@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
-import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -28,26 +27,19 @@ import {
 } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
-import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
-import { TopicClaims } from './topic-claims';
-import { TopicCoverage } from './topic-coverage';
-import { TopicDebates } from './topic-debates';
-import { TopicSubtopics } from './topic-subtopics';
+import { TopicFeed } from './topic-feed';
 import { useTopicAncestors } from './use-topic-ancestors';
-import { useTopicRecord } from './use-topic-record';
 
 /** Shared with the cover/avatar header so its left edge stays aligned with the topic column. */
 export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
-type TopicTab = 'overview' | 'debates' | 'claims' | 'subtopics' | 'coverage' | 'custom';
-type TopicSystemTab = Exclude<TopicTab, 'custom'>;
+type TopicTab = 'overview' | 'custom';
 
 export function resolveTopicTab({
-  pathname,
   authoredTabId,
   panel,
 }: {
@@ -57,18 +49,10 @@ export function resolveTopicTab({
 }): TopicTab {
   if (panel) {
     if (panel.activeTabId) return 'custom';
-    if (panel.activeSystemTab === 'debates') return 'debates';
-    if (panel.activeSystemTab === 'claims') return 'claims';
-    if (panel.activeSystemTab === 'subtopics') return 'subtopics';
-    if (panel.activeSystemTab === 'coverage') return 'coverage';
     return 'overview';
   }
 
   if (authoredTabId) return 'custom';
-  if (pathname.endsWith('/debates')) return 'debates';
-  if (pathname.endsWith('/claims')) return 'claims';
-  if (pathname.endsWith('/subtopics')) return 'subtopics';
-  if (pathname.endsWith('/coverage')) return 'coverage';
   return 'overview';
 }
 
@@ -88,8 +72,8 @@ export function resolveTopicTab({
  * One column at every width, laid out against a container query rather than the viewport, so the
  * route, the entity side panel and a phone are three widths of one page. Same as the claim page.
  *
- * Overview follows the same record shape as the custom Claim and personal-space pages: shared
- * Activity first, then the topic hierarchy and comments. The remaining records live in tabs.
+ * Overview is a topic-scoped Explore feed. It mixes Claims, Debates and coverage entities into one
+ * ranked rabbit hole while keeping authored tabs available through the same editor as Claim pages.
  */
 export function TopicPageView({
   entityId,
@@ -143,27 +127,8 @@ export function TopicPageView({
   // deep, and showing one parent reads as though the hierarchy is flat.
   const ancestors = useTopicAncestors(entityId, spaceId);
   const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
-  const record = useTopicRecord({ topicId: entityId, spaceId });
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
-  const hrefs = {
-    debates: `${overviewHref}/debates`,
-    claims: `${overviewHref}/claims`,
-    subtopics: `${overviewHref}/subtopics`,
-    coverage: `${overviewHref}/coverage`,
-  };
-  const hasDebates = hasRecordToShow(
-    record.debatesLoading || record.debatesError || record.debatesCountUnavailable ? undefined : record.debatesTotal
-  );
-  const hasClaims = hasRecordToShow(
-    record.claimsLoading || record.claimsError || record.claimsCountUnavailable ? undefined : record.claimsTotal
-  );
-  const systemTabs = [
-    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
-    ...(hasDebates ? [{ label: 'Debates', href: hrefs.debates, sidePanelKey: 'debates' }] : []),
-    ...(hasClaims ? [{ label: 'Claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
-    ...(subtopics.length > 0 ? [{ label: 'Subtopics', href: hrefs.subtopics, sidePanelKey: 'subtopics' }] : []),
-    { label: 'Coverage', href: hrefs.coverage, sidePanelKey: 'coverage' },
-  ];
+  const systemTabs = [{ label: 'Overview', href: overviewHref, sidePanelKey: 'overview' }];
 
   if (isLoading && !entity) {
     return (
@@ -267,15 +232,7 @@ export function TopicPageView({
           />
         </div>
 
-        <TopicTabPanel
-          activeTab={activeTab}
-          entityId={entityId}
-          spaceId={spaceId}
-          record={record}
-          subtopics={subtopics}
-          hrefs={hrefs}
-          onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
-        />
+        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} subtopics={subtopics} />
         {footer}
       </div>
     </div>
@@ -286,64 +243,18 @@ function TopicTabPanel({
   activeTab,
   entityId,
   spaceId,
-  record,
   subtopics,
-  hrefs,
-  onSelectSystemTab,
 }: {
   activeTab: TopicTab;
   entityId: string;
   spaceId: string;
-  record: ReturnType<typeof useTopicRecord>;
   subtopics: Relation[];
-  hrefs: { debates: string; claims: string; subtopics: string; coverage: string };
-  onSelectSystemTab?: (tab: TopicSystemTab) => void;
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
-  if (activeTab === 'debates') return <TopicDebates topicId={entityId} spaceId={spaceId} />;
-  if (activeTab === 'claims') return <TopicClaims topicId={entityId} spaceId={spaceId} />;
-  if (activeTab === 'subtopics') {
-    return <TopicSubtopics relations={subtopics} spaceId={spaceId} href={hrefs.subtopics} />;
-  }
-  if (activeTab === 'coverage') return <TopicCoverage topicId={entityId} spaceId={spaceId} />;
-
-  const kinds: ActivityKind[] = [
-    {
-      key: 'debates',
-      label: 'Debates',
-      rows: record.debateRows,
-      total: record.debatesTotal,
-      isLoading: record.debatesLoading,
-      isError: record.debatesError,
-      isCountUnavailable: record.debatesCountUnavailable,
-      href: hrefs.debates,
-      seeAllLabel: 'See all debates',
-      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
-    },
-    {
-      key: 'claims',
-      label: 'Claims',
-      rows: record.claimRows,
-      total: record.claimsTotal,
-      isLoading: record.claimsLoading,
-      isError: record.claimsError,
-      isCountUnavailable: record.claimsCountUnavailable,
-      href: hrefs.claims,
-      seeAllLabel: 'See all claims',
-      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
-    },
-  ];
 
   return (
     <>
-      <ProfileActivitySection kinds={kinds} />
-      <TopicSubtopics
-        relations={subtopics}
-        spaceId={spaceId}
-        href={hrefs.subtopics}
-        preview
-        onSeeAll={onSelectSystemTab ? () => onSelectSystemTab('subtopics') : undefined}
-      />
+      <TopicFeed topicId={entityId} spaceId={spaceId} topicOptions={subtopics} />
       <CommentSection entityId={entityId} spaceId={spaceId} />
     </>
   );

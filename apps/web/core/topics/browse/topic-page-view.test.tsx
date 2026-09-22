@@ -14,8 +14,8 @@ const mocks = vi.hoisted(() => ({
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
-  chipSection: null as Record<string, unknown> | null,
-  activity: null as Record<string, unknown> | null,
+  feed: null as Record<string, unknown> | null,
+  tabs: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -38,14 +38,13 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/space/space-1/topic-1',
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => <div data-testid="entity-tabs" /> }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
-vi.mock('~/partials/profile/profile-activity-section', () => ({
-  ProfileActivitySection: (props: Record<string, unknown>) => {
-    mocks.activity = props;
-    return <div data-testid="activity" />;
+vi.mock('~/partials/entity-page/entity-tabs', () => ({
+  EntityTabs: (props: Record<string, unknown>) => {
+    mocks.tabs = props;
+    return <div data-testid="entity-tabs" />;
   },
 }));
+vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -60,10 +59,10 @@ vi.mock('~/design-system/clamped-text', () => ({
 vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   META_CHIP_CLASS: 'meta-chip',
 }));
-vi.mock('./topic-subtopics', () => ({
-  TopicSubtopics: (props: Record<string, unknown>) => {
-    mocks.chipSection = props;
-    return <div data-testid="subtopics" />;
+vi.mock('./topic-feed', () => ({
+  TopicFeed: (props: Record<string, unknown>) => {
+    mocks.feed = props;
+    return <div data-testid="topic-feed" />;
   },
 }));
 
@@ -74,24 +73,7 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
-vi.mock('./use-topic-record', () => ({
-  useTopicRecord: () => ({
-    claimRows: [],
-    debateRows: [],
-    claimsTotal: 0,
-    debatesTotal: 0,
-    claimsLoading: false,
-    debatesLoading: false,
-    claimsError: false,
-    debatesError: false,
-    claimsCountUnavailable: false,
-    debatesCountUnavailable: false,
-  }),
-}));
 vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
-vi.mock('./topic-debates', () => ({ TopicDebates: () => null }));
-vi.mock('./topic-claims', () => ({ TopicClaims: () => null }));
-vi.mock('./topic-coverage', () => ({ TopicCoverage: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
 
 function topicEntity(description: string | null) {
@@ -108,8 +90,8 @@ function topicEntity(description: string | null) {
 beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
-  mocks.chipSection = null;
-  mocks.activity = null;
+  mocks.feed = null;
+  mocks.tabs = null;
 });
 
 afterEach(cleanup);
@@ -163,24 +145,32 @@ describe('TopicPageView title', () => {
   });
 });
 
-// GEO-2781 lifted this section out of this file so the claim view could draw its Topics with it.
-// Extracting a component is where a caller quietly loses an argument, so the subtopics side is
-// pinned too rather than only the new one.
-describe('TopicPageView subtopics preview', () => {
+describe('TopicPageView explore feed', () => {
   const subtopicRelation = {
     id: 'relation-1',
     type: { id: SUBTOPIC_RELATION_TYPE_ID },
     toEntity: { id: 'subtopic-1', name: 'Alignment' },
   };
 
-  it('passes the subtopic relations to the overview preview', () => {
+  it('renders one mixed feed and passes child topics to its topic filter', () => {
     mocks.entity = { ...topicEntity('Anything'), relations: [subtopicRelation] };
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('subtopics')).toBeInTheDocument();
-    expect(mocks.chipSection?.relations).toEqual([subtopicRelation]);
-    expect(mocks.chipSection?.spaceId).toBe('space-1');
-    expect(mocks.chipSection?.preview).toBe(true);
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(mocks.feed).toMatchObject({
+      topicId: 'topic-1',
+      spaceId: 'space-1',
+      topicOptions: [subtopicRelation],
+    });
+  });
+
+  it('keeps only Overview as a built-in tab so authored tabs can follow it', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toEqual([
+      { label: 'Overview', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
+    ]);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview']);
   });
 });
 
@@ -192,19 +182,10 @@ describe('TopicPageView composition', () => {
   });
 });
 
-describe('TopicPageView activity', () => {
-  it('uses the shared activity section for topic-scoped debates and claims', () => {
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
-
-    expect(screen.getByTestId('activity')).toBeInTheDocument();
-    expect((mocks.activity?.kinds as Array<{ key: string }>).map(kind => kind.key)).toEqual(['debates', 'claims']);
-  });
-});
-
 describe('resolveTopicTab', () => {
-  it('resolves route system tabs', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('coverage');
-    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('subtopics');
+  it('resolves legacy system routes to the single overview', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('overview');
+    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('overview');
   });
 
   it('lets an authored tab take precedence over the route', () => {
@@ -218,6 +199,6 @@ describe('resolveTopicTab', () => {
         authoredTabId: 'page-tab',
         panel: { activeTabId: null, activeSystemTab: 'debates' },
       })
-    ).toBe('debates');
+    ).toBe('overview');
   });
 });

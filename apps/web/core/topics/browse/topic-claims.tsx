@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -32,7 +31,6 @@ export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: st
     topicId,
     typeIds: [CLAIM_TYPE_ID],
     first: CLAIMS_PAGE_SIZE,
-    requireTagId: DEBATE_TAG_ID,
     after: pages.cursor,
     rankInSpaceId: spaceId,
     spaceIds,

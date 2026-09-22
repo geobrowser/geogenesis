@@ -112,6 +112,13 @@ function timeThresholdSec(filter: ExploreTime): number | null {
   }
 }
 
+function combineEntityFilters(...filters: Array<EntityFilter | undefined>): EntityFilter | undefined {
+  const present = filters.filter((filter): filter is EntityFilter => filter !== undefined);
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return { and: present };
+}
+
 type ExploreEntitiesPageResponse = {
   entities: ExploreCardEntity[];
   endCursor: string | null;
@@ -173,6 +180,7 @@ async function fetchBestEntitiesByTypePage(args: {
   offset: number;
   typeIds: readonly string[];
   requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   return Effect.runPromise(
@@ -192,7 +200,10 @@ async function fetchBestEntitiesByTypePage(args: {
         typeIds: [...args.typeIds],
         maxPerType: args.offset + args.limit,
         createdAfter: t != null ? String(t) : undefined,
-        filter: args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+        filter: combineEntityFilters(
+          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          args.entityFilter
+        ),
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -206,9 +217,10 @@ function buildFeedFilter(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   includeEntityScopeInFilter?: boolean;
+  entityFilter?: EntityFilter;
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
-  return {
+  const base: EntityFilter = {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
     ...(args.includeEntityScopeInFilter
@@ -230,6 +242,7 @@ function buildFeedFilter(args: {
       : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };
+  return combineEntityFilters(base, args.entityFilter) ?? base;
 }
 
 async function fetchExploreEntitiesPage(args: {
@@ -241,6 +254,7 @@ async function fetchExploreEntitiesPage(args: {
   typeIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -268,6 +282,7 @@ async function fetchTopEntitiesPage(args: {
   typeIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
@@ -318,6 +333,7 @@ async function fetchBestEntitiesPage(args: {
   limit: number;
   after: string | null;
   requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   return Effect.runPromise(
@@ -342,7 +358,10 @@ async function fetchBestEntitiesPage(args: {
         createdAfter: t != null ? String(t) : undefined,
         // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
         // no-filter fast path unless there is a clause the connection genuinely does not know.
-        filter: args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+        filter: combineEntityFilters(
+          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          args.entityFilter
+        ),
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -388,6 +407,8 @@ export async function fetchExploreFeed(args: {
    * precisely the kind of edit it exists to show.
    */
   requireDebateTagOnClaims?: boolean;
+  /** Additional server-side scope shared by Best, Top and New. */
+  entityFilter?: EntityFilter;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
@@ -472,6 +493,7 @@ export async function fetchExploreFeed(args: {
           offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
           typeIds: args.typeIds ?? [],
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+          entityFilter: args.entityFilter,
         })
       : args.sort === 'best'
         ? fetchBestEntitiesPage({
@@ -480,6 +502,7 @@ export async function fetchExploreFeed(args: {
             limit: windowSize,
             after: windowAfter,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+            entityFilter: args.entityFilter,
           })
         : args.sort === 'top'
           ? fetchTopEntitiesPage({
@@ -490,6 +513,7 @@ export async function fetchExploreFeed(args: {
               typeIds: args.typeIds,
               requireName: args.requireName,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+              entityFilter: args.entityFilter,
             })
           : fetchExploreEntitiesPage({
               spaceIds: baseIds,
@@ -500,6 +524,7 @@ export async function fetchExploreFeed(args: {
               typeIds: args.typeIds,
               requireName: args.requireName,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+              entityFilter: args.entityFilter,
             });
 
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {

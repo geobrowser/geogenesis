@@ -351,12 +351,21 @@ describe('EntityFeed Explore type filter', () => {
     await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
   });
 
-  it('preserves the historical query key for feeds without the Explore type filter', () => {
+  it('leaves contextual query-key slots empty for ordinary feeds', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
 
     // The time slot is empty rather than 'week': this feed sorts by New, which carries no range,
-    // so there is nothing to send and nothing to key on. Same positions otherwise.
-    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', undefined, 'space-id', null]);
+    // so there is nothing to send and nothing to key on. The Topic/fixed-param slots are empty.
+    expect(mocks.queryOptions?.queryKey).toEqual([
+      '/api/activity/feed',
+      'new',
+      undefined,
+      'space-id',
+      null,
+      '',
+      '',
+      null,
+    ]);
   });
   // GEO-2757. Explore opts its cards into opening the side panel; the space activity tab, which
   // renders this same feed, does not. The flag is a single forward, so nothing but a test says it
@@ -404,6 +413,53 @@ describe('EntityFeed Explore type filter', () => {
 
       rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
       expect(mocks.cardProps?.claimCardVariant).toBe('feed');
+    });
+  });
+});
+
+describe('EntityFeed contextual filters', () => {
+  const topicOptions = [
+    { value: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', label: 'Alignment' },
+    { value: 'cccccccccccccccccccccccccccccccc', label: 'Governance' },
+  ];
+
+  function renderTopicFeed() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        initialSort="best"
+        showSortFilter
+        showTimeFilter={false}
+        showSpaceFilter={false}
+        showTypeFilter
+        initialTypeIds={EXPLORE_ENTITY_TYPE_IDS}
+        persistTypeSelection={false}
+        topicOptions={topicOptions}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+      />
+    );
+  }
+
+  it('starts broad and sends the fixed Topic scope without Explore space state', async () => {
+    renderTopicFeed();
+
+    const request = new URL(await requestedUrl(), 'https://example.com');
+    expect(request.searchParams.get('sort')).toBe('best');
+    expect(request.searchParams.get('topicId')).toBe('topic-root');
+    expect(request.searchParams.get('spaceId')).toBe('space-route');
+    expect(request.searchParams.get('spaceIds')).toBeNull();
+    expect(request.searchParams.get('typeIds')).toBeNull();
+    expect(mocks.allowlistEnabled).toBe(false);
+  });
+
+  it('sends selected child topics as additional narrowing', async () => {
+    renderTopicFeed();
+
+    pickOption('Alignment');
+
+    await waitFor(async () => {
+      const request = new URL(await requestedUrl(), 'https://example.com');
+      expect(request.searchParams.get('topicIds')).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
     });
   });
 });

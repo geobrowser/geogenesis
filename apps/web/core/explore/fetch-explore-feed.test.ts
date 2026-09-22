@@ -135,6 +135,20 @@ describe('the debate-tag clause reaching the query', () => {
   });
 });
 
+describe('a contextual entity scope', () => {
+  const sorts = ['best', 'new', 'top'] as const;
+  const entityFilter = { id: { is: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } };
+
+  it.each(sorts)('is composed into the %s query', async sort => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort, entityFilter });
+
+    const filter = windows.variables[0]?.filter as { and?: unknown[] } | undefined;
+    expect(filter?.and).toContainEqual(entityFilter);
+  });
+});
+
 /**
  * GEO-2835 review. Best cannot filter by type in the query (GEO-2793), so it filters the window
  * here — and with the debate-tag gate applied, a Claim-only selection can match nothing in a

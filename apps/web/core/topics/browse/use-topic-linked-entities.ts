@@ -5,7 +5,6 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { TAG_PROPERTY_ID } from '~/core/constants';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -36,7 +35,6 @@ export function useTopicLinkedEntities({
   first,
   after,
   enabled = true,
-  requireTagId,
   rankInSpaceId,
   spaceIds,
 }: {
@@ -46,8 +44,6 @@ export function useTopicLinkedEntities({
   first: number;
   after?: string;
   enabled?: boolean;
-  /** When set, only entities carrying this tag are returned. */
-  requireTagId?: string;
   /** The space the ranking is read in. Ranking is space-scoped; omit to leave the page unranked. */
   rankInSpaceId?: string | null;
   /**
@@ -62,20 +58,9 @@ export function useTopicLinkedEntities({
       // Omitted rather than sent empty: the converter only emits a clause for a non-empty list, and
       // an empty one on the wire would be a filter matching nothing.
       ...(spaceIds && spaceIds.length > 0 ? { spaces: spaceIds.map(id => ({ equals: id })) } : {}),
-      relations: [
-        { typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { equals: topicId } } },
-        ...(requireTagId
-          ? [
-              {
-                typeOf: { id: { equals: TAG_PROPERTY_ID } },
-                toEntity: { id: { equals: requireTagId } },
-                ...(spaceIds && spaceIds.length > 0 ? { space: { in: spaceIds } } : {}),
-              },
-            ]
-          : []),
-      ],
+      relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { equals: topicId } } }],
     }),
-    [requireTagId, spaceIds, topicId, typeIds]
+    [spaceIds, topicId, typeIds]
   );
 
   const {
