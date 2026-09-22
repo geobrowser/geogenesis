@@ -396,7 +396,8 @@ export function DebateRecordingUploadCoordinator() {
   // The thank-you recording is counted before it reaches IndexedDB — persisting the blob takes a
   // moment and the banner has to be up for the whole thank-you period, not from partway through.
   const pendingUploadCount = publishableUploads.length + (thankingRecordingPending ? 1 : 0);
-  // Nothing is transferring yet, so there is no percentage to show and no queue state to describe.
+  // The one pending recording has not reached the queue yet, so there is no queue state to
+  // describe — neither "uploading" nor "waiting" is true of it.
   const preparingOnly = thankingRecordingPending && publishableUploads.length === 0;
 
   // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
@@ -441,9 +442,7 @@ export function DebateRecordingUploadCoordinator() {
 
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
-  const { data: activity } = useDebateActivity(
-    publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending
-  );
+  const { data: activity } = useDebateActivity(pendingUploadCount > 0 || thankingUploadFinished);
   const activityDebateId = activity?.debate ? normalizeDebateId(activity.debate.id) : null;
   const inLiveDebate = Boolean(
     activity?.debate &&
@@ -460,8 +459,14 @@ export function DebateRecordingUploadCoordinator() {
   }, 0);
   // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
   // stuck, so fall back to the plain in-progress copy.
+  //
+  // A recording still being written to IndexedDB has no byte size yet, so while one is pending the
+  // queue is not the whole of what the bar is counting and any figure off it is already wrong.
+  // Indeterminate until its row lands, rather than a percentage that drops when it does.
   const uploadPercent =
-    queuedBytes > 0 && transferredBytes < queuedBytes ? Math.round((transferredBytes / queuedBytes) * 100) : null;
+    thankingRecordingPending || queuedBytes === 0 || transferredBytes >= queuedBytes
+      ? null
+      : Math.round((transferredBytes / queuedBytes) * 100);
 
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
@@ -603,13 +608,18 @@ export function DebateRecordingUploadBanner({
     message = `Uploading & publishing ${label}`;
   }
 
-  const showProgress = !thankingUploadFinished && (preparingOnly || waitingReason === null);
-  const progressPercent = preparingOnly ? null : percent;
+  // A bar for work in progress, so it tracks the queue rather than the message: "Debate uploaded"
+  // over a queue that is still moving gets one, and an empty queue never does whatever the message
+  // says. Preparing is the exception — no bytes are in flight yet, but a recording is on its way
+  // into the queue, which is exactly what an indeterminate bar is for.
+  const showProgress = preparingOnly || (waitingReason === null && count > 0);
   const progressLabel = preparingOnly ? message : `Uploading and publishing ${label}`;
-  // Uploads run in this tab and nowhere else, so closing it strands whatever is still queued.
-  // Only while something actually is: "Debate uploaded" is the banner waiting on the opt-out
-  // window, not on the network.
-  const showKeepBrowserOpen = !thankingUploadFinished && count > 0;
+  // Uploads only make progress while this tab is open. Closing it doesn't lose the recording — the
+  // queue is in IndexedDB and resumes on the next visit — but it does park it indefinitely, and
+  // the debate stays unpublished until then. The warning follows the count and nothing else,
+  // "Debate uploaded" included: that line speaks for the one debate beside the Cancel action,
+  // while the queue behind it can still be busy.
+  const showKeepBrowserOpen = count > 0;
 
   return (
     <div
@@ -625,12 +635,12 @@ export function DebateRecordingUploadBanner({
             aria-label={progressLabel}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={progressPercent ?? undefined}
+            aria-valuenow={percent ?? undefined}
             className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
           >
             <div
-              className={`h-full rounded-full bg-text transition-[width] ${progressPercent === null ? 'w-1/3 animate-pulse' : ''}`}
-              style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
+              className={`h-full rounded-full bg-text transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={percent === null ? undefined : { width: `${percent}%` }}
             />
           </div>
         )}

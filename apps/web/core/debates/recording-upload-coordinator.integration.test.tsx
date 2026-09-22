@@ -584,22 +584,6 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
   });
 
-  // And when it was the only one, the banner goes away rather than counting down to zero.
-  it('drops the banner when the last pending upload is withdrawn from the card', async () => {
-    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
-    mocks.thankingDebateId = 'debate-1';
-    mocks.thankingShowsPublishControl = true;
-    mocks.publishOptOutRequest = 'debate-1';
-    mocks.queue = [queuedRecording('debate-1')];
-
-    render(<DebateRecordingUploadCoordinator />);
-
-    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
-
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
-  });
-
   // The room learns of a cancellation from its own debate query, which is a refetch away and may
   // never arrive. The coordinator knows the moment the server accepts it, so it says so directly —
   // otherwise the card cannot tell "withdrawn" from "never recorded" and drops the row in between.

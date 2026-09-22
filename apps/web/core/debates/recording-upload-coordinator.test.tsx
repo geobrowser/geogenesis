@@ -299,7 +299,7 @@ describe('DebateRecordingUploadBanner', () => {
   it('keeps uploaded copy and hides progress after the upload finishes', () => {
     render(
       <DebateRecordingUploadBanner
-        count={1}
+        count={0}
         thankingUploadFinished
         waitingReason={null}
         errorMessage={null}
@@ -314,6 +314,27 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     // Nothing is on the wire any more — this line is waiting on the opt-out window.
     expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
+  });
+
+  // "Debate uploaded" speaks for the one debate beside the Cancel action, so it can stand over a
+  // queue that is still busy. The warning follows the queue, not the message, or the user reads
+  // "uploaded" and closes the tab on the rest.
+  it('still warns against closing the browser when other uploads are pending', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        thankingUploadFinished
+        waitingReason={null}
+        errorMessage={null}
+        canCancel
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Debate uploaded')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+    // And the bar goes with it: the queue is moving even though this debate's part of it is done.
+    expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' })).toBeInTheDocument();
   });
 });
 
