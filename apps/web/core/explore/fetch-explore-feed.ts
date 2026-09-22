@@ -479,56 +479,70 @@ export async function fetchExploreFeed(args: {
   const windowSize =
     args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
 
+  const bestWithTopics = args.sort === 'best' && (args.topicIds?.length ?? 0) > 0;
+
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
-  // connection cannot serve — it matches nothing without `typeIds`.
-  const bestFiltersServerSide = args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  // connection cannot serve — it matches nothing without `typeIds`. Topics take neither path, per
+  // `bestWithTopics` above.
+  const bestFiltersServerSide = args.sort === 'best' && !bestWithTopics && (args.typeIds?.length ?? 0) > 0;
 
   const fetchWindow = (windowAfter: string | null) =>
-    bestFiltersServerSide
-      ? fetchBestEntitiesByTypePage({
+    bestWithTopics
+      ? fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
           limit: windowSize,
-          // This path paginates by offset, and the window cursor's `after` slot carries it as
-          // a decimal string. Anything unparseable restarts at 0, matching the tolerance
-          // `decodeExploreWindowCursor` already documents.
-          offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
-          typeIds: args.typeIds ?? [],
+          after: windowAfter,
+          typeIds: args.typeIds,
           topicIds: args.topicIds,
+          requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         })
-      : args.sort === 'best'
-        ? fetchBestEntitiesPage({
+      : bestFiltersServerSide
+        ? fetchBestEntitiesByTypePage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
-            after: windowAfter,
+            // This path paginates by offset, and the window cursor's `after` slot carries it as
+            // a decimal string. Anything unparseable restarts at 0, matching the tolerance
+            // `decodeExploreWindowCursor` already documents.
+            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+            typeIds: args.typeIds ?? [],
             topicIds: args.topicIds,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           })
-        : args.sort === 'top'
-          ? fetchTopEntitiesPage({
+        : args.sort === 'best'
+          ? fetchBestEntitiesPage({
               spaceIds: baseIds,
               time: args.time,
               limit: windowSize,
               after: windowAfter,
-              typeIds: args.typeIds,
               topicIds: args.topicIds,
-              requireName: args.requireName,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             })
-          : fetchExploreEntitiesPage({
-              spaceIds: baseIds,
-              time: args.time,
-              limit: windowSize,
-              after: windowAfter,
-              orderBy: [EntitiesOrderBy.CreatedAtDesc],
-              typeIds: args.typeIds,
-              topicIds: args.topicIds,
-              requireName: args.requireName,
-              requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-            });
+          : args.sort === 'top'
+            ? fetchTopEntitiesPage({
+                spaceIds: baseIds,
+                time: args.time,
+                limit: windowSize,
+                after: windowAfter,
+                typeIds: args.typeIds,
+                topicIds: args.topicIds,
+                requireName: args.requireName,
+                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+              })
+            : fetchExploreEntitiesPage({
+                spaceIds: baseIds,
+                time: args.time,
+                limit: windowSize,
+                after: windowAfter,
+                orderBy: [EntitiesOrderBy.CreatedAtDesc],
+                typeIds: args.typeIds,
+                topicIds: args.topicIds,
+                requireName: args.requireName,
+                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+              });
 
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
     const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
