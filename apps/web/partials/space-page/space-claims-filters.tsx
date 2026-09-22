@@ -2,9 +2,7 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
-import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import { HubFilterMenu, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import {
   SPACE_ACTIVITY_SORTS,
@@ -12,9 +10,7 @@ import {
   type SpaceActivitySort,
 } from '~/core/space/space-activity-rows';
 
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
-import { Menu, MenuItem } from '~/design-system/menu';
 
 export type SpaceClaimsTopicOption = { id: string; name: string | null; count: number };
 
@@ -52,7 +48,10 @@ export function SpaceClaimsFilters({
   topics,
   countsPending,
 }: Props) {
-  const [sortOpen, setSortOpen] = React.useState(false);
+  const sortOptions = React.useMemo(
+    () => SPACE_ACTIVITY_SORTS.map(option => ({ value: option, label: SPACE_ACTIVITY_SORT_LABEL[option] })),
+    []
+  );
 
   /**
    * Highest count first, with anything ticked held at the top in the order it was picked.
@@ -90,38 +89,18 @@ export function SpaceClaimsFilters({
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <Menu
-          asChild
-          open={sortOpen}
-          onOpenChange={setSortOpen}
-          sideOffset={8}
-          className="max-w-60 bg-white"
-          trigger={
-            <button
-              type="button"
-              aria-label={`Sort: ${SPACE_ACTIVITY_SORT_LABEL[sort]}`}
-              className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
-            >
-              <span>{SPACE_ACTIVITY_SORT_LABEL[sort]}</span>
-              <span className={cx('inline-flex transition-transform duration-200', sortOpen && 'rotate-180')}>
-                <ChevronDownSmall color="grey-04" />
-              </span>
-            </button>
-          }
-        >
-          {SPACE_ACTIVITY_SORTS.map(option => (
-            <MenuItem
-              key={option}
-              active={option === sort}
-              onClick={() => {
-                onSortChange(option);
-                setSortOpen(false);
-              }}
-            >
-              {SPACE_ACTIVITY_SORT_LABEL[option]}
-            </MenuItem>
-          ))}
-        </Menu>
+        {/*
+         * The same component the topic filter is, so the two pills cannot drift apart. An earlier
+         * revision hand-rolled this trigger from the explore feed's and ended up a different type
+         * size with its chevron on the other side of the label.
+         */}
+        <HubFilterMenu
+          label={SPACE_ACTIVITY_SORT_LABEL[sort]}
+          triggerAriaLabel={`Sort: ${SPACE_ACTIVITY_SORT_LABEL[sort]}`}
+          options={sortOptions}
+          value={sort}
+          onChange={onSortChange}
+        />
 
         {/* Only once there is a menu to draw. An empty topic picker on a space whose claims carry
             no topics is a control that can do nothing, and it would sit there through every load. */}
