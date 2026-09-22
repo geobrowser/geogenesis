@@ -98,11 +98,33 @@ export function Menu({
 
   // Merged rather than handed over: the wheel trap below needs the node whether or not a caller
   // asked for it.
+  //
+  // The merge has to carry React 19's callback-ref cleanup through, because `viewportRef` is typed
+  // as a full React ref and that contract is part of it. A caller may return a cleanup instead of
+  // waiting to be called back with `null` — the natural shape for attaching an observer to the
+  // viewport, which is what this prop exists for. Swallowing the return value would drop that
+  // cleanup on the floor and then hand the caller the very `null` the contract promised would not
+  // come, which a callback written for it has no reason to guard against.
+  //
+  // So: a cleanup from the caller is passed up, wrapped so this component's own ref is cleared
+  // alongside it. No cleanup, and nothing is returned — React then falls back to calling this with
+  // `null` on unmount, which is what clears both for every other kind of ref.
   const setScrollNode = React.useCallback(
     (node: HTMLDivElement | null) => {
       scrollRef.current = node;
-      if (typeof viewportRef === 'function') viewportRef(node);
-      else if (viewportRef) (viewportRef as React.RefObject<HTMLDivElement | null>).current = node;
+
+      if (typeof viewportRef !== 'function') {
+        if (viewportRef) (viewportRef as React.RefObject<HTMLDivElement | null>).current = node;
+        return;
+      }
+
+      const cleanup = viewportRef(node);
+      if (typeof cleanup !== 'function') return;
+
+      return () => {
+        scrollRef.current = null;
+        cleanup();
+      };
     },
     [viewportRef]
   );
