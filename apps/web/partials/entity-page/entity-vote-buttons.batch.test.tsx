@@ -189,8 +189,9 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('masks the claim percentage while preserving the vote total in its accessible label', () => {
     const view = renderButtons(true, true, 'stance', null);
 
-    const total = view.getByRole('button', { name: '3 votes. See split after vote.' });
+    const total = view.getByRole('button', { name: '3 votes. Add your position to see vote split.' });
     expect(total.querySelector('.animate-pulse')).not.toBeNull();
+    expect(total).toHaveTextContent('%');
     expect(view.queryByText('67%')).toBeNull();
   });
 

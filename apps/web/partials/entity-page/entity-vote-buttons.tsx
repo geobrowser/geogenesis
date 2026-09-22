@@ -380,18 +380,21 @@ export function EntityVoteButtons({
               effectiveTotal > 0
                 ? viewerHasResponded || !isClaimVariant
                   ? responseCopy.viewResponders
-                  : `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. See split after vote.`
+                  : `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Add your position to see vote split.`
                 : undefined
             }
             aria-label={
               isClaimVariant && !viewerHasResponded && effectiveTotal > 0
-                ? `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. See split after vote.`
+                ? `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Add your position to see vote split.`
                 : undefined
             }
             disabled={effectiveTotal === 0}
           >
             {isClaimVariant && !viewerHasResponded ? (
-              <Skeleton aria-hidden className="mx-auto h-4 w-8" />
+              <span className="flex items-center justify-center gap-0.5">
+                <span aria-hidden className="h-4 w-7 animate-pulse rounded-sm bg-grey-02" />
+                <span aria-hidden>%</span>
+              </span>
             ) : (
               displayLabel
             )}

@@ -202,36 +202,47 @@ export function ClaimSplitAvailableAfterVote({
       revealDirections={false}
     />
   );
+  const totalText = (
+    <Text as="span" variant="metadata" color="grey-04" className="shrink-0 tabular-nums">
+      {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
+    </Text>
+  );
+  const instruction = (
+    <Text as="span" variant="footnote" color="grey-04">
+      Add your position to see vote split.
+    </Text>
+  );
   const total = (
     <span className={cx('flex shrink-0 flex-col gap-0.5', scale === 'verdict' && 'items-end')}>
-      <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-        {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
-      </Text>
-      <Text as="span" variant="footnote" color="grey-04">
-        See split after vote
-      </Text>
+      {totalText}
+      {instruction}
     </span>
+  );
+
+  const compactMaskedShare = (
+    <div className="flex shrink-0 items-center gap-1.5" title="Add your position to see vote split." aria-hidden>
+      <div className="flex items-center gap-1">
+        <Skeleton aria-hidden className="h-4 w-9" />
+        <Text as="span" variant="metadataMedium" color="text">
+          %
+        </Text>
+      </div>
+      <Text as="span" variant="metadata" color="grey-04">
+        {copy.positiveAction.toLowerCase()}
+      </Text>
+    </div>
   );
 
   if (layout === 'inline') {
     return (
-      <div
-        className={cx('flex min-w-0 items-center gap-3', className)}
-        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
-      >
-        <div
-          className="flex shrink-0 items-center gap-1.5"
-          title="See split after vote"
-          aria-hidden
-        >
-          <Skeleton aria-hidden className="h-4 w-9" />
-          <Text as="span" variant="metadata" color="grey-04">
-            {copy.positiveAction.toLowerCase()}
-          </Text>
+      <div className={className} style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}>
+        <div className="flex min-w-0 items-center gap-3">
+          {compactMaskedShare}
+          <span aria-hidden className="h-0.5 min-w-0 flex-1 rounded-full bg-grey-02" />
+          {totalText}
+          {voters}
         </div>
-        <span aria-hidden className="h-0.5 min-w-0 flex-1 rounded-full bg-grey-02" />
-        {total}
-        {voters}
+        <div className="mt-1 text-left">{instruction}</div>
       </div>
     );
   }
@@ -241,16 +252,7 @@ export function ClaimSplitAvailableAfterVote({
       <div className={className}>
         <span aria-hidden className="block h-1.5 w-full rounded-full bg-grey-02" />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <div
-            className="flex shrink-0 items-center gap-1.5"
-            title="See split after vote"
-            aria-hidden
-          >
-            <Skeleton aria-hidden className="h-4 w-9" />
-            <Text as="span" variant="metadata" color="grey-04">
-              {copy.positiveAction.toLowerCase()}
-            </Text>
-          </div>
+          {compactMaskedShare}
           <span className="flex items-center gap-2">
             {total}
             {voters}
@@ -263,8 +265,18 @@ export function ClaimSplitAvailableAfterVote({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div className="flex items-end gap-1.5" title="See split after vote" aria-hidden>
-          <Skeleton aria-hidden className={cx('shrink-0', scale === 'verdict' ? 'h-10 w-20' : 'h-8 w-16')} />
+        <div className="flex items-end gap-1.5" title="Add your position to see vote split." aria-hidden>
+          <div className="flex items-end gap-1">
+            <Skeleton aria-hidden className={cx('shrink-0', scale === 'verdict' ? 'h-10 w-16' : 'h-8 w-14')} />
+            <span
+              className={cx(
+                'leading-none font-semibold text-text',
+                scale === 'verdict' ? 'text-[2.5rem] tracking-[-1px]' : 'text-[2rem] tracking-[-0.8px]'
+              )}
+            >
+              %
+            </span>
+          </div>
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>

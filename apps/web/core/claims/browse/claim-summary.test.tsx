@@ -36,11 +36,11 @@ function summary(overrides: Partial<ClaimResponseSummary> = {}): ClaimResponseSu
   };
 }
 
-function renderSummary(value: ClaimResponseSummary) {
+function renderSummary(value: ClaimResponseSummary, layout: 'stacked' | 'inline' = 'stacked') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="veracity" summary={value} />
+      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="veracity" summary={value} layout={layout} />
     </QueryClientProvider>
   );
 }
@@ -65,7 +65,8 @@ describe('ClaimSummary', () => {
   it('withholds the split before voting while keeping the total and combined voter list', async () => {
     const { container } = renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
 
-    expect(screen.getByText('See split after vote')).toBeInTheDocument();
+    expect(screen.getByText('Add your position to see vote split.')).toBeInTheDocument();
+    expect(screen.getByText('%')).toBeInTheDocument();
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.getByText('20 votes')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
@@ -73,6 +74,14 @@ describe('ClaimSummary', () => {
     fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
 
     expect(await screen.findByTestId('responders-list')).toHaveAttribute('data-reveal-directions', 'false');
+  });
+
+  it('puts the mobile helper copy on its own left-aligned line below the masked split row', () => {
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }), 'inline');
+
+    const instruction = screen.getByText('Add your position to see vote split.');
+    expect(instruction.parentElement).toHaveClass('mt-1', 'text-left');
+    expect(instruction.parentElement?.previousElementSibling).toHaveTextContent('%verify20 votes');
   });
 
   it('draws nothing where the counts never answered, whatever the total says', () => {

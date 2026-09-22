@@ -202,7 +202,9 @@ describe('DebateClaimTickerCard', () => {
 
     const { container } = renderCard();
 
-    expect(screen.getByLabelText('See split after vote')).toBeInTheDocument();
+    const split = screen.getByLabelText('Add your position to see vote split.');
+    expect(split).toBeInTheDocument();
+    expect(split).toHaveTextContent('%');
     expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.queryByText('65% agree')).toBeNull();
   });

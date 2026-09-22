@@ -843,10 +843,11 @@ function TickerClaimHeader({
             ) : (
               <span
                 className="flex shrink-0 items-center gap-1 [text-box:trim-both_cap_alphabetic]"
-                title="See split after vote"
-                aria-label="See split after vote"
+                title="Add your position to see vote split."
+                aria-label="Add your position to see vote split."
               >
                 <span aria-hidden className="h-3 w-7 animate-pulse rounded-sm bg-white/30" />
+                <span aria-hidden>%</span>
                 <span aria-hidden>{copy.positiveAction.toLowerCase()}</span>
               </span>
             )}

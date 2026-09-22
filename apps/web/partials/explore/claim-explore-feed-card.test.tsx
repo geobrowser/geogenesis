@@ -107,7 +107,8 @@ vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   ClaimSplitAvailableAfterVote: ({ summary }: { summary: { total: number } }) => (
     <div>
       <span data-testid="masked-split-skeleton" />
-      <span>See split after vote</span>
+      <span>%</span>
+      <span>Add your position to see vote split.</span>
       <span>{summary.total} votes</span>
       <span data-testid="responder-avatars" />
     </div>
@@ -521,7 +522,8 @@ describe('ClaimExploreFeedCard', () => {
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
-    expect(screen.getByText('See split after vote')).toBeInTheDocument();
+    expect(screen.getByText('Add your position to see vote split.')).toBeInTheDocument();
+    expect(screen.getByText('%')).toBeInTheDocument();
     expect(screen.getByTestId('masked-split-skeleton')).toBeInTheDocument();
     expect(screen.getByText('12 votes')).toBeInTheDocument();
     expect(screen.getByTestId('responder-avatars')).toBeInTheDocument();
