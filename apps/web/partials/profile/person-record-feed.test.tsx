@@ -123,6 +123,24 @@ describe('PersonRecordFeed', () => {
     expect(screen.queryByText('Couldn’t load more positions.')).not.toBeInTheDocument();
   });
 
+  it('draws the shared card when the caller supplies none', () => {
+    renderFeed({ rows: [row('a'), row('b')] });
+
+    expect(screen.getAllByTestId('card').map(card => card.textContent)).toEqual(['a', 'b']);
+  });
+
+  it('lets a caller draw its own card, keyed for it', () => {
+    // The Topics tab's card carries counts this component cannot fetch; everything around the rows
+    // is the same, which is why it is a render function rather than a second copy of this file.
+    renderFeed({
+      rows: [row('a'), row('b')],
+      renderCard: item => <div data-testid="custom">{item.entityId}</div>,
+    });
+
+    expect(screen.getAllByTestId('custom').map(card => card.textContent)).toEqual(['a', 'b']);
+    expect(screen.queryByTestId('card')).toBeNull();
+  });
+
   it('offers no retry when nothing failed', () => {
     renderFeed({ rows: [row('claim-1')], fetchNextPage: () => {} });
 

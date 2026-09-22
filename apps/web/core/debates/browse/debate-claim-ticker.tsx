@@ -26,11 +26,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { InfoSmall } from '~/design-system/icons/info-small';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -933,23 +930,9 @@ function ClaimIconButton({
           : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
-      {/*
-       * Written out rather than picked into one `Icon`, so each glyph is called with the props it
-       * actually has. A chevron takes `color` alone — it is a stroke with no interior — and the
-       * shared `Icon` const quietly dropped the `filled` it was handed, which read as veracity
-       * having a fill that never arrived. Its selected state is the background and colour above.
-       */}
-      {responseKind === 'veracity' ? (
-        position ? (
-          <ChevronUp />
-        ) : (
-          <ChevronDown />
-        )
-      ) : position ? (
-        <ThumbUp filled={selected} />
-      ) : (
-        <ThumbDown filled={selected} />
-      )}
+      {/* A veracity chevron has no filled form to switch to, so its selected state is the
+          background and colour above rather than the glyph. See `ResponsePositionIcon`. */}
+      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
     </button>
   );
 }

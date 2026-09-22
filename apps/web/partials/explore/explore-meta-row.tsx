@@ -18,7 +18,14 @@ import { SpaceThumb } from './space-thumb';
 
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
-const SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
+/**
+ * The type of one metadata segment.
+ *
+ * Exported because the topic card draws a second line of metadata under the description and it has
+ * to be the same type as this row. Spelling it out there instead is precisely how the claim card's
+ * copy of this row lost `font-normal` on three segments without any diff showing it.
+ */
+export const META_SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
 
 /**
  * The line above every explore card: the space, what the thing is, and when it appeared.
@@ -103,7 +110,7 @@ export function ExploreMetaRow({
       key: 'types',
       showOnCompactMobile: false,
       content: (
-        <span className={`inline-flex min-w-0 flex-wrap items-center ${SEGMENT_CLASS}`}>
+        <span className={`inline-flex min-w-0 flex-wrap items-center ${META_SEGMENT_CLASS}`}>
           {types.map((type, index) => (
             <React.Fragment key={type.id}>
               {index > 0 ? <MetaDot /> : null}
@@ -123,7 +130,7 @@ export function ExploreMetaRow({
     segments.push({
       key: 'time',
       showOnCompactMobile: false,
-      content: <span className={`shrink-0 ${SEGMENT_CLASS}`}>{timeAgo}</span>,
+      content: <span className={`shrink-0 ${META_SEGMENT_CLASS}`}>{timeAgo}</span>,
     });
   }
 

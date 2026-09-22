@@ -411,16 +411,10 @@ describe('DebateExploreFeedCard', () => {
     expect(onPlaybackAvailabilityChange).not.toHaveBeenCalled();
 
     intersectAll(0.1);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      true
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
 
     intersectAll(0);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      false
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
   });
 
   it('unregisters stale playable data when a refetch replaces the player with fallback', () => {
@@ -429,20 +423,14 @@ describe('DebateExploreFeedCard', () => {
     const onPlaybackAvailabilityChange = vi.fn();
     const view = renderCard({ onPlaybackAvailabilityChange });
     intersectAll(0.7);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      true
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
 
     // TanStack Query retains the previous data when a background refetch fails.
     mocks.debateQuery = { data: watchableDebate(), isError: true };
     view.rerenderCard();
 
     expect(screen.getByTestId('fallback')).toBeInTheDocument();
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      false
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
   });
 
   it('does not request playback from a loading skeleton that may resolve to the fallback', () => {
@@ -587,6 +575,33 @@ describe('DebateExploreFeedCard', () => {
    * itself — the open question in that ticket's notes. This control is the answer, and it has to
    * stay a real link: the Debate entity's page *is* the full-screen feed anchored to that debate.
    */
+  describe('column width', () => {
+    /** The one element carrying the column budget: the card's single inner column. */
+    const column = (container: HTMLElement) => container.querySelector('article > div') as HTMLElement;
+
+    it('caps itself at the card width, fitted to the viewport, by default', () => {
+      const { container } = renderCard();
+
+      expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
+      expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
+        'clamp(320px, calc(83dvh - 178px), 560px)'
+      );
+    });
+
+    it('raises the ceiling to the container under fullWidth without dropping the viewport budget', () => {
+      // `fullWidth` means "this column is already the reading width, don't cap me at 560px". It
+      // used to drop the `max-w` and the budget together, which on the claim page's 840px column
+      // made the card ~1140px tall — so on a 900px viewport the second debater and the interaction
+      // bar could not be seen together, which is the one thing the budget guarantees.
+      const { container } = renderCard({ fullWidth: true });
+
+      expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
+      expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
+        'max(320px, min(calc(83dvh - 178px), 100%))'
+      );
+    });
+  });
+
   describe('full-screen control', () => {
     it('links to the Debate entity, which is the anchored full-screen feed', () => {
       renderCard();

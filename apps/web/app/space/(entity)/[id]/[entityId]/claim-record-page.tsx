@@ -14,7 +14,7 @@ export type ClaimRecordPageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
-/** The shared server guard and page shell behind the claim's three record routes. */
+/** The shared server guard and page shell behind the claim's record routes. */
 export async function ClaimRecordPage(props: ClaimRecordPageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;
