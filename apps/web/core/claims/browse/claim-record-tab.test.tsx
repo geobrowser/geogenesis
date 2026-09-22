@@ -7,6 +7,7 @@ import { ClaimRecordTab } from './claim-record-tab';
 
 const mocks = vi.hoisted(() => ({
   hookCalls: [] as Array<Record<string, unknown>>,
+  facetHookCalls: [] as Array<Record<string, unknown>>,
   filterProps: null as Record<string, any> | null,
   feedProps: null as Record<string, unknown> | null,
 }));
@@ -27,6 +28,28 @@ vi.mock('./use-claim-record', () => ({
       debatesHasNextPage: false,
       fetchNextClaimsPage: vi.fn(),
       fetchNextDebatesPage: vi.fn(),
+    };
+  },
+}));
+vi.mock('./use-claim-record-facets', () => ({
+  useClaimRecordFacets: (args: Record<string, unknown>) => {
+    mocks.facetHookCalls.push(args);
+    return {
+      claimSpaces: [
+        { id: 'space-1', count: 8 },
+        { id: 'space-2', count: 3 },
+      ],
+      claimTopics: [
+        { id: 'topic-3', name: 'Economics', count: 5 },
+        { id: 'topic-1', name: 'Ethics', count: 2 },
+      ],
+      debateSpaces: [
+        { id: 'space-1', count: 4 },
+        { id: 'space-2', count: 1 },
+      ],
+      countsPending: false,
+      facetsSettled: true,
+      isError: false,
     };
   },
 }));
@@ -62,6 +85,7 @@ const common = {
 
 beforeEach(() => {
   mocks.hookCalls = [];
+  mocks.facetHookCalls = [];
   mocks.filterProps = null;
   mocks.feedProps = null;
 });
@@ -82,6 +106,15 @@ describe('ClaimRecordTab', () => {
       'spaces',
       'topics',
     ]);
+    expect(mocks.filterProps?.dimensions[0].options).toEqual([
+      { value: 'space-1', label: 'Relationships', count: 8, pending: false },
+      { value: 'space-2', label: 'Technology', count: 3, pending: false },
+    ]);
+    // Facets describe the complete Related claims corpus, not only the source claim's topics.
+    expect(mocks.filterProps?.dimensions[1].options).toEqual([
+      { value: 'topic-3', label: 'Economics', count: 5 },
+      { value: 'topic-1', label: 'Ethics', count: 2 },
+    ]);
     expect(mocks.hookCalls.at(-1)).toMatchObject({
       claimSort: 'best',
       spaceIds: ['space-1'],
@@ -89,6 +122,13 @@ describe('ClaimRecordTab', () => {
       claimsEnabled: true,
       debatesEnabled: false,
       countsEnabled: false,
+    });
+    expect(mocks.facetHookCalls.at(-1)).toMatchObject({
+      kind: 'claims',
+      allSpaceIds: ['space-1', 'space-2'],
+      selectedSpaceIds: ['space-1'],
+      selectedTopicIds: [],
+      sourceTopicIds: ['topic-1', 'topic-2'],
     });
   });
 
@@ -101,6 +141,7 @@ describe('ClaimRecordTab', () => {
     const dimensions = mocks.filterProps?.dimensions as Array<Record<string, any>>;
     act(() => dimensions.find(dimension => dimension.key === 'spaces')?.onClear());
     expect(mocks.hookCalls.at(-1)).toMatchObject({ spaceIds: ['space-1', 'space-2'] });
+    expect(mocks.facetHookCalls.at(-1)).toMatchObject({ selectedSpaceIds: ['space-1', 'space-2'] });
 
     act(() =>
       (mocks.filterProps?.dimensions as Array<Record<string, any>>)
@@ -108,6 +149,7 @@ describe('ClaimRecordTab', () => {
         ?.onToggle('topic-1')
     );
     expect(mocks.hookCalls.at(-1)).toMatchObject({ filterTopicIds: ['topic-1'] });
+    expect(mocks.facetHookCalls.at(-1)).toMatchObject({ selectedTopicIds: ['topic-1'] });
   });
 
   it('gives Debates the same sort order and only its Spaces filter', () => {
@@ -120,6 +162,10 @@ describe('ClaimRecordTab', () => {
       'New',
     ]);
     expect(mocks.filterProps?.dimensions.map((dimension: { key: string }) => dimension.key)).toEqual(['spaces']);
+    expect(mocks.filterProps?.dimensions[0].options).toEqual([
+      { value: 'space-1', label: 'Relationships', count: 4, pending: false },
+      { value: 'space-2', label: 'Technology', count: 1, pending: false },
+    ]);
     expect(mocks.hookCalls.at(-1)).toMatchObject({
       debateSort: 'best',
       spaceIds: ['space-1'],

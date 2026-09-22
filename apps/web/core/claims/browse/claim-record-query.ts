@@ -231,6 +231,8 @@ export type ClaimRecordFilters = {
   extractedClaims: EntityFilter;
   debates: EntityFilter;
   claimRelations: RelationFilter;
+  /** Topics carried by the exact Related claims union, grouped for the Topics menu. */
+  claimTopicRelations: RelationFilter;
   debateRelations: RelationFilter;
 };
 
@@ -313,6 +315,14 @@ export function claimRecordFilters({
   const debateTarget = (spaceId: string): EntityFilter =>
     topicIds.length > 0 ? { or: [{ id: { is: claimId } }, topicClaimTarget(spaceId)] } : { id: { is: claimId } };
 
+  const relatedClaim = (spaceId: string): EntityFilter => ({
+    ...narrowedClaimScope(spaceId),
+    or: [
+      { relations: { some: topicRelation(spaceId) } },
+      { relations: { some: extractedSourceRelation(spaceId) } },
+    ],
+  });
+
   const debateBranches: EntityFilter[] = scopes.map(spaceId => ({
     ...debateScope(spaceId),
     relations: {
@@ -337,6 +347,11 @@ export function claimRecordFilters({
       fromEntity: narrowedClaimScope(spaceId),
     },
   ]);
+  const claimTopicRelationBranches: RelationFilter[] = scopes.map(spaceId => ({
+    typeId: { is: TOPICS_PROPERTY_ID },
+    spaceId: { is: spaceId },
+    fromEntity: relatedClaim(spaceId),
+  }));
   const debateRelationBranches: RelationFilter[] = scopes.map(spaceId => ({
     typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
     spaceId: { is: spaceId },
@@ -350,6 +365,7 @@ export function claimRecordFilters({
     extractedClaims: { or: scopes.map(extractedClaim) },
     debates: debateBranches.length === 1 ? debateBranches[0] : { or: debateBranches },
     claimRelations: { or: claimRelationBranches },
+    claimTopicRelations: { or: claimTopicRelationBranches },
     debateRelations:
       debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
   };

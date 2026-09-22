@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
+import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
@@ -12,6 +13,7 @@ import { useRecordSelection } from '~/partials/profile/use-record-selection';
 
 import type { ClaimRecordSort } from './claim-record-query';
 import { useClaimRecord } from './use-claim-record';
+import { useClaimRecordFacets } from './use-claim-record-facets';
 
 const SORT_OPTIONS: HubFilterOption<string>[] = [
   { value: 'best', label: 'Best' },
@@ -69,25 +71,57 @@ export function ClaimRecordTab({
     debatesEnabled: kind === 'debates',
     countsEnabled: false,
   });
+  const facets = useClaimRecordFacets({
+    kind,
+    claimId,
+    allSpaceIds,
+    selectedSpaceIds,
+    sourceTopicIds,
+    selectedTopicIds: kind === 'claims' ? topics.values : [],
+  });
+
+  const facetSpaces = kind === 'claims' ? facets.claimSpaces : facets.debateSpaces;
+  const countsBySpace = React.useMemo(
+    () => new Map(facetSpaces.map(facet => [normId(facet.id), facet.count])),
+    [facetSpaces]
+  );
 
   const { labelsById, isLoading: spaceLabelsLoading } = useSpaceLabels(allSpaceIds);
   const spaceOptions = React.useMemo(
     () =>
-      allSpaceIds.map(id => ({
-        value: id,
-        label: spaceLabel(labelsById, id)?.name ?? `Space ${id.slice(0, 6)}`,
-        pending: spaceLabelsLoading && !spaceLabel(labelsById, id),
-      })),
-    [allSpaceIds, labelsById, spaceLabelsLoading]
+      allSpaceIds
+        .map(id => ({
+          value: id,
+          label: spaceLabel(labelsById, id)?.name ?? `Space ${id.slice(0, 6)}`,
+          pending: spaceLabelsLoading && !spaceLabel(labelsById, id),
+          count: countsBySpace.get(normId(id)),
+        }))
+        // Keep every option while the facet is arriving, then only spaces that lead somewhere —
+        // plus a selected zero, which has to stay visible so it can be un-picked.
+        .filter(option =>
+          facets.facetsSettled
+            ? (option.count ?? 0) > 0 || spaces.values.some(id => normId(id) === normId(option.value))
+            : true
+        )
+        .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.value.localeCompare(b.value)),
+    [allSpaceIds, countsBySpace, facets.facetsSettled, labelsById, spaceLabelsLoading, spaces.values]
   );
   const topicOptions = React.useMemo(
     () =>
-      sourceTopics.map(topic => ({
+      orderFacetOptions(facets.claimTopics, topics.values).map(topic => ({
         value: topic.id,
-        label: topic.name?.trim() || 'Unnamed topic',
+        label: topic.name?.trim() || 'Topic',
+        count: topic.count,
+        ...(facets.topicNamesPending && !topic.name ? { pending: true } : {}),
       })),
-    [sourceTopics]
+    [facets.claimTopics, facets.topicNamesPending, topics.values]
   );
+
+  const replaceTopics = topics.replace;
+  React.useEffect(() => {
+    if (kind !== 'claims' || !facets.facetsSettled) return;
+    replaceTopics(current => keepSelectableTopics(current, facets.claimTopics, true));
+  }, [facets.claimTopics, facets.facetsSettled, kind, replaceTopics]);
 
   const dimensions = [
     {
@@ -98,6 +132,7 @@ export function ClaimRecordTab({
       onClear: spaces.clear,
       anyLabel: 'Any space',
       noun: ['space', 'spaces'] as const,
+      isPending: facets.countsPending,
     },
     ...(kind === 'claims'
       ? [
@@ -109,6 +144,7 @@ export function ClaimRecordTab({
             onClear: topics.clear,
             anyLabel: 'Any topic',
             noun: ['topic', 'topics'] as const,
+            isPending: facets.countsPending,
           },
         ]
       : []),
@@ -121,7 +157,7 @@ export function ClaimRecordTab({
     <div className="flex flex-col gap-4">
       <RecordFilterRow
         sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as ClaimRecordSort) }}
-        dimensions={dimensions}
+        dimensions={facets.isError ? [] : dimensions}
       />
 
       <PersonRecordFeed

@@ -127,6 +127,49 @@ describe('claim record GraphQL', () => {
       spaceId: { is: SPACE_ID },
       fromEntity: { id: { isNot: CLAIM_ID } },
     });
+    expect(filters.claimTopicRelations).toEqual({
+      or: [
+        {
+          typeId: { is: TOPICS_PROPERTY_ID },
+          spaceId: { is: SPACE_ID },
+          fromEntity: {
+            id: { isNot: CLAIM_ID },
+            typeIds: { overlaps: [CLAIM_TYPE_ID] },
+            spaceIds: { overlaps: [SPACE_ID] },
+            or: [
+              {
+                relations: {
+                  some: {
+                    typeId: { is: TOPICS_PROPERTY_ID },
+                    spaceId: { is: SPACE_ID },
+                    toEntityId: { in: [TOPIC_ID] },
+                  },
+                },
+              },
+              {
+                relations: {
+                  some: {
+                    typeId: { is: SOURCES_PROPERTY_ID },
+                    spaceId: { is: SPACE_ID },
+                    toEntity: {
+                      typeIds: { overlaps: [DEBATE_TYPE_ID] },
+                      spaceIds: { overlaps: [SPACE_ID] },
+                      relations: {
+                        some: {
+                          typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+                          spaceId: { is: SPACE_ID },
+                          toEntityId: { is: CLAIM_ID },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    });
   });
 
   it('omits only the topic branch when there are no topics', () => {
@@ -165,6 +208,21 @@ describe('claim record GraphQL', () => {
       ],
     });
     expect(branches[1]).toMatchObject({ spaceIds: { overlaps: [secondSpace] } });
+
+    // The topic facet uses the same-space union population and includes every active topic, so
+    // each count is the number of complete Related claims matches rather than a loaded-page tally.
+    expect(filters.claimTopicRelations.or).toHaveLength(2);
+    expect(filters.claimTopicRelations.or?.[0]).toMatchObject({
+      typeId: { is: TOPICS_PROPERTY_ID },
+      spaceId: { is: SPACE_ID },
+      fromEntity: {
+        spaceIds: { overlaps: [SPACE_ID] },
+        and: [
+          { relations: { some: { spaceId: { is: SPACE_ID }, toEntityId: { is: TOPIC_ID } } } },
+          { relations: { some: { spaceId: { is: SPACE_ID }, toEntityId: { is: secondTopic } } } },
+        ],
+      },
+    });
   });
 
   it('decodes exact distinct counts without mistaking malformed data for a result', () => {
