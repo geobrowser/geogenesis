@@ -4184,13 +4184,50 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Debate again?')).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).not.toHaveLength(0);
-    const phaseTimers = screen.getAllByLabelText('Phase timer: 20 seconds remaining');
-    expect(phaseTimers).toHaveLength(2);
-    for (const phaseTimer of phaseTimers) {
-      expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
-    }
-    fireEvent.click(screen.getByRole('button', { name: "Let's go!" }));
+    expect(screen.queryByLabelText('Phase timer: 20 seconds remaining')).not.toBeInTheDocument();
+    const consentButton = screen.getByRole('button', { name: "Let's go!" });
+    expect(consentButton).toHaveTextContent("Let's go!0:20");
+    expect(consentButton).toHaveAccessibleDescription('20 seconds remaining');
+    fireEvent.click(consentButton);
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
+  });
+
+  it('automatically consents shortly before the thank-you countdown ends', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('enters the rematch browser at the thank-you deadline without waiting for a debate refresh', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   it('disables rematch consent and shows waiting immediately after clicking yes', async () => {

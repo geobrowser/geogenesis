@@ -193,6 +193,10 @@ type DebateRecordingWindow = {
 type DebateRemotePresence = 'absent' | 'present' | 'left';
 
 const debateThankingDurationMs = 20_000;
+// The rematch decision expires with the thank-you phase. Reserve a small network window so both
+// clients can record their automatic consent before the server closes the session at that same
+// boundary; the room itself stays visible until the countdown reaches zero.
+const rematchAutoConsentLeadSeconds = 5;
 const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
@@ -285,6 +289,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [connectStarting, setConnectStarting] = React.useState(false);
   const connectStartingGenerationRef = React.useRef(0);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
+  const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
@@ -1763,6 +1768,38 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, [consentToRematch, rematchConsentRequested]);
 
+  const localRematchParticipant = rematchQuery.data?.participants.find(
+    participant => participant.user_id === currentUserId
+  );
+  React.useEffect(() => {
+    if (debate?.status !== 'thanking' || countdown.effectiveStatus !== 'thanking') return;
+    if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > rematchAutoConsentLeadSeconds) return;
+    if (rematchQuery.data?.status !== 'deciding') return;
+    if (localRematchParticipant?.consented_at || rematchConsentRequested || consentToRematch.isPending) return;
+    const attempted = autoRematchConsentAttemptRef.current;
+    if (attempted?.debateId === debate.id && attempted.remainingSeconds === countdown.remainingSeconds) return;
+    // A failed automatic attempt may retry on the next displayed second without spinning requests
+    // on each state update. The mutation itself also retries known phase-boundary races once.
+    autoRematchConsentAttemptRef.current = { debateId: debate.id, remainingSeconds: countdown.remainingSeconds };
+    void requestRematch();
+  }, [
+    consentToRematch.isPending,
+    countdown.effectiveStatus,
+    countdown.remainingSeconds,
+    debate?.id,
+    debate?.status,
+    localRematchParticipant?.consented_at,
+    rematchConsentRequested,
+    rematchQuery.data?.status,
+    requestRematch,
+  ]);
+
+  React.useEffect(() => {
+    if (countdown.effectiveStatus !== 'thanking' || countdown.remainingSeconds > 0) return;
+    if (!rematchDestination(rematchQuery.data)) return;
+    void finishLiveDebate();
+  }, [countdown.effectiveStatus, countdown.remainingSeconds, finishLiveDebate, rematchQuery.data]);
+
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
    * ready" flips the debate to `connecting`, so `connect` never runs again — but the server still
@@ -2502,7 +2539,12 @@ function DebateRecordingModal({
         variant="muted"
       />
     ) : null;
-  const sharedPhaseCountdown = countdown.activeSlot === null && countdown.yieldingSlot === null ? countdownRing : null;
+  // During thanking the same countdown used to be drawn over both videos. It now belongs to the
+  // debate-again action below; all other shared phase countdowns keep their existing placement.
+  const sharedPhaseCountdown =
+    countdown.effectiveStatus !== 'thanking' && countdown.activeSlot === null && countdown.yieldingSlot === null
+      ? countdownRing
+      : null;
   const localCountdown = localEndingTurn
     ? null
     : countdown.activeSlot === localSlot
@@ -2670,6 +2712,7 @@ function DebateRecordingModal({
               remoteConsented={remoteConsented}
               busy={rematchBusy}
               onConsent={onRequestRematch}
+              remainingSeconds={countdown.remainingSeconds}
               publishing={publishing}
               publishBusy={publishOptOutOffer.busy}
               onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
@@ -3005,6 +3048,7 @@ function DebateAgainCard({
   remoteConsented,
   busy,
   onConsent,
+  remainingSeconds,
   publishing,
   publishBusy,
   onStopPublishing,
@@ -3014,11 +3058,15 @@ function DebateAgainCard({
   remoteConsented: boolean;
   busy: boolean;
   onConsent: () => void;
+  remainingSeconds: number;
   /** Null when there is no recording to opt out of, which is when the row is left off. */
   publishing: boolean | null;
   publishBusy: boolean;
   onStopPublishing: () => void;
 }) {
+  const countdownDescriptionId = React.useId();
+  const consentLabel = localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!";
+
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
       {publishing !== null && (
@@ -3055,13 +3103,25 @@ function DebateAgainCard({
           type="button"
           onClick={onConsent}
           disabled={busy || localConsented}
+          aria-label={consentLabel}
+          aria-describedby={!busy && !localConsented ? countdownDescriptionId : undefined}
           className={cx(
             cardPill,
             'text-white transition-colors disabled:cursor-default',
             localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
           )}
         >
-          {localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!"}
+          <span>{consentLabel}</span>
+          {!busy && !localConsented && (
+            <>
+              <span aria-hidden="true" className="text-white/70 tabular-nums">
+                {formatRematchCountdown(remainingSeconds)}
+              </span>
+              <span id={countdownDescriptionId} className="sr-only">
+                {remainingSeconds} seconds remaining
+              </span>
+            </>
+          )}
         </button>
       </CardRow>
       <CardDivider />
@@ -3077,6 +3137,11 @@ function DebateAgainCard({
       </CardRow>
     </section>
   );
+}
+
+function formatRematchCountdown(remainingSeconds: number) {
+  const seconds = Math.max(0, remainingSeconds);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
 function setLocalTrackPreferences(
