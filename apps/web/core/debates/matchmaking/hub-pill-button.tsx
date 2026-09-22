@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
+
 type Props = {
   variant?: 'primary' | 'secondary';
   /** Swapped in while a mutation is in flight, so the press has visible feedback. */
@@ -11,7 +13,9 @@ type Props = {
   pending?: boolean;
   /** Stable auto-capture label; string children are used when omitted. */
   analyticsLabel?: string;
-  /** Defaults to the hub and can be changed by the standalone rematch surface. */
+  /** Owning surface for shared controls; hub-only callers can use the default. */
+  analyticsSurface?: DebateAnalyticsSurface;
+  /** Explicit override for exceptional actions with a more specific intent. */
   analyticsIntent?: string;
 } & React.ComponentPropsWithoutRef<'button'>;
 
@@ -26,22 +30,24 @@ export function HubPillButton({
   pendingLabel,
   pending = false,
   analyticsLabel,
-  analyticsIntent = 'debates_hub_action',
+  analyticsSurface = 'hub',
+  analyticsIntent,
   disabled,
   className,
   children,
   ...rest
 }: Props) {
-  const resolvedAnalyticsLabel =
-    analyticsLabel ??
-    rest['aria-label'] ??
-    (typeof children === 'string' ? `Debate hub ${children}` : 'Debate hub action');
+  const surfaceAnalytics = debateSurfaceAnalyticsAttributes(
+    analyticsSurface,
+    typeof children === 'string' ? children : 'action'
+  );
+  const resolvedAnalyticsLabel = analyticsLabel ?? rest['aria-label'] ?? surfaceAnalytics['data-geo-analytics-label'];
 
   return (
     <button
       type="button"
       data-geo-analytics-label={resolvedAnalyticsLabel}
-      data-geo-analytics-intent={analyticsIntent}
+      data-geo-analytics-intent={analyticsIntent ?? surfaceAnalytics['data-geo-analytics-intent']}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(

@@ -166,4 +166,13 @@ describe('usePrivySignIn', () => {
 
     expect(onError).toHaveBeenCalledOnce();
   });
+
+  it('ignores an error from a login attempt this hook did not start', () => {
+    const onError = vi.fn();
+    renderHook(() => usePrivySignIn(undefined, { onError }));
+
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

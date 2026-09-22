@@ -333,6 +333,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
             Topic props are omitted because people carry no topics to facet on, the same way the
             requests bar omits them. */}
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={effectiveSpaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -344,6 +345,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
           failureReason={peopleQuery.failureReason}

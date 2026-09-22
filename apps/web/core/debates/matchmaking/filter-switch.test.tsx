@@ -9,7 +9,7 @@ afterEach(cleanup);
 
 describe('FilterSwitch analytics', () => {
   it('uses the stable setting name instead of state-dependent text', () => {
-    render(<FilterSwitch label="Matches only" checked={false} onChange={vi.fn()} />);
+    render(<FilterSwitch analyticsSurface="hub" label="Matches only" checked={false} onChange={vi.fn()} />);
 
     expect(screen.getByRole('switch', { name: 'Matches only' })).toHaveAttribute(
       'data-geo-analytics-label',
@@ -19,5 +19,13 @@ describe('FilterSwitch analytics', () => {
       'data-geo-analytics-intent',
       'filter_debates_hub'
     );
+  });
+
+  it('attributes the shared switch to rematch when that surface owns it', () => {
+    render(<FilterSwitch analyticsSurface="rematch" label="Matches only" checked={false} onChange={vi.fn()} />);
+
+    const toggle = screen.getByRole('switch', { name: 'Matches only' });
+    expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Matches only');
+    expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
   });
 });

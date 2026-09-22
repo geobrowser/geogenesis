@@ -1423,6 +1423,27 @@ describe('DebateRematchPageClient', () => {
       expect(toggle.previousElementSibling?.className).toContain('flex-1');
     });
 
+    it('attributes shared filters and switches to rematch rather than the debate hub', async () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+
+      expect(screen.getByRole('button', { name: 'All claims' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Claims source filter'
+      );
+      expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Space filter'
+      );
+      expect(screen.getByRole('button', { name: /Any topic/ })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Topic filter'
+      );
+      const toggle = screen.getByRole('switch', { name: 'Hide my positions' });
+      expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Hide my positions');
+      expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
+    });
+
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
     it('offers the sources in a fixed order, Recommended first', async () => {
       curatedPage();

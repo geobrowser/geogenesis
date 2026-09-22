@@ -77,6 +77,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     // or a login started somewhere else on the page — which is the same unbidden replay the
     // arming exists to prevent, just later.
     onError: () => {
+      if (!requestedRef.current) return;
       requestedRef.current = false;
       requestedAnalyticsRef.current = undefined;
       optionsRef.current?.onError?.();

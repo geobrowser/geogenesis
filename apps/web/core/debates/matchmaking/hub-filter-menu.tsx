@@ -15,8 +15,8 @@ import { Menu, type MenuAlign } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { formatFacetCount } from './topic-facets';
-import { hubAnalyticsAttributes } from './hub-analytics';
 import { useDelayedFlag } from './use-delayed-flag';
 
 export type HubFilterOption<T extends string> = {
@@ -32,8 +32,8 @@ export type HubFilterOption<T extends string> = {
 
 type Props<T extends string> = {
   label: string;
-  /** Stable hub filter dimension, independent of the current option. Omit on non-hub consumers. */
-  analyticsName?: string;
+  /** Stable filter dimension and owning debate surface. Omit on consumers outside debates. */
+  analytics?: { name: string; surface: DebateAnalyticsSurface };
   options: HubFilterOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -66,7 +66,7 @@ type Props<T extends string> = {
  */
 export function HubFilterMenu<T extends string>({
   label,
-  analyticsName,
+  analytics,
   options,
   value,
   onChange,
@@ -89,7 +89,9 @@ export function HubFilterMenu<T extends string>({
           icon={<ChevronDownSmall />}
           className="max-w-[160px]"
           aria-label={triggerAriaLabel}
-          {...(analyticsName ? hubAnalyticsAttributes(`${analyticsName} filter`, 'filter_debates_hub') : {})}
+          {...(analytics
+            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+            : {})}
         >
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
@@ -108,8 +110,8 @@ export function HubFilterMenu<T extends string>({
             // Picking a space nobody can name yet filters the list to something the viewer can't
             // read back off the trigger. The wait is short; the dead end isn't worth it.
             disabled={option.pending}
-            {...(analyticsName
-              ? hubAnalyticsAttributes(`${analyticsName} filter option`, 'filter_debates_hub')
+            {...(analytics
+              ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter option`, 'filter')
               : {})}
             onClick={() => {
               onChange(option.value);
@@ -157,8 +159,8 @@ export function HubFilterMenu<T extends string>({
 type MultiProps<T extends string> = {
   /** Shown in the trigger pill: the one selected name, a count of them, or the "any" wording. */
   label: string;
-  /** Stable hub filter dimension, independent of the current selection. Omit on non-hub consumers. */
-  analyticsName?: string;
+  /** Stable filter dimension and owning debate surface. Omit on consumers outside debates. */
+  analytics?: { name: string; surface: DebateAnalyticsSurface };
   options: HubFilterOption<T>[];
   values: T[];
   onToggle: (value: T) => void;
@@ -230,7 +232,7 @@ const SEARCH_FOCUS_DELAY_MS = 1;
  */
 export function HubMultiFilterMenu<T extends string>({
   label,
-  analyticsName,
+  analytics,
   options,
   values,
   onToggle,
@@ -374,7 +376,9 @@ export function HubMultiFilterMenu<T extends string>({
         <SmallButton
           icon={<ChevronDownSmall />}
           className="max-w-[160px]"
-          {...(analyticsName ? hubAnalyticsAttributes(`${analyticsName} filter`, 'filter_debates_hub') : {})}
+          {...(analytics
+            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+            : {})}
         >
           {labelPending ? (
             <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
@@ -430,8 +434,12 @@ export function HubMultiFilterMenu<T extends string>({
           {searching ? null : (
             <button
               type="button"
-              {...(analyticsName
-                ? hubAnalyticsAttributes(`Clear ${analyticsName.toLowerCase()} filter`, 'filter_debates_hub')
+              {...(analytics
+                ? debateSurfaceAnalyticsAttributes(
+                    analytics.surface,
+                    `Clear ${analytics.name.toLowerCase()} filter`,
+                    'filter'
+                  )
                 : {})}
               onClick={() => {
                 onClear();
@@ -481,8 +489,8 @@ export function HubMultiFilterMenu<T extends string>({
               key={option.value}
               type="button"
               disabled={option.pending}
-              {...(analyticsName
-                ? hubAnalyticsAttributes(`${analyticsName} filter option`, 'filter_debates_hub')
+              {...(analytics
+                ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter option`, 'filter')
                 : {})}
               // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
               // an ordinary button and nothing says whether it is picked.

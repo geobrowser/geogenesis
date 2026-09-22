@@ -127,6 +127,7 @@ function RequestsTabBody({
     <div className="flex flex-col">
       <HubStickyControls>
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={spaceIds}
           onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
           onSpacesClear={() => setSpaceIds([])}
@@ -134,7 +135,7 @@ function RequestsTabBody({
           leading={
             <HubFilterMenu
               label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
-              analyticsName="Status"
+              analytics={{ name: 'Status', surface: 'hub' }}
               options={STATUS_OPTIONS}
               value={status}
               onChange={setStatus}
@@ -149,6 +150,7 @@ function RequestsTabBody({
         {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
 
         <HubQueryState
+          analyticsSurface="hub"
           isLoading={requestsQuery.isLoading}
           error={requestsQuery.error}
           failureReason={requestsQuery.failureReason}
