@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import {
   SPACE_ACTIVITY_SORTS,
   SPACE_ACTIVITY_SORT_LABEL,
@@ -53,9 +54,22 @@ export function SpaceClaimsFilters({
 }: Props) {
   const [sortOpen, setSortOpen] = React.useState(false);
 
+  /**
+   * Highest count first, with anything ticked held at the top in the order it was picked.
+   *
+   * The facet answers in the graph's order, which is no order a reader can see — 21, 1, 1, 11, 31
+   * down the menu. `orderFacetOptions` is the rule the debates hub's own topic menu uses, pinning
+   * included: every count changes when the filter does, so without it the row just clicked jumps
+   * elsewhere before the next click lands.
+   */
   const topicOptions = React.useMemo(
-    () => topics.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topic.count })),
-    [topics]
+    () =>
+      orderFacetOptions(topics, topicIds).map(topic => ({
+        value: topic.id,
+        label: topic.name ?? 'Topic',
+        count: topic.count,
+      })),
+    [topicIds, topics]
   );
 
   const topicLabel = pickerLabel(

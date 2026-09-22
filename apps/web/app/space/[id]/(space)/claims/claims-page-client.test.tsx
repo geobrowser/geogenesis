@@ -99,9 +99,12 @@ const asked = () => mocks.hookCalls.at(-1)!;
 beforeEach(() => {
   mocks.hookCalls.length = 0;
   mocks.searchCalls.length = 0;
+  // Deliberately not in count order — the facet answers in the graph's, which is no order a reader
+  // can see, and putting the menu right is this surface's job.
   mocks.topics = [
     { id: 't1', name: 'Governance', count: 12 },
     { id: 't2', name: 'Safety', count: 5 },
+    { id: 't3', name: 'Industry', count: 31 },
   ];
   mocks.searchClaimIds = null;
   mocks.rows = [
@@ -199,6 +202,33 @@ describe('ClaimsPageClient', () => {
     expect(screen.getAllByText('Best')).toHaveLength(2);
     expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getByText('Top')).toBeInTheDocument();
+  });
+
+  const topicRows = () =>
+    screen
+      .getAllByRole('button')
+      .map(button => button.textContent?.trim() ?? '')
+      .filter(text => /^(Governance|Safety|Industry)\d+$/.test(text));
+
+  it('lists topics by highest count first', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(topicRows()).toEqual(['Industry31', 'Governance12', 'Safety5']);
+  });
+
+  /**
+   * Every count changes when the filter does, so ordering a ticked row by its new count would move
+   * the row just clicked before the next click lands. Picked rows hold the top, in pick order.
+   */
+  it('pins a picked topic to the top rather than re-sorting it', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Safety/ }));
+
+    expect(topicRows()[0]).toBe('Safety5');
   });
 
   it('narrows by a picked topic', () => {
