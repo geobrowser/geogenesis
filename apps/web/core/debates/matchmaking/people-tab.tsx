@@ -555,9 +555,9 @@ function PersonRow({
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
-            A plain anchor, with no click handler at all: the hub survives the navigation on its
-            own now (GEO-2788), so there is nothing to intercept — which is also what keeps
-            cmd-click, middle click and "copy link address" working here (GEO-2701).
+            A plain anchor whose click handler only observes analytics: the hub survives the
+            navigation on its own now (GEO-2788), so the handler does not intercept it — which is
+            also what keeps cmd-click, middle click and "copy link address" working here (GEO-2701).
 
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}

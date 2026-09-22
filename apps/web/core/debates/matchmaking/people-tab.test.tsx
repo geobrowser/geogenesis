@@ -988,7 +988,7 @@ describe('See times', () => {
 });
 
 // GEO-2788 / GEO-2611. The name goes to the person's personal space, and the hub stays open on the
-// way — which is why this needs no click handler and so keeps cmd-click and middle click working.
+// way. Its click handler only observes analytics, so Next still owns cmd-click and middle click.
 describe('the person link', () => {
   it("points the name at the person's space", () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
