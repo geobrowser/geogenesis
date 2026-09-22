@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  viewerPosition: null as boolean | null,
   commentCount: 0,
   notifyClaimResponseIndexed: vi.fn(),
 }));
@@ -85,7 +86,8 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
         ...actual.summarizeClaimResponses(mocks.positive, mocks.negative),
         isLoading: false,
         hasCounts: true,
-        viewerDirection: null,
+        viewerDirection:
+          mocks.viewerPosition === null ? null : mocks.viewerPosition ? ('positive' as const) : ('negative' as const),
         viewerSpaceId: null,
       };
     },
@@ -102,6 +104,13 @@ vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   // than dragging in a query client, and stops the share matching twice while both arrangements
   // are mounted.
   ClaimSummary: ({ className }: { className?: string }) => <div data-testid="inline-summary" className={className} />,
+  ClaimSplitAvailableAfterVote: ({ summary }: { summary: { total: number } }) => (
+    <div>
+      <span>Vote split available after vote</span>
+      <span>{summary.total} votes</span>
+      <span data-testid="responder-avatars" />
+    </div>
+  ),
 }));
 
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
@@ -127,7 +136,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   // answerable no matter what the lookups say — and these suites would go quiet on the bug they
   // exist to catch.
   useClaimPositionControl: ({ answersReady = true }: { answersReady?: boolean }) => ({
-    viewerPosition: null,
+    viewerPosition: mocks.viewerPosition,
     optimisticPositions: [],
     respond: vi.fn(),
     actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
@@ -185,6 +194,10 @@ vi.mock('~/core/claims/browse/claim-end-slot', () => ({
 // shared into that module. The responder faces are covered by their own suite.
 vi.mock('~/core/claims/browse/claim-side-responders', () => ({
   ClaimSideResponders: ({ label }: { label: string }) => <div data-testid={`responders-${label}`} />,
+}));
+
+vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
+  ClaimResponderAvatars: () => <span data-testid="responder-avatars" />,
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
@@ -250,6 +263,7 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.viewerPosition = null;
   mocks.commentCount = 0;
   mocks.notifyClaimResponseIndexed.mockClear();
 
@@ -431,6 +445,7 @@ describe('ClaimExploreFeedCard', () => {
   it('keeps mobile metadata semantic content single and preserves the Join action', () => {
     mocks.positive = 6;
     mocks.negative = 6;
+    mocks.viewerPosition = true;
     render(<ClaimExploreFeedCard item={{ ...item, isMemberOrEditor: false }} variant="debate-panel-mobile" />);
     scrollIntoRange();
 
@@ -476,6 +491,7 @@ describe('ClaimExploreFeedCard', () => {
     // reads as the card ending rather than as a divider inside it.
     mocks.positive = 9;
     mocks.negative = 3;
+    mocks.viewerPosition = true;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
@@ -485,9 +501,10 @@ describe('ClaimExploreFeedCard', () => {
     expect(verdict.className).not.toContain('claim-card-narrow:border-t');
   });
 
-  it('reports the split and both sides once anyone has answered', () => {
+  it('reports the split and both sides once the viewer has answered', () => {
     mocks.positive = 9;
     mocks.negative = 3;
+    mocks.viewerPosition = true;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
@@ -495,6 +512,20 @@ describe('ClaimExploreFeedCard', () => {
     // Count first and the verb lowercase, matching the share above it: "75% agree", "9 agree".
     expect(screen.getByText('9 agree')).toBeInTheDocument();
     expect(screen.getByText('3 disagree')).toBeInTheDocument();
+  });
+
+  it('withholds the split before voting while keeping the vote total and avatars', () => {
+    mocks.positive = 9;
+    mocks.negative = 3;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    expect(screen.getByText('Vote split available after vote')).toBeInTheDocument();
+    expect(screen.getByText('12 votes')).toBeInTheDocument();
+    expect(screen.getByTestId('responder-avatars')).toBeInTheDocument();
+    expect(screen.queryByText('75%')).toBeNull();
+    expect(screen.queryByText('9 agree')).toBeNull();
+    expect(screen.queryByText('3 disagree')).toBeNull();
   });
 
   /**
@@ -541,11 +572,21 @@ describe('ClaimExploreFeedCard', () => {
   it('flags a contested claim beside the space rather than in the verdict', () => {
     mocks.positive = 6;
     mocks.negative = 6;
+    mocks.viewerPosition = true;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
     // Beside the space chip, which is what the meta row is for — not a second voice in the split.
     const metaRow = screen.getByText('Global Politics').closest('div') as HTMLElement;
     expect(metaRow.textContent).toContain('Controversial');
+  });
+
+  it('does not leak a contested split before the viewer votes', () => {
+    mocks.positive = 6;
+    mocks.negative = 6;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    expect(screen.queryByText('Controversial')).toBeNull();
   });
 });

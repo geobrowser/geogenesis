@@ -735,7 +735,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        isControversial={summary.isControversial}
+        isControversial={viewerPosition !== null && summary.isControversial}
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
@@ -782,6 +782,7 @@ function RespondableControls({
           spaceId={claim.space_id}
           responseKind={readiness.response_kind}
           summary={summary}
+          viewerHasResponded={viewerPosition !== null}
           layout="inline"
           className={cx(
             '-mx-3 mt-3 claim-card-summary-band',
@@ -1061,7 +1062,10 @@ export function PositionRow({
             // Server labels win when a side has responders; otherwise fall back to the vocabulary for
             // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
             label={forSide?.position_label ?? copy.positiveAction}
-            summary={forSide}
+            // The presence stack identifies people on this side, which is itself part of the poll
+            // result. Before the viewer responds, the combined voter stack in `ClaimSummary` is
+            // the only identity preview shown and its dropdown deliberately omits directions.
+            summary={viewerPosition !== null ? forSide : undefined}
             position
             selected={viewerPosition === true}
             onRespond={onRespond}
@@ -1073,7 +1077,7 @@ export function PositionRow({
         <div className="flex flex-col">
           <PositionButton
             label={againstSide?.position_label ?? copy.negativeAction}
-            summary={againstSide}
+            summary={viewerPosition !== null ? againstSide : undefined}
             position={false}
             selected={viewerPosition === false}
             onRespond={onRespond}

@@ -135,6 +135,7 @@ export function ClaimPageView({
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
   const state = useClaimResponseState({ claimId: entityId, spaceId, row, entity: entity ?? null });
   const { responseKind, summary } = state;
+  const viewerHasResponded = state.readiness.viewer_response != null || summary.viewerDirection !== null;
   // Explore's rule for drawing the verdict column at all: counts that answered, and at least one.
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
   // Whether the hero keeps a second track, which is deliberately not the same question.
@@ -161,7 +162,8 @@ export function ClaimPageView({
   // verdict can start on the title's, and row 1 belongs to this strip — so when nothing fills it,
   // the rows have to move up rather than leave a `gap-y-4` above the claim that belongs to a row
   // nothing occupies. Visible in the side panel and at phone widths, where that gap is set.
-  const hasChipsRow = (SHOW_HERO_TOPICS && topics.length > 0) || summary.isControversial;
+  const hasChipsRow =
+    (SHOW_HERO_TOPICS && topics.length > 0) || (summary.isControversial && viewerHasResponded);
 
   const requestedTab = resolveClaimTab({
     pathname,
@@ -243,7 +245,7 @@ export function ClaimPageView({
                   spaceId={spaceId}
                   seeAllHref={hrefs.topics}
                   onSeeAll={sidePanelTab ? () => sidePanelTab.setActiveSystemTab('topics') : undefined}
-                  isControversial={summary.isControversial}
+                  isControversial={summary.isControversial && viewerHasResponded}
                   className="col-span-full row-start-1 mb-3 claim-card-narrow:mb-0"
                 />
               ) : null}
@@ -309,6 +311,7 @@ export function ClaimPageView({
                     spaceId={spaceId}
                     responseKind={responseKind}
                     summary={summary}
+                    viewerHasResponded={viewerHasResponded}
                     matchDebatePanelOnMobile={false}
                   />
                 </div>

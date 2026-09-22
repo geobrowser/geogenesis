@@ -14,7 +14,9 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   ClaimResponderAvatars: () => <span data-testid="responder-avatars" />,
 }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  RespondersPopoverContent: () => <div data-testid="responders-list" />,
+  RespondersPopoverContent: ({ revealDirections }: { revealDirections?: boolean }) => (
+    <div data-testid="responders-list" data-reveal-directions={String(revealDirections !== false)} />
+  ),
 }));
 vi.mock('./claim-side-responders', () => ({ ClaimSideResponders: () => null }));
 
@@ -54,9 +56,21 @@ afterEach(cleanup);
  */
 describe('ClaimSummary', () => {
   it('draws the split once the counts are an answer', () => {
-    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3), viewerDirection: 'positive' }));
 
     expect(screen.getByText('85%')).toBeInTheDocument();
+  });
+
+  it('withholds the split before voting while keeping the total and combined voter list', async () => {
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+
+    expect(screen.getByText('Vote split available after vote')).toBeInTheDocument();
+    expect(screen.getByText('20 votes')).toBeInTheDocument();
+    expect(screen.queryByText('85%')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
+
+    expect(await screen.findByTestId('responders-list')).toHaveAttribute('data-reveal-directions', 'false');
   });
 
   it('draws nothing where the counts never answered, whatever the total says', () => {
@@ -91,7 +105,7 @@ describe('ClaimSummary', () => {
  */
 describe('the responder list’s portal', () => {
   it('opens into the elevated portal, above whatever panel the card sits in', async () => {
-    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3), viewerDirection: 'positive' }));
 
     fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
 
@@ -101,7 +115,7 @@ describe('the responder list’s portal', () => {
 
   it('leaves the faces pressable at all', async () => {
     // The guard: the assertion above passes vacuously if nothing ever opens.
-    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3), viewerDirection: 'positive' }));
 
     expect(screen.queryByTestId('responders-list')).toBeNull();
     fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);

@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   /** The crowd's share of positive responses, or null on a claim nobody has answered. */
   percent: null as number | null,
+  total: 0,
   responseKind: 'stance' as 'stance' | 'veracity',
   respond: vi.fn(),
 }));
@@ -41,7 +42,7 @@ vi.mock('~/core/claims/browse/use-claim-response-state', () => ({
     isResponseKindResolved: true,
     isViewerResponseResolved: true,
     responseBlockedReason: null,
-    summary: { isLoading: false, percent: mocks.percent },
+    summary: { isLoading: false, percent: mocks.percent, total: mocks.total },
     claim: { id: 'claim-1' },
     positions: [],
     readiness: {},
@@ -141,6 +142,7 @@ function renderCard(props: Partial<React.ComponentProps<typeof DebateClaimTicker
 beforeEach(() => {
   mocks.viewerPosition = null;
   mocks.percent = null;
+  mocks.total = 0;
   mocks.responseKind = 'stance';
   mocks.respond.mockClear();
 });
@@ -194,18 +196,22 @@ describe('DebateClaimTickerCard', () => {
 
   // The card above the newest one dissolves into the video; the newest sits at full strength. In
   // Figma that is one gradient over the whole stack, reproduced per-card — see `OLDER_CARD_FADE`.
-  it('shows the crowd split before the viewer has answered, per the design', () => {
+  it('withholds the crowd split before the viewer has answered while showing participation', () => {
     mocks.percent = 65;
+    mocks.total = 20;
 
     renderCard();
 
-    expect(screen.getByText('65% agree')).toBeInTheDocument();
+    expect(screen.getByText('20 votes · split after vote')).toBeInTheDocument();
+    expect(screen.queryByText('65% agree')).toBeNull();
   });
 
   // "65% agree" on "the SEC sued Coinbase" is the wrong sentence; the share takes the same verb
   // the rest of the app uses for the claim's own vocabulary.
   it("reads the share with the claim's own vocabulary verb", () => {
     mocks.percent = 65;
+    mocks.total = 20;
+    mocks.viewerPosition = true;
     mocks.responseKind = 'veracity';
 
     renderCard();

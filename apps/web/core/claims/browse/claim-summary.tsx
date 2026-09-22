@@ -45,6 +45,7 @@ export function ClaimSummary({
   spaceId,
   responseKind,
   summary,
+  viewerHasResponded = summary.viewerDirection !== null,
   className,
   layout = 'stacked',
 }: {
@@ -52,6 +53,14 @@ export function ClaimSummary({
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
+  /**
+   * Whether the viewer currently holds a response, including geo-chat's fresher copy.
+   *
+   * `summary.viewerDirection` is the graph/indexing view. Claim surfaces can know the same answer
+   * from geo-chat first, so callers pass their resolved control state rather than making someone
+   * who already voted wait for a second source before the split appears.
+   */
+  viewerHasResponded?: boolean;
   className?: string;
   /**
    * `'stacked'` puts the bar above its reading, which is what the five surfaces with width do.
@@ -83,6 +92,19 @@ export function ClaimSummary({
   // footer.
   if (tier === 'invite') return null;
 
+  if (!viewerHasResponded) {
+    return (
+      <ClaimSplitAvailableAfterVote
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        layout={layout}
+        className={className}
+      />
+    );
+  }
+
   const responders = (
     <ClaimResponders
       entityId={entityId}
@@ -90,6 +112,7 @@ export function ClaimSummary({
       responseKind={responseKind}
       summary={summary}
       label={copy.viewResponders}
+      revealDirections
     />
   );
 
@@ -131,6 +154,72 @@ export function ClaimSummary({
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         {share}
         {responders}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The privacy-preserving summary shown until the viewer responds.
+ *
+ * The population is still useful context, and identities are not the poll result. The combined
+ * avatar stack therefore stays visible and opens one undivided voter list; percentages, colours,
+ * side counts and side labels are all withheld together so no presentation leaks the split.
+ */
+export function ClaimSplitAvailableAfterVote({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  className,
+  layout = 'stacked',
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+  className?: string;
+  layout?: 'stacked' | 'inline';
+}) {
+  const voters = (
+    <ClaimResponders
+      entityId={entityId}
+      spaceId={spaceId}
+      responseKind={responseKind}
+      summary={summary}
+      label="View voters"
+      revealDirections={false}
+    />
+  );
+  const total = (
+    <Text as="span" variant="metadata" color="grey-04" className="shrink-0 tabular-nums">
+      {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
+    </Text>
+  );
+
+  if (layout === 'inline') {
+    return (
+      <div
+        className={cx('flex min-w-0 items-center gap-3', className)}
+        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
+      >
+        <Text as="span" variant="metadataMedium" color="text" className="min-w-0 flex-1 truncate">
+          Vote split available after vote
+        </Text>
+        {total}
+        {voters}
+      </div>
+    );
+  }
+
+  return (
+    <div className={className}>
+      <Text as="p" variant="metadataMedium" color="text">
+        Vote split available after vote
+      </Text>
+      <div className="mt-2 flex items-center gap-2">
+        {total}
+        {voters}
       </div>
     </div>
   );
@@ -339,12 +428,14 @@ function ClaimResponders({
   responseKind,
   summary,
   label,
+  revealDirections,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   label: string;
+  revealDirections: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const warm = useWarmResponders(entityId, spaceId, responseKind);
@@ -409,6 +500,7 @@ function ClaimResponders({
               spaceId={spaceId}
               objectType={CLAIM_RESPONSE_OBJECT_TYPE}
               responseKind={responseKind}
+              revealDirections={revealDirections}
             />
           </Popover.Content>
         </Popover.Portal>

@@ -186,6 +186,14 @@ describe('EntityVoteButtons claims-page batching', () => {
     });
   });
 
+  it('shows the claim vote total instead of its percentage before the viewer responds', () => {
+    const view = renderButtons(true, true, 'stance', null);
+
+    const total = view.getByRole('button', { name: '3 votes. Vote split available after vote.' });
+    expect(total).toHaveTextContent('3');
+    expect(view.queryByText('67%')).toBeNull();
+  });
+
   it('wires optimistic claim response changes without blocking subsequent clicks', () => {
     mocks.smartAccount = {};
     const view = renderButtons(true, true);
@@ -252,7 +260,12 @@ function BatchedClaims({ targets }: { targets: Array<{ entityId: string; respons
   );
 }
 
-function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' | 'veracity' = 'stance') {
+function renderButtons(
+  ready: boolean,
+  seedCaches = false,
+  responseKind: 'stance' | 'veracity' = 'stance',
+  viewerResponse: 'positive' | 'negative' | null = 'positive'
+) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seedCaches) {
     queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, responseKind), {
@@ -261,7 +274,7 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
     });
     queryClient.setQueryData(
       userEntityResponseQueryKey('profile-1', 'claim-1', 'space-1', 0, responseKind),
-      'positive'
+      viewerResponse
     );
   }
   return render(
@@ -287,10 +300,16 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient) =>
+  const renderPopover = (queryClient: QueryClient, revealDirections = true) =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind="stance" />
+        <RespondersPopoverContent
+          entityId="claim-1"
+          spaceId="space-1"
+          objectType={0}
+          responseKind="stance"
+          revealDirections={revealDirections}
+        />
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -342,5 +361,24 @@ describe('RespondersPopoverContent under a batch', () => {
 
     await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
     expect(view.container.querySelector('.overflow-y-auto')?.className).toContain('overscroll-contain');
+  });
+
+  it('shows one combined voter list without side labels before the viewer votes', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+      { userId: 'profile-10', direction: 'negative' },
+    ]);
+    mocks.getProfiles.mockReturnValue([
+      { id: 'profile-9', name: 'Dovile', avatarUrl: null },
+      { id: 'profile-10', name: 'Preston', avatarUrl: null },
+    ]);
+
+    const view = renderPopover(queryClient, false);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    expect(view.getByText('Preston')).toBeInTheDocument();
+    expect(view.queryByText('Agree')).toBeNull();
+    expect(view.queryByText('Disagree')).toBeNull();
   });
 });

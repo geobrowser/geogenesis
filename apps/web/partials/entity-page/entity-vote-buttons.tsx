@@ -260,8 +260,6 @@ export function EntityVoteButtons({
       ? responseCopy.removeNegative
       : responseCopy.negativeAction;
 
-  const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
-
   const optimisticPositiveDelta =
     effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
   const optimisticNegativeDelta =
@@ -272,7 +270,10 @@ export function EntityVoteButtons({
   const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectivePositive) / effectiveTotal)}%` : '0%';
 
   const isClaimVariant = variant !== 'default';
-  const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
+  const viewerHasResponded = activeResponse === 'positive' || activeResponse === 'negative';
+  // A claim's aggregate split is withheld until the viewer contributes their own response. Keep
+  // the total visible before then: it communicates participation without nudging the answer.
+  const displayLabel = isClaimVariant ? (viewerHasResponded ? percentLabel : String(effectiveTotal)) : scoreLabel;
 
   const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
     if (variant === 'chevrons') {
@@ -375,8 +376,19 @@ export function EntityVoteButtons({
         <Popover.Trigger asChild>
           <button
             className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
-            title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
-            disabled={totalResponders === 0}
+            title={
+              effectiveTotal > 0
+                ? viewerHasResponded || !isClaimVariant
+                  ? responseCopy.viewResponders
+                  : `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Vote split available after vote.`
+                : undefined
+            }
+            aria-label={
+              isClaimVariant && !viewerHasResponded && effectiveTotal > 0
+                ? `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Vote split available after vote.`
+                : undefined
+            }
+            disabled={effectiveTotal === 0}
           >
             {displayLabel}
           </button>
@@ -405,6 +417,7 @@ export function EntityVoteButtons({
               spaceId={spaceId}
               objectType={ENTITY_RESPONSE_OBJECT_TYPE}
               responseKind={responseKind}
+              revealDirections={!isClaimVariant || viewerHasResponded}
             />
           </Popover.Content>
         </Popover.Portal>
@@ -509,11 +522,14 @@ export function RespondersPopoverContent({
   spaceId,
   objectType,
   responseKind,
+  revealDirections = true,
 }: {
   entityId: string;
   spaceId: string;
   objectType: 0 | 1;
   responseKind: ResponseKind;
+  /** False before a claim viewer votes: show identities in one list without exposing their sides. */
+  revealDirections?: boolean;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
@@ -574,13 +590,14 @@ export function RespondersPopoverContent({
     // responders scrolled the page under them. Every other scrolling surface in the design system
     // already contains itself; these two lists were written without it.
     <div className="max-h-[356px] overflow-y-auto overscroll-contain">
+      {!revealDirections && respondersWithProfiles.map(v => <VoterRow key={v.userId} profile={v.profile} />)}
       {/* The verb, not the noun. Every control on a claim says Agree and Disagree, so a list that
           heads its sections "Agreements" and "Disagreements" makes the reader translate on arrival
           — and "Verifications"/"Disputes" reads stranger still beside a button marked Verify. */}
-      {positiveResponders.length > 0 && (
+      {revealDirections && positiveResponders.length > 0 && (
         <ResponderSection label={copy.positiveAction} responders={positiveResponders} />
       )}
-      {negativeResponders.length > 0 && (
+      {revealDirections && negativeResponders.length > 0 && (
         <ResponderSection label={copy.negativeAction} responders={negativeResponders} />
       )}
     </div>

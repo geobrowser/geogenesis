@@ -62,7 +62,8 @@ vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ sma
 
 vi.mock('~/core/io/queries', () => ({
   getClaimResponseSummaryPage: () => Effect.succeed([]),
-  // Two up, one down: a curation score reads "1", a claim percentage reads "67%".
+  // Two up, one down: a curation score reads "1"; a claim with no viewer response shows all 3
+  // votes while withholding their split.
   getEntityResponseCounts: (_entityId: string, spaceId: string) => {
     mocks.countsSpaceIds.push(spaceId);
     return Effect.succeed({ positive: 2, negative: 1 });
@@ -182,8 +183,11 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     mocks.entity = claimEntity();
     renderButtons();
 
-    // The claim controls show agreement as a percentage; curation shows a net score.
-    expect(await screen.findByText('67%')).toBeInTheDocument();
+    // The claim controls show participation without the split before voting; curation shows a net
+    // score.
+    expect(await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' })).toHaveTextContent(
+      '3'
+    );
     expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
@@ -202,7 +206,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     renderButtons();
 
     expect(await screen.findByText('1')).toBeInTheDocument();
-    expect(screen.queryByText('67%')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Vote split available after vote/ })).not.toBeInTheDocument();
   });
 
   // Which *kind* of claim response is asked for stays a per-space question: the space passed in is
@@ -211,7 +215,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     mocks.entity = claimEntity({ isFactualIn: BLOCK_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     // Veracity draws chevrons, which are the only 16x16 icons among the response controls.
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
@@ -221,7 +225,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(false);
   });
@@ -238,7 +242,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity();
     renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     expect(mocks.countsSpaceIds).toContain(CLAIM_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(BLOCK_SPACE);
   });
@@ -247,7 +251,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity();
     renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     expect(mocks.responseSpaceIds.at(-1)).toBe(CLAIM_SPACE);
   });
 
@@ -257,7 +261,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE });
     const view = renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
   });
@@ -298,7 +302,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity({ alsoIn: BLOCK_SPACE });
     renderButtons();
 
-    await screen.findByText('67%');
+    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
     expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
   });

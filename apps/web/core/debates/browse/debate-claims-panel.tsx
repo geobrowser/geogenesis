@@ -175,9 +175,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               />
             </div>
             <ClaimList
-              claims={
-                isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))
-              }
+              claims={isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
               timings={timings}
@@ -391,6 +389,7 @@ function PanelClaimControls({
           spaceId={spaceId}
           responseKind={responseKind}
           summary={summary}
+          viewerHasResponded={control.viewerPosition !== null}
           className="mt-2"
         />
       )}

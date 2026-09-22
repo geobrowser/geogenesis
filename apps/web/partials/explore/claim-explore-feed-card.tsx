@@ -7,7 +7,13 @@ import cx from 'classnames';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import {
+  ClaimSides,
+  ClaimSplitAvailableAfterVote,
+  ClaimSplitBar,
+  ClaimSummary,
+  ControversialTag,
+} from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
@@ -166,8 +172,11 @@ export function ClaimExploreFeedCard({
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
   const extraSegments = React.useMemo(
-    () => (summary.isControversial ? [<ControversialTag key="controversial" />] : undefined),
-    [summary.isControversial]
+    () =>
+      summary.isControversial && control.viewerPosition !== null
+        ? [<ControversialTag key="controversial" />]
+        : undefined,
+    [control.viewerPosition, summary.isControversial]
   );
 
   /*
@@ -344,6 +353,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
+              viewerHasResponded={control.viewerPosition !== null}
               matchDebatePanelOnMobile={matchesDebatePanelOnMobile}
             />
           </div>
@@ -382,12 +392,14 @@ export function ClaimVerdictColumn({
   spaceId,
   responseKind,
   summary,
+  viewerHasResponded,
   matchDebatePanelOnMobile,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
   summary: ClaimResponseSummary;
+  viewerHasResponded: boolean;
   matchDebatePanelOnMobile: boolean;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
@@ -404,29 +416,40 @@ export function ClaimVerdictColumn({
       {/* Wide: this column's own arrangement. The narrow-width rules that used to enlarge it here
           are gone — a phone gets `ClaimSummary` below instead of a bigger version of this. */}
       <div className="claim-card-narrow:hidden">
-        {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
+        {!viewerHasResponded ? (
+          <ClaimSplitAvailableAfterVote
+            entityId={entityId}
+            spaceId={spaceId}
+            responseKind={responseKind}
+            summary={summary}
+          />
+        ) : (
+          <>
+            {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
           baseline. No response count — this is the 220px rail, where it wrapped onto a line of its
           own. It used to be kept for the phone; the phone reads `ClaimSummary` now. */}
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
-            {percent}%
-          </span>
-          <Text as="span" variant="metadata" color="grey-04">
-            {copy.positiveAction.toLowerCase()}
-          </Text>
-        </div>
-        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
-        {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
+                {percent}%
+              </span>
+              <Text as="span" variant="metadata" color="grey-04">
+                {copy.positiveAction.toLowerCase()}
+              </Text>
+            </div>
+            <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+            {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
-        {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's
+            {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's
           side-by-side arrangement went with the phone, which no longer draws this block. */}
-        <ClaimSides
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          className="mt-3 flex flex-col gap-1.5"
-        />
+            <ClaimSides
+              entityId={entityId}
+              spaceId={spaceId}
+              responseKind={responseKind}
+              summary={summary}
+              className="mt-3 flex flex-col gap-1.5"
+            />
+          </>
+        )}
       </div>
 
       {/* Narrow: the debates panel's footer band — share, split and faces on one line, on grey.
@@ -438,6 +461,7 @@ export function ClaimVerdictColumn({
           spaceId={spaceId}
           responseKind={responseKind}
           summary={summary}
+          viewerHasResponded={viewerHasResponded}
           layout="inline"
           className={cx(
             'claim-card-summary-band',

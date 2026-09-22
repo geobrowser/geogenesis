@@ -745,9 +745,8 @@ describe('position avatar stack', () => {
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
   });
 
-  // `viewer_response: null` throughout: a viewer who holds this side is added to it, faces and
-  // count together, which is a different rule with its own tests below. These are about the
-  // arithmetic on a side the viewer has nothing to do with.
+  // The viewer has responded, so the side populations are eligible to appear. These assertions
+  // are about the arithmetic on a side the viewer has nothing to do with.
   it('counts the overflow from available people, not from every holder', () => {
     renderCard(
       <MatchmakingClaimCard
@@ -761,7 +760,7 @@ describe('position avatar stack', () => {
           },
           { total_count: 3, available_now_count: 0, present_count: 0, participants: [] },
         ])}
-        readiness={readiness({ viewer_response: null })}
+        readiness={readiness()}
       />
     );
 
@@ -769,6 +768,21 @@ describe('position avatar stack', () => {
     // 4 available, 2 shown -> +2. Not 9 - 2 = +7, which counted five people who are offline.
     expect(within(agree).getByText('+2')).toBeInTheDocument();
     expect(within(agree).queryByText('+7')).toBeNull();
+  });
+
+  it('hides per-side participant faces until the viewer responds', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          { present_count: 1, participants: [participant('one')] },
+          { present_count: 1, participants: [participant('two')] },
+        ])}
+        readiness={readiness({ viewer_response: null })}
+      />
+    );
+
+    expect(screen.queryByTestId('avatar')).toBeNull();
   });
 
   it('shows no overflow when every available person is already on screen', () => {

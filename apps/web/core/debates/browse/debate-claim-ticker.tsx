@@ -760,10 +760,8 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
  * vocabulary and publish the response, so a factual claim still reads Verify/Dispute here and the
  * share is the same number the claim page prints.
  *
- * The crowd split is shown up front, per the Figma card. It is worth knowing that this cuts against
- * the usual argument for withholding it — a viewer who sees "65% agree" before answering is being
- * nudged, and the tally becomes partly a measure of itself. Drawn as designed because it is a
- * deliberate call about what the card is *for*: a running read of the room rather than a poll.
+ * The crowd split appears only after the viewer answers. Until then the total remains visible, so
+ * the card can still communicate participation without nudging which side the viewer chooses.
  */
 function TickerClaimHeader({
   claimId,
@@ -837,10 +835,11 @@ function TickerClaimHeader({
                 ·
               </span>
             )}
-            {/* Same wording as the verdict on the claim page — "65% agree", or "65% verify" on a
-                factual claim, so the share reads the same wherever it is printed. */}
+            {/* Same privacy rule and wording as the verdict on the claim page. */}
             <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
-              {percent}% {copy.positiveAction.toLowerCase()}
+              {position !== null
+                ? `${percent}% ${copy.positiveAction.toLowerCase()}`
+                : `${summary.total} ${summary.total === 1 ? 'vote' : 'votes'} · split after vote`}
             </span>
           </>
         )}
