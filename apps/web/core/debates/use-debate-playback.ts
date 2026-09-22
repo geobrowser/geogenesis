@@ -392,6 +392,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // And so does any rebuild still waiting on an element that is about to hold a different
     // recording. See `recoveryReleasesRef`.
     cancelRecoveries();
+    refreshedSlotsRef.current.clear();
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
@@ -434,6 +435,53 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
   // away, and a count that nothing would ever decrement.
   React.useEffect(() => cancelRecoveries, [cancelRecoveries]);
+
+  /**
+   * Which slots have already been handed a freshly signed URL (GEO-2985).
+   *
+   * One re-mint per recording, per card. `refreshSlotUrl` is the escalation a tile reaches for
+   * once re-fetching the same bytes has failed as often as it is allowed to, and without a
+   * ceiling a recording that is simply gone would mint a URL per round for as long as the card is
+   * on screen. Reset with the recordings themselves, since a different debate has earned its own.
+   */
+  const refreshedSlotsRef = React.useRef(new Set<1 | 2>());
+
+  /**
+   * Re-sign one recording, because the URL itself may be what is broken.
+   *
+   * `error.code === 2` is `MEDIA_ERR_NETWORK`, and it covers two quite different things: the
+   * demuxer read failure this ticket is about, where the URL is fine and the element is not, and
+   * a signed URL that has stopped working. Rebuilding the element answers the first and provably
+   * cannot answer the second — it re-fetches the same bytes from the same signature — so a card
+   * left open long enough for its presign to lapse would exhaust its whole budget deterministically
+   * and give up on a recording that is still there.
+   *
+   * One slot, not the pair. `fetchedForRef` guards the *pair* against re-fetching on every
+   * re-activation (GEO-2895) and the effect behind it opens by blanking both URLs, which would
+   * take the healthy tile down to "Loading…" and release a video the viewer is watching. Nothing
+   * about a dead recording is a reason to interrupt the live one.
+   */
+  const refreshSlotUrl = React.useCallback(
+    async (slot: 1 | 2) => {
+      if (refreshedSlotsRef.current.has(slot)) return;
+      const filename = slot === 1 ? slot1RecordingFilename : slot2RecordingFilename;
+      if (!filename) return;
+      refreshedSlotsRef.current.add(slot);
+
+      try {
+        const { url } = await getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename });
+        // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
+        setUrls(current =>
+          current[slot === 1 ? 'slot1' : 'slot2'] === url
+            ? current
+            : { ...current, [slot === 1 ? 'slot1' : 'slot2']: url }
+        );
+      } catch {
+        /* The tile has already shown what it shows when a recording cannot be revived. */
+      }
+    },
+    [debate.id, slot1RecordingFilename, slot2RecordingFilename]
+  );
 
   const videos = React.useCallback(
     () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
@@ -802,6 +850,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
          */
         if (outcome === 'blocked') {
           /*
+           * Unless a recording is still being rebuilt (GEO-2985).
+           *
+           * 'blocked' means the browser let `play()` through and the media did not confirm, which
+           * is exactly what a half-open element looks like — and a rebuilt cue-less recording is
+           * the slowest thing in this file to open. The retry the outcome asks for is right and
+           * happens either way; the sentence is not, because nothing has gone wrong and the
+           * rebuild will finish on its own. Saying so would put "Could not play both videos" on a
+           * card that is a second away from playing, which is the failure that started this
+           * ticket wearing different clothes.
+           */
+          if (recoveringSlotsRef.current > 0) {
+            setAutoplayBlocked(false);
+            return;
+          }
+          /*
            * A block releases the latch, and that omission is what this fixes.
            *
            * 'blocked' from an attempt we still own is positive evidence that the browser is no
@@ -878,7 +941,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     (slot: 1 | 2) => {
       const recoveredVideo = slot === 1 ? slot1VideoRef.current : slot2VideoRef.current;
       const partnerVideo = slot === 1 ? slot2VideoRef.current : slot1VideoRef.current;
-      if (!recoveredVideo || !partnerVideo || partnerVideo.paused) return;
+      if (!recoveredVideo || !partnerVideo) return;
       const recovered = recoveredVideo;
       const partner = partnerVideo;
 
@@ -895,9 +958,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
        * and answers it by pausing the running one. That is the same failure by a different route,
        * and the window is wider here — a rebuilt cue-less recording is the slowest thing in this
        * file to start.
+       *
+       * Taken before anything can return, including the paused-partner case below where there is
+       * no split to misread. A rebuild that is in flight is a fact about the pair whatever the
+       * partner is doing — `resumeBoth` reads it too — and a guard whose presence depends on the
+       * state at the instant `onError` happened to fire is one nobody can reason about later.
        */
       recoveringSlotsRef.current++;
       let released = false;
+      // Declared before `release` closes over it: `release` is reachable from the shared set the
+      // moment it is added, so its safety must not rest on which statement runs next.
+      let giveUpTimer: ReturnType<typeof setTimeout> | undefined = undefined;
       const release = () => {
         if (released) return;
         released = true;
@@ -912,7 +983,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       function rejoin() {
         if (released) return;
         // Re-read the partner rather than closing over a position: opening one of these
-        // recordings can take a second or more, and the debate has moved on in the meantime.
+        // recordings can take a second or more, and the debate has moved on in the meantime —
+        // or has yet to start, which is the preload case and wants no seek at all.
         if (partner.paused) {
           release();
           return;
@@ -931,7 +1003,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // Backstops, because neither the open nor the start is guaranteed to report: a rebuild that
       // fails again says so on `error`, and one that simply never arrives is given up on. Either
       // way the pair must not be left permanently unpoliced.
-      const giveUpTimer = setTimeout(release, RECOVERY_REJOIN_TIMEOUT_MS);
+      giveUpTimer = setTimeout(release, RECOVERY_REJOIN_TIMEOUT_MS);
       recovered.addEventListener('error', release);
 
       if (recovered.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) rejoin();
@@ -1148,6 +1220,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     subtitle,
     onPlaybackTick: updateTurnState,
     resyncSlot,
+    refreshSlotUrl,
     togglePlayback,
     playFromStart,
     resumeBoth,

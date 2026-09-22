@@ -1599,6 +1599,88 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     expect(slot1.plays).toBe(0);
   });
 
+  // The guard is a fact about the pair, not about what the partner happened to be doing when
+  // `onError` fired. The preload case — both paused — is where the original failure was observed,
+  // and it is the case where `resumeBoth` most needs to know a rebuild is under way.
+  it('guards the rebuild even while the partner is paused', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserPause();
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+
+    // Nothing is seeked, as before — but the pair is now known to be mid-rebuild.
+    expect(slot1.plays).toBe(0);
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+    });
+    act(() => slot2.stallPlay());
+    await act(async () => {
+      slot1.stallPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    // 'blocked' is what a half-open element looks like, and it is not something to tell the
+    // viewer about — the rebuild finishes on its own and the autoplay effect retries either way.
+    expect(result.current.error).toBeNull();
+  });
+
+  /**
+   * `error.code === 2` is `MEDIA_ERR_NETWORK` and covers a signature that has lapsed as well as a
+   * pipeline that died. Rebuilding re-fetches the same bytes from the same signature, so it
+   * provably cannot answer the first — this is the escalation that can.
+   */
+  it('re-signs one recording without disturbing the other', async () => {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const untouched = result.current.urls.slot2;
+    mocks.recordingUrl.mockResolvedValueOnce({ url: 'https://cdn.test/slot1.webm?sig=fresh' });
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+
+    expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=fresh');
+    // The healthy tile is mid-playback. Blanking its URL would drop it to "Loading…" and release
+    // a video the viewer is watching, which is a worse thing than the tile this is repairing.
+    expect(result.current.urls.slot2).toBe(untouched);
+  });
+
+  // Without a ceiling, a recording that is simply gone would mint a URL per round for as long as
+  // the card is on screen — the tile spends a fresh budget on every new `src`.
+  it('re-signs a recording once per card', async () => {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+      await result.current.refreshSlotUrl(1);
+    });
+
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives a different debate its own re-sign', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(3);
+
+    rerender({ debate: debateFixture('debate-2') });
+    await waitFor(() => expect(mocks.recordingUrl).toHaveBeenCalledTimes(5));
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(6);
+  });
+
   /**
    * A rebuild that exhausts its budget leaves an element that cannot play and cannot be made to.
    * Before the rebuild existed, Chrome left such an element `paused === false` and the pair's
