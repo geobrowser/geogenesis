@@ -153,12 +153,16 @@ type MultiProps<T extends string> = {
    */
   countsPending?: boolean;
   /**
-   * Turns on the in-menu search field, using this as its placeholder and accessible name.
+   * Allows the in-menu search field, using this as its placeholder and accessible name.
    *
-   * Opt-in rather than always on, because it only earns its place where the menu can get long
-   * enough to scroll past what the viewer can hold in their head. Topics are that menu — a space's
-   * facet is however many subjects its claims have been tagged with, and it grows with the corpus.
-   * The space menu is the viewer's own spaces, which is a list they already know.
+   * Allows rather than shows: the field appears only once the options actually run off the end of
+   * the menu, which the layout effect below measures. A search box over a list you can already see
+   * whole is a control that asks the viewer to type in order to reach something their eye had
+   * already found.
+   *
+   * Opt-in per menu on top of that, because only some of them can ever get there. Topics are the
+   * one that does — a space's facet is however many subjects its claims have been tagged with, and
+   * it grows with the corpus. The space menu is the viewer's own spaces, a list they already know.
    */
   searchPlaceholder?: string;
   /** What the menu says when the query matches nothing. */
@@ -172,6 +176,13 @@ type MultiProps<T extends string> = {
  * The skeleton stays for the slow answer it was written for, instead of flashing on every tick.
  */
 const COUNT_SKELETON_DELAY_MS = 250;
+
+/**
+ * How much taller than its scroll viewport the list must be before the search field is worth
+ * showing. A pixel of slack, so a sub-pixel rounding difference on a list that fits exactly is not
+ * read as a list that runs off the end.
+ */
+const OVERFLOW_TOLERANCE_PX = 1;
 
 /**
  * The multi-select twin of {@link HubFilterMenu}: checkboxes, and the menu stays open so several
@@ -199,14 +210,16 @@ export function HubMultiFilterMenu<T extends string>({
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [overflows, setOverflows] = React.useState(false);
+  const [viewportNode, setViewportNode] = React.useState<HTMLDivElement | null>(null);
+  const [listNode, setListNode] = React.useState<HTMLDivElement | null>(null);
   const searchRef = React.useRef<HTMLInputElement>(null);
   const showCountSkeletons = useDelayedFlag(countsPending ?? false, COUNT_SKELETON_DELAY_MS);
   const selected = new Set<string>(values);
 
-  // Nothing to search through is worse than no field at all: it offers work that cannot pay off,
-  // and it is the state a menu waiting on its first facet sits in.
-  const searchable = searchPlaceholder !== undefined && options.length > 0;
-  const trimmedQuery = searchable ? query.trim() : '';
+  const searchEnabled = searchPlaceholder !== undefined;
+  const showSearch = searchEnabled && overflows;
+  const trimmedQuery = showSearch ? query.trim() : '';
   const searching = trimmedQuery.length > 0;
 
   const visibleOptions = React.useMemo(
@@ -217,13 +230,53 @@ export function HubMultiFilterMenu<T extends string>({
   // The query belongs to a visit, not to the filter. Left behind, reopening the menu would show a
   // list already narrowed by something the viewer typed a while ago and has no reason to expect —
   // and the selection they *did* make is on the trigger, where they can see it.
+  //
+  // The overflow verdict goes with it: the menu is asking a question about a list that no longer
+  // exists, and the next opening measures the one that does.
   const onOpenChange = React.useCallback((next: boolean) => {
-    if (!next) setQuery('');
+    if (!next) {
+      setQuery('');
+      setOverflows(false);
+    }
     setOpen(next);
   }, []);
 
+  /**
+   * Whether the options run off the end of the menu, which is the whole question of whether a
+   * search field is worth its space.
+   *
+   * Measured rather than counted. The height to beat belongs to the shared menu — a max-height
+   * against the viewport — so the row count that clears it is different on a laptop and on a phone
+   * held in one hand, and the phone is where a long list is hardest to scan. A guess would be wrong
+   * there, in the direction of withholding the field.
+   *
+   * Layout effect, so the verdict is in before the first paint and the field does not appear a beat
+   * after the menu it belongs to.
+   *
+   * Latched on rather than tracked both ways. Narrowing the list is the point of the field, and a
+   * query that trims it back to something that fits would otherwise take the field away mid-word —
+   * leaving the viewer's own query on screen with nothing to edit it in. It can only ever be turned
+   * off by closing the menu, above. That also makes this stable rather than circular: the field
+   * costs height, so showing it can only push the list further past the end, never back inside.
+   */
+  React.useLayoutEffect(() => {
+    if (!searchEnabled || !viewportNode || !listNode) return;
+
+    const measure = () => {
+      if (viewportNode.scrollHeight > viewportNode.clientHeight + OVERFLOW_TOLERANCE_PX) setOverflows(true);
+    };
+
+    measure();
+    // Both ends of the comparison move on their own: the viewport as the popover settles into the
+    // space it has, the list as options arrive and as names land under the skeletons.
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewportNode);
+    observer.observe(listNode);
+    return () => observer.disconnect();
+  }, [searchEnabled, viewportNode, listNode]);
+
   React.useEffect(() => {
-    if (!open || !searchable) return;
+    if (!open || !showSearch) return;
     // Only where a keyboard is already in front of the viewer. On a touch device this would throw
     // the software keyboard up over the very list it is meant to help pick from, before anyone has
     // said they want to type.
@@ -232,7 +285,7 @@ export function HubMultiFilterMenu<T extends string>({
     // racing it. `preventScroll` because the panel this sits in scrolls independently.
     const frame = requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
-  }, [open, searchable]);
+  }, [open, showSearch]);
 
   return (
     <Menu
@@ -241,6 +294,7 @@ export function HubMultiFilterMenu<T extends string>({
       asChild
       align={align}
       className="max-w-[280px]"
+      viewportRef={setViewportNode}
       trigger={
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
           {labelPending ? (
@@ -252,7 +306,7 @@ export function HubMultiFilterMenu<T extends string>({
       }
     >
       <>
-        {searchable ? (
+        {showSearch ? (
           // Sticky, because the list it filters is exactly the list long enough to scroll — losing
           // the field at the top of it would mean scrolling back to change a query by one letter.
           <div className="sticky top-0 z-10 border-b border-grey-02 bg-white p-2">
@@ -272,85 +326,90 @@ export function HubMultiFilterMenu<T extends string>({
             </div>
           </div>
         ) : null}
-        {searching ? null : (
-          <button
-            type="button"
-            onClick={() => {
-              onClear();
-              onOpenChange(false);
-            }}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg"
-          >
-            <Text variant="button" className="truncate hover:text-text!">
-              {clearLabel}
-            </Text>
-            {values.length === 0 ? (
-              <span className="ml-auto shrink-0">
-                <TickSmall />
+        {/* Wrapped so the options can be measured against the viewport without the search field's
+            own height counting towards them — and so the observer above has a single node whose
+            height is exactly "how much list there is". */}
+        <div ref={setListNode}>
+          {searching ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                onClear();
+                onOpenChange(false);
+              }}
+              className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg"
+            >
+              <Text variant="button" className="truncate hover:text-text!">
+                {clearLabel}
+              </Text>
+              {values.length === 0 ? (
+                <span className="ml-auto shrink-0">
+                  <TickSmall />
+                </span>
+              ) : null}
+            </button>
+          )}
+          {searching && visibleOptions.length === 0 ? (
+            <div className="px-3 py-2.5">
+              <Text variant="footnote" className="text-grey-04!">
+                {searchEmptyLabel}
+              </Text>
+            </div>
+          ) : null}
+          {visibleOptions.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              disabled={option.pending}
+              // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
+              // an ordinary button and nothing says whether it is picked.
+              aria-pressed={selected.has(option.value)}
+              // No `setOpen(false)`: the point of multi-select is picking more than one, and closing
+              // on the first tick would make the second a whole new trip through the trigger.
+              onClick={() => onToggle(option.value)}
+              className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg disabled:cursor-default disabled:hover:bg-white"
+            >
+              <span className="shrink-0">
+                <CheckboxVisual checked={selected.has(option.value)} />
               </span>
-            ) : null}
-          </button>
-        )}
-        {searching && visibleOptions.length === 0 ? (
-          <div className="px-3 py-2.5">
-            <Text variant="footnote" className="text-grey-04!">
-              {searchEmptyLabel}
-            </Text>
-          </div>
-        ) : null}
-        {visibleOptions.map(option => (
-          <button
-            key={option.value}
-            type="button"
-            disabled={option.pending}
-            // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
-            // an ordinary button and nothing says whether it is picked.
-            aria-pressed={selected.has(option.value)}
-            // No `setOpen(false)`: the point of multi-select is picking more than one, and closing
-            // on the first tick would make the second a whole new trip through the trigger.
-            onClick={() => onToggle(option.value)}
-            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg disabled:cursor-default disabled:hover:bg-white"
-          >
-            <span className="shrink-0">
-              <CheckboxVisual checked={selected.has(option.value)} />
-            </span>
-            {showImages && option.showImage !== false ? (
-              option.pending ? (
-                <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
-              ) : option.image ? (
-                <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
-                  <ThumbGeoImage value={option.image} alt="" />
+              {showImages && option.showImage !== false ? (
+                option.pending ? (
+                  <Skeleton className="h-5 w-5 shrink-0 rounded-md" />
+                ) : option.image ? (
+                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-md">
+                    <ThumbGeoImage value={option.image} alt="" />
+                  </span>
+                ) : (
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-grey-01 text-[10px] font-medium text-grey-04">
+                    {(option.label.trim().slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?')}
+                  </span>
+                )
+              ) : null}
+              {option.pending ? (
+                <Skeleton
+                  className="h-[1em] flex-1"
+                  style={{ maxWidth: pendingLabelWidth(option.value) }}
+                  aria-label="Loading space name"
+                />
+              ) : (
+                <Text variant="button" className="truncate hover:text-text!">
+                  {option.label}
+                </Text>
+              )}
+              {option.count === undefined ? null : showCountSkeletons ? (
+                // Held as a skeleton rather than removed: the number is coming back, and taking the
+                // column away and putting it back makes every row twitch on each tick.
+                <span className="ml-auto shrink-0">
+                  <Skeleton className="h-[1em] w-5" aria-label="Loading count" />
                 </span>
               ) : (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-grey-01 text-[10px] font-medium text-grey-04">
-                  {(option.label.trim().slice(0, 1).toUpperCase() || '?').replace(/[^A-Z0-9?]/g, '?')}
-                </span>
-              )
-            ) : null}
-            {option.pending ? (
-              <Skeleton
-                className="h-[1em] flex-1"
-                style={{ maxWidth: pendingLabelWidth(option.value) }}
-                aria-label="Loading space name"
-              />
-            ) : (
-              <Text variant="button" className="truncate hover:text-text!">
-                {option.label}
-              </Text>
-            )}
-            {option.count === undefined ? null : showCountSkeletons ? (
-              // Held as a skeleton rather than removed: the number is coming back, and taking the
-              // column away and putting it back makes every row twitch on each tick.
-              <span className="ml-auto shrink-0">
-                <Skeleton className="h-[1em] w-5" aria-label="Loading count" />
-              </span>
-            ) : (
-              <Text variant="footnote" className="ml-auto shrink-0 text-grey-04!">
-                {formatFacetCount(option.count)}
-              </Text>
-            )}
-          </button>
-        ))}
+                <Text variant="footnote" className="ml-auto shrink-0 text-grey-04!">
+                  {formatFacetCount(option.count)}
+                </Text>
+              )}
+            </button>
+          ))}
+        </div>
       </>
     </Menu>
   );

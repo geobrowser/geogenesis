@@ -13,8 +13,31 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
+/**
+ * jsdom lays nothing out, so both sides of the menu's overflow test are 0 and it would never offer
+ * the search field. Defined on the prototype rather than on the viewport, which a test has no
+ * handle on — the shared `Menu` owns that node — and nothing else in these menus is measured.
+ *
+ * A plain `defineProperty` reading a variable rather than a spy, so a test can change the answer
+ * mid-run without re-spying a getter that is already mocked.
+ */
+let listOverflows = false;
+const VIEWPORT_CLIENT_HEIGHT = 400;
+
+function stubOverflow(overflowing: boolean) {
+  listOverflows = overflowing;
+}
+
 beforeAll(() => {
   window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    configurable: true,
+    get: () => VIEWPORT_CLIENT_HEIGHT,
+  });
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+    configurable: true,
+    get: () => (listOverflows ? VIEWPORT_CLIENT_HEIGHT * 2 : VIEWPORT_CLIENT_HEIGHT),
+  });
   // jsdom has no matchMedia, and the menu asks it whether a real keyboard is present before it
   // takes focus. Answered as a touch device so the tests drive the field explicitly.
   window.matchMedia = ((query: string) => ({
@@ -32,6 +55,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  listOverflows = false;
 });
 
 describe('HubMultiFilterMenu placement', () => {
@@ -91,7 +115,12 @@ describe('HubMultiFilterMenu search', () => {
     { value: 'topic-3', label: 'Artificial intelligence', count: 3 },
   ];
 
-  function renderTopicMenu(overrides?: { onToggle?: (value: string) => void; onClear?: () => void }) {
+  function renderTopicMenu(overrides?: {
+    onToggle?: (value: string) => void;
+    onClear?: () => void;
+    overflowing?: boolean;
+  }) {
+    stubOverflow(overrides?.overflowing ?? true);
     render(
       <HubMultiFilterMenu
         align="start"
@@ -179,6 +208,7 @@ describe('HubMultiFilterMenu search', () => {
   });
 
   it('offers no search field without the prop', async () => {
+    stubOverflow(true);
     render(
       <HubMultiFilterMenu
         align="start"
@@ -197,6 +227,27 @@ describe('HubMultiFilterMenu search', () => {
     expect(screen.queryByLabelText('Search topics')).not.toBeInTheDocument();
   });
 
+  it('offers no search field when the options fit on one page', async () => {
+    render(
+      <HubMultiFilterMenu
+        align="start"
+        label="Any topic"
+        options={TOPICS}
+        values={[]}
+        onToggle={() => {}}
+        onClear={() => {}}
+        clearLabel="Any topic"
+        searchPlaceholder="Search topics"
+      />
+    );
+    stubOverflow(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
+
+    await waitFor(() => expect(screen.getByText('Climate policy')).toBeInTheDocument());
+    expect(screen.queryByLabelText('Search topics')).not.toBeInTheDocument();
+  });
+
   it('offers no search field while the menu has no options to search', async () => {
     render(
       <HubMultiFilterMenu
@@ -210,10 +261,22 @@ describe('HubMultiFilterMenu search', () => {
         searchPlaceholder="Search topics"
       />
     );
+    stubOverflow(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
 
     await waitFor(() => expect(screen.getAllByText('Any topic')).toHaveLength(2));
     expect(screen.queryByLabelText('Search topics')).not.toBeInTheDocument();
+  });
+
+  it('keeps the field once shown, even when the query narrows the list back to a single page', async () => {
+    const field = await renderTopicMenu();
+
+    // What the measurement would now report: the field is only still there because it latched.
+    stubOverflow(false);
+    fireEvent.change(field, { target: { value: 'climate' } });
+
+    await waitFor(() => expect(screen.queryByText('Monetary policy')).not.toBeInTheDocument());
+    expect(screen.getByLabelText('Search topics')).toHaveValue('climate');
   });
 });

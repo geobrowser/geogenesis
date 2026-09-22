@@ -37,6 +37,14 @@ interface Props {
    * clicked unmounts with the menu, so the trigger is the only node left to return focus to.
    */
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  /**
+   * The inner scroll viewport, for callers that need to know whether their content overflows it.
+   *
+   * The height that decides that is this component's — a max-height against the viewport — so a
+   * caller cannot work it out from its own content alone, and guessing it from a row count would
+   * be wrong on exactly the short screens where it matters most.
+   */
+  viewportRef?: React.Ref<HTMLDivElement>;
 }
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
@@ -73,6 +81,7 @@ export function Menu({
   modal = false,
   onCloseAutoFocus,
   triggerRef: externalTriggerRef,
+  viewportRef,
 }: Props) {
   const internalTriggerRef = React.useRef<HTMLButtonElement>(null);
   const triggerRef = externalTriggerRef ?? internalTriggerRef;
@@ -86,6 +95,17 @@ export function Menu({
   const resolvedAlign = align === 'center' ? 'center' : (align ?? adaptiveAlign);
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Merged rather than handed over: the wheel trap below needs the node whether or not a caller
+  // asked for it.
+  const setScrollNode = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      scrollRef.current = node;
+      if (typeof viewportRef === 'function') viewportRef(node);
+      else if (viewportRef) (viewportRef as React.RefObject<HTMLDivElement | null>).current = node;
+    },
+    [viewportRef]
+  );
 
   const onMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(scrollRef.current, e);
@@ -108,7 +128,7 @@ export function Menu({
         onWheel={onMenuWheel}
         onCloseAutoFocus={onCloseAutoFocus}
       >
-        <div ref={scrollRef} className={viewportClassName ?? defaultScrollViewportClass}>
+        <div ref={setScrollNode} className={viewportClassName ?? defaultScrollViewportClass}>
           {children}
         </div>
       </PopoverContent>
