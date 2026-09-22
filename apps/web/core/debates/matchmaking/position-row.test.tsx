@@ -1,7 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 import type { DebateClaimPositionSummary } from '../api';
 import { PositionRow } from './matchmaking-claim-card';
@@ -141,15 +148,19 @@ describe('PositionRow', () => {
     expect(screen.getByText('Dispute')).toBeInTheDocument();
   });
 
-  // The stroke a `ChevronUp`/`ChevronDown` draws. Asserting the path rather than a test id because
-  // the glyph is the whole point here: a thumb swapped back in would still render an `svg`.
-  const CHEVRON_UP = 'M1 11L8 4L15 11';
-  const CHEVRON_DOWN = 'M1 5L8 12L15 5';
+  /**
+   * The glyph a pill draws, pinned against the icon it should be.
+   *
+   * Not asserted as "not the chevron": a thumb, a vote arrow and an empty span all satisfy that,
+   * so a pill that never got the veracity branch — the bug this file's chevron cases exist to
+   * catch — would pass its own regression test. Comparing the rendered icon says which glyph it
+   * is, and re-rendering the expectation from the component means redrawing an icon's art does
+   * not fail these.
+   */
+  const glyphMarkup = (label: string) =>
+    screen.getByText(label).closest('span')?.parentElement?.querySelector('svg')?.outerHTML ?? null;
 
-  const glyphPath = (label: string) =>
-    (
-      screen.getByText(label).closest('span')?.parentElement?.querySelector('svg path') as SVGPathElement | null
-    )?.getAttribute('d') ?? null;
+  const iconMarkup = (node: React.ReactNode) => render(<>{node}</>).container.innerHTML;
 
   // A thumb is an opinion and Verify/Dispute is not one — it says the claim is or is not true. The
   // claim ticker over the video already splits its glyphs this way, so a pill that thumbed both
@@ -157,15 +168,15 @@ describe('PositionRow', () => {
   it('draws chevrons for a factual claim rather than thumbs', () => {
     render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
 
-    expect(glyphPath('Verify')).toBe(CHEVRON_UP);
-    expect(glyphPath('Dispute')).toBe(CHEVRON_DOWN);
+    expect(glyphMarkup('Verify')).toBe(iconMarkup(<ChevronUp />));
+    expect(glyphMarkup('Dispute')).toBe(iconMarkup(<ChevronDown />));
   });
 
   it('keeps the thumbs on a stance claim', () => {
     render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 
-    expect(glyphPath('Agree')).not.toBe(CHEVRON_UP);
-    expect(glyphPath('Disagree')).not.toBe(CHEVRON_DOWN);
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled={false} />));
+    expect(glyphMarkup('Disagree')).toBe(iconMarkup(<ThumbDown filled={false} />));
   });
 
   // A chevron has no filled form, so the pill's own fill is the only thing left saying which side
