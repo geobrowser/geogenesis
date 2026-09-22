@@ -29,6 +29,7 @@ const CLAIMS_SOURCE = /* GraphQL */ `
     $spaceIdsForLists: [UUID!]!
     $topicFilter: EntityFilter!
     $extractedFilter: EntityFilter!
+    $matchingFilter: RelationFilter!
     $orderBy: [EntitiesOrderBy!]!
     $scorePropertyId: UUID!
     $first: Int!
@@ -56,6 +57,9 @@ const CLAIMS_SOURCE = /* GraphQL */ `
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
         }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
+        }
         ${exploreCardNodeFields(CLAIM_FRAGMENT)}
       }
     }
@@ -81,6 +85,9 @@ const CLAIMS_SOURCE = /* GraphQL */ `
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
         }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
+        }
         ${exploreCardNodeFields(CLAIM_FRAGMENT)}
       }
     }
@@ -101,6 +108,9 @@ const CLAIMS_SOURCE = /* GraphQL */ `
         updatedAt
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
+        }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
         }
         ${exploreCardNodeFields(CLAIM_FRAGMENT)}
       }
@@ -127,6 +137,9 @@ const CLAIMS_SOURCE = /* GraphQL */ `
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
         }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
+        }
         ${exploreCardNodeFields(CLAIM_FRAGMENT)}
       }
     }
@@ -141,6 +154,7 @@ const DEBATES_SOURCE = /* GraphQL */ `
     $spaceIds: [UUID!]!
     $spaceIdsForLists: [UUID!]!
     $filter: EntityFilter!
+    $matchingFilter: RelationFilter!
     $orderBy: [EntitiesOrderBy!]!
     $scorePropertyId: UUID!
     $first: Int!
@@ -163,6 +177,9 @@ const DEBATES_SOURCE = /* GraphQL */ `
         updatedAt
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
+        }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
         }
         ${exploreCardNodeFields(DEBATE_FRAGMENT)}
       }
@@ -188,6 +205,9 @@ const DEBATES_SOURCE = /* GraphQL */ `
         updatedAt
         scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
           integer
+        }
+        matchingRelations: relationsList(filter: $matchingFilter) {
+          spaceId
         }
         ${exploreCardNodeFields(DEBATE_FRAGMENT)}
       }
@@ -308,13 +328,6 @@ export function claimRecordFilters({
     ...claimScope(spaceId),
     and: [{ relations: { some: extractedSourceRelation(spaceId) } }, ...selectedTopicConditions(spaceId)],
   });
-  const topicClaimTarget = (spaceId: string): EntityFilter => ({
-    ...claimScope(spaceId),
-    relations: { some: topicRelation(spaceId) },
-  });
-  const debateTarget = (spaceId: string): EntityFilter =>
-    topicIds.length > 0 ? { or: [{ id: { is: claimId } }, topicClaimTarget(spaceId)] } : { id: { is: claimId } };
-
   const relatedClaim = (spaceId: string): EntityFilter => ({
     ...narrowedClaimScope(spaceId),
     or: [
@@ -329,7 +342,7 @@ export function claimRecordFilters({
       some: {
         typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
         spaceId: { is: spaceId },
-        toEntity: debateTarget(spaceId),
+        toEntity: { id: { is: claimId } },
       },
     },
   }));
@@ -356,7 +369,7 @@ export function claimRecordFilters({
     typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
     spaceId: { is: spaceId },
     fromEntity: debateScope(spaceId),
-    toEntity: debateTarget(spaceId),
+    toEntity: { id: { is: claimId } },
   }));
 
   return {
@@ -372,6 +385,8 @@ export function claimRecordFilters({
 }
 
 export type RankedClaimRecordEntity = ExploreCardEntity & {
+  /** Spaces where this entity satisfied the complete record relation predicate. */
+  matchingSpaceIds: string[];
   rankingScore: number | null;
   score: number | null;
   updatedAt: string;
@@ -411,12 +426,21 @@ function decodeConnection(connection: ConnectionShape): ClaimRecordConnectionPag
       rankingScore?: string | number | null;
       updatedAt?: string | null;
       scoreValues?: Array<{ integer?: string | number | null }> | null;
+      matchingRelations?: Array<{ spaceId?: string | null }> | null;
     };
     const parsedScore = raw.rankingScore == null ? null : Number(raw.rankingScore);
     const rawTopScore = raw.scoreValues?.[0]?.integer;
     const parsedTopScore = rawTopScore == null ? null : Number(rawTopScore);
     entities.push({
       ...decoded,
+      matchingSpaceIds: [
+        ...new Map(
+          (raw.matchingRelations ?? [])
+            .map(relation => relation.spaceId)
+            .filter((spaceId): spaceId is string => typeof spaceId === 'string' && spaceId.length > 0)
+            .map(spaceId => [normId(spaceId), spaceId])
+        ).values(),
+      ],
       rankingScore: parsedScore !== null && Number.isFinite(parsedScore) ? parsedScore : null,
       score: parsedTopScore !== null && Number.isFinite(parsedTopScore) ? parsedTopScore : null,
       updatedAt: raw.updatedAt ?? '',
@@ -568,6 +592,7 @@ export async function fetchClaimRecordClaimsPage({
         spaceIdsForLists: spaceIds,
         topicFilter: filters.topicClaims,
         extractedFilter: filters.extractedClaims,
+        matchingFilter: filters.claimRelations,
         orderBy: claimRecordOrderBy(sort),
         scorePropertyId: SCORE_SYSTEM_PROPERTY,
         first: CLAIM_RECORD_PAGE_SIZE,
@@ -605,6 +630,7 @@ export async function fetchClaimRecordDebatesPage({
         spaceIds,
         spaceIdsForLists: spaceIds,
         filter: filters.debates,
+        matchingFilter: filters.debateRelations,
         orderBy: claimRecordOrderBy(sort),
         scorePropertyId: SCORE_SYSTEM_PROPERTY,
         first: CLAIM_RECORD_PAGE_SIZE,

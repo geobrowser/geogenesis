@@ -46,6 +46,25 @@ export function ClaimRecordTab({
   availableSpaceIds,
   sourceTopics,
 }: ClaimRecordTabProps) {
+  return (
+    <ClaimRecordTabContent
+      key={`${kind}:${normId(claimId)}:${normId(spaceId)}`}
+      kind={kind}
+      claimId={claimId}
+      spaceId={spaceId}
+      availableSpaceIds={availableSpaceIds}
+      sourceTopics={sourceTopics}
+    />
+  );
+}
+
+function ClaimRecordTabContent({
+  kind,
+  claimId,
+  spaceId,
+  availableSpaceIds,
+  sourceTopics,
+}: ClaimRecordTabProps) {
   const [sort, setSort] = React.useState<ClaimRecordSort>('best');
   const spaces = useRecordSelection([spaceId]);
   const topics = useRecordSelection();
@@ -173,7 +192,7 @@ export function ClaimRecordTab({
             ? `No ${isClaims ? 'claims' : 'debates'} match these filters.`
             : isClaims
               ? 'No related debate claims yet.'
-              : 'No debates on this claim or its related claims yet.'
+              : 'No debates on this claim yet.'
         }
         errorLabel={isClaims ? 'Couldn’t load claims.' : 'Couldn’t load debates.'}
         noun={isClaims ? 'claims' : 'debates'}

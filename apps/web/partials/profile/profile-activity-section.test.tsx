@@ -226,6 +226,22 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('keeps the visible fallback selected when the previous kind later returns', () => {
+    const debates = kind({ rows: [row('d1')] });
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates, claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[debates, { ...claims, rows: [] }]} />);
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+
+    rerender(<ProfileActivitySection kinds={[debates, claims]} />);
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('renders only the shared gallery card limit', () => {
     render(
       <ProfileActivitySection kinds={[kind({ rows: Array.from({ length: 8 }, (_, index) => row(`d${index + 1}`)) })]} />

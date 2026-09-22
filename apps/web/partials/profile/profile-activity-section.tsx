@@ -89,7 +89,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (selectedKey === null && available[0]) setSelectedKey(available[0].key);
+    if (available[0] && !available.some(kind => kind.key === selectedKey)) setSelectedKey(available[0].key);
   }, [available, selectedKey]);
 
   // Whichever the reader picked, or the first with anything in it. Held as a key

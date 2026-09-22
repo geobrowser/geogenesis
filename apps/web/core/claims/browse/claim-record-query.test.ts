@@ -11,6 +11,7 @@ import {
   claimRecordDebatesDocument,
   claimRecordFilters,
   claimRecordOrderBy,
+  decodeClaimRecordClaims,
   decodeClaimRecordCounts,
   mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
@@ -36,9 +37,11 @@ describe('claim record GraphQL', () => {
     expect(claims).toContain('extractedClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).toContain('@skip(if: $skipTopicClaims)');
     expect(claims).toContain('@skip(if: $skipExtractedClaims)');
+    expect(claims.match(/matchingRelations: relationsList/g)).toHaveLength(4);
     expect(debates).toContain('debates: entitiesConnection');
     expect(debates).toContain('orderBy: $orderBy');
     expect(debates).toContain('debatesTop: entitiesOrderedByPropertyConnection');
+    expect(debates.match(/matchingRelations: relationsList/g)).toHaveLength(2);
     expect(counts.match(/distinctCount/g)).toHaveLength(2);
     expect(counts.match(/fromEntityId/g)).toHaveLength(2);
   });
@@ -185,6 +188,46 @@ describe('claim record GraphQL', () => {
     expect(filters.claimRelations.or?.[0]).toMatchObject({ typeId: { is: SOURCES_PROPERTY_ID } });
     expect(filters.debates.relations?.some?.toEntity).toEqual({ id: { is: CLAIM_ID } });
     expect(filters.debateRelations.toEntity).toEqual({ id: { is: CLAIM_ID } });
+  });
+
+  it('keeps Debates scoped to the viewed claim even when Related claims has topics', () => {
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      spaceIds: [SPACE_ID],
+      topicIds: [TOPIC_ID],
+      filterTopicIds: [],
+    });
+
+    expect(filters.debates.relations?.some?.toEntity).toEqual({ id: { is: CLAIM_ID } });
+    expect(filters.debateRelations.toEntity).toEqual({ id: { is: CLAIM_ID } });
+  });
+
+  it('decodes the spaces whose relations actually matched the record filter', () => {
+    const secondSpace = 'dddddddddddddddddddddddddddddddd';
+    const page = decodeClaimRecordClaims({
+      topicClaims: {
+        nodes: [
+          {
+            id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+            name: 'A related claim',
+            description: null,
+            spaceIds: [SPACE_ID, secondSpace],
+            createdAt: '1788802463',
+            backlinks: { totalCount: 0 },
+            types: [],
+            valuesList: [],
+            relationsList: [],
+            matchingRelations: [{ spaceId: secondSpace }, { spaceId: secondSpace }],
+            rankingScore: 10,
+            scoreValues: [],
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        pageInfo: { endCursor: null, hasNextPage: false },
+      },
+    });
+
+    expect(page.topicClaims.entities[0]?.matchingSpaceIds).toEqual([secondSpace]);
   });
 
   it('requires every selected topic in the same selected space', () => {

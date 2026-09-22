@@ -152,6 +152,34 @@ describe('ClaimRecordTab', () => {
     expect(mocks.facetHookCalls.at(-1)).toMatchObject({ selectedTopicIds: ['topic-1'] });
   });
 
+  it('resets sort and filters before rendering a different claim or space', () => {
+    const view = render(<ClaimRecordTab {...common} kind="claims" />);
+
+    act(() => mocks.filterProps?.sort.onChange('top'));
+    act(() =>
+      (mocks.filterProps?.dimensions as Array<Record<string, any>>)
+        .find(dimension => dimension.key === 'topics')
+        ?.onToggle('topic-1')
+    );
+
+    view.rerender(
+      <ClaimRecordTab
+        {...common}
+        kind="claims"
+        claimId="claim-2"
+        spaceId="space-2"
+        availableSpaceIds={['space-2']}
+      />
+    );
+
+    expect(mocks.hookCalls.at(-1)).toMatchObject({
+      claimId: 'claim-2',
+      claimSort: 'best',
+      spaceIds: ['space-2'],
+      filterTopicIds: [],
+    });
+  });
+
   it('gives Debates the same sort order and only its Spaces filter', () => {
     render(<ClaimRecordTab {...common} kind="debates" />);
 

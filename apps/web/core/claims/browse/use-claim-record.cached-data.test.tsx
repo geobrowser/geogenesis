@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
   useInfiniteQuery: vi.fn(),
   buildExploreFeedRows: vi.fn(),
+  claimData: undefined as Record<string, unknown> | undefined,
+  claimsHasNextPage: false,
+  claimFetchNextPage: vi.fn(),
+  allowedSets: [] as Set<string>[],
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -37,6 +41,18 @@ describe('useClaimRecord independent loading and cached data', () => {
     mocks.useQuery.mockReset();
     mocks.useInfiniteQuery.mockReset();
     mocks.buildExploreFeedRows.mockReset();
+    mocks.claimFetchNextPage.mockReset();
+    mocks.allowedSets = [];
+    mocks.claimsHasNextPage = false;
+    mocks.claimFetchNextPage.mockResolvedValue({ isError: false });
+    mocks.claimData = {
+      pages: [
+        {
+          topicClaims: { entities: [claimEntity], endCursor: null, hasNextPage: false },
+          extractedClaims: emptyConnection,
+        },
+      ],
+    };
 
     mocks.useQuery.mockImplementation(() => ({
       data: undefined,
@@ -44,23 +60,15 @@ describe('useClaimRecord independent loading and cached data', () => {
       isError: false,
       error: null,
     }));
-    mocks.useInfiniteQuery.mockImplementation(() => {
-      const call = mocks.useInfiniteQuery.mock.calls.length;
-      if (call === 1) {
+    mocks.useInfiniteQuery.mockImplementation((options: { queryKey: string[] }) => {
+      if (options.queryKey[1] === 'claims') {
         return {
-          data: {
-            pages: [
-              {
-                topicClaims: { entities: [claimEntity], endCursor: null, hasNextPage: false },
-                extractedClaims: emptyConnection,
-              },
-            ],
-          },
+          data: mocks.claimData,
           isLoading: false,
           isError: mocks.claimsError,
           isFetchingNextPage: false,
-          hasNextPage: false,
-          fetchNextPage: vi.fn(),
+          hasNextPage: mocks.claimsHasNextPage,
+          fetchNextPage: mocks.claimFetchNextPage,
           refetch: vi.fn(),
         };
       }
@@ -75,9 +83,10 @@ describe('useClaimRecord independent loading and cached data', () => {
         refetch: vi.fn(),
       };
     });
-    mocks.buildExploreFeedRows.mockImplementation((entities: Array<{ id: string }>) =>
-      entities.map(entity => ({ ...claimRow, entityId: entity.id }))
-    );
+    mocks.buildExploreFeedRows.mockImplementation((entities: Array<{ id: string }>, allowed: Set<string>) => {
+      mocks.allowedSets.push(allowed);
+      return entities.map(entity => ({ ...claimRow, entityId: entity.id }));
+    });
 
   });
 
@@ -101,5 +110,66 @@ describe('useClaimRecord independent loading and cached data', () => {
 
     expect(result.current.claimRows).toEqual([claimRow]);
     expect(result.current.claimsError).toBe(true);
+  });
+
+  it('uses each entity’s matching spaces rather than every selected space', () => {
+    mocks.claimData = {
+      pages: [
+        {
+          topicClaims: {
+            entities: [{ ...claimEntity, matchingSpaceIds: ['space-2'] }],
+            endCursor: null,
+            hasNextPage: false,
+          },
+          extractedClaims: emptyConnection,
+        },
+      ],
+    };
+
+    renderHook(() =>
+      useClaimRecord({
+        claimId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        spaceId: 'space-1',
+        spaceIds: ['space-1', 'space-2'],
+        topicIds: ['topic-1'],
+      })
+    );
+
+    expect([...mocks.allowedSets[0]]).toEqual(['space2']);
+  });
+
+  it('fetches every open union branch before revealing the next ranked slice', async () => {
+    let resolveNextPage!: (value: { isError: boolean }) => void;
+    mocks.claimFetchNextPage.mockReturnValue(
+      new Promise<{ isError: boolean }>(resolve => {
+        resolveNextPage = resolve;
+      })
+    );
+    mocks.claimsHasNextPage = true;
+    const entities = Array.from({ length: 40 }, (_, index) => ({
+      ...claimEntity,
+      id: `${index + 1}`.padStart(32, '0'),
+      rankingScore: 40 - index,
+    }));
+    mocks.claimData = {
+      pages: [
+        {
+          topicClaims: { entities: entities.slice(0, 20), endCursor: 'topic-next', hasNextPage: true },
+          extractedClaims: { entities: entities.slice(20), endCursor: 'extracted-next', hasNextPage: true },
+        },
+      ],
+    };
+
+    const { result } = renderHook(() =>
+      useClaimRecord({ claimId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', spaceId: 'space-1', topicIds: ['topic-1'] })
+    );
+    expect(result.current.claimRows).toHaveLength(20);
+
+    act(() => result.current.fetchNextClaimsPage());
+    expect(mocks.claimFetchNextPage).toHaveBeenCalledOnce();
+    expect(result.current.claimRows).toHaveLength(20);
+
+    await act(async () => resolveNextPage({ isError: false }));
+    expect(result.current.claimRows).toHaveLength(40);
   });
 });

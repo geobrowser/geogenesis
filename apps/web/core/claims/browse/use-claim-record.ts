@@ -29,6 +29,7 @@ function useVisibleRecordPage({
   recordKey,
   entityCount,
   queryHasNextPage,
+  queryIsFetchingNextPage,
   queryIsError,
   refetch,
   fetchNextPage,
@@ -36,28 +37,43 @@ function useVisibleRecordPage({
   recordKey: string;
   entityCount: number;
   queryHasNextPage: boolean;
+  queryIsFetchingNextPage: boolean;
   queryIsError: boolean;
   refetch: () => Promise<unknown>;
-  fetchNextPage: () => Promise<unknown>;
+  fetchNextPage: () => Promise<{ isError: boolean }>;
 }) {
   const [page, setPage] = React.useState({ key: recordKey, visibleCount: CLAIM_RECORD_PAGE_SIZE });
   const visibleCount = page.key === recordKey ? page.visibleCount : CLAIM_RECORD_PAGE_SIZE;
   const hasNextPage = entityCount > visibleCount || queryHasNextPage;
+
+  const revealNextPage = React.useCallback(() => {
+    setPage(current => ({
+      key: recordKey,
+      visibleCount:
+        (current.key === recordKey ? current.visibleCount : CLAIM_RECORD_PAGE_SIZE) + CLAIM_RECORD_PAGE_SIZE,
+    }));
+  }, [recordKey]);
 
   const fetchNext = React.useCallback(() => {
     if (queryIsError) {
       void refetch();
       return;
     }
+    if (queryIsFetchingNextPage) return;
 
-    const nextVisibleCount = visibleCount + CLAIM_RECORD_PAGE_SIZE;
-    setPage({ key: recordKey, visibleCount: nextVisibleCount });
+    // Every still-open branch must advance before another union slice is visible. A buffered 20
+    // from each branch cannot prove the union's top 40: row 21 in either branch may outrank a row
+    // already buffered from the other. Once each branch has K rows, its unseen rows cannot enter
+    // the union's top K because that branch alone already has K rows ahead of them.
+    if (queryHasNextPage) {
+      void fetchNextPage().then(result => {
+        if (!result.isError) revealNextPage();
+      });
+      return;
+    }
 
-    // Two ranked claim branches can provide a buffered page between them. Reveal that buffer
-    // immediately, and only ask the graph for another cursor page when it cannot fill the next
-    // visible page. This keeps scrolling bounded without adding an avoidable request per click.
-    if (entityCount < nextVisibleCount && queryHasNextPage) void fetchNextPage();
-  }, [entityCount, fetchNextPage, queryHasNextPage, queryIsError, recordKey, refetch, visibleCount]);
+    revealNextPage();
+  }, [fetchNextPage, queryHasNextPage, queryIsError, queryIsFetchingNextPage, refetch, revealNextPage]);
 
   return { visibleCount, hasNextPage, fetchNextPage: fetchNext };
 }
@@ -68,12 +84,15 @@ function rowsForEntities(
   spaceIds: string[]
 ): ExploreFeedRow[] {
   if (entities.length === 0) return NO_ROWS;
-  return buildExploreFeedRows(
-    entities.slice(0, visibleCount),
-    new Set(spaceIds.map(normId)),
-    // These records do not render a Join button, so there is no membership state to resolve.
-    new Set()
-  );
+  return entities.slice(0, visibleCount).flatMap(entity => {
+    const matchingSpaceIds = entity.matchingSpaceIds?.length ? entity.matchingSpaceIds : spaceIds;
+    return buildExploreFeedRows(
+      [entity],
+      new Set(matchingSpaceIds.map(normId)),
+      // These records do not render a Join button, so there is no membership state to resolve.
+      new Set()
+    );
+  });
 }
 
 /**
@@ -165,6 +184,7 @@ export function useClaimRecord({
     recordKey: `${recordKey}:${claimSort}`,
     entityCount: claimEntities.length,
     queryHasNextPage: Boolean(claims.hasNextPage),
+    queryIsFetchingNextPage: claims.isFetchingNextPage,
     queryIsError: claims.isError,
     refetch: claims.refetch,
     fetchNextPage: claims.fetchNextPage,
@@ -173,6 +193,7 @@ export function useClaimRecord({
     recordKey: `${recordKey}:${debateSort}`,
     entityCount: debateEntities.length,
     queryHasNextPage: Boolean(debates.hasNextPage),
+    queryIsFetchingNextPage: debates.isFetchingNextPage,
     queryIsError: debates.isError,
     refetch: debates.refetch,
     fetchNextPage: debates.fetchNextPage,
