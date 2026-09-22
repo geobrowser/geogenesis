@@ -89,6 +89,9 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
 
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
+    // Occupancy is last-event-per-connection, so a join still on the wire when the leave is sent
+    // can land after it and leave the viewer an occupant nothing will ever clear.
+    let inFlight: Promise<unknown> = Promise.resolve();
 
     const announce = (attempt = 0) => {
       // Both guards matter on the way out: a chain started before cleanup must not re-occupy the
@@ -96,7 +99,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
       // timer past the single `clearTimeout` in cleanup.
       if (cancelled) return;
       clearTimeout(retry);
-      void send(true)
+      inFlight = send(true)
         .then(room => {
           if (!cancelled) queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
         })
@@ -115,7 +118,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     // without it a back navigation reports a departure nothing ever takes back.
     // `keepalive`, so the request survives the document being torn down. Nothing else records a
     // departure: occupancy is an event log with no staleness window on the server.
-    const depart = () => void send(false, true).catch(() => {});
+    const depart = () => void inFlight.catch(() => {}).then(() => send(false, true).catch(() => {}));
     const restore = (event: PageTransitionEvent) => {
       if (event.persisted) announce();
     };
@@ -127,7 +130,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
       clearTimeout(retry);
       window.removeEventListener('pagehide', depart);
       window.removeEventListener('pageshow', restore);
-      void send(false, true).catch(() => {});
+      void inFlight.catch(() => {}).then(() => send(false, true).catch(() => {}));
     };
   }, [accountKey, admitted, connectionId, queryClient, roomId]);
 

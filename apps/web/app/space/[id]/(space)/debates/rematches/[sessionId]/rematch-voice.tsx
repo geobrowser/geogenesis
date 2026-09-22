@@ -36,8 +36,6 @@ import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
-import type { RemoteParticipant } from 'livekit-client';
-
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
 // user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
@@ -199,10 +197,7 @@ export function RematchVoicePill(props: RematchVoicePillProps) {
   return <SessionRematchVoicePill key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoicePill({
-  session,
-  currentUserId,
-}: RematchVoicePillProps) {
+function SessionRematchVoicePill({ session, currentUserId }: RematchVoicePillProps) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;

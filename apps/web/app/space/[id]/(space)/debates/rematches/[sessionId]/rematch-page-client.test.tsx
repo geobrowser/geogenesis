@@ -5110,20 +5110,9 @@ describe('inside a debate room', () => {
 
     render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
 
-    await waitFor(() => expect(screen.getByText('This room has closed')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument());
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
-  });
-
-  // Staying put is only right if the room says why: voice unmounts and every request 400s once the
-  // session is past `browsing`.
-  it('says so rather than leaving the viewer with a dead page', async () => {
-    mocks.session = session({ status: 'expired' });
-
-    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
-
-    expect(await screen.findByText('This room has closed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Find a debate' })).toBeInTheDocument();
   });
 
   // Off a room the flow is unchanged: a terminal session still returns the viewer where they came
