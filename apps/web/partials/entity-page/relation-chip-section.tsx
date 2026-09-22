@@ -44,11 +44,14 @@ export function RelationChipSection({
   label,
   relations,
   spaceId,
+  cap = CHIP_CAP,
 }: {
   /** Also the section's accessible name, so the two can never disagree. */
   label: string;
   relations: Relation[];
   spaceId: string;
+  /** How many chips show before the `+N`. `Infinity` for a surface that is already the full list. */
+  cap?: number;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const chipsRef = React.useRef<HTMLDivElement>(null);
@@ -79,12 +82,12 @@ export function RelationChipSection({
   React.useEffect(() => {
     if (!expanded || !focusAfterExpandRef.current) return;
     focusAfterExpandRef.current = false;
-    chipsRef.current?.querySelectorAll<HTMLAnchorElement>('a')[CHIP_CAP]?.focus();
-  }, [expanded]);
+    chipsRef.current?.querySelectorAll<HTMLAnchorElement>('a')[cap]?.focus();
+  }, [cap, expanded]);
 
   if (relations.length === 0) return null;
 
-  const visible = expanded ? relations : relations.slice(0, CHIP_CAP);
+  const visible = expanded ? relations : relations.slice(0, cap);
   const hidden = relations.length - visible.length;
 
   return (
