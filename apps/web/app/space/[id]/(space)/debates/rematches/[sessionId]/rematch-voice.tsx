@@ -279,15 +279,25 @@ function SessionRematchVoicePill({
   // preserves their mute state, without re-running the handler.)
   const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
 
-  // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Once per
-  // visit, so a deliberate mute afterwards sticks. Off a room there is no join event to key on and
-  // the dock stays muted, per GEO-2838.
-  const roomOpponentPresent = useDebateRoomContext()?.opponentPresent ?? false;
-  const micOpenedRef = React.useRef(false);
+  // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
+  // is not undone the moment the opponent walks in.
+  const micSettledRef = React.useRef(false);
+  const handleMicIntentChange = React.useCallback((enabled: boolean) => {
+    micSettledRef.current = true;
+    setMicIntent(enabled);
+  }, []);
+
+  // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
+  // there is no join event to key on and the dock stays muted, per GEO-2838.
+  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
   React.useEffect(() => {
-    if (!roomOpponentPresent || micOpenedRef.current) return;
-    micOpenedRef.current = true;
+    if (!roomOpponentPresent || micSettledRef.current) return;
+    micSettledRef.current = true;
     setMicIntent(true);
+    // `<LiveKitRoom audio>` is replayed only from its `SignalConnected` handler, so raising the
+    // intent alone does nothing to a room that is already connected — and would then publish the
+    // mic at the next reconnect instead. Drive the device here, as the mute button does.
+    void roomRef.current?.localParticipant?.setMicrophoneEnabled(true)?.catch(() => undefined);
   }, [roomOpponentPresent]);
 
   // Owned here, where nothing below the page itself can remount it, so "You're muted" is shown
@@ -421,7 +431,7 @@ function SessionRematchVoicePill({
         local={local}
         opponent={opponent}
         micFailure={micFailure}
-        onMicIntentChange={setMicIntent}
+        onMicIntentChange={handleMicIntentChange}
         onRetry={retry}
         roomRef={roomRef}
         nudgeSpentRef={nudgeSpentRef}

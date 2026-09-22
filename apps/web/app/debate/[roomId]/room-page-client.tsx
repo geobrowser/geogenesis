@@ -31,9 +31,14 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
   // Only a room that does not exist is an HTTP error.
-  const denial =
-    (room ? roomAccessDenialFor(room.access) : null) ??
-    (roomQuery.error instanceof GeoChatRequestError ? roomAccessDenialForStatus(roomQuery.error.status) : null);
+  // Read the body's own verdict first, and consult the transport only when there is no room to go
+  // on. React Query keeps the last payload through a failed refetch, and `retry: false` means one
+  // 404 on one 3s poll would otherwise redirect everyone currently sitting in the room.
+  const denial = room
+    ? roomAccessDenialFor(room.access)
+    : roomQuery.error instanceof GeoChatRequestError
+      ? roomAccessDenialForStatus(roomQuery.error.status)
+      : null;
 
   React.useEffect(() => {
     if (!denial) return;
@@ -71,7 +76,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   if (!room.rematch_session_id) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
 
   return (
-    <DebateRoomProvider presence={presence}>
+    <DebateRoomProvider roomId={roomId} presence={presence}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
       {presence && <DebateRoomPresenceIndicator presence={presence} />}
     </DebateRoomProvider>

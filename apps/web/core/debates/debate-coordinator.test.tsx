@@ -596,6 +596,33 @@ describe('DebateCoordinator', () => {
     expect(await screen.findByText(expected)).toBeInTheDocument();
   });
 
+  // The prompt is mounted app-wide, so without this it floats over a live debate and a recording,
+  // one click from leaving one.
+  it('does not offer a room over a live debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ due: true })];
+    mocks.activity = activityWithDebate();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your scheduled debate')).not.toBeInTheDocument());
+  });
+
+  // GEO-2941 bans automatic redirects into the debate-again flow. Joining a room gives the viewer a
+  // `browsing` session, which is the exact shape this effect pushes on, so holding an open room has
+  // to suppress the push wherever they happen to be.
+  it('does not push a viewer holding an open room into the picker', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
   // The door check is the server's. Offering a room it would refuse is an offer that fails.
   it('does not offer a room whose door is shut', async () => {
     mocks.pathname = '/space/space-1/claims';

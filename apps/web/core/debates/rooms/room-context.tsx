@@ -4,32 +4,51 @@ import * as React from 'react';
 
 import type { DebateRoomPresence } from './room-presence';
 
+export type DebateRoomContextValue = {
+  roomId: string;
+  /** `null` while the viewer's identity or the room payload is still resolving. */
+  presence: DebateRoomPresence | null;
+};
+
 /**
  * What the debate-again picker needs to know about the room around it (GEO-2941). A context rather
  * than a prop keeps the room a wrapper, and leaves the picker's own route reading the default.
  */
-const DebateRoomContext = React.createContext<DebateRoomPresence | null>(null);
+const DebateRoomContext = React.createContext<DebateRoomContextValue | null>(null);
 
 export function DebateRoomProvider({
+  roomId,
   presence,
   children,
 }: {
+  roomId: string;
   presence: DebateRoomPresence | null;
   children: React.ReactNode;
 }) {
-  return <DebateRoomContext.Provider value={presence}>{children}</DebateRoomContext.Provider>;
+  const value = React.useMemo(() => ({ roomId, presence }), [roomId, presence]);
+  return <DebateRoomContext.Provider value={value}>{children}</DebateRoomContext.Provider>;
 }
 
-/** The room's presence, or `null` outside a room and before it resolves. */
+/** The room around this subtree, or `null` outside one. */
 export function useDebateRoomContext() {
   return React.useContext(DebateRoomContext);
 }
 
 /**
- * Whether the opponent condition a room imposes is met. `true` outside a room, where there is no
- * join event to wait on; inside one, the mic and Request debate wait for state 3.
+ * Whether the picker is rendered inside a room. Distinct from knowing the opponent is present: a
+ * room whose presence has not resolved is still a room, and the session it renders is shared with
+ * it rather than owned by it.
+ */
+export function useInDebateRoom(): boolean {
+  return React.useContext(DebateRoomContext) !== null;
+}
+
+/**
+ * `true` outside a room, where there is no join event to wait on. Inside one an unresolved presence
+ * is `false`, or Request debate opens against someone the room has not said is there.
  */
 export function useRoomOpponentPresent(): boolean {
-  const presence = useDebateRoomContext();
-  return presence === null || presence.opponentPresent;
+  const room = React.useContext(DebateRoomContext);
+  if (room === null) return true;
+  return room.presence?.opponentPresent ?? false;
 }

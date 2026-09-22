@@ -8,7 +8,7 @@ import { type DebateRoomView, getDebateRoom, listUpcomingDebateRooms, setDebateR
 import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { debateRoomPresence } from './room-presence';
+import { debateRoomOpponent, debateRoomPresence } from './room-presence';
 
 /**
  * geo-chat publishes no room event, so this poll is the mechanism rather than a backstop. Tighter
@@ -18,6 +18,10 @@ const ROOM_POLL_MS = 3_000;
 
 /** The join prompt is ambient rather than urgent, and the window it watches is minutes wide. */
 const UPCOMING_ROOMS_POLL_MS = 30_000;
+
+/** An arrival nobody recorded counts towards a no-show, so a dropped join is worth re-sending. */
+const JOIN_RETRIES = 3;
+const JOIN_RETRY_MS = 2_000;
 
 export function useDebateRoom(roomId: string, enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -37,59 +41,81 @@ export function useDebateRoom(roomId: string, enabled = true) {
 /**
  * This tab's identity, stable for the document's life. Occupancy is per connection, so a leave
  * keyed only by user would tell an opponent that someone closing a second tab had left.
+ *
+ * The server parses this as a uuid and rejects anything else, so the fallback is uuid-shaped: a
+ * page served over plain http on a LAN address has no `crypto.randomUUID`.
  */
 function useConnectionId() {
   const ref = React.useRef<string>('');
-  if (!ref.current) {
-    ref.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
+  if (!ref.current) ref.current = globalThis.crypto?.randomUUID?.() ?? fallbackUuid();
   return ref.current;
+}
+
+function fallbackUuid() {
+  const hex = () => Math.floor(Math.random() * 16).toString(16);
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, marker =>
+    marker === 'x' ? hex() : ((Math.floor(Math.random() * 4) + 8) & 0xf).toString(16)
+  );
 }
 
 /**
  * Announces arrival once admitted, and departure on both exits: unmount is navigating within the
- * app, `pagehide` is closing the tab. A duplicate leave changes nothing.
+ * app, `pagehide` is closing the tab. A duplicate leave changes nothing. The leave is built inside
+ * the effect, since a ref written during render already holds the next room by cleanup time.
  */
 export function useRoomPresence(roomId: string, admitted: boolean) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const connectionId = useConnectionId();
 
-  const send = React.useCallback(
-    (joined: boolean) =>
-      setDebateRoomPresence(roomId, { connection_id: connectionId, joined }, getPrivyIdentityToken, accountKey),
-    [accountKey, connectionId, getPrivyIdentityToken, roomId]
-  );
-
-  const sendRef = React.useRef(send);
-  sendRef.current = send;
+  // `getPrivyIdentityToken` is not referentially stable, and it only reads the current session, so
+  // holding it in a ref keeps a token refresh from re-running the join/leave pair.
+  const tokenRef = React.useRef(getPrivyIdentityToken);
+  tokenRef.current = getPrivyIdentityToken;
 
   React.useEffect(() => {
     if (!admitted) return;
 
-    let departed = false;
-    const depart = () => {
-      if (departed) return;
-      departed = true;
-      // Unawaited: the tab may be going away, and a leave that fails is one the sweeper's idle
-      // timer reaches anyway.
-      void sendRef.current(false).catch(() => {});
+    const send = (joined: boolean) =>
+      setDebateRoomPresence(roomId, { connection_id: connectionId, joined }, () => tokenRef.current(), accountKey);
+
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+
+    const announce = (attempt = 0) => {
+      void send(true)
+        .then(room => {
+          if (!cancelled) queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
+        })
+        .catch(() => {
+          // A refusal is reported by the room query's own `access`. A dropped request is not, and
+          // an unannounced arrival is invisible to the opponent and counts towards a no-show, so
+          // it is retried rather than swallowed.
+          if (cancelled || attempt >= JOIN_RETRIES) return;
+          retry = setTimeout(() => announce(attempt + 1), JOIN_RETRY_MS * (attempt + 1));
+        });
     };
 
-    void sendRef
-      .current(true)
-      .then(room => queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room))
-      .catch(() => {
-        // A refused join is reported by the room query's own `access`, which is the surface that
-        // explains it. Nothing useful to add here.
-      });
+    announce();
+
+    // `pagehide` covers closing the tab; `pageshow` is how the same document comes back out of the
+    // bfcache, which restores it without re-running effects. Without the second half, a back
+    // navigation reported a departure the viewer never made and nothing ever took it back.
+    const depart = () => void send(false).catch(() => {});
+    const restore = (event: PageTransitionEvent) => {
+      if (event.persisted) announce();
+    };
 
     window.addEventListener('pagehide', depart);
+    window.addEventListener('pageshow', restore);
     return () => {
+      cancelled = true;
+      clearTimeout(retry);
       window.removeEventListener('pagehide', depart);
+      window.removeEventListener('pageshow', restore);
       depart();
     };
-  }, [accountKey, admitted, queryClient, roomId]);
+  }, [accountKey, admitted, connectionId, queryClient, roomId]);
 
   return { connectionId };
 }
@@ -97,25 +123,21 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
 /**
  * The room's presence state, plus this visit's memory of having seen the opponent.
  *
- * The memory is what separates "they left" from "they never came": the view reports who is in the
- * room and never who has been, so without it both read the same until the grace period expires.
+ * The memory is keyed by room rather than held as a flag beside a reset, because `opponentPresent`
+ * and the room id change in the same commit: a flag set by one effect and cleared by another in
+ * that commit stays cleared, and a viewer who arrives second is never told the opponent left.
  */
 export function useDebateRoomPresence(room: DebateRoomView | null | undefined) {
   const currentUserId = useCurrentGeoChatUserId();
-  const opponentUserId =
-    currentUserId && room?.access.status === 'admitted'
-      ? (room.participants.find(userId => userId !== currentUserId) ?? null)
-      : null;
-  const opponentPresent = Boolean(opponentUserId && room?.occupants.includes(opponentUserId));
-
-  const [sawOpponent, setSawOpponent] = React.useState(false);
-  React.useEffect(() => {
-    if (opponentPresent) setSawOpponent(true);
-  }, [opponentPresent]);
-
-  // Reset when the room changes, so one room's memory cannot describe another.
+  const { opponentPresent } = debateRoomOpponent(room, currentUserId);
   const roomId = room?.room_id ?? null;
-  React.useEffect(() => setSawOpponent(false), [roomId]);
+
+  const [seenIn, setSeenIn] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (opponentPresent && roomId) setSeenIn(roomId);
+  }, [opponentPresent, roomId]);
+
+  const sawOpponent = seenIn !== null && seenIn === roomId;
 
   return React.useMemo(
     () => debateRoomPresence({ room, currentUserId, sawOpponent }),

@@ -72,7 +72,7 @@ import {
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
-import { useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import { useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -93,6 +93,7 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { NavUtils } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -160,6 +161,9 @@ function firstNamePossessive(name: string) {
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  // The room owns this session rather than the other way round, so two of the page's exits change
+  // shape inside one: see the terminal-status effect and `leave` below.
+  const inDebateRoom = useInDebateRoom();
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
@@ -1896,11 +1900,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      returnFromSession(session);
+      // Never out of a room: geo-chat expires a `browsing` session once either party has been
+      // offline 90 seconds, which is what waiting for someone looks like.
+      if (!inDebateRoom) returnFromSession(session);
     }
-  }, [returnFromSession, router, session]);
+  }, [inDebateRoom, returnFromSession, router, session]);
 
   const leave = () => {
+    // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
+    // room that is the wrong verb: leaving is per person and the room stays open to come back to,
+    // so this walks out and lets `useRoomPresence` report the departure on unmount.
+    if (inDebateRoom) {
+      router.push(NavUtils.toExplore());
+      return;
+    }
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
     });

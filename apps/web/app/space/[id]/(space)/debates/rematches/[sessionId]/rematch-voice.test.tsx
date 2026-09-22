@@ -101,7 +101,10 @@ vi.mock('@livekit/components-react', () => ({
     microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
-  useRoomContext: () => ({ disconnect: mocks.disconnect }),
+  useRoomContext: () => ({
+    disconnect: mocks.disconnect,
+    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+  }),
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
     mocks.deviceSelectCalls.push({ kind, requestPermissions });
     return kind === 'audiooutput'
@@ -1400,7 +1403,7 @@ describe('the mic inside a debate room', () => {
   // to key on, so the dock stays muted per GEO-2838.
   it('stays muted while the viewer is on their own', async () => {
     render(
-      <DebateRoomProvider presence={presence(false)}>
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
         <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
       </DebateRoomProvider>
     );
@@ -1411,7 +1414,7 @@ describe('the mic inside a debate room', () => {
 
   it('opens the mic once the opponent arrives', async () => {
     const view = render(
-      <DebateRoomProvider presence={presence(false)}>
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
         <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
       </DebateRoomProvider>
     );
@@ -1420,12 +1423,40 @@ describe('the mic inside a debate room', () => {
     expect(lastAudio()).toBe(false);
 
     view.rerender(
-      <DebateRoomProvider presence={presence(true)}>
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
         <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
       </DebateRoomProvider>
     );
 
     await waitFor(() => expect(lastAudio()).toBe(true));
+    // The prop alone is not enough: LiveKit replays it only from `SignalConnected`, so on a room
+    // that is already connected the device has to be driven directly.
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+  });
+
+  // A mute chosen while waiting is a choice, and the opponent walking in must not undo it.
+  it('leaves a deliberate mute alone when the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await flushOwnership();
+    // A deliberate mute, made while waiting, through the dock's own control.
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false));
+    mocks.setMicrophoneEnabled.mockClear();
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
   });
 
   // Outside a room the context is absent, and the dock's own default governs.

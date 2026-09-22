@@ -212,14 +212,20 @@ export function DebateCoordinator() {
 
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
-  const upcomingRoomsQuery = useUpcomingDebateRooms(!isDebateRoomPath(pathname));
+  const atRoom = isDebateRoomPath(pathname);
+  const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const joinableRooms = React.useMemo(
     () => (upcomingRoomsQuery.data?.rooms ?? []).filter(room => room.joinable),
     [upcomingRoomsQuery.data]
   );
+  // `activeFlow` for the same reason every other prompt here carries it: a debate that overruns
+  // into the next slot must not get a Join button floating over a recording, one click from
+  // leaving it. That is prompt 2's job, and prompt 2 is gated on recording state (GEO-2946).
   const promptedRoom =
-    joinableRooms.find(room => !snoozedRoomIds.includes(room.room_id) && !isDebateRoomPath(pathname)) ?? null;
+    atRoom || activeFlow ? null : (joinableRooms.find(room => !snoozedRoomIds.includes(room.room_id)) ?? null);
+
+  const holdsOpenRoom = joinableRooms.length > 0;
 
   React.useEffect(() => {
     const liveIds = new Set(joinableRooms.map(room => room.room_id));
@@ -307,10 +313,10 @@ export function DebateCoordinator() {
     // stay put, and because attention is a subscription this re-runs when one is focused, so
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
-    // A room is entered by an offer and never a redirect (GEO-2941). This also asks where the
-    // viewer already is, which nothing here did: a stale `activity.rematch` yanks them out of the
-    // room and the page replaces them, which is the bounce diagnosed on the debate room.
-    if (isDebateRoomPath(pathname)) return;
+    // Never out of, or on behalf of, a room (GEO-2941). `holdsOpenRoom` is coarse because the
+    // upcoming rows carry no session id, so it errs towards not moving anyone; a
+    // `rematch_session_id` on the row would make it exact.
+    if (atRoom || holdsOpenRoom) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       const path = debateRematchPath(rematch);
       if (pathname !== path) {
@@ -320,7 +326,7 @@ export function DebateCoordinator() {
     }
     // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
     // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
-  }, [activity, hasAttention, pathname, router]);
+  }, [activity, atRoom, hasAttention, holdsOpenRoom, pathname, router]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);

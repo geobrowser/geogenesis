@@ -38,6 +38,34 @@ export type DebateRoomPresenceInput = {
 };
 
 /**
+ * The room view sends dashed uuids while the session token's `user_id` is dashless, so the two
+ * never match as written. Compared on one form rather than trusting either.
+ */
+function sameUser(a: string, b: string) {
+  return a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
+}
+
+/**
+ * The other participant and whether they are in the room. `null` whenever the answer would be a
+ * guess, so nothing downstream reads the viewer as their own opponent.
+ */
+export function debateRoomOpponent(room: DebateRoomView | null | undefined, currentUserId: string | null) {
+  if (!room || !currentUserId || room.access.status !== 'admitted') {
+    return { opponentUserId: null, opponentPresent: false };
+  }
+
+  const viewerIsListed = room.participants.some(userId => sameUser(userId, currentUserId));
+  const opponentUserId = viewerIsListed
+    ? (room.participants.find(userId => !sameUser(userId, currentUserId)) ?? null)
+    : null;
+
+  return {
+    opponentUserId,
+    opponentPresent: opponentUserId !== null && room.occupants.some(userId => sameUser(userId, opponentUserId)),
+  };
+}
+
+/**
  * The room's presence, or `null` when there is nothing to say: no room, no viewer, or a viewer who
  * is not admitted. Only an admitted viewer is given occupancy to read.
  */
@@ -48,8 +76,8 @@ export function debateRoomPresence({
 }: DebateRoomPresenceInput): DebateRoomPresence | null {
   if (!room || !currentUserId || room.access.status !== 'admitted') return null;
 
-  const opponentUserId = room.participants.find(userId => userId !== currentUserId) ?? null;
-  const opponentPresent = opponentUserId !== null && room.occupants.includes(opponentUserId);
+  const { opponentUserId, opponentPresent } = debateRoomOpponent(room, currentUserId);
+  if (!opponentUserId) return null;
 
   return { state: presenceState(room, opponentPresent, sawOpponent), opponentUserId, opponentPresent };
 }
