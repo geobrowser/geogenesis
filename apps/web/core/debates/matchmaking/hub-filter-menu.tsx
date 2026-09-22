@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 
 import { SmallButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -267,13 +268,24 @@ export function HubMultiFilterMenu<T extends string>({
     setOpen(next);
   }, []);
 
+  /**
+   * Whether a keyboard is already in front of the viewer, which is the only case where the field
+   * taking focus is a help rather than an ambush. On a touch device it would throw the software
+   * keyboard up over the very list it is meant to help pick from, before anyone said they wanted
+   * to type.
+   *
+   * Through the shared hook rather than an inline `matchMedia` read, for the answer it gives when
+   * it cannot tell: a runtime without `matchMedia` reports `false` here, and so does the server.
+   * The two ways of being wrong are not symmetric — guessing "desktop" covers the list with a
+   * keyboard nobody asked for, while guessing "touch" costs a tap on a field already on screen —
+   * so the unknown case belongs on the side that only costs a tap.
+   */
+  const hasFinePointer = useMediaQuery('(pointer: fine)');
+
   const shouldSkipFocus = React.useCallback(() => {
     if (touchedRef.current) return true;
-    // Only where a keyboard is already in front of the viewer. On a touch device this would throw
-    // the software keyboard up over the very list it is meant to help pick from, before anyone has
-    // said they want to type.
-    return typeof window.matchMedia === 'function' && !window.matchMedia('(pointer: fine)').matches;
-  }, []);
+    return !hasFinePointer;
+  }, [hasFinePointer]);
 
   const searchRef = useAutofocus<HTMLInputElement>(open && showSearch, SEARCH_FOCUS_DELAY_MS, {
     shouldSkipFocus,

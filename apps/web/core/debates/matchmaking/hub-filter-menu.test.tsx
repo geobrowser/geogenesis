@@ -303,6 +303,23 @@ describe('HubMultiFilterMenu search', () => {
     expect(field).not.toHaveFocus();
   });
 
+  it('declines to focus the field when the pointer kind cannot be established', async () => {
+    // A runtime with no matchMedia cannot say whether a keyboard is present, and the two ways of
+    // being wrong are not symmetric: guessing "desktop" throws a software keyboard over the list,
+    // guessing "touch" costs a tap on a field that is already on screen.
+    const saved = window.matchMedia;
+    // @ts-expect-error -- modelling a runtime that does not have it at all.
+    delete window.matchMedia;
+
+    try {
+      const field = await renderTopicMenu();
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(field).not.toHaveFocus();
+    } finally {
+      window.matchMedia = saved;
+    }
+  });
+
   it('takes focus on open where there is a keyboard to type with', async () => {
     hasFinePointer = true;
     const field = await renderTopicMenu();
