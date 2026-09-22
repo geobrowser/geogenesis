@@ -24,5 +24,13 @@ export default async function ClaimsPage(props: Props) {
     notFound();
   }
 
-  return <ClaimsPageClient spaceId={params.id} />;
+  /*
+   * Keyed on the space so a navigation between two of them remounts rather than reuses.
+   *
+   * Everything this page holds belongs to one space: the sort, the search, and above all the
+   * picked topics, whose ids mean nothing in another space and would narrow its list to nothing.
+   * React reuses an element of the same type across a route-param change, so without this they
+   * all carry over — which is also what let the rows query hold the previous space's claims.
+   */
+  return <ClaimsPageClient key={params.id} spaceId={params.id} />;
 }

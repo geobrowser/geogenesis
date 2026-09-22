@@ -162,9 +162,15 @@ export function decodeSpaceDebateActivityCounts(data: SpaceDebateActivityCountsR
     for (const node of nodes) {
       if (node?.fromEntityId) distinct.add(normId(node.fromEntityId));
     }
-    // A full window is exact. A truncated one cannot be deduplicated, and the relation total is not
-    // a substitute for the entity count — see the note above.
-    const truncated = totalCount != null && nodes.length < totalCount;
+    /*
+     * A short window is exact; anything else is not.
+     *
+     * With a total to compare against, "short" is literal. Without one — the total failed to
+     * decode, or the shape changed — a window that came back *full* is indistinguishable from a
+     * truncated one: there is no evidence the relations stopped there rather than at the limit. A
+     * partial window with no total is still exact, because nothing was cut off to reach it.
+     */
+    const truncated = totalCount != null ? nodes.length < totalCount : nodes.length >= DEBATE_RELATION_WINDOW;
     debates = truncated ? null : distinct.size;
   }
 

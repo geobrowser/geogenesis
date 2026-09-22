@@ -119,6 +119,27 @@ describe('useSpaceClaimSearch', () => {
     expect(typeof result.current.retry).toBe('function');
   });
 
+  /**
+   * The topic menu resolves its own ids from this text, through the same hook and the same
+   * `[tag, text]` key. Handing back the raw box would key a second search per keystroke — a
+   * `/search` request each, and a facet-count request behind it.
+   */
+  it('hands back the debounced text, not the raw box', async () => {
+    mocks.getResultsPage.mockReturnValue(ok(page(['a0'], 1)));
+
+    const { result, rerender } = renderHook(({ text }) => useSpaceClaimSearch(text, true), {
+      wrapper,
+      initialProps: { text: '' },
+    });
+
+    rerender({ text: 'regul' });
+    // Mid-debounce the box has moved on and this has not.
+    expect(result.current.search).toBe('');
+
+    await settleDebounce();
+    await waitFor(() => expect(result.current.search).toBe('regul'));
+  });
+
   it('asks for nothing and narrows nothing when the box is empty', async () => {
     const { result } = renderHook(() => useSpaceClaimSearch('', true), { wrapper });
     await settleDebounce();

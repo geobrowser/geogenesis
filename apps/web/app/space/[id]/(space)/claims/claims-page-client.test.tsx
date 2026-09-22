@@ -109,6 +109,13 @@ window.ResizeObserver ??= class {
 
 const asked = () => mocks.hookCalls.at(-1)!;
 
+/**
+ * The client component as the route mounts it — keyed on the space, so a navigation between two of
+ * them remounts. Written out here because the key lives in the server component, which a render
+ * test cannot mount.
+ */
+const ClaimsPage = ({ spaceId }: { spaceId: string }) => <ClaimsPageClient key={spaceId} spaceId={spaceId} />;
+
 beforeEach(() => {
   mocks.hookCalls.length = 0;
   mocks.searchCalls.length = 0;
@@ -152,6 +159,37 @@ describe('ClaimsPageClient', () => {
     view.rerender(<ClaimsPageClient spaceId="space-2" />);
 
     expect(asked()).toMatchObject({ spaceId: 'space-2', kind: 'claims' });
+  });
+
+  /**
+   * A topic id means nothing outside the space whose facet offered it, so carrying one into
+   * another space narrows that space's list by a clause nothing in it can satisfy. The sort and
+   * the search box are the reader's, but they are the reader's *about this space*.
+   *
+   * The route remounts this component per space (see `page.tsx`) rather than resetting each piece
+   * here, so this test asserts the behaviour a remount gives — and fails if the key is dropped and
+   * React reuses the element instead.
+   */
+  it('starts a different space with that space’s own filters', () => {
+    const view = render(<ClaimsPage spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+    fireEvent.click(screen.getByText('New'));
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'tariffs' } });
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(topicRow('Industry'));
+
+    expect(asked()).toMatchObject({ sort: 'new' });
+    expect(asked().filters.topicIds).toEqual(['t3']);
+
+    // Re-rendered rather than remounted by hand: React reuses an element of the same type across a
+    // route-param change, which is the situation the key exists for. Unmounting first would make
+    // this pass with or without it.
+    view.rerender(<ClaimsPage spaceId="space-2" />);
+
+    expect(asked()).toMatchObject({ spaceId: 'space-2', sort: 'best' });
+    expect(asked().filters.topicIds).toEqual([]);
+    expect(screen.getByLabelText('Search claims')).toHaveValue('');
   });
 
   // Every row is this space by construction, so a space chip and a Join button would say the same

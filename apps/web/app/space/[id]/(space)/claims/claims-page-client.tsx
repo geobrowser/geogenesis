@@ -79,13 +79,18 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
 
   const {
     claimIds,
+    search: debouncedSearch,
     isPending: isSearchPending,
     error: searchError,
     retry: retrySearch,
   } = useSpaceClaimSearch(search, true);
-  // The text rides along for the topic menu, which resolves its own ids from it; the rows are
-  // narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
-  const filters = React.useMemo(() => ({ topicIds, search, searchClaimIds: claimIds }), [claimIds, search, topicIds]);
+  // The *debounced* text rides along for the topic menu, which resolves its own ids from it through
+  // the same query the hook above already filled — the raw box would key a second search per
+  // keystroke. The rows are narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
+  const filters = React.useMemo(
+    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds }),
+    [claimIds, debouncedSearch, topicIds]
+  );
 
   const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useSpaceActivityRowsInfinite(spaceId, 'claims', sort, filters);

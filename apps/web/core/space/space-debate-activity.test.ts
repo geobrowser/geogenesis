@@ -101,6 +101,31 @@ describe('decodeSpaceDebateActivityCounts', () => {
     expect(counts.claims).toBe(1);
   });
 
+  /**
+   * With no total to compare against there is no evidence the relations stopped where the window
+   * did. A full window in that state is indistinguishable from a truncated one, so it reports
+   * unreadable rather than a floor stated as a fact.
+   */
+  it('treats a full window with an unreadable total as truncated', () => {
+    const full = Array.from({ length: 500 }, (_, index) => ({ fromEntityId: `d${index}` }));
+    const counts = decodeSpaceDebateActivityCounts({
+      debateTypeRelations: { totalCount: null, nodes: full },
+      taggedClaims: { totalCount: 1 },
+    });
+
+    expect(counts.debates).toBeNull();
+  });
+
+  // A partial window needed no cutting to reach, so it is exact whether or not a total came back.
+  it('trusts a partial window with an unreadable total', () => {
+    const counts = decodeSpaceDebateActivityCounts({
+      debateTypeRelations: { totalCount: null, nodes: [{ fromEntityId: 'a' }, { fromEntityId: 'a' }] },
+      taggedClaims: { totalCount: 1 },
+    });
+
+    expect(counts.debates).toBe(1);
+  });
+
   // The boundary either side: a window that exactly fills is whole, not truncated.
   it('trusts a window that exactly reaches the total', () => {
     const counts = decodeSpaceDebateActivityCounts({

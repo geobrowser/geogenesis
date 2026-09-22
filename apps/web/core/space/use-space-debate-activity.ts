@@ -1,6 +1,6 @@
 'use client';
 
-import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -187,7 +187,19 @@ export function useSpaceActivityRowsInfinite(
     queryKey: [...rowsQueryKey(spaceId, kind, sort, filters), 'infinite'] as const,
     enabled: spaceId !== '',
     staleTime: SPACE_ACTIVITY_STALE_TIME,
-    placeholderData: keepPreviousData,
+    /*
+     * Held rows are for a filter or a sort changing under the same list — not for a different one.
+     *
+     * `keepPreviousData` applies to every key change, `spaceId` included, so a component reused
+     * across a space navigation would show the previous space's claims under the new space's
+     * heading until it resolved. The old page carried a test against exactly that. Space and kind
+     * are the list's identity; sort and filters are views of it.
+     */
+    placeholderData: (previous, previousQuery) => {
+      const previousKey = previousQuery?.queryKey as readonly unknown[] | undefined;
+      if (!previousKey) return previous;
+      return previousKey[1] === spaceId && previousKey[2] === kind ? previous : undefined;
+    },
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) => fetchRowsPage({ spaceId, kind, sort, filters, after: pageParam, signal }),
     // A connection that claims another page but hands back no cursor has no way to reach it, and
@@ -309,6 +321,15 @@ export function useSpaceClaimSearch(search: string, enabled: boolean) {
 
   return {
     claimIds,
+    /**
+     * The debounced text, for the topic menu.
+     *
+     * `useTaggedTopicFacet` resolves its *own* ids from `TaggedClaimFilters.search`, through this
+     * same hook and the same `[tag, text]` key. Handing it the raw box instead would key a second
+     * search per keystroke — a `/search` request each, and a facet-count request behind it — where
+     * the debounced value shares the entry this hook already filled.
+     */
+    search: value,
     /** The list on screen is about the previous text. */
     isPending: settling,
     /** `/search` failed. The list cannot be narrowed, so the page says so instead of listing. */
