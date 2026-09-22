@@ -76,16 +76,22 @@ export function toPeerSchedule(response: ScheduleOverlapResponse): PeerSchedule 
     userId: response.with,
     viewerTimezone: response.viewer_timezone,
     peerTimezone: response.with_timezone,
-    viewerHasSchedule: response.viewer_has_schedule,
+    // `both_have_schedules` was the honest conjunction before geo-chat#134 replaced it.
+    viewerHasSchedule: response.viewer_has_schedule ?? response.both_have_schedules,
     // Their zone is empty exactly when they have no saved schedule, which is the one signal
     // separating "set nothing" from "nothing free this window".
     peerHasSchedule: Boolean(response.with_timezone),
-    slots: (response.their_slots ?? []).map(slot => ({
-      start: slot.start,
-      end: slot.end,
-      viewerIsFree: slot.viewer_free,
-    })),
+    slots: theirWeek(response),
   };
+}
+
+/** Their week, or the intersection on a deployment too old to send one: a missing `their_slots`
+ * read as an empty week would claim they are free at no time. */
+function theirWeek(response: ScheduleOverlapResponse): PeerSlot[] {
+  if (response.their_slots) {
+    return response.their_slots.map(slot => ({ start: slot.start, end: slot.end, viewerIsFree: slot.viewer_free }));
+  }
+  return (response.slots ?? []).map(slot => ({ start: slot.start, end: slot.end, viewerIsFree: true }));
 }
 
 /**

@@ -80,6 +80,28 @@ describe('toPeerSchedule', () => {
     });
   });
 
+  // testnet can sit on an image older than geo-chat#134 for days, and did when this was written.
+  describe('a deployment that does not send their_slots', () => {
+    it('falls back to the intersection rather than claiming they are free at no time', () => {
+      const legacy = response({ slots: [{ start: '2026-09-21T13:00:00Z', end: '2026-09-21T13:30:00Z' }] });
+      delete legacy.their_slots;
+
+      const schedule = toPeerSchedule(legacy);
+
+      expect(schedule.slots).toEqual([
+        { start: '2026-09-21T13:00:00Z', end: '2026-09-21T13:30:00Z', viewerIsFree: true },
+      ]);
+    });
+
+    it('reads viewerHasSchedule off both_have_schedules, which still meant the conjunction', () => {
+      const legacy = response({ both_have_schedules: false });
+      delete legacy.their_slots;
+      delete legacy.viewer_has_schedule;
+
+      expect(toPeerSchedule(legacy).viewerHasSchedule).toBe(false);
+    });
+  });
+
   // Hard-coded true server-side whenever they have a schedule, so it cannot be trusted.
   it('ignores both_have_schedules', () => {
     const schedule = toPeerSchedule(response({ both_have_schedules: true, viewer_has_schedule: false }));

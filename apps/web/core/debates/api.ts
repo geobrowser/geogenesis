@@ -857,9 +857,13 @@ export type ScheduleOverlapResponse = {
   with_timezone: string;
   /** The intersection, for surfaces wanting a few suggested times rather than a grid. */
   slots: ScheduleOverlapSlot[];
-  /** Their whole week. Populated whenever they have a schedule, viewer or no viewer. */
-  their_slots: AnnotatedSlot[];
-  viewer_has_schedule: boolean;
+  /**
+   * Their whole week, populated whenever they have a schedule. Optional because deployments
+   * before geo-chat#134 omit it, and an absent field is not an empty week.
+   */
+  their_slots?: AnnotatedSlot[];
+  /** Absent on the same older deployments, where `both_have_schedules` still meant the conjunction. */
+  viewer_has_schedule?: boolean;
   /** `limit` cut `slots` short. It never caps `their_slots`. */
   truncated: boolean;
 };
