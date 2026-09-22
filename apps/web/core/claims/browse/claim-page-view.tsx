@@ -186,7 +186,7 @@ export function ClaimPageView({
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >
         {/* The hero and the tabs share a fixed 48px gap rather than the page's, which is 24px below
-            560px and 32px above: 48px is the space above the verdict too, so the block sits evenly. */}
+            560px and 32px above. */}
         <div className="flex flex-col gap-12">
           {/* Hero */}
           <header className="flex flex-col gap-3">
@@ -256,8 +256,8 @@ export function ClaimPageView({
               spaceId={spaceId}
               responseKind={responseKind}
               summary={summary}
-              // With the header's 12px gap, 48px above the verdict: the same as below it.
-              className="mt-9"
+              // With the header's 12px gap, 36px between the chips and the verdict.
+              className="mt-6"
             >
               <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
             </ClaimVerdict>
