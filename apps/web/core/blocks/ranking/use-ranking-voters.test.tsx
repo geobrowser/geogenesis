@@ -13,6 +13,7 @@ import { useRankingVoters } from './use-ranking-voters';
 const mocks = vi.hoisted(() => ({
   fetchProfilesBySpaceIds: vi.fn(),
   getSpaces: vi.fn(),
+  queryEntities: vi.fn(() => ({ entities: [] as { id: string; spaces?: string[] }[], isLoading: false })),
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({
@@ -24,7 +25,7 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [] }),
+  useQueryEntities: () => mocks.queryEntities(),
 }));
 
 const profile = (spaceId: string, avatarUrl: string | null) => ({
@@ -50,6 +51,7 @@ beforeEach(() => {
   mocks.fetchProfilesBySpaceIds.mockReset();
   mocks.getSpaces.mockReset();
   mocks.getSpaces.mockReturnValue(Effect.succeed([]));
+  mocks.queryEntities.mockReturnValue({ entities: [], isLoading: false });
 });
 
 afterEach(() => {
@@ -88,6 +90,32 @@ describe('useRankingVoters', () => {
     expect(mocks.getSpaces).toHaveBeenCalledWith(expect.objectContaining({ spaceIds: ['space-b'] }));
     await waitFor(() => expect(result.current.voters[1].avatarUrl).toBe('ipfs://from-space'));
     expect(result.current.voters[0].avatarUrl).toBe('ipfs://a');
+  });
+
+  // A ref whose relation carried no `to_space` contributes no space id until its rank entity's home
+  // space is looked up.
+  it('reports loading while a ref without a space id is still being resolved', async () => {
+    mocks.queryEntities.mockReturnValue({ entities: [], isLoading: true });
+    mocks.fetchProfilesBySpaceIds.mockReturnValue(Effect.succeed([]));
+
+    const { result } = renderHook(() => useRankingVoters([{ rankEntityId: 'rank-c' }]), {
+      wrapper: createWrapper(),
+    });
+
+    expect(result.current.voters).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('resolves a ref without a space id from its rank entity home space', async () => {
+    mocks.queryEntities.mockReturnValue({ entities: [{ id: 'rank-c', spaces: ['space-c'] }], isLoading: false });
+    mocks.fetchProfilesBySpaceIds.mockReturnValue(Effect.succeed([profile('space-c', 'ipfs://c')]));
+
+    const { result } = renderHook(() => useRankingVoters([{ rankEntityId: 'rank-c' }]), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.voters[0]?.spaceId).toBe('space-c'));
   });
 
   it('treats the placeholder image as no avatar at all', async () => {

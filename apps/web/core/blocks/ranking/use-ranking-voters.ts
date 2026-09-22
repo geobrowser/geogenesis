@@ -42,7 +42,7 @@ function chunkSpaceIds(spaceIds: string[]): string[][] {
 }
 
 export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
-  const rankEntitySpaceById = useRankEntitySpaceById(refs);
+  const { rankEntitySpaceById, isResolvingSpaces } = useRankEntitySpaceById(refs);
 
   const resolvedRefs = React.useMemo(() => {
     const seen = new Set<string>();
@@ -116,7 +116,11 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
     [resolvedRefs, profilesBySpaceId, spacesById]
   );
 
-  const isLoading = spaceIds.length > 0 && isLoadingProfiles;
+  // `isResolvingSpaces` has to be part of this. Refs whose relation carried no `to_space` — the
+  // common shape on testnet — contribute nothing to `spaceIds` until their home space is looked up,
+  // so a flag derived only from the profiles query reads `false` for that whole window and the
+  // popover renders zero rows with no skeleton, under a footer already claiming N voters.
+  const isLoading = isResolvingSpaces || (spaceIds.length > 0 && isLoadingProfiles);
 
   return { voters, isLoading };
 }
