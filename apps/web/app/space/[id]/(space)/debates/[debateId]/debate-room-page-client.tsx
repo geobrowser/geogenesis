@@ -191,6 +191,9 @@ type DebateRecordingWindow = {
   endAtMs: number;
 };
 
+type DebateRoomState = 'idle' | 'connecting' | 'reconnecting' | 'connected' | 'saving';
+type DebateRecordingModalRoomState = Exclude<DebateRoomState, 'idle'> | 'transitioning';
+
 /** Where the other debater is, as far as LiveKit is concerned. */
 type DebateRemotePresence = 'absent' | 'present' | 'left';
 
@@ -215,7 +218,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
   usePrefetchClaimSpaceAllowlist(true);
 
   return (
-    <DebateMediaSessionBoundary>
+    <DebateMediaSessionBoundary key={debateId}>
       <DebateRoomSurface spaceId={spaceId} debateId={debateId} />
     </DebateMediaSessionBoundary>
   );
@@ -266,9 +269,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
-  const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'reconnecting' | 'connected' | 'saving'>(
-    'idle'
-  );
+  const [roomState, setRoomState] = React.useState<DebateRoomState>('idle');
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [postJoinConnectionFailure, setPostJoinConnectionFailure] = React.useState(false);
   const [connectionConflictSource, setConnectionConflictSource] =
@@ -595,7 +596,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // the generic "Leaving the debate" spinner here is the extra screen the user sees between the
   // thank-you period and the claim picker.
   const showRecordingModal = roomState !== 'idle' || idleRematchDestination !== null;
-  const recordingModalRoomState = roomState === 'idle' ? 'saving' : roomState;
+  const recordingModalRoomState: DebateRecordingModalRoomState =
+    roomState === 'idle' ? 'transitioning' : roomState;
 
   // Between the intro and the recording view, the debate connection has not set `roomState` yet:
   // either the auto-connect effect has not run, or `connect` is waiting on tab ownership. A spent
@@ -1818,7 +1820,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     participant => participant.user_id === currentUserId
   );
   React.useEffect(() => {
-    if (debate?.status !== 'thanking' || countdown.effectiveStatus !== 'thanking') return;
+    if (!debate || !['thanking', 'complete'].includes(debate.status) || countdown.effectiveStatus !== 'thanking') {
+      return;
+    }
     if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > rematchAutoConsentLeadSeconds) return;
     if (rematchQuery.data?.status !== 'deciding') return;
     if (rematchLeaveRequestedRef.current) return;
@@ -1833,8 +1837,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     consentToRematch.isPending,
     countdown.effectiveStatus,
     countdown.remainingSeconds,
-    debate?.id,
-    debate?.status,
+    debate,
     localRematchParticipant?.consented_at,
     rematchConsentRequested,
     rematchQuery.data?.status,
@@ -1925,10 +1928,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           rematchSessionStatus === 'browsing' ||
           rematchSessionStatus === 'request_pending';
         if (consentAlreadyPublished) await publishRematchLeave();
-        // A cancelled recording was discarded the moment the cancellation landed, so there is
-        // nothing to persist. Insisting anyway fails every time and traps someone who cancelled
-        // and then decided against the rematch — the one exit they have left.
-        if (debate.recording_cancelled_at === null) {
+        // A cancelled recording was discarded the moment the cancellation landed, and an idle
+        // room is the disconnected/reloaded path with no live recording to finalize. Insisting on
+        // persistence in either case fails every time and turns this opt-out into a fake exit.
+        if (debate.recording_cancelled_at === null && roomState !== 'idle') {
           const persisted = await persistStoppedLocalRecording();
           if (!persisted) {
             throw new Error('Could not save the local recording. Please try leaving again.');
@@ -1970,6 +1973,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     publishRematchLeave,
     rematchSessionStatus,
     returnFromDebate,
+    roomState,
   ]);
 
   const handleConnectionFailure = React.useCallback(() => {
@@ -2529,7 +2533,7 @@ function DebateRecordingModal({
   leaveDisabled,
 }: {
   debate: Debate;
-  roomState: 'connecting' | 'reconnecting' | 'connected' | 'saving';
+  roomState: DebateRecordingModalRoomState;
   roomError: string | null;
   countdown: DebateCountdown;
   localSlot: ParticipantSlot | null;
@@ -2636,6 +2640,7 @@ function DebateRecordingModal({
   );
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
+  const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
@@ -2803,12 +2808,12 @@ function DebateRecordingModal({
           <div className="mt-3 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
             {['thanking', 'complete'].includes(debate.status) && (
-              <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={roomState === 'saving'}>
+              <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={controlsDisabled}>
                 Retry save
               </Button>
             )}
             {canRetryConnection && (
-              <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={roomState === 'saving'}>
+              <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={controlsDisabled}>
                 Retry connection
               </Button>
             )}
@@ -2846,7 +2851,7 @@ function DebateDebugMenu({
 }: {
   debate: Debate;
   countdown: DebateCountdown;
-  roomState: 'connecting' | 'reconnecting' | 'connected' | 'saving';
+  roomState: DebateRecordingModalRoomState;
   audioMuted: boolean;
   remoteAudioEnabled: boolean;
   videoEnabled: boolean;
@@ -2859,7 +2864,8 @@ function DebateDebugMenu({
 }) {
   const phases = debateDebugPhases(debate, countdown);
   const noiseFilterAvailable = noiseFilterStatus === 'enabled' || noiseFilterStatus === 'disabled';
-  const noiseFilterDisabled = roomState === 'saving' || noiseFilterTogglePending || !noiseFilterAvailable;
+  const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
+  const noiseFilterDisabled = controlsDisabled || noiseFilterTogglePending || !noiseFilterAvailable;
 
   return (
     <aside className="fixed top-4 right-4 z-[1010] w-[min(280px,calc(100vw-2rem))] rounded-lg border border-grey-02 bg-white/95 p-3 shadow-card backdrop-blur">
@@ -2872,7 +2878,7 @@ function DebateDebugMenu({
             ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             onClick={onToggleAudioMuted}
-            disabled={roomState === 'saving'}
+            disabled={controlsDisabled}
             active={audioMuted}
           >
             <MicrophoneIcon muted={audioMuted} />
@@ -2881,7 +2887,7 @@ function DebateDebugMenu({
             ariaLabel={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
             title={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
             onClick={onToggleRemoteAudioEnabled}
-            disabled={roomState === 'saving'}
+            disabled={controlsDisabled}
             active={!remoteAudioEnabled}
           >
             <SpeakerIcon disabled={!remoteAudioEnabled} />
@@ -2890,7 +2896,7 @@ function DebateDebugMenu({
             ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             onClick={onToggleVideoEnabled}
-            disabled={roomState === 'saving'}
+            disabled={controlsDisabled}
             active={!videoEnabled}
           >
             <CameraIcon disabled={!videoEnabled} />
@@ -3496,11 +3502,7 @@ function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<Room
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
   const [now, setNow] = React.useState(serverNow);
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
-  const completedThankYouDeadlineMs =
-    debate?.status === 'complete' && isDebateInThankYouPeriod(debate, now)
-      ? timestampMs(debate.turn_ends_at ?? debate.completed_at)
-      : null;
-  const boundaryAtMs = countdownWindow?.targetMs ?? completedThankYouDeadlineMs;
+  const boundaryAtMs = countdownWindow?.targetMs ?? null;
 
   React.useEffect(() => {
     const currentNow = serverNow();
@@ -3685,10 +3687,10 @@ function countdownWindowForDebate(
     };
   }
 
-  if (debate.status === 'thanking') {
+  if (debate.status === 'thanking' || (debate.status === 'complete' && isDebateInThankYouPeriod(debate, now))) {
     return {
       startMs: timestampMs(debate.turn_started_at),
-      targetMs: timestampMs(debate.turn_ends_at),
+      targetMs: timestampMs(debate.turn_ends_at ?? debate.completed_at),
       activeSlot: null,
       effectiveStatus: 'thanking',
       turnIndex: null,
