@@ -176,11 +176,11 @@ describe('TopicPageView explore feed', () => {
     });
   });
 
-  it('keeps Overview and counted Comments as built-in tabs so authored tabs can follow them', () => {
+  it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toEqual([
-      { label: 'Overview', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
+      { label: 'Explore', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
       {
         label: 'Comments',
         href: '/space/space-1/topic-1/comments',
@@ -188,10 +188,10 @@ describe('TopicPageView explore feed', () => {
         badge: '7',
       },
     ]);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview', 'Comments']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments']);
   });
 
-  it('keeps comments out of Overview and renders them only on the Comments tab', () => {
+  it('keeps comments out of Explore and renders them only on the Comments tab', () => {
     const { rerender } = render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('topic-feed')).toBeInTheDocument();

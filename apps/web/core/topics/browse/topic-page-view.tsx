@@ -76,7 +76,7 @@ export function resolveTopicTab({
  * One column at every width, laid out against a container query rather than the viewport, so the
  * route, the entity side panel and a phone are three widths of one page. Same as the claim page.
  *
- * Overview is a topic-scoped Explore feed. It mixes Claims, Debates and coverage entities into one
+ * Explore is a topic-scoped feed. It mixes Claims, Debates and coverage entities into one
  * ranked rabbit hole while keeping authored tabs available through the same editor as Claim pages.
  */
 export function TopicPageView({
@@ -134,7 +134,7 @@ export function TopicPageView({
   const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
   const systemTabs = [
-    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
+    { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },
     {
       label: 'Comments',
       href: `${overviewHref}/comments`,

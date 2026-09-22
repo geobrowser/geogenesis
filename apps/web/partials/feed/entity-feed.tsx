@@ -103,6 +103,16 @@ type EntityFeedProps = {
   persistTypeSelection?: boolean;
   /** Optional Topic facet shown beside the type picker. */
   topicOptions?: HubFilterOption<string>[];
+  /** Keep the Topic picker visible while its options load or when the default list is empty. */
+  showTopicFilter?: boolean;
+  /** Optional search state for a dynamic Topic picker. */
+  topicSearch?: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder: string;
+    isLoading?: boolean;
+    emptyLabel?: string;
+  };
   /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
   fixedParams?: Record<string, string>;
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
@@ -171,6 +181,8 @@ export function EntityFeed({
   typeOptions = EXPLORE_ENTITY_TYPES,
   persistTypeSelection = true,
   topicOptions = [],
+  showTopicFilter = false,
+  topicSearch,
   fixedParams = {},
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
@@ -217,13 +229,13 @@ export function EntityFeed({
   // returning to Top restores the range the viewer last picked rather than resetting it.
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
-  const showTopicFilter = topicOptions.length > 0;
+  const topicFilterVisible = showTopicFilter || topicOptions.length > 0;
   const showFilterRow =
     showSortFilter ||
     timeRangeApplies ||
     (showSpaceFilter && lockedSpaceId == null) ||
     showTypeFilter ||
-    showTopicFilter;
+    topicFilterVisible;
 
   React.useEffect(() => {
     if (!showTypeFilter || !persistTypeSelection) return;
@@ -482,7 +494,7 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {(showSpaceFilter && lockedSpaceId == null) || showTypeFilter || showTopicFilter ? (
+          {(showSpaceFilter && lockedSpaceId == null) || showTypeFilter || topicFilterVisible ? (
             <div className="ml-auto flex items-center gap-3">
               {showSpaceFilter && lockedSpaceId == null ? (
                 <HubMultiFilterMenu
@@ -503,7 +515,7 @@ export function EntityFeed({
                   onToggleAll={toggleAllTypes}
                 />
               ) : null}
-              {showTopicFilter ? (
+              {topicFilterVisible ? (
                 <HubMultiFilterMenu
                   label={topicLabel}
                   options={topicOptions}
@@ -512,6 +524,7 @@ export function EntityFeed({
                   onClear={() => setSelectedTopicIds([])}
                   clearLabel="Any topic"
                   showImages={false}
+                  search={topicSearch}
                 />
               ) : null}
             </div>
