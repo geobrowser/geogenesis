@@ -69,6 +69,9 @@ export function SpaceDebateActivitySection({ spaceId }: { spaceId: string }) {
         isLoading: source.isLoading || isCountsLoading,
         isError: source.isError,
         href: spaceActivityFeedHref(spaceId, kind),
+        // The debates index is full-bleed — no header, no tab bar — so the fragment has nothing to
+        // land on and would only ride along in a copied URL. Claims keeps it: that route has tabs.
+        skipTabsAnchor: kind === 'debates',
         seeAllLabel: SEE_ALL_LABEL[kind],
       } satisfies ActivityKind;
     });

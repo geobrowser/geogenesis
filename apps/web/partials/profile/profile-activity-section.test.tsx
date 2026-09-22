@@ -599,6 +599,15 @@ describe('ProfileActivitySection', () => {
     );
   });
 
+  // A destination with no tab bar to land on — the full-bleed debates index, where
+  // `SpaceChromeGate` strips the header and tabs — would carry an inert fragment into any URL
+  // someone copied out of the address bar.
+  it('leaves the fragment off a kind that opts out', () => {
+    render(<ProfileActivitySection kinds={[kind({ href: '/space/s/debates', skipTabsAnchor: true })]} />);
+
+    expect(screen.getByRole('link', { name: /See all debates/ })).toHaveAttribute('href', '/space/s/debates');
+  });
+
   it('reserves the lost mobile document height while switching between kinds', () => {
     mockMobileActivityGeometry(600);
 

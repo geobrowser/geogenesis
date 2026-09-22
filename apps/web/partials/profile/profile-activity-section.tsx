@@ -63,6 +63,14 @@ export type ActivityKind = {
   isError?: boolean;
   /** The tab holding the rest. */
   href: string;
+  /**
+   * Link to {@link href} as given, without the tab-bar fragment.
+   *
+   * For a destination that has no tab bar to land on — the debates index is full-bleed, and
+   * `SpaceChromeGate` strips the header and tabs from it — where the fragment is inert and only
+   * shows up in a URL someone copies.
+   */
+  skipTabsAnchor?: boolean;
   seeAllLabel: string;
   /** Selects an in-place tab when the record is rendered inside a side panel. */
   onSeeAll?: () => void;
@@ -272,9 +280,10 @@ function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
 
   // A route navigation lands at the top of the page, which on a phone is a screenful of profile
   // chrome. The fragment puts the tab row under the navbar instead. Side panels use `onSeeAll`
-  // above because their tabs are selected in place and have no route fragment to follow.
+  // above because their tabs are selected in place and have no route fragment to follow, and a
+  // destination with no tab bar opts out — see `skipTabsAnchor`.
   return (
-    <Link href={withSpaceTabsAnchor(kind.href)} className={className}>
+    <Link href={kind.skipTabsAnchor ? kind.href : withSpaceTabsAnchor(kind.href)} className={className}>
       {kind.seeAllLabel}
     </Link>
   );

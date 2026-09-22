@@ -43,6 +43,7 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
           data-loading={String(Boolean(kind.isLoading))}
           data-error={String(Boolean(kind.isError))}
           data-href={kind.href}
+          data-skip-anchor={String(Boolean(kind.skipTabsAnchor))}
           data-rows={kind.rows.length}
         >
           {kind.seeAllLabel}
@@ -70,12 +71,12 @@ describe('SpaceDebateActivitySection', () => {
 
     const debates = screen.getByTestId('kind-debates');
     expect(debates).toHaveAttribute('data-total', '12');
-    expect(debates).toHaveAttribute('data-href', '/space/space-1/explore/debates');
+    expect(debates).toHaveAttribute('data-href', '/space/space-1/debates');
     expect(debates).toHaveTextContent('See all debates');
 
     const claims = screen.getByTestId('kind-claims');
     expect(claims).toHaveAttribute('data-total', '34');
-    expect(claims).toHaveAttribute('data-href', '/space/space-1/explore/claims');
+    expect(claims).toHaveAttribute('data-href', '/space/space-1/claims');
     expect(claims).toHaveTextContent('See all claims');
   });
 
@@ -126,6 +127,15 @@ describe('SpaceDebateActivitySection', () => {
 
     expect(screen.getByTestId('kind-debates')).toHaveAttribute('data-error', 'true');
     expect(screen.getByTestId('activity-card')).toBeInTheDocument();
+  });
+
+  // The debates index is full-bleed, so `#space-tabs` has nothing to land on there and would only
+  // ride along in a copied URL. The claims route has tabs and keeps it.
+  it('drops the tab-bar fragment for debates and keeps it for claims', () => {
+    render(<SpaceDebateActivitySection spaceId="space-1" />);
+
+    expect(screen.getByTestId('kind-debates')).toHaveAttribute('data-skip-anchor', 'true');
+    expect(screen.getByTestId('kind-claims')).toHaveAttribute('data-skip-anchor', 'false');
   });
 
   // The card decides whether it renders at all, so the gap under it has to travel with it.

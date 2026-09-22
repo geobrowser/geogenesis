@@ -42,15 +42,20 @@ export function parseSpaceActivityKindFromTypeIds(raw: string | null): SpaceActi
 }
 
 /**
- * The full-screen feed a "See all" row leads to.
+ * The full-screen view a "See all" row leads to — the space's own tab for that kind.
  *
- * Under `explore/` rather than at `/space/<id>/debates` or `/space/<id>/claims`, both of which are
- * already taken and are not this: the first is the full-bleed video player (`SpaceChromeGate`
- * strips the space chrome from it), and the second is the editor surface for staging new claims.
- * This is the browsing view — the Explore feed, narrowed to one type in one space.
+ * Both are Best-ordered, which is what makes them the right end of a "See all" from a card that
+ * ranks its six the same way. `/debates` is the full-bleed player feed, ranked by
+ * `useDebatesBestOrder` — the same `entitiesRankedForFeedByType` ranking Explore's Best sort uses.
+ * `/claims` is the space's claims tab, which this work turned into the matching browse feed.
+ *
+ * Deliberately the existing routes rather than a new `explore/` pair. An earlier revision added
+ * `/space/<id>/explore/debates` and `/space/<id>/explore/claims`, which meant a second debates
+ * surface beside the player people already reach from everywhere else — two views of one thing,
+ * ranked alike and drifting apart from the first change to either.
  */
 export function spaceActivityFeedHref(spaceId: string, kind: SpaceActivityKind): string {
-  return `/space/${spaceId}/explore/${kind}`;
+  return `/space/${spaceId}/${kind}`;
 }
 
 /** The REST endpoint both the Overview card and the full-screen feeds read. */

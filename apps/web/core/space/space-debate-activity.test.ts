@@ -32,11 +32,12 @@ describe('parseSpaceActivityKindFromTypeIds', () => {
 });
 
 describe('spaceActivityFeedHref', () => {
-  // Deliberately not `/space/<id>/debates` (the full-bleed player) or `/space/<id>/claims` (the
-  // editor surface). A test, because both are live routes that would silently take these over.
-  it('points at the space-scoped explore routes', () => {
-    expect(spaceActivityFeedHref('space-1', 'debates')).toBe('/space/space-1/explore/debates');
-    expect(spaceActivityFeedHref('space-1', 'claims')).toBe('/space/space-1/explore/claims');
+  // The space's own tabs, not a second pair of surfaces beside them. Both are Best-ordered — the
+  // debates feed by `useDebatesBestOrder`, the claims feed by the sort it opens on — which is what
+  // makes them the right end of a "See all" from a card that ranks its six the same way.
+  it('points at the space’s own debates and claims tabs', () => {
+    expect(spaceActivityFeedHref('space-1', 'debates')).toBe('/space/space-1/debates');
+    expect(spaceActivityFeedHref('space-1', 'claims')).toBe('/space/space-1/claims');
   });
 
   it('reads the feed from the space-pinned endpoint', () => {

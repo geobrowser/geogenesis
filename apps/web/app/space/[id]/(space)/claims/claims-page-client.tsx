@@ -4,27 +4,18 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { resolveClaimResponseKind, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { isClaimPublishedInSpace } from '~/core/claims/publish';
-import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
-import { useDebateClaims } from '~/core/debates/hooks';
-import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import {
-  ClaimResponseBatchBoundary,
-  useClaimResponseSummaryBatch,
-} from '~/core/responses/use-claim-response-summaries';
+import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { SPACE_ACTIVITY_TYPE_ID, spaceActivityFeedEndpoint } from '~/core/space/space-debate-activity';
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
+
+import { EntityFeed } from '~/partials/feed/entity-feed';
 
 type ClaimsPageClientProps = {
   spaceId: string;
@@ -48,55 +39,30 @@ const relatedFields: RelatedField[] = [
   },
 ];
 
+/**
+ * A space's claims, as the browse feed a reader arrives at from Overview's Activity card.
+ *
+ * This was a fixed list of up to fifty claims in whatever order the entity store happened to hold
+ * them, on a route the space's own tab bar does not link to. It is now the destination of "See all
+ * claims", so it has to answer the question that link asks — what is worth reading here — which
+ * means **Best order and no floor on how far you can scroll**, the same two properties the debates
+ * feed on the sibling route already has.
+ *
+ * So the list is the Explore feed, pinned to this space and to Claim, exactly as the Activity card
+ * above it is. One consequence worth knowing: like Explore, it shows the claims a curator has
+ * tagged `Debate` (GEO-2835) rather than every claim in the space. That is what the card's count is
+ * measured through too, so the number on the pill and the list it leads to are the same corpus.
+ *
+ * The staging form stays. It is unrelated to how the list is ordered, and it is the only place in
+ * the app that opens a claim proposal from a space. What it no longer does is show the staged claim
+ * in the list below before it is published — the feed reads the graph, not the local edit store —
+ * and staging already opens the review panel, which is where a draft lives until it is published.
+ */
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const { entities: claims, isLoading } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
-    first: 50,
-    deferUntilFetched: true,
-    includeUnpublishedLocal: true,
-  });
-  // Scoped to this space. `useQueryEntities` filters *which* entities come back, not each one's
-  // relations — rows materialize through a bare `store.getEntity(id)` — so the unscoped predicate
-  // reads a draft edit sitting in any other space and reports the claim unpublished here.
-  const isPublishedHere = React.useCallback((claim: Entity) => isClaimPublishedInSpace(claim, spaceId), [spaceId]);
-  const publishedClaimIds = React.useMemo(
-    () => claims.filter(isPublishedHere).map(claim => claim.id),
-    [claims, isPublishedHere]
-  );
-  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
-  const debateClaimsByEntityId = React.useMemo(() => {
-    const map = new Map<string, DebateClaim>();
-    for (const claim of debateClaimsQuery.data?.claims ?? []) {
-      map.set(claim.claim_entity_id, claim);
-    }
-    return map;
-  }, [debateClaimsQuery.data?.claims]);
-  const responseKindsByEntityId = React.useMemo(
-    () =>
-      new Map(
-        claims
-          .filter(isPublishedHere)
-          .map(claim => [
-            claim.id,
-            resolveClaimResponseKind(debateClaimsByEntityId.get(claim.id) ?? null, claim, spaceId),
-          ])
-      ),
-    [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
-  );
-  const responseTargets = React.useMemo(
-    () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
-    [publishedClaimIds, responseKindsByEntityId]
-  );
-  const responseBatch = useClaimResponseSummaryBatch({
-    spaceId,
-    targets: responseTargets,
-    enabled: true,
-  });
-  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
+  // A fixed one-element list, memoised so the feed's query key is stable across renders.
+  const lockedTypeIds = React.useMemo(() => [SPACE_ACTIVITY_TYPE_ID.claims], []);
+
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -113,23 +79,20 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
       {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
       <div className={cx(formOpen && 'mt-6')}>
-        <ClaimResponseBatchBoundary ready={responseBatchReady}>
-          {responseBatch.isError ? (
-            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
-              <Text color="grey-04">Response data could not be loaded.</Text>
-              <Button type="button" variant="secondary" onClick={() => void responseBatch.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : null}
-          <ClaimsList
-            claims={claims}
-            isLoading={isLoading}
-            spaceId={spaceId}
-            debateClaimsByEntityId={debateClaimsByEntityId}
-            debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
-          />
-        </ClaimResponseBatchBoundary>
+        <EntityFeed
+          apiEndpoint={spaceActivityFeedEndpoint(spaceId)}
+          lockedSpaceId={spaceId}
+          lockedTypeIds={lockedTypeIds}
+          initialSort="best"
+          showSortFilter
+          // "All time" rather than Explore's month: one space holds far less than the whole graph,
+          // and a window narrow enough to be interesting across every space can empty a single one.
+          initialTime="all"
+          // The presentation Explore and the Activity card above this both give a claim, so it is
+          // answerable in the same shape wherever it is read.
+          claimCardVariant="debate-panel-mobile"
+          feedTopSpacingClassName="mt-5"
+        />
       </div>
     </div>
   );
@@ -237,126 +200,5 @@ function AddClaimForm({ spaceId, onCancel }: { spaceId: string; onCancel: () => 
         <Button type="submit">Open proposal</Button>
       </div>
     </form>
-  );
-}
-
-function ClaimsList({
-  claims,
-  isLoading,
-  spaceId,
-  debateClaimsByEntityId,
-  debateStatus,
-}: {
-  claims: Entity[];
-  isLoading: boolean;
-  spaceId: string;
-  debateClaimsByEntityId: Map<string, DebateClaim>;
-  debateStatus: string | null;
-}) {
-  if (isLoading && claims.length === 0) {
-    return (
-      <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-        <Text color="grey-04">Loading claims...</Text>
-      </div>
-    );
-  }
-
-  if (claims.length === 0) {
-    return (
-      <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-        <Text as="h3" variant="bodySemibold" color="text">
-          No claims yet
-        </Text>
-        <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-          Add a claim to stage it as an edit, then publish it through Review edits.
-        </Text>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {debateStatus && (
-        <div className="rounded-lg border border-red-01 bg-white px-5 py-3">
-          <Text color="red-01">{debateStatus}</Text>
-        </div>
-      )}
-      {claims.map(claim => (
-        <ClaimListItem
-          key={claim.id}
-          claim={claim}
-          spaceId={spaceId}
-          debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
-        />
-      ))}
-    </div>
-  );
-}
-
-/**
- * One claim in a space's editing view, drawn as the card every other claim surface draws.
- *
- * This was a third card shape — its own shadow, its own title size, chevron response controls, and
- * a topic chip group nothing else showed. The response controls in particular were the entity-row
- * chevrons, which name neither side; on a page that is nothing but claims, that is exactly backwards.
- *
- * No readiness switch: GEO-2740 removed the per-claim Debate toggle from the product. An earlier
- * revision of this work kept one here on the grounds that this is where an editor stages claims for
- * debate, which stopped being possible when the control stopped existing.
- */
-function ClaimListItem({
-  claim,
-  spaceId,
-  debateClaim,
-}: {
-  claim: Entity;
-  spaceId: string;
-  debateClaim: DebateClaim | null;
-}) {
-  const published = isClaimPublishedInSpace(claim, spaceId);
-  const activeDebate = debateClaim?.active_debate ?? null;
-
-  // Catches up readiness for a position the viewer already held before GEO-2740. Temporary; see
-  // the hook.
-  useBackfillReadinessForHeldPosition({ readiness: debateClaim, entityId: claim.id, spaceId });
-
-  // The page resolved the kind already, to batch its response reads; the hook resolves it again from
-  // the same two inputs and by construction gets the same answer.
-  const state = useClaimResponseState({
-    claimId: claim.id,
-    spaceId,
-    row: debateClaim,
-    entity: claim,
-    title: claim.name ?? claim.id,
-    description: claim.description,
-  });
-
-  // A draft has no on-chain identity to respond to or debate over, so the card would offer controls
-  // that cannot work. Say what to do about it instead.
-  if (!published) {
-    return (
-      <article className="rounded-lg border border-grey-02 bg-white px-5 py-4">
-        <Text as="h3" variant="bodySemibold" color="text" className="block">
-          {claim.name ?? claim.id}
-        </Text>
-        <Text as="p" variant="body" color="grey-04" className="mt-2">
-          Publish this claim before starting a debate.
-        </Text>
-      </article>
-    );
-  }
-
-  // No footer. `ClaimDebateStatus` used to print "Debate in progress" here from `active_debate` —
-  // the same value the card's end slot now turns into a "Watch live" link. One fact, stated twice,
-  // and the sentence was the half you could not press.
-  return (
-    <MatchmakingClaimCard
-      claim={state.claim}
-      positions={state.positions}
-      readiness={state.readiness}
-      answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
-      responseBlockedReason={state.responseBlockedReason}
-      activeDebate={activeDebate}
-    />
   );
 }
