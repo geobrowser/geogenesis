@@ -8,6 +8,7 @@ import { Provider, useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -250,15 +251,34 @@ function PanelProbe() {
 // so the harness has to provide one too, or the double is laxer than the real tree.
 let client: QueryClient;
 
-function renderCard(props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {}) {
-  return render(
+function CardHarness({
+  props,
+  allowedId,
+}: {
+  props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>>;
+  allowedId?: string | null;
+}) {
+  const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />;
+
+  return (
     <QueryClientProvider client={client}>
       <Provider>
-        <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />
+        {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
         <PanelProbe />
       </Provider>
     </QueryClientProvider>
   );
+}
+
+function renderCard(
+  props: Partial<React.ComponentProps<typeof DebateExploreFeedCard>> = {},
+  allowedId?: string | null
+) {
+  const result = render(<CardHarness props={props} allowedId={allowedId} />);
+  return {
+    ...result,
+    rerenderCard: () => result.rerender(<CardHarness props={props} allowedId={allowedId} />),
+  };
 }
 
 /** Dispatches a click the way a browser would, so `defaultPrevented` is observable. */
@@ -343,6 +363,20 @@ describe('DebateExploreFeedCard', () => {
     expect(mocks.playerToggle).toHaveBeenCalledOnce();
   });
 
+  it('consumes an active non-owner click while transferring playback ownership', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    renderCard({ onPlaybackRequest }, 'another-debate');
+    intersectAll(0.7);
+
+    expect(screen.getByTestId('player')).toHaveAttribute('data-active', 'false');
+    fireEvent.click(screen.getByTestId('player'));
+
+    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+    expect(mocks.playerToggle).not.toHaveBeenCalled();
+  });
+
   it('brings an inactive player into view before requesting playback', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
@@ -381,6 +415,28 @@ describe('DebateExploreFeedCard', () => {
     );
 
     intersectAll(0);
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      false
+    );
+  });
+
+  it('unregisters stale playable data when a refetch replaces the player with fallback', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackAvailabilityChange = vi.fn();
+    const view = renderCard({ onPlaybackAvailabilityChange });
+    intersectAll(0.7);
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
+      'fd51f935-2063-4617-8039-7b672b23364c',
+      true
+    );
+
+    // TanStack Query retains the previous data when a background refetch fails.
+    mocks.debateQuery = { data: watchableDebate(), isError: true };
+    view.rerenderCard();
+
+    expect(screen.getByTestId('fallback')).toBeInTheDocument();
     expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
       'fd51f935-2063-4617-8039-7b672b23364c',
       false

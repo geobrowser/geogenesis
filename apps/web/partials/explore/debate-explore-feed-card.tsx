@@ -81,9 +81,9 @@ type DebateExploreFeedCardProps = {
   /** Compact title and metadata treatment used by the narrow profile Activity rail. */
   compactChrome?: boolean;
   /**
-   * Called before a pointer or keyboard click reaches an active player. A surface with several
-   * visible debates uses it to transfer playback ownership before the clicked player starts. An
-   * inactive clicked player is centered first, then requests ownership when it becomes active.
+   * Called when a coordinated surface's player is clicked. An allowed active player transfers
+   * before the click reaches it. A visible non-owner consumes that first click while ownership
+   * commits, and an inactive player is centered before requesting ownership when it becomes active.
    */
   onPlaybackRequest?: (debateId: string) => void;
   /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
@@ -193,7 +193,7 @@ export function DebateExploreFeedCard({
    * its votes and its comment count — neither asks geo-chat anything — and gets the rest back on
    * the way past.
    */
-  const mediaMounted = readyDebate != null && nearViewport;
+  const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
 
   // A card enters the media look-ahead band before it is active. Its visible edge can therefore
   // receive a click while the player still has `active={false}`. Giving that card ownership at
@@ -216,16 +216,23 @@ export function DebateExploreFeedCard({
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onPlaybackRequest) return;
-    if (active) {
+    if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
       return;
     }
 
-    // This first click activates the card; it must not also reach the player's full-tile toggle
-    // (or another media control) while the player is still inactive and denied by the gate.
+    // This first click either activates the card or transfers the gate. It must not also reach the
+    // player's full-tile toggle (or another media control) before the player is both active and
+    // allowed, or React's batched ownership update can briefly run it alongside the old owner.
     event.preventDefault();
     event.stopPropagation();
+
+    if (active) {
+      pendingPlaybackRequestRef.current = false;
+      onPlaybackRequest(debateId);
+      return;
+    }
 
     if (!container) return;
     pendingPlaybackRequestRef.current = true;
