@@ -283,9 +283,11 @@ export function personProfileOpened(
   personEntityId?: string | null,
   properties: AnalyticsProperties = {}
 ) {
-  graphRelationshipFollowed(personEntityId || profileSpaceId, {
+  const resolvedPersonEntityId = personEntityId && personEntityId !== profileSpaceId ? personEntityId : null;
+
+  graphRelationshipFollowed(resolvedPersonEntityId ?? profileSpaceId, {
     source: 'person_profile',
-    graph_entity_type: personEntityId ? 'person' : 'personal_space',
+    graph_entity_type: resolvedPersonEntityId ? 'person' : 'personal_space',
     profile_space_id: profileSpaceId,
     ...properties,
   });
@@ -491,6 +493,17 @@ function flushPendingCalls() {
 }
 
 function invokeRuntime(call: PendingCall) {
+  try {
+    return invokeRuntimeUnsafe(call);
+  } catch (error) {
+    // Analytics is observational. A collector/runtime failure must not break the product action
+    // that emitted the event, and retrying the same broken call would also stall the pending queue.
+    console.error('Analytics runtime call failed:', error);
+    return true;
+  }
+}
+
+function invokeRuntimeUnsafe(call: PendingCall) {
   const analytics = analyticsRuntime();
 
   if (!analytics) {

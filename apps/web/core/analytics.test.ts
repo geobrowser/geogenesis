@@ -307,4 +307,34 @@ describe('analytics', () => {
       signup_surface: 'explore_email_capture',
     });
   });
+
+  it('keeps product actions best-effort when the analytics runtime throws', async () => {
+    window.lytics = {
+      capture: vi.fn(() => {
+        throw new Error('collector unavailable');
+      }),
+    };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    expect(() => personProfileOpened('profile-space-1', 'person-1')).not.toThrow();
+  });
+
+  it('attributes a profile entity fallback as its personal space', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('profile-space-1', 'profile-space-1', { interaction_surface: 'claim_vote_list' });
+
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: 'profile-space-1',
+      graph_entity_type: 'personal_space',
+      profile_space_id: 'profile-space-1',
+      interaction_surface: 'claim_vote_list',
+    });
+  });
 });
