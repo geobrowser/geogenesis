@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   responseTotal: 11,
   /** Whether the response counts are still out, which is what the hero reserves its column for. */
   summaryLoading: false,
+  /** Whether the counts actually answered. False after a terminal failure, not just while loading. */
+  hasCounts: true,
   /** Drives the one strip that can occupy the hero's first grid row. */
   isControversial: false,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
@@ -120,7 +122,7 @@ vi.mock('./use-claim-response-state', () => ({
     responseKind: 'stance',
     summary: {
       isLoading: mocks.summaryLoading,
-      hasCounts: true,
+      hasCounts: mocks.hasCounts,
       total: mocks.responseTotal,
       isControversial: mocks.isControversial,
       viewerDirection: 'positive',
@@ -218,6 +220,7 @@ function claimEntity(description: string | null) {
 beforeEach(() => {
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
+  mocks.hasCounts = true;
   mocks.isControversial = false;
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
@@ -336,6 +339,20 @@ describe('ClaimPageView record', () => {
     const grid = container.querySelector('header > div');
     expect(grid?.className).toContain('grid-cols-[minmax(0,1fr)_220px]');
     // Reserved, not filled: nothing has said what the verdict is yet.
+    expect(screen.queryByTestId('verdict')).toBeNull();
+  });
+
+  it('keeps the track when the counts fail rather than reading the failure as a zero', () => {
+    // A counts query that exhausts its retries leaves `total` at zero with nothing loading any
+    // more — the shape of an unanswered claim, which is exactly what it is not. Keying the track
+    // off `isLoading` gave it back on that failure and re-wrapped the title anyway.
+    mocks.summaryLoading = false;
+    mocks.hasCounts = false;
+    mocks.responseTotal = 0;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(container.querySelector('header > div')?.className).toContain('grid-cols-[minmax(0,1fr)_220px]');
+    // Reserved, not filled: there is still no verdict to draw.
     expect(screen.queryByTestId('verdict')).toBeNull();
   });
 

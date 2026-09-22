@@ -144,7 +144,14 @@ export function ClaimPageView({
   // a layout shift at the very top of the page, on every load, that the old below-header verdict
   // never had. An answered claim is the common case on this page, so the unknown state reserves
   // the column and only a settled zero takes it away.
-  const reserveVerdictColumn = summary.isLoading || hasVerdict;
+  //
+  // `hasCounts`, not `isLoading`, is what "settled" means. A counts query that exhausts its
+  // retries leaves `total` at zero with nothing loading any more — the shape of an unanswered
+  // claim, which is exactly what it is not, and the distinction `hasCounts` exists to draw. Keying
+  // off `isLoading` gave the track back on that failure and re-wrapped the title anyway, and would
+  // have taken it away again if a later refetch succeeded. Unknown reserves; only a measured zero
+  // releases.
+  const reserveVerdictColumn = !summary.hasCounts || summary.total > 0;
 
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
