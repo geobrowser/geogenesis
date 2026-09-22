@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -105,6 +105,7 @@ function controllerFixture(overrides: {
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
+    resyncSlot: vi.fn(),
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
@@ -423,5 +424,91 @@ describe('a backlog latch outliving its stack', () => {
     mocks.ticker = withCardsForSlot1();
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+});
+
+/**
+ * GEO-2985. Chrome gives up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `FFmpegDemuxer: demuxer seek failed` — after the element has sat in the explore feed's
+ * look-ahead preload long enough for the browser to suspend its fetch and resume it. A `<video>`
+ * that reports an error is finished: nothing retries it, it paints nothing, and the debate plays
+ * on in the other tile with that debater simply absent. That is the reported "one debater's video
+ * never loads in the explore feed, while the same debate is fine full screen".
+ */
+describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
+  const controller = () => mocks.controller as ReturnType<typeof controllerFixture>;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function renderPair() {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    return { slot1, slot2 };
+  }
+
+  it('re-attaches the source and asks the controller to put it back in step', () => {
+    const { slot1 } = renderPair();
+    const src = slot1.getAttribute('src');
+
+    fireEvent.error(slot1);
+    // Spaced rather than immediate, so a transient failure has a chance to be over.
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(500));
+
+    // `load()` alone cannot revive an element holding a MediaError — resource selection would run
+    // against the src it already has. Detaching first is what makes this a new fetch.
+    expect(slot1.getAttribute('src')).toBe(src);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+    expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  it('repairs each tile independently', () => {
+    const { slot2 } = renderPair();
+
+    fireEvent.error(slot2);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(controller().resyncSlot).toHaveBeenCalledWith(2);
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // A genuinely unreadable source answers every rebuild with another error. Unbounded, that is a
+  // tile re-fetching a multi-megabyte recording forever — worse than the blank tile it replaces.
+  it('gives up after a bounded number of attempts', () => {
+    const { slot1 } = renderPair();
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(3);
+  });
+
+  // `load()` itself can fire `error` again before the first repair has finished, and each of
+  // those must not book its own rebuild.
+  it('does not stack repairs while one is pending', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // The feed keys its cards by claim, so a re-rank hands a different debate to the same tile. A
+  // repair booked for the recording that has just been replaced must not touch the new one.
+  it('drops a pending repair when the tile is handed a different recording', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    slot1.setAttribute('src', 'https://cdn.test/another.webm');
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
   });
 });

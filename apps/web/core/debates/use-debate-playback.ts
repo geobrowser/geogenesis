@@ -66,6 +66,14 @@ const MIN_BACKGROUND_RESTART_INTERVAL_MS = 2_000;
  * path resumes the pair anyway.
  */
 const MAX_BACKGROUND_RESTART_ATTEMPTS = 5;
+/**
+ * How long a rebuilt recording has to open before the pair is policed again (GEO-2985).
+ *
+ * Generous, because the whole point of the wait is that these recordings are slow to open and the
+ * one being rebuilt has just started from nothing. It is a backstop rather than a deadline: if it
+ * fires, the element simply never rejoins and the card behaves as it did before the rebuild.
+ */
+const RECOVERY_REJOIN_TIMEOUT_MS = 15_000;
 /** No forward progress for this long, while unpaused, counts as stalled rather than slow. */
 const STALL_AFTER_MS = 500;
 /** Progress smaller than this is float noise on `currentTime`, not playback. */
@@ -209,6 +217,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * pause, which is the very failure this file keeps having to fix (GEO-2783, GEO-2895).
    */
   const resumesInFlightRef = React.useRef(0);
+  /**
+   * How many recordings are being rebuilt after their media pipeline died (GEO-2985).
+   *
+   * The same kind of fact as `resumesInFlightRef`, and it earns its place for the same reason: a
+   * rebuild is a split pair by construction. Detaching the source pauses that element while its
+   * partner plays on, and every correction below reads a split pair as "the browser stopped
+   * playback on us" — which here would pause the half that is still fine and record it as a
+   * *user* pause, so the card stops dead and auto-resume refuses to undo it. Exactly the failure
+   * `pairIsSettled` already exists to prevent, arriving through a new door.
+   */
+  const recoveringSlotsRef = React.useRef(0);
   /**
    * The same fact as `resumesInFlightRef`, rendered.
    *
@@ -484,7 +503,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // drift and answers it by nudging or hard-seeking the element that is still trying to begin.
     // On these files a seek is a parse walk (GEO-2828), so that makes the start it is competing
     // with slower still.
-    const pairIsSettled = !hidden && resumesInFlightRef.current === 0;
+    const pairIsSettled = !hidden && resumesInFlightRef.current === 0 && recoveringSlotsRef.current === 0;
 
     if (primaryVideo) {
       const progress = primaryProgressRef.current;
@@ -779,6 +798,78 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     await resumeBoth();
   }, [resumeBoth, seekVideosTo]);
 
+  /**
+   * Put one recording back in step after its element was reloaded from scratch (GEO-2985).
+   *
+   * A tile whose media pipeline died is repaired by re-attaching its source, which restarts it at
+   * zero with no memory of where the debate had got to. This is the other half of that repair:
+   * the recovered element rejoins wherever its partner is, rather than sitting at the beginning
+   * of a debate the viewer is halfway through.
+   *
+   * Its partner's clock, not `playheadSeconds`: the state a tick maintains is derived from both
+   * elements, and one of them has just been reset to zero — which is precisely the reading that
+   * must not be trusted. The surviving element is the only record of the position.
+   *
+   * It does nothing at all while that partner is paused, and that is the common case rather than
+   * an edge one. The failure this recovers from is observed during the feed's look-ahead preload,
+   * before either element has played: there the pair is already agreed at zero, and the card's
+   * next `resumeBoth` aligns both anyway. Seeking here would buy nothing and cost a demuxer parse
+   * walk on a cue-less recording (GEO-2828) — the expensive operation these files punish.
+   *
+   * Deferred to `loadeddata` — decoded data, not merely a header. Measured against the recording
+   * that provoked this, a detached element handed the same URL loads, plays and seeks without a
+   * complaint, so the file is sound and the seek is only as safe as the state it is made from:
+   * these recordings carry no Cues, so seeking is a parse walk (GEO-2828) and asking for one over
+   * data the element does not yet hold is how the pipeline died in the first place.
+   */
+  const resyncSlot = React.useCallback(
+    (slot: 1 | 2) => {
+      const recoveredVideo = slot === 1 ? slot1VideoRef.current : slot2VideoRef.current;
+      const partnerVideo = slot === 1 ? slot2VideoRef.current : slot1VideoRef.current;
+      if (!recoveredVideo || !partnerVideo || partnerVideo.paused) return;
+      const recovered = recoveredVideo;
+      const partner = partnerVideo;
+
+      const recoveredOffset = slot === 1 ? offsets.slot1 : offsets.slot2;
+      const partnerOffset = slot === 1 ? offsets.slot2 : offsets.slot1;
+
+      // The pair is split from here until the element rejoins, and the corrections in
+      // `updateTurnState` must stand down for the whole of it. See `recoveringSlotsRef`.
+      recoveringSlotsRef.current++;
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        recoveringSlotsRef.current--;
+        clearTimeout(giveUpTimer);
+        recovered.removeEventListener('loadeddata', rejoin);
+      };
+
+      function rejoin() {
+        settle();
+        // Re-read the partner rather than closing over a position: metadata can be a second or
+        // more away on these files, and the debate has moved on in the meantime.
+        if (partner.paused) return;
+        recovered.currentTime = Math.max(0, partner.currentTime + partnerOffset - recoveredOffset);
+        recovered.playbackRate = 1;
+        // Slot 1's clock has just jumped, which is not progress, and the pair is aligned by
+        // construction — the same two records `seekVideosTo` clears for the same reason.
+        primaryProgressRef.current = null;
+        lastSyncSeekAtRef.current = Date.now();
+        void recovered.play().catch(() => {
+          /* A refusal here is the browser's to make; the card's own controls remain the way in. */
+        });
+      }
+
+      // A rebuild that never opens must not leave the pair permanently unpoliced.
+      const giveUpTimer = setTimeout(settle, RECOVERY_REJOIN_TIMEOUT_MS);
+
+      if (recovered.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) rejoin();
+      else recovered.addEventListener('loadeddata', rejoin);
+    },
+    [offsets]
+  );
+
   const seekBoth = React.useCallback(
     (seconds: number) => {
       const nextTime = clampSeconds(seconds, timelineSeconds);
@@ -986,6 +1077,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,
+    resyncSlot,
     togglePlayback,
     playFromStart,
     resumeBoth,

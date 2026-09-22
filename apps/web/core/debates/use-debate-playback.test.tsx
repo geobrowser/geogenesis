@@ -166,8 +166,11 @@ const interruption = () => new DOMException('The play() request was interrupted 
  * and the race under test cannot happen.
  */
 function fakeVideo() {
+  const listeners = new Map<string, Set<EventListener>>();
   const video = {
     paused: true,
+    /** HAVE_ENOUGH_DATA — the state an element that is playing normally reports. */
+    readyState: 4,
     // Both muted, so playBothWithMutedFallback takes the no-audio path and does not spend a
     // second confirm round retrying muted.
     muted: true,
@@ -251,8 +254,22 @@ function fakeVideo() {
       video.pending = null;
       return () => detached?.reject(refusal());
     },
+    addEventListener(type: string, listener: EventListener) {
+      const forType = listeners.get(type) ?? new Set<EventListener>();
+      forType.add(listener);
+      listeners.set(type, forType);
+    },
+    removeEventListener(type: string, listener: EventListener) {
+      listeners.get(type)?.delete(listener);
+    },
+    /** Fire a media event at whatever is listening — `loadeddata`, in practice. */
+    emit(type: string) {
+      for (const listener of [...(listeners.get(type) ?? [])]) listener(new Event(type));
+    },
   };
   return video as unknown as HTMLVideoElement & {
+    readyState: number;
+    emit: (type: string) => void;
     plays: number;
     settlePlay: () => void;
     rejectPlay: () => void;
@@ -1407,5 +1424,114 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
 
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     expect(result.current.urls.slot2).not.toBeNull();
+  });
+});
+
+/**
+ * GEO-2985. Chrome gives up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `FFmpegDemuxer: demuxer seek failed` — after the element has sat in the explore feed's
+ * look-ahead preload long enough for the browser to suspend its fetch and resume it. The tile is
+ * then permanently blank while its partner plays on beside it. `DebaterVideo` rebuilds the
+ * element; `resyncSlot` is the other half — putting the rebuilt recording back where the debate
+ * has got to, and holding the pair's own corrections off while it does.
+ */
+describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  async function mounted() {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+    return { result, slot1, slot2 };
+  }
+
+  it('seeks the rebuilt recording to its partner and starts it', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    // Slot 2 carried on while slot 1 was rebuilt, so it is the only record of the position.
+    slot2.browserResume();
+    slot2.currentTime = 12.5;
+
+    act(() => result.current.resyncSlot(1));
+
+    expect(slot1.currentTime).toBe(12.5);
+    expect(slot1.plays).toBe(1);
+  });
+
+  // A rebuild that lands before either element has played — the observed case, where the failure
+  // happens during preload. Seeking here would buy nothing and cost a demuxer parse walk on a
+  // cue-less recording (GEO-2828); the card's next resume aligns both anyway.
+  it('leaves a paused pair alone', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserPause();
+
+    act(() => result.current.resyncSlot(1));
+
+    expect(slot1.currentTime).toBe(0);
+    expect(slot1.plays).toBe(0);
+  });
+
+  it('waits for decoded data before seeking the rebuilt element', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 8;
+    slot1.readyState = 0; // straight out of load(), nothing opened yet
+
+    act(() => result.current.resyncSlot(1));
+    // Seeking a cue-less recording over data the element does not hold is what killed it.
+    expect(slot1.plays).toBe(0);
+
+    // The partner has moved on by the time the recording opens, and that is where it rejoins.
+    slot2.currentTime = 9.25;
+    act(() => slot1.emit('loadeddata'));
+
+    expect(slot1.currentTime).toBe(9.25);
+    expect(slot1.plays).toBe(1);
+  });
+
+  /**
+   * THE REGRESSION this guard exists for. Rebuilding detaches the source, which pauses that
+   * element while its partner plays on — and a split pair is exactly what `updateTurnState` reads
+   * as "the browser stopped playback on us". Left unguarded it would pause the half that is
+   * still fine and record it as a *user* pause, so the card stops dead and auto-resume refuses to
+   * undo it: a blank tile traded for a stopped debate.
+   */
+  it('does not let the split pair pause the half that is still playing', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    slot1.readyState = 0; // rebuilding
+
+    act(() => result.current.resyncSlot(1));
+    // Slot 1 is paused mid-rebuild, slot 2 is not. A tick lands in that window as a matter of
+    // course — `timeupdate` fires about four times a second on the element still running.
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  it('polices the pair again once the rebuild reports', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+    act(() => slot1.emit('loadeddata'));
+    // The rebuilt element asked to play but the browser has not started it yet, so the pair is
+    // split again — this time for the ordinary reason, which the correction is right to act on.
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(true);
+    expect(result.current.userPaused).toBe(true);
   });
 });
