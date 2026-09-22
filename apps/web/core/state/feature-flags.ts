@@ -37,7 +37,7 @@ export const featureFlagDefinitions = [
     id: 'peerAvailability',
     label: "View someone's availability",
     description:
-      'Show "See times" on People rows, opening another debater\'s week (GEO-2938). Shows times you both have free until the API can return their availability unfiltered.',
+      'Show "See times" on People rows, opening another debater\'s week (GEO-2938). Viewing only: there is no way to request a time yet.',
     enabledByDefault: false,
   },
   {
