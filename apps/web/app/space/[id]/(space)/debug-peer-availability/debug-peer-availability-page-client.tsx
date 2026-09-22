@@ -119,24 +119,13 @@ export function DebugPeerAvailabilityPageClient({ spaceId }: { spaceId: string }
   );
 }
 
-/**
- * The states the endpoint cannot send today.
- *
- * `slots` is currently a true intersection and comes back empty whenever either side has no
- * schedule, so everything except `mutual` is unreachable live. They are written as view models
- * rather than as wire payloads because the wire has no way to say any of this yet.
- */
+/** Every state the view draws, without needing two accounts and two calendars to reach them. */
 const FIXTURES = {
   mutual: fixture({}),
-  'theirs only': fixture({
-    viewerHasSchedule: false,
-    peerHasSchedule: null,
-    slots: week(false),
-  }),
+  'theirs only': fixture({ viewerHasSchedule: false, slots: week(false) }),
   mixed: fixture({ slots: [...week(true).slice(0, 6), ...week(false).slice(6)] }),
-  'they have none': fixture({ peerHasSchedule: false, slots: [] }),
+  'they have none': fixture({ peerHasSchedule: false, peerTimezone: '', slots: [] }),
   'far apart': fixture({ viewerTimezone: 'America/Los_Angeles', peerTimezone: 'Asia/Tokyo' }),
-  truncated: fixture({ truncated: true }),
 } satisfies Record<string, ReturnType<typeof fixture>>;
 
 type FixtureName = keyof typeof FIXTURES;
@@ -146,17 +135,16 @@ function fixture(overrides: Partial<ReturnType<typeof base>>) {
 }
 
 function base() {
-  return toPeerSchedule(
-    {
-      with: 'debug-peer',
-      both_have_schedules: true,
-      viewer_timezone: 'America/New_York',
-      with_timezone: 'Europe/Berlin',
-      slots: week(true).map(slot => ({ start: slot.start, end: slot.end })),
-      truncated: false,
-    },
-    { viewerHasSchedule: true }
-  );
+  return toPeerSchedule({
+    with: 'debug-peer',
+    both_have_schedules: true,
+    viewer_timezone: 'America/New_York',
+    with_timezone: 'Europe/Berlin',
+    slots: [],
+    their_slots: week(true).map(slot => ({ start: slot.start, end: slot.end, viewer_free: true })),
+    viewer_has_schedule: true,
+    truncated: false,
+  });
 }
 
 /** A plausible week: a few hours on most days, enough on two of them to trip the expander. */

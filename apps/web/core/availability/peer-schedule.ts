@@ -5,17 +5,9 @@
  * the wire shape, and nothing downstream sees a UTC instant: absolute instants are what make two
  * people's calendars comparable, and they are also the one thing a grid must never render.
  *
- * ## The gap this module is shaped around
- *
- * The view shows *their* availability, not the intersection — the viewer's own schedule changes
- * how a slot is styled, never whether it appears. The endpoint cannot say that yet: its `slots`
- * are `overlapping_slots(&mine, &theirs)`, and it returns nothing at all when either side has no
- * schedule. So every slot it sends today is mutual, and {@link toPeerSchedule} marks them
- * `viewerIsFree: true`.
- *
- * The dashed half is fully built above this line, against {@link PeerSlot.viewerIsFree}. When the
- * API sends their slots unfiltered with a per-slot flag, this file changes and the view's copy
- * with it: four of its strings name the pair.
+ * Reads `their_slots`, their whole week with each slot flagged, rather than `slots`, which is the
+ * intersection kept for surfaces wanting a few suggested times. That is what lets the grid show
+ * their availability and style it by the viewer's, instead of filtering by it.
  */
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
@@ -34,11 +26,7 @@ export type PeerSlot = {
   /** Absolute UTC instant, exactly as the wire gave it. */
   start: string;
   end: string;
-  /**
-   * Whether the viewer is free then too — the whole of the solid/dashed distinction.
-   *
-   * Always true against today's endpoint, which only ever sends mutual slots. See the module note.
-   */
+  /** Whether the viewer is free then too — the whole of the solid/dashed distinction. */
   viewerIsFree: boolean;
 };
 
@@ -48,18 +36,8 @@ export type PeerSchedule = {
   viewerTimezone: string;
   peerTimezone: string;
   viewerHasSchedule: boolean;
-  /**
-   * `null` when the response cannot say.
-   *
-   * `both_have_schedules` is `viewerHas && peerHas`, so a `false` only pins down the other person
-   * when the viewer's own schedule is known to exist. A viewer with no schedule gets `false` for
-   * reasons that are entirely about themselves, and calling that "they have no availability" would
-   * put an empty state in front of a person whose week may be full.
-   */
-  peerHasSchedule: boolean | null;
+  peerHasSchedule: boolean;
   slots: PeerSlot[];
-  /** The server hit the `limit` it was given. Nothing sends one yet, so this is false in the app. */
-  truncated: boolean;
 };
 
 /** One 30-minute chip, resolved into both people's wall clocks. */
@@ -92,31 +70,21 @@ export type PeerDay = {
   slots: PeerDaySlot[];
 };
 
-/**
- * Wire to view model.
- *
- * `viewerHasSchedule` comes from the viewer's own `/me/debate-schedule` rather than from this
- * response, which has no field for it — see {@link PeerSchedule.peerHasSchedule}.
- */
-export function toPeerSchedule(
-  response: ScheduleOverlapResponse,
-  { viewerHasSchedule }: { viewerHasSchedule: boolean }
-): PeerSchedule {
+/** Wire to view model. */
+export function toPeerSchedule(response: ScheduleOverlapResponse): PeerSchedule {
   return {
     userId: response.with,
     viewerTimezone: response.viewer_timezone,
     peerTimezone: response.with_timezone,
-    // `both_have_schedules` proves it by itself, so a caller whose own lookup failed or has not
-    // answered cannot make this read false when the response already says otherwise.
-    viewerHasSchedule: response.both_have_schedules || viewerHasSchedule,
-    peerHasSchedule: response.both_have_schedules ? true : viewerHasSchedule ? false : null,
-    slots: (response.slots ?? []).map(slot => ({
+    viewerHasSchedule: response.viewer_has_schedule,
+    // Their zone is empty exactly when they have no saved schedule, which is the one signal
+    // separating "set nothing" from "nothing free this window".
+    peerHasSchedule: Boolean(response.with_timezone),
+    slots: (response.their_slots ?? []).map(slot => ({
       start: slot.start,
       end: slot.end,
-      // Absent today, and absent means mutual, because that is all the endpoint sends.
-      viewerIsFree: slot.viewer_is_free ?? true,
+      viewerIsFree: slot.viewer_free,
     })),
-    truncated: response.truncated,
   };
 }
 

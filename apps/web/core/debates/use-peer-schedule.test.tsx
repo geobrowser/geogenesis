@@ -46,6 +46,8 @@ const overlap = (overrides: Partial<ScheduleOverlapResponse> = {}): ScheduleOver
   viewer_timezone: 'America/New_York',
   with_timezone: 'Europe/Berlin',
   slots: [],
+  their_slots: [],
+  viewer_has_schedule: true,
   truncated: false,
   ...overrides,
 });
@@ -82,55 +84,20 @@ beforeEach(() => {
 });
 
 describe('usePeerSchedule', () => {
-  it('builds the view model once both reads land', async () => {
-    mocks.getScheduleOverlaps.mockResolvedValue(overlap());
-    mocks.getDebateSchedule.mockResolvedValue({ is_set: true, schedule: { recurring: [], dated: [] } });
+  it('builds the view model from the one response', async () => {
+    mocks.getScheduleOverlaps.mockResolvedValue(overlap({ viewer_has_schedule: true }));
 
     const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
 
     await waitFor(() => expect(result.current.schedule).toBeDefined());
     expect(result.current.isError).toBe(false);
     expect(result.current.schedule?.viewerHasSchedule).toBe(true);
+    // One request: the viewer's own schedule rides along on the response.
+    expect(mocks.getDebateSchedule).not.toHaveBeenCalled();
   });
 
-  // The viewer read usually fails first, and a later `both_have_schedules: true` makes it moot.
-  it('keeps waiting when the viewer read fails while the overlap is still in flight', async () => {
-    const pending = deferred<ScheduleOverlapResponse>();
-    mocks.getScheduleOverlaps.mockReturnValue(pending.promise);
-    mocks.getDebateSchedule.mockRejectedValue(new Error('nope'));
-
-    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
-
-    // Let the viewer read reject and settle before asserting on the pair.
-    await waitFor(() => expect(mocks.getDebateSchedule).toHaveBeenCalled());
-    await waitFor(() => expect(result.current.isPending).toBe(true));
-    expect(result.current.isError).toBe(false);
-
-    pending.settle(overlap({ both_have_schedules: true }));
-
-    await waitFor(() => expect(result.current.schedule).toBeDefined());
-    // Never flashed an error on the way.
-    expect(result.current.isError).toBe(false);
-    expect(result.current.schedule?.viewerHasSchedule).toBe(true);
-  });
-
-  // With `both_have_schedules: false` the viewer's own read is the only thing that can say which
-  // side is missing a schedule, so losing it is genuinely fatal rather than merely early.
-  it('reports an error once the overlap needs the viewer read and it failed', async () => {
-    mocks.getScheduleOverlaps.mockResolvedValue(overlap({ both_have_schedules: false }));
-    mocks.getDebateSchedule.mockRejectedValue(new Error('nope'));
-
-    const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.schedule).toBeUndefined();
-    expect(result.current.isPending).toBe(false);
-  });
-
-  // Both can be true at once, and a stuck spinner is the worse of the two to render.
-  it('reports an error rather than a spinner when both reads fail', async () => {
+  it('reports an error rather than a spinner when the read fails', async () => {
     mocks.getScheduleOverlaps.mockRejectedValue(new Error('down'));
-    mocks.getDebateSchedule.mockRejectedValue(new Error('down'));
 
     const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
 
@@ -141,7 +108,6 @@ describe('usePeerSchedule', () => {
   // Nothing asserted this before, so the peer id and the window could both be wrong and green.
   it('asks for the peer it was given, over the window the grid draws', async () => {
     mocks.getScheduleOverlaps.mockResolvedValue(overlap());
-    mocks.getDebateSchedule.mockResolvedValue({ is_set: true, schedule: { recurring: [], dated: [] } });
 
     const { result } = renderHook(() => usePeerSchedule('user-peer'), { wrapper });
     await waitFor(() => expect(result.current.schedule).toBeDefined());
@@ -156,7 +122,6 @@ describe('usePeerSchedule', () => {
   });
 
   it('keys the cache on the peer, so two peers cannot share an answer', async () => {
-    mocks.getDebateSchedule.mockResolvedValue({ is_set: true, schedule: { recurring: [], dated: [] } });
     mocks.getScheduleOverlaps.mockImplementation((withUserId: string) =>
       Promise.resolve(overlap({ with: withUserId }))
     );

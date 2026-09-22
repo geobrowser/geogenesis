@@ -836,33 +836,31 @@ export async function replaceDebateSchedule(
 export type ScheduleOverlapSlot = {
   start: string;
   end: string;
-  /**
-   * Whether the viewer is also free then.
-   *
-   * Not sent today: `slots` is already the intersection, so every entry is mutual. Read here
-   * because the surface that draws these (GEO-2938) shows *their* whole week and styles the
-   * non-mutual slots differently, which needs either this flag or an unfiltered mode. Optional
-   * until that is agreed, so landing it later is additive rather than a breaking parse.
-   */
-  viewer_is_free?: boolean;
 };
 
-/**
- * What `/matchmaking/schedule-overlaps` answers.
- *
- * `both_have_schedules` is the conjunction — it does not say which side is missing one — and
- * `slots` comes back empty whenever it is false. `core/availability/peer-schedule` is where that
- * is turned into something a view can act on.
- */
+/** One of *their* slots, flagged with whether the viewer is free for it too (geo-chat#134). */
+export type AnnotatedSlot = ScheduleOverlapSlot & {
+  viewer_free: boolean;
+};
+
+/** What `/matchmaking/schedule-overlaps` answers. */
 export type ScheduleOverlapResponse = {
   /** The other person's user id, echoed back. */
   with: string;
+  /**
+   * Unused. Hard-coded true whenever *they* have a schedule, so it does not mean what its name or
+   * its server-side doc say. Read `viewer_has_schedule` and `with_timezone` instead.
+   */
   both_have_schedules: boolean;
-  /** IANA zones, as each side saved them. */
+  /** IANA zones. `with_timezone` is empty exactly when they have no saved schedule. */
   viewer_timezone: string;
   with_timezone: string;
+  /** The intersection, for surfaces wanting a few suggested times rather than a grid. */
   slots: ScheduleOverlapSlot[];
-  /** The server capped the list; there is more than this. */
+  /** Their whole week. Populated whenever they have a schedule, viewer or no viewer. */
+  their_slots: AnnotatedSlot[];
+  viewer_has_schedule: boolean;
+  /** `limit` cut `slots` short. It never caps `their_slots`. */
   truncated: boolean;
 };
 

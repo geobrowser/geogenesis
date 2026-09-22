@@ -587,13 +587,13 @@ export function useDebateActivity(enabled = true) {
  * Returns blocks rather than the wire payload, so callers never handle the one-based `weekday`
  * or the absent-when-empty `exceptions` themselves — `fromPayload` is the only place that knows.
  */
-export function useDebateSchedule(enabled = true) {
+export function useDebateSchedule() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   const query = useQuery({
     queryKey: debateQueryKeys.schedule(accountKey),
     // Signed out there is no schedule to fetch, and asking would 401 on every render.
-    enabled: enabled && accountKey !== null,
+    enabled: accountKey !== null,
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
@@ -628,20 +628,14 @@ export function useSaveDebateSchedule() {
 /**
  * Another person's availability, ready to draw (GEO-2938).
  *
- * The only data access behind that view. It returns a {@link PeerSchedule} rather than the wire
- * shape, so the surface never learns that `slots` is currently an intersection — see
- * `core/availability/peer-schedule` for what changes when the endpoint can express the rest.
- *
- * Reads the viewer's own schedule alongside it, because `both_have_schedules` is the conjunction
- * and is uninterpretable without knowing which side of it the viewer is.
+ * The only data access behind that view. One request: the response carries their week, the
+ * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
  */
 export function usePeerSchedule(peerUserId: string | null) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
   // dialog that stays mounted passes an empty id, not null.
   const enabled = authenticated && Boolean(peerUserId);
-  // Gated too: with no peer there is nothing to interpret it against.
-  const viewerSchedule = useDebateSchedule(enabled);
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
@@ -657,33 +651,15 @@ export function usePeerSchedule(peerUserId: string | null) {
     enabled,
   });
 
-  // `both_have_schedules` proves the viewer has one, so their own lookup only matters when false.
-  const provenByOverlap = query.data?.both_have_schedules === true;
-  // `isSet` reads false while in flight and on error, neither distinguishable from a real false,
-  // so anything short of success is withheld rather than shown as "no schedule set".
-  const viewerResolved = provenByOverlap || viewerSchedule.isSuccess;
-  // Fatal only once the overlap has answered and still needs it, so a slow `true` cannot arrive
-  // and retract an error already on screen.
-  const viewerUnavailable = query.isSuccess && !provenByOverlap && viewerSchedule.isError;
-
-  const schedule: PeerSchedule | undefined =
-    query.data && viewerResolved ? toPeerSchedule(query.data, { viewerHasSchedule: viewerSchedule.isSet }) : undefined;
-
-  const isError = query.isError || (enabled && viewerUnavailable);
-
   return {
     ...query,
-    schedule,
+    schedule: query.data ? toPeerSchedule(query.data) : undefined,
     /**
      * Whether this is a question that can be asked at all. A disabled query sits at `pending`
      * forever, which a caller would otherwise draw as a spinner that never resolves.
      */
     enabled,
-    // Error wins. With the overlap failed and the viewer read not yet successful both would
-    // otherwise be true at once, and callers check pending first, so a dead end would draw as a
-    // spinner that never resolves.
-    isPending: enabled && !isError && (query.isPending || !viewerResolved),
-    isError,
+    isPending: enabled && query.isPending,
   };
 }
 

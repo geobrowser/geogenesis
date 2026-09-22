@@ -27,7 +27,6 @@ const schedule = (overrides: Partial<PeerSchedule> = {}): PeerSchedule => ({
   viewerHasSchedule: true,
   peerHasSchedule: true,
   slots: [slot(13)],
-  truncated: false,
   ...overrides,
 });
 
@@ -44,7 +43,7 @@ describe('PeerAvailabilityView', () => {
   it('names both people and both zones', () => {
     setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Europe/Berlin' });
 
-    expect(screen.getByRole('heading', { name: 'When you and Ada are both free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'When Ada is free' })).toBeInTheDocument();
     expect(screen.getByText(/America\/New_York/)).toBeInTheDocument();
     expect(screen.getByText(/Europe\/Berlin/)).toBeInTheDocument();
   });
@@ -105,7 +104,6 @@ describe('PeerAvailabilityView', () => {
     it('shows a viewer with no schedule the whole week, dashed, rather than nothing', () => {
       setup({
         viewerHasSchedule: false,
-        peerHasSchedule: null,
         slots: [slot(13, false), slot(14, false)],
       });
 
@@ -184,12 +182,12 @@ describe('PeerAvailabilityView', () => {
   describe('hint bar', () => {
     it('appears only when the viewer has no availability set', () => {
       setup({ viewerHasSchedule: false });
-      expect(screen.getByText(/Set your availability to see when you and Ada are both free/)).toBeInTheDocument();
+      expect(screen.getByText(/You can still see Ada’s/)).toBeInTheDocument();
     });
 
     it('stays out of the way when they have', () => {
       setup({ viewerHasSchedule: true });
-      expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
     });
 
     it('never blocks the week', () => {
@@ -206,11 +204,11 @@ describe('PeerAvailabilityView', () => {
       expect(screen.queryAllByTestId(/^peer-day-/)).toHaveLength(0);
     });
 
-    it('does not claim they have none when the response could not say', () => {
-      setup({ slots: [], peerHasSchedule: null, viewerHasSchedule: false });
+    it('says they have none free rather than none set, when they have a schedule', () => {
+      setup({ slots: [], peerHasSchedule: true });
 
       expect(screen.queryByText(/hasn’t set any availability/)).not.toBeInTheDocument();
-      expect(screen.getByText('No shared times in the next 7 days.')).toBeInTheDocument();
+      expect(screen.getByText('Ada has no times free in the next 7 days.')).toBeInTheDocument();
     });
   });
 
@@ -274,11 +272,6 @@ describe('PeerAvailabilityView', () => {
       const chip = screen.getByRole('button', { name: /9am/ });
       expect(chip.textContent).toBe('9am');
     });
-  });
-
-  it('says when the list was cut short', () => {
-    setup({ truncated: true });
-    expect(screen.getByText(/Showing the first of your shared times/)).toBeInTheDocument();
   });
 
   it('renders no absolute instant anywhere — they are for comparing, not for reading', () => {

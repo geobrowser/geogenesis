@@ -217,7 +217,6 @@ beforeEach(() => {
       viewerHasSchedule: true,
       peerHasSchedule: true,
       slots: [],
-      truncated: false,
     },
   });
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];

@@ -28,15 +28,11 @@ const SLOTS_PER_DAY = 4;
 /**
  * Another person's availability, read-only (GEO-2938).
  *
- * ## It draws the overlap today, and says so
+ * ## It shows their week, not the overlap
  *
- * GEO-2938 wants their whole week, styled by the viewer's own rather than filtered by it. The
- * endpoint cannot say that yet: it returns mutual slots only, and nothing at all when either side
- * has no schedule. So every string here is about the pair, and a viewer with no schedule gets the
- * hint bar rather than a dashed week.
- *
- * The dashed path below is built and tested against {@link PeerDaySlot.viewerIsFree}. Landing the
- * API change means flipping those strings back as well as changing the adapter.
+ * The grid is *their* availability; the viewer's own picks solid over dashed, never whether a
+ * slot appears. Intersecting would leave a shared-link recipient with no schedule of their own
+ * seeing nothing, which is the case this exists for.
  *
  * ## Viewing only
  *
@@ -98,7 +94,7 @@ export function PeerAvailabilityView({
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
       <header className="flex shrink-0 flex-col gap-1">
         <Text as="h2" variant="smallTitle">
-          When you and {name} are both free
+          When {name} is free
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
           {/* geo-chat sends an empty zone for a side with no saved schedule, so naming them is
@@ -111,24 +107,21 @@ export function PeerAvailabilityView({
         </Text>
       </header>
 
-      {/* Today's endpoint returns only mutual slots, so with no schedule of your own there is
-          nothing to intersect and no times at all. Softens once the API sends their week whole. */}
-      {!schedule.viewerHasSchedule && <Hint>Set your availability to see when you and {name} are both free.</Hint>}
-
-      {schedule.peerHasSchedule === false && !hasAnySlot ? (
-        <Empty>{name} hasn&rsquo;t set any availability yet.</Empty>
-      ) : !hasAnySlot ? (
-        // About the pair, not about them: with no viewer schedule the response cannot say whether
-        // their week is empty, so naming them would be a guess stated as fact.
-        <Empty>No shared times in the next 7 days.</Empty>
-      ) : (
-        <WeekGrid days={days} peerName={name} />
+      {/* Informational, never a gate: a first-time recipient of a shared link has no schedule,
+          and blocking them was the failure mode GEO-2938 exists to remove. */}
+      {!schedule.viewerHasSchedule && (
+        <Hint>
+          You haven&rsquo;t set your own availability. You can still see {name}&rsquo;s; setting yours just marks the
+          times you both have free.
+        </Hint>
       )}
 
-      {schedule.truncated && (
-        <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
-          Showing the first of your shared times.
-        </Text>
+      {!schedule.peerHasSchedule ? (
+        <Empty>{name} hasn&rsquo;t set any availability yet.</Empty>
+      ) : !hasAnySlot ? (
+        <Empty>{name} has no times free in the next 7 days.</Empty>
+      ) : (
+        <WeekGrid days={days} peerName={name} />
       )}
     </div>
   );

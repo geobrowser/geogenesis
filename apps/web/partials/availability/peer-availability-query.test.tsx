@@ -19,7 +19,6 @@ const schedule: PeerSchedule = {
   viewerHasSchedule: true,
   peerHasSchedule: true,
   slots: [],
-  truncated: false,
 };
 
 afterEach(() => {
@@ -81,6 +80,6 @@ describe('PeerAvailability', () => {
   it('draws the week once it has one', () => {
     state({ schedule });
     render(<PeerAvailability userId="user-peer" peerName="Ada" />);
-    expect(screen.getByRole('heading', { name: 'When you and Ada are both free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'When Ada is free' })).toBeInTheDocument();
   });
 });
