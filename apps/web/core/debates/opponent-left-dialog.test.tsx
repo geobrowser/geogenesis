@@ -10,23 +10,27 @@ vi.mock('~/core/debates/matchmaking/use-focus-trap', () => ({
 }));
 
 describe('OpponentLeftDialog', () => {
-  it('holds until the viewer acknowledges', () => {
-    const onAcknowledge = vi.fn();
+  it('offers Find debate and an X to close', () => {
+    const onClose = vi.fn();
+    const onFindDebate = vi.fn();
 
-    render(<OpponentLeftDialog onAcknowledge={onAcknowledge} />);
+    render(<OpponentLeftDialog onClose={onClose} onFindDebate={onFindDebate} />);
 
     expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
     expect(screen.getByText('Your opponent left the debate.')).toBeInTheDocument();
     expect(screen.getByText('Find another match from Debates.')).toBeInTheDocument();
-    expect(onAcknowledge).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onFindDebate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Find debate' }));
+    expect(onFindDebate).toHaveBeenCalledOnce();
 
-    expect(onAcknowledge).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('says when a mid-recording capture was discarded', () => {
-    render(<OpponentLeftDialog recordingDiscarded onAcknowledge={() => undefined} />);
+    render(<OpponentLeftDialog recordingDiscarded onClose={() => undefined} onFindDebate={() => undefined} />);
 
     expect(screen.getByText('Your opponent left the debate. Your recording was discarded.')).toBeInTheDocument();
   });

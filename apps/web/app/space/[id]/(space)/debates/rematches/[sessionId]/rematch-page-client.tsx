@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
@@ -37,7 +37,11 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { didLocallyLeaveRematch } from '~/core/debates/local-debate-leave';
+import {
+  didLocallyLeaveRematch,
+  markLocalRematchLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -63,7 +67,6 @@ import { type NarrowedListState, useNarrowedDefault } from '~/core/debates/match
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
-import { OpponentLeftDialog } from '~/core/debates/opponent-left-dialog';
 import {
   type ParticipantPositionsByClaim,
   participantSidesOn,
@@ -107,7 +110,7 @@ import { Text } from '~/design-system/text';
 
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
-import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
+import { opponentLeftNoticeAtom, rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -197,8 +200,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
   const leaveRequestedRef = React.useRef(false);
-  const [localLeaveStarted, setLocalLeaveStarted] = React.useState(false);
-  const [opponentLeftAcknowledged, setOpponentLeftAcknowledged] = React.useState(false);
+  const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -2004,10 +2006,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
       if (!inDebateRoom) {
-        // Stay on an `ended` the viewer didn't cause so the opponent-left dialog can show; return
-        // only on the viewer's own Leave (same-mount or after a remount) or a lapsed (`expired`) lifetime.
-        if (localLeaveStarted || didLocallyLeaveRematch(session.id) || session.status === 'expired')
-          returnFromSession(session);
+        // The viewer is booted out of a dead session either way; announce 'opponent left'
+        // afterward (via the notice atom, shown by DebateCoordinator) only when the viewer didn't
+        // end it themselves and the lifetime hadn't merely lapsed (`expired`).
+        if (session.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+          setOpponentLeftNotice({ recordingDiscarded: false });
+        }
+        returnFromSession(session);
       }
       // geo-chat replaces a finished room session on the next join, which someone who never left
       // would not otherwise send. Once per session, so a refusal cannot loop.
@@ -2028,10 +2033,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
-  }, [inDebateRoom, localLeaveStarted, rejoinRetry, returnFromSession, roomRejoin, router, session]);
+  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session, setOpponentLeftNotice]);
 
   const leave = () => {
-    setLocalLeaveStarted(true);
+    // Durable so a Back-remount into the ended session doesn't read the viewer's own Leave as the
+    // opponent leaving; cleared again if the leave request fails.
+    markLocalRematchLeave(sessionId);
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
     // room that is the wrong verb: leaving is per person and the room stays open to come back to,
     // so this walks out and lets `useRoomPresence` report the departure on unmount.
@@ -2044,6 +2051,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       onSuccess: returnFromSession,
       onError: () => {
         leaveRequestedRef.current = false;
+        unmarkLocalRematchLeave(sessionId);
       },
     });
   };
@@ -2054,15 +2062,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     leave: () => leaveSession.mutate(),
     exiting: () => exitStartedRef.current || leaveRequestedRef.current,
   });
-
-  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave.
-  const showOpponentLeftDialog = Boolean(
-    session &&
-    session.status === 'ended' &&
-    !localLeaveStarted &&
-    !didLocallyLeaveRematch(session.id) &&
-    !opponentLeftAcknowledged
-  );
 
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
@@ -2131,14 +2130,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   return (
     <>
-      {showOpponentLeftDialog && session ? (
-        <OpponentLeftDialog
-          onAcknowledge={() => {
-            setOpponentLeftAcknowledged(true);
-            returnFromSession(session);
-          }}
-        />
-      ) : null}
       {/* Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
           and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
           the session keeps the screen to itself.
