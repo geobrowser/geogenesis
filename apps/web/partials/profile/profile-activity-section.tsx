@@ -132,7 +132,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
          */}
         <header className="flex flex-col gap-3 pb-3">
           <h3 className="text-mediumTitle text-text">Activity</h3>
-          <div className="flex items-center gap-2">
+className="flex flex-wrap items-center gap-2"
             {available.map(kind => {
               const isSelected = kind.key === selected.key;
 
