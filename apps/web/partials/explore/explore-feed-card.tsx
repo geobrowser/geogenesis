@@ -42,6 +42,8 @@ type ExploreFeedCardProps = {
   responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
   /** Compact title and metadata treatment for a debate in profile Activity. */
   compactDebateChrome?: boolean;
+  /** Let a debate fill the column rather than its viewport-fitted cap. See `DebateExploreFeedCard`. */
+  fullWidthDebate?: boolean;
   /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
   onDebatePlaybackRequest?: (debateId: string) => void;
   /** Register whether this debate currently has a mounted player. Ignored by other row types. */
@@ -149,6 +151,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
         compactChrome={props.compactDebateChrome}
+        fullWidth={props.fullWidthDebate}
         onPlaybackRequest={props.onDebatePlaybackRequest}
         onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
         fallback={<BaseExploreFeedCard {...props} />}
@@ -195,12 +198,7 @@ function BaseExploreFeedCard({
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
       {compactDebateChrome ? (
-        <DebateExploreMetaRow
-          item={item}
-          hideSpaceLink={hideSpaceLink}
-          hideJoinButton={hideJoinButton}
-          compact
-        />
+        <DebateExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} compact />
       ) : (
         <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
       )}

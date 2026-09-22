@@ -41,6 +41,7 @@ export function PersonRecordFeed({
   noun,
   responseByClaimId,
   personName,
+  fullWidthDebates = false,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -82,6 +83,8 @@ export function PersonRecordFeed({
    * beside them says nothing about which of the two people it describes.
    */
   personName?: string | null;
+  /** Debates fill the column instead of their viewport-fitted cap. */
+  fullWidthDebates?: boolean;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -131,6 +134,7 @@ export function PersonRecordFeed({
           <ExploreFeedCard
             key={`${item.entityId}-${item.spaceId}`}
             item={item}
+            fullWidthDebate={fullWidthDebates}
             // The card resolves the claim's response kind and hands it back, so
             // the tag is worded from the question actually asked.
             responseNote={
