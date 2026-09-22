@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe('HubMultiFilterMenu placement', () => {
-  it('stays aligned to the trigger start inside a right-docked panel', async () => {
+  function mockRightSideTrigger() {
     vi.spyOn(HTMLButtonElement.prototype, 'getBoundingClientRect').mockReturnValue({
       bottom: 140,
       height: 40,
@@ -35,9 +35,12 @@ describe('HubMultiFilterMenu placement', () => {
       y: 100,
       toJSON: () => {},
     });
+  }
 
+  function renderMenu(align?: 'start') {
     render(
       <HubMultiFilterMenu
+        align={align}
         label="Any space"
         options={[{ value: 'space-1', label: 'Crypto', count: 4 }]}
         values={[]}
@@ -48,9 +51,23 @@ describe('HubMultiFilterMenu placement', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Any space' }));
+  }
+
+  it('accepts a start override for a right-docked panel', async () => {
+    mockRightSideTrigger();
+    renderMenu('start');
 
     await waitFor(() =>
       expect(screen.getByText('Crypto').closest('[data-align]')).toHaveAttribute('data-align', 'start')
+    );
+  });
+
+  it('keeps adaptive placement when no override is provided', async () => {
+    mockRightSideTrigger();
+    renderMenu();
+
+    await waitFor(() =>
+      expect(screen.getByText('Crypto').closest('[data-align]')).toHaveAttribute('data-align', 'end')
     );
   });
 });

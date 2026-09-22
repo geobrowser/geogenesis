@@ -11,13 +11,15 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
+export type MenuAlign = 'end' | 'center' | 'start';
+
 interface Props {
   children: React.ReactNode;
   trigger: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Pin the content to a trigger edge instead of choosing from the trigger's viewport position. */
-  align?: 'end' | 'center' | 'start';
+  align?: MenuAlign;
   sideOffset?: number;
   className?: string;
   /** Override the inner scroll viewport classes (e.g., to set a different max height). */

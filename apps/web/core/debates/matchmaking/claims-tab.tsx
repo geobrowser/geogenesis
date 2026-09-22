@@ -1305,6 +1305,11 @@ export function SpaceTopicFilters({
     <div className="flex flex-wrap items-center gap-2">
       {leading}
       <HubMultiFilterMenu
+        // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
+        // Viewport-based alignment chooses the end there and hangs the menu over the page behind
+        // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
+        // their adaptive placement.
+        align="start"
         label={spaceMenuLabel}
         labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
@@ -1321,6 +1326,7 @@ export function SpaceTopicFilters({
         // together there — a menu and a switch, reading as one control. The menus belong with each
         // other; the switch is what the end of the row is for.
         <HubMultiFilterMenu
+          align="start"
           label={topicMenuLabel}
           options={topicOptions}
           values={topicIds}

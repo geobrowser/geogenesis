@@ -7,7 +7,7 @@ import { CheckboxVisual } from '~/design-system/checkbox';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
-import { Menu } from '~/design-system/menu';
+import { Menu, type MenuAlign } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -139,6 +139,8 @@ type MultiProps<T extends string> = {
   onClear: () => void;
   clearLabel: string;
   showImages?: boolean;
+  /** Overrides the shared menu's viewport-based horizontal placement. */
+  align?: MenuAlign;
   labelPending?: boolean;
   /**
    * The counts in hand answer a filter the viewer has already moved on from.
@@ -176,6 +178,7 @@ export function HubMultiFilterMenu<T extends string>({
   onClear,
   clearLabel,
   showImages,
+  align,
   labelPending,
   countsPending,
 }: MultiProps<T>) {
@@ -188,10 +191,7 @@ export function HubMultiFilterMenu<T extends string>({
       open={open}
       onOpenChange={setOpen}
       asChild
-      // The debates hub is docked to the viewport's right, but its filters start at the panel's
-      // left. Viewport-based alignment chooses the trigger's end there and hangs this wide menu
-      // over the page behind the panel; anchoring its start keeps it inside the hub.
-      align="start"
+      align={align}
       className="max-w-[280px]"
       trigger={
         <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
