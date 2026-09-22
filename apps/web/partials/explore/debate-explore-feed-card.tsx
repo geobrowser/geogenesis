@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -14,7 +12,6 @@ import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
@@ -23,11 +20,9 @@ import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { SpaceThumb } from './space-thumb';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
@@ -271,8 +266,6 @@ export function DebateExploreFeedCard({
     return <>{fallback}</>;
   }
 
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
   /**
    * Comments and counts differ from the full-screen feed only in where they come from and where
    * they lead, never in how they look:
@@ -311,62 +304,24 @@ export function DebateExploreFeedCard({
         className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
         style={DEBATE_CARD_COLUMN_STYLE}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div
-            className={cx(
-              'flex min-w-0 items-center gap-x-2',
-              compactChrome ? 'flex-nowrap overflow-hidden' : 'flex-wrap gap-y-1'
-            )}
-          >
-            {!hideSpaceLink ? (
-              <Link
-                href={NavUtils.toSpace(item.spaceId)}
-                className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-              >
-                <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-                <span className="min-w-0 truncate">{item.spaceName}</span>
-              </Link>
-            ) : null}
-            {!hideJoinButton && !item.isMemberOrEditor ? (
-              // The design puts the join CTA as a compact chip beside the space name, unlike the
-              // generic card's right-aligned button — the right side holds the debate CTA.
-              <ExploreJoinSpaceButton
-                spaceId={item.spaceId}
-                hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-                variant="pill"
-                label="Join"
-              />
-            ) : null}
-            {!compactChrome ? (
-              <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-                Debate
-              </span>
-            ) : null}
-            <span className="shrink-0 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-              {timeAgo}
-            </span>
-          </div>
-          {/* The way out of the card and into the debate at full size.
-           *
-           * This corner used to hold "View all", a link to the space's whole debates list. Since
-           * GEO-2879 headed the card with the claim, nothing on the card pointed at the debate
-           * itself any more — the open question in that ticket's notes, which asked where the path
-           * to the full-screen debate would go once the title stopped being it. Here.
-           *
-           * The Debate entity's own page is that path: `DebateEntityView` renders it as the
-           * `/debates` feed anchored to this debate, which is the full-screen experience with this
-           * debate on top. So this is the entity link the title used to be, moved to a control
-           * that says "bigger" rather than competing with the claim for the heading.
-           *
-           * `FullscreenLink` so it reads as the same offer a data block's header makes, which is
-           * where this control's styling comes from. */}
-          <FullscreenLink
-            href={NavUtils.toEntity(item.spaceId, item.entityId)}
-            entityId={item.entityId}
-            spaceId={item.spaceId}
-            ariaLabel="Watch this debate full screen"
-          />
-        </div>
+        {/* The way out of the card and into the debate at full size. This corner used to hold
+            "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
+            with the claim, the entity link moved here so it says "bigger" rather than competing
+            with the claim for the heading. The shared metadata keeps fallback cards identical. */}
+        <DebateExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          compact={compactChrome}
+          endSlot={
+            <FullscreenLink
+              href={NavUtils.toEntity(item.spaceId, item.entityId)}
+              entityId={item.entityId}
+              spaceId={item.spaceId}
+              ariaLabel="Watch this debate full screen"
+            />
+          }
+        />
 
         {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
             height budget is calculated against — a third line is 23px the viewport was not

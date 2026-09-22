@@ -487,6 +487,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const collectionKey = React.useMemo(() => rows.map(row => `${row.entityId}:${row.spaceId}`).join('|'), [rows]);
   const [availableDebateIds, setAvailableDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const scheduleMeasureRef = React.useRef<(() => void) | null>(null);
   const availableRef = React.useRef(availableDebateIds);
   availableRef.current = availableDebateIds;
   const firstDebateId =
@@ -577,6 +578,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     const scheduleMeasure = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
+    scheduleMeasureRef.current = scheduleMeasure;
 
     measure();
     scroller.addEventListener('scroll', scheduleMeasure, { passive: true });
@@ -586,6 +588,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     window.addEventListener('resize', scheduleMeasure);
 
     return () => {
+      if (scheduleMeasureRef.current === scheduleMeasure) scheduleMeasureRef.current = null;
       if (frame) cancelAnimationFrame(frame);
       scroller.removeEventListener('scroll', scheduleMeasure);
       window.removeEventListener('scroll', scheduleMeasure);
@@ -593,6 +596,13 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       window.removeEventListener('resize', scheduleMeasure);
     };
   }, [collectionKey]);
+
+  // A player can appear or disappear without the rail moving (query completion, refetch failure,
+  // or media eviction). Re-run the same visibility selection used by scrolling instead of falling
+  // back to source order until some later scroll or resize happens to correct ownership.
+  React.useEffect(() => {
+    scheduleMeasureRef.current?.();
+  }, [availableDebateIds]);
 
   const scrollByCard = React.useCallback(
     (direction: -1 | 1) => {
@@ -615,6 +625,10 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 
   const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
     const id = normId(debateId);
+    if (!available) {
+      // An unavailable requested player must not reclaim the gate merely by remounting later.
+      setRequestedPlayback(current => (current && ID.equals(current.debateId, debateId) ? null : current));
+    }
     setAvailableDebateIds(current => {
       if (current.has(id) === available) return current;
 

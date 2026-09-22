@@ -19,6 +19,7 @@ import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
+import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
@@ -69,7 +70,12 @@ type CardBodyProps = {
 };
 
 /** The default body: thumbnail on the left, title and description beside it. */
-function DefaultCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
+function DefaultCardBody({
+  item,
+  actions,
+  titleOpensSidePanel,
+  compactTitle = false,
+}: CardBodyProps & { compactTitle?: boolean }) {
   return (
     <div className="flex items-start gap-4">
       {item.imageUrl ? (
@@ -82,7 +88,12 @@ function DefaultCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) 
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="min-w-0">
-          <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} />
+          <ExploreCardTitle
+            item={item}
+            opensSidePanel={titleOpensSidePanel}
+            clamped={compactTitle}
+            showFullTextOnHover={compactTitle}
+          />
           {item.description ? (
             <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
               {item.description}
@@ -170,6 +181,7 @@ function BaseExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  compactDebateChrome = false,
 }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
@@ -182,14 +194,28 @@ function BaseExploreFeedCard({
 
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
+      {compactDebateChrome ? (
+        <DebateExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          compact
+        />
+      ) : (
+        <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
+      )}
 
       {isCommunityCall ? (
         <CommunityCallCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : isRanking ? (
         <RankingCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : (
-        <DefaultCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
+        <DefaultCardBody
+          item={item}
+          actions={cardActions}
+          titleOpensSidePanel={titleOpensSidePanel}
+          compactTitle={compactDebateChrome}
+        />
       )}
     </article>
   );

@@ -283,6 +283,45 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByTestId('playback-gate')).toHaveAttribute('data-allowed-id', 'd2');
   });
 
+  it('reselects a visible debate when the requested player becomes unavailable', async () => {
+    const props = { kinds: [kind({ rows: [row('d1'), row('d2'), row('d3')] })] };
+    const view = render(<ProfileActivitySection {...props} />);
+    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
+    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
+    const gate = screen.getByTestId('playback-gate');
+    const horizontalRect = (left: number, width: number): DOMRect => ({
+      ...rect(width, 400),
+      x: left,
+      left,
+      right: left + width,
+      bottom: 400,
+    });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => horizontalRect(0, 536));
+    const starts = [0, 276, 552];
+    scroller.scrollLeft = 276;
+    cards.forEach((card, index) => {
+      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
+        horizontalRect(starts[index]! - scroller.scrollLeft, 260)
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'd3' }));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd3');
+
+    // A failed refetch can replace the selected player's card with fallback content. The next
+    // owner must come from what is visible now, not from the first mounted row in source order.
+    activityMocks.unavailableDebateIds.add('d3');
+    view.rerender(<ProfileActivitySection {...props} />);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+
+    // The stale request must be gone too: remounting d3 cannot reclaim ownership by itself.
+    activityMocks.unavailableDebateIds.delete('d3');
+    view.rerender(<ProfileActivitySection {...props} />);
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+  });
+
   it('returns playback to the first debate after switching to another Activity collection', () => {
     render(
       <ProfileActivitySection
