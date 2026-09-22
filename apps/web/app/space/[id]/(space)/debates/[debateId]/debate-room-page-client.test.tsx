@@ -3086,7 +3086,7 @@ describe('DebateRoomPageClient', () => {
     const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
     await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -4245,6 +4245,57 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
   });
 
+  it('does not finalize a connected early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('does not redirect an idle early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
   it('does not carry rematch consent state into a subsequent debate route', async () => {
     installRecordingMocks();
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
@@ -4610,7 +4661,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalled());
@@ -4639,7 +4690,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -4741,7 +4792,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
@@ -4763,7 +4814,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('deciding');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(screen.getByText('Debate complete.')).toBeInTheDocument());
@@ -4783,7 +4834,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
@@ -4809,7 +4860,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(
@@ -5072,6 +5123,15 @@ function completedDebate(): Debate {
     cancellation_reason: null,
     recording_cancelled_at: null,
     recording_cancelled_by: null,
+  };
+}
+
+function completedDebateOutsideThankYou(): Debate {
+  return {
+    ...completedDebate(),
+    turn_started_at: '2026-07-02T00:00:00.000Z',
+    turn_ends_at: '2026-07-02T00:00:20.000Z',
+    completed_at: '2026-07-02T00:00:20.000Z',
   };
 }
 

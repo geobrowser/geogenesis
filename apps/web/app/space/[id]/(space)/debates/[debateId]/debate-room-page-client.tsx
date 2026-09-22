@@ -1743,29 +1743,48 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, [localMediaStreamRef, localTracksRef, persistStoppedLocalRecording]);
 
-  const finishLiveDebate = React.useCallback(async () => {
-    if (!debate || rematchLeaveRequestedRef.current || finalizedDebateRef.current === debate.id) return;
-    const session = rematchQuery.data;
-    if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
-    finalizedDebateRef.current = debate.id;
-    // A cancelled recording was discarded locally and deleted server-side, so there is nothing
-    // left to save — but the rematch it anchored still needs its navigation.
-    if (debate.recording_cancelled_at === null) {
-      const persisted = await finishAndPersist();
-      if (!persisted) return;
-    } else {
-      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
-      localMediaStreamRef.current = null;
-      setRemoteVideoReady(false);
-      setRoomState('idle');
-    }
-    const destination = rematchDestination(session);
-    if (destination) {
-      router.replace(destination);
-      return;
-    }
-    returnFromDebate();
-  }, [debate, finishAndPersist, localMediaStreamRef, localTracksRef, rematchQuery.data, returnFromDebate, router]);
+  const finishLiveDebate = React.useCallback(
+    async ({ allowDuringThankYou = false }: { allowDuringThankYou?: boolean } = {}) => {
+      if (
+        !debate ||
+        (!allowDuringThankYou && locallyThanking) ||
+        rematchLeaveRequestedRef.current ||
+        finalizedDebateRef.current === debate.id
+      ) {
+        return;
+      }
+      const session = rematchQuery.data;
+      if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
+      finalizedDebateRef.current = debate.id;
+      // A cancelled recording was discarded locally and deleted server-side, so there is nothing
+      // left to save — but the rematch it anchored still needs its navigation.
+      if (debate.recording_cancelled_at === null) {
+        const persisted = await finishAndPersist();
+        if (!persisted) return;
+      } else {
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        setRemoteVideoReady(false);
+        setRoomState('idle');
+      }
+      const destination = rematchDestination(session);
+      if (destination) {
+        router.replace(destination);
+        return;
+      }
+      returnFromDebate();
+    },
+    [
+      debate,
+      finishAndPersist,
+      localMediaStreamRef,
+      localTracksRef,
+      locallyThanking,
+      rematchQuery.data,
+      returnFromDebate,
+      router,
+    ]
+  );
 
   const retryLiveDebateFinalization = React.useCallback(() => {
     if (debate?.status === 'thanking') {
@@ -1942,7 +1961,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localMediaStreamRef.current = null;
         setRoomState('idle');
       } else if (debate.status === 'complete') {
-        await finishLiveDebate();
+        await finishLiveDebate({ allowDuringThankYou: true });
         return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
@@ -2083,9 +2102,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [returnFromDebate, shouldReturnFromTerminalDebate]);
 
   React.useEffect(() => {
-    if (!idleRematchDestination) return;
+    if (!idleRematchDestination || locallyThanking) return;
     router.replace(idleRematchDestination);
-  }, [idleRematchDestination, router]);
+  }, [idleRematchDestination, locallyThanking, router]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
