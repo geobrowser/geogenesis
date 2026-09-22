@@ -90,7 +90,7 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
 }));
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
-  useDebateShareAction: () => ({ open: false, onOpen: vi.fn(), onOpenChange: vi.fn() }),
+  useDebateShareAction: () => ({ opensDialog: true, open: false, onShare: vi.fn(), onOpenChange: vi.fn() }),
 }));
 
 vi.mock('~/core/debates/browse/share-dialog', () => ({

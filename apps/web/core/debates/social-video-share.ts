@@ -41,6 +41,35 @@ const EMPTY_PREPARED_SOCIAL_VIDEO: Omit<PreparedSocialVideo, 'retry'> = {
   error: null,
 };
 
+/**
+ * The most recently prepared social cut, so a hand-off that has to happen synchronously can use one
+ * that already exists.
+ *
+ * `navigator.share` needs the click's transient activation and the first `await` spends it, so the
+ * mobile Share button cannot fetch a video and then share it — it can only offer a file already in
+ * memory. Deliberately outlives the hook that filled it: the blob stays valid after unmount (only
+ * the object URL is revoked, which a share does not need), and the point is to still have it when
+ * the viewer shares later.
+ *
+ * One entry, replaced rather than accumulated. These are whole MP4s, and the only one worth holding
+ * is the debate whose cut was just prepared.
+ */
+let lastPreparedSocialVideo: { debateId: string; file: File } | null = null;
+
+export function rememberPreparedSocialVideo(debateId: string, file: File) {
+  lastPreparedSocialVideo = { debateId, file };
+}
+
+/** The prepared cut for this debate if one is in memory. Never fetches — see the registry above. */
+export function preparedSocialVideoFile(debateId: string): File | null {
+  return lastPreparedSocialVideo?.debateId === debateId ? lastPreparedSocialVideo.file : null;
+}
+
+/** Test seam: drops whatever cut is held, so one suite's file cannot leak into the next. */
+export function forgetPreparedSocialVideo() {
+  lastPreparedSocialVideo = null;
+}
+
 export function usePreparedSocialVideo(
   debateId: string,
   { enabled, includePreview }: { enabled: boolean; includePreview: boolean }
@@ -125,6 +154,7 @@ export function usePreparedSocialVideo(
                 lastModified: Date.now(),
               });
               downloadUrl = URL.createObjectURL(file);
+              rememberPreparedSocialVideo(debateId, file);
               setState(current => ({
                 ...current,
                 status: 'ready',
