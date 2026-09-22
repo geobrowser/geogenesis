@@ -312,6 +312,8 @@ export const rankingPendingPublishedAtAtom = atom<number | null>(null);
 export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
 export const rankingFullscreenActiveAtom = atom<boolean>(false);
+// A visible focus home when mobile ranking fullscreen hides the app navbar.
+export const rankingFullscreenFocusTargetAtom = atom<HTMLElement | null>(null);
 
 // Set while the full-screen debates feed is on screen. A Debate entity page renders the feed
 // from a route `Main` otherwise treats as an ordinary entity page, so without this it wraps a

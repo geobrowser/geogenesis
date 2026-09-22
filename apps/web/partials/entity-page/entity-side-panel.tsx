@@ -309,7 +309,7 @@ export function EntitySidePanelSurface({
           data-entity-side-panel-scroll
           data-mobile-sheet-scroll
         >
-          <EntitySidePanelActiveTabProvider entityId={entityId}>
+          <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
               entityId={entityId}

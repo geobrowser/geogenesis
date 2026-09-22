@@ -17,12 +17,18 @@ type Claim = {
   position?: string;
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
+  /**
+   * Values on the block → claim relation entity, where timecodes live. Integers arrive from the
+   * API as strings, so these fixtures are written as strings too.
+   */
+  offsets?: Array<{ propertyId: string; integer?: string | null } | null>;
 };
 
 type Block = {
   id: string;
   position?: string;
   author?: string | null;
+  markdown?: string | null;
   claims: Claim[];
 };
 
@@ -38,11 +44,13 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
               position: block.position ?? 'a0',
               toEntity: {
                 id: block.id,
+                markdown: block.markdown === undefined ? [] : [{ spaceId: SPACE, text: block.markdown }],
                 authors: block.author === null ? [] : [{ position: 'a0', toEntity: { id: block.author ?? PRESTON } }],
                 claims: block.claims.map(claim => {
                   const spaceId = claim.spaceId === undefined ? SPACE : claim.spaceId;
                   return {
                     position: claim.position ?? 'a0',
+                    entity: claim.offsets === undefined ? null : { valuesList: claim.offsets },
                     toEntity: {
                       id: claim.id,
                       // Aggregated across spaces, so it is only the resolver's last resort.
@@ -141,6 +149,30 @@ describe('groupTranscriptClaims', () => {
     expect(claimsForParticipant(grouped, PRESTON)[0]).toBe(claimsForParticipant(grouped, ARTURAS)[0]);
     expect(grouped.totalCount).toBe(1);
     expect(grouped.all).toHaveLength(1);
+  });
+
+  /**
+   * The row is deduped and carries one turn's block, offsets and relation entity out of two, so it
+   * cannot answer "when" or "who". The flag is what stops the surfaces that assert either from
+   * using the first turn's answer for both — see `restated`.
+   */
+  it('marks a claim stated in two turns, so nothing reads one turn as both', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.all[0].restated).toBe(true);
+  });
+
+  it('does not mark a claim the graph merely returned twice for one turn', () => {
+    const grouped = group(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-1' }] }])
+    );
+
+    expect(grouped.all[0].restated).toBe(false);
   });
 
   it('still lists a claim once per speaker when that speaker repeats it', () => {
@@ -445,5 +477,86 @@ describe('space scoping', () => {
     );
 
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(NAMING);
+  });
+});
+
+describe('published timecodes', () => {
+  const START = 'a1d1cb557b184238ba0ec78ba7f289fb';
+  const END = '79a677b597f84ca8a1cf24eef7837b61';
+
+  const offsets = (start: string | null, end: string | null) => [
+    { propertyId: START, integer: start },
+    { propertyId: END, integer: end },
+  ];
+
+  it('reads the pair off the relation entity, parsing the strings the API sends', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: offsets('134600', '143140') }] }]));
+
+    expect(all[0].publishedTiming).toEqual({ startMs: 134600, endMs: 143140 });
+  });
+
+  it('reports no timing for the debates that predate timecodes', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1' }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  // Each of these would otherwise be drawn on the timeline as a real moment. Falling back to
+  // matching against the transcript is both honest and, in practice, right.
+  it.each([
+    ['only a start', offsets('1000', null)],
+    ['only an end', offsets(null, '2000')],
+    ['an unparseable value', offsets('about a minute in', '2000')],
+    // `Number('')` is 0, and 0 is a legal start — so a blank start beside a real end would have
+    // published "said in the first two seconds" as a certainty.
+    ['a blank start', offsets('', '2000')],
+    ['a whitespace start', offsets('   ', '2000')],
+    ['a blank end', offsets('1000', '')],
+    ['a negative start', offsets('-500', '2000')],
+    ['an end at the start', offsets('2000', '2000')],
+    ['an end before the start', offsets('4000', '2000')],
+  ])('discards a pair with %s', (_label, values) => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  it('carries the block each claim was said in, so its turn can be located on the recording', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-2', markdown: 'The reply.', author: ARTURAS, claims: [{ id: 'c2' }] },
+      ])
+    );
+
+    expect(all.map(claim => claim.blockId)).toEqual(['block-1', 'block-2']);
+    expect(blocks).toEqual([
+      { id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' },
+      { id: 'block-2', authorSpaceId: ARTURAS, text: 'The reply.' },
+    ]);
+  });
+
+  /**
+   * The same rule the claim loop already follows, on the turn list beside it.
+   *
+   * The graph can return one relation twice — duplicate publishes happen, which is why claims are
+   * deduped at all. The app never noticed, because every consumer keys blocks into a `Map`. The
+   * matching scripts do not: `export-claims-for-matching.ts` walks this list and filters claims by
+   * `blockId`, so a repeated block emits one turn twice with the same claims in each — and
+   * `build-plan-from-matches.ts` then reads that as a claim filed under two turns and rejects every
+   * claim in it. A silent loss of placements, from a duplicate this layer is meant to absorb.
+   */
+  it('lists a turn once when the graph returns its relation twice', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-1', markdown: 'The first turn, as spoken.', position: 'a1', claims: [{ id: 'c1' }] },
+      ])
+    );
+
+    expect(blocks).toEqual([{ id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' }]);
+    // And the repeat is still not a second turn for the claim — see `restated`.
+    expect(all).toHaveLength(1);
+    expect(all[0].restated).toBe(false);
   });
 });

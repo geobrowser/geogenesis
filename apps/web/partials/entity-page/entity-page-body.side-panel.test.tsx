@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -5,24 +6,45 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { TOPIC_TYPE_ID } from '~/core/constants';
+
 import { EntityPageBody } from './entity-page-body';
 
 const mocks = vi.hoisted(() => ({
   actions: null as Record<string, unknown> | null,
+  cover: null as Record<string, unknown> | null,
+  entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
+  editing: false,
+  isLoadingSpace: false,
+  claimPage: null as Record<string, unknown> | null,
+  entityMediaUrl: null as string | null,
+  previewImageUrl: null as string | null,
+  space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
-vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => false }));
+vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
+// Node's built-in localStorage shim can shadow jsdom with a partial object. This
+// layout test only reaches the pending-space atom through transitive UI imports.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({ entity: { id: 'entity-1', types: [] }, isLoading: false }),
+  useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
 // `useCustomBrowseView` asks for the space to tell a person's profile from an
 // ordinary entity. This file renders without a QueryClient on purpose — it is
 // about the header row, not about data — so the space is stubbed like the rest.
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null, isLoading: false }) }));
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: mocks.space, isLoading: mocks.isLoadingSpace }),
+}));
 vi.mock('~/core/utils/use-entity-media', () => ({
-  useEntityMediaUrl: () => null,
-  useImageUrlFromEntity: () => null,
+  useEntityMediaUrl: () => mocks.entityMediaUrl,
+  useImageUrlFromEntity: () => mocks.previewImageUrl,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-actions', () => ({
@@ -44,23 +66,47 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   EntityPageInlineDescription: () => <div data-testid="description" />,
   ENTITY_DESCRIPTION_MAX_LINES: 3,
 }));
+vi.mock('~/partials/profile/person-profile-view', () => ({
+  PersonProfileView: () => <div data-testid="person-profile" />,
+}));
+vi.mock('~/partials/profile/personal-space-profile', () => ({
+  PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
+}));
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
 // none of it is what this file asserts.
-vi.mock('~/partials/entity-page/entity-page-cover', () => ({ EntityPageCover: () => null }));
+vi.mock('~/partials/entity-page/entity-page-cover', () => ({
+  EntityPageCover: (props: Record<string, unknown>) => {
+    mocks.cover = props;
+    return <div data-testid="cover" />;
+  },
+}));
 vi.mock('~/partials/entity-page/entity-page-content-container', () => ({
   EntityPageContentContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => null }));
-vi.mock('~/partials/entity-page/toggle-entity-page', () => ({ ToggleEntityPage: () => null }));
-vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({ AutomaticModeToggle: () => null }));
+vi.mock('~/partials/entity-page/toggle-entity-page', () => ({
+  ToggleEntityPage: () => <div data-testid="properties" />,
+}));
+vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({
+  AutomaticModeToggle: () => <div data-testid="automatic-mode-toggle" />,
+}));
 vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
-vi.mock('~/core/claims/browse/claim-page-view', () => ({ ClaimPageView: () => null }));
-vi.mock('~/core/topics/browse/topic-page-view', () => ({ TopicPageView: () => null }));
+vi.mock('~/core/claims/browse/claim-page-view', () => ({
+  CLAIM_PAGE_CONTENT_INSET_CLASS: 'claim-content-inset',
+  CLAIM_PAGE_CONTENT_MAX_WIDTH: 720,
+  ClaimPageView: (props: Record<string, unknown>) => {
+    mocks.claimPage = props;
+    return <div data-testid="claim-page">{props.footer as React.ReactNode}</div>;
+  },
+}));
+vi.mock('~/core/topics/browse/topic-page-view', () => ({
+  TopicPageView: () => <div data-testid="topic-page" />,
+}));
 
 const SHARED = {
   entityId: 'entity-1',
@@ -77,7 +123,15 @@ function renderPanel(overrides?: { isRelationPage?: boolean; previewName?: strin
 
 beforeEach(() => {
   mocks.actions = null;
+  mocks.cover = null;
+  mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
+  mocks.editing = false;
+  mocks.claimPage = null;
+  mocks.entityMediaUrl = null;
+  mocks.previewImageUrl = null;
+  mocks.isLoadingSpace = false;
+  mocks.space = null;
 });
 
 afterEach(cleanup);
@@ -123,11 +177,154 @@ describe('EntityPageBody relation side panel', () => {
     expect(mocks.actions).toMatchObject({ isVoteable: true });
   });
 
+  it('puts profile actions beside the name and hides Person and Space types', () => {
+    const personType = { id: SystemIds.PERSON_TYPE };
+    mocks.entity = { id: 'entity-1', types: [personType] };
+    mocks.space = { type: 'PERSONAL', entity: { id: 'entity-1', types: [personType] } };
+
+    renderPanel();
+
+    expect(screen.getByTestId('person-profile')).toBeInTheDocument();
+    expect(screen.queryByTestId('metadata')).toBeNull();
+    expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
+    expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
+      4
+    );
+    expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
+    expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
+  });
+
+  it('withholds generic-only chrome while the Person space lookup is pending', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: SystemIds.PERSON_TYPE }] };
+    mocks.isLoadingSpace = true;
+
+    renderPanel();
+
+    // The identity shared by both outcomes remains visible; metadata and
+    // actions cannot be placed correctly until the space identifies a profile.
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('description')).toBeInTheDocument();
+    expect(screen.queryByTestId('metadata')).toBeNull();
+    expect(screen.queryByTestId('actions')).toBeNull();
+    expect(screen.queryByTestId('profile-headline')).toBeNull();
+    expect(screen.queryByTestId('person-profile')).toBeNull();
+    expect(mocks.actions).toBeNull();
+  });
+
   // The title is outside the gate entirely — a relation page is still titled.
   it('titles a relation page from the preview name', () => {
     renderPanel({ isRelationPage: true, previewName: 'Preview name' });
 
     expect(screen.getByTestId('title')).toBeInTheDocument();
     expect(mocks.heading).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1', fallbackName: 'Preview name' });
+  });
+});
+
+describe('EntityPageBody claim side panel', () => {
+  it('shows both configured claim images above the custom view', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        avatarUrl="https://example.com/avatar.png"
+        coverUrl="https://example.com/cover.png"
+      />
+    );
+
+    expect(screen.getByTestId('cover')).toBeInTheDocument();
+    expect(screen.getByTestId('claim-page')).toBeInTheDocument();
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: 'https://example.com/avatar.png',
+      coverUrl: 'https://example.com/cover.png',
+      compact: true,
+      withAvatar: true,
+      contentMaxWidth: 720,
+      contentInsetClassName: 'claim-content-inset',
+    });
+  });
+
+  it('does not render a cover or preview fallback as the claim avatar', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    mocks.entityMediaUrl = 'https://example.com/cover-fallback.png';
+    mocks.previewImageUrl = 'https://example.com/preview-fallback.png';
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        coverUrl="https://example.com/cover.png"
+        previewImageUrl="image-entity-id"
+      />
+    );
+
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: null,
+      coverUrl: 'https://example.com/cover.png',
+      withAvatar: true,
+    });
+  });
+
+  it('does not render a cover or preview fallback as a person avatar either', () => {
+    const personType = { id: SystemIds.PERSON_TYPE };
+    mocks.entity = { id: 'entity-1', types: [personType] };
+    mocks.space = { type: 'PERSONAL', entity: { id: 'entity-1', types: [personType] } };
+    mocks.entityMediaUrl = 'https://example.com/cover-fallback.png';
+    mocks.previewImageUrl = 'https://example.com/preview-fallback.png';
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        coverUrl="https://example.com/cover.png"
+        previewImageUrl="image-entity-id"
+      />
+    );
+
+    expect(mocks.cover).toMatchObject({
+      avatarUrl: null,
+      coverUrl: 'https://example.com/cover.png',
+      withAvatar: true,
+    });
+  });
+
+  it('keeps the custom claim view and appends properties while editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    mocks.editing = true;
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    expect(screen.getByTestId('claim-page')).toBeInTheDocument();
+    expect(screen.getByTestId('properties')).toBeInTheDocument();
+    expect(mocks.claimPage?.isEditing).toBe(true);
+    expect(mocks.claimPage?.footer).toBeTruthy();
+  });
+
+  it('mounts route edit initialization before the claim is already editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
+    expect(mocks.claimPage?.isEditing).toBe(false);
+    expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
+  });
+
+  it('mounts the same route edit initialization for the Topic custom surface', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
+  });
+
+  it('does not mount route edit initialization in the side panel', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    expect(screen.queryByTestId('automatic-mode-toggle')).not.toBeInTheDocument();
   });
 });

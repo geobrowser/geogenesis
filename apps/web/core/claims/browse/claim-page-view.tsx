@@ -2,33 +2,83 @@
 
 import * as React from 'react';
 
+import { usePathname } from 'next/navigation';
+
+import { ClaimCommentPositionProvider } from '~/core/claims/browse/claim-comment-position';
+import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
+import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import type { Relation, TabEntity } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
 
 import { ClampedText } from '~/design-system/clamped-text';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
-import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { Editor } from '~/partials/editor/editor';
+import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import {
+  ENTITY_DESCRIPTION_MAX_LINES,
+  EntityPageInlineDescription,
+} from '~/partials/entity-page/entity-page-inline-description';
+import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 import { SectionTitle } from '~/partials/entity-page/section-title';
+import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
+import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
-import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
-import { ClaimProvenance } from './claim-provenance';
-import { ClaimRelatedClaims } from './claim-related-claims';
+import { ClaimRecordTab } from './claim-record-tab';
+import { getClaimSources } from './claim-sources';
+import { ClaimSourcesTab } from './claim-sources-tab';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
+import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
+
+type ClaimTab = 'overview' | 'debates' | 'claims' | 'sources' | 'custom';
+type ClaimSystemTab = Exclude<ClaimTab, 'custom'>;
+
+/** Shared with the cover/avatar header so its left edge stays aligned with the claim column. */
+export const CLAIM_PAGE_CONTENT_MAX_WIDTH = 720;
+export const CLAIM_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
+
+export function resolveClaimTab({
+  pathname,
+  authoredTabId,
+  panel,
+}: {
+  pathname: string;
+  authoredTabId: string | null;
+  panel: { activeTabId: string | null; activeSystemTab: string | null } | null;
+}): ClaimTab {
+  // A side panel owns its navigation. The page behind it may itself be on /debates or carry a
+  // custom tab query, and borrowing either would make a newly opened panel start on the wrong tab.
+  if (panel) {
+    if (panel.activeTabId) return 'custom';
+    if (panel.activeSystemTab === 'debates') return 'debates';
+    if (panel.activeSystemTab === 'claims') return 'claims';
+    if (panel.activeSystemTab === 'sources') return 'sources';
+    return 'overview';
+  }
+
+  if (authoredTabId) return 'custom';
+  if (pathname.endsWith('/debates')) return 'debates';
+  if (pathname.endsWith('/claims')) return 'claims';
+  if (pathname.endsWith('/sources')) return 'sources';
+  return 'overview';
+}
 
 /**
  * The browse-mode read view for a Claim.
@@ -46,8 +96,25 @@ import { type ClaimResponseState, useClaimResponseState } from './use-claim-resp
  * never been debated, that carries no topics and was authored by hand shows its text, its space,
  * and the controls to act on it — and nothing else.
  */
-export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function ClaimPageView({
+  entityId,
+  spaceId,
+  initialTabRelations = [],
+  tabEntities = [],
+  footer,
+  isEditing = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  initialTabRelations?: Relation[];
+  tabEntities?: TabEntity[];
+  footer?: React.ReactNode;
+  isEditing?: boolean;
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
+  const pathname = usePathname();
+  const activeAuthoredTabId = useActiveTabIdForEditor();
+  const sidePanelTab = useEntitySidePanelActiveTab();
 
   // Hoisted so one lookup answers for the whole page. geo-chat's row and the graph's `Is factual`
   // are two copies of the same fact and can disagree — while an edit to the flag indexes, most
@@ -65,12 +132,47 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
+  const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
   // Named types only: an unnamed one would render as a raw id, which says less than no chip.
   const typeName = entity?.types.find(type => type.name)?.name ?? null;
 
+  const requestedTab = resolveClaimTab({
+    pathname,
+    authoredTabId: activeAuthoredTabId,
+    panel: sidePanelTab,
+  });
+  const record = useClaimRecord({
+    claimId: entityId,
+    spaceId,
+    topicIds,
+  });
+
+  const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const hrefs = {
+    debates: `${overviewHref}/debates`,
+    claims: `${overviewHref}/claims`,
+    sources: `${overviewHref}/sources`,
+  };
+  // Matches profile record tabs: unknown/error stays reachable, while a settled zero disappears.
+  const hasDebates = hasRecordToShow(
+    record.debatesLoading || record.debatesError || record.debatesCountUnavailable
+      ? undefined
+      : record.debatesTotal
+  );
+  const hasClaims = hasRecordToShow(
+    record.claimsLoading || record.claimsError || record.claimsCountUnavailable ? undefined : record.claimsTotal
+  );
+  const hasSources = sources.length > 0;
+  const systemTabs = [
+    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
+    ...(hasDebates ? [{ label: 'Debates', href: hrefs.debates, sidePanelKey: 'debates' }] : []),
+    ...(hasClaims ? [{ label: 'Related claims', href: hrefs.claims, sidePanelKey: 'claims' }] : []),
+    ...(hasSources ? [{ label: 'Sources', href: hrefs.sources, sidePanelKey: 'sources' }] : []),
+  ];
+
   if (isLoading && !entity) {
     return (
-      <div className="flex flex-col gap-4 px-4 py-6 @[560px]:px-5">
+      <div className={`flex flex-col gap-4 py-6 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}>
         <Skeleton className="h-8 w-3/4 rounded" />
         <Skeleton className="h-[132px] w-full rounded-lg" />
         <Skeleton className="h-[96px] w-full rounded-lg" />
@@ -82,16 +184,23 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
   return (
     <div className="@container">
-      <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
+      <div
+        className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
+        style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
+      >
         {/* Hero */}
         <header className="flex flex-col gap-3">
           {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
               stranded last word, so the lines fill. */}
-          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
-            {entity.name ?? entity.id}
-          </h1>
+          {isEditing ? (
+            <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
+          ) : (
+            <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+              {entity.name ?? entity.id}
+            </h1>
+          )}
 
           {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
               budget, not the cut: wrapping differs with width, so the route, the side panel and a
@@ -103,13 +212,21 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               `ClampedText` measures an unclamped clone, so the toggle appears only when something
               is genuinely hidden, and it is unaffected by the naive-overflow bug GEO-2756 fixed in
               the feed's own title. */}
-          {entity.description && (
-            <ClampedText
-              text={entity.description}
-              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-              variant="body"
-              textClassName="wrap-break-word text-grey-04"
+          {isEditing ? (
+            <EntityPageInlineDescription
+              entityId={entityId}
+              spaceId={spaceId}
+              fallbackDescription={entity.description}
             />
+          ) : (
+            entity.description && (
+              <ClampedText
+                text={entity.description}
+                maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+                variant="body"
+                textClassName="wrap-break-word text-grey-04"
+              />
+            )
           )}
 
           {/* What this is. Topics — what it is *about* — used to sit opposite these, pushed to the
@@ -128,29 +245,150 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
           </div>
         </header>
 
-        {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
-            reader, so the same answer rather than two that look alike until one of them changes.
-            Directly under the header, where the topic view puts its own: on a claim the thing worth
-            offering before the argument itself is somewhere else to take it. */}
-        <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
+        <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
+          <EntityTabs
+            entityId={entityId}
+            spaceId={spaceId}
+            initialTabRelations={initialTabRelations}
+            tabEntities={tabEntities}
+            systemTabsBefore={systemTabs}
+            reservedSystemLabels={systemTabs.map(tab => tab.label)}
+            divideBeforeAuthored
+          />
+        </div>
 
-        <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
-
-        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
-
-        <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
-
-        <ClaimProvenance claimId={entityId} claimRelations={entity.relations} spaceId={spaceId} />
-
-        <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
-
-        {/* Last, and in the same `page` variant a regular entity uses — the entity body renders it
-            this way for both the route and the side panel, and only the dedicated comments panel
-            asks for the `panel` variant. Unlike the modules above, this one always renders: an
-            empty thread is an invitation to start it, not an absence to hide. */}
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <ClaimTabPanel
+          activeTab={requestedTab}
+          entityId={entityId}
+          spaceId={spaceId}
+          entityRelations={entity.relations}
+          responseKind={responseKind}
+          summary={summary}
+          state={state}
+          row={row}
+          record={record}
+          topics={topics}
+          availableSpaceIds={entity.spaces}
+          hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
+          onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
+        />
+        {footer}
       </div>
     </div>
+  );
+}
+
+function ClaimTabPanel({
+  activeTab,
+  entityId,
+  spaceId,
+  entityRelations,
+  responseKind,
+  summary,
+  state,
+  row,
+  record,
+  topics,
+  availableSpaceIds,
+  hrefs,
+  onSelectSystemTab,
+}: {
+  activeTab: ClaimTab;
+  entityId: string;
+  spaceId: string;
+  entityRelations: Relation[];
+  responseKind: ClaimResponseState['responseKind'];
+  summary: ClaimResponseState['summary'];
+  state: ClaimResponseState;
+  row: DebateClaim | null;
+  record: ReturnType<typeof useClaimRecord>;
+  topics: Relation[];
+  availableSpaceIds: string[];
+  hrefs: { debates: string; claims: string };
+  onSelectSystemTab?: (tab: ClaimSystemTab) => void;
+}) {
+  if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
+
+  if (activeTab === 'debates') {
+    return (
+      <ClaimRecordTab
+        kind="debates"
+        claimId={entityId}
+        spaceId={spaceId}
+        availableSpaceIds={availableSpaceIds}
+        sourceTopics={topics.map(topic => ({ id: topic.toEntity.id, name: topic.toEntity.name }))}
+      />
+    );
+  }
+
+  if (activeTab === 'claims') {
+    return (
+      <ClaimRecordTab
+        kind="claims"
+        claimId={entityId}
+        spaceId={spaceId}
+        availableSpaceIds={availableSpaceIds}
+        sourceTopics={topics.map(topic => ({ id: topic.toEntity.id, name: topic.toEntity.name }))}
+      />
+    );
+  }
+
+  if (activeTab === 'sources') {
+    return <ClaimSourcesTab claimId={entityId} claimRelations={entityRelations} spaceId={spaceId} />;
+  }
+
+  const kinds: ActivityKind[] = [
+    {
+      key: 'debates',
+      label: 'Debates',
+      rows: record.debateRows,
+      total: record.debatesTotal,
+      isLoading: record.debatesLoading,
+      isError: record.debatesError,
+      isCountUnavailable: record.debatesCountUnavailable,
+      href: hrefs.debates,
+      seeAllLabel: 'See all debates',
+      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
+    },
+    {
+      key: 'claims',
+      label: 'Claims',
+      rows: record.claimRows,
+      total: record.claimsTotal,
+      isLoading: record.claimsLoading,
+      isError: record.claimsError,
+      isCountUnavailable: record.claimsCountUnavailable,
+      href: hrefs.claims,
+      seeAllLabel: 'See all claims',
+      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
+    },
+  ];
+
+  return (
+    <>
+      <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+      {/* The response control follows the aggregate result, so a reader understands the current
+          split before being asked to add their own position. */}
+      <section aria-label="Position response options" className="flex flex-col gap-3">
+        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+      </section>
+      <ProfileActivitySection kinds={kinds} />
+      {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
+          reader, so the same shared section rather than two implementations. On a claim, Topics
+          belong to the Overview's supporting context and follow its Activity record. */}
+      <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
+      {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}
+      <ClaimCommentPositionProvider
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        viewerDirection={summary.viewerDirection}
+        viewerSpaceId={summary.viewerSpaceId}
+        isViewerResponseLoading={summary.isViewerResponseLoading}
+      >
+        <CommentSection entityId={entityId} spaceId={spaceId} />
+      </ClaimCommentPositionProvider>
+    </>
   );
 }
 
@@ -206,11 +444,14 @@ function ClaimPositionSection({
       {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
           row that used to hold it; with nothing on its right there is no row, just a label. */}
       <SectionTitle>Your position</SectionTitle>
-      <PositionRow
+      <ClaimPositionCommentControl
+        entityId={entityId}
+        spaceId={spaceId}
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
+        promptForComment={control.isConnected}
         disabled={!control.canRespond}
         titleFor={control.actionTitle}
       />

@@ -421,6 +421,7 @@ export function useClaimPositionControl({
 }) {
   const target = {
     entityId: claim.claim_entity_id,
+    entityName: claim.claim,
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };
@@ -542,6 +543,7 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
+    isConnected,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -997,6 +999,7 @@ export function PositionRow({
   disabled,
   titleFor,
   noteFor,
+  endSlot,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: MatchmakingReadiness['response_kind'];
@@ -1014,6 +1017,8 @@ export function PositionRow({
    * can be nothing for the other one.
    */
   noteFor?: (position: boolean) => React.ReactNode;
+  /** A compact third action, kept beside both positions at narrow and wide card widths. */
+  endSlot?: React.ReactNode;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const forSide = positions.find(position => position.position === true);
@@ -1027,9 +1032,19 @@ export function PositionRow({
   // reads this row's own width wherever it has been dropped, and styles.css carries the threshold
   // and how it was measured. Stacking rather than clipping is the point: the label is the only part
   // of a pill allowed to shrink, which is how a button came to read "Dis..." (GEO-2774).
+  //
+  // A compact end slot is the claim-list exception: the Figma row deliberately groups all three
+  // actions, and its two flexible position columns can shed responder faces before their labels
+  // run out of room. Keep that row three columns at every card width instead of letting the nested
+  // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className="@container">
-      <div className="grid grid-cols-1 gap-2 claim-pills-wide:grid-cols-2">
+      <div
+        className={cx(
+          'grid gap-2',
+          endSlot ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-1 claim-pills-wide:grid-cols-2'
+        )}
+      >
         {/* The note shares its button's grid cell rather than sitting in one of
             its own, which is what keeps the two arrangements honest: stacked, it
             follows the button it belongs to instead of both buttons; side by
@@ -1067,6 +1082,7 @@ export function PositionRow({
           />
           {noteFor?.(false)}
         </div>
+        {endSlot ? <div className="flex h-7 shrink-0 items-center">{endSlot}</div> : null}
       </div>
     </div>
   );

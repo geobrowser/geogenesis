@@ -2,7 +2,10 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { useLineClampOverflow } from '~/core/debates/browse/line-clamp-overflow';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
@@ -51,12 +54,47 @@ export function exploreCardHeading(item: ExploreFeedItem): {
  * same heading and importing it from there would close a cycle — `explore-feed-card` is what draws
  * the debate card in the first place.
  */
-export function ExploreCardTitle({ item, opensSidePanel }: { item: ExploreFeedItem; opensSidePanel: boolean }) {
+export function ExploreCardTitle({
+  item,
+  opensSidePanel,
+  clamped = false,
+  showFullTextOnHover = false,
+}: {
+  item: ExploreFeedItem;
+  opensSidePanel: boolean;
+  /**
+   * Hold the heading to two lines.
+   *
+   * Only the debate card asks for it. That card sizes fixed aspect-ratio media from the height its
+   * title leaves over, so a third line is height it did not budget for; every other card lets the
+   * name run.
+   *
+   * A tooltip is separate and opt-in: clamping is not proof that this particular heading overflowed,
+   * and most feed headings do not need duplicate hover text. Constrained surfaces can explicitly
+   * measure the clamp and expose the full heading only when text was actually hidden.
+   */
+  clamped?: boolean;
+  /** Expose the complete heading through the native tooltip on constrained card surfaces. */
+  showFullTextOnHover?: boolean;
+}) {
   const { text, target } = exploreCardHeading(item);
+  const [headingElement, setHeadingElement] = React.useState<HTMLHeadingElement | null>(null);
+  const isOverflowing = useLineClampOverflow(headingElement, {
+    maxLines: 2,
+    enabled: clamped && showFullTextOnHover,
+    contentKey: text,
+  });
 
   return (
     <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
-      <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
+      <h2
+        ref={setHeadingElement}
+        title={showFullTextOnHover && isOverflowing ? text : undefined}
+        className={cx(
+          'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
+          clamped && 'line-clamp-2'
+        )}
+      >
         {text}
       </h2>
     </ExploreCardEntityLink>

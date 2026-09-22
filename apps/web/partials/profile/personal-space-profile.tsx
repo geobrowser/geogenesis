@@ -118,7 +118,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const debates = usePersonDebates(spaceId, true);
 
   /*
-   * Ranked the way the Debates tab opens, so "View all" on Debates leads to the same
+   * Ranked the way the Debates tab opens, so "See all debates" leads to the same
    * six in the same order — one constant, not two literals that happen to match.
    *
    * Claims need no equivalent: `usePersonPositions` defaults to the sort its own
@@ -147,22 +147,6 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   const personName = spaceLabel(labelsById, spaceId)?.name ?? null;
 
   const kinds: ActivityKind[] = [
-    // Claims first: what this person holds, then where they argued it.
-    {
-      key: 'claims',
-      label: 'Claims',
-      rows: positions.rows,
-      responseByClaimId: positions.responseByClaimId,
-      personName,
-      total: positionsCount ?? 0,
-      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
-      // Both sources have to fail before the count is gone: the vote table can
-      // answer it on its own, and does.
-      isCountUnavailable: isFactsError && responses.isError,
-      isError: positions.isError,
-      href: `/space/${spaceId}/positions`,
-      seeAllLabel: 'View all',
-    },
     {
       key: 'debates',
       label: 'Debates',
@@ -180,7 +164,22 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
-      seeAllLabel: 'View all',
+      seeAllLabel: 'See all debates',
+    },
+    {
+      key: 'claims',
+      label: 'Claims',
+      rows: positions.rows,
+      responseByClaimId: positions.responseByClaimId,
+      personName,
+      total: positionsCount ?? 0,
+      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
+      // Both sources have to fail before the count is gone: the vote table can
+      // answer it on its own, and does.
+      isCountUnavailable: isFactsError && responses.isError,
+      isError: positions.isError,
+      href: `/space/${spaceId}/positions`,
+      seeAllLabel: 'See all claims',
     },
   ];
 

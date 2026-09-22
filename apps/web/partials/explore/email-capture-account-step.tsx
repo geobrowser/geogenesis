@@ -146,7 +146,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   }, [busy]);
 
   return (
-    <form onSubmit={submitCode} noValidate>
+    <form data-geo-analytics-label="Explore account verification" onSubmit={submitCode} noValidate>
       {/* The card's own subtext style, shared from the popup so the two states are one design
           rather than two that drifted. */}
       <p className={SUBTEXT_CLASS}>
