@@ -254,10 +254,11 @@ export function ClaimSplitAvailableAfterVote({
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           {compactMaskedShare}
           <span className="flex items-center gap-2">
-            {total}
+            {totalText}
             {voters}
           </span>
         </div>
+        <div className="mt-1 text-left">{instruction}</div>
       </div>
     );
   }

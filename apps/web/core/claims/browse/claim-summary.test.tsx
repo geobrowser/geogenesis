@@ -71,6 +71,10 @@ describe('ClaimSummary', () => {
     expect(screen.getByText('20 votes')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
 
+    const instruction = screen.getByText('Add your position to see vote split.');
+    expect(instruction.parentElement).toHaveClass('mt-1', 'text-left');
+    expect(instruction.parentElement?.previousElementSibling).toHaveTextContent('%verify20 votes');
+
     fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
 
     expect(await screen.findByTestId('responders-list')).toHaveAttribute('data-reveal-directions', 'false');
