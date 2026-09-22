@@ -155,7 +155,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('player layout', () => {
   it('keeps both stacked videos at the original aspect ratio', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const { container } = render(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     const player = container.querySelector('[data-debate-ready]');
     expect(player?.className).toContain('flex-col');
@@ -176,7 +176,7 @@ describe('overlay variants', () => {
       cardsBySlot: new Map([[1, [{}]]]),
     };
 
-    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     expect(queryByTestId('claim-stack')).toBeNull();
   });
@@ -184,34 +184,34 @@ describe('overlay variants', () => {
   it('shows subtitles only for an active, playing, muted compact debate', () => {
     const subtitle = 'A complete subtitle';
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
-    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(queryByText(subtitle)).not.toBeNull();
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
-    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(queryByText(subtitle)).toBeNull();
 
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, subtitle });
-    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays votes={votes} />);
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(queryByText(subtitle)).toBeNull();
 
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
-    rerender(<DebateFeedPlayer debate={debate} active={false} reducedOverlays votes={votes} />);
+    rerender(<DebateFeedPlayer debate={debate} active={false} reducedOverlays />);
     expect(queryByText(subtitle)).toBeNull();
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
-    rerender(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    rerender(<DebateFeedPlayer debate={debate} active />);
     expect(queryByText(subtitle)).not.toBeNull();
   });
 
   it('preserves the current subtitle when a regular debate is paused or inactive', () => {
     const subtitle = 'The current regular-player subtitle';
     mocks.controller = controllerFixture({ mutedByUser: false, playing: false, turnSlot: 1, subtitle });
-    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active />);
     expect(queryByText(subtitle)).not.toBeNull();
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
-    rerender(<DebateFeedPlayer debate={debate} active={false} votes={votes} />);
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
     expect(queryByText(subtitle)).not.toBeNull();
   });
 });
