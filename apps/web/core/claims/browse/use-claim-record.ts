@@ -14,8 +14,9 @@ import {
   fetchClaimRecordCounts,
   fetchClaimRecordDebatesPage,
   firstClaimRecordClaimsPageParam,
-  mergeRankedRecordEntities,
+  mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
+  type ClaimRecordSort,
   type RankedClaimRecordEntity,
 } from './claim-record-query';
 
@@ -61,11 +62,15 @@ function useVisibleRecordPage({
   return { visibleCount, hasNextPage, fetchNextPage: fetchNext };
 }
 
-function rowsForEntities(entities: RankedClaimRecordEntity[], visibleCount: number, spaceId: string): ExploreFeedRow[] {
+function rowsForEntities(
+  entities: RankedClaimRecordEntity[],
+  visibleCount: number,
+  spaceIds: string[]
+): ExploreFeedRow[] {
   if (entities.length === 0) return NO_ROWS;
   return buildExploreFeedRows(
     entities.slice(0, visibleCount),
-    new Set([normId(spaceId)]),
+    new Set(spaceIds.map(normId)),
     // These records do not render a Join button, so there is no membership state to resolve.
     new Set()
   );
@@ -85,58 +90,79 @@ export function useClaimRecord({
   claimId,
   spaceId,
   topicIds,
+  spaceIds,
+  filterTopicIds = [],
+  claimSort = 'best',
+  debateSort = 'best',
+  claimsEnabled = true,
+  debatesEnabled = true,
+  countsEnabled = true,
 }: {
   claimId: string;
   spaceId: string;
   topicIds: string[];
+  spaceIds?: string[];
+  filterTopicIds?: string[];
+  claimSort?: ClaimRecordSort;
+  debateSort?: ClaimRecordSort;
+  claimsEnabled?: boolean;
+  debatesEnabled?: boolean;
+  countsEnabled?: boolean;
 }) {
+  const selectedSpaceIds = spaceIds && spaceIds.length > 0 ? spaceIds : [spaceId];
   const topicKey = topicIds.map(normId).sort().join(',');
-  const recordKey = `${normId(spaceId)}:${normId(claimId)}:${topicKey}`;
+  const filterTopicKey = filterTopicIds.map(normId).sort().join(',');
+  const spaceKey = selectedSpaceIds.map(normId).sort().join(',');
+  const recordKey = `${normId(claimId)}:${spaceKey}:${topicKey}:${filterTopicKey}`;
   const filters = React.useMemo(
-    () => claimRecordFilters({ claimId, spaceId, topicIds }),
-    // Topic order and UUID formatting do not change the query's meaning.
+    () => claimRecordFilters({ claimId, spaceIds: selectedSpaceIds, topicIds, filterTopicIds }),
+    // Topic/space order and UUID formatting do not change the query's meaning.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [claimId, spaceId, topicKey]
+    [claimId, spaceKey, topicKey, filterTopicKey]
   );
 
   const counts = useQuery({
     queryKey: ['claim-record', 'counts', recordKey],
+    enabled: countsEnabled,
     queryFn: ({ signal }) => fetchClaimRecordCounts({ filters, signal }),
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
   const claims = useInfiniteQuery({
-    queryKey: ['claim-record', 'claims', recordKey],
+    queryKey: ['claim-record', 'claims', recordKey, claimSort],
+    enabled: claimsEnabled,
     initialPageParam: firstClaimRecordClaimsPageParam(filters.hasTopics),
     queryFn: ({ pageParam, signal }) =>
-      fetchClaimRecordClaimsPage({ filters, spaceId, pageParam, signal }),
+      fetchClaimRecordClaimsPage({ filters, spaceIds: selectedSpaceIds, sort: claimSort, pageParam, signal }),
     getNextPageParam: nextClaimRecordClaimsPageParam,
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
   const debates = useInfiniteQuery({
-    queryKey: ['claim-record', 'debates', recordKey],
+    queryKey: ['claim-record', 'debates', recordKey, debateSort],
+    enabled: debatesEnabled,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
-      fetchClaimRecordDebatesPage({ filters, spaceId, after: pageParam, signal }),
+      fetchClaimRecordDebatesPage({ filters, spaceIds: selectedSpaceIds, sort: debateSort, after: pageParam, signal }),
     getNextPageParam: page => (page.hasNextPage && page.endCursor !== null ? page.endCursor : undefined),
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
   const claimEntities = React.useMemo(() => {
     const pages = claims.data?.pages ?? [];
-    return mergeRankedRecordEntities(
+    return mergeSortedRecordEntities(
+      claimSort,
       pages.flatMap(page => page.topicClaims.entities),
       pages.flatMap(page => page.extractedClaims.entities)
     );
-  }, [claims.data?.pages]);
+  }, [claimSort, claims.data?.pages]);
   const debateEntities = React.useMemo(
-    () => mergeRankedRecordEntities(...(debates.data?.pages ?? []).map(page => page.entities)),
-    [debates.data?.pages]
+    () => mergeSortedRecordEntities(debateSort, ...(debates.data?.pages ?? []).map(page => page.entities)),
+    [debateSort, debates.data?.pages]
   );
 
   const claimsPage = useVisibleRecordPage({
-    recordKey,
+    recordKey: `${recordKey}:${claimSort}`,
     entityCount: claimEntities.length,
     queryHasNextPage: Boolean(claims.hasNextPage),
     queryIsError: claims.isError,
@@ -144,7 +170,7 @@ export function useClaimRecord({
     fetchNextPage: claims.fetchNextPage,
   });
   const debatesPage = useVisibleRecordPage({
-    recordKey,
+    recordKey: `${recordKey}:${debateSort}`,
     entityCount: debateEntities.length,
     queryHasNextPage: Boolean(debates.hasNextPage),
     queryIsError: debates.isError,
@@ -153,12 +179,15 @@ export function useClaimRecord({
   });
 
   const claimRows = React.useMemo(
-    () => rowsForEntities(claimEntities, claimsPage.visibleCount, spaceId),
-    [claimEntities, claimsPage.visibleCount, spaceId]
+    () => rowsForEntities(claimEntities, claimsPage.visibleCount, selectedSpaceIds),
+    // `spaceKey` is the semantic identity; callers may rebuild the array around it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [claimEntities, claimsPage.visibleCount, spaceKey]
   );
   const debateRows = React.useMemo(
-    () => rowsForEntities(debateEntities, debatesPage.visibleCount, spaceId),
-    [debateEntities, debatesPage.visibleCount, spaceId]
+    () => rowsForEntities(debateEntities, debatesPage.visibleCount, selectedSpaceIds),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [debateEntities, debatesPage.visibleCount, spaceKey]
   );
 
   return {

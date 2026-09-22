@@ -3,14 +3,16 @@ import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
+import { EntitiesOrderBy } from '~/core/gql/graphql';
 
 import {
   claimRecordClaimsDocument,
   claimRecordCountsDocument,
   claimRecordDebatesDocument,
   claimRecordFilters,
+  claimRecordOrderBy,
   decodeClaimRecordCounts,
-  mergeRankedRecordEntities,
+  mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
 } from './claim-record-query';
 
@@ -29,47 +31,84 @@ describe('claim record GraphQL', () => {
     expect(claims).toContain('first: $first');
     expect(claims).toContain('after: $topicAfter');
     expect(claims).toContain('after: $extractedAfter');
-    expect(claims).toContain('orderBy: [RANKING_SCORE_DESC, UPDATED_AT_DESC, ID_ASC]');
+    expect(claims).toContain('orderBy: $orderBy');
+    expect(claims).toContain('topicClaimsTop: entitiesOrderedByPropertyConnection');
+    expect(claims).toContain('extractedClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).toContain('@skip(if: $skipTopicClaims)');
     expect(claims).toContain('@skip(if: $skipExtractedClaims)');
     expect(debates).toContain('debates: entitiesConnection');
-    expect(debates).toContain('orderBy: [RANKING_SCORE_DESC, UPDATED_AT_DESC, ID_ASC]');
+    expect(debates).toContain('orderBy: $orderBy');
+    expect(debates).toContain('debatesTop: entitiesOrderedByPropertyConnection');
     expect(counts.match(/distinctCount/g)).toHaveLength(2);
     expect(counts.match(/fromEntityId/g)).toHaveLength(2);
   });
 
+  it('uses Best by default and exposes the exact server orders for Best and New', () => {
+    expect(claimRecordOrderBy('best')).toEqual([
+      EntitiesOrderBy.RankingScoreDesc,
+      EntitiesOrderBy.UpdatedAtDesc,
+      EntitiesOrderBy.IdAsc,
+    ]);
+    expect(claimRecordOrderBy('new')).toEqual([EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdAsc]);
+  });
+
   it('scopes both related-claim paths to the space and excludes the current claim', () => {
-    const filters = claimRecordFilters({ claimId: CLAIM_ID, spaceId: SPACE_ID, topicIds: [TOPIC_ID] });
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      spaceIds: [SPACE_ID],
+      topicIds: [TOPIC_ID],
+      filterTopicIds: [],
+    });
 
     expect(filters.topicClaims).toEqual({
-      id: { isNot: CLAIM_ID },
-      relations: {
-        some: {
-          typeId: { is: TOPICS_PROPERTY_ID },
-          spaceId: { is: SPACE_ID },
-          toEntityId: { in: [TOPIC_ID] },
-        },
-      },
-    });
-    expect(filters.extractedClaims).toEqual({
-      id: { isNot: CLAIM_ID },
-      relations: {
-        some: {
-          typeId: { is: SOURCES_PROPERTY_ID },
-          spaceId: { is: SPACE_ID },
-          toEntity: {
-            typeIds: { overlaps: [DEBATE_TYPE_ID] },
-            spaceIds: { overlaps: [SPACE_ID] },
-            relations: {
-              some: {
-                typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                spaceId: { is: SPACE_ID },
-                toEntityId: { is: CLAIM_ID },
+      or: [
+        {
+          id: { isNot: CLAIM_ID },
+          typeIds: { overlaps: [CLAIM_TYPE_ID] },
+          spaceIds: { overlaps: [SPACE_ID] },
+          and: [
+            {
+              relations: {
+                some: {
+                  typeId: { is: TOPICS_PROPERTY_ID },
+                  spaceId: { is: SPACE_ID },
+                  toEntityId: { in: [TOPIC_ID] },
+                },
               },
             },
-          },
+          ],
         },
-      },
+      ],
+    });
+    expect(filters.extractedClaims).toEqual({
+      or: [
+        {
+          id: { isNot: CLAIM_ID },
+          typeIds: { overlaps: [CLAIM_TYPE_ID] },
+          spaceIds: { overlaps: [SPACE_ID] },
+          and: [
+            {
+              relations: {
+                some: {
+                  typeId: { is: SOURCES_PROPERTY_ID },
+                  spaceId: { is: SPACE_ID },
+                  toEntity: {
+                    typeIds: { overlaps: [DEBATE_TYPE_ID] },
+                    spaceIds: { overlaps: [SPACE_ID] },
+                    relations: {
+                      some: {
+                        typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+                        spaceId: { is: SPACE_ID },
+                        toEntityId: { is: CLAIM_ID },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
     });
 
     expect(filters.claimRelations.or).toHaveLength(2);
@@ -91,13 +130,41 @@ describe('claim record GraphQL', () => {
   });
 
   it('omits only the topic branch when there are no topics', () => {
-    const filters = claimRecordFilters({ claimId: CLAIM_ID, spaceId: SPACE_ID, topicIds: [] });
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      spaceIds: [SPACE_ID],
+      topicIds: [],
+      filterTopicIds: [],
+    });
 
     expect(filters.hasTopics).toBe(false);
     expect(filters.claimRelations.or).toHaveLength(1);
     expect(filters.claimRelations.or?.[0]).toMatchObject({ typeId: { is: SOURCES_PROPERTY_ID } });
     expect(filters.debates.relations?.some?.toEntity).toEqual({ id: { is: CLAIM_ID } });
     expect(filters.debateRelations.toEntity).toEqual({ id: { is: CLAIM_ID } });
+  });
+
+  it('requires every selected topic in the same selected space', () => {
+    const secondSpace = 'dddddddddddddddddddddddddddddddd';
+    const secondTopic = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      spaceIds: [SPACE_ID, secondSpace],
+      topicIds: [TOPIC_ID],
+      filterTopicIds: [TOPIC_ID, secondTopic],
+    });
+
+    const branches = filters.topicClaims.or ?? [];
+    expect(branches).toHaveLength(2);
+    expect(branches[0]).toMatchObject({
+      spaceIds: { overlaps: [SPACE_ID] },
+      and: [
+        { relations: { some: { spaceId: { is: SPACE_ID }, toEntityId: { in: [TOPIC_ID] } } } },
+        { relations: { some: { spaceId: { is: SPACE_ID }, toEntityId: { is: TOPIC_ID } } } },
+        { relations: { some: { spaceId: { is: SPACE_ID }, toEntityId: { is: secondTopic } } } },
+      ],
+    });
+    expect(branches[1]).toMatchObject({ spaceIds: { overlaps: [secondSpace] } });
   });
 
   it('decodes exact distinct counts without mistaking malformed data for a result', () => {
@@ -125,7 +192,7 @@ describe('claim record ranked union', () => {
       { id: '33333333333333333333333333333333', rankingScore: 9, updatedAt: '2025-01-01T00:00:00Z' },
     ];
 
-    expect(mergeRankedRecordEntities(topic, extracted).map(entity => entity.id)).toEqual([
+    expect(mergeSortedRecordEntities('best', topic, extracted).map(entity => entity.id)).toEqual([
       '33333333333333333333333333333333',
       '11111111111111111111111111111111',
       '22222222222222222222222222222222',
@@ -139,10 +206,38 @@ describe('claim record ranked union', () => {
       { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', rankingScore: null, updatedAt: '2026-02-01T00:00:00Z' },
     ];
 
-    expect(mergeRankedRecordEntities(rows).map(entity => entity.id)).toEqual([
+    expect(mergeSortedRecordEntities('best', rows).map(entity => entity.id)).toEqual([
       'cccccccccccccccccccccccccccccccc',
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    ]);
+  });
+
+  it('merges Top and New branches by their corresponding server sort values', () => {
+    const rows = [
+      {
+        id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        rankingScore: 100,
+        score: 1,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        rankingScore: 1,
+        score: 9,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ];
+
+    expect(mergeSortedRecordEntities('top', rows).map(entity => entity.id)).toEqual([
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    ]);
+    expect(mergeSortedRecordEntities('new', rows).map(entity => entity.id)).toEqual([
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ]);
   });
 

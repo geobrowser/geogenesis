@@ -33,11 +33,11 @@ import {
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 import { SectionTitle } from '~/partials/entity-page/section-title';
-import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { ClaimEndSlot } from './claim-end-slot';
+import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ControversialTag } from './claim-summary';
@@ -266,6 +266,7 @@ export function ClaimPageView({
           row={row}
           record={record}
           topics={topics}
+          availableSpaceIds={entity.spaces}
           hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
           onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
         />
@@ -286,6 +287,7 @@ function ClaimTabPanel({
   row,
   record,
   topics,
+  availableSpaceIds,
   hrefs,
   onSelectSystemTab,
 }: {
@@ -299,6 +301,7 @@ function ClaimTabPanel({
   row: DebateClaim | null;
   record: ReturnType<typeof useClaimRecord>;
   topics: Relation[];
+  availableSpaceIds: string[];
   hrefs: { debates: string; claims: string };
   onSelectSystemTab?: (tab: ClaimSystemTab) => void;
 }) {
@@ -306,34 +309,24 @@ function ClaimTabPanel({
 
   if (activeTab === 'debates') {
     return (
-      <PersonRecordFeed
-        rows={record.debateRows}
-        isLoading={record.debatesLoading}
-        isError={record.debatesError}
-        isFetchingNextPage={record.debatesFetchingNextPage}
-        hasNextPage={record.debatesHasNextPage}
-        fetchNextPage={record.fetchNextDebatesPage}
-        loadingLabel="Loading debates…"
-        emptyLabel="No debates on this claim or its related claims yet."
-        errorLabel="Couldn’t load debates."
-        noun="debates"
+      <ClaimRecordTab
+        kind="debates"
+        claimId={entityId}
+        spaceId={spaceId}
+        availableSpaceIds={availableSpaceIds}
+        sourceTopics={topics.map(topic => ({ id: topic.toEntity.id, name: topic.toEntity.name }))}
       />
     );
   }
 
   if (activeTab === 'claims') {
     return (
-      <PersonRecordFeed
-        rows={record.claimRows}
-        isLoading={record.claimsLoading}
-        isError={record.claimsError}
-        isFetchingNextPage={record.claimsFetchingNextPage}
-        hasNextPage={record.claimsHasNextPage}
-        fetchNextPage={record.fetchNextClaimsPage}
-        loadingLabel="Loading claims…"
-        emptyLabel="No related debate claims yet."
-        errorLabel="Couldn’t load claims."
-        noun="claims"
+      <ClaimRecordTab
+        kind="claims"
+        claimId={entityId}
+        spaceId={spaceId}
+        availableSpaceIds={availableSpaceIds}
+        sourceTopics={topics.map(topic => ({ id: topic.toEntity.id, name: topic.toEntity.name }))}
       />
     );
   }

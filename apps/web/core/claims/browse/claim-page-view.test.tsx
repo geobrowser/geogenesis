@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   chipSection: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   activity: null as Record<string, unknown> | null,
-  feed: null as Record<string, unknown> | null,
+  recordTab: null as Record<string, unknown> | null,
   sidePanel: null as {
     activeTabId: string | null;
     activeSystemTab: string | null;
@@ -128,6 +128,12 @@ vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
 vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => <div data-testid="verdict" /> }));
 vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
+vi.mock('./claim-record-tab', () => ({
+  ClaimRecordTab: (props: Record<string, unknown>) => {
+    mocks.recordTab = props;
+    return <div data-testid="record-tab" />;
+  },
+}));
 vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
 vi.mock('./use-claim-record', () => ({
   useClaimRecord: () => mocks.record,
@@ -145,12 +151,6 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
   ProfileActivitySection: (props: Record<string, unknown>) => {
     mocks.activity = props;
     return <div data-testid="activity" />;
-  },
-}));
-vi.mock('~/partials/profile/person-record-feed', () => ({
-  PersonRecordFeed: (props: Record<string, unknown>) => {
-    mocks.feed = props;
-    return <div data-testid="feed" />;
   },
 }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
@@ -174,7 +174,7 @@ beforeEach(() => {
   mocks.chipSection = null;
   mocks.tabs = null;
   mocks.activity = null;
-  mocks.feed = null;
+  mocks.recordTab = null;
   mocks.sidePanel = null;
   mocks.record.claimsTotal = 0;
   mocks.record.claimsLoading = false;
@@ -291,19 +291,15 @@ describe('ClaimPageView record', () => {
     expect(kinds.find(kind => kind.key === 'debates')?.isCountUnavailable).toBe(false);
   });
 
-  it('connects bounded record pagination to the full side-panel tab', () => {
-    const fetchNextClaimsPage = vi.fn();
-    mocks.record.claimsHasNextPage = true;
-    mocks.record.claimsFetchingNextPage = true;
-    mocks.record.fetchNextClaimsPage = fetchNextClaimsPage;
+  it('hands the full side-panel tab the claim record scope', () => {
     mocks.sidePanel = { activeTabId: null, activeSystemTab: 'claims', setActiveSystemTab: vi.fn() };
 
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.feed).toMatchObject({
-      hasNextPage: true,
-      isFetchingNextPage: true,
-      fetchNextPage: fetchNextClaimsPage,
+    expect(mocks.recordTab).toMatchObject({
+      kind: 'claims',
+      claimId: 'claim-1',
+      spaceId: 'space-1',
     });
   });
 });
