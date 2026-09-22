@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { readAppBottomInset } from '~/core/app-bottom-inset';
+
 type DropdownAlign = 'start' | 'end';
 type DropdownSide = 'top' | 'bottom';
 
@@ -31,18 +33,6 @@ const DEFAULT_GAP = 8;
 
 /** When neither side fits, the other side must beat the current one by this much before an open dropdown flips. */
 const FLIP_HYSTERESIS = 32;
-
-/**
- * Read `--app-bottom-inset` (set by global floating bars like flow-bar) so
- * dropdowns can subtract it from spaceBelow. Returns 0 when unset/invalid.
- */
-function readBottomInset(): number {
-  if (typeof document === 'undefined') return 0;
-  const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-bottom-inset').trim();
-  if (!raw) return 0;
-  const parsed = parseFloat(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 export function useAdaptiveDropdownPlacement(
   anchorRef: React.RefObject<Element | null>,
@@ -76,7 +66,7 @@ export function useAdaptiveDropdownPlacement(
     // Subtract any global bottom inset (e.g. flow-bar's "Review edits" footprint)
     // from the available space below so the dropdown flips up instead of sliding
     // under a floating action bar.
-    const bottomInset = readBottomInset();
+    const bottomInset = readAppBottomInset();
     const spaceBelow = viewportHeight - rect.bottom - bottomInset;
     const spaceAbove = rect.top;
 

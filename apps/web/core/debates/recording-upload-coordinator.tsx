@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { SmallButton } from '~/design-system/button';
@@ -538,6 +539,14 @@ export function DebateRecordingUploadCoordinator() {
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
   const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
+  // The banner sits on the bottom edge of the viewport across its full width, so anything else
+  // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
+  // clear it. `h-7` is 28px; the two have to be changed together.
+  //
+  // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
+  // same two conditions that decide whether the banner actually paints.
+  useAppBottomInset('debate-upload-banner', 28, bannerVisible && !inLiveDebate);
+
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
   }
@@ -591,8 +600,10 @@ export function DebateRecordingUploadBanner({
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
   let message: string;
-  if (thankingUploadFinished) {
-    // The actionable thank-you debate takes priority while unrelated recordings keep uploading.
+  if (thankingUploadFinished && count === 0) {
+    // Nothing left on the wire, and the thank-you debate can still be withdrawn — so the line
+    // belongs to the Cancel action beside it. A queue that is still moving outranks it: that is
+    // the one thing on screen telling the user this tab still has work to finish.
     message = 'Debate uploaded';
   } else if (preparingOnly) {
     message = 'Preparing debate upload';

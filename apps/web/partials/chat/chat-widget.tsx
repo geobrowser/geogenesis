@@ -11,6 +11,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { capture } from '~/core/analytics';
+import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
@@ -1157,7 +1158,7 @@ export function ChatWidget() {
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>

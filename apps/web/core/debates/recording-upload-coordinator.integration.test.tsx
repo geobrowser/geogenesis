@@ -237,6 +237,9 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // The banner claims `--app-bottom-inset` on the shared document root, so a case that leaves it
+  // set would bleed into the next one.
+  document.documentElement.style.removeProperty('--app-bottom-inset');
 });
 
 describe('DebateRecordingUploadCoordinator', () => {
@@ -518,6 +521,35 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
+  // The banner covers the bottom edge of the viewport, so it has to claim that space for as long
+  // as it paints — otherwise the assistant launcher, which anchors to the same corner, sits
+  // underneath it.
+  it('claims the bottom of the viewport only while the banner is on screen', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    const { unmount } = render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('28px');
+
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+  });
+
+  it('claims nothing while an unrelated live debate hides the banner', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = null;
+    mocks.activityDebate = { id: 'debate-9', status: 'in_progress' };
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.createUpload).toHaveBeenCalled());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+  });
+
   // The card carries the publish switch (GEO-2773), but only the switch. What is still going out
   // of this browser, and the warning not to close it, stay the banner's — and the thank-you debate
   // is the bulk of what is still going out while its own card is up.
@@ -742,14 +774,19 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.createUpload).not.toHaveBeenCalled();
   });
 
-  it('keeps the uploaded thank-you message while an unrelated debate continues uploading', async () => {
+  // "Debate uploaded" is about the Cancel action beside it, and it is worth saying only while
+  // nothing else is going out. A queue that is still moving outranks it: that count is the one
+  // thing telling the user this tab still has work to finish. The opt-out stays on offer either
+  // way — the message changed, not what the button does.
+  it('reports the still-uploading debate over the uploaded thank-you message', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingHasUploadedRecording = true;
     mocks.queue = [queuedRecording('debate-2')];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     await waitFor(() =>
       expect(mocks.createUpload).toHaveBeenCalledWith(

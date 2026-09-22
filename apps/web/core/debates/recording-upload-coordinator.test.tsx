@@ -316,10 +316,9 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
   });
 
-  // "Debate uploaded" speaks for the one debate beside the Cancel action, so it can stand over a
-  // queue that is still busy. The warning follows the queue, not the message, or the user reads
-  // "uploaded" and closes the tab on the rest.
-  it('still warns against closing the browser when other uploads are pending', () => {
+  // A queue that is still moving outranks "Debate uploaded", which is only worth saying once
+  // nothing is left on the wire. The opt-out stays on offer either way.
+  it('reports the remaining count over the uploaded copy when uploads are still pending', () => {
     render(
       <DebateRecordingUploadBanner
         count={1}
@@ -331,10 +330,10 @@ describe('DebateRecordingUploadBanner', () => {
       />
     );
 
-    expect(screen.getByText('Debate uploaded')).toBeInTheDocument();
+    expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
     expect(screen.getByText('Keep browser open')).toBeInTheDocument();
-    // And the bar goes with it: the queue is moving even though this debate's part of it is done.
     expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 });
 
