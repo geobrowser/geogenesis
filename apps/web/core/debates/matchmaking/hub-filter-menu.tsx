@@ -6,7 +6,9 @@ import { SmallButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Search } from '~/design-system/icons/search';
 import { TickSmall } from '~/design-system/icons/tick-small';
+import { inputStyles } from '~/design-system/input';
 import { Menu, type MenuAlign } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -150,6 +152,17 @@ type MultiProps<T extends string> = {
    * would only flash. Callers should read this as "these are stale", not "these are hidden".
    */
   countsPending?: boolean;
+  /**
+   * Turns on the in-menu search field, using this as its placeholder and accessible name.
+   *
+   * Opt-in rather than always on, because it only earns its place where the menu can get long
+   * enough to scroll past what the viewer can hold in their head. Topics are that menu — a space's
+   * facet is however many subjects its claims have been tagged with, and it grows with the corpus.
+   * The space menu is the viewer's own spaces, which is a list they already know.
+   */
+  searchPlaceholder?: string;
+  /** What the menu says when the query matches nothing. */
+  searchEmptyLabel?: string;
 };
 
 /**
@@ -181,15 +194,50 @@ export function HubMultiFilterMenu<T extends string>({
   align,
   labelPending,
   countsPending,
+  searchPlaceholder,
+  searchEmptyLabel = 'No matches',
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const searchRef = React.useRef<HTMLInputElement>(null);
   const showCountSkeletons = useDelayedFlag(countsPending ?? false, COUNT_SKELETON_DELAY_MS);
   const selected = new Set<string>(values);
+
+  // Nothing to search through is worse than no field at all: it offers work that cannot pay off,
+  // and it is the state a menu waiting on its first facet sits in.
+  const searchable = searchPlaceholder !== undefined && options.length > 0;
+  const trimmedQuery = searchable ? query.trim() : '';
+  const searching = trimmedQuery.length > 0;
+
+  const visibleOptions = React.useMemo(
+    () => (trimmedQuery === '' ? options : options.filter(option => matchesQuery(option, trimmedQuery))),
+    [options, trimmedQuery]
+  );
+
+  // The query belongs to a visit, not to the filter. Left behind, reopening the menu would show a
+  // list already narrowed by something the viewer typed a while ago and has no reason to expect —
+  // and the selection they *did* make is on the trigger, where they can see it.
+  const onOpenChange = React.useCallback((next: boolean) => {
+    if (!next) setQuery('');
+    setOpen(next);
+  }, []);
+
+  React.useEffect(() => {
+    if (!open || !searchable) return;
+    // Only where a keyboard is already in front of the viewer. On a touch device this would throw
+    // the software keyboard up over the very list it is meant to help pick from, before anyone has
+    // said they want to type.
+    if (typeof window.matchMedia === 'function' && !window.matchMedia('(pointer: fine)').matches) return;
+    // Radix focuses the popover content itself on open, so take focus on the next frame rather than
+    // racing it. `preventScroll` because the panel this sits in scrolls independently.
+    const frame = requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [open, searchable]);
 
   return (
     <Menu
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={onOpenChange}
       asChild
       align={align}
       className="max-w-[280px]"
@@ -204,24 +252,53 @@ export function HubMultiFilterMenu<T extends string>({
       }
     >
       <>
-        <button
-          type="button"
-          onClick={() => {
-            onClear();
-            setOpen(false);
-          }}
-          className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg"
-        >
-          <Text variant="button" className="truncate hover:text-text!">
-            {clearLabel}
-          </Text>
-          {values.length === 0 ? (
-            <span className="ml-auto shrink-0">
-              <TickSmall />
-            </span>
-          ) : null}
-        </button>
-        {options.map(option => (
+        {searchable ? (
+          // Sticky, because the list it filters is exactly the list long enough to scroll — losing
+          // the field at the top of it would mean scrolling back to change a query by one letter.
+          <div className="sticky top-0 z-10 border-b border-grey-02 bg-white p-2">
+            <div className="relative w-full">
+              <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-grey-04">
+                <Search />
+              </div>
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={event => setQuery(event.currentTarget.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                className={inputStyles({ withSearchIcon: true })}
+              />
+            </div>
+          </div>
+        ) : null}
+        {searching ? null : (
+          <button
+            type="button"
+            onClick={() => {
+              onClear();
+              onOpenChange(false);
+            }}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg"
+          >
+            <Text variant="button" className="truncate hover:text-text!">
+              {clearLabel}
+            </Text>
+            {values.length === 0 ? (
+              <span className="ml-auto shrink-0">
+                <TickSmall />
+              </span>
+            ) : null}
+          </button>
+        )}
+        {searching && visibleOptions.length === 0 ? (
+          <div className="px-3 py-2.5">
+            <Text variant="footnote" className="text-grey-04!">
+              {searchEmptyLabel}
+            </Text>
+          </div>
+        ) : null}
+        {visibleOptions.map(option => (
           <button
             key={option.value}
             type="button"
@@ -277,6 +354,21 @@ export function HubMultiFilterMenu<T extends string>({
       </>
     </Menu>
   );
+}
+
+/**
+ * Whether an option survives the in-menu search.
+ *
+ * A plain case-insensitive substring, not a prefix: topic names are ordinary noun phrases and the
+ * word the viewer remembers is as often the second one ("climate policy" typed as "policy").
+ *
+ * An option whose label hasn't arrived is dropped while a query is live rather than kept. Its label
+ * is a skeleton, so there is nothing to match it on — and keeping it would put an unreadable row in
+ * a list the viewer is looking at precisely because they know what they want.
+ */
+function matchesQuery<T extends string>(option: HubFilterOption<T>, query: string): boolean {
+  if (option.pending) return false;
+  return option.label.toLowerCase().includes(query.toLowerCase());
 }
 
 /**
