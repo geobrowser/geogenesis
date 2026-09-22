@@ -55,7 +55,7 @@ export const EditableCoverAvatarHeader = ({
   avatarUrl,
   contentMaxWidth = ENTITY_PAGE_CONTENT_MAX_WIDTH,
   coverUrl,
-  fitImage = false,
+  compact = false,
   withAvatar = false,
   contentInsetClassName,
 }: {
@@ -69,8 +69,8 @@ export const EditableCoverAvatarHeader = ({
   /** Responsive inline padding inside the aligned content column. */
   contentInsetClassName?: string;
   coverUrl: string | null;
-  fitImage?: boolean;
-  /** Whether the fitted header shows the avatar too — see the `fitImage` branch. */
+  compact?: boolean;
+  /** Whether the compact header shows the avatar too — see the `compact` branch. */
   withAvatar?: boolean;
 }) => {
   const { spaceId, id } = useEntityStoreInstance();
@@ -93,8 +93,10 @@ export const EditableCoverAvatarHeader = ({
   const hasAvatar = !!showAvatar;
 
   /*
-   * The fitted header: a cover sized to the column it is in rather than cropped
-   * to a fixed height. The side panel uses it.
+   * The compact header: a cover cropped to the side panel's available width.
+   * Keeping it to the same 180px height as the mobile page header leaves the
+   * entity's identity and content above the fold, even when the source image is
+   * square or portrait.
    *
    * `withAvatar` is off by default and that is deliberate. This branch drew the
    * cover alone, which is right for most entities — an entity's avatar is a
@@ -103,7 +105,7 @@ export const EditableCoverAvatarHeader = ({
    * avatar is their face, and a profile that opens without it is missing the one
    * thing a reader recognises. So the caller says.
    */
-  if (fitImage) {
+  if (compact) {
     if (!hasCoverImage && !(withAvatar && hasAvatar)) return null;
 
     return (
@@ -114,7 +116,7 @@ export const EditableCoverAvatarHeader = ({
             typeOfId={SystemIds.COVER_PROPERTY}
             inputId="cover-input"
             imgUrl={coverUrl}
-            fitImage
+            compact
           />
         )}
         {withAvatar && hasAvatar && (
@@ -234,13 +236,13 @@ const AvatarCoverInput = ({
   inputId,
   entityId,
   imgUrl,
-  fitImage = false,
+  compact = false,
 }: {
   typeOfId: string;
   inputId: string;
   entityId: string;
   imgUrl?: string | null;
-  fitImage?: boolean;
+  compact?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -319,7 +321,7 @@ const AvatarCoverInput = ({
           if (!imgUrl && editable) openInput();
         }}
         className={
-          fitImage
+          compact
             ? cx('relative w-full rounded-lg', imgUrl && 'bg-transparent', !imgUrl && editable && 'cursor-pointer')
             : cx(
                 'relative h-full w-full rounded-lg',
@@ -333,7 +335,7 @@ const AvatarCoverInput = ({
         }
       >
         {/* Cover placeholder — two layers crossfaded via opacity for smooth hover */}
-        {isCover && !imgUrl && !fitImage && (
+        {isCover && !imgUrl && !compact && (
           <>
             <div className="absolute inset-0 rounded-lg bg-cover-default bg-contain bg-center bg-no-repeat" />
             <div
@@ -343,11 +345,11 @@ const AvatarCoverInput = ({
           </>
         )}
         {imgUrl &&
-          (fitImage ? (
+          (compact ? (
             <NativeGeoImage
               value={imgUrl}
               alt=""
-              className="block h-auto w-full rounded-lg border border-white bg-white"
+              className="block h-[180px] w-full rounded-lg border border-white bg-white object-cover"
             />
           ) : (
             <GeoImage

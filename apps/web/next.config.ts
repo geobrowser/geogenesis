@@ -142,11 +142,25 @@ const nextConfig: NextConfig = {
     optimizePackageImports,
   },
   images: {
+    // Only hosts we control reach the optimizer. `hostname: '**'` made `/_next/image` an open
+    // proxy: anyone could have our deployment fetch, decode, resize and re-serve any HTTPS URL
+    // from our domain, under our certificate, on our bill (GEO-2984).
+    //
+    // Narrowing this is safe because it is not the list of hosts whose images we *display*.
+    // Image values are free-text entity properties and an author can type any URL; those still
+    // render, via `isOptimizableImageSrc`, which marks foreign hosts `unoptimized` so the browser
+    // fetches them from their own origin. `unoptimized` short-circuits `generateImgAttrs` before
+    // the default loader runs, so such a src is never checked against these patterns.
+    //
+    // Keep in step with `OPTIMIZABLE_HOSTS` in `core/utils/utils.ts`, which is derived from
+    // `IPFS_GATEWAYS`. A host here but not there is merely unused; a host there but not here is a
+    // broken image, which is why the test asserts the two agree.
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
+      { protocol: 'https', hostname: 'mature-tomato-basilisk.myfilebase.com' },
+      { protocol: 'https', hostname: 'magenta-naval-crow-536.mypinata.cloud' },
+      { protocol: 'https', hostname: 'gateway.lighthouse.storage' },
+      { protocol: 'https', hostname: 'geobrowser.io' },
+      { protocol: 'https', hostname: 'www.geobrowser.io' },
     ],
   },
   async headers() {

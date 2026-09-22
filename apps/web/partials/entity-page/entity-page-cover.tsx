@@ -13,8 +13,8 @@ import { EditableCoverAvatarHeader } from './editable-entity-cover-avatar-header
 type EntityPageCoverProps = {
   avatarUrl: string | null;
   coverUrl: string | null;
-  fitImage?: boolean;
-  /** Whether a fitted cover shows the avatar too — see `EditableCoverAvatarHeader`. */
+  compact?: boolean;
+  /** Whether a compact cover shows the avatar too — see `EditableCoverAvatarHeader`. */
   withAvatar?: boolean;
   /** Width of the text column below, so the avatar lines up with the name. */
   contentMaxWidth?: number;
@@ -72,7 +72,7 @@ function useImageUrl(entityId: string, spaceId: string, propertyId: string, serv
 export const EntityPageCover = ({
   avatarUrl: serverAvatarUrl,
   coverUrl: serverCoverUrl,
-  fitImage = false,
+  compact = false,
   withAvatar = false,
   contentMaxWidth,
   contentInsetClassName,
@@ -86,7 +86,7 @@ export const EntityPageCover = ({
     <EditableCoverAvatarHeader
       avatarUrl={avatarUrl}
       coverUrl={coverUrl}
-      fitImage={fitImage}
+      compact={compact}
       withAvatar={withAvatar}
       contentMaxWidth={contentMaxWidth}
       contentInsetClassName={contentInsetClassName}

@@ -1,6 +1,10 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
-import { NAME_PROPERTY_ID } from '~/core/debates/ontology';
+import {
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
+  NAME_PROPERTY_ID,
+} from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
@@ -17,15 +21,71 @@ export type TranscriptClaim = {
    * claim unlinkable and unrespondable rather than pointing it at the wrong space.
    */
   spaceId: string | null;
+  /**
+   * The transcript block this claim was first seen on — the turn it was said in.
+   *
+   * Carried so `claim-timing.ts` can place the claim inside that turn's slice of the recording
+   * rather than searching the whole debate, which is both slower and a way to match a phrase the
+   * other debater said.
+   */
+  blockId: string;
+  /**
+   * The claim's timecodes as published on the block → claim relation entity, in milliseconds from
+   * the start of the debate timeline. Null for every debate published before timecodes existed,
+   * which is nearly all of them — the resolver recovers those from the transcript instead.
+   */
+  publishedTiming: { startMs: number; endMs: number } | null;
+  /**
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} is
+   * read from and where a backfill writes it.
+   *
+   * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
+   * always describe the same statement. Null only if the API omits it.
+   */
+  relationEntityId: string | null;
+  /**
+   * True when the same claim entity is linked from more than one turn.
+   *
+   * `find-or-create` links an existing claim rather than minting a second, so one entity really can
+   * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
+   * carries only the *first* relation's block, offsets and relation entity. Rather than let that
+   * silently stand in for both statements, the flag says the row cannot answer "when" or "who", and
+   * the surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
+   * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
+   * skip it rather than writing one occurrence and leaving the other unplaced.
+   *
+   * No restated claim has been observed in the published corpus yet, so the flag costs nothing in
+   * practice — but the grouping tests treat two speakers sharing a claim as the ordinary case under
+   * find-or-create, so it is a matter of when. Modelling timing per statement is the real fix and
+   * belongs with the backend work in GEO-2958.
+   */
+  restated: boolean;
+};
+
+/** One turn of the debate as published, with the text needed to locate it on the recording. */
+export type TranscriptBlock = {
+  id: string;
+  /** The speaker's personal-space id, or null on a block with no `Authors` relation. */
+  authorSpaceId: string | null;
+  /** The turn's verbatim text, in transcript order within the turn. */
+  text: string;
 };
 
 export type DebateTranscriptClaims = {
-  /** Every claim, deduped, in transcript order. */
+  /**
+   * Every claim, deduped, in the order the graph returned them.
+   *
+   * Not chronological, despite how it reads: relations are published with `Position.generate()`,
+   * which is random rather than monotonic, so `position` order is arbitrary. `claim-timing.ts`
+   * recovers the real order from the recording. See {@link groupTranscriptClaims}.
+   */
   all: TranscriptClaim[];
   /** Claims keyed by the hex form of the speaker's `profile_space_id`. */
   byAuthorSpaceId: Map<string, TranscriptClaim[]>;
   /** Claims on a block with no `Authors` relation. Empty for anything we publish. */
   unattributed: TranscriptClaim[];
+  /** The debate's turns, in the same arbitrary order, keyed by block id. */
+  blocks: TranscriptBlock[];
   totalCount: number;
 };
 
@@ -33,26 +93,95 @@ export const EMPTY_TRANSCRIPT_CLAIMS: DebateTranscriptClaims = {
   all: [],
   byAuthorSpaceId: new Map(),
   unattributed: [],
+  blocks: [],
   totalCount: 0,
 };
 
-type PresentRelation<T> = { position?: string | null; toEntity: T };
+type PresentRelation<T, E = unknown> = {
+  position?: string | null;
+  entityId?: string | null;
+  entity?: E;
+  toEntity: T;
+};
 
 /**
- * Drop relations the API returned as null (or pointing at nothing) and put the rest in graph
- * order. `relationsList` does not come back sorted by `position`, so ordering has to happen here
- * for claims to read in transcript order.
+ * Drop relations the API returned as null (or pointing at nothing) and put the rest in `position`
+ * order.
+ *
+ * This is a stable order, not a chronological one. Every relation here was published with
+ * `Position.generate()`, which is random rather than monotonic, so sorting by it produces the same
+ * arbitrary sequence on every read rather than the order the turns were spoken in. That is enough
+ * for grouping and dedupe, which is all this function feeds; anything that needs real order takes
+ * it from `claim-timing.ts`.
+ *
+ * The relation's own `entity` and `entityId` are carried through, because on a block → claim
+ * relation that entity is where the claim's timecodes live and its id is where a backfill writes
+ * them.
  */
-function presentRelations<T>(
-  relations: Array<{ position?: string | null; toEntity: T | null } | null> | null | undefined
-): PresentRelation<T>[] {
-  const present: PresentRelation<T>[] = [];
+function presentRelations<T, E = unknown>(
+  relations:
+    | Array<{ position?: string | null; entityId?: string | null; entity?: E; toEntity: T | null } | null>
+    | null
+    | undefined
+): PresentRelation<T, E>[] {
+  const present: PresentRelation<T, E>[] = [];
 
   for (const relation of relations ?? []) {
-    if (relation?.toEntity) present.push({ position: relation.position, toEntity: relation.toEntity });
+    if (relation?.toEntity) {
+      present.push({
+        position: relation.position,
+        entityId: relation.entityId,
+        entity: relation.entity,
+        toEntity: relation.toEntity,
+      });
+    }
   }
 
   return present.sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+}
+
+/** The turn's text as published in this space, or '' when the graph holds none. */
+function blockTextInSpace(
+  markdown: Array<{ spaceId: string; text?: string | null } | null> | null | undefined,
+  spaceId: string
+): string {
+  for (const value of markdown ?? []) {
+    if (!value || typeof value.text !== 'string') continue;
+    if (uuidToHex(value.spaceId) === uuidToHex(spaceId)) return value.text.trim();
+  }
+  return '';
+}
+
+/**
+ * The timecodes published on a block → claim relation entity, or null when it carries none.
+ *
+ * Integer values arrive as strings, so they are parsed rather than trusted. A pair that is
+ * incomplete, unparseable, negative, or not strictly increasing is discarded whole: a half-answer
+ * here would be drawn as a real moment on the timeline, and falling back to matching is both
+ * honest and usually right.
+ */
+function publishedTiming(
+  values: Array<{ propertyId: string; integer?: string | null } | null> | null | undefined
+): { startMs: number; endMs: number } | null {
+  let startMs: number | null = null;
+  let endMs: number | null = null;
+
+  for (const value of values ?? []) {
+    if (!value || value.integer === null || value.integer === undefined) continue;
+    // An empty or whitespace `integer` is a missing offset, not offset zero — `Number('')` is 0,
+    // and 0 is a legal `startMs`. A blank start beside a real end would publish "said in the first
+    // few seconds" as a certainty, scored 1.0, over a claim made anywhere in the debate.
+    if (value.integer.trim() === '') continue;
+    const parsed = Number(value.integer);
+    if (!Number.isFinite(parsed)) continue;
+    if (uuidToHex(value.propertyId) === uuidToHex(CLAIM_START_OFFSET_PROPERTY_ID)) startMs = parsed;
+    if (uuidToHex(value.propertyId) === uuidToHex(CLAIM_END_OFFSET_PROPERTY_ID)) endMs = parsed;
+  }
+
+  if (startMs === null || endMs === null) return null;
+  if (startMs < 0 || endMs <= startMs) return null;
+
+  return { startMs, endMs };
 }
 
 type ClaimEntityNaming = {
@@ -116,9 +245,12 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
   const all: TranscriptClaim[] = [];
   const byAuthorSpaceId = new Map<string, TranscriptClaim[]>();
   const unattributed: TranscriptClaim[] = [];
+  const blocks: TranscriptBlock[] = [];
   const rowsByClaimId = new Map<string, TranscriptClaim>();
   /** `${authorKey}:${claimKey}`; the empty author key stands for unattributed. */
   const seenPairs = new Set<string>();
+  /** Turns already listed, so a relation the graph repeats does not become a second turn. */
+  const seenBlockIds = new Set<string>();
 
   for (const transcript of presentRelations(data.entity?.transcripts)) {
     for (const block of presentRelations(transcript.toEntity.blocks)) {
@@ -127,6 +259,20 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
       // A block should have exactly one author; take the first if the graph ever holds more, so
       // one turn's claims land in one group rather than being counted under each speaker.
       const authorSpaceId = presentRelations(blockEntity.authors)[0]?.toEntity.id;
+
+      // Deduped on the same grounds the claims below are: the graph can return one relation twice.
+      // Every reader in the app keys these into a `Map` and so never saw it, but the matching
+      // scripts walk this list — `export-claims-for-matching.ts` filters claims by `blockId`, so a
+      // repeated block emits one turn twice with the same claims in each, and the plan builder then
+      // reads that as a claim filed under two turns and drops every claim in it.
+      if (!seenBlockIds.has(blockEntity.id)) {
+        seenBlockIds.add(blockEntity.id);
+        blocks.push({
+          id: blockEntity.id,
+          authorSpaceId: authorSpaceId ?? null,
+          text: blockTextInSpace(blockEntity.markdown, spaceId),
+        });
+      }
 
       for (const claim of presentRelations(blockEntity.claims)) {
         const claimEntity = claim.toEntity;
@@ -137,9 +283,21 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           const resolved = resolveClaimNaming(claimEntity, spaceId);
           // A claim with no name has nothing to render — its text *is* its name.
           if (!resolved.text) continue;
-          row = { id: claimEntity.id, text: resolved.text, spaceId: resolved.spaceId };
+          row = {
+            id: claimEntity.id,
+            text: resolved.text,
+            spaceId: resolved.spaceId,
+            blockId: blockEntity.id,
+            publishedTiming: publishedTiming(claim.entity?.valuesList),
+            relationEntityId: claim.entityId ?? null,
+            restated: false,
+          };
           rowsByClaimId.set(key, row);
           all.push(row);
+        } else if (row.blockId !== blockEntity.id) {
+          // A second turn for a claim already seen. The same relation repeated inside one block is
+          // just noise and does not count — see `restated`.
+          row.restated = true;
         }
 
         const authorKey = authorSpaceId ? uuidToHex(authorSpaceId) : '';
@@ -159,7 +317,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
     }
   }
 
-  return { all, byAuthorSpaceId, unattributed, totalCount: all.length };
+  return { all, byAuthorSpaceId, unattributed, blocks, totalCount: all.length };
 }
 
 /**

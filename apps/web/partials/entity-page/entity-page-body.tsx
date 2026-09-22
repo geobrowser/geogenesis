@@ -9,13 +9,9 @@ import {
 } from '~/core/claims/browse/claim-page-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
-import type { Space } from '~/core/io/dto/spaces';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
-import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
-import { Spaces } from '~/core/utils/space';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { Spacer } from '~/design-system/spacer';
@@ -23,6 +19,7 @@ import { Spacer } from '~/design-system/spacer';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
+import { type CustomBrowseView, customBrowseView, needsSpaceForView } from '~/partials/entity-page/custom-browse-view';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
@@ -35,6 +32,7 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
+import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
 
 type SharedProps = {
   entityId: string;
@@ -128,88 +126,6 @@ function EditorFooter({
   );
 }
 
-export type CustomBrowseView = 'claim' | 'topic' | 'person' | 'person-pending' | 'generic' | 'pending';
-
-/**
- * The decision itself, with no hooks in it.
- *
- * Exported and pure because it is a routing rule rather than a rendering
- * detail: which of four read surfaces somebody gets, from four inputs that
- * arrive at different times. The hook below is the only place those inputs are
- * gathered.
- */
-export function customBrowseView({
-  entityId,
-  entity,
-  isLoadingEntity,
-  space,
-  isLoadingSpace,
-  isEditing,
-}: {
-  entityId: string;
-  entity: { types: { id: string }[] } | null | undefined;
-  isLoadingEntity: boolean;
-  space: Pick<Space, 'type' | 'entity'> | null | undefined;
-  isLoadingSpace: boolean;
-  isEditing: boolean;
-}): CustomBrowseView {
-  // The types decide which page this is, so until they are known there is no page to draw. Falling
-  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
-  // replaced it a moment later, which read as the page loading twice.
-  if (!entity) return isLoadingEntity ? 'pending' : 'generic';
-
-  const byType = entityBrowseViewFromTypes(entity.types);
-
-  if (byType === 'claim') return 'claim';
-  if (isEditing) return 'generic';
-  if (byType === 'topic') return 'topic';
-
-  /*
-   * A profile is the *space's* view of a person, not the type's.
-   *
-   * `isPersonProfileSpace` wants a PERSONAL space whose own entity is a Person,
-   * and this wants, on top of that, the entity being read to *be* that entity.
-   * Both halves matter and the first has burned this codebase before: a Person
-   * written into a DAO space satisfies the type check alone, and was once handed
-   * profile tabs whose routes answered 404. A personal space also holds entities
-   * besides its owner, and those are not profiles either.
-   */
-  if (byType === 'person') {
-    // `person-pending`, not `pending`: the caller holds back the *body* on this
-    // one and draws the header regardless. A profile and an ordinary Person
-    // entity have the same cover, avatar, name and bio, so there is nothing to
-    // get wrong by drawing them — where blanking the page would make every
-    // Person in a DAO space wait out a space read for a view it was never going
-    // to get.
-    if (!space) return isLoadingSpace ? 'person-pending' : 'generic';
-    if (Spaces.isPersonProfileSpace(space) && space.entity && ID.equals(space.entity.id, entityId)) return 'person';
-  }
-
-  return 'generic';
-}
-
-/**
- * Whether the space has to be read before this entity's view is known.
- *
- * The one question `useSpace` is enabled by, and it is asked through
- * `entityBrowseViewFromTypes` rather than restated. Restating it is exactly what went wrong:
- * the gate tested Person alone, so an entity typed Person *and* Claim — which
- * the routing test covers explicitly — fetched a space that the claim branch
- * above was always going to discard. A gate that repeats a precedence it does
- * not own drifts from it the first time the precedence changes.
- */
-export function needsSpaceForView({
-  entity,
-  isEditing,
-}: {
-  entity: { types: { id: string }[] } | null | undefined;
-  isEditing: boolean;
-}): boolean {
-  if (isEditing || !entity) return false;
-
-  return entityBrowseViewFromTypes(entity.types) === 'person';
-}
-
 /**
  * Which custom read view this entity gets, if any.
  *
@@ -295,7 +211,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               // media and preview fallbacks may be a cover image, which remains a cover here.
               avatarUrl={props.avatarUrl}
               coverUrl={props.coverUrl}
-              fitImage={props.variant === 'sidePanel'}
+              compact={props.variant === 'sidePanel'}
               contentMaxWidth={CLAIM_PAGE_CONTENT_MAX_WIDTH}
               contentInsetClassName={CLAIM_PAGE_CONTENT_INSET_CLASS}
               // Claims use both media properties as part of their identity. The generic fitted
@@ -373,20 +289,30 @@ export function EntityPageBody(props: EntityPageBodyProps) {
    * shows, and this is the only tab bar the panel has — the space route carries
    * them in its own header instead, which is why the profile body there does not.
    */
-  const personProfile =
-    customView === 'person' ? (
-      <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
-    ) : null;
+  const isPersonProfile = customView === 'person';
+  const personProfile = isPersonProfile ? (
+    <PersonProfileView key={entityId} entityId={entityId} spaceId={spaceId} authoredTabs={tabsSection} />
+  ) : null;
 
   // The space read is still out on an entity that might be a profile. Its header
   // is already drawn above; what follows it is the part that depends on the
   // answer, and the generic tabs-and-editor would have to be swapped out for the
   // profile a moment later.
   const isPersonPending = customView === 'person-pending';
+  const showGenericMetadataAndActions = !isPersonProfile && !isPersonPending;
 
   if (props.variant === 'sidePanel') {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
+    const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
+    const actions = (
+      <EntityPageActions
+        entityId={entityId}
+        spaceId={spaceId}
+        isVoteable={!isRelationPage}
+        votesFirst={isPersonProfile}
+      />
+    );
 
     return (
       <div className="px-4 pt-6 pb-12 mobile:px-5">
@@ -394,17 +320,27 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}
         <EntityPageCover
-          // A person's fitted avatar must follow the same rule as a claim's: a cover-only entity
+          // A person's compact avatar must follow the same rule as a claim's: a cover-only entity
           // cannot reuse its rectangular cover/preview as a circular portrait.
-          avatarUrl={customView === 'person' ? props.avatarUrl : avatarUrl}
+          avatarUrl={isPersonProfile ? props.avatarUrl : avatarUrl}
           coverUrl={props.coverUrl}
-          fitImage
-          withAvatar={customView === 'person'}
+          compact
+          withAvatar={isPersonProfile}
         />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
-              <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />
+              {isPersonProfile ? (
+                // The mobile profile keeps voting, history and the overflow
+                // menu beside the name, wrapping only when space runs out.
+                <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <div className="min-w-0 grow">{heading}</div>
+                  {actions}
+                </div>
+              ) : (
+                heading
+              )}
+              {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
               {!isRelationPage && (
                 <EntityPageInlineDescription
                   entityId={entityId}
@@ -412,32 +348,41 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                   fallbackDescription={previewDescription}
                 />
               )}
-              <div className="flex items-center gap-4 text-text">
-                {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
-                <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} />
-              </div>
+              {showGenericMetadataAndActions && (
+                <div className="flex items-center gap-4 text-text">
+                  {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
+                  {actions}
+                </div>
+              )}
             </div>
-            <Spacer height={40} />
-            {personProfile ??
-              (isPersonPending ? null : (
-                <>
-                  {tabsSection}
-                  {notice ? (
-                    <>
-                      <Spacer height={24} />
-                      {notice}
-                    </>
-                  ) : null}
-                  <Spacer height={40} />
-                  <EditorFooter
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    variant="sidePanel"
-                    belowBodySlot={belowBodySlot}
-                    hideProperties={hideProperties}
-                  />
-                </>
-              ))}
+            {personProfile ? (
+              // The full-screen profile uses this margin rather than a fixed
+              // spacer, allowing it to collapse with the description's mb-5.
+              <div className="mt-6">{personProfile}</div>
+            ) : (
+              <>
+                <Spacer height={40} />
+                {isPersonPending ? null : (
+                  <>
+                    {tabsSection}
+                    {notice ? (
+                      <>
+                        <Spacer height={24} />
+                        {notice}
+                      </>
+                    ) : null}
+                    <Spacer height={40} />
+                    <EditorFooter
+                      entityId={entityId}
+                      spaceId={spaceId}
+                      variant="sidePanel"
+                      belowBodySlot={belowBodySlot}
+                      hideProperties={hideProperties}
+                    />
+                  </>
+                )}
+              </>
+            )}
           </div>
         </EntityPageContentContainer>
       </div>

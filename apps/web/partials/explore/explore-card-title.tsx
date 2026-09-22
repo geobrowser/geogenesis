@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
@@ -51,12 +53,38 @@ export function exploreCardHeading(item: ExploreFeedItem): {
  * same heading and importing it from there would close a cycle — `explore-feed-card` is what draws
  * the debate card in the first place.
  */
-export function ExploreCardTitle({ item, opensSidePanel }: { item: ExploreFeedItem; opensSidePanel: boolean }) {
+export function ExploreCardTitle({
+  item,
+  opensSidePanel,
+  clamped = false,
+}: {
+  item: ExploreFeedItem;
+  opensSidePanel: boolean;
+  /**
+   * Hold the heading to two lines.
+   *
+   * Only the debate card asks for it. That card sizes fixed aspect-ratio media from the height its
+   * title leaves over, so a third line is height it did not budget for; every other card lets the
+   * name run.
+   *
+   * No `title` tooltip with it. Clamping is not the same as being cut — most headings fit inside
+   * two lines — and a tooltip repeating text already on screen is worse than none. Knowing which
+   * is which means measuring, as the full-screen header does with `useLineClampOverflow`, and that
+   * is a ResizeObserver per card in an infinite feed to reveal what the heading's own link already
+   * opens.
+   */
+  clamped?: boolean;
+}) {
   const { text, target } = exploreCardHeading(item);
 
   return (
     <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
-      <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
+      <h2
+        className={cx(
+          'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
+          clamped && 'line-clamp-2'
+        )}
+      >
         {text}
       </h2>
     </ExploreCardEntityLink>

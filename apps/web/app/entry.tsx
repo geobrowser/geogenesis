@@ -22,6 +22,7 @@ import { ClientOnly } from '~/design-system/client-only';
 import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
 import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
@@ -36,7 +37,7 @@ import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { rankingFullscreenActiveAtom } from '~/atoms';
+import { rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -98,8 +99,12 @@ const DebatesHubPanel = dynamic(
 
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
+  const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
+  const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -122,6 +127,10 @@ export function App({ children }: { children: React.ReactNode }) {
 
   useKeyboardShortcuts(memoizedShortcuts);
 
+  React.useEffect(() => {
+    if (fullscreenActive) setMobileBrowseOpen(false);
+  }, [fullscreenActive]);
+
   return (
     <DebateMediaSessionProvider>
       <div className="flex min-h-[100dvh] items-stretch">
@@ -130,7 +139,22 @@ export function App({ children }: { children: React.ReactNode }) {
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
+          <Navbar
+            browseOpen={mobileBrowseOpen && !fullscreenActive}
+            browseButtonRef={mobileBrowseButtonRef}
+            navbarRef={navbarRef}
+            onBrowseClick={() => setMobileBrowseOpen(true)}
+            onSearchClick={() => setOpen(true)}
+            hideLogo={sidebarOpen && !fullscreenActive}
+            showBrowseButton={!fullscreenActive}
+          />
+          <MobileBrowseDrawer
+            open={mobileBrowseOpen && !fullscreenActive}
+            fallbackFocusRef={navbarRef}
+            fullscreenFocusTarget={rankingFullscreenFocusTarget}
+            onOpenChange={setMobileBrowseOpen}
+            triggerRef={mobileBrowseButtonRef}
+          />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>

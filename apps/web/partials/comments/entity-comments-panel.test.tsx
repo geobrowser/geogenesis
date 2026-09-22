@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 
+import type React from 'react';
+
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +15,22 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 3, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('~/core/claims/browse/claim-comment-position', () => ({
+  ClaimCommentPositionBoundary: ({
+    entityId,
+    spaceId,
+    children,
+  }: {
+    entityId: string;
+    spaceId: string;
+    children: React.ReactNode;
+  }) => (
+    <div data-testid="claim-comment-position-boundary" data-entity-id={entityId} data-space-id={spaceId}>
+      {children}
+    </div>
+  ),
+}));
+
 vi.mock('./comments-section', () => ({
   CommentSection: () => <div>Comment section</div>,
 }));
@@ -20,6 +38,16 @@ vi.mock('./comments-section', () => ({
 afterEach(cleanup);
 
 describe('EntityCommentsPanel', () => {
+  it('provides claim position context around its generic comment section', () => {
+    const { getByTestId } = render(
+      <EntityCommentsPanel entityId="claim-1" spaceId="space-1" onClose={vi.fn()} presentation="overlay" />
+    );
+
+    expect(getByTestId('claim-comment-position-boundary')).toHaveAttribute('data-entity-id', 'claim-1');
+    expect(getByTestId('claim-comment-position-boundary')).toHaveAttribute('data-space-id', 'space-1');
+    expect(getByTestId('claim-comment-position-boundary')).toHaveTextContent('Comment section');
+  });
+
   /**
    * A slide-up — the proposal review sheet, the edit review — sits at z-10000. Opened over one at
    * 150, this panel draws underneath it and reads as not opening at all, which is exactly how it

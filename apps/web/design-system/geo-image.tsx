@@ -6,7 +6,7 @@ import type { ImgHTMLAttributes } from 'react';
 import cn from 'classnames';
 import Image, { ImageProps } from 'next/image';
 
-import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '~/core/utils/utils';
+import { IPFS_GATEWAY_COUNT, getImagePathAtLevel, isOptimizableImageSrc } from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
@@ -25,7 +25,15 @@ function isRenderableSrc(src: string): boolean {
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
 }
 
-/** Image component that resolves IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
+/**
+ * Image component that resolves IPFS values through the gateway fallback chain (Filebase →
+ * Pinata → Lighthouse).
+ *
+ * Images from hosts we do not control are rendered unoptimized, so the browser fetches them from
+ * their own origin rather than our deployment fetching, decoding, resizing and re-serving
+ * arbitrary remote content under our certificate (GEO-2984). Passing `unoptimized` explicitly
+ * still works; it can only turn optimization further off, never back on for a foreign host.
+ */
 export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
   const [level, setLevel] = useState(0);
 
@@ -39,7 +47,15 @@ export function GeoImage({ value, alt = '', unoptimized = false, ...props }: Geo
   if (!isRenderableSrc(src)) return null;
 
   const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
-  return <Image {...imageProps} src={src} alt={alt} onError={handleError} unoptimized={unoptimized} />;
+  return (
+    <Image
+      {...imageProps}
+      src={src}
+      alt={alt}
+      onError={handleError}
+      unoptimized={unoptimized || !isOptimizableImageSrc(src)}
+    />
+  );
 }
 
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {

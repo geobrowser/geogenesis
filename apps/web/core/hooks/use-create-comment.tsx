@@ -26,6 +26,13 @@ import { useToast } from './use-toast';
 
 type CreateCommentResult = { id: string; published: boolean };
 
+type CreateCommentInput = Omit<CreateCommentParams, 'targetEntityId'> & {
+  /** Called once the optimistic row has been inserted into the cache, with its id. */
+  onOptimistic?: (commentId: string) => void;
+  /** Reuses the optimistic entity when a publish waited for the personal space to become ready. */
+  commentId?: string;
+};
+
 /** Generate a short name from the first ~20 chars of markdown text, stripping formatting. */
 function getCommentName(markdown: string): string {
   const plain = markdown
@@ -143,11 +150,7 @@ export function useCreateComment(targetEntityId: string) {
       ancestorComments,
       onOptimistic,
       commentId: existingCommentId,
-    }: Omit<CreateCommentParams, 'targetEntityId'> & {
-      /** Called once the optimistic row has been inserted into the cache, with its id. */
-      onOptimistic?: (commentId: string) => void;
-      commentId?: string;
-    }): Promise<CreateCommentResult | null> => {
+    }: CreateCommentInput): Promise<CreateCommentResult | null> => {
       const account = readCachedSmartAccount(queryClient, smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to comment</span>);

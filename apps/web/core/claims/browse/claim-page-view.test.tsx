@@ -44,6 +44,8 @@ const mocks = vi.hoisted(() => ({
     fetchNextClaimsPage: () => {},
     fetchNextDebatesPage: () => {},
   },
+  /** Claim response context supplied to the otherwise generic comment thread. */
+  commentPosition: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -98,7 +100,12 @@ vi.mock('~/core/debates/hooks', () => ({
 vi.mock('./use-claim-response-state', () => ({
   useClaimResponseState: () => ({
     responseKind: 'stance',
-    summary: { isControversial: false },
+    summary: {
+      isControversial: false,
+      viewerDirection: 'positive',
+      viewerSpaceId: 'viewer-space',
+      isViewerResponseLoading: true,
+    },
     claim: null,
     positions: [],
     readiness: { response_kind: 'stance' },
@@ -111,7 +118,6 @@ vi.mock('./use-claim-response-state', () => ({
 // The page's modules each reach for the sync engine, geo-chat or Privy. None of them is what this
 // file is asserting, and the hero renders above all of them.
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  PositionRow: () => <div data-testid="position" />,
   useClaimPositionControl: () => ({
     optimisticPositions: [],
     viewerPosition: null,
@@ -119,7 +125,17 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     canRespond: false,
     actionTitle: () => undefined,
     responseError: null,
+    isConnected: false,
   }),
+}));
+vi.mock('./claim-position-comment', () => ({
+  ClaimPositionCommentControl: () => <div data-testid="position" />,
+}));
+vi.mock('./claim-comment-position', () => ({
+  ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
+    mocks.commentPosition = props;
+    return <>{props.children as React.ReactNode}</>;
+  },
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
@@ -190,6 +206,7 @@ beforeEach(() => {
   mocks.record.debatesFetchingNextPage = false;
   mocks.record.debatesHasNextPage = false;
   mocks.record.fetchNextDebatesPage = () => {};
+  mocks.commentPosition = null;
 });
 
 describe('ClaimPageView record', () => {
@@ -353,6 +370,21 @@ describe('ClaimPageView description', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+describe('ClaimPageView comments', () => {
+  it('labels commenters using this claim’s response kind and optimistic viewer position', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.commentPosition).toMatchObject({
+      entityId: 'claim-1',
+      spaceId: 'space-1',
+      responseKind: 'stance',
+      viewerDirection: 'positive',
+      viewerSpaceId: 'viewer-space',
+      isViewerResponseLoading: true,
+    });
   });
 });
 
