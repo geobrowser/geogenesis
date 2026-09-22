@@ -55,6 +55,11 @@ vi.mock('~/core/debates/hooks', () => ({
     hasError: mocks.mediaError,
   }),
   useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
+  // Reached by the Share button's mobile hand-off, which is idle here: these tests run the default
+  // (desktop) layout, where Share opens the in-app sheet and looks up no media at all. Both are
+  // still mounted — hooks cannot be called conditionally — so both still have to exist.
+  useDebateMedia: () => ({ data: undefined, isSuccess: false, isError: false }),
+  useDebateMediaArtifactUrl: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock('./use-debates-best-order', async () => {

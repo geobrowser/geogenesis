@@ -460,6 +460,8 @@ function DebateFeedItem({
     // Undefined where Share opens the OS sheet: that button opens no dialog, so it must not
     // announce one. See {@link DebateShareControls.opensDialog}.
     shareOpen: share.opensDialog ? share.open : undefined,
+    sharePending: share.sharePending,
+    shareLabel: share.shareLabel,
   };
 
   return (

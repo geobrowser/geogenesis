@@ -291,6 +291,8 @@ export function DebateExploreFeedCard({
     onShare: mediaMounted ? share.onShare : undefined,
     // See the same line on the full-screen feed: no dialog to announce when Share opens the OS sheet.
     shareOpen: share.opensDialog ? share.open : undefined,
+    sharePending: share.sharePending,
+    shareLabel: share.shareLabel,
   };
 
   return (

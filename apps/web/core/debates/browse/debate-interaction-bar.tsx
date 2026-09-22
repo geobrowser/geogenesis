@@ -7,6 +7,7 @@ import cx from 'classnames';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { Warning } from '~/design-system/icons/warning';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -38,6 +39,14 @@ type InteractionBarProps = {
   onClaims?: () => void;
   onShare?: () => void;
   shareOpen?: boolean;
+  /**
+   * Share is rendering the debate's video and cannot be activated yet — the mobile hand-off waits
+   * for the cut before it opens the OS share sheet. Swaps the icon for a spinner and turns the
+   * control aside rather than unmounting it, so the bar doesn't reflow mid-wait.
+   */
+  sharePending?: boolean;
+  /** What the Share control reads, which is its progress while {@link sharePending}. */
+  shareLabel?: string;
   /**
    * What kind of response the vote control records, or `'infer'` to let `EntityVoteButtons` read
    * it off the entity.
@@ -75,6 +84,8 @@ export function DebateInteractionBar({
   onClaims,
   onShare,
   shareOpen,
+  sharePending = false,
+  shareLabel = 'Share',
   responseKind = 'curation',
   className,
 }: InteractionBarProps) {
@@ -91,6 +102,9 @@ export function DebateInteractionBar({
 
   const commentsLabel = `Comments (${commentCount})`;
   const claimsLabel = `Claims (${claimsCount ?? 0})`;
+  // The wait is said, not just spun: the visible label is a bare percentage, which on its own names
+  // neither what is progressing nor the control it belongs to.
+  const shareAriaLabel = sharePending ? 'Preparing the debate video to share' : 'Share debate';
 
   if (orientation === 'vertical') {
     return (
@@ -119,10 +133,11 @@ export function DebateInteractionBar({
         )}
         {onShare && (
           <CircleAction
-            label="Share"
+            label={shareLabel}
             onClick={onShare}
-            icon={<Share />}
-            ariaLabel="Share debate"
+            icon={sharePending ? <Spinner /> : <Share />}
+            ariaLabel={shareAriaLabel}
+            ariaDisabled={sharePending}
             expanded={shareOpen}
           />
         )}
@@ -159,9 +174,10 @@ export function DebateInteractionBar({
       {onShare && (
         <PillAction
           onClick={onShare}
-          icon={<Share />}
-          label="Share"
-          ariaLabel="Share debate"
+          icon={sharePending ? <Spinner /> : <Share />}
+          label={shareLabel}
+          ariaLabel={shareAriaLabel}
+          ariaDisabled={sharePending}
           expanded={shareOpen}
           compact={compact}
           hideLabel={compact}
@@ -176,6 +192,7 @@ function CircleAction({
   icon,
   onClick,
   ariaLabel,
+  ariaDisabled,
   expanded,
   open,
   commentsPanelOpener,
@@ -184,6 +201,11 @@ function CircleAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  /**
+   * Inert, but still focusable and still announced — `aria-disabled` rather than `disabled`,
+   * because a control that disappears from the tab order mid-wait strands whoever was on it.
+   */
+  ariaDisabled?: boolean;
   // When set, the button opens a dialog — announce that and its open/closed state to screen readers,
   // which Radix would do via <Trigger> if the trigger lived in the sheet's own subtree.
   expanded?: boolean;
@@ -205,9 +227,10 @@ function CircleAction({
         aria-label={ariaLabel}
         aria-haspopup={expanded === undefined ? undefined : 'dialog'}
         aria-expanded={expanded ?? open}
+        aria-disabled={ariaDisabled}
         data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
-        onClick={onClick}
-        className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text"
+        onClick={ariaDisabled ? undefined : onClick}
+        className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text aria-disabled:cursor-not-allowed aria-disabled:hover:text-grey-04"
       >
         {icon}
       </button>
@@ -223,6 +246,7 @@ function PillAction({
   icon,
   onClick,
   ariaLabel,
+  ariaDisabled,
   expanded,
   open,
   commentsPanelOpener,
@@ -234,6 +258,8 @@ function PillAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  // See {@link CircleAction}: inert without leaving the tab order.
+  ariaDisabled?: boolean;
   // See {@link CircleAction}: announces the dialog and its open state when this button opens one.
   expanded?: boolean;
   // See {@link CircleAction}.
@@ -251,10 +277,11 @@ function PillAction({
       aria-label={ariaLabel}
       aria-haspopup={expanded === undefined ? undefined : 'dialog'}
       aria-expanded={expanded ?? open}
+      aria-disabled={ariaDisabled}
       data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
-      onClick={onClick}
+      onClick={ariaDisabled ? undefined : onClick}
       className={cx(
-        'flex h-7 items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text',
+        'flex h-7 items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text aria-disabled:cursor-not-allowed aria-disabled:hover:text-grey-04',
         compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
         className
       )}

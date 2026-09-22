@@ -90,7 +90,14 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
 }));
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
-  useDebateShareAction: () => ({ opensDialog: true, open: false, onShare: vi.fn(), onOpenChange: vi.fn() }),
+  useDebateShareAction: () => ({
+    opensDialog: true,
+    open: false,
+    onShare: vi.fn(),
+    sharePending: false,
+    shareLabel: 'Share',
+    onOpenChange: vi.fn(),
+  }),
 }));
 
 vi.mock('~/core/debates/browse/share-dialog', () => ({
@@ -411,16 +418,10 @@ describe('DebateExploreFeedCard', () => {
     expect(onPlaybackAvailabilityChange).not.toHaveBeenCalled();
 
     intersectAll(0.1);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      true
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
 
     intersectAll(0);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      false
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
   });
 
   it('unregisters stale playable data when a refetch replaces the player with fallback', () => {
@@ -429,20 +430,14 @@ describe('DebateExploreFeedCard', () => {
     const onPlaybackAvailabilityChange = vi.fn();
     const view = renderCard({ onPlaybackAvailabilityChange });
     intersectAll(0.7);
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      true
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', true);
 
     // TanStack Query retains the previous data when a background refetch fails.
     mocks.debateQuery = { data: watchableDebate(), isError: true };
     view.rerenderCard();
 
     expect(screen.getByTestId('fallback')).toBeInTheDocument();
-    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith(
-      'fd51f935-2063-4617-8039-7b672b23364c',
-      false
-    );
+    expect(onPlaybackAvailabilityChange).toHaveBeenLastCalledWith('fd51f935-2063-4617-8039-7b672b23364c', false);
   });
 
   it('does not request playback from a loading skeleton that may resolve to the fallback', () => {
