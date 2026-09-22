@@ -5,8 +5,12 @@ import * as React from 'react';
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Menu } from '~/design-system/menu';
 
+import { hubAnalyticsAttributes } from './hub-analytics';
+
 export type RequestOverflowAction = {
   label: string;
+  /** Stable action name; unlike `label`, this must not contain a person's name. */
+  analyticsLabel: string;
   onClick: () => void;
   destructive?: boolean;
 };
@@ -30,6 +34,7 @@ export function RequestOverflowMenu({ actions }: { actions: RequestOverflowActio
         <button
           type="button"
           aria-label="More options"
+          {...hubAnalyticsAttributes('Request options', 'open_debate_request_options')}
           className="flex h-7 w-7 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
         >
           <Ellipsis />
@@ -41,6 +46,7 @@ export function RequestOverflowMenu({ actions }: { actions: RequestOverflowActio
           <button
             key={action.label}
             type="button"
+            {...hubAnalyticsAttributes(action.analyticsLabel, 'manage_debate_request')}
             onClick={() => {
               setOpen(false);
               action.onClick();

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
+  usePrivySignInOptions: undefined as undefined | { analytics?: Record<string, unknown>; onError?: () => void },
   useLoginWithEmailArgs: undefined as unknown,
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
@@ -52,8 +53,9 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => {
+  usePrivySignIn: (_onComplete?: () => void, options?: { analytics?: Record<string, unknown>; onError?: () => void }) => {
     mocks.usePrivySignIn();
+    mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
   },
 }));
@@ -96,6 +98,7 @@ beforeEach(() => {
   mocks.prepareOnboarding.mockReset();
   mocks.useGeoLoginWithEmail.mockReset();
   mocks.usePrivySignIn.mockReset();
+  mocks.usePrivySignInOptions = undefined;
   mocks.signupCompleted.mockReset();
   mocks.trackPrivyAuth.mockReset();
   mocks.useLoginWithEmailArgs = undefined;
@@ -944,13 +947,30 @@ describe('ExploreEmailCapturePopup', () => {
     // email is a convenience, and it must not become the reason nobody can sign up at all.
     it('falls back to the normal sign-in dialog when the shortcut cannot start', async () => {
       mocks.sendCode.mockRejectedValue(new Error('captcha required'));
-      await subscribeSuccessfully();
+      const view = await subscribeSuccessfully();
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+      expect(mocks.usePrivySignInOptions?.analytics).toEqual({
+        link_source: 'explore_email_capture',
+        form_type: 'account',
+        signup_surface: 'explore_email_capture',
+      });
+      // The modal replaces the popup visually, but this hook must remain mounted until Privy
+      // completes so its completion handler can attribute the signup to this surface.
+      expect(popup()).toBeInTheDocument();
+
+      mocks.isModalOpen = true;
+      // The popup hides behind Privy without unmounting its account step.
+      view.rerender(<ExploreEmailCapturePopup />);
+      expect(popup()).toBeNull();
+
+      act(() => mocks.usePrivySignInOptions?.onError?.());
+      mocks.isModalOpen = false;
+      view.rerender(<ExploreEmailCapturePopup />);
       expect(popup()).toBeNull();
     });
   });

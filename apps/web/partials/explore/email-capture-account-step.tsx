@@ -49,16 +49,25 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
         signup_surface: 'explore_email_capture',
       }),
   });
-  // Here for the same reason as the hook above, and it is the one that matters more: this registers
-  // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
-  // actually press. Mounted in the parent it would do that on every Explore visit.
-  const openPrivyModal = usePrivySignIn();
-  const [code, setCode] = React.useState('');
-
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
   const giveUpRef = React.useRef(onGiveUp);
   giveUpRef.current = onGiveUp;
+  // Here for the same reason as the hook above, and it is the one that matters more: this registers
+  // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
+  // actually press. Mounted in the parent it would do that on every Explore visit. If the shortcut
+  // cannot send a code, the parent hides this card behind Privy's modal without unmounting it, so
+  // this hook still owns the completion and can attribute it to the email-capture surface.
+  const openPrivyModal = usePrivySignIn(undefined, {
+    analytics: {
+      link_source: 'explore_email_capture',
+      form_type: 'account',
+      signup_surface: 'explore_email_capture',
+    },
+    onError: () => giveUpRef.current(),
+  });
+  const [code, setCode] = React.useState('');
+
   const openPrivyModalRef = React.useRef(openPrivyModal);
   openPrivyModalRef.current = openPrivyModal;
   // Behind a ref because a hook's returned callbacks are new objects on every render. Naming
@@ -94,14 +103,9 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       if (!mountedRef.current) return;
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
-      // Closing this card unmounts the `usePrivySignIn` instance that registered the modal's
-      // completion callback, so this flow's own `link_source` attribution is lost for the fallback.
-      // The sign-in itself is still recorded: the navbar's `GeoConnectButton` is mounted for every
-      // logged-out reader (`navbar-actions.tsx` renders it whenever there is no address) and its
-      // `onComplete` tracks unconditionally. Keeping this mounted behind the modal to reclaim one
-      // attribution field would mean a small state machine in auth code, watching the modal open
-      // and close again, for a branch that only runs when `sendCode` has already failed.
-      giveUpRef.current();
+      // Keep this step mounted while the parent hides it behind the modal. Its own sign-in hook
+      // then observes completion and preserves this surface's attribution. Dismissal comes back
+      // through the hook's `onError` and closes the attempt.
       openPrivyModalRef.current();
     } finally {
       if (mountedRef.current) setSending(false);

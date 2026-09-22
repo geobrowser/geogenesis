@@ -1311,6 +1311,7 @@ export function SpaceTopicFilters({
         // their adaptive placement.
         align="start"
         label={spaceMenuLabel}
+        analyticsName="Space"
         labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
         values={spaceIds}
@@ -1328,6 +1329,7 @@ export function SpaceTopicFilters({
         <HubMultiFilterMenu
           align="start"
           label={topicMenuLabel}
+          analyticsName="Topic"
           options={topicOptions}
           values={topicIds}
           onToggle={onTopicToggle}

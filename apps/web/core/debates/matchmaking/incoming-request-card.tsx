@@ -68,6 +68,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
                 // Guarded like the buttons: this is the same dismiss endpoint they use, so an
                 // answer already taken would 409 here.
                 label: "I don't want to debate this claim",
+                analyticsLabel: 'Remove claim request intent',
                 onClick: () =>
                   answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer)),
               },
@@ -77,6 +78,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
                 // cannot collide with one — and gating it would let an answer already taken
                 // swallow a safety action, which is the worse failure by far.
                 label: `Block ${speakerLabel(request.requester)}`,
+                analyticsLabel: 'Block requester',
                 destructive: true,
                 onClick: () => blockUser.mutate(request.requester.user_id),
               },

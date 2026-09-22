@@ -16,6 +16,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { formatFacetCount } from './topic-facets';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { useDelayedFlag } from './use-delayed-flag';
 
 export type HubFilterOption<T extends string> = {
@@ -31,6 +32,8 @@ export type HubFilterOption<T extends string> = {
 
 type Props<T extends string> = {
   label: string;
+  /** Stable hub filter dimension, independent of the current option. Omit on non-hub consumers. */
+  analyticsName?: string;
   options: HubFilterOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -63,6 +66,7 @@ type Props<T extends string> = {
  */
 export function HubFilterMenu<T extends string>({
   label,
+  analyticsName,
   options,
   value,
   onChange,
@@ -81,7 +85,12 @@ export function HubFilterMenu<T extends string>({
       className="max-w-[280px]"
       // Space names come from the knowledge graph and can be long enough to burst the pill.
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]" aria-label={triggerAriaLabel}>
+        <SmallButton
+          icon={<ChevronDownSmall />}
+          className="max-w-[160px]"
+          aria-label={triggerAriaLabel}
+          {...(analyticsName ? hubAnalyticsAttributes(`${analyticsName} filter`, 'filter_debates_hub') : {})}
+        >
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
             <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
@@ -99,6 +108,9 @@ export function HubFilterMenu<T extends string>({
             // Picking a space nobody can name yet filters the list to something the viewer can't
             // read back off the trigger. The wait is short; the dead end isn't worth it.
             disabled={option.pending}
+            {...(analyticsName
+              ? hubAnalyticsAttributes(`${analyticsName} filter option`, 'filter_debates_hub')
+              : {})}
             onClick={() => {
               onChange(option.value);
               setOpen(false);
@@ -145,6 +157,8 @@ export function HubFilterMenu<T extends string>({
 type MultiProps<T extends string> = {
   /** Shown in the trigger pill: the one selected name, a count of them, or the "any" wording. */
   label: string;
+  /** Stable hub filter dimension, independent of the current selection. Omit on non-hub consumers. */
+  analyticsName?: string;
   options: HubFilterOption<T>[];
   values: T[];
   onToggle: (value: T) => void;
@@ -216,6 +230,7 @@ const SEARCH_FOCUS_DELAY_MS = 1;
  */
 export function HubMultiFilterMenu<T extends string>({
   label,
+  analyticsName,
   options,
   values,
   onToggle,
@@ -356,7 +371,11 @@ export function HubMultiFilterMenu<T extends string>({
       className="max-w-[280px]"
       viewportRef={setViewportNode}
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
+        <SmallButton
+          icon={<ChevronDownSmall />}
+          className="max-w-[160px]"
+          {...(analyticsName ? hubAnalyticsAttributes(`${analyticsName} filter`, 'filter_debates_hub') : {})}
+        >
           {labelPending ? (
             <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
           ) : (
@@ -411,6 +430,9 @@ export function HubMultiFilterMenu<T extends string>({
           {searching ? null : (
             <button
               type="button"
+              {...(analyticsName
+                ? hubAnalyticsAttributes(`Clear ${analyticsName.toLowerCase()} filter`, 'filter_debates_hub')
+                : {})}
               onClick={() => {
                 onClear();
                 onOpenChange(false);
@@ -459,6 +481,9 @@ export function HubMultiFilterMenu<T extends string>({
               key={option.value}
               type="button"
               disabled={option.pending}
+              {...(analyticsName
+                ? hubAnalyticsAttributes(`${analyticsName} filter option`, 'filter_debates_hub')
+                : {})}
               // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
               // an ordinary button and nothing says whether it is picked.
               aria-pressed={selected.has(option.value)}

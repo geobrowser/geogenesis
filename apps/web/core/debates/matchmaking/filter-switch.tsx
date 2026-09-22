@@ -2,6 +2,8 @@
 
 import { Toggle } from '~/design-system/toggle';
 
+import { hubAnalyticsAttributes } from './hub-analytics';
+
 /**
  * A single on/off setting on a filter row, as a switch rather than a pill (GEO-2861).
  *
@@ -29,6 +31,7 @@ export function FilterSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      {...hubAnalyticsAttributes(label, 'filter_debates_hub')}
       onClick={() => onChange(!checked)}
       className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04"
     >

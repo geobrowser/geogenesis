@@ -134,6 +134,7 @@ function RequestsTabBody({
           leading={
             <HubFilterMenu
               label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+              analyticsName="Status"
               options={STATUS_OPTIONS}
               value={status}
               onChange={setStatus}

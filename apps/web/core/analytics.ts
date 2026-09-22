@@ -1,5 +1,7 @@
 'use client';
 
+import { ID } from '~/core/id';
+
 export type AnalyticsProperties = Record<string, unknown>;
 
 type AnalyticsIdentity = string | number | AnalyticsProperties;
@@ -283,7 +285,7 @@ export function personProfileOpened(
   personEntityId?: string | null,
   properties: AnalyticsProperties = {}
 ) {
-  const resolvedPersonEntityId = personEntityId && personEntityId !== profileSpaceId ? personEntityId : null;
+  const resolvedPersonEntityId = personEntityId && !ID.equals(personEntityId, profileSpaceId) ? personEntityId : null;
 
   graphRelationshipFollowed(resolvedPersonEntityId ?? profileSpaceId, {
     source: 'person_profile',

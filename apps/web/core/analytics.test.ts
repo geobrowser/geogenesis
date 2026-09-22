@@ -337,4 +337,21 @@ describe('analytics', () => {
       interaction_surface: 'claim_vote_list',
     });
   });
+
+  it('recognizes dashed and differently cased forms of the same personal-space id', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('4C81561D-1F95-4131-9CDD-DD20AB831BA2', '4c81561d1f9541319cdddd20ab831ba2');
+
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+      graph_entity_type: 'personal_space',
+      profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+    });
+  });
 });

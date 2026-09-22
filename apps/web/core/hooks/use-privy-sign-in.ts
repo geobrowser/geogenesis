@@ -21,6 +21,8 @@ type UsePrivySignInOptions = {
    * URL.
    */
   analytics?: AnalyticsProperties;
+  /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
+  onError?: () => void;
 };
 
 /**
@@ -77,6 +79,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     onError: () => {
       requestedRef.current = false;
       requestedAnalyticsRef.current = undefined;
+      optionsRef.current?.onError?.();
     },
   });
 

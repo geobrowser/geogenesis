@@ -78,6 +78,7 @@ export function IncomingRequestPopup({
               // cannot collide with one — and gating it would let an answer already taken swallow
               // a safety action, which is the worse failure by far.
               label: `Block ${speakerLabel(request.requester)}`,
+              analyticsLabel: 'Block requester',
               destructive: true,
               onClick: () => blockUser.mutate(request.requester.user_id),
             },
