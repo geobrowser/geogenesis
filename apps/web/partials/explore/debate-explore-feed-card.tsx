@@ -85,6 +85,8 @@ type DebateExploreFeedCardProps = {
    * visible debates uses it to transfer playback ownership before the clicked player starts.
    */
   onPlaybackRequest?: (debateId: string) => void;
+  /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
+  onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -111,6 +113,7 @@ export function DebateExploreFeedCard({
   titleOpensSidePanel = false,
   compactChrome = false,
   onPlaybackRequest,
+  onPlaybackAvailabilityChange,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -190,6 +193,13 @@ export function DebateExploreFeedCard({
    * the way past.
    */
   const mediaMounted = readyDebate != null && nearViewport;
+
+  React.useEffect(() => {
+    if (!mediaMounted || !onPlaybackAvailabilityChange) return;
+
+    onPlaybackAvailabilityChange(debateId, true);
+    return () => onPlaybackAvailabilityChange(debateId, false);
+  }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
   // The interaction state lives on the card rather than inside the bar: the bar is shared with the
   // full-screen feed and stays presentational, so what a control opens — the claims overlay, the

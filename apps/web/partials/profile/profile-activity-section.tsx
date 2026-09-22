@@ -407,8 +407,15 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const { scrollerRef, allowedDebateId, requestPlayback, canScrollLeft, canScrollRight, scrollByCard } =
-    useActivityGallery(shown);
+  const {
+    scrollerRef,
+    allowedDebateId,
+    requestPlayback,
+    setPlaybackAvailable,
+    canScrollLeft,
+    canScrollRight,
+    scrollByCard,
+  } = useActivityGallery(shown);
 
   return (
     // One at a time. Compact cards can leave several debates fully visible, so intersection alone
@@ -452,6 +459,7 @@ function ActivityGallery({
               response={responseByClaimId?.[normId(row.entityId)]}
               personName={personName}
               onDebatePlaybackRequest={requestPlayback}
+              onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 pr-4" />
@@ -467,22 +475,29 @@ function ActivityGallery({
 /**
  * Own autoplay for a row where several debates can be visible at once.
  *
- * The first debate starts. A click transfers ownership immediately. Scrolling keeps that owner
- * until less than 40% remains in the rail, then advances in the scroll direction to a card that is
- * at least 60% visible. Those are the same hysteresis edges used by the player itself, so the gate
- * hands off at the moment the outgoing player pauses rather than leaving a silent visible row.
- * The same measurement pass also drives the rail navigation controls.
+ * The first debate with a mounted player starts. A click transfers ownership immediately.
+ * Scrolling the rail or page keeps that owner until less than 40% of its two-dimensional area is
+ * visible, then advances to a mounted card that is at least 60% visible. Those are the same
+ * hysteresis edges and visibility dimensions used by the player itself, so the gate hands off at
+ * the moment the outgoing player pauses rather than leaving a silent visible row. The same
+ * measurement pass also drives the rail navigation controls.
  */
 function useActivityGallery(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const collectionKey = React.useMemo(() => rows.map(row => `${row.entityId}:${row.spaceId}`).join('|'), [rows]);
-  const firstDebateId = rows.find(row => !isClaimRow(row))?.entityId ?? null;
+  const [availableDebateIds, setAvailableDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const availableRef = React.useRef(availableDebateIds);
+  availableRef.current = availableDebateIds;
+  const firstDebateId =
+    rows.find(row => !isClaimRow(row) && availableDebateIds.has(normId(row.entityId)))?.entityId ?? null;
   const [requestedPlayback, setRequestedPlayback] = React.useState<{ collectionKey: string; debateId: string } | null>(
     null
   );
   const requestedDebateId = requestedPlayback?.collectionKey === collectionKey ? requestedPlayback.debateId : null;
   const allowedDebateId =
-    requestedDebateId && rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
+    requestedDebateId &&
+    availableDebateIds.has(normId(requestedDebateId)) &&
+    rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, requestedDebateId))
       ? requestedDebateId
       : firstDebateId;
   const allowedRef = React.useRef(allowedDebateId);
@@ -519,18 +534,23 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
         current.left === nextNavigation.left && current.right === nextNavigation.right ? current : nextNavigation
       );
 
-      if (scrollDirection === 0) return;
-
       const visible = cards.flatMap((card, index) => {
         const id = card.dataset.activityDebateId;
-        if (!id) return [];
+        if (!id || !availableRef.current.has(normId(id))) return [];
         const box = card.getBoundingClientRect();
-        const visibleWidth = Math.max(0, Math.min(box.right, scrollerBox.right) - Math.max(box.left, scrollerBox.left));
+        const visibleWidth = Math.max(
+          0,
+          Math.min(box.right, scrollerBox.right, window.innerWidth) - Math.max(box.left, scrollerBox.left, 0)
+        );
+        const visibleHeight = Math.max(
+          0,
+          Math.min(box.bottom, scrollerBox.bottom, window.innerHeight) - Math.max(box.top, scrollerBox.top, 0)
+        );
         return [
           {
             id,
             index,
-            ratio: box.width > 0 ? visibleWidth / box.width : 0,
+            ratio: box.width > 0 && box.height > 0 ? (visibleWidth * visibleHeight) / (box.width * box.height) : 0,
           },
         ];
       });
@@ -543,7 +563,9 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       const directional =
         scrollDirection > 0
           ? candidates.find(card => current == null || card.index > current.index)
-          : [...candidates].reverse().find(card => current == null || card.index < current.index);
+          : scrollDirection < 0
+            ? [...candidates].reverse().find(card => current == null || card.index < current.index)
+            : undefined;
       const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
 
       if (next && (!currentId || !ID.equals(next.id, currentId))) {
@@ -557,6 +579,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 
     measure();
     scroller.addEventListener('scroll', scheduleMeasure, { passive: true });
+    window.addEventListener('scroll', scheduleMeasure, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure);
     observer?.observe(scroller);
     window.addEventListener('resize', scheduleMeasure);
@@ -564,6 +587,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     return () => {
       if (frame) cancelAnimationFrame(frame);
       scroller.removeEventListener('scroll', scheduleMeasure);
+      window.removeEventListener('scroll', scheduleMeasure);
       observer?.disconnect();
       window.removeEventListener('resize', scheduleMeasure);
     };
@@ -582,14 +606,29 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
   );
 
   const requestPlayback = React.useCallback(
-    (debateId: string) => setRequestedPlayback({ collectionKey, debateId }),
+    (debateId: string) => {
+      if (availableRef.current.has(normId(debateId))) setRequestedPlayback({ collectionKey, debateId });
+    },
     [collectionKey]
   );
+
+  const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
+    const id = normId(debateId);
+    setAvailableDebateIds(current => {
+      if (current.has(id) === available) return current;
+
+      const next = new Set(current);
+      if (available) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   return {
     scrollerRef,
     allowedDebateId,
     requestPlayback,
+    setPlaybackAvailable,
     canScrollLeft: navigation.left,
     canScrollRight: navigation.right,
     scrollByCard,
@@ -631,12 +670,14 @@ function GalleryCard({
   response,
   personName,
   onDebatePlaybackRequest,
+  onDebatePlaybackAvailabilityChange,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
   personName?: string | null;
   onDebatePlaybackRequest: (debateId: string) => void;
+  onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -679,6 +720,7 @@ function GalleryCard({
           titleOpensSidePanel
           compactDebateChrome
           onDebatePlaybackRequest={onDebatePlaybackRequest}
+          onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
         />
       )}
     </div>

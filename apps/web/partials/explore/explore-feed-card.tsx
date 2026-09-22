@@ -43,6 +43,8 @@ type ExploreFeedCardProps = {
   compactDebateChrome?: boolean;
   /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
   onDebatePlaybackRequest?: (debateId: string) => void;
+  /** Register whether this debate currently has a mounted player. Ignored by other row types. */
+  onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
@@ -137,6 +139,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         titleOpensSidePanel={props.titleOpensSidePanel}
         compactChrome={props.compactDebateChrome}
         onPlaybackRequest={props.onDebatePlaybackRequest}
+        onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
