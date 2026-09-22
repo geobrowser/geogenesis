@@ -24,7 +24,7 @@ const JOIN_RETRIES = 3;
 const JOIN_RETRY_MS = 2_000;
 
 export function useDebateRoom(roomId: string, enabled = true) {
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   // Visibility rather than attention, as the rematch query uses: waiting for someone while looking
   // at another window is exactly this flow.
   const present = useDebateVisibility();
@@ -33,7 +33,9 @@ export function useDebateRoom(roomId: string, enabled = true) {
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.room(accountKey, roomId),
     queryFn: ({ signal }) => getDebateRoom(roomId, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && Boolean(roomId),
+    // `authenticated`, or the fetcher throws before it reaches the wire and the page reports a
+    // failure at a viewer who has simply not signed in — or has, and Privy is still restoring.
+    enabled: enabled && Boolean(roomId) && ready && authenticated,
     refetchInterval: present ? ROOM_POLL_MS : false,
   });
 }
@@ -76,13 +78,24 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
   React.useEffect(() => {
     if (!admitted) return;
 
-    const send = (joined: boolean) =>
-      setDebateRoomPresence(roomId, { connection_id: connectionId, joined }, () => tokenRef.current(), accountKey);
+    const send = (joined: boolean, keepalive = false) =>
+      setDebateRoomPresence(
+        roomId,
+        { connection_id: connectionId, joined },
+        () => tokenRef.current(),
+        accountKey,
+        keepalive
+      );
 
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout> | undefined;
 
     const announce = (attempt = 0) => {
+      // Both guards matter on the way out: a chain started before cleanup must not re-occupy the
+      // room afterwards, and `pageshow` starting a second chain must not orphan the first one's
+      // timer past the single `clearTimeout` in cleanup.
+      if (cancelled) return;
+      clearTimeout(retry);
       void send(true)
         .then(room => {
           if (!cancelled) queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
@@ -98,10 +111,11 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
 
     announce();
 
-    // `pagehide` covers closing the tab; `pageshow` is how the same document comes back out of the
-    // bfcache, which restores it without re-running effects. Without the second half, a back
-    // navigation reported a departure the viewer never made and nothing ever took it back.
-    const depart = () => void send(false).catch(() => {});
+    // `pageshow` is how a bfcached document comes back, restored without re-running effects — so
+    // without it a back navigation reports a departure nothing ever takes back.
+    // `keepalive`, so the request survives the document being torn down. Nothing else records a
+    // departure: occupancy is an event log with no staleness window on the server.
+    const depart = () => void send(false, true).catch(() => {});
     const restore = (event: PageTransitionEvent) => {
       if (event.persisted) announce();
     };
@@ -113,7 +127,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
       clearTimeout(retry);
       window.removeEventListener('pagehide', depart);
       window.removeEventListener('pageshow', restore);
-      depart();
+      void send(false, true).catch(() => {});
     };
   }, [accountKey, admitted, connectionId, queryClient, roomId]);
 

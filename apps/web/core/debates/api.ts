@@ -759,6 +759,8 @@ type RequestOptions = {
   getPrivyIdentityToken?: GetPrivyIdentityToken;
   accountKey?: string | null;
   signal?: AbortSignal;
+  /** Let the request outlive the document. For anything sent from `pagehide`. */
+  keepalive?: boolean;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -1540,7 +1542,12 @@ export async function setDebateRoomPresence(
   roomId: string,
   body: { connection_id: string; joined: boolean },
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  /**
+   * For a leave sent while the tab is going away. Occupancy is an event log with no staleness
+   * window, so a cancelled leave leaves the opponent looking at "is here" indefinitely.
+   */
+  keepalive = false
 ) {
   return geoChatRequest<DebateRoomView>(`/debate-rooms/${roomId}/presence`, {
     method: 'POST',
@@ -1548,6 +1555,7 @@ export async function setDebateRoomPresence(
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+    keepalive,
   });
 }
 
@@ -1940,6 +1948,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
+    keepalive: options.keepalive,
   });
 
   if (!response.ok) {

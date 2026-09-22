@@ -2,9 +2,12 @@
 
 import * as React from 'react';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebateRoom, useDebateRoomPresence, useRoomPresence } from '~/core/debates/rooms/hooks';
 import {
   roomAccessDenialFor,
@@ -13,7 +16,8 @@ import {
 } from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_NOT_YET_OPEN } from '~/core/debates/rooms/room-copy';
-import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
+import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { rememberRoomSession } from '~/core/debates/rooms/room-sessions';
 
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
@@ -49,10 +53,28 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const admitted = room?.access.status === 'admitted';
   useRoomPresence(roomId, admitted);
   const presence = useDebateRoomPresence(room);
+  const { ready, authenticated } = useGeoChatAuth();
+
+  // So the coordinator can tell this session from a challenge's and leave it alone. See
+  // `room-sessions`.
+  const sessionId = room?.rematch_session_id ?? null;
+  React.useEffect(() => {
+    if (sessionId) rememberRoomSession(sessionId);
+  }, [sessionId]);
 
   // Nothing renders for someone not in this room: not a degraded room, and not a 404 — the link is
   // valid, they are just not in this one.
   if (denial) return null;
+
+  // A room link is pasted into a calendar invite, so the person opening it is often signed out.
+  // The room cannot say who they are, and an error card is a dead end.
+  if (ready && !authenticated) {
+    return (
+      <RoomNotice action={{ href: toSignIn({ pathname: debateRoomPath(roomId), via: 'room' }), label: 'Sign in' }}>
+        Sign in to join your debate.
+      </RoomNotice>
+    );
+  }
 
   if (!room) {
     return roomQuery.isError ? (
@@ -78,24 +100,45 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   return (
     <DebateRoomProvider roomId={roomId} presence={presence}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
-      {presence && <DebateRoomPresenceIndicator presence={presence} />}
     </DebateRoomProvider>
   );
 }
 
+/**
+ * `opens_at` has no lower bound — a room booked for next week is `not_yet_open` all week — so the
+ * date is only dropped when it is today.
+ */
 function formatTime(iso: string) {
   const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? 'the scheduled time'
-    : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (Number.isNaN(at.getTime())) return 'the scheduled time';
+
+  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const today = new Date();
+  const sameDay =
+    at.getFullYear() === today.getFullYear() && at.getMonth() === today.getMonth() && at.getDate() === today.getDate();
+
+  return sameDay ? time : `${at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
 }
 
-function RoomNotice({ children, busy = false }: { children: React.ReactNode; busy?: boolean }) {
+function RoomNotice({
+  children,
+  busy = false,
+  action,
+}: {
+  children: React.ReactNode;
+  busy?: boolean;
+  action?: { href: string; label: string };
+}) {
   return (
     <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8" role="status">
       <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
+        {action && (
+          <Link href={action.href} className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white">
+            {action.label}
+          </Link>
+        )}
       </div>
     </div>
   );

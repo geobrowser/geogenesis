@@ -13,18 +13,11 @@ import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from 
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
+import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const {
-  SPACE_1,
-  SPACE_2,
-  CLAIM_SHARED,
-  CLAIM_MORE,
-  CLAIM_SOURCE,
-  CLAIM_FRESH,
-  NAME_PROPERTY,
-} = vi.hoisted(() => ({
+const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, NAME_PROPERTY } = vi.hoisted(() => ({
   SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
   SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
   // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
@@ -60,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   back: vi.fn(),
+  push: vi.fn(),
   mutate: vi.fn(),
   leaveMutate: vi.fn(),
   acceptMutate: vi.fn(),
@@ -201,7 +195,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
+  useRouter: () => ({ replace: mocks.replace, back: mocks.back, push: mocks.push }),
 }));
 
 // The voice channel has its own colocated suite (rematch-voice.test.tsx); rendering it here would
@@ -853,6 +847,7 @@ beforeEach(() => {
   clearDebateReturnDestination();
   mocks.replace.mockReset();
   mocks.back.mockReset();
+  mocks.push.mockReset();
   mocks.mutate.mockReset();
   mocks.leaveMutate.mockReset();
   mocks.acceptMutate.mockReset();
@@ -5098,5 +5093,47 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+});
+
+describe('inside a debate room', () => {
+  const inRoom = (children: React.ReactElement) => (
+    <DebateRoomProvider roomId="room-1" presence={null}>
+      {children}
+    </DebateRoomProvider>
+  );
+
+  // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
+  // waiting for someone looks like. Acting on it threw the waiting person out of the room.
+  it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {
+    mocks.session = session({ status });
+
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(screen.getByText('This room has closed')).toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // Staying put is only right if the room says why: voice unmounts and every request 400s once the
+  // session is past `browsing`.
+  it('says so rather than leaving the viewer with a dead page', async () => {
+    mocks.session = session({ status: 'expired' });
+
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(await screen.findByText('This room has closed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find a debate' })).toBeInTheDocument();
+  });
+
+  // Off a room the flow is unchanged: a terminal session still returns the viewer where they came
+  // from.
+  it('still navigates away outside a room', async () => {
+    mocks.session = session({ status: 'ended' });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.replace.mock.calls.length + mocks.back.mock.calls.length).toBeGreaterThan(0));
+    expect(screen.queryByText('This room has closed')).not.toBeInTheDocument();
   });
 });

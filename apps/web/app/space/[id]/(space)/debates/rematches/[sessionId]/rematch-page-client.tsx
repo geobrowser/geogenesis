@@ -72,7 +72,9 @@ import {
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
-import { useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import { ROOM_SESSION_ENDED } from '~/core/debates/rooms/room-copy';
+import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -164,6 +166,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
+  const roomPresence = useDebateRoomContext()?.presence ?? null;
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
@@ -1892,6 +1895,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
+  // The room keeps them here rather than ejecting, so the dead session has to say so itself:
+  // voice unmounts and every request 400s once it is past `browsing`.
+  const roomSessionEnded = inDebateRoom && (session?.status === 'ended' || session?.status === 'expired');
+
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
@@ -1986,6 +1993,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
         <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
+          {roomSessionEnded ? (
+            <RoomSessionEndedNotice onLeave={() => router.push(NavUtils.toExplore())} />
+          ) : (
+            roomPresence && <DebateRoomPresenceIndicator presence={roomPresence} />
+          )}
           <header className="mb-4 flex items-center justify-between gap-4">
             <h1 className="sr-only">Rematch {remoteName}</h1>
             {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
@@ -2744,5 +2756,25 @@ function LeaveIcon() {
       <path d="M13 12H3" />
       <path d="M6 9l-3 3 3 3" />
     </svg>
+  );
+}
+
+function RoomSessionEndedNotice({ onLeave }: { onLeave: () => void }) {
+  return (
+    <div className="mb-3 flex flex-col items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2 text-center">
+      <Text as="p" variant="metadataMedium">
+        {ROOM_SESSION_ENDED.title}
+      </Text>
+      <Text as="p" variant="footnote" color="grey-04">
+        {ROOM_SESSION_ENDED.body}
+      </Text>
+      <button
+        type="button"
+        onClick={onLeave}
+        className="rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90"
+      >
+        {ROOM_SESSION_ENDED.action}
+      </button>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { clearRoomSessions, rememberRoomSession } from './rooms/room-sessions';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -148,6 +149,7 @@ beforeEach(() => {
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
+  clearRoomSessions();
   mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
@@ -608,19 +610,32 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.queryByText('Your scheduled debate')).not.toBeInTheDocument());
   });
 
-  // GEO-2941 bans automatic redirects into the debate-again flow. Joining a room gives the viewer a
-  // `browsing` session, which is the exact shape this effect pushes on, so holding an open room has
-  // to suppress the push wherever they happen to be.
-  it('does not push a viewer holding an open room into the picker', async () => {
+  // GEO-2941 bans automatic redirects into the debate-again flow, and a room's session is the exact
+  // shape this effect pushes on.
+  it('does not push a viewer into the picker for a room-held session', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.upcomingRooms = [upcomingRoom()];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+    rememberRoomSession('rematch-1');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // The other half of the same guard: suppressing the push for *any* session while a room happened
+  // to be open stranded the one flow this effect exists to serve.
+  it('still pushes a challenge rematch while an unrelated room is open', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-unrelated' })];
     const activity = activityWithRematch('browsing');
     mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   // The door check is the server's. Offering a room it would refuse is an offer that fails.

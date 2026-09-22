@@ -9,7 +9,7 @@ import type { DebateRoomPresenceState } from './room-presence';
 export function roomPresenceLabel(state: DebateRoomPresenceState, opponentName: string): string {
   switch (state) {
     case 'arrived_early':
-      return 'Room not open yet';
+      return 'Waiting to start';
     case 'waiting':
     case 'waiting_elsewhere':
       return `Waiting for ${opponentName}`;
@@ -58,6 +58,16 @@ export const ROOM_JOIN_PROMPT = {
 export const ROOM_NOT_YET_OPEN = {
   title: 'The room isn’t open yet',
   opensAt: (opensAt: string) => `You can join from ${opensAt}.`,
+} as const;
+
+/**
+ * A room whose session has gone. geo-chat expires one after 90s of either party being offline and
+ * never mints a replacement, so voice and Request debate stop working.
+ */
+export const ROOM_SESSION_ENDED = {
+  title: 'This room has closed',
+  body: 'You can’t start a debate here any more. Find someone else whenever you’re ready.',
+  action: 'Find a debate',
 } as const;
 
 /** The popup on Explore after a redirect. A stale calendar link produces the second reason. */

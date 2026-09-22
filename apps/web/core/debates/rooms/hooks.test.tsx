@@ -1,4 +1,7 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook } from '@testing-library/react';
+
+import * as React from 'react';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +18,18 @@ const VIEWER_DASHLESS = VIEWER.replace(/-/g, '');
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => VIEWER_DASHLESS,
 }));
+
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
+}));
+
+vi.mock('../debate-attention', () => ({ useDebateVisibility: () => true }));
+
+function withQueryClient({ children }: { children: React.ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 function room(occupants: string[], waiting: DebateRoomView['waiting'] = { reason: 'opponent_late' }): DebateRoomView {
   return {
@@ -82,5 +97,25 @@ describe('useDebateRoomPresence', () => {
 
     rerender({ view: { ...room([VIEWER]), room_id: 'room-2' } });
     expect(result.current?.state).toBe('waiting');
+  });
+});
+
+describe('useRoomPresence', () => {
+  it('sends the departure with keepalive, so a closing tab still records it', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    const spy = vi.spyOn(api, 'setDebateRoomPresence').mockResolvedValue({} as never);
+
+    const { unmount } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    unmount();
+    await vi.waitFor(() => expect(spy.mock.calls.some(call => call[1].joined === false)).toBe(true));
+
+    const leave = spy.mock.calls.find(call => call[1].joined === false);
+    // The fifth argument is `keepalive`. Without it the request dies with the document and the
+    // opponent keeps seeing a green "is here" for someone who has gone.
+    expect(leave?.[4]).toBe(true);
+    spy.mockRestore();
   });
 });

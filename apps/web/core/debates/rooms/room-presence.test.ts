@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { DebateRoomAccess, DebateRoomView, DebateRoomWaiting } from '../api';
 import { debateRoomPresence } from './room-presence';
 
-const VIEWER = 'user-viewer';
-const OPPONENT = 'user-opponent';
+const VIEWER = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const OPPONENT = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 function room(overrides: Partial<DebateRoomView> = {}): DebateRoomView {
   return {
@@ -21,13 +21,21 @@ function room(overrides: Partial<DebateRoomView> = {}): DebateRoomView {
   };
 }
 
-function stateOf(overrides: Partial<DebateRoomView> = {}, sawOpponent = false, currentUserId: string | null = VIEWER) {
+// The room view sends dashed ids; the session token's `user_id` is dashless. Both spellings, so a
+// comparison that trusted either one fails here.
+const VIEWER_AS_TOKEN_SPELLS_IT = VIEWER.replace(/-/g, '');
+
+function stateOf(
+  overrides: Partial<DebateRoomView> = {},
+  sawOpponent = false,
+  currentUserId: string | null = VIEWER_AS_TOKEN_SPELLS_IT
+) {
   return debateRoomPresence({ room: room(overrides), currentUserId, sawOpponent })?.state ?? null;
 }
 
 describe('debateRoomPresence', () => {
   it('says nothing without a room', () => {
-    expect(debateRoomPresence({ room: null, currentUserId: VIEWER, sawOpponent: false })).toBeNull();
+    expect(debateRoomPresence({ room: null, currentUserId: VIEWER_AS_TOKEN_SPELLS_IT, sawOpponent: false })).toBeNull();
   });
 
   // Guessing at `waiting` would claim someone is late who was never expected.
@@ -41,7 +49,7 @@ describe('debateRoomPresence', () => {
     ['a closed room', { status: 'closed', reason: 'completed' } as DebateRoomAccess],
     ['a locked door', { status: 'not_yet_open', opens_at: '2026-09-21T08:50:00.000Z' } as DebateRoomAccess],
   ])('says nothing to %s', (_label, access) => {
-    expect(stateOf({ access, participants: [], occupants: [] })).toBeNull();
+    expect(stateOf({ access })).toBeNull();
   });
 
   it('is state 1 before the scheduled start', () => {
@@ -90,12 +98,12 @@ describe('debateRoomPresence', () => {
   });
 
   it('opens the mic only when they are present', () => {
-    const alone = debateRoomPresence({ room: room(), currentUserId: VIEWER, sawOpponent: false });
+    const alone = debateRoomPresence({ room: room(), currentUserId: VIEWER_AS_TOKEN_SPELLS_IT, sawOpponent: false });
     expect(alone?.opponentPresent).toBe(false);
 
     const together = debateRoomPresence({
       room: room({ occupants: [VIEWER, OPPONENT], waiting: null }),
-      currentUserId: VIEWER,
+      currentUserId: VIEWER_AS_TOKEN_SPELLS_IT,
       sawOpponent: false,
     });
     expect(together?.opponentPresent).toBe(true);

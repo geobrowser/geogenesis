@@ -29,12 +29,13 @@ export function DebateRoomPresenceIndicator({
     <div
       role="status"
       aria-live="polite"
-      // Above the picker's own `fixed inset-0 z-[150]` overlay, below the app-wide dialogs at
-      // z-1100 — a room must not cover a popup telling the viewer something about it.
-      className="pointer-events-none fixed top-3 left-1/2 z-[200] flex w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 flex-col items-center gap-2"
+      // In the picker's own sticky header rather than floating over it. A fixed overlay sat on the
+      // tab strip and the leave button — including in the three states whose note tells the viewer
+      // to go and find someone else.
+      className="mb-3 flex flex-col items-center gap-2"
       data-room-presence={presence.state}
     >
-      <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-3 shadow-card">
+      <div className="flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-3">
         <PresenceDot state={presence.state} />
         <Text as="span" variant="metadata" className="truncate">
           {roomPresenceLabel(presence.state, opponentName)}
@@ -42,7 +43,7 @@ export function DebateRoomPresenceIndicator({
       </div>
 
       {note && (
-        <div className="pointer-events-auto max-w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-center shadow-card">
+        <div className="max-w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-center">
           <Text as="p" variant="footnote" color="grey-04">
             {note}
           </Text>
