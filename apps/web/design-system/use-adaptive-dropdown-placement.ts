@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { readAppBottomInset } from '~/core/app-bottom-inset';
+import { readAppBottomInset, subscribeAppBottomInset } from '~/core/app-bottom-inset';
 
 type DropdownAlign = 'start' | 'end';
 type DropdownSide = 'top' | 'bottom';
@@ -124,6 +124,10 @@ export function useAdaptiveDropdownPlacement(
 
     window.addEventListener('resize', scheduleRecompute);
     window.addEventListener('scroll', scheduleRecompute, true);
+    // A bar claiming the bottom of the viewport changes `spaceBelow` without resizing or scrolling
+    // anything, and a custom property changing fires no DOM event — so an open dropdown would keep
+    // the placement it measured before the bar arrived, and sit underneath it.
+    const unsubscribeBottomInset = subscribeAppBottomInset(scheduleRecompute);
 
     let resizeObserver: ResizeObserver | null = null;
     if (contentElement) {
@@ -138,6 +142,7 @@ export function useAdaptiveDropdownPlacement(
       }
       window.removeEventListener('resize', scheduleRecompute);
       window.removeEventListener('scroll', scheduleRecompute, true);
+      unsubscribeBottomInset();
       resizeObserver?.disconnect();
     };
     // The spread is the point: callers pass whatever their placement depends on. The rule cannot

@@ -3,7 +3,14 @@ import { cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readAppBottomInset, useAppBottomInset } from './app-bottom-inset';
+import {
+  BOTTOM_INSET_MAX_HEIGHT_CLASS,
+  BOTTOM_INSET_OFFSET_CLASS,
+  BOTTOM_INSET_OFFSET_EXPRESSION,
+  readAppBottomInset,
+  subscribeAppBottomInset,
+  useAppBottomInset,
+} from './app-bottom-inset';
 
 afterEach(() => {
   cleanup();
@@ -73,5 +80,54 @@ describe('readAppBottomInset', () => {
     document.documentElement.style.setProperty('--app-bottom-inset', 'auto');
 
     expect(readAppBottomInset()).toBe(0);
+  });
+});
+
+describe('subscribeAppBottomInset', () => {
+  it('notifies while the published inset changes, and stops once unsubscribed', () => {
+    const changes: number[] = [];
+    const unsubscribe = subscribeAppBottomInset(() => changes.push(readAppBottomInset()));
+
+    const banner = renderHook(() => useAppBottomInset('upload-banner', 28, true));
+    expect(changes).toEqual([28]);
+
+    const flowBar = renderHook(() => useAppBottomInset('flow-bar', 96, true));
+    expect(changes).toEqual([28, 96]);
+
+    flowBar.unmount();
+    expect(changes).toEqual([28, 96, 28]);
+
+    unsubscribe();
+    banner.unmount();
+    expect(changes).toEqual([28, 96, 28]);
+  });
+
+  // A shorter bar arriving under a taller one leaves the published figure alone, and consumers
+  // that recompute on notification shouldn't be woken for a value that did not move.
+  it('stays quiet when a change leaves the published inset where it was', () => {
+    renderHook(() => useAppBottomInset('flow-bar', 96, true));
+
+    let notifications = 0;
+    const unsubscribe = subscribeAppBottomInset(() => {
+      notifications += 1;
+    });
+    const banner = renderHook(() => useAppBottomInset('upload-banner', 28, true));
+
+    expect(readAppBottomInset()).toBe(96);
+    expect(notifications).toBe(0);
+
+    banner.unmount();
+    unsubscribe();
+    expect(notifications).toBe(0);
+  });
+});
+
+describe('bottom inset classes', () => {
+  // Tailwind finds classes by scanning source text, so the offset cannot be interpolated into
+  // them and each class spells it out again. A panel whose ceiling subtracted a different figure
+  // than its offset added hung off the top of the screen by the difference.
+  it('size and offset against the same expression', () => {
+    expect(BOTTOM_INSET_OFFSET_CLASS).toContain(BOTTOM_INSET_OFFSET_EXPRESSION);
+    expect(BOTTOM_INSET_MAX_HEIGHT_CLASS).toContain(BOTTOM_INSET_OFFSET_EXPRESSION);
   });
 });
