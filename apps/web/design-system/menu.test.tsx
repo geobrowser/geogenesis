@@ -60,3 +60,15 @@ describe('Menu triggerRef', () => {
     expect(document.activeElement).toBe(triggerRef.current);
   });
 });
+
+describe('Menu alignment', () => {
+  it('honors an explicit trigger-edge alignment', () => {
+    render(
+      <Menu open onOpenChange={() => {}} align="start" trigger={<span>Open</span>}>
+        <button type="button">Item</button>
+      </Menu>
+    );
+
+    expect(screen.getByText('Item').closest('[data-align]')).toHaveAttribute('data-align', 'start');
+  });
+});
