@@ -229,6 +229,20 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    */
   const recoveringSlotsRef = React.useRef(0);
   /**
+   * How to call every rebuild in progress off.
+   *
+   * The counter above says how many there are; this is what ends them. A rebuild outlives the
+   * render that started it — it is waiting on a `loadeddata` from an element that may take a
+   * second to open — and the feed keys its cards by claim, so a re-rank hands a *different*
+   * debate to this same hook and this same `<video>` node while one is pending. Left alone, that
+   * rejoin would fire against the new recording, seek it with the old debate's offsets, and start
+   * it; and the count it holds would keep the new debate's pair unpoliced until its backstop.
+   */
+  const recoveryReleasesRef = React.useRef(new Set<() => void>());
+  const cancelRecoveries = React.useCallback(() => {
+    for (const release of [...recoveryReleasesRef.current]) release();
+  }, []);
+  /**
    * The same fact as `resumesInFlightRef`, rendered.
    *
    * `playBothWithMutedFallback` mutes both elements to retry a blocked play and leaves them that
@@ -375,6 +389,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
      */
     resumeGenerationRef.current++;
     debateGenerationRef.current++;
+    // And so does any rebuild still waiting on an element that is about to hold a different
+    // recording. See `recoveryReleasesRef`.
+    cancelRecoveries();
 
     Promise.all([
       getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
@@ -412,12 +429,29 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [debate.id, enabled, slot1RecordingFilename, slot2RecordingFilename]);
+  }, [cancelRecoveries, debate.id, enabled, slot1RecordingFilename, slot2RecordingFilename]);
+
+  // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
+  // away, and a count that nothing would ever decrement.
+  React.useEffect(() => cancelRecoveries, [cancelRecoveries]);
 
   const videos = React.useCallback(
     () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
     []
   );
+
+  /**
+   * What a deliberate seek owes the sync logic, wherever it is made from.
+   *
+   * The pair is aligned by construction after one, so the drift nudge has nothing to correct; and
+   * slot 1's `currentTime` has just jumped, which is not progress and must not be read as any.
+   * Stated once because both `seekVideosTo` and `resyncSlot` owe it and neither is the other's
+   * caller.
+   */
+  const noteDeliberateSeek = React.useCallback(() => {
+    primaryProgressRef.current = null;
+    lastSyncSeekAtRef.current = Date.now();
+  }, []);
 
   // `playhead` is debate-timeline seconds (0 = debate start). Map it onto each recording's
   // own currentTime via that recording's start offset so the two videos stay aligned.
@@ -431,17 +465,14 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       if (!primaryVideo || !secondaryVideo) return false;
       primaryVideo.currentTime = Math.max(0, playhead - offsets.slot1);
       secondaryVideo.currentTime = Math.max(0, playhead - offsets.slot2);
-      // A deliberate seek resets both the nudge and the stall watch: the pair is aligned by
-      // construction here, and slot 1's `currentTime` has just jumped, which is not progress.
       secondaryVideo.playbackRate = 1;
-      primaryProgressRef.current = null;
+      noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
       // where playback had previously got to.
       lastRunningPlayheadRef.current = playhead;
-      lastSyncSeekAtRef.current = Date.now();
       return true;
     },
-    [offsets]
+    [noteDeliberateSeek, offsets]
   );
 
   const updateTurnState = React.useCallback(() => {
@@ -548,6 +579,25 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       secondaryVideo.playbackRate = 1;
     }
 
+    /**
+     * A recording the browser has given up on (GEO-2985).
+     *
+     * `DebaterVideo` rebuilds one of these, but a rebuild can fail as often as it is allowed to,
+     * and what is left then is an element that cannot play and cannot be made to. It is not a
+     * pair member the corrections below can rebalance, and it is not evidence about whether the
+     * debate is running — so neither of them may reason from it.
+     *
+     * Before the rebuild existed this was true by accident: Chrome leaves a failed element
+     * `paused === false`, which is why the original report showed `playing=true` beside a blank
+     * tile, and why the corrections never fired. Detaching the source to rebuild it flips that to
+     * `true`, so what was accidental has to be said.
+     */
+    const primaryUnplayable = Boolean(primaryVideo?.error);
+    const secondaryUnplayable = Boolean(secondaryVideo?.error);
+    // Whichever element still speaks for whether the debate is running. Slot 1, as everywhere
+    // else in this file, unless slot 1 is the one that cannot play.
+    const runningVideo = primaryUnplayable ? secondaryVideo : primaryVideo;
+
     // Keep both videos in the same play/pause state. If the browser pauses one
     // on its own (e.g. it blocks the unmuted speaker under autoplay policy),
     // pause the other too so audio and video can never drift apart.
@@ -563,6 +613,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       primaryVideo &&
       secondaryVideo &&
       pairIsSettled &&
+      !primaryUnplayable &&
+      !secondaryUnplayable &&
       primaryVideo.paused !== secondaryVideo.paused &&
       playhead < timelineSeconds
     ) {
@@ -589,7 +641,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // turn there drops `audible`, and `audible` is what un-mutes the speaking video, so slot 2
     // would go silent while it was still perfectly happily playing. Same silence as before,
     // arriving through the back door.
-    if (pairIsSettled && (!primaryVideo || primaryVideo.paused || primaryVideo.ended)) {
+    if (pairIsSettled && (!runningVideo || runningVideo.paused || runningVideo.ended)) {
       setTurnState(null);
       return;
     }
@@ -833,41 +885,59 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       const recoveredOffset = slot === 1 ? offsets.slot1 : offsets.slot2;
       const partnerOffset = slot === 1 ? offsets.slot2 : offsets.slot1;
 
-      // The pair is split from here until the element rejoins, and the corrections in
-      // `updateTurnState` must stand down for the whole of it. See `recoveringSlotsRef`.
+      /*
+       * The pair is split from here until the rebuilt element is *running*, and the corrections in
+       * `updateTurnState` must stand down for the whole of it — see `recoveringSlotsRef`.
+       *
+       * Held across the start rather than released at the seek, for the reason
+       * `resumesInFlightRef` is: `play()` does not start an element synchronously, so a tick
+       * landing between the call and the first frame sees a paused element beside a running one
+       * and answers it by pausing the running one. That is the same failure by a different route,
+       * and the window is wider here — a rebuilt cue-less recording is the slowest thing in this
+       * file to start.
+       */
       recoveringSlotsRef.current++;
-      let settled = false;
-      const settle = () => {
-        if (settled) return;
-        settled = true;
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
         recoveringSlotsRef.current--;
         clearTimeout(giveUpTimer);
         recovered.removeEventListener('loadeddata', rejoin);
+        recovered.removeEventListener('error', release);
+        recoveryReleasesRef.current.delete(release);
       };
+      recoveryReleasesRef.current.add(release);
 
       function rejoin() {
-        settle();
-        // Re-read the partner rather than closing over a position: metadata can be a second or
-        // more away on these files, and the debate has moved on in the meantime.
-        if (partner.paused) return;
+        if (released) return;
+        // Re-read the partner rather than closing over a position: opening one of these
+        // recordings can take a second or more, and the debate has moved on in the meantime.
+        if (partner.paused) {
+          release();
+          return;
+        }
         recovered.currentTime = Math.max(0, partner.currentTime + partnerOffset - recoveredOffset);
         recovered.playbackRate = 1;
-        // Slot 1's clock has just jumped, which is not progress, and the pair is aligned by
-        // construction — the same two records `seekVideosTo` clears for the same reason.
-        primaryProgressRef.current = null;
-        lastSyncSeekAtRef.current = Date.now();
-        void recovered.play().catch(() => {
-          /* A refusal here is the browser's to make; the card's own controls remain the way in. */
-        });
+        noteDeliberateSeek();
+        void recovered
+          .play()
+          .catch(() => {
+            /* A refusal here is the browser's to make; the card's own controls remain the way in. */
+          })
+          .finally(release);
       }
 
-      // A rebuild that never opens must not leave the pair permanently unpoliced.
-      const giveUpTimer = setTimeout(settle, RECOVERY_REJOIN_TIMEOUT_MS);
+      // Backstops, because neither the open nor the start is guaranteed to report: a rebuild that
+      // fails again says so on `error`, and one that simply never arrives is given up on. Either
+      // way the pair must not be left permanently unpoliced.
+      const giveUpTimer = setTimeout(release, RECOVERY_REJOIN_TIMEOUT_MS);
+      recovered.addEventListener('error', release);
 
       if (recovered.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) rejoin();
       else recovered.addEventListener('loadeddata', rejoin);
     },
-    [offsets]
+    [noteDeliberateSeek, offsets]
   );
 
   const seekBoth = React.useCallback(
