@@ -264,7 +264,7 @@ function TopicTabPanel({
   subtopics: Relation[];
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
-  if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} />;
+  if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} variant="tab" />;
 
   return <TopicFeed topicId={entityId} spaceId={spaceId} topicOptions={subtopics} />;
 }

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   feed: null as Record<string, unknown> | null,
+  comments: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   pathname: '/space/space-1/topic-1',
   /**
@@ -79,7 +80,10 @@ vi.mock('~/core/sync/use-store', () => ({
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
 vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: () => <div data-testid="comments" />,
+  CommentSection: (props: Record<string, unknown>) => {
+    mocks.comments = props;
+    return <div data-testid="comments" />;
+  },
 }));
 
 function topicEntity(description: string | null) {
@@ -97,6 +101,7 @@ beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.feed = null;
+  mocks.comments = null;
   mocks.tabs = null;
   mocks.pathname = '/space/space-1/topic-1';
 });
@@ -197,6 +202,7 @@ describe('TopicPageView explore feed', () => {
 
     expect(screen.getByTestId('comments')).toBeInTheDocument();
     expect(screen.queryByTestId('topic-feed')).toBeNull();
+    expect(mocks.comments).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1', variant: 'tab' });
   });
 });
 
