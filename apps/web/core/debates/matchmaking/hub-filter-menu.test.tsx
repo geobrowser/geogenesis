@@ -287,6 +287,22 @@ describe('HubMultiFilterMenu search', () => {
     await waitFor(() => expect(screen.getByLabelText('Search topics')).toBeInTheDocument());
   });
 
+  it('leaves the field unfocused on a touch device, popover autofocus included', async () => {
+    const field = await renderTopicMenu();
+
+    // Two separate things could focus this field, and the pointer check only governs one of them.
+    //
+    // Radix focuses the first tabbable descendant when the popover mounts, and it would take this
+    // input if the input were there — it is not, because the field is downstream of a measurement
+    // that cannot happen until the viewport node exists, which is a commit later. That is a real
+    // guarantee but an easy one to lose, so this asserts the outcome rather than the mechanism: it
+    // fails both if the pointer guard goes and if the field ever becomes present at mount.
+    //
+    // Long enough for Radix's mount focus and for the autofocus timer that declines to run.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(field).not.toHaveFocus();
+  });
+
   it('takes focus on open where there is a keyboard to type with', async () => {
     hasFinePointer = true;
     const field = await renderTopicMenu();

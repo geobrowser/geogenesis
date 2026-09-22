@@ -354,8 +354,14 @@ export function HubMultiFilterMenu<T extends string>({
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
               // As the properties menu does: what happens in the field is the field's business, and
-              // the surfaces this menu opens over listen for both. Escape still closes the popover,
-              // which Radix hears on the document rather than through React.
+              // the surfaces this menu opens over listen for both.
+              //
+              // Two things ride on this that are worth naming, because neither is visible from here.
+              // Escape still closes the popover: Radix's dismissable layer listens natively on the
+              // document, in the capture phase, where a React handler cannot reach it. And Radix's
+              // focus scope loops Tab through a React handler on the content, which this does stop —
+              // so Shift+Tab out of the field lands on the trigger rather than wrapping to the last
+              // row. From the first element in the scope that is the better of the two anyway.
               onClick={event => event.stopPropagation()}
               onKeyDown={event => event.stopPropagation()}
             />
