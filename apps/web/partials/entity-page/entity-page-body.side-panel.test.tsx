@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   actions: null as Record<string, unknown> | null,
   entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
+  isLoadingSpace: false,
   space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
@@ -30,7 +31,9 @@ vi.mock('~/core/sync/use-store', () => ({
 // `useCustomBrowseView` asks for the space to tell a person's profile from an
 // ordinary entity. This file renders without a QueryClient on purpose — it is
 // about the header row, not about data — so the space is stubbed like the rest.
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: mocks.space, isLoading: false }) }));
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: mocks.space, isLoading: mocks.isLoadingSpace }),
+}));
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMediaUrl: () => null,
   useImageUrlFromEntity: () => null,
@@ -96,6 +99,7 @@ beforeEach(() => {
   mocks.actions = null;
   mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
+  mocks.isLoadingSpace = false;
   mocks.space = null;
 });
 
@@ -157,6 +161,23 @@ describe('EntityPageBody relation side panel', () => {
     );
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
     expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
+  });
+
+  it('withholds generic-only chrome while the Person space lookup is pending', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: SystemIds.PERSON_TYPE }] };
+    mocks.isLoadingSpace = true;
+
+    renderPanel();
+
+    // The identity shared by both outcomes remains visible; metadata and
+    // actions cannot be placed correctly until the space identifies a profile.
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('description')).toBeInTheDocument();
+    expect(screen.queryByTestId('metadata')).toBeNull();
+    expect(screen.queryByTestId('actions')).toBeNull();
+    expect(screen.queryByTestId('profile-headline')).toBeNull();
+    expect(screen.queryByTestId('person-profile')).toBeNull();
+    expect(mocks.actions).toBeNull();
   });
 
   // The title is outside the gate entirely — a relation page is still titled.

@@ -251,6 +251,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // answer, and the generic tabs-and-editor would have to be swapped out for the
   // profile a moment later.
   const isPersonPending = customView === 'person-pending';
+  const showGenericMetadataAndActions = !isPersonProfile && !isPersonPending;
 
   if (props.variant === 'sidePanel') {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
@@ -292,7 +293,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                   fallbackDescription={previewDescription}
                 />
               )}
-              {!isPersonProfile && (
+              {showGenericMetadataAndActions && (
                 <div className="flex items-center gap-4 text-text">
                   {!isRelationPage && <EntityPageMetadataHeader spaceId={spaceId} />}
                   {actions}
