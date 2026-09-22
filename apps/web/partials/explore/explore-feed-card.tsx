@@ -9,19 +9,14 @@ import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
-import { NavUtils } from '~/core/utils/utils';
-
-import { FallbackImage } from '~/design-system/fallback-image';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
-import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
+import { EXPLORE_CARD_CLASS, ExploreCardActions, ExploreCardDefaultBody } from './explore-card-chrome';
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreFeedCommentLink } from './explore-feed-comment-link';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
 
@@ -58,47 +53,9 @@ type CardBodyProps = {
   item: ExploreFeedItem;
   /** The vote / comment row, owned by the shell so bodies render it identically. Not every body takes it. */
   actions: React.ReactNode;
-  /** Threaded to the title only. The thumbnail beside it still navigates — see `BaseExploreFeedCard`. */
+  /** Threaded to the title only. The thumbnail beside it still navigates — see `ExploreCardDefaultBody`. */
   titleOpensSidePanel: boolean;
 };
-
-/** The default body: thumbnail on the left, title and description beside it. */
-function DefaultCardBody({
-  item,
-  actions,
-  titleOpensSidePanel,
-  compactTitle = false,
-}: CardBodyProps & { compactTitle?: boolean }) {
-  return (
-    <div className="flex items-start gap-4">
-      {item.imageUrl ? (
-        <Link
-          href={NavUtils.toEntity(item.spaceId, item.entityId)}
-          className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
-        >
-          <FallbackImage value={item.imageUrl} sizes="120px" className="object-cover" />
-        </Link>
-      ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="min-w-0">
-          <ExploreCardTitle
-            item={item}
-            opensSidePanel={titleOpensSidePanel}
-            clamped={compactTitle}
-            showFullTextOnHover={compactTitle}
-          />
-          {item.description ? (
-            <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
-              {item.description}
-            </p>
-          ) : null}
-        </div>
-
-        {actions}
-      </div>
-    </div>
-  );
-}
 
 /** A Community call event's body */
 function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
@@ -179,15 +136,10 @@ function BaseExploreFeedCard({
 }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
-  const cardActions = (
-    <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-      <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
-    </EntityRowActions>
-  );
+  const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <article className={EXPLORE_CARD_CLASS}>
       {compactDebateChrome ? (
         <DebateExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} compact />
       ) : (
@@ -199,7 +151,7 @@ function BaseExploreFeedCard({
       ) : isRanking ? (
         <RankingCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : (
-        <DefaultCardBody
+        <ExploreCardDefaultBody
           item={item}
           actions={cardActions}
           titleOpensSidePanel={titleOpensSidePanel}

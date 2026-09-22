@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -125,6 +125,54 @@ export function decodeTopicConnectionCounts(
 }
 
 /**
+ * Topics per request.
+ *
+ * Each one contributes three aliased counts, one of them a two-hop nested filter, so the request
+ * grows with the list. Claims measured on testnet carry at most 7 topics and three at the 95th
+ * percentile, which means this is one request in practice — the chunking is what stops a
+ * topic-heavy claim from becoming one unbounded query, and what keeps a chunk that fails from
+ * costing every other topic its numbers.
+ *
+ * The same shape `useClaimExploreRows` and `fetchExploreRowsByIds` use, for the same reason.
+ */
+export const TOPIC_COUNT_BATCH_SIZE = 10;
+
+/**
+ * Topic ids as request-sized batches: deduped, normalized, and sorted.
+ *
+ * Sorted so the same set of topics asked in a different order is the same cache entry rather than
+ * a second request — which matters here, because the tab re-asks in count order once the counts
+ * have landed.
+ */
+export function topicCountBatches(topicIds: readonly string[]): string[][] {
+  const ids = [...new Set(topicIds.map(normId))].sort();
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += TOPIC_COUNT_BATCH_SIZE) {
+    batches.push(ids.slice(start, start + TOPIC_COUNT_BATCH_SIZE));
+  }
+  return batches;
+}
+
+type CountsQueryResult = { data?: Record<string, TopicConnectionCounts>; isLoading: boolean; isError: boolean };
+
+function combineTopicConnectionCounts(queries: CountsQueryResult[]) {
+  // `null`, not `{}`, while nothing has answered: an empty map is indistinguishable from a topic
+  // the counts came back empty for, and the card draws no metadata line for either.
+  const answered = queries.filter(query => query.data);
+
+  return {
+    countsByTopicId: answered.length > 0 ? Object.assign({}, ...answered.map(query => query.data)) : null,
+    isLoading: queries.some(query => query.isLoading),
+    /**
+     * A failed count is not an empty one. The tab still lists its topics — it falls back to the
+     * order the claim carries them in and leaves the metadata row out, rather than printing zeros
+     * for numbers nobody measured.
+     */
+    isError: queries.some(query => query.isError),
+  };
+}
+
+/**
  * Claims, news stories and debates attached to each of these topics.
  *
  * Returns a map rather than an array so a caller can look a topic up without depending on the
@@ -132,40 +180,29 @@ export function decodeTopicConnectionCounts(
  * numbers.
  */
 export function useTopicConnectionCounts(topicIds: string[]) {
-  // Deduped and sorted, so the same set of topics in a different order is the same cache entry and
-  // not a second request.
-  const ids = React.useMemo(() => [...new Set(topicIds.map(normId))].sort(), [topicIds]);
+  const batches = React.useMemo(() => topicCountBatches(topicIds), [topicIds]);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['topic', 'connection-counts', ids],
-    enabled: ids.length > 0,
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: topicConnectionCountsDocument(ids.length),
-          decoder: (response: CountsResponse) => decodeTopicConnectionCounts(response, ids),
-          variables: {
-            topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
-            claimTypeIds: [ID.uuidToHex(CLAIM_TYPE_ID)],
-            newsTypeIds: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
-            debateTypeIds: [ID.uuidToHex(DEBATE_TYPE_ID)],
-            debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
-            ...Object.fromEntries(ids.map((id, index) => [`topic${index}`, ID.uuidToHex(id)])),
-          },
-          signal,
-        })
-      ),
-    staleTime: 30_000,
+  return useQueries({
+    queries: batches.map(ids => ({
+      queryKey: ['topic', 'connection-counts', ids],
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        Effect.runPromise(
+          graphql({
+            query: topicConnectionCountsDocument(ids.length),
+            decoder: (response: CountsResponse) => decodeTopicConnectionCounts(response, ids),
+            variables: {
+              topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
+              claimTypeIds: [ID.uuidToHex(CLAIM_TYPE_ID)],
+              newsTypeIds: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
+              debateTypeIds: [ID.uuidToHex(DEBATE_TYPE_ID)],
+              debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
+              ...Object.fromEntries(ids.map((id, index) => [`topic${index}`, ID.uuidToHex(id)])),
+            },
+            signal,
+          })
+        ),
+      staleTime: 30_000,
+    })),
+    combine: combineTopicConnectionCounts,
   });
-
-  return {
-    countsByTopicId: data ?? null,
-    isLoading: ids.length > 0 && isLoading,
-    /**
-     * A failed count is not an empty one. The tab still lists its topics — it falls back to the
-     * order the claim carries them in and leaves the metadata row out, rather than printing zeros
-     * for numbers nobody measured.
-     */
-    isError,
-  };
 }

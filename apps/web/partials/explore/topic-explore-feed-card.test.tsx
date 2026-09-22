@@ -12,6 +12,7 @@ import { TopicExploreFeedCard } from './topic-explore-feed-card';
 // The card's job here is the metadata line and the layout around it. The meta row, the title link
 // and the vote/comment row all have their own suites and all reach the network.
 vi.mock('./explore-meta-row', () => ({
+  META_SEGMENT_CLASS: 'meta-segment',
   ExploreMetaRow: (props: Record<string, unknown>) => (
     <div data-testid="meta-row" data-hide-join={String(props.hideJoinButton)} />
   ),

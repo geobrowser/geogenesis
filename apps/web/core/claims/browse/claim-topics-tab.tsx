@@ -2,14 +2,12 @@
 
 import * as React from 'react';
 
-import { toExploreFeedItem } from '~/core/explore/explore-card-item';
-import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
 import type { Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { TopicExploreFeedCard } from '~/partials/explore/topic-explore-feed-card';
-import { RecordLoadError } from '~/partials/profile/partial-load-error';
+import { PersonRecordFeed } from '~/partials/profile/person-record-feed';
 
 import { useClaimExploreRows } from './use-claim-explore-rows';
 
@@ -30,6 +28,10 @@ import { useClaimExploreRows } from './use-claim-explore-rows';
  * Nothing renders until the counts are in. The rows and the counts are two requests, and painting
  * the first would show the claim's own topic order and then resequence it under the reader — the
  * same trade `useTopicLinkedEntities` makes, for the same reason.
+ *
+ * The feed itself is `PersonRecordFeed`, as the Sources tab does with the same shape of question —
+ * a bounded id list hydrated into explore cards. It draws a topic card instead of the shared one;
+ * everything around the rows is the same and is not worth a second copy.
  */
 export function ClaimTopicsTab({ topics, spaceId }: { topics: Relation[]; spaceId: string }) {
   // The claim's order, deduped: a topic related twice in different spaces is one card.
@@ -50,21 +52,19 @@ export function ClaimTopicsTab({ topics, spaceId }: { topics: Relation[]; spaceI
   // also change the query key the moment the counts landed, paying for the whole list twice.
   const rows = useClaimExploreRows(topicIds, spaceId, topicIds.length > 0);
 
+  const countsByTopicId = counts.countsByTopicId;
   const ordered = React.useMemo(() => {
-    const byTopicId = counts.countsByTopicId;
-    const withCounts = rows.data.map(row => ({ row, counts: byTopicId?.[normId(row.entityId)] ?? null }));
-    if (!byTopicId) return withCounts;
+    if (!countsByTopicId) return rows.data;
 
-    return withCounts.sort(
+    const totalOf = (entityId: string) => countsByTopicId[normId(entityId)];
+
+    return [...rows.data].sort(
       (a, b) =>
-        (b.counts?.total ?? 0) - (a.counts?.total ?? 0) ||
-        (b.counts?.claims ?? 0) - (a.counts?.claims ?? 0) ||
-        a.row.title.localeCompare(b.row.title)
+        (totalOf(b.entityId)?.total ?? 0) - (totalOf(a.entityId)?.total ?? 0) ||
+        (totalOf(b.entityId)?.claims ?? 0) - (totalOf(a.entityId)?.claims ?? 0) ||
+        a.title.localeCompare(b.title)
     );
-  }, [counts.countsByTopicId, rows.data]);
-
-  const rowSpaceIds = React.useMemo(() => [...new Set(ordered.map(entry => entry.row.spaceId))], [ordered]);
-  const { labelsById } = useSpaceLabels(rowSpaceIds);
+  }, [countsByTopicId, rows.data]);
 
   // The parent only offers this tab when the claim has topics. The route stays addressable
   // directly, matching the Sources tab, so a stale bookmark still gets an honest empty state.
@@ -72,30 +72,31 @@ export function ClaimTopicsTab({ topics, spaceId }: { topics: Relation[]; spaceI
     return <p className="py-6 text-metadata text-grey-04">No topics have been linked to this claim yet.</p>;
   }
 
-  if (rows.isLoading || counts.isLoading) {
-    return <p className="py-6 text-metadata text-grey-04">Loading topics…</p>;
-  }
-
-  if (rows.isError && ordered.length === 0) {
-    return <RecordLoadError message="Couldn’t load topics." onRetry={rows.refetch} />;
-  }
-
-  if (ordered.length === 0) {
-    return <p className="py-6 text-metadata text-grey-04">No linked topics could be displayed.</p>;
-  }
-
   return (
-    <div className="pt-1">
-      {ordered.map(entry => (
+    <PersonRecordFeed
+      // Held back until the counts land, not merely marked loading: the feed prints its loading
+      // label only while it has no rows, so handing it the unsorted ones would paint the claim's
+      // own topic order and resequence it a beat later — exactly what waiting exists to prevent.
+      rows={counts.isLoading ? [] : ordered}
+      isLoading={rows.isLoading || counts.isLoading}
+      isError={rows.isError}
+      // These ids are loaded as one bounded record, not paginated. A refetch is an error retry or a
+      // background refresh and must not draw the feed's next-page skeletons.
+      isFetchingNextPage={false}
+      onRetry={rows.refetch}
+      loadingLabel="Loading topics…"
+      emptyLabel="No linked topics could be displayed."
+      errorLabel="Couldn’t load topics."
+      noun="topics"
+      renderCard={item => (
         <TopicExploreFeedCard
-          key={`${entry.row.entityId}-${entry.row.spaceId}`}
-          item={toExploreFeedItem(entry.row, spaceLabel(labelsById, entry.row.spaceId))}
-          counts={entry.counts}
+          item={item}
+          counts={countsByTopicId?.[normId(item.entityId)] ?? null}
           // The claim page is one column a reader scrolls; a topic is what they came here to open.
           titleOpensSidePanel
           hideJoinButton
         />
-      ))}
-    </div>
+      )}
+    />
   );
 }
