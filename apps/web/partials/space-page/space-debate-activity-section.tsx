@@ -16,9 +16,10 @@ const KIND_LABEL: Record<(typeof SPACE_ACTIVITY_KINDS)[number], string> = {
   claims: 'Claims',
 };
 
+/** "View all", matching every other surface that draws this card — the profile and a claim page. */
 const SEE_ALL_LABEL: Record<(typeof SPACE_ACTIVITY_KINDS)[number], string> = {
-  debates: 'See all debates',
-  claims: 'See all claims',
+  debates: 'View all debates',
+  claims: 'View all claims',
 };
 
 /**

@@ -605,7 +605,7 @@ describe('ProfileActivitySection', () => {
   it('leaves the fragment off a kind that opts out', () => {
     render(<ProfileActivitySection kinds={[kind({ href: '/space/s/debates', skipTabsAnchor: true })]} />);
 
-    expect(screen.getByRole('link', { name: /See all debates/ })).toHaveAttribute('href', '/space/s/debates');
+    expect(screen.getByRole('link', { name: /View all debates/ })).toHaveAttribute('href', '/space/s/debates');
   });
 
   it('reserves the lost mobile document height while switching between kinds', () => {

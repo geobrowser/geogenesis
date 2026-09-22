@@ -72,12 +72,12 @@ describe('SpaceDebateActivitySection', () => {
     const debates = screen.getByTestId('kind-debates');
     expect(debates).toHaveAttribute('data-total', '12');
     expect(debates).toHaveAttribute('data-href', '/space/space-1/debates');
-    expect(debates).toHaveTextContent('See all debates');
+    expect(debates).toHaveTextContent('View all debates');
 
     const claims = screen.getByTestId('kind-claims');
     expect(claims).toHaveAttribute('data-total', '34');
     expect(claims).toHaveAttribute('data-href', '/space/space-1/claims');
-    expect(claims).toHaveTextContent('See all claims');
+    expect(claims).toHaveTextContent('View all claims');
   });
 
   // Most spaces are not set up for debates, and three requests per Overview to render nothing is
