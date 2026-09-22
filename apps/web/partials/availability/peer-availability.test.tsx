@@ -114,6 +114,15 @@ describe('PeerAvailabilityView', () => {
       expect(monday.getByRole('button', { name: /2pm, only Ada is free/ })).toBeInTheDocument();
     });
 
+    // Before the viewer's own window opens the server cannot annotate, so neither can the label.
+    it('does not say the viewer is busy when it cannot know', () => {
+      setup({ slots: [{ ...slot(13), viewerIsFree: null } as never] });
+      const monday = within(day('2026-09-21'));
+
+      expect(monday.getByRole('button', { name: /1pm, Ada is free$/ })).toBeInTheDocument();
+      expect(monday.queryByRole('button', { name: /only Ada is free/ })).not.toBeInTheDocument();
+    });
+
     // The same hour recurs on every one of the seven days.
     it('qualifies each slot with its day, so names do not collide across the week', () => {
       setup({ slots: [slot(13), slot(13, true, 22)] });

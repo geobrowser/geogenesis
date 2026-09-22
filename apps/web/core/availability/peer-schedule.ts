@@ -46,7 +46,11 @@ export type PeerSchedule = {
 export type PeerDaySlot = {
   /** Absolute instant, kept so a later scheduling half has something unambiguous to send. */
   start: string;
-  viewerIsFree: boolean;
+  /**
+   * `null` before the viewer's own window opens: the server resolves their schedule over the same
+   * UTC-dated range, so `viewer_free` is false there whatever their calendar says.
+   */
+  viewerIsFree: boolean | null;
   /** Minutes from midnight in the viewer's zone — the chip's sort order. */
   minutes: number;
   /** `9:30am`, in the viewer's zone. */
@@ -103,6 +107,10 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   const peerZone = usableZone(schedule.peerTimezone);
 
   const today = zonedParts(now, viewerZone).date;
+  // Their window opens at their midnight on the UTC date; the viewer's opens at theirs. A peer to
+  // the east opens first, and nothing in that lead can be annotated.
+  const viewerWindowOpens = schedule.viewerHasSchedule ? windowStart(now, viewerZone).getTime() : -Infinity;
+
   const days = dayColumns(now, viewerZone, peerZone).map((date): PeerDay => ({
     date,
     ...dayLabels(date),
@@ -122,7 +130,7 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
       const peer = zonedParts(instant, peerZone);
       day.slots.push({
         start: instant.toISOString(),
-        viewerIsFree: slot.viewerIsFree,
+        viewerIsFree: instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree,
         minutes: viewer.minutes,
         label: formatTime(viewer.minutes),
         peerLabel: formatTime(peer.minutes),

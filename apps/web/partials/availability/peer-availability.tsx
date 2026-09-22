@@ -226,7 +226,11 @@ function SlotChip({ slot, dayLabel, peerName }: { slot: PeerDaySlot; dayLabel: s
   const label = [
     `${dayLabel} at ${slot.label}`,
     showPeerTime ? `${slot.peerLabel} for ${peerName}` : null,
-    slot.viewerIsFree ? 'you are both free' : `only ${peerName} is free`,
+    slot.viewerIsFree === null
+      ? `${peerName} is free`
+      : slot.viewerIsFree
+        ? 'you are both free'
+        : `only ${peerName} is free`,
   ]
     .filter(Boolean)
     .join(', ');
@@ -236,11 +240,11 @@ function SlotChip({ slot, dayLabel, peerName }: { slot: PeerDaySlot; dayLabel: s
       type="button"
       aria-label={label}
       aria-pressed={selected}
-      data-viewer-free={slot.viewerIsFree || undefined}
+      data-viewer-free={slot.viewerIsFree === true || undefined}
       onClick={() => setSelected(current => !current)}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
-        slot.viewerIsFree
+        slot.viewerIsFree === true
           ? 'border-solid border-grey-02 bg-[#F6F6F6] text-text hover:bg-grey-01'
           : 'border-dashed border-grey-02 bg-transparent text-grey-04 hover:text-text',
         selected && 'border-solid border-text bg-[#EFE2FF] text-text'

@@ -59,7 +59,7 @@ describe('PeerAvailability', () => {
 
     expect(screen.getByText(/Loading availability/)).toBeInTheDocument();
     // Specifically not the hint bar, which a premature `viewerHasSchedule: false` would raise.
-    expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
   });
 
   // The overlap call can succeed while `/me/debate-schedule` fails. Reading that as "no schedule
@@ -69,7 +69,7 @@ describe('PeerAvailability', () => {
     render(<PeerAvailability userId="user-peer" />);
 
     expect(screen.getByText(/Couldn’t load their availability/)).toBeInTheDocument();
-    expect(screen.queryByText(/Set your availability/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/haven’t set your own availability/)).not.toBeInTheDocument();
   });
 
   it('reports a failure as one', () => {

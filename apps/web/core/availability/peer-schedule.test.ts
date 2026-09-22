@@ -177,6 +177,24 @@ describe('peerScheduleDays', () => {
       expect(result[result.length - 1].date).toBe('2026-09-12');
     });
 
+    // The server resolves the viewer's schedule over the same UTC-dated window, so `viewer_free`
+    // is false for every instant before the viewer's own window opens, whatever their calendar
+    // says. Those slots must not be reported as "only they are free".
+    it('does not claim the viewer is busy before their own window opens', () => {
+      const evening = new Date('2026-09-22T03:00:00Z');
+      const result = days(
+        {
+          viewer_timezone: 'America/Los_Angeles',
+          with_timezone: 'Asia/Tokyo',
+          viewer_has_schedule: true,
+          their_slots: their(['2026-09-22T03:00:00Z', '2026-09-22T03:30:00Z', false]),
+        },
+        evening
+      );
+
+      expect(result[0].slots[0].viewerIsFree).toBeNull();
+    });
+
     it('keeps a peer slot that lands on it', () => {
       // Tue 12:00 Tokyo is Mon 20:00 in Los Angeles: tonight, and four hours away.
       const evening = new Date('2026-09-22T03:00:00Z');
