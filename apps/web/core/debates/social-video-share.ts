@@ -180,11 +180,13 @@ export function usePreparedSocialVideo(
 export async function handoffPreparedSocialVideo({
   debateId,
   title,
+  text,
   file,
   downloadUrl,
 }: {
   debateId: string;
   title: string;
+  text?: string;
   file: File;
   downloadUrl: string;
 }): Promise<SocialVideoHandoffMethod> {
@@ -193,7 +195,7 @@ export async function handoffPreparedSocialVideo({
   try {
     if (method === 'native_share') {
       try {
-        const sharePromise = navigator.share({ title, files: [file] });
+        const sharePromise = navigator.share(text ? { title, text, files: [file] } : { title, files: [file] });
         await sharePromise;
       } catch (error) {
         // `navigator.canShare({ files })` chose this path, but it is a *hint* — it answers whether
@@ -252,6 +254,17 @@ export function getPreparedSocialVideoHandoffMethod(file: File): SocialVideoHand
     return navigator.canShare({ files: [file] }) ? 'native_share' : 'download';
   } catch {
     return 'download';
+  }
+}
+
+/** True when the native share sheet can take a video file. Empty probe file is enough — `canShare` checks the descriptor, not the bytes. */
+export function canNativeShareVideo(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [new File([], 'debate.mp4', { type: 'video/mp4' })] });
+  } catch {
+    return false;
   }
 }
 
