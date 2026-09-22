@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   editing: false,
   isLoadingSpace: false,
   claimPage: null as Record<string, unknown> | null,
+  topicPage: null as Record<string, unknown> | null,
   entityMediaUrl: null as string | null,
   previewImageUrl: null as string | null,
   space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
@@ -107,7 +108,10 @@ vi.mock('~/core/claims/browse/claim-page-view', () => ({
 vi.mock('~/core/topics/browse/topic-page-view', () => ({
   TOPIC_PAGE_CONTENT_INSET_CLASS: 'topic-content-inset',
   TOPIC_PAGE_CONTENT_MAX_WIDTH: 720,
-  TopicPageView: () => <div data-testid="topic-page" />,
+  TopicPageView: (props: Record<string, unknown>) => {
+    mocks.topicPage = props;
+    return <div data-testid="topic-page">{props.footer as React.ReactNode}</div>;
+  },
 }));
 
 const SHARED = {
@@ -130,6 +134,7 @@ beforeEach(() => {
   mocks.heading = null;
   mocks.editing = false;
   mocks.claimPage = null;
+  mocks.topicPage = null;
   mocks.entityMediaUrl = null;
   mocks.previewImageUrl = null;
   mocks.isLoadingSpace = false;
@@ -349,5 +354,17 @@ describe('EntityPageBody topic side panel', () => {
       contentMaxWidth: 720,
       contentInsetClassName: 'topic-content-inset',
     });
+  });
+
+  it('keeps topic tabs available and appends properties while editing', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
+    mocks.editing = true;
+
+    render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(screen.getByTestId('properties')).toBeInTheDocument();
+    expect(mocks.topicPage?.isEditing).toBe(true);
+    expect(mocks.topicPage?.footer).toBeTruthy();
   });
 });

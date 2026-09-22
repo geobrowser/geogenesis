@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
+  activity: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -39,6 +40,12 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({ EntityTabs: () => <div data-testid="entity-tabs" /> }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/profile/profile-activity-section', () => ({
+  ProfileActivitySection: (props: Record<string, unknown>) => {
+    mocks.activity = props;
+    return <div data-testid="activity" />;
+  },
+}));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -67,6 +74,20 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
+vi.mock('./use-topic-record', () => ({
+  useTopicRecord: () => ({
+    claimRows: [],
+    debateRows: [],
+    claimsTotal: 0,
+    debatesTotal: 0,
+    claimsLoading: false,
+    debatesLoading: false,
+    claimsError: false,
+    debatesError: false,
+    claimsCountUnavailable: false,
+    debatesCountUnavailable: false,
+  }),
+}));
 vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
 vi.mock('./topic-debates', () => ({ TopicDebates: () => null }));
 vi.mock('./topic-claims', () => ({ TopicClaims: () => null }));
@@ -88,6 +109,7 @@ beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
+  mocks.activity = null;
 });
 
 afterEach(cleanup);
@@ -167,6 +189,15 @@ describe('TopicPageView composition', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('topic-composition')).toBeNull();
+  });
+});
+
+describe('TopicPageView activity', () => {
+  it('uses the shared activity section for topic-scoped debates and claims', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('activity')).toBeInTheDocument();
+    expect((mocks.activity?.kinds as Array<{ key: string }>).map(kind => kind.key)).toEqual(['debates', 'claims']);
   });
 });
 
