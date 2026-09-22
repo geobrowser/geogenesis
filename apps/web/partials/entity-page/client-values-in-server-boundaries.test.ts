@@ -75,37 +75,72 @@ const SERVER_ENTRY =
   /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
 
 /**
- * The specifiers of `import('…')` calls, found in the tree rather than in the text.
+ * What a module pulls in through a call rather than a declaration: `import('…')` and `require('…')`.
  *
- * Reading these off the source matched them inside comments, strings and template literals, and
- * matched `type T = import('./types').T` — an `ImportTypeNode`, which TypeScript erases — as a
- * runtime edge. It also missed any spelling with a comment in the middle. A `CallExpression` whose
- * callee is the `import` keyword is none of those things by construction.
+ * Both are read from the tree rather than the text, so a spelling inside a comment or a string is
+ * not an edge and `type T = import('./types').T` — an `ImportTypeNode`, which TypeScript erases —
+ * is not one either. A computed specifier resolves to no file and is skipped.
  *
- * Walking every node of all 1,633 files costs 86ms, which was the only argument for the regex.
+ * `require` also carries bindings, which a plain edge loses. The tree has one — `markdown-adapter`
+ * reaches the tiptap extensions as `require('…').tiptapExtensions` — and recorded as an edge alone
+ * that property read was invisible to the check even while the module was traversed.
  */
-function dynamicImportSpecifiers(sourceFile: ts.SourceFile): string[] {
-  const found: string[] = [];
+function callReferences(sourceFile: ts.SourceFile): CallReference[] {
+  const found: CallReference[] = [];
 
   const visit = (node: ts.Node) => {
-    // `require('…')` counts as well. There is one in this tree — `markdown-adapter.ts` reaches the
-    // tiptap extensions that way — and while nothing server-reachable imports that module today,
-    // the call is real and the subtree beyond it would be unguarded the day something does.
-    const isRequire =
-      ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require';
-
-    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || isRequire)) {
+    if (ts.isCallExpression(node)) {
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       const [specifier] = node.arguments;
-      // `isStringLiteralLike`, unlike the directive check: `import(`./helper`)` is a legal and
-      // statically resolvable specifier, where `` `use client` `` is not a legal directive. A
-      // computed specifier resolves to no file, so there is nothing to follow.
-      if (specifier && ts.isStringLiteralLike(specifier)) found.push(specifier.text);
+
+      if ((isDynamicImport || isRequire) && specifier && ts.isStringLiteralLike(specifier)) {
+        // `const { x } = await import('…')` is not destructured — see the file's doc block — so a
+        // dynamic import stays an edge and only `require` contributes bindings.
+        found.push(...(isRequire ? requireBindings(node, specifier.text) : [{ specifier: specifier.text, local: '' }]));
+      }
     }
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(sourceFile, visit);
 
   return found;
+}
+
+/** What a `require()` call's surroundings say is being taken from it. */
+type CallReference = { specifier: string; exported?: string; local: string; namespace?: boolean };
+
+function requireBindings(call: ts.CallExpression, specifier: string): CallReference[] {
+  const parent = call.parent;
+
+  // `require('./x').thing`
+  if (parent && ts.isPropertyAccessExpression(parent) && parent.expression === call) {
+    return [{ specifier, exported: parent.name.text, local: parent.name.text }];
+  }
+
+  if (parent && ts.isVariableDeclaration(parent) && parent.initializer === call) {
+    // `const { A, B } = require('./x')`
+    if (ts.isObjectBindingPattern(parent.name)) {
+      return parent.name.elements
+        .filter(element => ts.isIdentifier(element.name))
+        .map(element => ({
+          specifier,
+          exported: ts.isIdentifier(element.propertyName ?? element.name)
+            ? ((element.propertyName ?? element.name) as ts.Identifier).text
+            : '',
+          local: (element.name as ts.Identifier).text,
+        }))
+        .filter(reference => reference.exported);
+    }
+
+    // `const ns = require('./x')` keeps the whole module object.
+    if (ts.isIdentifier(parent.name)) {
+      return [{ specifier, local: `* as ${parent.name.text}`, namespace: true }];
+    }
+  }
+
+  // Anything else — a bare call for its side effects — loads the module and takes nothing.
+  return [{ specifier, local: '' }];
 }
 
 /**
@@ -333,6 +368,22 @@ function returnsAValue(expression: ts.Expression): boolean {
     return returnsAValue(expression.expression);
   }
 
+  // Every branch, or it is not definite. `return enabled ? {} : {}` hands back an object either
+  // way; `cond ? {} : <div />` does not, and stays a component.
+  if (ts.isConditionalExpression(expression)) {
+    return returnsAValue(expression.whenTrue) && returnsAValue(expression.whenFalse);
+  }
+
+  // `a ?? {}` and `a || {}` are the same question with two operands.
+  if (
+    ts.isBinaryExpression(expression) &&
+    [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.AmpersandAmpersandToken].includes(
+      expression.operatorToken.kind
+    )
+  ) {
+    return returnsAValue(expression.left) && returnsAValue(expression.right);
+  }
+
   return (
     ts.isObjectLiteralExpression(expression) ||
     ts.isRegularExpressionLiteral(expression) ||
@@ -480,6 +531,13 @@ function exportKindsOf(
       // `export default interface Foo {}` is looked up as `default`, the way the function and class
       // branches already key theirs.
       if (isExported(statement)) kinds.set(isDefault(statement) ? 'default' : statement.name.text, 'erased');
+      continue;
+    }
+
+    // `export namespace Foo {}` builds an object at runtime, so it is a value. An ambient one —
+    // `export declare namespace` — is erased like a type.
+    if (ts.isModuleDeclaration(statement) && isExported(statement) && ts.isIdentifier(statement.name)) {
+      kinds.set(statement.name.text, hasModifier(statement, ts.SyntaxKind.DeclareKeyword) ? 'erased' : 'value');
       continue;
     }
 
@@ -747,7 +805,7 @@ describe('server components take only components from client modules', () => {
       }
     }
 
-    for (const specifier of dynamicImportSpecifiers(sourceFile)) found.push({ specifier, local: '' });
+    found.push(...callReferences(sourceFile));
 
     referencesByFile.set(file, found);
     return found;
@@ -813,7 +871,8 @@ describe('server components take only components from client modules', () => {
             // `export *` does not carry the default export, so reading one here invents an offence.
             if (exported === 'default') continue;
 
-            const verdict = verdictFor(exported, kind);
+            // One name here: a re-export has no local binding in this file to read.
+            const verdict = verdictFor([exported], kind);
 
             yield {
               offence: verdict ? `${from} -> re-exports ${exported} (${verdict.label}from ${source})` : null,
@@ -839,7 +898,7 @@ describe('server components take only components from client modules', () => {
          * '~/design-system/suggested-formats-window'` in the space layout — reported before, silent
          * after.
          */
-        const verdict = verdictFor(reference.exported, kind);
+        const verdict = verdictFor([reference.exported, reference.local], kind);
 
         yield {
           offence: verdict ? `${from} -> ${reference.local} (${verdict.label}from ${source})${suffix}` : null,
@@ -952,49 +1011,78 @@ function isCapitalised(name: string): boolean {
  *
  * `default` is exempt from the capitalisation question because it is not a name anyone chose.
  */
-function verdictFor(named: string, kind: ExportKind): { label: string; capitalised: boolean } | null {
+function verdictFor(names: string[], kind: ExportKind): { label: string; capitalised: boolean } | null {
   if (kind === 'erased') return null;
-  if (named !== 'default' && !isCapitalised(named)) return { label: '', capitalised: false };
+
+  /*
+   * Every name the binding has, because an alias can supply the one that matters and the two
+   * directions want opposite rules. `import { widget as Widget }` renders as `<Widget />`, so the
+   * local name is what makes it a component; `import { Button as button }` is React's component
+   * under a name this file cannot render as a tag, but it is still a client component reference and
+   * passing one across the boundary is what the boundary is for. Reading either name accepts both.
+   *
+   * The cost is `{ useThing as Thing }` — a hook wearing a component's alias — which nothing here
+   * does, and which no classifier can catch, because a hook is a function like any other.
+   *
+   * `default` is not a name anyone chose, so its presence exempts the binding outright.
+   */
+  if (!names.some(name => name === 'default' || isCapitalised(name))) {
+    return { label: '', capitalised: false };
+  }
   if (kind === 'component') return null;
 
   return { label: kind === 'unknown' ? 'unclassifiable ' : '', capitalised: true };
 }
 
 describe('verdictFor', () => {
-  const offends = (named: string, kind: ExportKind) => verdictFor(named, kind) !== null;
+  const offends = (names: string[], kind: ExportKind) => verdictFor(names, kind) !== null;
 
   it('lets an erased export cross whatever it is called', () => {
     // `export interface options {}` is gone before anything runs, so its lowercase name is not a
     // reason to report it. This order was the other way round, and reported it.
-    expect(offends('options', 'erased')).toBe(false);
-    expect(offends('Options', 'erased')).toBe(false);
+    expect(offends(['options'], 'erased')).toBe(false);
+    expect(offends(['Options'], 'erased')).toBe(false);
   });
 
   it('rejects a lowercase name even when the source calls it a component', () => {
     // React cannot render `<buildOptions />`, so a lowercase export is a value however it is
     // declared — and it has to be rejected through a barrel as surely as it is directly. The star
     // path exempted it, because it asked about the kind first.
-    expect(offends('buildOptions', 'component')).toBe(true);
-    expect(offends('BuildOptions', 'component')).toBe(false);
+    expect(offends(['buildOptions'], 'component')).toBe(true);
+    expect(offends(['BuildOptions'], 'component')).toBe(false);
   });
 
   it('rejects a value and an unclassifiable export', () => {
-    expect(offends('Thing', 'value')).toBe(true);
-    expect(offends('Thing', 'unknown')).toBe(true);
-    expect(verdictFor('Thing', 'unknown')?.label).toBe('unclassifiable ');
+    expect(offends(['Thing'], 'value')).toBe(true);
+    expect(offends(['Thing'], 'unknown')).toBe(true);
+    expect(verdictFor(['Thing'], 'unknown')?.label).toBe('unclassifiable ');
   });
 
   it('asks nothing about the capitalisation of `default`', () => {
-    expect(offends('default', 'component')).toBe(false);
-    expect(offends('default', 'value')).toBe(true);
+    expect(offends(['default'], 'component')).toBe(false);
+    expect(offends(['default'], 'value')).toBe(true);
+    // A default import under a lowercase alias is still a default: the local name is a fact about
+    // the importing file, not about the export. Judging by the alias rejected real components, and
+    // this is the assertion that was missing when that happened.
+    expect(offends(['default', 'suggestedFormats'], 'component')).toBe(false);
   });
 
   it('lets an acronym through and still reports a constant', () => {
     // These two used to be answered by the same rule — an all-uppercase name was not capitalised,
     // so `FAQ` was reported alongside `BOARD_GRID_CLASS`. The kind separates them now.
-    expect(offends('FAQ', 'component')).toBe(false);
-    expect(offends('A', 'component')).toBe(false);
-    expect(offends('BOARD_GRID_CLASS', 'value')).toBe(true);
+    expect(offends(['FAQ'], 'component')).toBe(false);
+    expect(offends(['A'], 'component')).toBe(false);
+    expect(offends(['BOARD_GRID_CLASS'], 'value')).toBe(true);
+  });
+
+  it('reads either name when an alias supplies the capital', () => {
+    // `import { widget as Widget }` renders as `<Widget />`, and `import { Button as button }` is
+    // still a component reference. Both directions pass; a hook under either spelling does not.
+    expect(offends(['widget', 'Widget'], 'component')).toBe(false);
+    expect(offends(['Button', 'button'], 'component')).toBe(false);
+    expect(offends(['useThing', 'useThing'], 'component')).toBe(true);
+    // And an alias cannot launder a value.
+    expect(offends(['widget', 'Widget'], 'value')).toBe(true);
   });
 });
 
@@ -1024,6 +1112,10 @@ describe('exportKindsOf', () => {
       "import { default as React } from 'react';\nexport const Subject = React.memo(() => <div />);",
     ],
     ['a non-null asserted arrow', 'export const Subject = (() => <div />)!;'],
+    // One branch renders, so nothing is definite.
+    ['a function returning an element from one branch', 'export function Subject() { return on ? <div /> : {}; }'],
+    // `cached` could be anything, including something renderable, so this is not definite either.
+    ['a function returning an object after an unknown left side', 'export function Subject() { return cached ?? {}; }'],
     ['an identifier default', 'const Inner = () => <div />;\nexport default Inner;'],
     ['a parenthesised arrow', 'export const Subject = ((props) => <div />);'],
     ['an arrow returning a component call', 'export const Subject = () => renderThing();'],
@@ -1053,6 +1145,10 @@ describe('exportKindsOf', () => {
     // A returned function is as unrenderable as a returned object.
     ['a function returning a function', 'export function Subject() { return () => {}; }'],
     ['a function returning a class', 'export function Subject() { return class {}; }'],
+    // Every branch, or it is not definite.
+    ['a function returning an object from both branches', 'export function Subject() { return on ? {} : {}; }'],
+    ['a function returning an object from both sides of ??', 'export function Subject() { return {} ?? {}; }'],
+    ['an exported namespace', 'export namespace Subject { export const a = 1; }'],
     [
       "a wrapper call that is not React's",
       "import { memo } from 'other';\nexport const Subject = memo(() => <div />);",
@@ -1100,6 +1196,11 @@ describe('exportKindsOf', () => {
     expect(kinds.get('BUTTON_CLASS')).toBe('value');
     // `export *` does not carry a default, so claiming one here would invent an offence.
     expect(kinds.has('default')).toBe(false);
+  });
+
+  it('erases an ambient namespace and keeps a real one', () => {
+    // `export namespace` builds an object at runtime; `declare` does not build anything.
+    expect(kindOf('export declare namespace Subject { const a: number; }')).toBe('erased');
   });
 
   it('treats a type as erased, however it is written', () => {
