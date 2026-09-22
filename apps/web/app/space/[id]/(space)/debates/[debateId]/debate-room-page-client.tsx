@@ -293,7 +293,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectStartingGenerationRef = React.useRef(0);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
+  const rematchConsentInFlightRef = React.useRef<Promise<boolean> | null>(null);
+  const rematchConsentPublishedRef = React.useRef(false);
   const rematchLeaveRequestedRef = React.useRef(false);
+  const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
@@ -571,7 +574,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // runs with a live connection, and an idle room has nothing left to save. Mobile reaches this
   // whenever a backgrounded tab drops the call or remounts.
   const idleRematchDestination =
-    debate?.status === 'complete' && debate.rematch_session_id && roomState === 'idle'
+    !rematchLeaveRequestedRef.current &&
+    debate?.status === 'complete' &&
+    debate.rematch_session_id &&
+    roomState === 'idle'
       ? rematchDestination(rematchQuery.data)
       : null;
   const hasRecordingPersistenceError = Boolean(
@@ -1736,7 +1742,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [localMediaStreamRef, localTracksRef, persistStoppedLocalRecording]);
 
   const finishLiveDebate = React.useCallback(async () => {
-    if (!debate || finalizedDebateRef.current === debate.id) return;
+    if (!debate || rematchLeaveRequestedRef.current || finalizedDebateRef.current === debate.id) return;
     const session = rematchQuery.data;
     if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
     finalizedDebateRef.current = debate.id;
@@ -1784,13 +1790,29 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (rematchConsentRequested) return;
     setRoomError(null);
     setRematchConsentRequested(true);
-    try {
-      await consentToRematch.mutateAsync();
-    } catch (error) {
-      setRematchConsentRequested(false);
-      setRoomError(error instanceof Error ? error.message : 'Could not request another debate.');
-    }
+    const request = (async () => {
+      try {
+        await consentToRematch.mutateAsync();
+        rematchConsentPublishedRef.current = true;
+        return true;
+      } catch (error) {
+        setRematchConsentRequested(false);
+        setRoomError(error instanceof Error ? error.message : 'Could not request another debate.');
+        return false;
+      }
+    })();
+    rematchConsentInFlightRef.current = request;
+    const consented = await request;
+    if (rematchConsentInFlightRef.current === request) rematchConsentInFlightRef.current = null;
+    return consented;
   }, [consentToRematch, rematchConsentRequested]);
+
+  const requestRematchManually = React.useCallback(() => {
+    // A failed Leave can leave the thank-you screen interactive. A later explicit Let's go is a
+    // new choice and may replace that opt-out; automatic consent never clears it.
+    rematchLeaveRequestedRef.current = false;
+    void requestRematch();
+  }, [requestRematch]);
 
   const localRematchParticipant = rematchQuery.data?.participants.find(
     participant => participant.user_id === currentUserId
@@ -1875,17 +1897,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, [ensureLocalPreview, markReady]);
 
+  const publishRematchLeave = React.useCallback(async () => {
+    if (rematchLeavePublishedRef.current) return;
+    await leaveRematch.mutateAsync();
+    rematchLeavePublishedRef.current = true;
+  }, [leaveRematch]);
+
   const leave = React.useCallback(async () => {
     if (!debate) return;
     setRoomError(null);
     try {
-      if (debate.status === 'complete') {
-        await finishLiveDebate();
-        return;
-      } else if (debate.status === 'thanking' && debate.rematch_session_id) {
+      const leavingLiveRematch =
+        debate.rematch_session_id &&
+        ['thanking', 'complete'].includes(debate.status) &&
+        (rematchLeavePublishedRef.current ||
+          !['converted', 'ended', 'expired'].includes(rematchSessionStatus ?? 'deciding'));
+      if (leavingLiveRematch) {
         // Leaving is an explicit opt-out. Record it before persistence, which may take long enough
         // to cross the automatic-consent boundary while the viewer is still on this screen.
         rematchLeaveRequestedRef.current = true;
+        // Once consent is already authoritative, publish the opt-out before a retryable local save
+        // can fail. For an unconsented session, preserve the existing save-before-leave guarantee.
+        if (rematchConsentInFlightRef.current) await rematchConsentInFlightRef.current;
+        const consentAlreadyPublished =
+          rematchConsentPublishedRef.current ||
+          Boolean(localRematchParticipant?.consented_at) ||
+          rematchSessionStatus === 'browsing' ||
+          rematchSessionStatus === 'request_pending';
+        if (consentAlreadyPublished) await publishRematchLeave();
         // A cancelled recording was discarded the moment the cancellation landed, so there is
         // nothing to persist. Insisting anyway fails every time and traps someone who cancelled
         // and then decided against the rematch — the one exit they have left.
@@ -1895,10 +1934,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             throw new Error('Could not save the local recording. Please try leaving again.');
           }
         }
-        await leaveRematch.mutateAsync();
+        await publishRematchLeave();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRoomState('idle');
+      } else if (debate.status === 'complete') {
+        await finishLiveDebate();
+        return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -1921,10 +1963,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     discardLocalRecorder,
     finishLiveDebate,
-    leaveRematch,
     localMediaStreamRef,
     localTracksRef,
+    localRematchParticipant?.consented_at,
     persistStoppedLocalRecording,
+    publishRematchLeave,
+    rematchSessionStatus,
     returnFromDebate,
   ]);
 
@@ -2433,7 +2477,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onToggleNoiseFilter={toggleNoiseFilter}
                 rematchSession={rematchQuery.data ?? null}
                 currentUserId={currentUserId}
-                onRequestRematch={requestRematch}
+                onRequestRematch={requestRematchManually}
                 rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
                 endTurnPending={pendingTurnYield !== null}
