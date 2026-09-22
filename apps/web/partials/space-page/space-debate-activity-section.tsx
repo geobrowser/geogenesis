@@ -11,6 +11,9 @@ import {
 
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 
+/** Stable, so withholding rows does not rebuild the card's memos on every render. */
+const NO_ROWS: ActivityKind['rows'] = [];
+
 /**
  * A space's debate activity, at the top of its Overview.
  *
@@ -48,7 +51,19 @@ export function SpaceDebateActivitySection({ spaceId }: { spaceId: string }) {
       return {
         key: kind,
         label: SPACE_ACTIVITY_LABELS[kind].label,
-        rows: source.rows,
+        /*
+         * Withheld until the count is in.
+         *
+         * The card decides it has something to show from `rows.length`, and uses `isLoading` only
+         * to pick the no-rows skeleton — so rows arriving ahead of the count painted six real
+         * debates beside a confident "0". Holding them keeps the skeleton up for the extra moment
+         * instead, and costs nothing in practice: the count is one aggregate against two
+         * card-selection reads, and lands first.
+         *
+         * A count that *failed* is settled, not pending, so this releases on an error too — the
+         * pill then draws the dash `isCountUnavailable` asks for.
+         */
+        rows: isCountsLoading ? NO_ROWS : source.rows,
         // A failed count is a dash, not a zero. The rows and the count are separate requests, so
         // the card can hold real debates beside a count that could not be read — and "0 debates"
         // stated confidently over six of them reads as a bug in the page.

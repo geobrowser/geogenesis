@@ -12,6 +12,7 @@ import { useTaggedClaimSearch } from '~/core/debates/tagged-claim-search';
 import { useTaggedTopicFacet } from '~/core/debates/tagged-claims';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { graphql } from '~/core/io/graphql-client';
 
 import {
@@ -218,6 +219,15 @@ export function useSpaceActivityRowsInfinite(
     hasNextPage: query.hasNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     fetchNextPage: query.fetchNextPage,
+    /**
+     * Try the list again after a failure.
+     *
+     * `refetch` rather than `fetchNextPage`, because a failure can be either hop — the first page
+     * or an appended one — and `refetch` covers both. The sentinel stops observing on an error, so
+     * this is the only way back. Wrapped so it can be handed straight to an `onClick`, whose event
+     * argument `refetch` would otherwise read as its options.
+     */
+    retry: () => void query.refetch(),
   };
 }
 
@@ -232,14 +242,26 @@ export function useSpaceActivityRowsInfinite(
  * cannot disagree about what is in the corpus.
  */
 export function useSpaceClaimTopicFacet(spaceId: string, filters: SpaceActivityFilters, enabled: boolean) {
+  /*
+   * Held off until the search's ids are whole.
+   *
+   * `useTaggedClaimSearch` reports `settled` once its *first* page succeeds, which stays true for a
+   * while before the accumulation above finishes — and this facet's filter carries those ids, so it
+   * re-keyed and re-fired on every page. A broad search launched up to ten grouped-aggregate counts
+   * to arrive at the one the menu draws. The options on screen are held meanwhile; see below.
+   */
   const facet = useTaggedTopicFacet(
     DEBATE_TAG_ID,
     spaceTaggedClaimFilters(spaceId, filters),
-    enabled && spaceId !== ''
+    enabled && spaceId !== '' && !filters.isSearchPending
   );
 
+  // The options stay while the next set is counted, rather than the menu emptying under a reader
+  // who has it open. Reset on the space, because another space's topics are not these.
+  const topics = useLastSettled(facet.topics, !facet.settled && facet.error === null, spaceId);
+
   return {
-    topics: facet.topics,
+    topics,
     isLoading: facet.isLoading,
     /** Whether there are counts to draw at all; the menu renders a row without one rather than a 0. */
     settled: facet.settled,
@@ -286,12 +308,26 @@ export function useSpaceClaimSearch(search: string, enabled: boolean) {
   const { value, pending } = useDebouncedSearch(search);
   const result = useTaggedClaimSearch({ tagId: DEBATE_TAG_ID, search: value, enabled });
 
-  const { hasNextPage, fetchNextPage, isFetchingNextPage, idPages, settled, error, refetch } = result;
-  const atCap = idPages.length >= SEARCH_ID_PAGE_CAP;
+  const { hasNextPage, fetchNextPage, isFetchingNextPage, settled, error, refetch } = result;
+
+  /*
+   * Counted in requests asked for, not in pages that survived.
+   *
+   * `useTaggedClaimSearch` drops a page whose rows were all repeats of ones already seen — the
+   * endpoint pages over per-space rows, so that happens — and those requests would then not count
+   * against a cap read off `idPages`. The cap is a budget on what this hook spends, so it counts
+   * what it spends. Starting at one, because the query fetches the first page itself and a counter
+   * that only counted the effect's own calls made the real budget eleven. Reset per search, which
+   * is what the cap is per.
+   */
+  const requestedRef = React.useRef({ forSearch: value, count: 1 });
+  if (requestedRef.current.forSearch !== value) requestedRef.current = { forSearch: value, count: 1 };
+  const atCap = requestedRef.current.count >= SEARCH_ID_PAGE_CAP;
 
   // Read every page before filtering, rather than narrowing by the first hundred. See the cap.
   React.useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || atCap) return;
+    requestedRef.current.count += 1;
     fetchNextPage();
   }, [atCap, fetchNextPage, hasNextPage, isFetchingNextPage]);
 

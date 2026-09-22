@@ -20,7 +20,12 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
-import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } from '~/core/io/relation-facet';
+import {
+  type RelationFacetCount,
+  decodeRelationFacet,
+  relationFacetByFilterDocument,
+  relationFacetDocument,
+} from '~/core/io/relation-facet';
 
 import { type TaggedClaimSearch, useTaggedClaimSearch } from './tagged-claim-search';
 
@@ -160,6 +165,19 @@ export type TaggedClaimFilters = {
    * `null` while the allowlist is unresolved, which deliberately narrows nothing.
    */
   eligibleSpaceIds: string[] | null;
+  /**
+   * The spaces a picked topic must have been *assigned in*, where the caller wants that asked.
+   *
+   * Topics are per-space: the same claim can carry different ones in different spaces, which is why
+   * `topic-facets` filters a card's topics by the space it is drawn under. The relation clauses
+   * below do not ask that by default, so a claim can be matched on a topic assigned only somewhere
+   * else — measured on one space's tagged claims, 12 of 1,000 topic relations were written
+   * elsewhere and one topic was reachable *only* that way.
+   *
+   * Undefined leaves the clauses unscoped, which is what every cross-space caller wants and what
+   * they all did before this existed. A single-space surface sets it to that space.
+   */
+  topicSpaceIds?: string[];
 };
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
@@ -304,9 +322,12 @@ export function taggedEntityFilter(
 
   const and: Record<string, unknown>[] = [{ relations: { some: tagRelation } }];
 
-  // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them.
+  // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them. Scoped to
+  // the spaces the topic must have been assigned in, where the caller asked — see `topicSpaceIds`.
   for (const topicId of filters.topicIds) {
-    and.push({ relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } });
+    const topicRelation: Record<string, unknown> = { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } };
+    if (filters.topicSpaceIds) topicRelation.spaceId = { in: filters.topicSpaceIds };
+    and.push({ relations: { some: topicRelation } });
   }
 
   // Search arrives as ids rather than as text (GEO-2898). Narrowing by id is what lets the text
@@ -411,6 +432,7 @@ export const taggedClaimsQueryKey = (
     filters.topicIds,
     filters.spaceIds,
     filters.eligibleSpaceIds,
+    filters.topicSpaceIds ?? null,
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -727,6 +749,7 @@ export const taggedFacetQueryKey = (
     // The space facet does not narrow by the picked spaces, so they are not part of its identity.
     dimension === 'spaces' ? null : filters.spaceIds,
     filters.eligibleSpaceIds,
+    filters.topicSpaceIds ?? null,
   ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];
@@ -752,14 +775,32 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: relationFacetDocument,
+          // The by-filter document only where the relation itself has to be narrowed: the simpler
+          // one cannot express a `spaceId` on the relation being grouped, and unscoped it counts a
+          // topic assigned in any space into this space's menu. Same query, same decoder.
+          query: filters.topicSpaceIds ? relationFacetByFilterDocument : relationFacetDocument,
           decoder: decodeRelationFacet,
-          variables: {
-            typeId: TOPICS_PROPERTY_ID,
-            toEntityId: null,
-            fromEntity: { typeIds: { in: [CLAIM_TYPE_ID] }, ...taggedEntityFilter(tagId, filters, search.claimIds) },
-            groupBy: ['TO_ENTITY_ID'],
-          },
+          variables: filters.topicSpaceIds
+            ? {
+                filter: {
+                  typeId: { is: TOPICS_PROPERTY_ID },
+                  spaceId: { in: filters.topicSpaceIds },
+                  fromEntity: {
+                    typeIds: { in: [CLAIM_TYPE_ID] },
+                    ...taggedEntityFilter(tagId, filters, search.claimIds),
+                  },
+                },
+                groupBy: ['TO_ENTITY_ID'],
+              }
+            : {
+                typeId: TOPICS_PROPERTY_ID,
+                toEntityId: null,
+                fromEntity: {
+                  typeIds: { in: [CLAIM_TYPE_ID] },
+                  ...taggedEntityFilter(tagId, filters, search.claimIds),
+                },
+                groupBy: ['TO_ENTITY_ID'],
+              },
           signal,
         })
       ),

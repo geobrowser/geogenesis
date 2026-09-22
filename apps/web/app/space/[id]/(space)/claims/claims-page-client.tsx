@@ -88,11 +88,11 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   // the same query the hook above already filled — the raw box would key a second search per
   // keystroke. The rows are narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
   const filters = React.useMemo(
-    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds }),
-    [claimIds, debouncedSearch, topicIds]
+    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds, isSearchPending }),
+    [claimIds, debouncedSearch, isSearchPending, topicIds]
   );
 
-  const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } =
+  const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage, retry } =
     useSpaceActivityRowsInfinite(spaceId, 'claims', sort, filters);
   const facet = useSpaceClaimTopicFacet(spaceId, filters, true);
 
@@ -183,6 +183,19 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
         {isFetchingNextPage ? <ClaimsSkeleton rows={3} /> : null}
+        {/*
+          A failure with rows already on screen. The sentinel stops observing on an error — it has
+          to, or a failing page is asked for forever — so without this the feed simply stops
+          growing with nothing to say why and no way to try again.
+        */}
+        {isError && rows.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+            <Text color="grey-04">Could not load more claims.</Text>
+            <Button type="button" variant="secondary" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { SCORE_SYSTEM_PROPERTY, TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_TAG_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { taggedEntityFilter } from '~/core/debates/tagged-claims';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID } from '~/core/explore/explore-constants';
 
 import {
@@ -287,6 +288,53 @@ describe('spaceTaggedClaimFilters', () => {
     expect(spaceTaggedClaimFilters(SPACE, { topicIds: [], search: 'tariffs', searchClaimIds: ['c1'] })).toMatchObject({
       search: 'tariffs',
     });
+  });
+
+  /**
+   * Topics are per-space — the same claim can carry different ones in different spaces, which is
+   * why `topic-facets` filters a card's topics by the space it is drawn under. Unscoped, this
+   * surface offered and matched on a topic assigned only somewhere else: measured on one space's
+   * tagged claims, 12 of 1,000 topic relations were written elsewhere and one topic was reachable
+   * only that way.
+   */
+  it('requires a picked topic to have been assigned in this space', () => {
+    expect(spaceTaggedClaimFilters(SPACE, NO_SPACE_ACTIVITY_FILTERS)).toMatchObject({
+      topicSpaceIds: [SPACE],
+    });
+  });
+
+  /**
+   * The scope is opt-in. Every cross-space caller — the debates hub's three lists — leaves it
+   * undefined and must keep the unscoped clause it has always sent, or this fix changes a surface
+   * it was never about.
+   */
+  it('leaves the clause unscoped for a caller that does not ask', () => {
+    const unscoped = taggedEntityFilter(
+      DEBATE_TAG_ID,
+      { search: '', topicIds: ['t1'], spaceIds: [SPACE], eligibleSpaceIds: [SPACE] },
+      null
+    );
+    const topicClause = (unscoped.and as Record<string, any>[])
+      .map(clause => clause.relations?.some)
+      .find(some => some?.typeId?.is === TOPICS_PROPERTY_ID);
+
+    expect(topicClause).toBeDefined();
+    expect(topicClause).not.toHaveProperty('spaceId');
+  });
+
+  it('puts that scope on every topic clause it builds', () => {
+    const filter = spaceActivityRowsFilter(SPACE, 'claims', {
+      topicIds: ['t1', 't2'],
+      search: '',
+      searchClaimIds: null,
+    });
+    const clauses = (filter as { and: Record<string, any>[] }).and;
+    const topicClauses = clauses
+      .map(clause => clause.relations?.some)
+      .filter(some => some?.typeId?.is === TOPICS_PROPERTY_ID);
+
+    expect(topicClauses).toHaveLength(2);
+    for (const clause of topicClauses) expect(clause.spaceId).toEqual({ in: [SPACE] });
   });
 
   it('names this space on both space fields', () => {

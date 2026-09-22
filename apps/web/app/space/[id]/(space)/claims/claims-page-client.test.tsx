@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   topics: [] as { id: string; name: string | null; count: number }[],
   searchClaimIds: null as string[] | null,
   retrySearch: vi.fn(),
+  retryRows: vi.fn(),
+  facetCalls: [] as { enabled: boolean; isSearchPending: boolean }[],
   search: { isPending: false, error: null as Error | null },
   facet: { settled: true, error: null as Error | null },
   rows: [] as { entityId: string; spaceId: string }[],
@@ -43,14 +45,18 @@ vi.mock('~/core/space/use-space-debate-activity', () => ({
       hasNextPage: mocks.listState.hasNextPage,
       isFetchingNextPage: mocks.listState.isFetchingNextPage,
       fetchNextPage: mocks.fetchNextPage,
+      retry: mocks.retryRows,
     };
   },
-  useSpaceClaimTopicFacet: () => ({
-    topics: mocks.topics,
-    isLoading: false,
-    settled: mocks.facet.settled,
-    error: mocks.facet.error,
-  }),
+  useSpaceClaimTopicFacet: (_spaceId: string, filters: { isSearchPending?: boolean }, enabled: boolean) => {
+    mocks.facetCalls.push({ enabled, isSearchPending: Boolean(filters.isSearchPending) });
+    return {
+      topics: mocks.topics,
+      isLoading: false,
+      settled: mocks.facet.settled,
+      error: mocks.facet.error,
+    };
+  },
   useSpaceClaimSearch: (search: string) => {
     mocks.searchCalls.push(search);
     return {
@@ -119,6 +125,7 @@ const ClaimsPage = ({ spaceId }: { spaceId: string }) => <ClaimsPageClient key={
 beforeEach(() => {
   mocks.hookCalls.length = 0;
   mocks.searchCalls.length = 0;
+  mocks.facetCalls.length = 0;
   // Deliberately not in count order — the facet answers in the graph's, which is no order a reader
   // can see, and putting the menu right is this surface's job.
   mocks.topics = [
@@ -423,6 +430,52 @@ describe('ClaimsPageClient', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /**
+   * The sentinel stops observing on an error — it has to, or a failing page is asked for forever —
+   * so a next-page failure with rows already on screen left the feed silently stuck: no message,
+   * no spinner, no way back.
+   */
+  it('offers a retry when a later page fails with rows on screen', () => {
+    mocks.listState = { ...mocks.listState, isError: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    // The rows already read stay; what is added is the reason it stopped.
+    expect(screen.getAllByTestId('claim-card')).toHaveLength(2);
+    expect(screen.getByText('Could not load more claims.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.retryRows).toHaveBeenCalled();
+  });
+
+  // The first-page failure keeps its own wording; the two are different states.
+  it('keeps the first-page error distinct from the later-page one', () => {
+    mocks.rows = [];
+    mocks.listState = { ...mocks.listState, isError: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('Could not load claims.')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load more claims.')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The facet's filter carries the search ids, so counting it while they accumulate re-keys and
+   * re-fires it on every page. The hook is what holds it off (see `useSpaceClaimTopicFacet`); what
+   * the page owes it is the flag, which it cannot work out for itself.
+   */
+  it('tells the topic facet when the search ids are still arriving', () => {
+    mocks.search = { isPending: true, error: null };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ isSearchPending: true });
+    expect(asked().filters).toMatchObject({ isSearchPending: true });
+  });
+
+  it('clears the flag once they are in', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ isSearchPending: false });
   });
 
   // The staging form is unrelated to how the list is ordered, and it is the only place in the app

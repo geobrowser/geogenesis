@@ -193,6 +193,14 @@ export type SpaceActivityFilters = {
    * list alone, nothing matched empties it.
    */
   searchClaimIds: string[] | null;
+  /**
+   * The ids are still being read.
+   *
+   * Only the topic facet reads this — it must not count a partial id set, because it would re-key
+   * and re-fire on every page of one. The rows never see a partial set at all (the search hook
+   * withholds it), so nothing about them depends on this.
+   */
+  isSearchPending?: boolean;
 };
 
 export const NO_SPACE_ACTIVITY_FILTERS: SpaceActivityFilters = { topicIds: [], search: '', searchClaimIds: null };
@@ -214,6 +222,9 @@ export function spaceTaggedClaimFilters(spaceId: string, filters: SpaceActivityF
     topicIds: filters.topicIds,
     spaceIds: [spaceId],
     eligibleSpaceIds: [spaceId],
+    // Topics are per-space, and this surface is one space. Without this the menu offered — and the
+    // list matched on — a topic assigned only somewhere else. See `TaggedClaimFilters`.
+    topicSpaceIds: [spaceId],
   };
 }
 

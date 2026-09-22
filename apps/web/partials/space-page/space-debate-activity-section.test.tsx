@@ -138,6 +138,30 @@ describe('SpaceDebateActivitySection', () => {
     expect(screen.getByTestId('kind-claims')).toHaveAttribute('data-skip-anchor', 'true');
   });
 
+  /**
+   * The card decides it has something to show from `rows.length` and uses `isLoading` only to pick
+   * the no-rows skeleton, so rows arriving ahead of the count painted real debates beside a
+   * confident "0". They are held until the count is in.
+   */
+  it('shows no rows while the count is still in flight', () => {
+    mocks.counts = { debates: null, claims: null };
+    mocks.countsState = { isLoading: true, isError: false };
+    render(<SpaceDebateActivitySection spaceId="space-1" />);
+
+    expect(screen.getByTestId('kind-debates')).toHaveAttribute('data-rows', '0');
+  });
+
+  // A count that failed is settled, not pending: the rows are released and the pill draws a dash.
+  it('releases the rows when the count fails', () => {
+    mocks.counts = { debates: null, claims: null };
+    mocks.countsState = { isLoading: false, isError: true };
+    render(<SpaceDebateActivitySection spaceId="space-1" />);
+
+    const debates = screen.getByTestId('kind-debates');
+    expect(debates).toHaveAttribute('data-rows', '1');
+    expect(debates).toHaveAttribute('data-count-unavailable', 'true');
+  });
+
   // The card decides whether it renders at all, so the gap under it has to travel with it.
   it('hands the card its own bottom spacing', () => {
     render(<SpaceDebateActivitySection spaceId="space-1" />);

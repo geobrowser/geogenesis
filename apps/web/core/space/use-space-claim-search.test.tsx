@@ -6,7 +6,8 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useSpaceClaimSearch } from './use-space-debate-activity';
+import { NO_SPACE_ACTIVITY_FILTERS } from './space-activity-rows';
+import { useSpaceClaimSearch, useSpaceClaimTopicFacet } from './use-space-debate-activity';
 
 /**
  * The search half of the claims feed, against a faked `/search` page source.
@@ -18,6 +19,22 @@ import { useSpaceClaimSearch } from './use-space-debate-activity';
 const mocks = vi.hoisted(() => ({
   getResultsPage: vi.fn(),
 }));
+
+const facetMocks = vi.hoisted(() => ({
+  // Typed through its arguments, so `enabled` — the third, and the whole point of these cases —
+  // reads as a boolean rather than as an element of an empty tuple.
+  useTaggedTopicFacet: vi.fn((_tagId: string, _filters: unknown, _enabled: boolean) => ({
+    topics: [] as { id: string; name: string | null; count: number }[],
+    isLoading: false,
+    settled: true,
+    error: null,
+  })),
+}));
+
+vi.mock('~/core/debates/tagged-claims', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/tagged-claims')>();
+  return { ...actual, useTaggedTopicFacet: facetMocks.useTaggedTopicFacet };
+});
 
 vi.mock('~/core/io/queries', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/io/queries')>();
@@ -140,6 +157,24 @@ describe('useSpaceClaimSearch', () => {
     await waitFor(() => expect(result.current.search).toBe('regul'));
   });
 
+  /**
+   * The cap is a budget on requests, so it counts requests.
+   *
+   * `useTaggedClaimSearch` drops a page whose rows were all repeats of ones already seen — the
+   * endpoint pages over per-space rows, so that happens — and a cap read off the surviving pages
+   * would not count those requests at all. Every page here is the same row, so the surviving count
+   * never moves past one while the requests keep going.
+   */
+  it('caps on requests issued, not on pages that survived deduplication', async () => {
+    mocks.getResultsPage.mockImplementation(() => ok(page(['same'], 10_000)));
+
+    const { result } = renderHook(() => useSpaceClaimSearch('broad', true), { wrapper });
+    await settleDebounce();
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(mocks.getResultsPage).toHaveBeenCalledTimes(10);
+  });
+
   it('asks for nothing and narrows nothing when the box is empty', async () => {
     const { result } = renderHook(() => useSpaceClaimSearch('', true), { wrapper });
     await settleDebounce();
@@ -147,5 +182,40 @@ describe('useSpaceClaimSearch', () => {
     expect(result.current.claimIds).toBeNull();
     expect(result.current.isPending).toBe(false);
     expect(mocks.getResultsPage).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The topic facet, which reads the same accumulating search.
+ *
+ * `useTaggedTopicFacet` is faked here rather than driven: what is under test is the `enabled` this
+ * hook hands it, and the facet's own counting is covered where it lives.
+ */
+describe('useSpaceClaimTopicFacet', () => {
+  it('holds the facet off while the search ids are still arriving', () => {
+    renderHook(
+      () => useSpaceClaimTopicFacet('space-1', { ...NO_SPACE_ACTIVITY_FILTERS, isSearchPending: true }, true),
+      {
+        wrapper,
+      }
+    );
+
+    expect(facetMocks.useTaggedTopicFacet.mock.calls.at(-1)?.[2]).toBe(false);
+  });
+
+  it('counts it once they are in', () => {
+    renderHook(() => useSpaceClaimTopicFacet('space-1', NO_SPACE_ACTIVITY_FILTERS, true), { wrapper });
+
+    expect(facetMocks.useTaggedTopicFacet.mock.calls.at(-1)?.[2]).toBe(true);
+  });
+
+  // Its own caller can still turn it off, and a space with no id has nothing to count.
+  it.each([
+    ['the caller says no', 'space-1', false],
+    ['there is no space', '', true],
+  ])('stays off when %s', (_label, spaceId, enabled) => {
+    renderHook(() => useSpaceClaimTopicFacet(spaceId, NO_SPACE_ACTIVITY_FILTERS, enabled), { wrapper });
+
+    expect(facetMocks.useTaggedTopicFacet.mock.calls.at(-1)?.[2]).toBe(false);
   });
 });
