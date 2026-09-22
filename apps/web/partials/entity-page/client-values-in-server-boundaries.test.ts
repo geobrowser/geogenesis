@@ -336,7 +336,12 @@ function returnsAValue(expression: ts.Expression): boolean {
   return (
     ts.isObjectLiteralExpression(expression) ||
     ts.isRegularExpressionLiteral(expression) ||
-    ts.isNewExpression(expression)
+    ts.isNewExpression(expression) ||
+    // A function is not renderable either. `function BuildOptions() { return () => {}; }` is a
+    // factory, and so is anything handing back a class.
+    ts.isArrowFunction(expression) ||
+    ts.isFunctionExpression(expression) ||
+    ts.isClassExpression(expression)
   );
 }
 
@@ -821,14 +826,25 @@ describe('server components take only components from client modules', () => {
 
         if (!reference.exported) continue;
 
-        const named = reference.exported === 'default' ? reference.local : reference.exported;
         const kind = kindsFor(target).get(reference.exported) ?? 'unknown';
-        const verdict = verdictFor(named, kind);
+        /*
+         * Judged by the exported name, which is the declaration being classified. For a default
+         * that is the word `default`, which `verdictFor` exempts from the capitalisation question
+         * because nobody chose it — the local alias is a fact about this file, not about the export.
+         *
+         * Passing the alias here instead rejected a default client component imported under a
+         * lowercase name, before its kind was ever considered. No fixture covers this line: it
+         * needs a real module graph, and the `verdictFor` tests below only prove that `default` is
+         * exempt once it gets there. Verified by planting `import suggestedFormats from
+         * '~/design-system/suggested-formats-window'` in the space layout — reported before, silent
+         * after.
+         */
+        const verdict = verdictFor(reference.exported, kind);
 
         yield {
           offence: verdict ? `${from} -> ${reference.local} (${verdict.label}from ${source})${suffix}` : null,
           kind,
-          capitalised: verdict?.capitalised ?? isCapitalised(named),
+          capitalised: verdict?.capitalised ?? isCapitalised(reference.exported),
         };
       }
     }
@@ -870,14 +886,22 @@ describe('server components take only components from client modules', () => {
    */
   it('classifies every capitalised client export the server graph takes', () => {
     const kinds: Record<ExportKind, number> = { component: 0, erased: 0, value: 0, unknown: 0 };
-    for (const { kind, capitalised } of clientBindings()) if (capitalised) kinds[kind] += 1;
+
+    // The allowlist is excluded rather than the bound loosened. Three of its entries are
+    // all-uppercase and reach the classifier now that the capitalisation gate no longer pretends
+    // to do its job — they are values, correctly, which is why they are listed.
+    for (const { kind, capitalised, offence } of clientBindings()) {
+      if (!capitalised) continue;
+      if (offence && KNOWN.has(offence)) continue;
+      kinds[kind] += 1;
+    }
 
     // Components, and the two `export type`s imported without the `type` keyword — `Tabs` from
     // `editor-provider` and `Feature` from `use-place-search`.
     expect(kinds.component).toBeGreaterThan(100);
     expect(kinds.erased).toBe(2);
-    // Nothing capitalised is a value or unreadable. A classifier that started calling components
-    // values would move this off zero before the offence list above grew past its allowlist.
+    // Nothing else capitalised is a value or unreadable. A classifier that started calling
+    // components values would move this off zero before the offence list above grew.
     expect(kinds.value).toBe(0);
     expect(kinds.unknown).toBe(0);
   });
@@ -902,9 +926,18 @@ describe('server components take only components from client modules', () => {
  * asking about capitalisation, the other asked about capitalisation before resolving the kind. The
  * cases below are the disagreement, written down.
  */
-/** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
+/**
+ * Only a capitalised name can be a component: React reads a lowercase tag as an HTML element, so
+ * `useFeatureFlag` is a function and still a value.
+ *
+ * All-uppercase names used to be excluded here as well, on the grounds that `BOARD_GRID_CLASS` is
+ * obviously a constant — which also rejected `FAQ` and `A`, both of which are perfectly good
+ * component names. The exclusion was standing in for classification, and there is real
+ * classification now: those three constants reach `verdictFor` and are reported for being values,
+ * which is both true and the reason they were on the allowlist to begin with.
+ */
 function isCapitalised(name: string): boolean {
-  return /^[A-Z]/.test(name) && name !== name.toUpperCase();
+  return /^[A-Z]/.test(name);
 }
 
 /**
@@ -954,6 +987,14 @@ describe('verdictFor', () => {
   it('asks nothing about the capitalisation of `default`', () => {
     expect(offends('default', 'component')).toBe(false);
     expect(offends('default', 'value')).toBe(true);
+  });
+
+  it('lets an acronym through and still reports a constant', () => {
+    // These two used to be answered by the same rule — an all-uppercase name was not capitalised,
+    // so `FAQ` was reported alongside `BOARD_GRID_CLASS`. The kind separates them now.
+    expect(offends('FAQ', 'component')).toBe(false);
+    expect(offends('A', 'component')).toBe(false);
+    expect(offends('BOARD_GRID_CLASS', 'value')).toBe(true);
   });
 });
 
@@ -1009,6 +1050,9 @@ describe('exportKindsOf', () => {
     ['a concise arrow returning an asserted object', 'export const Subject = () => ({}) as Thing;'],
     ['a function returning a constructed object', 'export function Subject() { return new Date(); }'],
     ['a function returning a regular expression', 'export function Subject() { return /x/; }'],
+    // A returned function is as unrenderable as a returned object.
+    ['a function returning a function', 'export function Subject() { return () => {}; }'],
+    ['a function returning a class', 'export function Subject() { return class {}; }'],
     [
       "a wrapper call that is not React's",
       "import { memo } from 'other';\nexport const Subject = memo(() => <div />);",
