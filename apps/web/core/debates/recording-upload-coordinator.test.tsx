@@ -157,9 +157,44 @@ describe('DebateRecordingUploadBanner', () => {
     expect(progress).toHaveAttribute('aria-valuenow', '57');
     expect(progress.firstElementChild).toHaveStyle({ width: '57%' });
 
+    // Closing the tab strands the upload, so the banner says so for as long as one is pending.
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(cancel).toHaveBeenCalledOnce();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('shows indeterminate progress while the thank-you recording is still being prepared', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        preparingOnly
+        waitingReason="waiting"
+        errorMessage={null}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Preparing debate upload')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Preparing debate upload' })).not.toHaveAttribute('aria-valuenow');
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+  });
+
+  it('keeps the browser warning up while uploads are waiting rather than transferring', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={2}
+        waitingReason="retry"
+        errorMessage="Finalization unavailable"
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    // No bytes are moving, but the retry still needs the tab.
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
   });
 
   it('pluralizes the count and shows indeterminate progress while the percentage is unavailable', () => {
@@ -277,6 +312,8 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    // Nothing is on the wire any more — this line is waiting on the opt-out window.
+    expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
   });
 });
 

@@ -26,8 +26,8 @@ const mocks = vi.hoisted(() => ({
   thankingHasPendingLocalRecording: false,
   thankingHasUploadedRecording: false,
   thankingRecordingCancelled: false,
-  // The card only owns the publish control while it is on screen; these cases are about the
-  // banner, which is what is left when it isn't.
+  // Whether the thank-you card is on screen carrying the publish switch. It changes which opt-out
+  // control is drawn, not whether the banner reports the upload — it always does.
   thankingShowsPublishControl: false,
   publishOptOutOffer: null as { debateId: string | null; busy: boolean; cancelled: boolean } | null,
   publishOptOutRequest: null as string | null,
@@ -518,9 +518,10 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
-  // GEO-2773. The thank-you card carries the publish switch now, so the bar at the bottom of the
-  // screen would be a second voice on the same upload — and the bar is the thing being replaced.
-  it('stands down while the thank-you card is carrying the publish control', async () => {
+  // The card carries the publish switch (GEO-2773), but only the switch. What is still going out
+  // of this browser, and the warning not to close it, stay the banner's — and the thank-you debate
+  // is the bulk of what is still going out while its own card is up.
+  it('keeps reporting the upload while the thank-you card carries the publish control', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-1';
     mocks.thankingShowsPublishControl = true;
@@ -529,13 +530,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.publishOptOutOffer?.debateId).toBe('debate-1'));
-    expect(screen.queryByText(/Uploading & publishing/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+    // The switch is the only opt-out on screen; the banner does not draw a second one.
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
-  // Only for the debate the card is about. Another debate's upload has nothing on screen to
-  // report it, so the banner is still the only thing that can.
-  it('keeps reporting other debates while the card carries the control', async () => {
+  // Recording a second debate while the first is still going out: the thank-you screen for the new
+  // one has to account for both, not just its own.
+  it('counts the thank-you debate alongside an earlier upload still finishing', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
@@ -543,9 +546,58 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    // One, not two: the thank-you debate is the card's to speak for.
-    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
+  // The thank-you debate's blob is written to IndexedDB after the debate ends, so for a moment
+  // there is no queue row for it. The banner still has to be up — the user is already on the
+  // thank-you screen — and still has to count the debate the row is coming for.
+  it('shows the banner from the start of the thank-you period, before the recording is queued', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.thankingHasPendingLocalRecording = true;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+  });
+
+  // Switching publishing off is the one thing that takes a debate out of the count early.
+  it('drops the withdrawn debate from the count when the card switches publishing off', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-2';
+    mocks.queue = [queuedRecording('debate-1'), queuedRecording('debate-2')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a'));
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+  });
+
+  // And when it was the only one, the banner goes away rather than counting down to zero.
+  it('drops the banner when the last pending upload is withdrawn from the card', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-1';
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
   // The room learns of a cancellation from its own debate query, which is a refetch away and may
@@ -569,15 +621,14 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.publishOptOutOffer?.debateId).toBeNull();
   });
 
-  // Everything the banner says has to come off the uploads it is actually speaking for. Counting
-  // one debate while reporting another debate's failure is the way that goes wrong, and the
-  // thank-you debate is the one it stops speaking for.
-  it('does not report the card debate failure against another debate count', async () => {
+  // The count and the failure quoted beside it come off the same set of uploads, so a failure on
+  // the thank-you debate is reported against a count that includes it.
+  it('reports the card debate failure against the full pending count', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
     // Both are backing off, so nothing is uploading and the banner is in its waiting state — which
-    // is the only state that quotes a failure. Only the card's debate has actually failed.
+    // is the only state that quotes a failure.
     mocks.queue = [
       { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
       {
@@ -590,20 +641,20 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    // The plain wait, not the failure: debate-1 has nothing wrong with it.
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
-    expect(screen.queryByText(/Upload failed spectacularly/)).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Waiting to upload 2 debates — Upload failed spectacularly. Retrying automatically.')
+    ).toBeInTheDocument();
+    // Still pending, however badly it is going — so the warning stands.
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
   });
 
-  // Activity has to be measured against the uploads the banner speaks for. The one in flight can be
-  // the thank-you debate's, which the card reports — counted as the banner's, it claimed to be
-  // uploading while every recording it does report was sitting in backoff.
-  it('does not call itself uploading while only the card debate is in flight', async () => {
+  // The upload in flight counts as movement for the whole banner, the thank-you debate's included.
+  it('calls itself uploading while the thank-you debate is the one in flight', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
     mocks.queue = [
-      // Backing off, so it cannot be the upload in flight — the card's debate is.
+      // Backing off, so it cannot be the upload in flight — the thank-you debate is.
       { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
       queuedRecording('debate-2'),
     ];
@@ -611,22 +662,27 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
   });
 
-  // The harder half of the same idea: the banner's own recording is past its next attempt, so its
-  // backoff says nothing is wrong — but uploads run one at a time and the card's debate has the
-  // slot, so it is queued rather than uploading. Ordered so the card's debate is picked first.
-  it('does not call itself uploading while its own recording is queued behind the card debate', async () => {
+  // A recording already withdrawn can still be the request in flight — the cancellation lands
+  // while its upload chain is running — and that is not movement the banner can claim.
+  it('does not call itself uploading while only a withdrawn recording is in flight', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
-    mocks.queue = [queuedRecording('debate-2'), queuedRecording('debate-1')];
+    mocks.publishOptOutRequest = 'debate-2';
+    mocks.queue = [
+      // Backing off, so the thank-you debate is the one that takes the upload slot.
+      { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
+      queuedRecording('debate-2'),
+    ];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
-    // Eligible, but behind the card's debate — so waiting, not uploading.
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a'));
     expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
   });
 
