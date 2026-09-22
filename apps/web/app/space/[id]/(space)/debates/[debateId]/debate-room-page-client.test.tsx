@@ -1029,19 +1029,19 @@ describe('DebateRoomPageClient', () => {
       expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
     });
 
-    it('holds a full-screen state while an idle room walks into the rematch', async () => {
+    it('keeps the recording surface visible while an idle room walks into the rematch', async () => {
       mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
       mocks.rematch = rematchSession('browsing');
 
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
     it('holds focus, the scroll lock and a visible label while the holding screen is up', async () => {
-      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
-      mocks.rematch = rematchSession('browsing');
+      mocks.debate = completedDebate();
 
       const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -4446,7 +4446,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -4457,7 +4458,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
   });
 
   it('enters the rematch browser after the live connection drops before the debate completes', async () => {

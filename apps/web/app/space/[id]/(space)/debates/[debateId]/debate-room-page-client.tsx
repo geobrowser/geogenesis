@@ -581,8 +581,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const shouldHideTerminalDebate =
     (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
-    (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation) ||
-    idleRematchDestination !== null;
+    (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation);
+  // A disconnected or reloaded room can discover that it should enter an already-live rematch.
+  // Keep the recording surface over the app while that prefetched route replaces it; swapping to
+  // the generic "Leaving the debate" spinner here is the extra screen the user sees between the
+  // thank-you period and the claim picker.
+  const showRecordingModal = roomState !== 'idle' || idleRematchDestination !== null;
+  const recordingModalRoomState = roomState === 'idle' ? 'saving' : roomState;
 
   // Between the intro and the recording view, the debate connection has not set `roomState` yet:
   // either the auto-connect effect has not run, or `connect` is waiting on tab ownership. A spent
@@ -2400,10 +2405,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               )}
             </section>
 
-            {roomState !== 'idle' && (
+            {showRecordingModal && (
               <DebateRecordingModal
                 debate={debate}
-                roomState={roomState}
+                roomState={recordingModalRoomState}
                 roomError={roomError}
                 countdown={countdown}
                 localSlot={joinResponse?.participant_slot ?? null}
