@@ -162,8 +162,7 @@ export function ClaimPageView({
   // verdict can start on the title's, and row 1 belongs to this strip — so when nothing fills it,
   // the rows have to move up rather than leave a `gap-y-4` above the claim that belongs to a row
   // nothing occupies. Visible in the side panel and at phone widths, where that gap is set.
-  const hasChipsRow =
-    (SHOW_HERO_TOPICS && topics.length > 0) || (summary.isControversial && viewerHasResponded);
+  const hasChipsRow = (SHOW_HERO_TOPICS && topics.length > 0) || (summary.isControversial && viewerHasResponded);
 
   const requestedTab = resolveClaimTab({
     pathname,

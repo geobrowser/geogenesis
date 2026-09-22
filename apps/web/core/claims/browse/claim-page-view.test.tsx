@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => ({
   hasCounts: true,
   /** Drives the one strip that can occupy the hero's first grid row. */
   isControversial: false,
+  /** Whether the viewer has already earned access to the aggregate split. */
+  viewerDirection: 'positive' as 'positive' | 'negative' | null,
+  /** Props handed to the Explore-style verdict column in the hero. */
+  verdict: null as Record<string, unknown> | null,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
@@ -125,7 +129,7 @@ vi.mock('./use-claim-response-state', () => ({
       hasCounts: mocks.hasCounts,
       total: mocks.responseTotal,
       isControversial: mocks.isControversial,
-      viewerDirection: 'positive',
+      viewerDirection: mocks.viewerDirection,
       viewerSpaceId: 'viewer-space',
       isViewerResponseLoading: true,
     },
@@ -173,7 +177,10 @@ vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));
 vi.mock('~/partials/explore/claim-explore-feed-card', () => ({
-  ClaimVerdictColumn: () => <div data-testid="verdict" />,
+  ClaimVerdictColumn: (props: Record<string, unknown>) => {
+    mocks.verdict = props;
+    return <div data-testid="verdict" />;
+  },
 }));
 vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
@@ -222,6 +229,8 @@ beforeEach(() => {
   mocks.summaryLoading = false;
   mocks.hasCounts = true;
   mocks.isControversial = false;
+  mocks.viewerDirection = 'positive';
+  mocks.verdict = null;
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
@@ -327,6 +336,17 @@ describe('ClaimPageView record', () => {
 
     expect(screen.queryByTestId('verdict')).toBeNull();
     expect(screen.getByTestId('position')).toBeInTheDocument();
+  });
+
+  it('keeps the verdict split and controversial hint masked until the viewer responds', () => {
+    mocks.viewerDirection = null;
+    mocks.isControversial = true;
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.verdict).toMatchObject({ viewerHasResponded: false });
+    expect(screen.queryByText('Controversial')).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-1');
   });
 
   it('keeps both hero tracks while the counts are still out', () => {
