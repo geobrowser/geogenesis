@@ -1037,6 +1037,7 @@ describe('DebateRoomPageClient', () => {
 
       expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
       expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Saving local recording' })).toBeDisabled();
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
@@ -4248,6 +4249,35 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
     persistence.resolve();
     await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('preserves the rematch opt-out when leaving fails near the automatic-consent boundary', async () => {
+    mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
   });
 
   it('enters the rematch browser at the thank-you deadline without waiting for a debate refresh', async () => {

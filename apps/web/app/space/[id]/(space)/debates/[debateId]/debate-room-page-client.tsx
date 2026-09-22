@@ -1914,7 +1914,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       returnFromDebate();
     } catch (error) {
-      rematchLeaveRequestedRef.current = false;
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
   }, [
@@ -2443,7 +2442,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
-                leaveDisabled={abortDebate.isPending || roomState === 'saving'}
+                leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
             )}
           </>
