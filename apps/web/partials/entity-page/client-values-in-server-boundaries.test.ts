@@ -72,7 +72,7 @@ const SOURCE_DIRS = ['app', 'atoms', 'core', 'design-system', 'partials'];
  * the walk entirely.
  */
 const SERVER_ENTRY =
-  /\/(layout|page|template|default|loading|error|not-found|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
+  /^app\/(?:.*\/)?(layout|page|template|default|loading|error|not-found|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
 
 /**
  * What a module pulls in through a call rather than a declaration: `import('…')` and `require('…')`.
@@ -110,27 +110,51 @@ function callReferences(sourceFile: ts.SourceFile): CallReference[] {
 /** What a `require()` call's surroundings say is being taken from it. */
 type CallReference = { specifier: string; exported?: string; local: string; namespace?: boolean };
 
+/** `require('x').thing` and `require('x')['thing']` name the same export two ways. */
+function accessedName(access: ts.PropertyAccessExpression | ts.ElementAccessExpression): string | null {
+  if (ts.isPropertyAccessExpression(access)) return access.name.text;
+
+  const argument = access.argumentExpression;
+  // A computed key names nothing this can resolve; a literal one names an export.
+  return ts.isStringLiteralLike(argument) ? argument.text : null;
+}
+
 function requireBindings(call: ts.CallExpression, specifier: string): CallReference[] {
   const parent = call.parent;
 
-  // `require('./x').thing`
-  if (parent && ts.isPropertyAccessExpression(parent) && parent.expression === call) {
-    return [{ specifier, exported: parent.name.text, local: parent.name.text }];
+  // `require('./x').thing`, `require('./x')['thing']`, and either assigned to a name:
+  // `const Widget = require('./x').widget` is a component under a capital, and losing that name is
+  // how the both-names gate came to reject it.
+  if (
+    parent &&
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === call
+  ) {
+    const exported = accessedName(parent);
+    if (!exported) return [{ specifier, local: '' }];
+
+    const assignedTo = parent.parent;
+    const local =
+      assignedTo && ts.isVariableDeclaration(assignedTo) && ts.isIdentifier(assignedTo.name)
+        ? assignedTo.name.text
+        : exported;
+
+    return [{ specifier, exported, local }];
   }
 
   if (parent && ts.isVariableDeclaration(parent) && parent.initializer === call) {
-    // `const { A, B } = require('./x')`
+    // `const { A, B } = require('./x')`, including the `{ 'A': a }` spelling.
     if (ts.isObjectBindingPattern(parent.name)) {
-      return parent.name.elements
-        .filter(element => ts.isIdentifier(element.name))
-        .map(element => ({
-          specifier,
-          exported: ts.isIdentifier(element.propertyName ?? element.name)
-            ? ((element.propertyName ?? element.name) as ts.Identifier).text
-            : '',
-          local: (element.name as ts.Identifier).text,
-        }))
-        .filter(reference => reference.exported);
+      const bindings: CallReference[] = [];
+
+      for (const element of parent.name.elements) {
+        const key = element.propertyName ?? element.name;
+        const exported = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
+        const local = ts.isIdentifier(element.name) ? element.name.text : exported;
+        if (exported && local) bindings.push({ specifier, exported, local });
+      }
+
+      return bindings;
     }
 
     // `const ns = require('./x')` keeps the whole module object.
@@ -344,6 +368,26 @@ function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
 }
 
 /**
+ * Wrappers that say nothing about what is inside them.
+ *
+ * Kept in one place because both classifiers have to see through the same set, and the list has
+ * been short by one four separate times — `!` in one half but not the other, and the angle-bracket
+ * `<T>x` assertion in neither. A `.ts` module can still write that form.
+ */
+function isTransparent(
+  expression: ts.Expression
+): expression is
+  ts.ParenthesizedExpression | ts.AsExpression | ts.SatisfiesExpression | ts.NonNullExpression | ts.TypeAssertion {
+  return (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isTypeAssertionExpression(expression)
+  );
+}
+
+/**
  * A return React could not render, through whatever is wrapped around it.
  *
  * Narrower than "a literal", and deliberately so. `function Badge() { return 'New'; }` is a real
@@ -359,14 +403,7 @@ function classifyFunction(node: ts.SignatureDeclaration): ExportKind {
  * rather than a component — a different question, answered by the initialiser classifier.
  */
 function returnsAValue(expression: ts.Expression): boolean {
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression) ||
-    ts.isNonNullExpression(expression)
-  ) {
-    return returnsAValue(expression.expression);
-  }
+  if (isTransparent(expression)) return returnsAValue(expression.expression);
 
   // Every branch, or it is not definite. `return enabled ? {} : {}` hands back an object either
   // way; `cond ? {} : <div />` does not, and stays a component.
@@ -494,16 +531,7 @@ function exportKindsOf(
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node, react);
     if (ts.isTaggedTemplateExpression(node)) return 'value';
     if (ts.isCallExpression(node)) return isComponentWrapper(node.expression, react) ? 'component' : 'value';
-    // The same transparent wrappers `returnsAValue` sees through, including `!`, which this half
-    // was missing — the two halves of one classifier disagreeing is how several of these started.
-    if (
-      ts.isParenthesizedExpression(node) ||
-      ts.isAsExpression(node) ||
-      ts.isSatisfiesExpression(node) ||
-      ts.isNonNullExpression(node)
-    ) {
-      return classify(node.expression, seen);
-    }
+    if (ts.isExpression(node) && isTransparent(node)) return classify(node.expression, seen);
     if (ts.isIdentifier(node)) {
       const local = locals.get(node.text);
       if (local) return classify(local, seen);
@@ -534,10 +562,26 @@ function exportKindsOf(
       continue;
     }
 
-    // `export namespace Foo {}` builds an object at runtime, so it is a value. An ambient one —
-    // `export declare namespace` — is erased like a type.
+    /*
+     * `declare` means the declaration describes something that already exists rather than building
+     * it, so nothing of it survives compilation — a class, a const, a function and a namespace
+     * alike. This was written for `export declare namespace` alone last round and left the other
+     * three classified as runtime exports, which reported a type-only import as a client value.
+     */
+    if (isExported(statement) && hasModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+      const declared: (ts.Node | undefined)[] = ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations.map(declaration => declaration.name)
+        : [(statement as ts.DeclarationStatement).name];
+
+      for (const name of declared) {
+        if (name && ts.isIdentifier(name)) kinds.set(name.text, 'erased');
+      }
+      continue;
+    }
+
+    // `export namespace Foo {}` builds an object at runtime, so it is a value.
     if (ts.isModuleDeclaration(statement) && isExported(statement) && ts.isIdentifier(statement.name)) {
-      kinds.set(statement.name.text, hasModifier(statement, ts.SyntaxKind.DeclareKeyword) ? 'erased' : 'value');
+      kinds.set(statement.name.text, 'value');
       continue;
     }
 
@@ -576,7 +620,17 @@ function exportKindsOf(
     if (ts.isExportDeclaration(statement) && !statement.exportClause && statement.moduleSpecifier) {
       if (statement.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const origin = resolveOrigin(statement.moduleSpecifier.text);
-      if (!origin) continue;
+
+      /*
+       * An unresolved target is not an empty one. Dropping it left the map with no bindings at all,
+       * so a server barrel star-re-exporting this one checked nothing and passed in silence — the
+       * worst shape of answer this guard can give. `*` is recorded instead, which reads as
+       * `re-exports *` and is reported.
+       */
+      if (!origin) {
+        kinds.set('*', 'unknown');
+        continue;
+      }
 
       for (const [name, kind] of origin) {
         if (name !== 'default') kinds.set(name, kind);
@@ -1034,6 +1088,34 @@ function verdictFor(names: string[], kind: ExportKind): { label: string; capital
   return { label: kind === 'unknown' ? 'unclassifiable ' : '', capitalised: true };
 }
 
+/**
+ * Which files seed the walk.
+ *
+ * Tested directly on the pattern, because the tree holds no entry-shaped basename outside `app/`
+ * today — so restricting it changes nothing observable, and a fix with nothing to fail is a fix
+ * nobody can trust. A future `core/error.ts` or `partials/loading.tsx` would otherwise be walked as
+ * a route nothing imports, and offences found through it would be against code the server never
+ * renders.
+ */
+describe('SERVER_ENTRY', () => {
+  it.each([
+    'app/layout.tsx',
+    'app/space/[id]/(space)/layout.tsx',
+    'app/bounties/loading.tsx',
+    'app/robots.ts',
+    'app/api/chat/route.ts',
+  ])('seeds %s', file => {
+    expect(SERVER_ENTRY.test(file)).toBe(true);
+  });
+
+  it.each(['core/error.ts', 'partials/loading.tsx', 'design-system/page.tsx', 'atoms/route.ts'])(
+    'does not seed %s',
+    file => {
+      expect(SERVER_ENTRY.test(file)).toBe(false);
+    }
+  );
+});
+
 describe('verdictFor', () => {
   const offends = (names: string[], kind: ExportKind) => verdictFor(names, kind) !== null;
 
@@ -1196,6 +1278,31 @@ describe('exportKindsOf', () => {
     expect(kinds.get('BUTTON_CLASS')).toBe('value');
     // `export *` does not carry a default, so claiming one here would invent an offence.
     expect(kinds.has('default')).toBe(false);
+  });
+
+  it('sees through an angle-bracket type assertion', () => {
+    // `.ts`, because `<T>x` is not valid in `.tsx` — which is why nothing caught this until now.
+    const kindOfTs = (source: string) => exportKindsOf(parse('fixture.ts', source), () => null).get('Subject');
+
+    expect(kindOfTs('export function Subject() { return <Record<string, string>>{}; }')).toBe('value');
+    expect(kindOfTs('export const Subject = <() => null>(() => null);')).toBe('component');
+  });
+
+  it('erases every ambient declaration, not just a namespace', () => {
+    // `declare` describes something that exists rather than building it, so none of these survive
+    // compilation. Only the namespace form was handled, and the other three were called runtime.
+    expect(kindOf('export declare class Subject {}')).toBe('erased');
+    expect(kindOf('export declare const Subject: object;')).toBe('erased');
+    expect(kindOf('export declare function Subject(): void;')).toBe('erased');
+    expect(kindOf('export declare enum Subject { A }')).toBe('erased');
+  });
+
+  it('keeps an unresolved wildcard rather than reporting nothing', () => {
+    // `export * from './missing'` used to leave an empty map, so a barrel over this barrel checked
+    // no bindings and passed in silence. `*` is recorded and reported instead.
+    const kinds = exportKindsOf(parse('barrel.tsx', "export * from './missing';"), () => null);
+
+    expect(kinds.get('*')).toBe('unknown');
   });
 
   it('erases an ambient namespace and keeps a real one', () => {
