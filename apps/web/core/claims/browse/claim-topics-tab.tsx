@@ -20,14 +20,18 @@ import { useClaimExploreRows } from './use-claim-explore-rows';
  * description, its picture, and how much is attached to it — which is also what this list is
  * ordered by.
  *
- * Ordered by the metadata it shows: claims + news stories + debates, largest first. That is the
- * ask's first choice and the one worth having, since "Best" over a handful of topics resolves to an
- * order a reader cannot see. Ties break on claims, then on name, so the list is stable rather than
- * merely sorted.
+ * Ordered by the metadata it shows — debates + claims + news stories totalled, largest first. That
+ * is the ask's first choice and the one worth having, since "Best" over a handful of topics
+ * resolves to an order a reader cannot see. Ties break on claims, then on name, so the list is
+ * stable rather than merely sorted. (The card names those three in a different order than they are
+ * summed in; the sum is over all three either way.)
  *
  * Nothing renders until the counts are in. The rows and the counts are two requests, and painting
  * the first would show the claim's own topic order and then resequence it under the reader — the
  * same trade `useTopicLinkedEntities` makes, for the same reason.
+ *
+ * And nothing is ordered unless *every* count arrived. A partial answer falls back to the claim's
+ * order rather than ranking the topics it could not measure as zero.
  *
  * The feed itself is `PersonRecordFeed`, as the Sources tab does with the same shape of question —
  * a bounded id list hydrated into explore cards. It draws a topic card instead of the shared one;

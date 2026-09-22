@@ -455,12 +455,16 @@ function ClaimTabPanel({
 }
 
 /**
- * Taking a side, and standing ready to argue it.
+ * Taking a side, and being offered a debate on it.
  *
- * Both live together, under the claim in the hero, with the readiness switch in the header's top right and the side pills
- * beneath — the same arrangement the hub's claim card uses, so the switch is where anyone who has
- * used the panel already looks for it. They belong together because they are a sequence: readiness
- * can only be turned *on* for a claim you have already responded to.
+ * Both live together under the claim in the hero: the side pills first, then the debate offer
+ * directly beneath them. They belong together because they are a sequence — the offer exists only
+ * because of the side above it, and reading it beside the title asked the reader to connect two
+ * things a screen apart. The offer's own comment below says the same about where it sits.
+ *
+ * There is no readiness switch and no header here. The hub's claim card puts a switch in its
+ * header's top right; this section is not that card, and an earlier version of this note described
+ * that arrangement instead of this one.
  *
  * The pills and the publishing behind them come from the hub's own control, so a response taken
  * here goes through exactly the path a response taken in the panel does — including the optimistic

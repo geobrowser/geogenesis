@@ -47,9 +47,10 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * viewer happens to be in would make a topic's size depend on who is reading it, and would reorder
  * the tab under anyone whose space allowlist resolved a beat after the counts did.
  *
- * One request for the whole list: each topic contributes three aliased counts over the same
- * connections. Five topics measured ~0.75s against testnet, against five round trips for the same
- * work.
+ * One request per batch of topics, and in practice one batch: each topic contributes three aliased
+ * counts over the same connections, and the list is split at {@link TOPIC_COUNT_BATCH_SIZE}. Claims
+ * on testnet carry at most 7 topics, so a claim's whole Topics tab is normally a single request.
+ * Five topics measured ~0.75s against testnet, against five round trips for the same work.
  */
 function buildCountsSource(topicCount: number): string {
   const declarations = [
@@ -164,9 +165,13 @@ function combineTopicConnectionCounts(queries: CountsQueryResult[]) {
     countsByTopicId: answered.length > 0 ? Object.assign({}, ...answered.map(query => query.data)) : null,
     isLoading: queries.some(query => query.isLoading),
     /**
-     * A failed count is not an empty one. The tab still lists its topics — it falls back to the
-     * order the claim carries them in and leaves the metadata row out, rather than printing zeros
-     * for numbers nobody measured.
+     * A failed count is not an empty one. The tab still lists its topics, in the order the claim
+     * carries them in, rather than printing zeros for numbers nobody measured.
+     *
+     * True of a *partial* failure too, which is why this is `some` rather than `every`: with more
+     * than one batch, one can fail while another answers, and half the numbers cannot order the
+     * list. The cards whose batch did answer still get their own counts; the rest draw no metadata
+     * line.
      */
     isError: queries.some(query => query.isError),
   };
