@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { RematchVoicePill } from './rematch-voice';
 
@@ -1383,5 +1384,55 @@ describe('RematchVoicePill', () => {
     mocks.requestTakeover.mockResolvedValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
     await waitFor(() => expect(screen.getByTestId('livekit-room')).toBeInTheDocument());
+  });
+});
+
+describe('the mic inside a debate room', () => {
+  const presence = (opponentPresent: boolean) => ({
+    state: opponentPresent ? ('present' as const) : ('waiting' as const),
+    opponentUserId: 'them',
+    opponentPresent,
+  });
+
+  const lastAudio = () => mocks.livekitRoomProps.at(-1)?.audio;
+
+  // GEO-2941 state 3, and the only behaviour the ticket changes. Off a room there is no join event
+  // to key on, so the dock stays muted per GEO-2838.
+  it('stays muted while the viewer is on their own', async () => {
+    render(
+      <DebateRoomProvider presence={presence(false)}>
+        <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+  });
+
+  it('opens the mic once the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider presence={presence(false)}>
+        <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+
+    view.rerender(
+      <DebateRoomProvider presence={presence(true)}>
+        <RematchVoicePill session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(lastAudio()).toBe(true));
+  });
+
+  // Outside a room the context is absent, and the dock's own default governs.
+  it('stays muted with no room around it', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
   });
 });

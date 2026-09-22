@@ -16,6 +16,7 @@ function room(overrides: Partial<DebateRoomView> = {}): DebateRoomView {
     participants: [VIEWER, OPPONENT],
     occupants: [VIEWER],
     waiting: { reason: 'opponent_late' } satisfies DebateRoomWaiting,
+    rematch_session_id: 'session-1',
     ...overrides,
   };
 }

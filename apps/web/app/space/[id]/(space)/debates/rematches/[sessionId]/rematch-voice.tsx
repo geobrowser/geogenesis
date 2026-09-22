@@ -1,6 +1,5 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -13,12 +12,14 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
+import * as Popover from '@radix-ui/react-popover';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
 import { ConnectionState, MediaDeviceFailure, type Room, Track } from 'livekit-client';
+import type { RemoteParticipant } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
@@ -28,6 +29,7 @@ import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
@@ -277,6 +279,17 @@ function SessionRematchVoicePill({
   // preserves their mute state, without re-running the handler.)
   const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
 
+  // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Once per
+  // visit, so a deliberate mute afterwards sticks. Off a room there is no join event to key on and
+  // the dock stays muted, per GEO-2838.
+  const roomOpponentPresent = useDebateRoomContext()?.opponentPresent ?? false;
+  const micOpenedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!roomOpponentPresent || micOpenedRef.current) return;
+    micOpenedRef.current = true;
+    setMicIntent(true);
+  }, [roomOpponentPresent]);
+
   // Owned here, where nothing below the page itself can remount it, so "You're muted" is shown
   // once per visit rather than once per connection.
   const nudgeSpentRef = React.useRef(false);
@@ -342,9 +355,7 @@ function SessionRematchVoicePill({
     () => ({
       // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
       reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current
-        ? { deviceId: initialAudioInputIdRef.current }
-        : undefined,
+      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
     }),
     []
   );
@@ -366,7 +377,9 @@ function SessionRematchVoicePill({
   if (!voiceActive || !opponent) return null;
 
   if (ownership === 'elsewhere') {
-    return <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />;
+    return (
+      <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />
+    );
   }
 
   if (ownership === 'pending' || join.isLoading) return null;
@@ -550,7 +563,9 @@ function VoiceDockBody({
   // Blocked playback outranks everything else the dock could say: the room is fine, the opponent
   // may well be talking, and the viewer simply cannot hear it until they click.
   if (!canPlayAudio) {
-    return <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />;
+    return (
+      <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />
+    );
   }
 
   const localRow = (
@@ -718,18 +733,18 @@ function OpponentRow({
   if (!participant) {
     return (
       <>
-        <ParticipantIdentity name={name} avatarUrl={opponent.avatar_cid} avatarValue={opponent.profile_space_id} dimmed />
+        <ParticipantIdentity
+          name={name}
+          avatarUrl={opponent.avatar_cid}
+          avatarValue={opponent.profile_space_id}
+          dimmed
+        />
         <OpponentMicChip state="waiting" name={name} />
       </>
     );
   }
   return (
-    <ConnectedOpponentRow
-      participant={participant}
-      opponent={opponent}
-      name={name}
-      onAudibleChange={onAudibleChange}
-    />
+    <ConnectedOpponentRow participant={participant} opponent={opponent} name={name} onAudibleChange={onAudibleChange} />
   );
 }
 
@@ -934,12 +949,7 @@ function LocalAudioControls({
       {isMobile ? (
         <>
           {settingsTrigger}
-          <MobileSettingsSheet
-            title="Audio settings"
-            open={open}
-            onOpenChange={setOpen}
-            returnFocusRef={triggerRef}
-          >
+          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
             <AudioSettings {...settings} framed />
           </MobileSettingsSheet>
         </>

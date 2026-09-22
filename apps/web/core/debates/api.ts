@@ -1490,6 +1490,14 @@ export type DebateRoomView = {
   occupants: string[];
   /** `null` once both sides are present, and for a viewer not in the room themselves. */
   waiting: DebateRoomWaiting | null;
+  /**
+   * The debate-again session the room opens with: claim browsing, the request that starts the
+   * debate, and voice all hang off it.
+   *
+   * `null` until someone arrives, since it is created on first join, and withheld from a viewer who
+   * is not admitted — the id is a capability, and `rematch_livekit_token` trades one for a token.
+   */
+  rematch_session_id: string | null;
 };
 
 /** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */

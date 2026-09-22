@@ -18,6 +18,8 @@ import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { DebateRematchPageClient } from '../../space/[id]/(space)/debates/rematches/[sessionId]/rematch-page-client';
+
 /**
  * A debate room (GEO-2941): the debate-again picker with an indicator over it, so a wrapper rather
  * than a screen. Nothing here ejects anyone — `scheduled_end_at` is never read.
@@ -65,11 +67,12 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
     );
   }
 
+  // Created on first join, so it trails admission by a round trip rather than being absent.
+  if (!room.rematch_session_id) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
+
   return (
     <DebateRoomProvider presence={presence}>
-      {/* The picker belongs here. geo-chat does not yet link a room to a rematch session, so
-          there is nothing to render it from — see the note in `room-context`. */}
-      <RoomNotice busy>Waiting for your claims…</RoomNotice>
+      <DebateRematchPageClient sessionId={room.rematch_session_id} />
       {presence && <DebateRoomPresenceIndicator presence={presence} />}
     </DebateRoomProvider>
   );
