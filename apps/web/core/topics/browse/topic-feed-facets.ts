@@ -3,10 +3,9 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { buildExploreFeedFilter, exploreBrowseSpaceIds } from '~/core/explore/fetch-explore-feed';
+import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
@@ -15,12 +14,12 @@ import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/re
 import { normId } from '~/core/utils/norm-id';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
-import { topicFeedFilter } from './topic-feed-filter';
+import { debateTopicFeedFilter, directTopicFeedFilter } from './topic-feed-filter';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
 
 type TopicFacetArgs = {
-  browse: BrowseSidebarData;
+  spaceIds: string[];
   topicId: string;
   selectedTopicIds: readonly string[];
   typeIds: readonly string[];
@@ -104,14 +103,23 @@ export const topicFeedCompositionDocument = parse(COMPOSITION_SOURCE) as TypedDo
   { claims: EntityFilter; debates: EntityFilter; news: EntityFilter }
 >;
 
-function scopedFeedFilter(spaceIds: string[], topicId: string, typeIds: readonly string[], selectedTopicIds: string[]) {
+function scopedFeedFilter(
+  spaceIds: string[],
+  topicId: string,
+  typeIds: readonly string[],
+  selectedTopicIds: string[],
+  kind: 'direct' | 'debate'
+) {
   return buildExploreFeedFilter({
     spaceIds,
     time: 'all',
     typeIds,
     requireName: true,
     includeEntityScopeInFilter: true,
-    entityFilter: topicFeedFilter(topicId, selectedTopicIds),
+    entityFilter:
+      kind === 'debate'
+        ? debateTopicFeedFilter(topicId, selectedTopicIds)
+        : directTopicFeedFilter(topicId, selectedTopicIds),
   });
 }
 
@@ -168,13 +176,12 @@ async function fetchTopicNames(ids: string[], signal?: AbortSignal) {
  * traversed once and deduplicated by Debate because their Topics live on their debated Claims.
  */
 export async function fetchTopicFeedFacets({
-  browse,
+  spaceIds,
   topicId,
   selectedTopicIds,
   typeIds,
   signal,
 }: TopicFacetArgs): Promise<TopicFeedFacet[]> {
-  const spaceIds = exploreBrowseSpaceIds(browse, null);
   if (typeIds.length === 0 || spaceIds.length === 0) return [];
 
   const directTypeIds = typeIds.filter(id => !ID.equals(id, DEBATE_TYPE_ID));
@@ -190,7 +197,7 @@ export async function fetchTopicFeedFacets({
             variables: {
               filter: {
                 typeId: { is: TOPICS_PROPERTY_ID },
-                fromEntity: scopedFeedFilter(spaceIds, topicId, directTypeIds, [...selectedTopicIds]),
+                fromEntity: scopedFeedFilter(spaceIds, topicId, directTypeIds, [...selectedTopicIds], 'direct'),
               } satisfies RelationFilter,
               groupBy: ['TO_ENTITY_ID'],
             },
@@ -199,7 +206,10 @@ export async function fetchTopicFeedFacets({
         );
 
   const debateCountsPromise = includesDebates
-    ? fetchDebateTopicCounts(scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], [...selectedTopicIds]), signal)
+    ? fetchDebateTopicCounts(
+        scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], [...selectedTopicIds], 'debate'),
+        signal
+      )
     : Promise.resolve(new Map<string, number>());
 
   const [directCounts, debateCounts] = await Promise.all([directCountsPromise, debateCountsPromise]);
@@ -215,15 +225,14 @@ export async function fetchTopicFeedFacets({
 
 /** Unique, display-eligible entities in the exact visible-space scope used by the Topic feed. */
 export async function fetchTopicFeedCompositionCounts({
-  browse,
+  spaceIds,
   topicId,
   signal,
 }: {
-  browse: BrowseSidebarData;
+  spaceIds: string[];
   topicId: string;
   signal?: AbortSignal;
 }) {
-  const spaceIds = exploreBrowseSpaceIds(browse, null);
   if (spaceIds.length === 0) return { claims: 0, debates: 0, news: 0 };
 
   return Effect.runPromise(
@@ -235,9 +244,9 @@ export async function fetchTopicFeedCompositionCounts({
         news: Number(response.news?.totalCount ?? 0),
       }),
       variables: {
-        claims: scopedFeedFilter(spaceIds, topicId, [CLAIM_TYPE_ID], []),
-        debates: scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], []),
-        news: scopedFeedFilter(spaceIds, topicId, [NEWS_STORY_TYPE_ID], []),
+        claims: scopedFeedFilter(spaceIds, topicId, [CLAIM_TYPE_ID], [], 'direct'),
+        debates: scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], [], 'debate'),
+        news: scopedFeedFilter(spaceIds, topicId, [NEWS_STORY_TYPE_ID], [], 'direct'),
       },
       signal,
     })

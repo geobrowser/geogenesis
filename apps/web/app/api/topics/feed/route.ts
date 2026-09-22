@@ -29,6 +29,7 @@ export async function GET(request: Request) {
     .split(',')
     .filter(IdUtils.isValid)
     .filter(id => id !== topicId);
+  const requestedSpaceIds = (searchParams.get('spaceIds') ?? '').split(',').filter(IdUtils.isValid).slice(0, 100);
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveTopicFeedRequestContext(routeSpaceId);
 
   try {
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
       browse,
       sort: parseSort(searchParams.get('sort')),
       time: 'all',
-      spaceFilterIds: null,
+      spaceFilterIds: requestedSpaceIds.length > 0 ? requestedSpaceIds : null,
       cursor: searchParams.get('cursor'),
       walletAddress,
       memberOrEditorSpaceIds,

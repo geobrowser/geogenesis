@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { topicFeedFilter } from './topic-feed-filter';
+import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedFilter } from './topic-feed-filter';
 
 describe('topicFeedFilter', () => {
   it('matches direct topic relations and debates through their claim', () => {
@@ -53,5 +53,36 @@ describe('topicFeedFilter', () => {
 
   it('deduplicates repeated additional topics', () => {
     expect(topicFeedFilter('topic-1', ['topic-2', 'topic-2']).and).toHaveLength(2);
+  });
+
+  it('uses only direct Topic relations when the caller already excludes Debates', () => {
+    expect(directTopicFeedFilter('topic-1')).toEqual({
+      and: [
+        {
+          relations: {
+            some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
+          },
+        },
+      ],
+    });
+  });
+
+  it('uses only inherited Claim Topics when the caller already selects Debates', () => {
+    expect(debateTopicFeedFilter('topic-1')).toEqual({
+      and: [
+        {
+          relations: {
+            some: {
+              typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+              toEntity: {
+                relations: {
+                  some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
+                },
+              },
+            },
+          },
+        },
+      ],
+    });
   });
 });

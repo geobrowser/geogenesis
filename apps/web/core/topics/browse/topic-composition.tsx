@@ -9,30 +9,35 @@ import { ID } from '~/core/id';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
+
 type CompositionCounts = { claims: number; debates: number; news: number };
 
 type Bucket = { key: string; label: string; count: number; className: string };
 
-export function useTopicComposition(topicId: string, spaceId: string) {
+export function useTopicComposition(topicId: string, spaceId: string, spaceIds: string[] | undefined) {
   const { data, isLoading } = useQuery({
-    queryKey: ['topic', 'composition', ID.uuidToHex(topicId), ID.uuidToHex(spaceId)],
+    queryKey: ['topic', 'composition', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), spaceIds],
     queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({ topicId, spaceId });
+      const params = new URLSearchParams({ topicId, spaceId, spaceIds: spaceIds!.join(',') });
       const response = await fetch(`/api/topics/composition?${params}`, { credentials: 'include', signal });
       if (!response.ok) throw new Error('Topic composition failed');
       return response.json() as Promise<CompositionCounts>;
     },
+    enabled: spaceIds !== undefined,
     staleTime: 60_000,
   });
 
-  return { counts: data ?? null, isLoading };
+  return { counts: data ?? null, isLoading: spaceIds === undefined || isLoading };
 }
 
 /**
  * A compact summary of the three entity types that make up the Topic Explore feed.
  */
 export function TopicComposition({ topicId, spaceId }: { topicId: string; spaceId: string }) {
-  const { counts, isLoading } = useTopicComposition(topicId, spaceId);
+  const fullSpaceIds = useTopicSpaceScope(spaceId);
+  const spaceIds = React.useMemo(() => fullSpaceIds?.slice(0, 100), [fullSpaceIds]);
+  const { counts, isLoading } = useTopicComposition(topicId, spaceId, spaceIds);
 
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];

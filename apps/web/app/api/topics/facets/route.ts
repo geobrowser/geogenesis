@@ -3,7 +3,6 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { NextResponse } from 'next/server';
 
 import { fetchTopicFeedFacets } from '~/core/topics/browse/topic-feed-facets';
-import { resolveTopicFeedRequestContext } from '~/core/topics/browse/topic-feed-request-context';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 import { normId } from '~/core/utils/norm-id';
 
@@ -26,11 +25,15 @@ export async function POST(request: Request) {
   } | null;
   const topicId = body?.fixedParams?.topicId;
   const routeSpaceId = body?.fixedParams?.spaceId;
+  const spaceIds = parseIds(
+    typeof body?.fixedParams?.spaceIds === 'string' ? body.fixedParams.spaceIds.split(',') : []
+  ).slice(0, 100);
   if (
     typeof topicId !== 'string' ||
     !IdUtils.isValid(topicId) ||
     typeof routeSpaceId !== 'string' ||
-    !IdUtils.isValid(routeSpaceId)
+    !IdUtils.isValid(routeSpaceId) ||
+    spaceIds.length === 0
   ) {
     return NextResponse.json({ topics: [] }, { status: 400 });
   }
@@ -44,9 +47,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { browse } = await resolveTopicFeedRequestContext(routeSpaceId);
     const topics = await fetchTopicFeedFacets({
-      browse,
+      spaceIds,
       topicId,
       selectedTopicIds,
       typeIds,

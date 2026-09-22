@@ -12,6 +12,10 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
+vi.mock('../use-topic-space-scope', () => ({
+  useTopicSpaceScope: () => ['00000000000000000000000000000003'],
+}));
+
 afterEach(cleanup);
 
 describe('TopicComposition', () => {

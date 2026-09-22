@@ -8,12 +8,6 @@ const mocks = vi.hoisted(() => ({
   fetchFacets: vi.fn(),
 }));
 
-vi.mock('~/core/topics/browse/topic-feed-request-context', () => ({
-  resolveTopicFeedRequestContext: () => ({
-    browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
-  }),
-}));
-
 vi.mock('~/core/topics/browse/topic-feed-facets', () => ({
   fetchTopicFeedFacets: (args: unknown) => mocks.fetchFacets(args),
 }));
@@ -36,7 +30,7 @@ describe('POST /api/topics/facets', () => {
         body: JSON.stringify({
           selectedTopicIds: [CANDIDATE_TOPIC],
           typeIds: [CLAIM_TYPE_ID],
-          fixedParams: { topicId: PAGE_TOPIC, spaceId: SPACE },
+          fixedParams: { topicId: PAGE_TOPIC, spaceId: SPACE, spaceIds: SPACE },
         }),
       })
     );
@@ -48,6 +42,7 @@ describe('POST /api/topics/facets', () => {
     expect(mocks.fetchFacets).toHaveBeenCalledWith(
       expect.objectContaining({
         topicId: PAGE_TOPIC,
+        spaceIds: [SPACE],
         selectedTopicIds: [CANDIDATE_TOPIC],
         typeIds: [CLAIM_TYPE_ID],
       })

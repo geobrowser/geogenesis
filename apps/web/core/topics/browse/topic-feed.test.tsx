@@ -16,6 +16,10 @@ vi.mock('~/partials/feed/entity-feed', () => ({
   },
 }));
 
+vi.mock('../use-topic-space-scope', () => ({
+  useTopicSpaceScope: () => ['11111111111111111111111111111111'],
+}));
+
 afterEach(cleanup);
 
 describe('TopicFeed', () => {
@@ -40,7 +44,11 @@ describe('TopicFeed', () => {
         placeholder: 'Search topics',
         emptyLabel: 'No topics found',
       },
-      fixedParams: { topicId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', spaceId: 'space-1' },
+      fixedParams: {
+        topicId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        spaceId: 'space-1',
+        spaceIds: '11111111111111111111111111111111',
+      },
       titleOpensSidePanel: true,
     });
   });

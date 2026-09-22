@@ -449,19 +449,19 @@ describe('EntityFeed contextual filters', () => {
         initialTypeIds={EXPLORE_ENTITY_TYPE_IDS}
         persistTypeSelection={false}
         topicOptions={topicOptions}
-        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
       />
     );
   }
 
-  it('starts broad and sends the fixed Topic scope without Explore space state', async () => {
+  it('starts broad and sends the fixed Topic and curated-space scope', async () => {
     renderTopicFeed();
 
     const request = new URL(await requestedUrl(), 'https://example.com');
     expect(request.searchParams.get('sort')).toBe('best');
     expect(request.searchParams.get('topicId')).toBe('topic-root');
     expect(request.searchParams.get('spaceId')).toBe('space-route');
-    expect(request.searchParams.get('spaceIds')).toBeNull();
+    expect(request.searchParams.get('spaceIds')).toBe('space-route');
     expect(request.searchParams.get('typeIds')).toBeNull();
     expect(mocks.allowlistEnabled).toBe(false);
   });
@@ -510,7 +510,7 @@ describe('EntityFeed contextual filters', () => {
         topicFacetEndpoint="/api/topics/facets"
         showSpaceFilter={false}
         showTopicFilter
-        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
       />
     );
 
@@ -526,7 +526,7 @@ describe('EntityFeed contextual filters', () => {
         topicFacetEndpoint="/api/topics/facets"
         showSpaceFilter={false}
         showTopicFilter
-        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
       />
     );
 
@@ -536,7 +536,7 @@ describe('EntityFeed contextual filters', () => {
     const body = JSON.parse(mocks.fetch.mock.calls.at(-1)?.[1]?.body as string);
     expect(body).toMatchObject({
       selectedTopicIds: [],
-      fixedParams: { topicId: 'topic-root', spaceId: 'space-route' },
+      fixedParams: { topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' },
     });
     expect(body).not.toHaveProperty('candidateTopicIds');
   });

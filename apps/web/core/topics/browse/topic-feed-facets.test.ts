@@ -79,13 +79,7 @@ vi.mock('~/core/io/graphql-client', async () => {
   };
 });
 
-const browse = {
-  featured: [{ id: '11111111111111111111111111111111', name: 'Featured', image: null }],
-  editorOf: [],
-  memberOf: [],
-  documentationImage: null,
-  personalSpaceId: null,
-};
+const spaceIds = ['11111111111111111111111111111111'];
 
 beforeEach(() => {
   mocks.calls = [];
@@ -94,7 +88,7 @@ beforeEach(() => {
 describe('fetchTopicFeedFacets', () => {
   it('facets only the feed population and counts each Debate once per inherited Claim Topic', async () => {
     const topics = await fetchTopicFeedFacets({
-      browse,
+      spaceIds,
       topicId: PAGE_TOPIC,
       selectedTopicIds: [],
       typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
@@ -109,7 +103,7 @@ describe('fetchTopicFeedFacets', () => {
 
   it('does not traverse Debate claims when Debate is excluded by the type filter', async () => {
     await fetchTopicFeedFacets({
-      browse,
+      spaceIds,
       topicId: PAGE_TOPIC,
       selectedTopicIds: [],
       typeIds: [CLAIM_TYPE_ID],
@@ -121,7 +115,7 @@ describe('fetchTopicFeedFacets', () => {
 
 describe('fetchTopicFeedCompositionCounts', () => {
   it('counts unique feed-eligible entities with the same Topic and visible-space filters', async () => {
-    await expect(fetchTopicFeedCompositionCounts({ browse, topicId: PAGE_TOPIC })).resolves.toEqual({
+    await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual({
       claims: 1,
       debates: 2,
       news: 3,
