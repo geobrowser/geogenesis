@@ -60,6 +60,15 @@ vi.mock('@tanstack/react-query', () => ({
   },
 }));
 
+vi.mock('~/core/explore/use-explore-topic-facet', () => ({
+  useExploreTopicFacet: () => ({
+    topics: [],
+    namesPending: false,
+    countsPending: false,
+    settled: false,
+  }),
+}));
+
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
   useClaimSpaceAllowlist: (enabled?: boolean) => {
     mocks.allowlistEnabled = enabled;
@@ -355,8 +364,17 @@ describe('EntityFeed Explore type filter', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
 
     // The time slot is empty rather than 'week': this feed sorts by New, which carries no range,
-    // so there is nothing to send and nothing to key on. Same positions otherwise.
-    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', undefined, 'space-id', null]);
+    // so there is nothing to send and nothing to key on. Type and topic slots stay null on
+    // surfaces that do not show those filters, so they do not split the cache.
+    expect(mocks.queryOptions?.queryKey).toEqual([
+      '/api/activity/feed',
+      'new',
+      undefined,
+      'space-id',
+      null,
+      null,
+      null,
+    ]);
   });
   // GEO-2757. Explore opts its cards into opening the side panel; the space activity tab, which
   // renders this same feed, does not. The flag is a single forward, so nothing but a test says it
