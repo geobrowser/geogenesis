@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { useLineClampOverflow } from '~/core/debates/browse/line-clamp-overflow';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
@@ -57,6 +58,7 @@ export function ExploreCardTitle({
   item,
   opensSidePanel,
   clamped = false,
+  showFullTextOnHover = false,
 }: {
   item: ExploreFeedItem;
   opensSidePanel: boolean;
@@ -67,19 +69,27 @@ export function ExploreCardTitle({
    * title leaves over, so a third line is height it did not budget for; every other card lets the
    * name run.
    *
-   * No `title` tooltip with it. Clamping is not the same as being cut — most headings fit inside
-   * two lines — and a tooltip repeating text already on screen is worse than none. Knowing which
-   * is which means measuring, as the full-screen header does with `useLineClampOverflow`, and that
-   * is a ResizeObserver per card in an infinite feed to reveal what the heading's own link already
-   * opens.
+   * A tooltip is separate and opt-in: clamping is not proof that this particular heading overflowed,
+   * and most feed headings do not need duplicate hover text. Constrained surfaces can explicitly
+   * measure the clamp and expose the full heading only when text was actually hidden.
    */
   clamped?: boolean;
+  /** Expose the complete heading through the native tooltip on constrained card surfaces. */
+  showFullTextOnHover?: boolean;
 }) {
   const { text, target } = exploreCardHeading(item);
+  const [headingElement, setHeadingElement] = React.useState<HTMLHeadingElement | null>(null);
+  const isOverflowing = useLineClampOverflow(headingElement, {
+    maxLines: 2,
+    enabled: clamped && showFullTextOnHover,
+    contentKey: text,
+  });
 
   return (
     <ExploreCardEntityLink item={target} opensSidePanel={opensSidePanel}>
       <h2
+        ref={setHeadingElement}
+        title={showFullTextOnHover && isOverflowing ? text : undefined}
         className={cx(
           'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
           clamped && 'line-clamp-2'

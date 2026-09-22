@@ -8,9 +8,11 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ID } from '~/core/id';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
+import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -21,6 +23,8 @@ import { GalleryClaimCard } from './gallery-claim-card';
 
 /** How many cards a gallery holds before the reader is sent to the tab. */
 const SHOWN = 6;
+const GALLERY_ACTIVATE_RATIO = 0.6;
+const GALLERY_DEACTIVATE_RATIO = 0.4;
 
 export type ActivityKind = {
   key: string;
@@ -163,6 +167,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
           <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
         ) : (
           <ActivityGallery
+            // Each tab is a distinct playback collection. Remounting clears an explicit card
+            // selection before any player in a revisited tab can resume from stale ownership.
+            key={selected.key}
             rows={selected.rows}
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
@@ -400,14 +407,21 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const { scrollerRef, centredId } = useCentredCard(shown);
+  const {
+    scrollerRef,
+    allowedDebateId,
+    requestPlayback,
+    setPlaybackAvailable,
+    canScrollLeft,
+    canScrollRight,
+    scrollByCard,
+  } = useActivityGallery(shown);
 
   return (
-    // One at a time. A debate card decides for itself whether to play from how
-    // much of it is on screen, which is right in a stacked feed and wrong in a
-    // row — here several are fully visible at once and every one of them would
-    // start. The gate names the one nearest the middle.
-    <DebatePlaybackGate allowedId={centredId}>
+    // One at a time. Compact cards can leave several debates fully visible, so intersection alone
+    // cannot choose. The first debate receives autoplay; clicking another player transfers the
+    // gate before that click starts it, which also pauses the previous owner.
+    <DebatePlaybackGate allowedId={allowedDebateId}>
       {/*
        * The wrapper, not the scroller, carries both of these.
        *
@@ -423,7 +437,7 @@ function ActivityGallery({
        * the gallery hangs off the side of the document and every profile scrolls sideways. `md` is
        * inside `2xl` in a desktop-first scale, so the gutter is always there to cancel.
        */}
-      <div className="@container md:-mr-[2ch]">
+      <div className="@container relative md:-mr-[2ch]">
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
@@ -444,88 +458,221 @@ function ActivityGallery({
               label={spaceLabel(labelsById, row.spaceId)}
               response={responseByClaimId?.[normId(row.entityId)]}
               personName={personName}
+              onDebatePlaybackRequest={requestPlayback}
+              onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 pr-4" />
         </div>
+
+        {canScrollLeft ? <GalleryNavigationButton direction="left" onClick={() => scrollByCard(-1)} /> : null}
+        {canScrollRight ? <GalleryNavigationButton direction="right" onClick={() => scrollByCard(1)} /> : null}
       </div>
     </DebatePlaybackGate>
   );
 }
 
 /**
- * Which card is nearest the middle of the row.
+ * Own autoplay for a row where several debates can be visible at once.
  *
- * Measured rather than derived from the scroll offset over a card width: the
- * cards are `min(420px, 84cqw)` and the spacers at either end are not cards at
- * all, so arithmetic on a nominal width would drift. Read on scroll through a
- * rAF, which is what keeps a flick from measuring on every frame it fires.
+ * The first debate with a mounted player starts. A click on an active player transfers ownership
+ * immediately; a click on an inactive visible edge centers that card and transfers once active.
+ * Scrolling the rail or page keeps that owner until less than 40% of its two-dimensional area is
+ * visible, then advances to a mounted card that is at least 60% visible. Those are the same
+ * hysteresis edges and visibility dimensions used by the player itself, so the gate hands off at
+ * the moment the outgoing player pauses rather than leaving a silent visible row. The same
+ * measurement pass also drives the rail navigation controls.
  */
-function useCentredCard(rows: ExploreFeedRow[]) {
+function useActivityGallery(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
-  const [centredIndex, setCentredIndex] = React.useState(0);
+  const collectionKey = React.useMemo(() => rows.map(row => `${row.entityId}:${row.spaceId}`).join('|'), [rows]);
+  const [availableDebateIds, setAvailableDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const scheduleMeasureRef = React.useRef<(() => void) | null>(null);
+  const availableRef = React.useRef(availableDebateIds);
+  availableRef.current = availableDebateIds;
+  // Ownership is state, not a derivation from row order. Once a player starts, a different row
+  // finishing its lookup must not interrupt it; only click, visibility, or unavailability moves it.
+  const [selectedPlaybackId, setSelectedPlaybackId] = React.useState<string | null>(null);
+  const allowedDebateId =
+    selectedPlaybackId &&
+    availableDebateIds.has(normId(selectedPlaybackId)) &&
+    rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, selectedPlaybackId))
+      ? selectedPlaybackId
+      : null;
+  const allowedRef = React.useRef(allowedDebateId);
+  allowedRef.current = allowedDebateId;
+  const [navigation, setNavigation] = React.useState({ left: false, right: false });
 
   React.useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
+    // A different Activity collection starts at its first card. Besides being the expected tab
+    // behavior, this keeps the first debate selected for autoplay and actually visible together.
+    scroller.scrollLeft = 0;
     let frame = 0;
+    let previousScrollLeft = 0;
 
     const measure = () => {
       frame = 0;
-      const cards = scroller.querySelectorAll('[data-activity-card]');
-      if (cards.length === 0) return;
+      const scrollDirection = Math.sign(scroller.scrollLeft - previousScrollLeft);
+      previousScrollLeft = scroller.scrollLeft;
 
-      // Both sides read from `getBoundingClientRect`, so both are in the
-      // viewport's coordinates. `offsetLeft` against `scrollLeft` mixed two:
-      // offsets are measured to the nearest *positioned* ancestor, which this
-      // scroller is not, so every card's value carried a constant the scroll
-      // position knew nothing about — the comparison came out the same however
-      // far the row was scrolled, and the answer never moved off the first card.
       const scrollerBox = scroller.getBoundingClientRect();
-      const middle = scrollerBox.left + scrollerBox.width / 2;
+      const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-activity-card]'));
+      const firstBox = cards.at(0)?.getBoundingClientRect();
+      const lastBox = cards.at(-1)?.getBoundingClientRect();
+      const nextNavigation = {
+        // Card bounds, rather than raw scroll offsets, keep the controls tied to useful content.
+        // The rail has spacer elements at both ends, and scrolling through those alone should not
+        // leave an arrow visible after the first or last card is already fully in view.
+        left: Boolean(firstBox && firstBox.left < scrollerBox.left - 1),
+        right: Boolean(lastBox && lastBox.right > scrollerBox.right + 1),
+      };
+      setNavigation(current =>
+        current.left === nextNavigation.left && current.right === nextNavigation.right ? current : nextNavigation
+      );
 
-      let bestIndex = 0;
-      let bestDistance = Infinity;
-
-      cards.forEach((card, index) => {
+      const visible = cards.flatMap((card, index) => {
+        const id = card.dataset.activityDebateId;
+        if (!id || !availableRef.current.has(normId(id))) return [];
         const box = card.getBoundingClientRect();
-        const distance = Math.abs(box.left + box.width / 2 - middle);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = index;
-        }
+        const visibleWidth = Math.max(
+          0,
+          Math.min(box.right, scrollerBox.right, window.innerWidth) - Math.max(box.left, scrollerBox.left, 0)
+        );
+        const visibleHeight = Math.max(
+          0,
+          Math.min(box.bottom, scrollerBox.bottom, window.innerHeight) - Math.max(box.top, scrollerBox.top, 0)
+        );
+        return [
+          {
+            id,
+            index,
+            ratio: box.width > 0 && box.height > 0 ? (visibleWidth * visibleHeight) / (box.width * box.height) : 0,
+          },
+        ];
       });
 
-      setCentredIndex(bestIndex);
+      const currentId = allowedRef.current;
+      const current = visible.find(card => currentId && ID.equals(card.id, currentId));
+      if (current && current.ratio > GALLERY_DEACTIVATE_RATIO) return;
+
+      const candidates = visible.filter(card => card.id && card.ratio >= GALLERY_ACTIVATE_RATIO);
+      const directional =
+        scrollDirection > 0
+          ? candidates.find(card => current == null || card.index > current.index)
+          : scrollDirection < 0
+            ? [...candidates].reverse().find(card => current == null || card.index < current.index)
+            : undefined;
+      const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
+
+      if (next && (!currentId || !ID.equals(next.id, currentId))) {
+        setSelectedPlaybackId(next.id);
+      }
     };
 
-    const onScroll = () => {
-      if (frame) return;
-      frame = requestAnimationFrame(measure);
+    const scheduleMeasure = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
     };
+    scheduleMeasureRef.current = scheduleMeasure;
 
     measure();
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    scroller.addEventListener('scroll', scheduleMeasure, { passive: true });
+    window.addEventListener('scroll', scheduleMeasure, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure);
+    observer?.observe(scroller);
+    window.addEventListener('resize', scheduleMeasure);
 
     return () => {
+      if (scheduleMeasureRef.current === scheduleMeasure) scheduleMeasureRef.current = null;
       if (frame) cancelAnimationFrame(frame);
-      scroller.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
+      scroller.removeEventListener('scroll', scheduleMeasure);
+      window.removeEventListener('scroll', scheduleMeasure);
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleMeasure);
     };
-  }, [rows]);
+  }, [collectionKey]);
 
-  return { scrollerRef, centredId: rows[centredIndex]?.entityId ?? null };
+  // A player can appear or disappear without the rail moving (query completion, refetch failure,
+  // or media eviction). Re-run the same visibility selection used by scrolling instead of falling
+  // back to source order until some later scroll or resize happens to correct ownership.
+  React.useEffect(() => {
+    scheduleMeasureRef.current?.();
+  }, [availableDebateIds]);
+
+  const scrollByCard = React.useCallback(
+    (direction: -1 | 1) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const firstCard = scroller.querySelector<HTMLElement>('[data-activity-card]');
+      const cardWidth = firstCard?.getBoundingClientRect().width || 260;
+      // `gap-4` is 16px. Move one complete card plus that gap so the next snap point lands flush.
+      scroller.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
+    },
+    [scrollerRef]
+  );
+
+  const requestPlayback = React.useCallback(
+    (debateId: string) => {
+      if (availableRef.current.has(normId(debateId))) setSelectedPlaybackId(debateId);
+    },
+    []
+  );
+
+  const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
+    const id = normId(debateId);
+    setSelectedPlaybackId(current => {
+      if (available) return current ?? debateId;
+      // An unavailable owner must not reclaim the gate merely by remounting later.
+      return current && ID.equals(current, debateId) ? null : current;
+    });
+    setAvailableDebateIds(current => {
+      if (current.has(id) === available) return current;
+
+      const next = new Set(current);
+      if (available) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  return {
+    scrollerRef,
+    allowedDebateId,
+    requestPlayback,
+    setPlaybackAvailable,
+    canScrollLeft: navigation.left,
+    canScrollRight: navigation.right,
+    scrollByCard,
+  };
+}
+
+function GalleryNavigationButton({ direction, onClick }: { direction: 'left' | 'right'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`Scroll activity ${direction}`}
+      onClick={onClick}
+      className={cx(
+        'absolute top-1/2 z-30 grid size-9 -translate-y-1/2 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-card transition-colors hover:bg-grey-01 focus-visible:border-text focus-visible:outline-none',
+        direction === 'left' ? 'left-2' : 'right-2'
+      )}
+    >
+      <span className={direction === 'left' ? 'rotate-180' : undefined} aria-hidden>
+        <ChevronRight />
+      </span>
+    </button>
+  );
 }
 
 /**
  * One card in the row.
  *
- * `420px` on a wide screen, and never wider than the viewport allows on a
- * phone. Under `520px` the claim card switches to its own narrow arrangement —
- * `claim-card-narrow`, a container query — so this width is what puts it there,
- * and the card lays itself out rather than being told how.
+ * Debate cards stay at `260px`, leaving almost three in view at the profile's
+ * 750px content width. Claim cards use `300px`: after the card's border and 24px
+ * horizontal padding, their 274px pill row clears the 272px container-query threshold and
+ * keeps both response buttons beside each other.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -535,11 +682,15 @@ function GalleryCard({
   label,
   response,
   personName,
+  onDebatePlaybackRequest,
+  onDebatePlaybackAvailabilityChange,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
   personName?: string | null;
+  onDebatePlaybackRequest: (debateId: string) => void;
+  onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -553,17 +704,18 @@ function GalleryCard({
   return (
     <div
       data-activity-card
+      data-activity-debate-id={isClaim ? undefined : row.entityId}
       className={cx(
         // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
         // panel: the panel is a column of its own width inside a window that may
         // be three times wider, so `84vw` there is not 84% of anything the reader
         // can see. The wrapper around the scroller establishes the container this
         // measures — see `ActivityGallery`.
-        // Sized so the pill row clears the 272px that `claim-pills-wide` needs to put Agree and
-        // Disagree side by side — the card's own padding takes 26px off whatever this is — while
-        // leaving a clear sliver of the next card. Narrower phones still stack, which is the
-        // container query doing its job rather than a card growing wider than its screen.
-        'w-[min(420px,84cqw)] shrink-0 snap-start',
+        // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
+        // to preserve two response columns after the card's padding. `84cqw` remains the phone
+        // ceiling, where the response row may stack rather than overflow.
+        isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
+        'shrink-0 snap-start',
         // The lobby card brings its own outline; the feed's card does not, and
         // draws a rule underneath itself to separate it from the next card
         // *down* — which in a row is a line under nothing.
@@ -575,7 +727,14 @@ function GalleryCard({
       ) : (
         // The Join button is hidden: this is a record being read, not a place to
         // be recruited into.
-        <ExploreFeedCard item={toExploreFeedItem(row, label)} hideJoinButton titleOpensSidePanel />
+        <ExploreFeedCard
+          item={toExploreFeedItem(row, label)}
+          hideJoinButton
+          titleOpensSidePanel
+          compactDebateChrome
+          onDebatePlaybackRequest={onDebatePlaybackRequest}
+          onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+        />
       )}
     </div>
   );

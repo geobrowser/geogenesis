@@ -81,6 +81,7 @@ function controllerFixture(overrides: {
   autoplayBlocked?: boolean;
   playing?: boolean;
   playbackEnded?: boolean;
+  subtitle?: string | null;
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -102,7 +103,7 @@ function controllerFixture(overrides: {
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
     activeSlot: overrides.turnSlot,
-    subtitle: null,
+    subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
@@ -150,6 +151,70 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('player layout', () => {
+  it('keeps both stacked videos at the original aspect ratio', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const player = container.querySelector('[data-debate-ready]');
+    expect(player?.className).toContain('flex-col');
+
+    const tiles = Array.from(container.querySelectorAll('[aria-label="Pause or play"]')).map(
+      control => control.parentElement
+    );
+    expect(tiles).toHaveLength(2);
+    expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
+  });
+});
+
+describe('overlay variants', () => {
+  it('removes inline claim cards while leaving claim details to the card action', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.ticker = {
+      ...emptyTicker(),
+      cardsBySlot: new Map([[1, [{}]]]),
+    };
+
+    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+
+    expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('shows subtitles only for an active, playing, muted compact debate', () => {
+    const subtitle = 'A complete subtitle';
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(queryByText(subtitle)).not.toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active={false} reducedOverlays />);
+    expect(queryByText(subtitle)).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active />);
+    expect(queryByText(subtitle)).not.toBeNull();
+  });
+
+  it('preserves the current subtitle when a regular debate is paused or inactive', () => {
+    const subtitle = 'The current regular-player subtitle';
+    mocks.controller = controllerFixture({ mutedByUser: false, playing: false, turnSlot: 1, subtitle });
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(queryByText(subtitle)).not.toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+    expect(queryByText(subtitle)).not.toBeNull();
+  });
+});
 
 /**
  * Per-turn audio is the `muted` flag: only the debater whose turn it is is audible, and the

@@ -12,7 +12,6 @@ import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
@@ -21,11 +20,9 @@ import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { SpaceThumb } from './space-thumb';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
@@ -76,6 +73,16 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
+  /** Compact title and metadata treatment used by the narrow profile Activity rail. */
+  compactChrome?: boolean;
+  /**
+   * Called when a coordinated surface's player is clicked. An allowed active player transfers
+   * before the click reaches it. A visible non-owner consumes that first click while ownership
+   * commits, and an inactive player is centered before requesting ownership when it becomes active.
+   */
+  onPlaybackRequest?: (debateId: string) => void;
+  /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
+  onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -100,6 +107,9 @@ export function DebateExploreFeedCard({
   hideSpaceLink = false,
   hideJoinButton = false,
   titleOpensSidePanel = false,
+  compactChrome = false,
+  onPlaybackRequest,
+  onPlaybackAvailabilityChange,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -178,7 +188,58 @@ export function DebateExploreFeedCard({
    * its votes and its comment count — neither asks geo-chat anything — and gets the rest back on
    * the way past.
    */
-  const mediaMounted = readyDebate != null && nearViewport;
+  const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
+
+  // A card enters the media look-ahead band before it is active. Its visible edge can therefore
+  // receive a click while the player still has `active={false}`. Giving that card ownership at
+  // once would stop the current player only for the new owner to pause itself. Bring the clicked
+  // card into the active range first, then complete the same capture-phase handoff once its
+  // observer confirms that the player can run.
+  const pendingPlaybackRequestRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!mediaMounted || !onPlaybackRequest) {
+      pendingPlaybackRequestRef.current = false;
+      return;
+    }
+
+    if (!active || !pendingPlaybackRequestRef.current) return;
+
+    pendingPlaybackRequestRef.current = false;
+    onPlaybackRequest(debateId);
+  }, [active, debateId, mediaMounted, onPlaybackRequest]);
+
+  const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onPlaybackRequest) return;
+    if (active && playbackAllowed) {
+      pendingPlaybackRequestRef.current = false;
+      onPlaybackRequest(debateId);
+      return;
+    }
+
+    // This first click either activates the card or transfers the gate. It must not also reach the
+    // player's full-tile toggle (or another media control) before the player is both active and
+    // allowed, or React's batched ownership update can briefly run it alongside the old owner.
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (active) {
+      pendingPlaybackRequestRef.current = false;
+      onPlaybackRequest(debateId);
+      return;
+    }
+
+    if (!container) return;
+    pendingPlaybackRequestRef.current = true;
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  };
+
+  React.useEffect(() => {
+    if (!mediaMounted || !onPlaybackAvailabilityChange) return;
+
+    onPlaybackAvailabilityChange(debateId, true);
+    return () => onPlaybackAvailabilityChange(debateId, false);
+  }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
   // The interaction state lives on the card rather than inside the bar: the bar is shared with the
   // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
@@ -204,8 +265,6 @@ export function DebateExploreFeedCard({
   if (notWatchable) {
     return <>{fallback}</>;
   }
-
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
   /**
    * Comments and counts differ from the full-screen feed only in where they come from and where
@@ -245,67 +304,45 @@ export function DebateExploreFeedCard({
         className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
         style={DEBATE_CARD_COLUMN_STYLE}
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {!hideSpaceLink ? (
-              <Link
-                href={NavUtils.toSpace(item.spaceId)}
-                className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-              >
-                <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-                <span className="min-w-0 truncate">{item.spaceName}</span>
-              </Link>
-            ) : null}
-            {!hideJoinButton && !item.isMemberOrEditor ? (
-              // The design puts the join CTA as a compact chip beside the space name, unlike the
-              // generic card's right-aligned button — the right side holds the debate CTA.
-              <ExploreJoinSpaceButton
-                spaceId={item.spaceId}
-                hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-                variant="pill"
-                label="Join"
-              />
-            ) : null}
-            <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-              Debate
-            </span>
-            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
-          </div>
-          {/* The way out of the card and into the debate at full size.
-           *
-           * This corner used to hold "View all", a link to the space's whole debates list. Since
-           * GEO-2879 headed the card with the claim, nothing on the card pointed at the debate
-           * itself any more — the open question in that ticket's notes, which asked where the path
-           * to the full-screen debate would go once the title stopped being it. Here.
-           *
-           * The Debate entity's own page is that path: `DebateEntityView` renders it as the
-           * `/debates` feed anchored to this debate, which is the full-screen experience with this
-           * debate on top. So this is the entity link the title used to be, moved to a control
-           * that says "bigger" rather than competing with the claim for the heading.
-           *
-           * `FullscreenLink` so it reads as the same offer a data block's header makes, which is
-           * where this control's styling comes from. */}
-          <FullscreenLink
-            href={NavUtils.toEntity(item.spaceId, item.entityId)}
-            entityId={item.entityId}
-            spaceId={item.spaceId}
-            ariaLabel="Watch this debate full screen"
-          />
-        </div>
+        {/* The way out of the card and into the debate at full size. This corner used to hold
+            "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
+            with the claim, the entity link moved here so it says "bigger" rather than competing
+            with the claim for the heading. The shared metadata keeps fallback cards identical. */}
+        <DebateExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          compact={compactChrome}
+          endSlot={
+            <FullscreenLink
+              href={NavUtils.toEntity(item.spaceId, item.entityId)}
+              entityId={item.entityId}
+              spaceId={item.spaceId}
+              ariaLabel="Watch this debate full screen"
+            />
+          }
+        />
 
         {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
             height budget is calculated against — a third line is 23px the viewport was not
             promised. Only the debate card asks for it, because only the debate card has fixed
             aspect-ratio media whose height follows from the space the title leaves it. */}
-        <ExploreCardTitle item={item} opensSidePanel={titleOpensSidePanel} clamped />
+        <ExploreCardTitle
+          item={item}
+          opensSidePanel={titleOpensSidePanel}
+          clamped
+          showFullTextOnHover={compactChrome}
+        />
 
-        {mediaMounted ? (
-          // The recordings resolve while the card is still approaching. Crossing back out of
-          // that same window unmounts this subtree instead of retaining two paused videos forever.
-          <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} />
-        ) : (
-          <DebateVideoSkeleton />
-        )}
+        <div onClickCapture={mediaMounted && onPlaybackRequest ? requestPlayback : undefined}>
+          {mediaMounted ? (
+            // The recordings resolve while the card is still approaching. Crossing back out of
+            // that same window unmounts this subtree instead of retaining two paused videos forever.
+            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} reducedOverlays={compactChrome} />
+          ) : (
+            <DebateVideoSkeleton />
+          )}
+        </div>
 
         {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
             the media's right at desktop widths and moves it here at narrow ones; a card is short
@@ -314,7 +351,7 @@ export function DebateExploreFeedCard({
             a difference full screen already makes with itself. Wrapper carries the margin so it
             doesn't collide with the bar's own `flex`. */}
         <div className="mt-1">
-          <DebateInteractionBar orientation="horizontal" {...interactionProps} />
+          <DebateInteractionBar orientation="horizontal" compact={compactChrome} {...interactionProps} />
         </div>
       </div>
 
@@ -354,8 +391,16 @@ export function DebateExploreFeedCard({
 // is a boolean, so on a change that is only about the panel this skips the player and its playback
 // hooks entirely. (A re-render never interrupted playback — the <video> keeps its identity — but
 // there is no reason to re-run the whole subtree for a flag it does not read.)
-const DebateCardVideos = React.memo(function DebateCardVideos({ debate, active }: { debate: Debate; active: boolean }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload />;
+const DebateCardVideos = React.memo(function DebateCardVideos({
+  debate,
+  active,
+  reducedOverlays,
+}: {
+  debate: Debate;
+  active: boolean;
+  reducedOverlays: boolean;
+}) {
+  return <DebateFeedPlayer debate={debate} active={active} preload reducedOverlays={reducedOverlays} />;
 });
 
 function DebateVideoSkeleton() {
