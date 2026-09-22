@@ -16,9 +16,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => false }));
-// A transitive UI import reaches onboarding, whose persisted atom reads storage
-// at module load. This header test has no onboarding behavior to exercise.
-vi.mock('~/core/hooks/use-onboarding', () => ({ useOnboarding: () => ({}) }));
+// Node's built-in localStorage shim can shadow jsdom with a partial object. This
+// layout test only reaches the pending-space atom through transitive UI imports.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));

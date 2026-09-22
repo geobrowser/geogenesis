@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -53,7 +55,7 @@ export function EntityPageActions({
   const voteButtons = isVoteable ? <EntityVoteButtons entityId={entityId} spaceId={spaceId} /> : null;
 
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-5">
+    <div className={cx('ml-auto flex shrink-0 items-center', votesFirst ? 'gap-4' : 'gap-5')}>
       {/* Profiles put voting first, as their mobile header does. Every other
           surface keeps master's create, history, menu, votes order. */}
       {votesFirst && voteButtons}
