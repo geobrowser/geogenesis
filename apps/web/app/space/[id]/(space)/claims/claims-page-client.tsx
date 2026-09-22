@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { toggleId } from '~/core/debates/matchmaking/topic-facets';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
 import { type SpaceActivitySort } from '~/core/space/space-activity-rows';
 import {
@@ -95,8 +96,12 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const isStale = isPending || isSearchPending;
   const hasNarrowed = search.trim().length > 0 || topicIds.length > 0;
 
+  // `toggleId`, not a local include/filter. It compares canonically, because the facet answers in
+  // dashed uuids where the rows carry dashless ones — an id-equality toggle would then *add* a
+  // second spelling of a topic already picked instead of removing it. It also appends, which is
+  // what `orderFacetOptions` pins the menu by.
   const toggleTopic = React.useCallback((topicId: string) => {
-    setTopicIds(current => (current.includes(topicId) ? current.filter(id => id !== topicId) : [...current, topicId]));
+    setTopicIds(current => toggleId(current, topicId));
   }, []);
 
   return (

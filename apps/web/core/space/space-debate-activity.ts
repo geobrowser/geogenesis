@@ -1,8 +1,12 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
+import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TAG_PROPERTY_ID } from '~/core/constants';
-import { DEBATE_TAG_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import type { EntityFilter } from '~/core/gql/graphql';
+import { normId } from '~/core/utils/norm-id';
 
 /**
  * The two kinds of debate activity a space can hold.
@@ -15,16 +19,24 @@ export type SpaceActivityKind = 'debates' | 'claims';
 
 export const SPACE_ACTIVITY_KINDS: readonly SpaceActivityKind[] = ['debates', 'claims'];
 
+/**
+ * What each kind is called, on the card and on the row that leaves it.
+ *
+ * Together rather than as two records keyed alike, and here rather than in the component, because
+ * three surfaces draw this card: a space's Overview, a person's profile and a claim page. The other
+ * two still state these inline, which is what made "See all" on a space read differently from
+ * "View all" everywhere else until it was caught.
+ */
+export const SPACE_ACTIVITY_LABELS: Record<SpaceActivityKind, { label: string; seeAllLabel: string }> = {
+  debates: { label: 'Debates', seeAllLabel: 'View all debates' },
+  claims: { label: 'Claims', seeAllLabel: 'View all claims' },
+};
+
 /** The entity type each kind selects. One type each — the two surfaces are never mixed. */
 export const SPACE_ACTIVITY_TYPE_ID: Record<SpaceActivityKind, string> = {
   debates: DEBATE_TYPE_ID,
   claims: CLAIM_TYPE_ID,
 };
-
-/** Normalized so two spellings of one id are one thing. Same rule the rest of the app counts by. */
-function normalizeId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 /**
  * The full-screen view a "See all" row leads to — the space's own tab for that kind.
@@ -49,6 +61,13 @@ export function spaceActivityFeedHref(spaceId: string, kind: SpaceActivityKind):
  * `null` for either means the count could not be read, which the card draws as a dash rather than
  * a confident zero — the same distinction `ProfileActivitySection` already makes for a person.
  */
+/**
+ * How many `Types -> Debate` relations one request reads before the distinct count below becomes a
+ * lower bound. The whole graph held 88 when this was written, so it is not a page size so much as
+ * the point past which {@link decodeSpaceDebateActivityCounts} stops trusting its own dedupe.
+ */
+const DEBATE_RELATION_WINDOW = 500;
+
 export type SpaceDebateActivityCounts = {
   debates: number | null;
   claims: number | null;
@@ -83,44 +102,42 @@ export const NO_SPACE_DEBATE_ACTIVITY_COUNTS: SpaceDebateActivityCounts = { deba
  * Counting entities also needs no dedupe pass, so the two halves of this query are shaped
  * differently on purpose rather than by oversight.
  *
- * Both halves scope the *relation* to this space, not just the entity. A relation carries its own
- * space independently of the entity's, so an unscoped tag clause would accept a `Tags -> Debate`
- * written from anywhere — the loophole `claimsRequireDebateTagFilter` exists to close. The count
- * and the list have to close it the same way or the pill and the list disagree, which is why the
- * claims half is the same clause `spaceActivityRowsFilter` applies to the rows. Measured against
- * one space, both answer 611.
+ * The claims half takes the list's own filter as a variable rather than restating it. That is not
+ * tidiness: a relation carries its own space independently of the entity's, so an unscoped tag
+ * clause would accept a `Tags -> Debate` written from anywhere — the loophole
+ * `claimsRequireDebateTagFilter` exists to close — and the pill and the list have to close it
+ * identically or they are counting different corpora. Restated, they also drifted on the name
+ * requirement: the rows demand one and the count did not, which agreed only because every tagged
+ * claim happens to be named. One clause, passed in, cannot drift either way.
  */
-export const SPACE_DEBATE_ACTIVITY_COUNTS_QUERY = /* GraphQL */ `
+const SPACE_DEBATE_ACTIVITY_COUNTS_SOURCE = /* GraphQL */ `
   query SpaceDebateActivityCounts(
     $typesPropertyId: UUID!
     $debateTypeId: UUID!
-    $claimTypeIds: [UUID!]
-    $spaceIds: [UUID!]
-    $tagPropertyId: UUID!
-    $debateTagId: UUID!
+    $spaceIdList: [UUID!]
+    $spaceIds: UUIDFilter!
+    $claimTypeIds: UUIDFilter
+    $claimsFilter: EntityFilter
   ) {
     debateTypeRelations: relationsConnection(
-      first: 500
-      filter: { typeId: { is: $typesPropertyId }, toEntityId: { is: $debateTypeId }, spaceId: { in: $spaceIds } }
+      first: ${DEBATE_RELATION_WINDOW}
+      filter: { typeId: { is: $typesPropertyId }, toEntityId: { is: $debateTypeId }, spaceId: { in: $spaceIdList } }
     ) {
       totalCount
       nodes {
         fromEntityId
       }
     }
-    taggedClaims: entitiesConnection(
-      filter: {
-        typeIds: { overlaps: $claimTypeIds }
-        spaceIds: { overlaps: $spaceIds }
-        relations: {
-          some: { typeId: { is: $tagPropertyId }, toEntityId: { is: $debateTagId }, spaceId: { in: $spaceIds } }
-        }
-      }
-    ) {
+    taggedClaims: entitiesConnection(spaceIds: $spaceIds, typeIds: $claimTypeIds, filter: $claimsFilter) {
       totalCount
     }
   }
 `;
+
+export const spaceDebateActivityCountsDocument = parse(SPACE_DEBATE_ACTIVITY_COUNTS_SOURCE) as TypedDocumentNode<
+  any,
+  any
+>;
 
 export type SpaceDebateActivityCountsResult = {
   debateTypeRelations: {
@@ -139,7 +156,7 @@ export function decodeSpaceDebateActivityCounts(data: SpaceDebateActivityCountsR
   if (nodes) {
     const distinct = new Set<string>();
     for (const node of nodes) {
-      if (node?.fromEntityId) distinct.add(normalizeId(node.fromEntityId));
+      if (node?.fromEntityId) distinct.add(normId(node.fromEntityId));
     }
     // A full window is exact; a truncated one is not, and `totalCount` is the honest answer there.
     debates = totalCount != null && nodes.length < totalCount ? totalCount : distinct.size;
@@ -150,11 +167,17 @@ export function decodeSpaceDebateActivityCounts(data: SpaceDebateActivityCountsR
   return { debates, claims: data.taggedClaims?.totalCount ?? null };
 }
 
-export const spaceDebateActivityCountsVariables = (spaceId: string) => ({
+/**
+ * `claimsFilter` is passed in rather than built here, and it is the list's own — see
+ * {@link spaceActivityRowsFilter}. Composed by the caller because the filter lives in the module
+ * that reads the rows and that module needs the kinds from this one; wiring it at the one place
+ * that imports both keeps the two files acyclic and keeps the count measuring what the list shows.
+ */
+export const spaceDebateActivityCountsVariables = (spaceId: string, claimsFilter: EntityFilter) => ({
   typesPropertyId: SystemIds.TYPES_PROPERTY,
   debateTypeId: DEBATE_TYPE_ID,
-  claimTypeIds: [CLAIM_TYPE_ID],
-  spaceIds: [spaceId],
-  tagPropertyId: TAG_PROPERTY_ID,
-  debateTagId: DEBATE_TAG_ID,
+  spaceIdList: [spaceId],
+  spaceIds: { in: [spaceId] },
+  claimTypeIds: { in: [CLAIM_TYPE_ID] },
+  claimsFilter,
 });

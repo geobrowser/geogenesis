@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { SPACE_ACTIVITY_KINDS, spaceActivityFeedHref } from '~/core/space/space-debate-activity';
+import { SPACE_ACTIVITY_KINDS, SPACE_ACTIVITY_LABELS, spaceActivityFeedHref } from '~/core/space/space-debate-activity';
 import {
   useSpaceActivityRows,
   useSpaceDebateActivityCounts,
@@ -10,17 +10,6 @@ import {
 } from '~/core/space/use-space-debate-activity';
 
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
-
-const KIND_LABEL: Record<(typeof SPACE_ACTIVITY_KINDS)[number], string> = {
-  debates: 'Debates',
-  claims: 'Claims',
-};
-
-/** "View all", matching every other surface that draws this card — the profile and a claim page. */
-const SEE_ALL_LABEL: Record<(typeof SPACE_ACTIVITY_KINDS)[number], string> = {
-  debates: 'View all debates',
-  claims: 'View all claims',
-};
 
 /**
  * A space's debate activity, at the top of its Overview.
@@ -58,7 +47,7 @@ export function SpaceDebateActivitySection({ spaceId }: { spaceId: string }) {
 
       return {
         key: kind,
-        label: KIND_LABEL[kind],
+        label: SPACE_ACTIVITY_LABELS[kind].label,
         rows: source.rows,
         // A failed count is a dash, not a zero. The rows and the count are separate requests, so
         // the card can hold real debates beside a count that could not be read — and "0 debates"
@@ -73,7 +62,7 @@ export function SpaceDebateActivitySection({ spaceId }: { spaceId: string }) {
         // Both destinations are full-bleed — no header, no tab bar — so the fragment has nothing to
         // land on and would only ride along in a copied URL.
         skipTabsAnchor: true,
-        seeAllLabel: SEE_ALL_LABEL[kind],
+        seeAllLabel: SPACE_ACTIVITY_LABELS[kind].seeAllLabel,
       } satisfies ActivityKind;
     });
   }, [claims, counts, debates, isCountsLoading, spaceId]);

@@ -204,6 +204,13 @@ describe('ClaimsPageClient', () => {
     expect(screen.getByText('Top')).toBeInTheDocument();
   });
 
+  /** A row inside the open topic menu, which the trigger's own label can otherwise shadow. */
+  const topicRow = (name: string) =>
+    screen
+      .getAllByRole('button')
+      .filter(button => button.closest('[data-radix-popper-content-wrapper]') !== null)
+      .find(button => button.textContent?.startsWith(name))!;
+
   const topicRows = () =>
     screen
       .getAllByRole('button')
@@ -249,6 +256,30 @@ describe('ClaimsPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /Safety/ }));
 
     expect(asked().filters).toMatchObject({ topicIds: ['t1', 't2'] });
+  });
+
+  /**
+   * The facet answers in dashed uuids where the rows carry dashless ones, so an id-equality toggle
+   * would add a second spelling of a topic already picked rather than removing it. `toggleId`
+   * compares canonically; this pins that it is what runs.
+   */
+  it('unticks a topic whose id comes back in the other spelling', () => {
+    mocks.topics = [{ id: '41e851610e13a19441c4d980f2f2ce6b', name: 'Governance', count: 12 }];
+    const view = render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(topicRow('Governance'));
+    expect(asked().filters.topicIds).toHaveLength(1);
+
+    // The same topic, dashed — which is how a facet grouping hands it back. Re-rendered so the menu
+    // actually redraws with the other spelling; without that the row still carries the first one
+    // and the toggle is never asked the question. Once one is picked the trigger carries its name
+    // too, so the row has to be found inside the open menu.
+    mocks.topics = [{ id: '41e85161-0e13-a194-41c4-d980f2f2ce6b', name: 'Governance', count: 12 }];
+    view.rerender(<ClaimsPageClient spaceId="space-1" />);
+    fireEvent.click(topicRow('Governance'));
+
+    expect(asked().filters.topicIds).toEqual([]);
   });
 
   it('clears the topic selection', () => {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeSpaceDebateActivityCounts, spaceActivityFeedHref } from './space-debate-activity';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
+import { spaceActivityRowsFilter } from './space-activity-rows';
+import {
+  SPACE_ACTIVITY_LABELS,
+  decodeSpaceDebateActivityCounts,
+  spaceActivityFeedHref,
+  spaceDebateActivityCountsVariables,
+} from './space-debate-activity';
 
 describe('spaceActivityFeedHref', () => {
   // The space's own tabs, not a second pair of surfaces beside them. Both are ranked — the debates
@@ -9,6 +17,43 @@ describe('spaceActivityFeedHref', () => {
   it('points at the space’s own debates and claims tabs', () => {
     expect(spaceActivityFeedHref('space-1', 'debates')).toBe('/space/space-1/debates');
     expect(spaceActivityFeedHref('space-1', 'claims')).toBe('/space/space-1/claims');
+  });
+});
+
+describe('spaceDebateActivityCountsVariables', () => {
+  const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
+
+  /**
+   * The whole reason the filter is passed in. Restated, the count and the list drifted on the name
+   * requirement — the rows demand one and the count did not — which agreed only because every
+   * tagged claim happens to be named. A pill that counts a different corpus from the list it leads
+   * to is the bug this closes.
+   */
+  it('counts claims through the clause the list is filtered by', () => {
+    const filter = spaceActivityRowsFilter(SPACE, 'claims');
+
+    expect(spaceDebateActivityCountsVariables(SPACE, filter)).toMatchObject({
+      claimsFilter: filter,
+      claimTypeIds: { in: [CLAIM_TYPE_ID] },
+      spaceIds: { in: [SPACE] },
+    });
+  });
+
+  it('scopes the debate relation count to this space', () => {
+    expect(spaceDebateActivityCountsVariables(SPACE, spaceActivityRowsFilter(SPACE, 'claims'))).toMatchObject({
+      spaceIdList: [SPACE],
+    });
+  });
+});
+
+// Three surfaces draw this card; the other two still state these inline, which is how "See all" on
+// a space came to read differently from "View all" everywhere else.
+describe('SPACE_ACTIVITY_LABELS', () => {
+  it('names both kinds and the row that leaves them', () => {
+    expect(SPACE_ACTIVITY_LABELS).toEqual({
+      debates: { label: 'Debates', seeAllLabel: 'View all debates' },
+      claims: { label: 'Claims', seeAllLabel: 'View all claims' },
+    });
   });
 });
 

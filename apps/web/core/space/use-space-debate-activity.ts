@@ -1,19 +1,17 @@
 'use client';
 
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
-import { parse } from 'graphql';
 
+import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useTaggedClaimSearch } from '~/core/debates/tagged-claim-search';
 import { useTaggedTopicFacet } from '~/core/debates/tagged-claims';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { graphql } from '~/core/io/graphql-client';
 
 import {
@@ -25,20 +23,19 @@ import {
   type SpaceActivitySort,
   decodeSpaceActivityRows,
   spaceActivityRowsDocumentFor,
+  spaceActivityRowsFilter,
   spaceActivityRowsVariables,
   spaceTaggedClaimFilters,
 } from './space-activity-rows';
 import {
   NO_SPACE_DEBATE_ACTIVITY_COUNTS,
-  SPACE_DEBATE_ACTIVITY_COUNTS_QUERY,
   type SpaceActivityKind,
   type SpaceDebateActivityCounts,
   type SpaceDebateActivityCountsResult,
   decodeSpaceDebateActivityCounts,
+  spaceDebateActivityCountsDocument,
   spaceDebateActivityCountsVariables,
 } from './space-debate-activity';
-
-const countsDocument = parse(SPACE_DEBATE_ACTIVITY_COUNTS_QUERY) as TypedDocumentNode<any, any>;
 
 /**
  * None of this moves on anything a reader does on the page, and the Overview card asks for all of
@@ -46,9 +43,6 @@ const countsDocument = parse(SPACE_DEBATE_ACTIVITY_COUNTS_QUERY) as TypedDocumen
  * reason.
  */
 const SPACE_ACTIVITY_STALE_TIME = 60_000;
-
-/** Long enough that typing a word is one search rather than five, short enough to feel immediate. */
-const SEARCH_DEBOUNCE_MS = 250;
 
 /**
  * Everything that changes which rows come back, and in what order.
@@ -130,9 +124,10 @@ export function useSpaceDebateActivityCounts(
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: countsDocument,
+          query: spaceDebateActivityCountsDocument,
           decoder: (result: SpaceDebateActivityCountsResult) => decodeSpaceDebateActivityCounts(result),
-          variables: spaceDebateActivityCountsVariables(spaceId),
+          // The list's own clause, so the pill and the list it leads to count the same corpus.
+          variables: spaceDebateActivityCountsVariables(spaceId, spaceActivityRowsFilter(spaceId, 'claims')),
           signal,
         })
       ),
@@ -248,12 +243,14 @@ export function useSpaceClaimTopicFacet(spaceId: string, filters: SpaceActivityF
  * `[]` means nothing matched, which empties the list.
  */
 export function useSpaceClaimSearch(search: string, enabled: boolean) {
-  const debounced = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
-  const result = useTaggedClaimSearch({ tagId: DEBATE_TAG_ID, search: debounced, enabled });
+  // The hub's own search debounce, constant included. It trims on both sides, so a query differing
+  // from the one in flight only by a space just typed reads as settled rather than as pending.
+  const { value, pending } = useDebouncedSearch(search);
+  const result = useTaggedClaimSearch({ tagId: DEBATE_TAG_ID, search: value, enabled });
 
   return {
     claimIds: result.claimIds,
     /** The viewer has typed since the last answer, so the list on screen is about the old text. */
-    isPending: debounced !== search || !result.settled,
+    isPending: pending || !result.settled,
   };
 }
