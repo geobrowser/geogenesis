@@ -200,6 +200,21 @@ describe('HubMultiFilterMenu search', () => {
     await waitFor(() => expect(screen.getByText('No topics match')).toBeInTheDocument());
   });
 
+  it('announces an empty result without moving focus', async () => {
+    const field = await renderTopicMenu();
+
+    // The region is mounted before the message exists. A live region inserted at the same moment
+    // as its text is the case screen readers are documented to miss.
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('');
+
+    fireEvent.change(field, { target: { value: 'zzz' } });
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('No topics match'));
+    // Announced, not focused: the viewer stays where they were typing.
+    expect(screen.getByRole('status')).not.toHaveFocus();
+  });
+
   it('hides the clear row while a query is live, and brings it back when the query is cleared', async () => {
     const field = await renderTopicMenu();
 

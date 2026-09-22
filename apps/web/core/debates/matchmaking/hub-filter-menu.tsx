@@ -418,13 +418,33 @@ export function HubMultiFilterMenu<T extends string>({
               ) : null}
             </button>
           )}
-          {searching && visibleOptions.length === 0 ? (
-            <div className="px-3 py-2.5">
+          {/* The empty state, and the announcement of it, in one node.
+
+              Typing narrows the rows while focus stays in the field, so a run of them vanishing is
+              silent: a viewer who cannot see the list is told nothing and has to go looking to find
+              out it is empty. `role="status"` says it out loud without taking focus off what they
+              are typing.
+
+              Mounted for as long as the field is, and empty until there is something to say, rather
+              than appearing with its message already inside it — a live region inserted at the same
+              moment as its text is the case screen readers are documented to miss, and an
+              announcement nobody hears would leave this where it started. Empty it has no padding
+              and no text, so it costs no height while it waits.
+
+              One node rather than a visible message beside a screen-reader-only twin, which would
+              put the same sentence in the accessibility tree twice: once on the way past, once out
+              loud. */}
+          <div
+            role="status"
+            aria-live="polite"
+            className={searching && visibleOptions.length === 0 ? 'px-3 py-2.5' : undefined}
+          >
+            {searching && visibleOptions.length === 0 ? (
               <Text variant="footnote" className="text-grey-04!">
                 {searchEmptyLabel}
               </Text>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
           {visibleOptions.map(option => (
             <button
               key={option.value}
