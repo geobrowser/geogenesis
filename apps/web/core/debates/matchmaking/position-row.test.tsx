@@ -140,4 +140,41 @@ describe('PositionRow', () => {
     expect(screen.getByText('Verify')).toBeInTheDocument();
     expect(screen.getByText('Dispute')).toBeInTheDocument();
   });
+
+  // The stroke a `ChevronUp`/`ChevronDown` draws. Asserting the path rather than a test id because
+  // the glyph is the whole point here: a thumb swapped back in would still render an `svg`.
+  const CHEVRON_UP = 'M1 11L8 4L15 11';
+  const CHEVRON_DOWN = 'M1 5L8 12L15 5';
+
+  const glyphPath = (label: string) =>
+    (
+      screen.getByText(label).closest('span')?.parentElement?.querySelector('svg path') as SVGPathElement | null
+    )?.getAttribute('d') ?? null;
+
+  // A thumb is an opinion and Verify/Dispute is not one — it says the claim is or is not true. The
+  // claim ticker over the video already splits its glyphs this way, so a pill that thumbed both
+  // kinds made the same claim read differently in the panel and on the video.
+  it('draws chevrons for a factual claim rather than thumbs', () => {
+    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
+
+    expect(glyphPath('Verify')).toBe(CHEVRON_UP);
+    expect(glyphPath('Dispute')).toBe(CHEVRON_DOWN);
+  });
+
+  it('keeps the thumbs on a stance claim', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    expect(glyphPath('Agree')).not.toBe(CHEVRON_UP);
+    expect(glyphPath('Disagree')).not.toBe(CHEVRON_DOWN);
+  });
+
+  // A chevron has no filled form, so the pill's own fill is the only thing left saying which side
+  // the viewer holds. Losing it would leave a factual claim with no visible record of a response.
+  it('still marks the held side on a factual claim, where the glyph cannot', () => {
+    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={true} />);
+
+    const verify = screen.getByText('Verify').closest('div.flex.min-h-7') as HTMLElement;
+
+    expect([...verify.classList]).toContain('bg-divider');
+  });
 });

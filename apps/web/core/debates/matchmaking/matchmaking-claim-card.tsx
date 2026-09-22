@@ -28,6 +28,8 @@ import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils'
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { OnlineDot } from '~/design-system/online-dot';
@@ -1062,6 +1064,7 @@ export function PositionRow({
             // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
             label={forSide?.position_label ?? copy.positiveAction}
             summary={forSide}
+            responseKind={responseKind}
             position
             selected={viewerPosition === true}
             onRespond={onRespond}
@@ -1074,6 +1077,7 @@ export function PositionRow({
           <PositionButton
             label={againstSide?.position_label ?? copy.negativeAction}
             summary={againstSide}
+            responseKind={responseKind}
             position={false}
             selected={viewerPosition === false}
             onRespond={onRespond}
@@ -1123,6 +1127,7 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
 function PositionButton({
   label,
   summary,
+  responseKind,
   position,
   selected,
   onRespond,
@@ -1131,6 +1136,7 @@ function PositionButton({
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
+  responseKind: MatchmakingReadiness['response_kind'];
   position: boolean;
   selected: boolean;
   onRespond?: (position: boolean) => void;
@@ -1142,8 +1148,8 @@ function PositionButton({
   // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
   // green or red, which made the pill argue the position as well as record it — and put white-ish
   // text on two saturated fills that nothing else in the product uses this way. Which side is
-  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
-  // bar below, where the colours still mean something.
+  // yours is said by the fill (and, on a stance claim, the filled thumb); which side is *which* is
+  // said by the summary bar below, where the colours still mean something.
   //
   // `border` on both states, transparent when held, so picking a side cannot change the pill's
   // width and shuffle the row.
@@ -1161,8 +1167,32 @@ function PositionButton({
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
     <span className="flex min-w-0 items-center gap-1.5">
-      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      <span className="shrink-0">
+        {/*
+         * Chevrons for a factual claim, thumbs for a stance — the same split the claim ticker over
+         * the video already draws (GEO-2774 follow-up). A thumb is an opinion, and Verify/Dispute
+         * is not one: it says the claim is or is not true, which is the distinction the reader is
+         * watching people argue over. The pill shipped with thumbs on both kinds, so the one place
+         * the glyph could have carried that difference said nothing.
+         *
+         * Written out rather than picked into a shared `Icon`, because the two glyphs take
+         * different props: a chevron is a stroke with no interior and has no `filled` form, so
+         * handing it one silently drops it. Which side you hold is said by the pill's fill and the
+         * screen-reader note below, both of which a chevron keeps.
+         */}
+        {responseKind === 'veracity' ? (
+          position ? (
+            <ChevronUp />
+          ) : (
+            <ChevronDown />
+          )
+        ) : position ? (
+          /* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */
+          <ThumbUp filled={selected} />
+        ) : (
+          <ThumbDown filled={selected} />
+        )}
+      </span>
       <span className="truncate">
         {label}
         {selected ? <span className="sr-only"> — your response</span> : null}
