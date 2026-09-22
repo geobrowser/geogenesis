@@ -6,7 +6,12 @@ import type { ImgHTMLAttributes } from 'react';
 import cn from 'classnames';
 import Image, { ImageProps } from 'next/image';
 
-import { IPFS_GATEWAY_COUNT, getImagePathAtLevel, isOptimizableImageSrc } from '~/core/utils/utils';
+import {
+  IPFS_GATEWAY_COUNT,
+  getImagePathAtLevel,
+  isOptimizableImageSrc,
+  isRenderableImageSrc,
+} from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
@@ -21,11 +26,9 @@ const LQIP_SIZES = '32px';
 
 const DEFAULT_FADE_MS = 150;
 
-// next/image throws synchronously if `src` isn't a valid URL or local path, so
-// skip values that don't resolve to something renderable — e.g. a bare CID or an
-// unresolved entity id that slipped through in place of an ipfs:// URL.
-function isRenderableSrc(src: string): boolean {
-  return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
+/** Local object URLs from file pickers — fine for `<img>`, not for next/image. */
+function isBlobSrc(src: string): boolean {
+  return src.startsWith('blob:');
 }
 
 function isHttpSrc(src: string): boolean {
@@ -114,7 +117,7 @@ export function GeoImage({
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const loaded = loadedSrc === src;
 
-  if (!isRenderableSrc(src)) return <>{fallback ?? null}</>;
+  if (!isRenderableImageSrc(src)) return <>{fallback ?? null}</>;
 
   const isFill = Boolean(props.fill);
   const sizes = props.sizes ?? (isFill ? DEFAULT_IMAGE_SIZES : undefined);
@@ -208,7 +211,8 @@ export function NativeGeoImage({ value, alt = '', fallback, ...props }: NativeGe
 
   const src = getImagePathAtLevel(value, level);
   // A bare CID or an entity id that slipped through resolves to something no browser can fetch.
-  if (failed || !isRenderableSrc(src)) return <>{fallback ?? null}</>;
+  // `blob:` is allowed here only — next/image rejects it, but file-picker previews need it.
+  if (failed || (!isRenderableImageSrc(src) && !isBlobSrc(src))) return <>{fallback ?? null}</>;
 
   return <img {...props} src={src} alt={alt} onError={handleError} />;
 }

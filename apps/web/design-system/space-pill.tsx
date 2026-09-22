@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { FallbackImage } from '~/design-system/fallback-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 
 /**
  * The side panel's space pill: a 16px avatar and a name inside a rounded outline.
@@ -32,11 +32,11 @@ export function SpacePillLabel({ children }: { children: React.ReactNode }) {
   return <span className="min-w-0 truncate">{children}</span>;
 }
 
-/** The pill's avatar. `FallbackImage` walks gateways and covers a value that will not load. */
+/** The pill's avatar. Tiny thumbs skip the blur placeholder; gateway fallback still runs. */
 export function SpacePillAvatar({ value }: { value: string }) {
   return (
     <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
-      <FallbackImage value={value} sizes="16px" className="object-cover" />
+      <ThumbGeoImage value={value} />
     </span>
   );
 }

@@ -3,6 +3,7 @@ import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
@@ -54,7 +55,7 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
     }
 
     case 'image':
-      return <img src={block.src} alt="" />;
+      return <NativeGeoImage value={block.src} alt="" />;
 
     case 'video':
       return (

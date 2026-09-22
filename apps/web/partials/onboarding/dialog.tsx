@@ -17,7 +17,6 @@ import { useRouter } from 'next/navigation';
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { ROOT_SPACE } from '~/core/constants';
-import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -35,7 +34,7 @@ import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Button, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
-import { NativeGeoImage } from '~/design-system/geo-image';
+import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
 import { CheckedCircleCheckedSmall } from '~/design-system/icons/check-circle-checked-small';
 import { CheckedCircleUncheckedSmall } from '~/design-system/icons/check-circle-unchecked-small';
@@ -836,17 +835,16 @@ function StepInterestedIn({
 function StepComplete() {
   const avatar = useAtomValue(avatarAtom);
 
-  const { src, onError } = useImageWithFallback(avatar);
-
   return (
     <StepContents childKey="completed">
       <div className="flex w-full flex-col items-center">
-        <img
-          className="mb-5 h-[50px] w-[50px] rounded-full"
-          src={src ?? '/images/onboarding/no-avatar.png'}
-          onError={onError}
-          alt=""
-        />
+        <span className="relative mb-5 h-[50px] w-[50px] overflow-hidden rounded-full bg-grey-01">
+          {avatar ? (
+            <GeoImage value={avatar} alt="" fill sizes="50px" className="object-cover" />
+          ) : (
+            <img src="/images/onboarding/no-avatar.png" alt="" className="h-full w-full object-cover" />
+          )}
+        </span>
         <Text
           as="h3"
           variant="bodySemibold"
@@ -919,23 +917,11 @@ export const Animation = ({ active = false }) => {
   );
 };
 
-// Helper component for avatar preview with fallback
+// Helper component for avatar preview with gateway + progressive loading.
 const OnboardingAvatarPreview = ({ avatar }: { avatar: string }) => {
-  const { src, onError } = useImageWithFallback(avatar);
-
   return (
-    <div
-      style={{
-        backgroundImage: `url(${src})`,
-        height: 80,
-        width: 80,
-        backgroundSize: 'cover',
-        backgroundRepeat: 'no-repeat',
-        borderRadius: 100,
-      }}
-    >
-      {/* Hidden img to trigger fallback if needed */}
-      <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
+    <div className="relative h-20 w-20 overflow-hidden rounded-full bg-grey-01">
+      <GeoImage value={avatar} alt="" fill sizes="80px" className="object-cover" />
     </div>
   );
 };
