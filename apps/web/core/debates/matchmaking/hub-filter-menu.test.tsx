@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,10 +7,20 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { HubMultiFilterMenu } from './hub-filter-menu';
 
+/** Callbacks handed to {@link ResizeObserverStub}, so a test can say "the list just grew". */
+const resizeCallbacks: ResizeObserverCallback[] = [];
+
 class ResizeObserverStub {
+  constructor(callback: ResizeObserverCallback) {
+    resizeCallbacks.push(callback);
+  }
   observe() {}
   unobserve() {}
   disconnect() {}
+}
+
+function fireResize() {
+  for (const callback of [...resizeCallbacks]) callback([], {} as ResizeObserver);
 }
 
 /**
@@ -22,6 +32,7 @@ class ResizeObserverStub {
  * mid-run without re-spying a getter that is already mocked.
  */
 let listOverflows = false;
+let hasFinePointer = false;
 const VIEWPORT_CLIENT_HEIGHT = 400;
 
 function stubOverflow(overflowing: boolean) {
@@ -39,9 +50,10 @@ beforeAll(() => {
     get: () => (listOverflows ? VIEWPORT_CLIENT_HEIGHT * 2 : VIEWPORT_CLIENT_HEIGHT),
   });
   // jsdom has no matchMedia, and the menu asks it whether a real keyboard is present before it
-  // takes focus. Answered as a touch device so the tests drive the field explicitly.
+  // takes focus. Answered as a touch device by default, so only the tests that are about focus
+  // have to think about it.
   window.matchMedia = ((query: string) => ({
-    matches: false,
+    matches: query.includes('pointer: fine') ? hasFinePointer : false,
     media: query,
     onchange: null,
     addListener: () => {},
@@ -56,6 +68,8 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   listOverflows = false;
+  hasFinePointer = false;
+  resizeCallbacks.length = 0;
 });
 
 describe('HubMultiFilterMenu placement', () => {
@@ -248,12 +262,12 @@ describe('HubMultiFilterMenu search', () => {
     expect(screen.queryByLabelText('Search topics')).not.toBeInTheDocument();
   });
 
-  it('offers no search field while the menu has no options to search', async () => {
+  it('offers the field when the list grows past the viewport after the menu is already open', async () => {
     render(
       <HubMultiFilterMenu
         align="start"
         label="Any topic"
-        options={[]}
+        options={TOPICS}
         values={[]}
         onToggle={() => {}}
         onClear={() => {}}
@@ -261,22 +275,65 @@ describe('HubMultiFilterMenu search', () => {
         searchPlaceholder="Search topics"
       />
     );
-    stubOverflow(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
-
-    await waitFor(() => expect(screen.getAllByText('Any topic')).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText('Climate policy')).toBeInTheDocument());
     expect(screen.queryByLabelText('Search topics')).not.toBeInTheDocument();
+
+    // The facet lands, and the list now runs off the end.
+    stubOverflow(true);
+    act(fireResize);
+
+    await waitFor(() => expect(screen.getByLabelText('Search topics')).toBeInTheDocument());
+  });
+
+  it('takes focus on open where there is a keyboard to type with', async () => {
+    hasFinePointer = true;
+    const field = await renderTopicMenu();
+
+    await waitFor(() => expect(field).toHaveFocus());
+  });
+
+  it('leaves focus alone when the field only appears after the viewer has started picking', async () => {
+    hasFinePointer = true;
+    render(
+      <HubMultiFilterMenu
+        align="start"
+        label="Any topic"
+        options={TOPICS}
+        values={[]}
+        onToggle={() => {}}
+        onClear={() => {}}
+        clearLabel="Any topic"
+        searchPlaceholder="Search topics"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
+    await waitFor(() => expect(screen.getByText('Climate policy')).toBeInTheDocument());
+
+    // Ticking a topic widens the co-occurrence facet, and the menu stays open for it.
+    const row = screen.getByText('Climate policy').closest('button')!;
+    fireEvent.pointerDown(row);
+    fireEvent.click(row);
+    stubOverflow(true);
+    act(fireResize);
+
+    const field = await screen.findByLabelText('Search topics');
+    // Long enough for the autofocus timer and its frame to have come and gone.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(field).not.toHaveFocus();
   });
 
   it('keeps the field once shown, even when the query narrows the list back to a single page', async () => {
     const field = await renderTopicMenu();
 
-    // What the measurement would now report: the field is only still there because it latched.
-    stubOverflow(false);
+    // The query trims the list back to something that fits, and the shrink is measured again.
     fireEvent.change(field, { target: { value: 'climate' } });
-
     await waitFor(() => expect(screen.queryByText('Monetary policy')).not.toBeInTheDocument());
+    stubOverflow(false);
+    act(fireResize);
+
     expect(screen.getByLabelText('Search topics')).toHaveValue('climate');
   });
 });

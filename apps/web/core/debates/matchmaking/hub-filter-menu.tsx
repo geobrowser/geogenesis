@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 
+import { useAutofocus } from '~/core/hooks/use-autofocus';
+
 import { SmallButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Search } from '~/design-system/icons/search';
 import { TickSmall } from '~/design-system/icons/tick-small';
-import { inputStyles } from '~/design-system/input';
+import { Input } from '~/design-system/input';
 import { Menu, type MenuAlign } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -185,6 +186,15 @@ const COUNT_SKELETON_DELAY_MS = 250;
 const OVERFLOW_TOLERANCE_PX = 1;
 
 /**
+ * How long the field waits before taking focus on open.
+ *
+ * It buys the frame, not the milliseconds: Radix focuses the popover content itself when it mounts,
+ * and {@link useAutofocus} waits this out and then an animation frame, which puts this after it
+ * rather than racing it.
+ */
+const SEARCH_FOCUS_DELAY_MS = 1;
+
+/**
  * The multi-select twin of {@link HubFilterMenu}: checkboxes, and the menu stays open so several
  * can be picked in one visit.
  *
@@ -213,7 +223,6 @@ export function HubMultiFilterMenu<T extends string>({
   const [overflows, setOverflows] = React.useState(false);
   const [viewportNode, setViewportNode] = React.useState<HTMLDivElement | null>(null);
   const [listNode, setListNode] = React.useState<HTMLDivElement | null>(null);
-  const searchRef = React.useRef<HTMLInputElement>(null);
   const showCountSkeletons = useDelayedFlag(countsPending ?? false, COUNT_SKELETON_DELAY_MS);
   const selected = new Set<string>(values);
 
@@ -227,6 +236,21 @@ export function HubMultiFilterMenu<T extends string>({
     [options, trimmedQuery]
   );
 
+  /**
+   * Whether the viewer has started working inside the menu, which is the only thing that separates a
+   * field arriving as part of opening from one arriving on top of them.
+   *
+   * The latch below can turn true at any point in a visit, not just at the opening: unticking a
+   * topic widens the co-occurrence facet, and the menu deliberately stays open for it, so the list
+   * can cross the end of the viewport under a cursor that is mid-pick. Focus must not jump to a
+   * field that appears then — it would take the keyboard out of the row they are in and leave the
+   * next arrow key scrolling a text box.
+   */
+  const touchedRef = React.useRef(false);
+  const markTouched = React.useCallback(() => {
+    touchedRef.current = true;
+  }, []);
+
   // The query belongs to a visit, not to the filter. Left behind, reopening the menu would show a
   // list already narrowed by something the viewer typed a while ago and has no reason to expect —
   // and the selection they *did* make is on the trigger, where they can see it.
@@ -237,9 +261,25 @@ export function HubMultiFilterMenu<T extends string>({
     if (!next) {
       setQuery('');
       setOverflows(false);
+    } else {
+      touchedRef.current = false;
     }
     setOpen(next);
   }, []);
+
+  const shouldSkipFocus = React.useCallback(() => {
+    if (touchedRef.current) return true;
+    // Only where a keyboard is already in front of the viewer. On a touch device this would throw
+    // the software keyboard up over the very list it is meant to help pick from, before anyone has
+    // said they want to type.
+    return typeof window.matchMedia === 'function' && !window.matchMedia('(pointer: fine)').matches;
+  }, []);
+
+  const searchRef = useAutofocus<HTMLInputElement>(open && showSearch, SEARCH_FOCUS_DELAY_MS, {
+    shouldSkipFocus,
+    // The popover is already placed, and the panel behind it scrolls on its own.
+    preventScroll: true,
+  });
 
   /**
    * Whether the options run off the end of the menu, which is the whole question of whether a
@@ -268,24 +308,15 @@ export function HubMultiFilterMenu<T extends string>({
 
     measure();
     // Both ends of the comparison move on their own: the viewport as the popover settles into the
-    // space it has, the list as options arrive and as names land under the skeletons.
-    const observer = new ResizeObserver(measure);
-    observer.observe(viewportNode);
-    observer.observe(listNode);
-    return () => observer.disconnect();
+    // space it has, the list as options arrive and as names land under the skeletons. Guarded the
+    // way the repo's other measurement sites are — without it a runtime that has no ResizeObserver
+    // throws inside a layout effect and blanks the panel, where the measurement above has already
+    // answered for the list as it stands and only later growth goes unnoticed.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(viewportNode);
+    observer?.observe(listNode);
+    return () => observer?.disconnect();
   }, [searchEnabled, viewportNode, listNode]);
-
-  React.useEffect(() => {
-    if (!open || !showSearch) return;
-    // Only where a keyboard is already in front of the viewer. On a touch device this would throw
-    // the software keyboard up over the very list it is meant to help pick from, before anyone has
-    // said they want to type.
-    if (typeof window.matchMedia === 'function' && !window.matchMedia('(pointer: fine)').matches) return;
-    // Radix focuses the popover content itself on open, so take focus on the next frame rather than
-    // racing it. `preventScroll` because the panel this sits in scrolls independently.
-    const frame = requestAnimationFrame(() => searchRef.current?.focus({ preventScroll: true }));
-    return () => cancelAnimationFrame(frame);
-  }, [open, showSearch]);
 
   return (
     <Menu
@@ -307,29 +338,33 @@ export function HubMultiFilterMenu<T extends string>({
     >
       <>
         {showSearch ? (
-          // Sticky, because the list it filters is exactly the list long enough to scroll — losing
-          // the field at the top of it would mean scrolling back to change a query by one letter.
+          // Same chrome as the properties menu's search (`table-block-properties-menu.tsx`), which
+          // is also the chrome of the "Search claims" field directly above this row in the panel.
+          //
+          // Sticky rather than pinned above the scroll well, because `Menu` owns that well and puts
+          // every child inside it. It has to stay put either way: the list this filters is by
+          // definition the one long enough to scroll the field off the top, and losing it there
+          // would mean scrolling back to change a query by one letter.
           <div className="sticky top-0 z-10 border-b border-grey-02 bg-white p-2">
-            <div className="relative w-full">
-              <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2 text-grey-04">
-                <Search />
-              </div>
-              <input
-                ref={searchRef}
-                type="text"
-                value={query}
-                onChange={event => setQuery(event.currentTarget.value)}
-                placeholder={searchPlaceholder}
-                aria-label={searchPlaceholder}
-                className={inputStyles({ withSearchIcon: true })}
-              />
-            </div>
+            <Input
+              withSearchIcon
+              inputRef={searchRef}
+              value={query}
+              onChange={event => setQuery(event.currentTarget.value)}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              // As the properties menu does: what happens in the field is the field's business, and
+              // the surfaces this menu opens over listen for both. Escape still closes the popover,
+              // which Radix hears on the document rather than through React.
+              onClick={event => event.stopPropagation()}
+              onKeyDown={event => event.stopPropagation()}
+            />
           </div>
         ) : null}
-        {/* Wrapped so the options can be measured against the viewport without the search field's
-            own height counting towards them — and so the observer above has a single node whose
-            height is exactly "how much list there is". */}
-        <div ref={setListNode}>
+        {/* One node whose height is exactly "how much list there is", which is what makes the
+            options' own growth observable — the viewport stops changing size once it reaches its
+            max-height, and `scrollHeight` alone reports no event when it moves. */}
+        <div ref={setListNode} onPointerDownCapture={markTouched} onKeyDownCapture={markTouched}>
           {searching ? null : (
             <button
               type="button"
