@@ -97,15 +97,6 @@ type EntityFeedProps = {
   showSortFilter?: boolean;
   /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
   showTypeFilter?: boolean;
-  /**
-   * Types this feed is pinned to. Always sent; no type menu is drawn and the stored Explore
-   * selection is ignored.
-   *
-   * The counterpart of `lockedSpaceId`: a surface that *is* one type — a space's debates, a space's
-   * claims — has no filter to offer, and letting the persisted Explore selection reach it would let
-   * a reader who unticked Debate on Explore arrive at a debates page with nothing in it.
-   */
-  lockedTypeIds?: readonly string[];
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
@@ -163,7 +154,6 @@ export function EntityFeed({
   showTimeFilter = true,
   showSortFilter = false,
   showTypeFilter = false,
-  lockedTypeIds,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
@@ -196,11 +186,8 @@ export function EntityFeed({
     [lockedSpaceId, spaceIds]
   );
   const spaceIdsKey = requestedSpaceIds.join(',');
-  // A locked selection wins outright. `showTypeFilter` and this are mutually exclusive by
-  // construction — there is no menu to reconcile a pin with — so the pin is simply the answer.
   const typeIds =
-    lockedTypeIds ??
-    (showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined);
+    showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
@@ -251,10 +238,9 @@ export function EntityFeed({
   const smartAccountAddress = smartAccount?.account.address ?? null;
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const queryKey =
-    showTypeFilter || lockedTypeIds
-      ? [apiEndpoint, sort, requestedTime, spaceIdsKey, typeIdsKey, smartAccountAddress]
-      : [apiEndpoint, sort, requestedTime, spaceIdsKey, smartAccountAddress];
+  const queryKey = showTypeFilter
+    ? [apiEndpoint, sort, requestedTime, spaceIdsKey, typeIdsKey, smartAccountAddress]
+    : [apiEndpoint, sort, requestedTime, spaceIdsKey, smartAccountAddress];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,

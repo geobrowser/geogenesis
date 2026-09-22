@@ -263,57 +263,6 @@ describe('a type selection filters server-side (GEO-2885)', () => {
     expect(sent()).toHaveProperty('after');
   });
 
-  /**
-   * `maxPerType` caps the *candidates*, `filter` is applied to them afterwards, and `offset`
-   * indexes the survivors — so a budget equal to the row budget guarantees a short page whenever
-   * anything is filtered out, and a connection that returns fewer rows than `first` reports
-   * `hasNextPage: false`. Measured on testnet against one space's debate-tagged claims: 18 rows of
-   * a 30-row page and no cursor, on a space holding hundreds.
-   */
-  describe('widenBestCandidateBudget', () => {
-    it('asks for more candidates than the page serves when the caller opts in', async () => {
-      windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
-
-      await fetchExploreFeed({
-        ...feedArgs,
-        sort: 'best',
-        typeIds: [CLAIM_TYPE_ID],
-        widenBestCandidateBudget: true,
-      });
-
-      const rowBudget = (sent().offset as number) + (sent().first as number);
-      expect(sent().maxPerType as number).toBeGreaterThan(rowBudget);
-    });
-
-    it('grows the widened cap as it pages deeper, and stays bounded', async () => {
-      windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: true, endCursor: '66' })];
-
-      await fetchExploreFeed({
-        ...feedArgs,
-        sort: 'best',
-        typeIds: [CLAIM_TYPE_ID],
-        cursor: 'w1:0:66',
-        widenBestCandidateBudget: true,
-      });
-
-      expect(sent().offset).toBe(66);
-      expect(sent().maxPerType as number).toBeGreaterThan(66 + (sent().first as number));
-      // Bounded, or a deep scroll walks an ever-wider index — 4,000 candidates measured at 1.25s
-      // against 575ms for 240.
-      expect(sent().maxPerType as number).toBeLessThanOrEqual(2_000);
-    });
-
-    // Explore's own request has to be unchanged by this: its mixed feed filters almost nothing out
-    // and pays nothing for the exact cap.
-    it('leaves the exact cap alone when the caller does not ask', async () => {
-      windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
-
-      await fetchExploreFeed({ ...feedArgs, sort: 'best', typeIds: [CLAIM_TYPE_ID] });
-
-      expect(sent().maxPerType).toBe((sent().offset as number) + (sent().first as number));
-    });
-  });
-
   it('still forwards the debate-tag gate on the type-filtered path', async () => {
     windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 

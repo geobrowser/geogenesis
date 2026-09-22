@@ -15,30 +15,15 @@ export type SpaceActivityKind = 'debates' | 'claims';
 
 export const SPACE_ACTIVITY_KINDS: readonly SpaceActivityKind[] = ['debates', 'claims'];
 
-/** The entity type each kind selects. One type each, deliberately — see `spaceActivityFeedHref`. */
+/** The entity type each kind selects. One type each — the two surfaces are never mixed. */
 export const SPACE_ACTIVITY_TYPE_ID: Record<SpaceActivityKind, string> = {
   debates: DEBATE_TYPE_ID,
   claims: CLAIM_TYPE_ID,
 };
 
-/** Normalized so two spellings of one id are one type. Same rule the rest of the app compares by. */
+/** Normalized so two spellings of one id are one thing. Same rule the rest of the app counts by. */
 function normalizeId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
-}
-
-/**
- * Which kind a `typeIds` parameter names, or `null` for anything else.
- *
- * The feed surfaces send `typeIds` because that is what every `EntityFeed` sends, and the endpoint
- * has to turn it back into one of exactly two answers. Anything else — two types, a type this
- * surface is not about, an empty list — is rejected rather than widened: a space-scoped Explore
- * reader for arbitrary types is a different endpoint from this one, and should be written as one.
- */
-export function parseSpaceActivityKindFromTypeIds(raw: string | null): SpaceActivityKind | null {
-  if (!raw) return null;
-  const ids = raw.split(',').map(normalizeId).filter(Boolean);
-  if (ids.length !== 1) return null;
-  return SPACE_ACTIVITY_KINDS.find(kind => normalizeId(SPACE_ACTIVITY_TYPE_ID[kind]) === ids[0]) ?? null;
 }
 
 /**
@@ -56,11 +41,6 @@ export function parseSpaceActivityKindFromTypeIds(raw: string | null): SpaceActi
  */
 export function spaceActivityFeedHref(spaceId: string, kind: SpaceActivityKind): string {
   return `/space/${spaceId}/${kind}`;
-}
-
-/** The REST endpoint both the Overview card and the full-screen feeds read. */
-export function spaceActivityFeedEndpoint(spaceId: string): string {
-  return `/api/space/${spaceId}/debate-activity/feed`;
 }
 
 /**
@@ -106,7 +86,9 @@ export const NO_SPACE_DEBATE_ACTIVITY_COUNTS: SpaceDebateActivityCounts = { deba
  * Both halves scope the *relation* to this space, not just the entity. A relation carries its own
  * space independently of the entity's, so an unscoped tag clause would accept a `Tags -> Debate`
  * written from anywhere — the loophole `claimsRequireDebateTagFilter` exists to close. The count
- * and the feed have to close it the same way or the pill and the list disagree.
+ * and the list have to close it the same way or the pill and the list disagree, which is why the
+ * claims half is the same clause `spaceActivityRowsFilter` applies to the rows. Measured against
+ * one space, both answer 611.
  */
 export const SPACE_DEBATE_ACTIVITY_COUNTS_QUERY = /* GraphQL */ `
   query SpaceDebateActivityCounts(

@@ -6,16 +6,18 @@ import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { SPACE_ACTIVITY_TYPE_ID, spaceActivityFeedEndpoint } from '~/core/space/space-debate-activity';
+import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
+import { useSpaceActivityRowsInfinite } from '~/core/space/use-space-debate-activity';
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
 
 import { Button } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { EntityFeed } from '~/partials/feed/entity-feed';
+import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 type ClaimsPageClientProps = {
   spaceId: string;
@@ -40,28 +42,39 @@ const relatedFields: RelatedField[] = [
 ];
 
 /**
- * A space's claims, as the browse feed a reader arrives at from Overview's Activity card.
+ * A space's claims, ranked, as the browse feed a reader arrives at from Overview's Activity card.
  *
  * This was a fixed list of up to fifty claims in whatever order the entity store happened to hold
  * them, on a route the space's own tab bar does not link to. It is now the destination of "See all
  * claims", so it has to answer the question that link asks — what is worth reading here — which
- * means **Best order and no floor on how far you can scroll**, the same two properties the debates
- * feed on the sibling route already has.
+ * means ranked order and no floor on how far you can scroll.
  *
- * So the list is the Explore feed, pinned to this space and to Claim, exactly as the Activity card
- * above it is. One consequence worth knowing: like Explore, it shows the claims a curator has
- * tagged `Debate` (GEO-2835) rather than every claim in the space. That is what the card's count is
- * measured through too, so the number on the pill and the list it leads to are the same corpus.
+ * The rows come from `entitiesConnection` ordered by ranking score, which is the same ordering the
+ * Activity card above it draws its six from. Deliberately not the explore feed: that path reaches
+ * only the claims the ranked-feed connection has scored — 262 of this space's 611, measured — where
+ * this returns all of them, unscored ones last. It is also what the count on the pill is measured
+ * through, so the number and the list it leads to are the same corpus.
+ *
+ * Like Explore, the list is the claims a curator has tagged `Debate` (GEO-2835) rather than every
+ * claim in the space: these surfaces are about debate activity.
  *
  * The staging form stays. It is unrelated to how the list is ordered, and it is the only place in
  * the app that opens a claim proposal from a space. What it no longer does is show the staged claim
- * in the list below before it is published — the feed reads the graph, not the local edit store —
+ * in the list below before it is published — the list reads the graph, not the local edit store —
  * and staging already opens the review panel, which is where a draft lives until it is published.
  */
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const [formOpen, setFormOpen] = React.useState(false);
-  // A fixed one-element list, memoised so the feed's query key is stable across renders.
-  const lockedTypeIds = React.useMemo(() => [SPACE_ACTIVITY_TYPE_ID.claims], []);
+  const { rows, isLoading, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useSpaceActivityRowsInfinite(
+    spaceId,
+    'claims'
+  );
+  const sentinelRef = useInfiniteSentinel({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    isError,
+  });
 
   return (
     <div className="py-8">
@@ -78,22 +91,42 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
 
       {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
-      <div className={cx(formOpen && 'mt-6')}>
-        <EntityFeed
-          apiEndpoint={spaceActivityFeedEndpoint(spaceId)}
-          lockedSpaceId={spaceId}
-          lockedTypeIds={lockedTypeIds}
-          initialSort="best"
-          showSortFilter
-          // "All time" rather than Explore's month: one space holds far less than the whole graph,
-          // and a window narrow enough to be interesting across every space can empty a single one.
-          initialTime="all"
-          // The presentation Explore and the Activity card above this both give a claim, so it is
-          // answerable in the same shape wherever it is read.
-          claimCardVariant="debate-panel-mobile"
-          feedTopSpacingClassName="mt-5"
-        />
+      <div className={cx('mt-5', formOpen && 'mt-6')}>
+        {isError && rows.length === 0 ? (
+          <Text color="grey-04">Could not load claims.</Text>
+        ) : isLoading ? (
+          <ClaimsSkeleton />
+        ) : rows.length === 0 ? (
+          <Text color="grey-04">No claims here yet.</Text>
+        ) : (
+          rows.map(row => (
+            <ExploreFeedCard
+              key={`${row.entityId}-${row.spaceId}`}
+              item={{ ...row, spaceName: '', spaceImage: null, hasPendingMembershipRequest: false }}
+              // Every row is this space by construction, so a space chip and a Join button would
+              // say the same thing on all of them.
+              hideSpaceLink
+              hideJoinButton
+              claimCardVariant="debate-panel-mobile"
+            />
+          ))
+        )}
+        <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        {isFetchingNextPage ? <ClaimsSkeleton rows={3} /> : null}
       </div>
+    </div>
+  );
+}
+
+function ClaimsSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-4" aria-busy="true">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="space-y-2 rounded-lg border border-grey-02 p-4">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-5 w-2/3" />
+        </div>
+      ))}
     </div>
   );
 }

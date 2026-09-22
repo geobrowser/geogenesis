@@ -1,47 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-
-import {
-  decodeSpaceDebateActivityCounts,
-  parseSpaceActivityKindFromTypeIds,
-  spaceActivityFeedEndpoint,
-  spaceActivityFeedHref,
-} from './space-debate-activity';
-
-describe('parseSpaceActivityKindFromTypeIds', () => {
-  it('reads the two kinds this surface is about', () => {
-    expect(parseSpaceActivityKindFromTypeIds(DEBATE_TYPE_ID)).toBe('debates');
-    expect(parseSpaceActivityKindFromTypeIds(CLAIM_TYPE_ID)).toBe('claims');
-  });
-
-  it('accepts the dashed spelling of the same id', () => {
-    const dashed = `${DEBATE_TYPE_ID.slice(0, 8)}-${DEBATE_TYPE_ID.slice(8)}`;
-    expect(parseSpaceActivityKindFromTypeIds(dashed)).toBe('debates');
-  });
-
-  // The endpoint behind this is a space-scoped Explore reader with no type menu. Widening it by
-  // accident is how it stops being "this space's debates" and starts being a general feed.
-  it('rejects anything that is not exactly one of those two types', () => {
-    expect(parseSpaceActivityKindFromTypeIds(null)).toBeNull();
-    expect(parseSpaceActivityKindFromTypeIds('')).toBeNull();
-    expect(parseSpaceActivityKindFromTypeIds(`${DEBATE_TYPE_ID},${CLAIM_TYPE_ID}`)).toBeNull();
-    expect(parseSpaceActivityKindFromTypeIds('e550fe517e904b2c8fffdf13408f5634')).toBeNull();
-  });
-});
+import { decodeSpaceDebateActivityCounts, spaceActivityFeedHref } from './space-debate-activity';
 
 describe('spaceActivityFeedHref', () => {
-  // The space's own tabs, not a second pair of surfaces beside them. Both are Best-ordered — the
-  // debates feed by `useDebatesBestOrder`, the claims feed by the sort it opens on — which is what
-  // makes them the right end of a "See all" from a card that ranks its six the same way.
+  // The space's own tabs, not a second pair of surfaces beside them. Both are ranked — the debates
+  // feed by `useDebatesBestOrder`, the claims tab by `RANKING_SCORE_DESC` — which is what makes
+  // them the right end of a "See all" from a card that ranks its six the same way.
   it('points at the space’s own debates and claims tabs', () => {
     expect(spaceActivityFeedHref('space-1', 'debates')).toBe('/space/space-1/debates');
     expect(spaceActivityFeedHref('space-1', 'claims')).toBe('/space/space-1/claims');
-  });
-
-  it('reads the feed from the space-pinned endpoint', () => {
-    expect(spaceActivityFeedEndpoint('space-1')).toBe('/api/space/space-1/debate-activity/feed');
   });
 });
 

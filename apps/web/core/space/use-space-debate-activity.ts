@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -9,18 +9,23 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
-import type { ExploreFeedResult } from '~/core/explore/fetch-explore-feed';
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { graphql } from '~/core/io/graphql-client';
 
 import {
+  SPACE_ACTIVITY_PAGE_SIZE,
+  type SpaceActivityRowsPage,
+  decodeSpaceActivityRows,
+  spaceActivityRowsDocument,
+  spaceActivityRowsVariables,
+} from './space-activity-rows';
+import {
   NO_SPACE_DEBATE_ACTIVITY_COUNTS,
-  SPACE_ACTIVITY_TYPE_ID,
   SPACE_DEBATE_ACTIVITY_COUNTS_QUERY,
   type SpaceActivityKind,
   type SpaceDebateActivityCounts,
   type SpaceDebateActivityCountsResult,
   decodeSpaceDebateActivityCounts,
-  spaceActivityFeedEndpoint,
   spaceDebateActivityCountsVariables,
 } from './space-debate-activity';
 
@@ -32,6 +37,20 @@ const countsDocument = parse(SPACE_DEBATE_ACTIVITY_COUNTS_QUERY) as TypedDocumen
  * reason.
  */
 const SPACE_ACTIVITY_STALE_TIME = 60_000;
+
+/** The list and the card share a key prefix, so one page is fetched once for both. */
+const rowsQueryKey = (spaceId: string, kind: SpaceActivityKind) => ['space-activity-rows', spaceId, kind] as const;
+
+function fetchRowsPage(spaceId: string, kind: SpaceActivityKind, after: string | null, signal?: AbortSignal) {
+  return Effect.runPromise(
+    graphql({
+      query: spaceActivityRowsDocument,
+      decoder: (response: Parameters<typeof decodeSpaceActivityRows>[1]) => decodeSpaceActivityRows(spaceId, response),
+      variables: spaceActivityRowsVariables({ spaceId, kind, first: SPACE_ACTIVITY_PAGE_SIZE, after }),
+      signal,
+    })
+  );
+}
 
 /**
  * Whether this space is set up for debates at all.
@@ -90,35 +109,56 @@ export function useSpaceDebateActivityCounts(
 }
 
 /**
- * The first page of one kind, in the order its full-screen feed opens on.
+ * The top of one kind's ranking — what the Overview card's gallery draws.
  *
- * Fetched through the same endpoint that feed uses, with the same sort, so "See all debates" leads
- * to the same rows in the same order rather than to a second ranking that happens to look similar.
- * The card renders six of them; the page size is whatever the feed serves, and slicing is the
+ * The first page of the same query the full list opens with, so "See all claims" continues the
+ * order rather than starting a different one. The card renders six of them; slicing is the
  * gallery's job.
  */
-export function useSpaceActivityRows(spaceId: string, kind: SpaceActivityKind, enabled: boolean) {
-  const endpoint = spaceActivityFeedEndpoint(spaceId);
-
+export function useSpaceActivityRows(
+  spaceId: string,
+  kind: SpaceActivityKind,
+  enabled: boolean
+): { rows: ExploreFeedRow[]; isLoading: boolean; isError: boolean } {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['space-debate-activity-rows', spaceId, kind] as const,
+    queryKey: [...rowsQueryKey(spaceId, kind), 'first-page'] as const,
     enabled: enabled && spaceId !== '',
     staleTime: SPACE_ACTIVITY_STALE_TIME,
-    queryFn: async ({ signal }): Promise<ExploreFeedResult> => {
-      // `typeIds` and `sort`, the same two parameters the full-screen feed sends for this kind, so
-      // both read one endpoint with one contract rather than the card having a private shortcut.
-      const params = new URLSearchParams({ typeIds: SPACE_ACTIVITY_TYPE_ID[kind], sort: 'best' });
-      const response = await fetch(`${endpoint}?${params.toString()}`, { credentials: 'include', signal });
-      // Thrown rather than swallowed into an empty page: an empty feed and a failed one look
-      // identical on screen and mean opposite things, and the card draws them differently.
-      if (!response.ok) throw new Error(`space activity ${kind}: ${response.status}`);
-      return (await response.json()) as ExploreFeedResult;
-    },
-    retry: 2,
-    retryDelay: attempt => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: ({ signal }) => fetchRowsPage(spaceId, kind, null, signal),
   });
 
-  const rows = React.useMemo(() => data?.items ?? [], [data?.items]);
+  const rows = React.useMemo(() => data?.rows ?? [], [data?.rows]);
 
   return { rows, isLoading: enabled && isLoading, isError };
+}
+
+/**
+ * The whole of one kind's ranking, a page at a time.
+ *
+ * What the space's own tab scrolls through. Cursor-paged off `entitiesConnection` rather than the
+ * ranked feed's window cursor, so a page is a page: no window is re-fetched to serve the back half
+ * of it, and nothing is dropped between one and the next.
+ */
+export function useSpaceActivityRowsInfinite(spaceId: string, kind: SpaceActivityKind) {
+  const query = useInfiniteQuery({
+    queryKey: [...rowsQueryKey(spaceId, kind), 'infinite'] as const,
+    enabled: spaceId !== '',
+    staleTime: SPACE_ACTIVITY_STALE_TIME,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => fetchRowsPage(spaceId, kind, pageParam, signal),
+    // A connection that claims another page but hands back no cursor has no way to reach it, and
+    // re-sending `null` would restart the list and scroll forever.
+    getNextPageParam: (last: SpaceActivityRowsPage) => (last.hasNextPage ? (last.endCursor ?? undefined) : undefined),
+  });
+
+  const rows = React.useMemo(() => (query.data?.pages ?? []).flatMap(page => page.rows), [query.data?.pages]);
+
+  return {
+    rows,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+    fetchNextPage: query.fetchNextPage,
+  };
 }
