@@ -745,7 +745,8 @@ function StepInterestedIn({
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const primaryLabel = selectedTopicIds.length > 0 || featuredSpaces.length === 0 ? 'Create profile' : 'Skip for now';
+  const isCreateProfile = selectedTopicIds.length > 0 || featuredSpaces.length === 0;
+  const primaryLabel = isCreateProfile ? 'Create profile' : 'Skip for now';
 
   return (
     <div className="flex h-full flex-col justify-between">
@@ -808,9 +809,10 @@ function StepInterestedIn({
         <Button
           onClick={onCompleteOnboard}
           disabled={isLoading}
+          variant={isCreateProfile ? 'primary' : 'secondary'}
           className={cx(
             'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && 'bg-ctaHover'
+            !isLoading && isCreateProfile && 'bg-ctaHover'
           )}
         >
           {primaryLabel}
