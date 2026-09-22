@@ -77,6 +77,12 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import {
+  markLocalDebateLeave,
+  markLocalRematchLeave,
+  unmarkLocalDebateLeave,
+  unmarkLocalRematchLeave,
+} from './local-debate-leave';
+import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
   useParticipantAvatars,
@@ -848,6 +854,12 @@ export function useAbortDebate(debateId: string) {
 
   return useMutation({
     mutationFn: () => abortDebate(debateId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalDebateLeave(debateId);
+    },
+    onError: () => {
+      unmarkLocalDebateLeave(debateId);
+    },
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
@@ -968,6 +980,12 @@ export function useLeaveDebateRematch(sessionId: string) {
 
   return useMutation({
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
+    onMutate: () => {
+      markLocalRematchLeave(sessionId);
+    },
+    onError: () => {
+      unmarkLocalRematchLeave(sessionId);
+    },
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
       const activityKey = debateQueryKeys.activity(accountKey);
