@@ -532,7 +532,6 @@ function ActivityGallery({
           ))}
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
         </div>
-
       </div>
     </DebatePlaybackGate>
   );
