@@ -63,6 +63,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
         opponent={request.requester}
         overflow={
           <RequestOverflowMenu
+            analyticsSurface="hub"
             actions={[
               {
                 // Guarded like the buttons: this is the same dismiss endpoint they use, so an

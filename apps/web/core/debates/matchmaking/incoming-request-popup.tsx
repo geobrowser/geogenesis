@@ -71,6 +71,7 @@ export function IncomingRequestPopup({
       }}
       overflowMenu={
         <RequestOverflowMenu
+          analyticsSurface="request-popup"
           actions={[
             {
               // Deliberately outside the answer guard. Blocking writes the viewer's block list

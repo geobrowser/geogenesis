@@ -354,4 +354,15 @@ describe('analytics', () => {
       profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
     });
   });
+
+  it('does not attribute a profile open to a pending personal-space sentinel', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('pending:0x123', null, { interaction_surface: 'comment_author' });
+
+    expect(capture).not.toHaveBeenCalled();
+  });
 });

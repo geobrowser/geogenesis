@@ -1,6 +1,7 @@
 'use client';
 
 import { ID } from '~/core/id';
+import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
@@ -285,6 +286,8 @@ export function personProfileOpened(
   personEntityId?: string | null,
   properties: AnalyticsProperties = {}
 ) {
+  if (isPendingPersonalSpaceId(profileSpaceId)) return;
+
   const resolvedPersonEntityId = personEntityId && !ID.equals(personEntityId, profileSpaceId) ? personEntityId : null;
 
   graphRelationshipFollowed(resolvedPersonEntityId ?? profileSpaceId, {

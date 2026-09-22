@@ -114,6 +114,11 @@ const mocks = vi.hoisted(() => ({
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
   fetchNextTaggedPage: vi.fn(),
+  boundedPagingOverride: null as {
+    autoPages: boolean;
+    stoppedShort: boolean;
+    keepLooking: () => void;
+  } | null,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -481,6 +486,16 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     };
   },
 }));
+
+vi.mock('~/core/debates/matchmaking/use-bounded-paging', async importOriginal => {
+  const original = await importOriginal<typeof import('~/core/debates/matchmaking/use-bounded-paging')>();
+
+  return {
+    ...original,
+    useBoundedPaging: (options: Parameters<typeof original.useBoundedPaging>[0]) =>
+      mocks.boundedPagingOverride ?? original.useBoundedPaging(options),
+  };
+});
 
 const HYDRATION_ERROR = new Error('hydration exploded');
 
@@ -877,6 +892,7 @@ beforeEach(() => {
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
+  mocks.boundedPagingOverride = null;
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
   mocks.savedClaimsError = null;
@@ -1988,6 +2004,16 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
+  });
+
+  it('keeps the same rematch attribution when Keep looking appears below existing rows', async () => {
+    mocks.boundedPagingOverride = { autoPages: false, stoppedShort: true, keepLooking: vi.fn() };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const keepLooking = screen.getByRole('button', { name: 'Keep looking' });
+    expect(keepLooking).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Keep looking');
+    expect(keepLooking).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
   });
 
   it('leaves the sentinel out once there is no page left to fetch', async () => {
