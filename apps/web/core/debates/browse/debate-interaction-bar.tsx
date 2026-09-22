@@ -131,7 +131,7 @@ export function DebateInteractionBar({
   }
 
   return (
-    <div className={cx('flex w-full items-center', compact ? 'justify-between gap-1' : 'gap-2', className)}>
+    <div className={cx('flex w-full items-center gap-2', className)}>
       <EntityVoteButtons
         entityId={entityId}
         spaceId={spaceId}

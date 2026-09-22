@@ -317,6 +317,8 @@ describe('DebateExploreFeedCard', () => {
 
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
+    expect(screen.getByTestId('vote-buttons').parentElement).toHaveClass('gap-2');
+    expect(screen.getByTestId('vote-buttons').parentElement).not.toHaveClass('justify-between', 'gap-1');
     expect(screen.getByRole('button', { name: /^Comments/ })).toHaveClass('gap-1', 'px-1.5');
     expect(screen.getByRole('button', { name: 'Share debate' })).toHaveClass('size-7', 'px-0');
     expect(screen.getByRole('button', { name: 'Share debate' }).textContent).toBe('');
