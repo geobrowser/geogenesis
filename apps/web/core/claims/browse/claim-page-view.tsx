@@ -35,7 +35,7 @@ import {
   EntityPageInlineDescription,
 } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
-import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
+import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
@@ -44,6 +44,7 @@ import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
+import { ClaimTopicsTab } from './claim-topics-tab';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
@@ -367,8 +368,9 @@ function ClaimTabPanel({
   }
 
   if (activeTab === 'topics') {
-    // Every topic, uncapped: this tab is where the hero's "See all" leads.
-    return <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} cap={Infinity} />;
+    // Every topic, uncapped, as explore cards: this tab is where the hero's "See all" leads, and a
+    // list somebody was sent to is a list worth ordering and describing rather than a row of chips.
+    return <ClaimTopicsTab topics={topics} spaceId={spaceId} />;
   }
 
   if (activeTab === 'sources') {

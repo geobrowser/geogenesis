@@ -21,7 +21,7 @@ import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-fee
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreCommentsIcon } from './explore-comments-icon';
+import { ExploreFeedCommentLink } from './explore-feed-comment-link';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
 
@@ -49,15 +49,6 @@ type ExploreFeedCardProps = {
   /** Register whether this debate currently has a mounted player. Ignored by other row types. */
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
 };
-
-function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
-  return (
-    <Link href={href} className="inline-flex items-center gap-1.5 transition-colors hover:text-grey-04">
-      <ExploreCommentsIcon className="text-grey-03" />
-      <span className="tabular-nums">{count}</span>
-    </Link>
-  );
-}
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);

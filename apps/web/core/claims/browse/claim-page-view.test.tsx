@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
+  /** Props the Topics tab received, or null if the page rendered none. */
+  topicsTab: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   activity: null as Record<string, unknown> | null,
   recordTab: null as Record<string, unknown> | null,
@@ -82,12 +84,22 @@ vi.mock('~/design-system/clamped-text', () => ({
   },
 }));
 
-// Its own suite covers the chips and the expander; here we only need to see what it was handed.
+// Only `META_CHIP_CLASS` is still read from here — the hero's switched-off topics row borrows the
+// chips' shape. The section itself no longer renders on this page at all.
 vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   META_CHIP_CLASS: 'meta-chip',
   RelationChipSection: (props: Record<string, unknown>) => {
     mocks.chipSection = props;
     return <div data-testid="chip-section" data-label={props.label as string} />;
+  },
+}));
+
+// The Topics tab is a feed of its own, with its own counts and ordering covered in its own suite.
+// Here we only need to see which topics reached it.
+vi.mock('./claim-topics-tab', () => ({
+  ClaimTopicsTab: (props: Record<string, unknown>) => {
+    mocks.topicsTab = props;
+    return <div data-testid="topics-tab" />;
   },
 }));
 
@@ -204,6 +216,7 @@ beforeEach(() => {
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
+  mocks.topicsTab = null;
   mocks.tabs = null;
   mocks.activity = null;
   mocks.recordTab = null;
@@ -444,13 +457,20 @@ describe('ClaimPageView topics', () => {
 
   it('draws every topic, and only topics, on the Topics tab', () => {
     mocks.sidePanel = { activeTabId: null, activeSystemTab: 'topics', setActiveSystemTab: vi.fn() };
-    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1), tagRelation] };
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1), topic(2), tagRelation] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Topics');
-    expect(mocks.chipSection?.relations).toEqual([topic(1)]);
-    expect(mocks.chipSection?.cap).toBe(Infinity);
-    expect(mocks.chipSection?.spaceId).toBe('space-1');
+    expect(screen.getByTestId('topics-tab')).toBeInTheDocument();
+    expect(mocks.topicsTab?.topics).toEqual([topic(1), topic(2)]);
+    expect(mocks.topicsTab?.spaceId).toBe('space-1');
+  });
+
+  it('no longer draws them as chips anywhere on the page', () => {
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'topics', setActiveSystemTab: vi.fn() };
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByTestId('chip-section')).toBeNull();
   });
 
   it('no longer repeats them on the Overview', () => {
@@ -458,6 +478,7 @@ describe('ClaimPageView topics', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('chip-section')).toBeNull();
+    expect(screen.queryByTestId('topics-tab')).toBeNull();
   });
 
   it('offers a Topics tab only when the claim has topics', () => {
