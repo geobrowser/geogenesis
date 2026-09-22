@@ -175,12 +175,12 @@ className="flex flex-wrap items-center gap-2"
              * full tab. Both belong to the selected kind — see `navigation`.
              */}
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              {navigation && (navigation.left || navigation.right) ? (
+              {selected.rows.length > 0 ? (
                 // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
                 // there: dark when there is somewhere to go, grey at the row's end.
                 <span className="mr-1 flex items-center gap-3">
-                  <PreviousButton isDisabled={!navigation.left} onClick={() => navigation.scrollByCard(-1)} />
-                  <NextButton isDisabled={!navigation.right} onClick={() => navigation.scrollByCard(1)} />
+                  <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
+                  <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
                 </span>
               ) : null}
               <ActivitySeeAll kind={selected} />
