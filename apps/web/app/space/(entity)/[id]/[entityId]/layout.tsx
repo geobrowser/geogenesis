@@ -15,6 +15,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -77,9 +78,9 @@ export default async function ProfileLayout(props: Props) {
 
   const { children } = props;
   const result = await cachedFetchEntityPage(entityId, spaceId);
-  const typeIds = result?.entity?.types.map(t => t.id) ?? [];
+  const entityTypes = result?.entity?.types ?? [];
 
-  if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
+  if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
     return <>{children}</>;
   }
 

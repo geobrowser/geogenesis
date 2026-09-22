@@ -1,9 +1,17 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
+// Statically, below the mocks vitest hoists above it. Importing this graph inside a test body ran
+// it against the 5s test timeout instead, which the route's module tree exceeds under a parallel
+// run — it is the layout, so it pulls in most of the entity page.
+import ProfileLayout from './layout';
 
 // The layout 404s on anything `IdUtils.isValid` rejects, so these are real ids rather than labels.
 /** The route params. The fetched person's id is deliberately a different one. */
@@ -17,14 +25,16 @@ const mocks = vi.hoisted(() => ({
   heading: null as Record<string, unknown> | null,
   storeProvider: null as Record<string, unknown> | null,
   metadataHeader: null as Record<string, unknown> | null,
+  entityTypes: [] as { id: string }[],
 }));
 
-vi.mock('./cached-fetch-entity', async () => {
-  const { SystemIds } = await import('@geoprotocol/geo-sdk/lite');
+vi.mock('./cached-fetch-entity', () => {
   const person = {
     id: 'c3d4e5f6a7b8429c0d1e2f3a4b5c6d7e',
     name: 'Ada Lovelace',
-    types: [{ id: SystemIds.PERSON_TYPE }],
+    get types() {
+      return mocks.entityTypes;
+    },
     relations: [],
     values: [],
     spaces: [],
@@ -88,12 +98,8 @@ vi.mock('~/partials/entity-page/personal-profile-suggested-task-sync', () => ({
   PersonalProfileSuggestedTaskSync: () => null,
 }));
 
-// Statically, below the mocks vitest hoists above it. Importing this graph inside a test body ran
-// it against the 5s test timeout instead, which the route's module tree exceeds under a parallel
-// run — it is the layout, so it pulls in most of the entity page.
-import ProfileLayout from './layout';
-
 beforeEach(() => {
+  mocks.entityTypes = [{ id: SystemIds.PERSON_TYPE }];
   mocks.actions = null;
   mocks.heading = null;
   mocks.storeProvider = null;
@@ -139,5 +145,15 @@ describe('profile ProfileLayout', () => {
     // The metadata header takes its id from the store rather than a prop, so pinning the provider
     // above is what covers it — the space it scopes by is the one assertable here.
     expect(mocks.metadataHeader).toMatchObject({ spaceId: SPACE_ID });
+  });
+
+  it('does not wrap a mixed Claim and Person entity in the profile shell', async () => {
+    mocks.entityTypes = [{ id: SystemIds.PERSON_TYPE }, { id: CLAIM_TYPE_ID }];
+
+    const view = await renderProfileLayout();
+
+    expect(view.getByTestId('page')).toBeInTheDocument();
+    expect(mocks.storeProvider).toBeNull();
+    expect(mocks.actions).toBeNull();
   });
 });

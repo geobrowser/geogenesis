@@ -2,7 +2,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { parse } from 'graphql';
 
-import type { EntityFilter } from '~/core/gql/graphql';
+import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { uuidToHex } from '~/core/id/normalize';
 
 /**
@@ -39,6 +39,28 @@ const RELATION_FACET_SOURCE = /* GraphQL */ `
   }
 `;
 
+/**
+ * The same grouped aggregate, accepting the complete relation predicate.
+ *
+ * Most callers facet one property over an entity population, which is the simpler document above.
+ * A population can instead be a union of relation paths — Related claims are either topic matches
+ * or claims extracted from a debate — and reducing that to one `typeId` plus `fromEntity` loses the
+ * path and space that matched. Keeping the full relation filter lets the server dedupe that union
+ * by `fromEntityId` before grouping it, rather than forcing a page-local client approximation.
+ */
+const RELATION_FACET_BY_FILTER_SOURCE = /* GraphQL */ `
+  query RelationFacetByFilter($filter: RelationFilter!, $groupBy: [RelationsGroupBy!]!) {
+    relationsConnection(filter: $filter) {
+      groupedAggregates(groupBy: $groupBy) {
+        keys
+        distinctCount {
+          fromEntityId
+        }
+      }
+    }
+  }
+`;
+
 export type RelationFacetResult = {
   relationsConnection: {
     groupedAggregates: Array<{
@@ -61,6 +83,11 @@ export type RelationFacetVariables = {
 export const relationFacetDocument = parse(RELATION_FACET_SOURCE) as TypedDocumentNode<
   RelationFacetResult,
   RelationFacetVariables
+>;
+
+export const relationFacetByFilterDocument = parse(RELATION_FACET_BY_FILTER_SOURCE) as TypedDocumentNode<
+  RelationFacetResult,
+  { filter: RelationFilter; groupBy: RelationFacetGroupBy[] }
 >;
 
 /** One facet row: a group's id and how many distinct population rows fall in it. */

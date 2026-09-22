@@ -107,10 +107,13 @@ describe('customBrowseView', () => {
     expect(view({ entity: { types: [PERSON, CLAIM_TYPE] } })).toBe('claim');
   });
 
-  it('falls through to the generic page while editing', () => {
-    // These are read surfaces with no property editor behind them, so an editor
-    // who lost the value sheet would have no way to change the entity.
+  it('keeps the claim surface while editing', () => {
+    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true })).toBe('claim');
+  });
+
+  it('falls through to the generic page for other custom views while editing', () => {
     expect(view({ isEditing: true })).toBe('generic');
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('generic');
   });
 
   it('draws nothing until the entity itself is known', () => {

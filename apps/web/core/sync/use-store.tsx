@@ -16,6 +16,7 @@ import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { cloneCursorPageCheckpoint, collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
@@ -84,6 +85,11 @@ function localEntityLatestTimestamp(entity: Entity): string {
   return latest;
 }
 
+/** Store lookups can miss with either nullish spelling; never narrow only one of them. */
+function isMaterializedEntity(entity: Entity | null | undefined): entity is Entity {
+  return entity != null;
+}
+
 /**
  * Prepend unpublished local entities that match the query filter but are not yet in the server page
  */
@@ -97,7 +103,7 @@ function mergeUnpublishedLocalEntities(
   const localIds = getUnpublishedLocalEntityIds().filter(id => !serverIdSet.has(id));
   if (localIds.length === 0) return serverEntities;
 
-  const localEntities = localIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+  const localEntities = localIds.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
   if (localEntities.length === 0) return serverEntities;
 
@@ -429,7 +435,7 @@ export function useQueryEntities({
       // must fall through to the server-filtered `data.ids`.
       if (where?.id?.in && !sort && Object.keys(where).length === 1) {
         const ids = where.id.in;
-        const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
+        const entities = ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
         return first !== undefined ? entities.slice(0, first) : entities;
       }
 
@@ -437,7 +443,7 @@ export function useQueryEntities({
       // from the server-returned ids; store.getEntity still picks up local
       // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
-        const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+        const serverEntities = data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
         // Cursor-anchored fetches of later pages arrive as (after, offset:
         // undefined), so a missing offset alone does not mean page one.
@@ -483,6 +489,110 @@ export function useQueryEntities({
     refetch,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
+  };
+}
+
+type QueryAllEntitiesOptions = {
+  where: WhereCondition;
+  pageSize?: number;
+  enabled?: boolean;
+  orderBy?: EntitiesOrderBy[];
+  /** Skip the query layer's default non-empty-name filter when unnamed entities are meaningful. */
+  includeEmptyNames?: boolean;
+};
+
+/**
+ * Fetches a complete cursor connection before exposing its entities.
+ *
+ * Use this only when the caller explicitly needs the whole connection and can activate it lazily.
+ * Summary/list screens should use a server count plus a bounded page, or `useQueryEntities` with
+ * pagination; exhausting a broad relation filter during initial render scales with the graph.
+ */
+export function useQueryAllEntities({
+  where,
+  pageSize = 100,
+  enabled = true,
+  orderBy,
+  includeEmptyNames = false,
+}: QueryAllEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+  const querySignature = `${stableStringify(where)}:${pageSize}:${stableStringify(orderBy ?? null)}:${includeEmptyNames}`;
+  const progressRef = React.useRef({ signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() });
+  const resetProgress = React.useCallback(() => {
+    progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+  }, [querySignature]);
+
+  const { data, isFetched, isLoading, isFetching, error, refetch: refetchQuery } = useQuery({
+    enabled,
+    queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null, includeEmptyNames],
+    queryFn: async ({ signal }) => {
+      if (progressRef.current.signature !== querySignature) {
+        resetProgress();
+      }
+
+      const checkpoint = cloneCursorPageCheckpoint(progressRef.current.checkpoint);
+      let ids: string[];
+      try {
+        ids = await collectCursorPages(async after => {
+          const page = await E.syncMany({
+            store,
+            cache,
+            where,
+            first: pageSize,
+            after,
+            orderBy,
+            includeEmptyNames,
+            signal,
+          });
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
+
+          return {
+            items: page.merged.map(entity => entity.id),
+            endCursor: page.endCursor,
+            hasNextPage: page.hasNextPage,
+          };
+        }, checkpoint);
+      } catch (cause) {
+        // Automatic retries resume this attempt. An execution cancelled by a newer refetch cannot
+        // overwrite that newer execution's progress with its stale checkpoint.
+        if (!signal.aborted) progressRef.current = { signature: querySignature, checkpoint };
+        throw cause;
+      }
+
+      if (!signal.aborted) resetProgress();
+
+      return { ids: [...new Set(ids)] };
+    },
+  });
+
+  // A user retry or a later background refetch is a new snapshot, not another automatic attempt.
+  React.useEffect(() => {
+    if (error) resetProgress();
+  }, [error, resetProgress]);
+  const refetch = React.useCallback(() => {
+    resetProgress();
+    return refetchQuery();
+  }, [refetchQuery, resetProgress]);
+
+  const entities = useSelector(
+    reactive,
+    () => {
+      if (!enabled || !data) return [];
+      return data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
+    },
+    equal
+  );
+
+  return {
+    entities,
+    /** Cached results remain usable when a later background refresh fails. */
+    dataAvailable: !enabled || data !== undefined,
+    isLoading: !isFetched && enabled && isLoading,
+    isFetching: enabled && isFetching,
+    isFetched: isFetched && enabled,
+    error,
+    refetch,
   };
 }
 

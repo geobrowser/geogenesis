@@ -18,6 +18,8 @@ type EntityPageCoverProps = {
   withAvatar?: boolean;
   /** Width of the text column below, so the avatar lines up with the name. */
   contentMaxWidth?: number;
+  /** Responsive inline padding inside that column, shared with the content below. */
+  contentInsetClassName?: string;
 };
 
 /**
@@ -73,6 +75,7 @@ export const EntityPageCover = ({
   compact = false,
   withAvatar = false,
   contentMaxWidth,
+  contentInsetClassName,
 }: EntityPageCoverProps) => {
   const { id, spaceId } = useEntityStoreInstance();
 
@@ -86,6 +89,7 @@ export const EntityPageCover = ({
       compact={compact}
       withAvatar={withAvatar}
       contentMaxWidth={contentMaxWidth}
+      contentInsetClassName={contentInsetClassName}
     />
   );
 };

@@ -235,6 +235,67 @@ describe('ProfileActivitySection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('reserves the Activity section with a skeleton while both kinds are loading', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind({ rows: [], isLoading: true }),
+          kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true }),
+        ]}
+      />
+    );
+
+    expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+  });
+
+  it('shows a completed kind without waiting for the other kind', () => {
+    render(
+      <ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true })]} />
+    );
+
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the first available kind selected when an earlier kind finishes later', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(
+      <ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />
+    );
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the visible fallback selected when the previous kind later returns', () => {
+    const debates = kind({ rows: [row('d1')] });
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates, claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[debates, { ...claims, rows: [] }]} />);
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+
+    rerender(<ProfileActivitySection kinds={[debates, claims]} />);
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('renders only the shared gallery card limit', () => {
+    render(
+      <ProfileActivitySection kinds={[kind({ rows: Array.from({ length: 8 }, (_, index) => row(`d${index + 1}`)) })]} />
+    );
+
+    expect(screen.getAllByTestId('card')).toHaveLength(6);
+  });
+
   it('leaves out a kind that is empty but fine', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims', rows: [] })]} />);
 
@@ -488,6 +549,18 @@ describe('ProfileActivitySection', () => {
     );
 
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveTextContent('—');
+  });
+
+  it('selects an in-place record tab instead of navigating when given an action', () => {
+    const onSeeAll = vi.fn();
+    render(<ProfileActivitySection kinds={[kind({ onSeeAll })]} />);
+
+    const seeAll = screen.getByRole('button', { name: 'See all debates' });
+    expect(screen.queryByRole('link', { name: 'See all debates' })).not.toBeInTheDocument();
+
+    fireEvent.click(seeAll);
+
+    expect(onSeeAll).toHaveBeenCalledOnce();
   });
 
   it('sends See all to the tab bar rather than the top of the page', () => {

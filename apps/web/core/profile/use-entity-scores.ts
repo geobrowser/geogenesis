@@ -3,6 +3,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
@@ -117,34 +119,75 @@ export function entityScoresQueryKey(ids: readonly string[]) {
 
 const NO_SCORES: EntityScores = { scores: new Map(), rankings: new Map() };
 
+type EntityScoreCheckpoint = EntityScores & {
+  ids: string[];
+  nextStart: number;
+};
+
+function createEntityScoreCheckpoint(ids: readonly string[]): EntityScoreCheckpoint {
+  return { ids: [...ids], nextStart: 0, scores: new Map(), rankings: new Map() };
+}
+
+function cloneEntityScoreCheckpoint(checkpoint: EntityScoreCheckpoint): EntityScoreCheckpoint {
+  return {
+    ids: [...checkpoint.ids],
+    nextStart: checkpoint.nextStart,
+    scores: new Map(checkpoint.scores),
+    rankings: new Map(checkpoint.rankings),
+  };
+}
+
 export function useEntityScores({ ids, enabled = true }: { ids: readonly string[]; enabled?: boolean }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: entityScoresQueryKey(ids),
+  const queryKey = entityScoresQueryKey(ids);
+  const signature = queryKey[1];
+  const progressRef = React.useRef({ signature, checkpoint: createEntityScoreCheckpoint(ids) });
+  const resetProgress = React.useCallback(() => {
+    progressRef.current = { signature, checkpoint: createEntityScoreCheckpoint(ids) };
+  }, [ids, signature]);
+  const { data, isLoading, isError, isFetching, refetch: refetchQuery } = useQuery({
+    queryKey,
     enabled: enabled && ids.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async ({ signal }): Promise<EntityScores> => {
-      const scores = new Map<string, number>();
-      const rankings = new Map<string, number>();
-
-      for (let start = 0; start < ids.length; start += ID_BATCH_SIZE) {
-        const chunk = ids.slice(start, start + ID_BATCH_SIZE);
-
-        const page = await Effect.runPromise(
-          graphql({
-            query: entityScoresDocument,
-            decoder: decodeScores,
-            variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
-            signal,
-          })
-        );
-
-        for (const [id, score] of page.scores) scores.set(id, score);
-        for (const [id, rank] of page.rankings) rankings.set(id, rank);
+      if (progressRef.current.signature !== signature) {
+        resetProgress();
       }
 
-      return { scores, rankings };
+      const checkpoint = cloneEntityScoreCheckpoint(progressRef.current.checkpoint);
+      try {
+        while (checkpoint.nextStart < checkpoint.ids.length) {
+          const chunk = checkpoint.ids.slice(checkpoint.nextStart, checkpoint.nextStart + ID_BATCH_SIZE);
+          const page = await Effect.runPromise(
+            graphql({
+              query: entityScoresDocument,
+              decoder: decodeScores,
+              variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
+              signal,
+            })
+          );
+
+          for (const [id, score] of page.scores) checkpoint.scores.set(id, score);
+          for (const [id, rank] of page.rankings) checkpoint.rankings.set(id, rank);
+          checkpoint.nextStart += chunk.length;
+        }
+      } catch (cause) {
+        if (!signal.aborted) progressRef.current = { signature, checkpoint };
+        throw cause;
+      }
+
+      const result = { scores: new Map(checkpoint.scores), rankings: new Map(checkpoint.rankings) };
+      if (!signal.aborted) resetProgress();
+      return result;
     },
   });
+
+  React.useEffect(() => {
+    if (isError) resetProgress();
+  }, [isError, resetProgress]);
+  const refetch = React.useCallback(() => {
+    resetProgress();
+    return refetchQuery();
+  }, [refetchQuery, resetProgress]);
 
   // `isError` matters because the empty map is indistinguishable from the
   // loading one, and `sortRows` treats "no scores" as "keep the incoming order".
@@ -152,5 +195,14 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
   // says Top or Best, permanently and silently.
   const { scores, rankings } = data ?? NO_SCORES;
 
-  return { scores, rankings, isLoading, isError };
+  return {
+    scores,
+    rankings,
+    /** Cached rankings remain usable when a later background refresh fails. */
+    dataAvailable: ids.length === 0 || data !== undefined,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  };
 }

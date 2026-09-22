@@ -13,7 +13,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ClaimResponseTag } from './claim-response-tag';
-import { PartialLoadError } from './partial-load-error';
+import { PartialLoadError, RecordLoadError } from './partial-load-error';
 
 /**
  * A person's record, rendered as explore cards (GEO-2859).
@@ -34,6 +34,7 @@ export function PersonRecordFeed({
   isFetchingNextPage = false,
   hasNextPage = false,
   fetchNextPage,
+  onRetry,
   loadingLabel,
   emptyLabel,
   errorLabel,
@@ -52,7 +53,10 @@ export function PersonRecordFeed({
   isError?: boolean;
   isFetchingNextPage?: boolean;
   hasNextPage?: boolean;
+  /** Loads another page and uses the partial-page error message when existing rows remain. */
   fetchNextPage?: () => void;
+  /** Retries a bounded record and keeps `errorLabel` even when some rows were hydrated. */
+  onRetry?: () => void;
   loadingLabel: string;
   emptyLabel: string;
   /** Said instead of `emptyLabel` when the list could not be read at all. */
@@ -90,6 +94,7 @@ export function PersonRecordFeed({
   );
 
   const noop = React.useCallback(() => {}, []);
+  const retry = onRetry ?? fetchNextPage;
   const sentinelRef = useInfiniteSentinel({
     hasNextPage,
     isFetchingNextPage,
@@ -105,6 +110,7 @@ export function PersonRecordFeed({
   // failed leaves the rows that did arrive on screen, where the sentinel has
   // already stopped asking for more.
   if (isError && rows.length === 0) {
+    if (retry) return <RecordLoadError message={errorLabel} onRetry={retry} />;
     return <p className="py-6 text-metadata text-grey-04">{errorLabel}</p>;
   }
 
@@ -166,7 +172,10 @@ export function PersonRecordFeed({
        * asking — deliberately — so without this the list simply ends early and
        * reads as complete.
        */}
-      {isError && !isFetchingNextPage && fetchNextPage && <PartialLoadError noun={noun} onRetry={fetchNextPage} />}
+      {isError && !isFetchingNextPage && onRetry && <RecordLoadError message={errorLabel} onRetry={onRetry} />}
+      {isError && !isFetchingNextPage && !onRetry && fetchNextPage && (
+        <PartialLoadError noun={noun} onRetry={fetchNextPage} />
+      )}
     </div>
   );
 }
