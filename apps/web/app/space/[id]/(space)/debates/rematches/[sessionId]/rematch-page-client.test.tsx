@@ -1050,17 +1050,13 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('holds an opponent-left notice until acknowledged before leaving an ended rematch', async () => {
+  it('boots out of an ended rematch when the opponent left, for the coordinator to announce', async () => {
     mocks.session = session({ status: 'ended' });
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
-
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`));
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
   });
 
   // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed

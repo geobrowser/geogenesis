@@ -599,22 +599,17 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
-  it('falls back to the debates page when a cancelled room has no prior history', async () => {
+  it('boots to the debates page when a cancelled room has no prior history', async () => {
     setHistoryLength(1);
     mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
-    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
-    expect(mocks.clearDebateActivity).not.toHaveBeenCalled();
-    expect(mocks.replace).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
-
     await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
   });
 
   // Forward, never back: the entry behind this room is often this same room (hub → room → rematch
@@ -4352,18 +4347,14 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
-    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
-    expect(screen.getByText('Your opponent left the debate. Your recording was discarded.')).toBeInTheDocument();
-    expect(mocks.back).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    // Booted out (forward-only) with no in-place dialog; the coordinator announces the opponent-left.
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
   });
 
-  it('holds Opponent left on the thank-you screen when the rematch ends under you', async () => {
+  it('boots off the thank-you screen when the rematch ends under you', async () => {
     setHistoryLength(1);
     installRecordingMocks();
     const view = await renderLiveDebate();
@@ -4373,14 +4364,11 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
-    expect(mocks.clearDebateActivity).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Find a match' }));
-
+    // The source recording is saved first, then the viewer is returned out with no in-place dialog;
+    // the app-wide coordinator shows the "opponent left" notice on the debates page.
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {

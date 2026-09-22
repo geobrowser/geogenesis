@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { claimResponseKind } from '~/core/claims/response-kind';
@@ -39,7 +39,11 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { didLocallyLeaveRematch } from '~/core/debates/local-debate-leave';
+import {
+  didLocallyLeaveRematch,
+  markLocalRematchLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -65,7 +69,6 @@ import { type NarrowedListState, useNarrowedDefault } from '~/core/debates/match
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
-import { OpponentLeftDialog } from '~/core/debates/opponent-left-dialog';
 import {
   type ParticipantPositionsByClaim,
   participantSidesOn,
@@ -102,7 +105,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { RematchVoicePill } from './rematch-voice';
-import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
+import { opponentLeftNoticeAtom, rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -180,8 +183,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
 
-  const [localLeaveStarted, setLocalLeaveStarted] = React.useState(false);
-  const [opponentLeftAcknowledged, setOpponentLeftAcknowledged] = React.useState(false);
+  const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -1900,27 +1902,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      if (localLeaveStarted || didLocallyLeaveRematch(session.id) || session.status === 'expired') {
-        returnFromSession(session);
+      if (session.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+        setOpponentLeftNotice({ recordingDiscarded: false });
       }
+      returnFromSession(session);
     }
-  }, [localLeaveStarted, returnFromSession, router, session]);
+  }, [returnFromSession, router, session, setOpponentLeftNotice]);
 
   const leave = () => {
-    setLocalLeaveStarted(true);
+    markLocalRematchLeave(sessionId);
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
+      onError: () => {
+        unmarkLocalRematchLeave(sessionId);
+      },
     });
   };
-
-  // `didLocallyLeaveRematch` covers remounts after this tab's own Leave.
-  const showOpponentLeftDialog = Boolean(
-    session &&
-    session.status === 'ended' &&
-    !localLeaveStarted &&
-    !didLocallyLeaveRematch(session.id) &&
-    !opponentLeftAcknowledged
-  );
 
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
@@ -1975,14 +1972,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   return (
     <>
-      {showOpponentLeftDialog && session ? (
-        <OpponentLeftDialog
-          onAcknowledge={() => {
-            setOpponentLeftAcknowledged(true);
-            returnFromSession(session);
-          }}
-        />
-      ) : null}
       {/* Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
         and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
         the session keeps the screen to itself.
