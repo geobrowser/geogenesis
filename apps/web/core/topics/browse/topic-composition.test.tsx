@@ -12,15 +12,13 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-vi.mock('../use-topic-space-scope', () => ({
-  useTopicSpaceScope: () => undefined,
-}));
-
 afterEach(cleanup);
 
 describe('TopicComposition', () => {
   it('summarizes only debates, claims, and news stories', () => {
-    render(<TopicComposition topicId="00000000-0000-0000-0000-000000000001" spaceId="space-1" />);
+    render(
+      <TopicComposition topicId="00000000-0000-0000-0000-000000000001" spaceId="00000000-0000-0000-0000-000000000002" />
+    );
 
     const composition = screen.getByRole('region', { name: 'What this topic holds' });
     expect(composition).toHaveTextContent('3 debates');

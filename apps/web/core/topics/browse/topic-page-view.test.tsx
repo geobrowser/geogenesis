@@ -5,8 +5,6 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
-
 import { TopicPageView, resolveTopicTab } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
@@ -165,22 +163,15 @@ describe('TopicPageView title', () => {
 });
 
 describe('TopicPageView explore feed', () => {
-  const subtopicRelation = {
-    id: 'relation-1',
-    type: { id: SUBTOPIC_RELATION_TYPE_ID },
-    toEntity: { id: 'subtopic-1', name: 'Alignment' },
-  };
-
-  it('renders one mixed feed and passes child topics to its topic filter', () => {
-    mocks.entity = { ...topicEntity('Anything'), relations: [subtopicRelation] };
+  it('renders one mixed feed whose filters are derived from that feed', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
     expect(mocks.feed).toMatchObject({
       topicId: 'topic-1',
       spaceId: 'space-1',
-      topicOptions: [subtopicRelation],
     });
+    expect(mocks.feed).not.toHaveProperty('topicOptions');
   });
 
   it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {

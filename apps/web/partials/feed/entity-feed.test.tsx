@@ -16,7 +16,7 @@ import { EntityFeed } from './entity-feed';
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
   facetQueryOptions: null as Record<string, unknown> | null,
-  facetData: null as { counts: Record<string, number> } | null,
+  facetData: null as { topics: Array<{ id: string; name: string | null; count: number }> } | null,
   /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
   queryKeys: [] as unknown[][],
   fetch: vi.fn(),
@@ -501,10 +501,7 @@ describe('EntityFeed contextual filters', () => {
 
   it('shows entity counts and removes settled zero-result Topic options', () => {
     mocks.facetData = {
-      counts: {
-        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 4,
-        cccccccccccccccccccccccccccccccc: 0,
-      },
+      topics: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Alignment', count: 4 }],
     };
 
     render(
@@ -513,13 +510,35 @@ describe('EntityFeed contextual filters', () => {
         topicFacetEndpoint="/api/topics/facets"
         showSpaceFilter={false}
         showTopicFilter
-        topicOptions={topicOptions}
         fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
       />
     );
 
     expect(screen.getByRole('button', { name: /Alignment.*4/ })).not.toBeNull();
     expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
+  });
+
+  it('requests one population facet rather than sending a global Topic candidate list', async () => {
+    mocks.facetData = { topics: [] };
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        topicFacetEndpoint="/api/topics/facets"
+        showSpaceFilter={false}
+        showTopicFilter
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+      />
+    );
+
+    const queryFn = mocks.facetQueryOptions?.queryFn as (args: { signal?: AbortSignal }) => Promise<unknown>;
+    await queryFn({});
+
+    const body = JSON.parse(mocks.fetch.mock.calls.at(-1)?.[1]?.body as string);
+    expect(body).toMatchObject({
+      selectedTopicIds: [],
+      fixedParams: { topicId: 'topic-root', spaceId: 'space-route' },
+    });
+    expect(body).not.toHaveProperty('candidateTopicIds');
   });
 });
 

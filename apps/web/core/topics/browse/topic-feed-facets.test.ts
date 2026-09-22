@@ -4,11 +4,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { fetchTopicFeedFacetCounts } from './topic-feed-facets';
+import { fetchTopicFeedCompositionCounts, fetchTopicFeedFacets } from './topic-feed-facets';
+
+const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const PAGE_TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const TOPIC_C = 'cccccccccccccccccccccccccccccccc';
 
 const mocks = vi.hoisted(() => ({
   calls: [] as Array<{ operation: string | undefined; variables: Record<string, any> }>,
 }));
+
+vi.mock('~/core/io/queries', async () => {
+  const { Effect } = await import('effect');
+  return {
+    getEntityNames: (ids: string[]) =>
+      Effect.succeed(ids.map(id => ({ id, name: id === TOPIC_A ? 'Alignment' : 'Governance' }))),
+  };
+});
 
 vi.mock('~/core/io/graphql-client', async () => {
   const { Effect } = await import('effect');
@@ -24,14 +36,45 @@ vi.mock('~/core/io/graphql-client', async () => {
           decoder({
             relationsConnection: {
               groupedAggregates: [
-                { keys: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'], distinctCount: { fromEntityId: '3' } },
+                { keys: [TOPIC_A], distinctCount: { fromEntityId: '3' } },
+                { keys: [PAGE_TOPIC], distinctCount: { fromEntityId: '8' } },
               ],
             },
           })
         );
       }
-
-      return Effect.succeed(decoder({ topic0: { totalCount: 2 }, topic1: { totalCount: 1 } }));
+      if (operation?.name?.value === 'TopicFeedDebateTopics') {
+        return Effect.succeed(
+          decoder({
+            entitiesConnection: {
+              nodes: [
+                {
+                  id: 'debate-1',
+                  relationsList: [
+                    { toEntity: { relationsList: [{ toEntity: { id: TOPIC_A } }] } },
+                    {
+                      toEntity: {
+                        relationsList: [{ toEntity: { id: TOPIC_A } }, { toEntity: { id: TOPIC_C } }],
+                      },
+                    },
+                  ],
+                },
+                {
+                  id: 'debate-2',
+                  relationsList: [{ toEntity: { relationsList: [{ toEntity: { id: TOPIC_A } }] } }],
+                },
+              ],
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          })
+        );
+      }
+      if (operation?.name?.value === 'TopicFeedComposition') {
+        return Effect.succeed(
+          decoder({ claims: { totalCount: 1 }, debates: { totalCount: 2 }, news: { totalCount: 3 } })
+        );
+      }
+      throw new Error(`Unexpected operation ${operation?.name?.value}`);
     },
   };
 });
@@ -48,39 +91,47 @@ beforeEach(() => {
   mocks.calls = [];
 });
 
-describe('fetchTopicFeedFacetCounts', () => {
-  it('adds direct entities to distinct Debates counted through their debated Claims', async () => {
-    const counts = await fetchTopicFeedFacetCounts({
+describe('fetchTopicFeedFacets', () => {
+  it('facets only the feed population and counts each Debate once per inherited Claim Topic', async () => {
+    const topics = await fetchTopicFeedFacets({
       browse,
-      topicId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      topicId: PAGE_TOPIC,
       selectedTopicIds: [],
-      candidateTopicIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'cccccccccccccccccccccccccccccccc'],
       typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
     });
 
-    expect(counts).toEqual({
-      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 5,
-      cccccccccccccccccccccccccccccccc: 1,
-    });
-    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter', 'TopicFeedDebateFacets']);
-
-    const debateFilter = mocks.calls[1]?.variables.filter0;
-    const candidateTopicMatch = debateFilter.and[1].and[1];
-    expect(candidateTopicMatch.or[1].and[1].relations.some.toEntity.relations.some.toEntityId.is).toBe(
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    );
+    expect(topics).toEqual([
+      { id: TOPIC_A, name: 'Alignment', count: 5 },
+      { id: TOPIC_C, name: 'Governance', count: 1 },
+    ]);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter', 'TopicFeedDebateTopics']);
   });
 
-  it('does not run Debate counts when Debate is excluded by the type filter', async () => {
-    const counts = await fetchTopicFeedFacetCounts({
+  it('does not traverse Debate claims when Debate is excluded by the type filter', async () => {
+    await fetchTopicFeedFacets({
       browse,
-      topicId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      topicId: PAGE_TOPIC,
       selectedTopicIds: [],
-      candidateTopicIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
       typeIds: [CLAIM_TYPE_ID],
     });
 
-    expect(counts).toEqual({ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 3 });
     expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
+  });
+});
+
+describe('fetchTopicFeedCompositionCounts', () => {
+  it('counts unique feed-eligible entities with the same Topic and visible-space filters', async () => {
+    await expect(fetchTopicFeedCompositionCounts({ browse, topicId: PAGE_TOPIC })).resolves.toEqual({
+      claims: 1,
+      debates: 2,
+      news: 3,
+    });
+
+    const variables = mocks.calls[0]?.variables;
+    for (const filter of [variables.claims, variables.debates, variables.news]) {
+      const feedScope = filter.and[0];
+      expect(feedScope.spaceIds.overlaps).toEqual(['11111111111111111111111111111111']);
+      expect(feedScope.values.some.text).toEqual({ isNull: false, isNot: '' });
+    }
   });
 });

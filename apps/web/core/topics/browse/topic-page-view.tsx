@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
 
-import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
@@ -30,7 +30,6 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
-import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';
 import { useTopicAncestors } from './use-topic-ancestors';
@@ -100,23 +99,6 @@ export function TopicPageView({
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
   const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
-
-  const subtopics = React.useMemo(() => {
-    // Both hierarchy properties, merged and deduplicated. The named `Subtopics` and the unnamed
-    // `4b5bbddf…` carry near-identical sets, and which one a topic was written with varies — reading
-    // only one silently drops children.
-    const seen = new Map<string, Relation>();
-    for (const relation of entity?.relations ?? []) {
-      if (relation.isDeleted === true) continue;
-      const isSubtopic =
-        ID.equals(relation.type.id, SUBTOPIC_RELATION_TYPE_ID) ||
-        ID.equals(relation.type.id, UNNAMED_SUBTOPIC_PROPERTY_ID);
-      if (isSubtopic && !seen.has(ID.uuidToHex(relation.toEntity.id))) {
-        seen.set(ID.uuidToHex(relation.toEntity.id), relation);
-      }
-    }
-    return [...seen.values()];
-  }, [entity?.relations]);
 
   const isCurated = React.useMemo(
     () =>
@@ -248,26 +230,16 @@ export function TopicPageView({
           />
         </div>
 
-        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} subtopics={subtopics} />
+        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} />
         {footer}
       </div>
     </div>
   );
 }
 
-function TopicTabPanel({
-  activeTab,
-  entityId,
-  spaceId,
-  subtopics,
-}: {
-  activeTab: TopicTab;
-  entityId: string;
-  spaceId: string;
-  subtopics: Relation[];
-}) {
+function TopicTabPanel({ activeTab, entityId, spaceId }: { activeTab: TopicTab; entityId: string; spaceId: string }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
   if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} variant="tab" />;
 
-  return <TopicFeed topicId={entityId} spaceId={spaceId} topicOptions={subtopics} />;
+  return <TopicFeed topicId={entityId} spaceId={spaceId} />;
 }

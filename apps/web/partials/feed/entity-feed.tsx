@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
@@ -165,12 +166,11 @@ async function fetchFeedPage(
   return res.json() as Promise<ExploreFeedResult>;
 }
 
-type TopicFacetResult = { counts: Record<string, number> };
+type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
 
-async function fetchTopicFacetCounts(
+async function fetchTopicFacets(
   endpoint: string,
   params: {
-    candidateTopicIds: readonly string[];
     selectedTopicIds: readonly string[];
     typeIds: readonly string[] | undefined;
     fixedParams: Record<string, string>;
@@ -182,7 +182,6 @@ async function fetchTopicFacetCounts(
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      candidateTopicIds: params.candidateTopicIds,
       selectedTopicIds: params.selectedTopicIds,
       typeIds: params.typeIds,
       fixedParams: params.fixedParams,
@@ -252,43 +251,22 @@ export function EntityFeed({
   const typeIds = showTypeFilter && selectedTypeIds.length !== typeOptions.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
-  const topicOptionCache = React.useRef(new Map<string, HubFilterOption<string>>());
-  const availableTopicOptions = React.useMemo(() => {
-    for (const option of topicOptions) topicOptionCache.current.set(normId(option.value), option);
-
-    const options = [...topicOptions];
-    const offeredIds = new Set(options.map(option => normId(option.value)));
-    for (const selectedId of selectedTopicIds) {
-      const normalizedId = normId(selectedId);
-      if (offeredIds.has(normalizedId)) continue;
-      const retained = topicOptionCache.current.get(normalizedId);
-      if (retained) options.push(retained);
-    }
-    return options;
-  }, [selectedTopicIds, topicOptions]);
   const fixedParamsKey = Object.entries(fixedParams)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
-  const candidateTopicIds = React.useMemo(
-    () => [...new Map(availableTopicOptions.map(option => [normId(option.value), option.value])).values()],
-    [availableTopicOptions]
-  );
-  const candidateTopicIdsKey = candidateTopicIds.map(normId).sort().join(',');
   const topicFacets = useQuery({
     queryKey: [
       'entity-feed-topic-facets',
       topicFacetEndpoint ?? null,
-      candidateTopicIdsKey,
       topicIdsKey,
       showTypeFilter ? typeIdsKey : null,
       fixedParamsKey,
     ],
-    enabled: Boolean(topicFacetEndpoint && candidateTopicIds.length > 0 && typeSelectionLoaded),
+    enabled: Boolean(topicFacetEndpoint && typeSelectionLoaded),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
-      fetchTopicFacetCounts(topicFacetEndpoint!, {
-        candidateTopicIds,
+      fetchTopicFacets(topicFacetEndpoint!, {
         selectedTopicIds,
         typeIds: showTypeFilter ? typeIds : undefined,
         fixedParams,
@@ -297,27 +275,22 @@ export function EntityFeed({
     staleTime: 60_000,
   });
   const topicCountsPending = Boolean(topicFacetEndpoint) && (topicFacets.isLoading || topicFacets.isPlaceholderData);
-  const topicCountsSettled = Boolean(
-    topicFacetEndpoint && !topicCountsPending && !topicFacets.error && topicFacets.data
-  );
-  const countedTopicOptions = React.useMemo(() => {
-    if (!topicFacetEndpoint || topicFacets.error) return availableTopicOptions;
+  const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
+    const options = topicFacetEndpoint
+      ? orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
+          value: topic.id,
+          label: topic.name?.trim() || 'Topic',
+          count: topic.count,
+        }))
+      : topicOptions;
+    const query = topicSearch?.value.trim().toLocaleLowerCase();
+    return query ? options.filter(option => option.label.toLocaleLowerCase().includes(query)) : options;
+  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions, topicSearch?.value]);
 
-    const selectedIds = new Set(selectedTopicIds.map(normId));
-    return availableTopicOptions
-      .map(option => ({
-        ...option,
-        count: topicFacets.data ? (topicFacets.data.counts[normId(option.value)] ?? 0) : undefined,
-      }))
-      .filter(option => !topicCountsSettled || (option.count ?? 0) > 0 || selectedIds.has(normId(option.value)));
-  }, [
-    availableTopicOptions,
-    selectedTopicIds,
-    topicCountsSettled,
-    topicFacetEndpoint,
-    topicFacets.data,
-    topicFacets.error,
-  ]);
+  React.useEffect(() => {
+    if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
+    setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
+  }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
   // returning to Top restores the range the viewer last picked rather than resetting it.
@@ -513,7 +486,10 @@ export function EntityFeed({
     selectedTopicIds.length,
     'Any topic',
     () =>
-      availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ?? '1 topic',
+      topicFacets.data?.topics.find(topic => normId(topic.id) === normId(selectedTopicIds[0]))?.name ??
+      topicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
+      availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
+      '1 topic',
     count => `${count} topics`
   );
 
@@ -613,13 +589,20 @@ export function EntityFeed({
               {topicFilterVisible ? (
                 <HubMultiFilterMenu
                   label={topicLabel}
-                  options={countedTopicOptions}
+                  options={availableTopicOptions}
                   values={selectedTopicIds}
                   onToggle={toggleTopic}
                   onClear={() => setSelectedTopicIds([])}
                   clearLabel="Any topic"
                   showImages={false}
-                  search={topicSearch}
+                  search={
+                    topicSearch
+                      ? {
+                          ...topicSearch,
+                          isLoading: topicSearch.isLoading || (Boolean(topicFacetEndpoint) && topicFacets.isLoading),
+                        }
+                      : undefined
+                  }
                   countsPending={topicCountsPending}
                 />
               ) : null}
