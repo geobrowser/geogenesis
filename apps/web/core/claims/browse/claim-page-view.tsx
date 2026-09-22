@@ -155,9 +155,7 @@ export function ClaimPageView({
   };
   // Matches profile record tabs: unknown/error stays reachable, while a settled zero disappears.
   const hasDebates = hasRecordToShow(
-    record.debatesLoading || record.debatesError || record.debatesCountUnavailable
-      ? undefined
-      : record.debatesTotal
+    record.debatesLoading || record.debatesError || record.debatesCountUnavailable ? undefined : record.debatesTotal
   );
   const hasClaims = hasRecordToShow(
     record.claimsLoading || record.claimsError || record.claimsCountUnavailable ? undefined : record.claimsTotal
@@ -347,7 +345,7 @@ function ClaimTabPanel({
       isError: record.debatesError,
       isCountUnavailable: record.debatesCountUnavailable,
       href: hrefs.debates,
-      seeAllLabel: 'See all debates',
+      seeAllLabel: 'View all debates',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
     },
     {
@@ -359,7 +357,7 @@ function ClaimTabPanel({
       isError: record.claimsError,
       isCountUnavailable: record.claimsCountUnavailable,
       href: hrefs.claims,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all claims',
       onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('claims') : undefined,
     },
   ];

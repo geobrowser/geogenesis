@@ -15,7 +15,6 @@ import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/co
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
-import { ProfileBioSection } from './profile-bio-section';
 import { ProfileHeadline } from './profile-headline';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
@@ -66,8 +65,6 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
        * stale. It is one card tall either way, so leading with it costs the
        * history nothing.
        */}
-      <ProfileBioSection spaceId={spaceId} personEntityId={personEntityId} />
-
       <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
 
       {/* A failed history read is not an empty account. Keep its own sections
@@ -164,7 +161,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
-      seeAllLabel: 'See all debates',
+      seeAllLabel: 'View all debates',
     },
     {
       key: 'claims',
@@ -179,7 +176,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError && responses.isError,
       isError: positions.isError,
       href: `/space/${spaceId}/positions`,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all claims',
     },
   ];
 

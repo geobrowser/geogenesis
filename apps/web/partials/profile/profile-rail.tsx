@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -22,6 +23,7 @@ import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
+import { useValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import {
@@ -31,9 +33,10 @@ import {
   SquareButton,
   buttonClassNames,
 } from '~/design-system/button';
+import { ClampedText } from '~/design-system/clamped-text';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { EditSmall } from '~/design-system/icons/edit-small';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
@@ -112,6 +115,7 @@ export function ProfileRailSections({
         positionsCount={positionsCount}
         types={types}
         spaceId={spaceId}
+        personEntityId={personEntityId}
         systemEntityId={systemEntityId}
         address={address}
         spaceType={spaceType}
@@ -160,8 +164,10 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   return (
     <RailCard title="Spaces">
       {/* Rows styled as the browse sidebar draws its spaces (`SpaceRowLink`), so
-          a space looks and responds the same wherever it is listed. */}
-      <ul className="space-y-0.5">
+          a space looks and responds the same wherever it is listed. Pulled 10px
+          left — the row's own padding — so the icons line up under the title and
+          only the hover background reaches past it. */}
+      <ul className="-ml-2.5 space-y-0.5">
         {shown.map(space => {
           // Nine of the reference account's 33 have no name. A blank row in a
           // list of 33 reads as a loading failure.
@@ -396,6 +402,7 @@ function AboutSection({
   positionsCount,
   types,
   spaceId,
+  personEntityId,
   systemEntityId,
   address,
   spaceType,
@@ -408,11 +415,20 @@ function AboutSection({
   positionsCount: number | null;
   types: ProfileRailProps['types'];
   spaceId: string;
+  personEntityId: string | null;
   systemEntityId: string;
   address: string | null;
   spaceType: ProfileRailProps['spaceType'];
 }) {
   const joined = formatJoined(facts.joinedAt);
+
+  // The person's description, read here rather than under their name. It is still edited in the
+  // header, which is where its edit field is; the header shows it only while editing
+  // (`hideWhenReading`).
+  const description = useValue({
+    selector: v =>
+      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  })?.value;
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
@@ -428,6 +444,18 @@ function AboutSection({
        * and are the rows a returning reader scans for, so they sit last, next to
        * each other, where a set of numbers reads as a set.
        */}
+      {description && (
+        <div className="mb-2">
+          <ClampedText
+            text={description}
+            maxLines={6}
+            variant="metadata"
+            textClassName="wrap-break-word text-text"
+            togglePlacement="below"
+          />
+        </div>
+      )}
+
       <dl className="flex flex-col">
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
 
@@ -648,18 +676,17 @@ function SystemRecord({
   spaceType: ProfileRailProps['spaceType'];
 }) {
   return (
-    // A grey strip flush to the card's bottom edge, with an arrow that turns as
-    // it opens. Grey because it is a different register from the rows above it:
-    // those are facts about a person, these are ids for whoever is debugging
-    // the page.
-    <details className="group border-t border-dashed border-grey-02 bg-grey-01 [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-smallButton text-grey-04 hover:text-text">
+    // An accordion, closed by default, in the rows' own type: the label reads like
+    // "Positions" above it, and opening it lays the ids out as more rows of the
+    // same kind. The standard chevron, flipped when open.
+    <details className="group [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-metadata text-grey-04 hover:text-text">
         <span>Space system data</span>
-        <span className="text-grey-04 transition-transform duration-150 group-open:rotate-90">
-          <RightArrowLongSmall />
+        <span className="flex transition-transform duration-150 group-open:rotate-180">
+          <ChevronDownSmall color="grey-04" />
         </span>
       </summary>
-      <dl className="flex flex-col px-4 pb-3">
+      <dl className="flex flex-col">
         <SystemRow label="Space id" value={spaceId} />
         <SystemRow label="Entity id" value={systemEntityId} />
         <SystemRow label="Type" value={spaceType} />
@@ -671,9 +698,8 @@ function SystemRecord({
 
 function SystemRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 border-b border-grey-02 py-1 last:border-b-0">
-      <dt className="text-smallButton text-grey-04">{label}</dt>
-      <dd className="font-mono text-tag break-all text-text">{value}</dd>
-    </div>
+    <Row label={label}>
+      <span className="text-metadata break-all text-text">{value}</span>
+    </Row>
   );
 }

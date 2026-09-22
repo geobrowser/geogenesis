@@ -72,7 +72,7 @@ const kind = (over: Partial<React.ComponentProps<typeof ProfileActivitySection>[
   total: 10,
   isLoading: false,
   href: '/space/s/debates',
-  seeAllLabel: 'See all debates',
+  seeAllLabel: 'View all debates',
   ...over,
 });
 
@@ -247,6 +247,16 @@ describe('ProfileActivitySection', () => {
 
     expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    // No tabs to draw until a kind arrives.
+    expect(screen.queryByRole('button', { name: /Debates|Claims/ })).not.toBeInTheDocument();
+  });
+
+  it('titles the section Activity, with the kinds as pills beneath it', () => {
+    render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims' })]} />);
+
+    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('shows a completed kind without waiting for the other kind', () => {
@@ -260,9 +270,7 @@ describe('ProfileActivitySection', () => {
 
   it('keeps the first available kind selected when an earlier kind finishes later', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
-    const { rerender } = render(
-      <ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />
-    );
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
 
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
 
@@ -428,7 +436,7 @@ describe('ProfileActivitySection', () => {
     expect(cards.every(card => card.parentElement?.className.includes('w-[min(300px,84cqw)]'))).toBe(true);
   });
 
-  it('offers left and right buttons to scroll one Activity card at a time', async () => {
+  it('offers left and right buttons in the header to scroll one Activity card at a time', async () => {
     render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
 
     const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
@@ -453,22 +461,29 @@ describe('ProfileActivitySection', () => {
     fireEvent.scroll(scroller);
     await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
 
-    expect(screen.queryByRole('button', { name: 'Scroll activity left' })).toBeNull();
-    const next = screen.getByRole('button', { name: 'Scroll activity right' });
+    // Both arrows stay in the header once the row can scroll, so View all beside them never moves;
+    // the one pointing past an end is disabled instead.
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    const next = screen.getByRole('button', { name: 'Next page' });
+    expect(next).toBeEnabled();
+    // More to the right, so the edge fades.
+    expect(document.querySelector('[data-activity-scroll-fade]')).not.toBeNull();
     fireEvent.click(next);
     expect(scroller.scrollBy).toHaveBeenCalledWith({ left: 276, behavior: 'smooth' });
 
     scroller.scrollLeft = 300;
     fireEvent.scroll(scroller);
     await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(screen.getByRole('button', { name: 'Scroll activity left' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
 
     // The final card is fully visible here even though the trailing spacer means the rail itself
-    // still has a few scrollable pixels left. Those pixels should not keep the arrow around.
+    // still has a few scrollable pixels left. Those pixels should not keep the arrow live.
     scroller.scrollLeft = 512;
     fireEvent.scroll(scroller);
     await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(screen.queryByRole('button', { name: 'Scroll activity right' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+    // Nothing further right: no fade over the last card.
+    expect(document.querySelector('[data-activity-scroll-fade]')).toBeNull();
   });
 
   it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
@@ -555,34 +570,34 @@ describe('ProfileActivitySection', () => {
     const onSeeAll = vi.fn();
     render(<ProfileActivitySection kinds={[kind({ onSeeAll })]} />);
 
-    const seeAll = screen.getByRole('button', { name: 'See all debates' });
-    expect(screen.queryByRole('link', { name: 'See all debates' })).not.toBeInTheDocument();
+    const seeAll = screen.getByRole('button', { name: 'View all debates' });
+    expect(screen.queryByRole('link', { name: 'View all debates' })).not.toBeInTheDocument();
 
     fireEvent.click(seeAll);
 
     expect(onSeeAll).toHaveBeenCalledOnce();
   });
 
-  it('sends See all to the tab bar rather than the top of the page', () => {
+  it('sends View all to the tab bar rather than the top of the page', () => {
     render(
       <ProfileActivitySection
         kinds={[
           kind(),
-          kind({ key: 'claims', label: 'Claims', href: '/space/s/positions', seeAllLabel: 'See all claims' }),
+          kind({ key: 'claims', label: 'Claims', href: '/space/s/positions', seeAllLabel: 'View all claims' }),
         ]}
       />
     );
 
     // Without the fragment the reader lands at the top of the profile — a screenful of cover,
     // avatar, name, roles and bio — rather than on the list they clicked for.
-    expect(screen.getByRole('link', { name: /See all debates/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /View all debates/ })).toHaveAttribute(
       'href',
       '/space/s/debates#space-tabs'
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
 
-    expect(screen.getByRole('link', { name: /See all claims/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /View all claims/ })).toHaveAttribute(
       'href',
       '/space/s/positions#space-tabs'
     );
