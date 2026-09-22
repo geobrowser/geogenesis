@@ -13,9 +13,14 @@ describe('topicFeedFilter', () => {
     expect(match).toEqual({
       or: [
         {
-          relations: {
-            some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
-          },
+          and: [
+            { not: { typeIds: { overlaps: [DEBATE_TYPE_ID] } } },
+            {
+              relations: {
+                some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
+              },
+            },
+          ],
         },
         {
           and: [
@@ -44,5 +49,9 @@ describe('topicFeedFilter', () => {
 
   it('does not duplicate the page topic when it is selected', () => {
     expect(topicFeedFilter('topic-1', ['topic-1']).and).toHaveLength(1);
+  });
+
+  it('deduplicates repeated additional topics', () => {
+    expect(topicFeedFilter('topic-1', ['topic-2', 'topic-2']).and).toHaveLength(2);
   });
 });

@@ -1,6 +1,7 @@
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import type { EntityFilter } from '~/core/gql/graphql';
+import { normId } from '~/core/utils/norm-id';
 
 /**
  * One topic predicate for the mixed rabbit-hole feed.
@@ -13,12 +14,20 @@ function topicMatch(topicId: string): EntityFilter {
   return {
     or: [
       {
-        relations: {
-          some: {
-            typeId: { is: TOPICS_PROPERTY_ID },
-            toEntityId: { is: topicId },
+        and: [
+          // A Debate's Topics are inherited from the Claim it debates. Ignore any direct Topic
+          // relation on the Debate itself so the feed and its facet counts cannot disagree about
+          // which subject the Debate belongs to.
+          { not: { typeIds: { overlaps: [DEBATE_TYPE_ID] } } },
+          {
+            relations: {
+              some: {
+                typeId: { is: TOPICS_PROPERTY_ID },
+                toEntityId: { is: topicId },
+              },
+            },
           },
-        },
+        ],
       },
       {
         and: [
@@ -46,7 +55,8 @@ function topicMatch(topicId: string): EntityFilter {
 
 /** The page topic is mandatory; extra topic selections narrow the feed with AND semantics. */
 export function topicFeedFilter(topicId: string, selectedTopicIds: readonly string[] = []): EntityFilter {
+  const topicIds = [...new Map([topicId, ...selectedTopicIds].map(id => [normId(id), id])).values()];
   return {
-    and: [topicMatch(topicId), ...selectedTopicIds.filter(id => id !== topicId).map(topicMatch)],
+    and: topicIds.map(topicMatch),
   };
 }

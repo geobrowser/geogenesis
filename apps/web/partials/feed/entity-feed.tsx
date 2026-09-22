@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -13,6 +13,7 @@ import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/e
 import { EXPLORE_TYPE_FILTER_STORAGE_KEY, parseStoredExploreTypeIds } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -103,6 +104,8 @@ type EntityFeedProps = {
   persistTypeSelection?: boolean;
   /** Optional Topic facet shown beside the type picker. */
   topicOptions?: HubFilterOption<string>[];
+  /** Optional endpoint that counts and prunes Topic options against this feed's current filters. */
+  topicFacetEndpoint?: string;
   /** Keep the Topic picker visible while its options load or when the default list is empty. */
   showTopicFilter?: boolean;
   /** Optional search state for a dynamic Topic picker. */
@@ -162,6 +165,34 @@ async function fetchFeedPage(
   return res.json() as Promise<ExploreFeedResult>;
 }
 
+type TopicFacetResult = { counts: Record<string, number> };
+
+async function fetchTopicFacetCounts(
+  endpoint: string,
+  params: {
+    candidateTopicIds: readonly string[];
+    selectedTopicIds: readonly string[];
+    typeIds: readonly string[] | undefined;
+    fixedParams: Record<string, string>;
+    signal?: AbortSignal;
+  }
+): Promise<TopicFacetResult> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      candidateTopicIds: params.candidateTopicIds,
+      selectedTopicIds: params.selectedTopicIds,
+      typeIds: params.typeIds,
+      fixedParams: params.fixedParams,
+    }),
+    signal: params.signal,
+  });
+  if (!response.ok) throw new Error('Topic facets failed');
+  return response.json() as Promise<TopicFacetResult>;
+}
+
 /**
  * Generic entity-feed surface: time + (optional) space dropdowns, auth-aware infinite
  * scroll, skeleton loaders. Explore and activity are both thin wrappers around this.
@@ -181,6 +212,7 @@ export function EntityFeed({
   typeOptions = EXPLORE_ENTITY_TYPES,
   persistTypeSelection = true,
   topicOptions = [],
+  topicFacetEndpoint,
   showTopicFilter = false,
   topicSearch,
   fixedParams = {},
@@ -220,16 +252,78 @@ export function EntityFeed({
   const typeIds = showTypeFilter && selectedTypeIds.length !== typeOptions.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
+  const topicOptionCache = React.useRef(new Map<string, HubFilterOption<string>>());
+  const availableTopicOptions = React.useMemo(() => {
+    for (const option of topicOptions) topicOptionCache.current.set(normId(option.value), option);
+
+    const options = [...topicOptions];
+    const offeredIds = new Set(options.map(option => normId(option.value)));
+    for (const selectedId of selectedTopicIds) {
+      const normalizedId = normId(selectedId);
+      if (offeredIds.has(normalizedId)) continue;
+      const retained = topicOptionCache.current.get(normalizedId);
+      if (retained) options.push(retained);
+    }
+    return options;
+  }, [selectedTopicIds, topicOptions]);
   const fixedParamsKey = Object.entries(fixedParams)
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
+  const candidateTopicIds = React.useMemo(
+    () => [...new Map(availableTopicOptions.map(option => [normId(option.value), option.value])).values()],
+    [availableTopicOptions]
+  );
+  const candidateTopicIdsKey = candidateTopicIds.map(normId).sort().join(',');
+  const topicFacets = useQuery({
+    queryKey: [
+      'entity-feed-topic-facets',
+      topicFacetEndpoint ?? null,
+      candidateTopicIdsKey,
+      topicIdsKey,
+      showTypeFilter ? typeIdsKey : null,
+      fixedParamsKey,
+    ],
+    enabled: Boolean(topicFacetEndpoint && candidateTopicIds.length > 0 && typeSelectionLoaded),
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) =>
+      fetchTopicFacetCounts(topicFacetEndpoint!, {
+        candidateTopicIds,
+        selectedTopicIds,
+        typeIds: showTypeFilter ? typeIds : undefined,
+        fixedParams,
+        signal,
+      }),
+    staleTime: 60_000,
+  });
+  const topicCountsPending = Boolean(topicFacetEndpoint) && (topicFacets.isLoading || topicFacets.isPlaceholderData);
+  const topicCountsSettled = Boolean(
+    topicFacetEndpoint && !topicCountsPending && !topicFacets.error && topicFacets.data
+  );
+  const countedTopicOptions = React.useMemo(() => {
+    if (!topicFacetEndpoint || topicFacets.error) return availableTopicOptions;
+
+    const selectedIds = new Set(selectedTopicIds.map(normId));
+    return availableTopicOptions
+      .map(option => ({
+        ...option,
+        count: topicFacets.data ? (topicFacets.data.counts[normId(option.value)] ?? 0) : undefined,
+      }))
+      .filter(option => !topicCountsSettled || (option.count ?? 0) > 0 || selectedIds.has(normId(option.value)));
+  }, [
+    availableTopicOptions,
+    selectedTopicIds,
+    topicCountsSettled,
+    topicFacetEndpoint,
+    topicFacets.data,
+    topicFacets.error,
+  ]);
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
   // returning to Top restores the range the viewer last picked rather than resetting it.
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
-  const topicFilterVisible = showTopicFilter || topicOptions.length > 0;
+  const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
   const showFilterRow =
     showSortFilter ||
     timeRangeApplies ||
@@ -418,7 +512,8 @@ export function EntityFeed({
   const topicLabel = pickerLabel(
     selectedTopicIds.length,
     'Any topic',
-    () => topicOptions.find(option => option.value === selectedTopicIds[0])?.label ?? '1 topic',
+    () =>
+      availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ?? '1 topic',
     count => `${count} topics`
   );
 
@@ -518,13 +613,14 @@ export function EntityFeed({
               {topicFilterVisible ? (
                 <HubMultiFilterMenu
                   label={topicLabel}
-                  options={topicOptions}
+                  options={countedTopicOptions}
                   values={selectedTopicIds}
                   onToggle={toggleTopic}
                   onClear={() => setSelectedTopicIds([])}
                   clearLabel="Any topic"
                   showImages={false}
                   search={topicSearch}
+                  countsPending={topicCountsPending}
                 />
               ) : null}
             </div>

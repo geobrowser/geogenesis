@@ -71,6 +71,7 @@ describe('TopicFeed', () => {
         { value: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', label: 'Alignment' },
         { value: 'cccccccccccccccccccccccccccccccc', label: 'AI governance' },
       ],
+      topicFacetEndpoint: '/api/topics/facets',
       showTopicFilter: true,
       topicSearch: {
         value: 'governance',

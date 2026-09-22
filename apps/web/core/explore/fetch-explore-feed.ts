@@ -210,7 +210,7 @@ async function fetchBestEntitiesByTypePage(args: {
   );
 }
 
-function buildFeedFilter(args: {
+export function buildExploreFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
   typeIds?: readonly string[];
@@ -263,7 +263,7 @@ async function fetchExploreEntitiesPage(args: {
       variables: {
         limit: args.limit,
         after: args.after,
-        filter: buildFeedFilter(args),
+        filter: buildExploreFeedFilter(args),
         orderBy: args.orderBy,
         spaceIds: { in: args.spaceIds },
         typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : undefined,
@@ -291,7 +291,7 @@ async function fetchTopEntitiesPage(args: {
       variables: {
         first: args.limit,
         after: args.after,
-        filter: buildFeedFilter(args),
+        filter: buildExploreFeedFilter(args),
         propertyId: SCORE_SYSTEM_PROPERTY,
         dataType: 'integer',
         sortDirection: 'DESC',
@@ -309,7 +309,7 @@ async function fetchTopEntitiesPage(args: {
 
 // "Best" sort: the Phase A ranked feed via `entitiesRankedForFeedConnection`.
 //
-// Unlike the other two this sends no `buildFeedFilter`. Candidate generation inside
+// Unlike the other two this sends no `buildExploreFeedFilter`. Candidate generation inside
 // `entities_ranked_for_feed` already enforces every clause it builds — name presence,
 // system entities, excluded block types — and takes space, type and recency as its own
 // arguments. See explore-best-document for why sending them twice is not merely
@@ -379,6 +379,15 @@ function browseSpaceRowsToMap(data: BrowseSidebarData): Map<string, { name: stri
   return m;
 }
 
+/** The exact visible space scope used by Explore and contextual Topic feeds. */
+export function exploreBrowseSpaceIds(browse: BrowseSidebarData, spaceFilterIds: readonly string[] | null): string[] {
+  const visibleIds = [...browseSpaceRowsToMap(browse).keys()];
+  if (spaceFilterIds === null) return visibleIds;
+
+  const wanted = new Set(spaceFilterIds.map(normId));
+  return visibleIds.filter(id => wanted.has(id));
+}
+
 export async function fetchExploreFeed(args: {
   browse: BrowseSidebarData;
   sort: ExploreSort;
@@ -411,8 +420,7 @@ export async function fetchExploreFeed(args: {
   entityFilter?: EntityFilter;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
-  const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
-  const baseIds = [...new Set([...spaceMeta.keys()].map(normId))].filter(id => (wanted ? wanted.has(id) : true));
+  const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
   if (baseIds.length === 0) {
     return { items: [], nextCursor: null };
   }

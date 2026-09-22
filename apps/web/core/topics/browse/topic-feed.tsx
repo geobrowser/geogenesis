@@ -53,6 +53,7 @@ export function TopicFeed({
       typeOptions={TOPIC_FEED_ENTITY_TYPES}
       persistTypeSelection={false}
       topicOptions={options}
+      topicFacetEndpoint="/api/topics/facets"
       showTopicFilter
       topicSearch={{
         value: topicSearch.query,

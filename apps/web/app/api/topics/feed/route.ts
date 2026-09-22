@@ -1,17 +1,11 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
+import { resolveTopicFeedRequestContext } from '~/core/topics/browse/topic-feed-request-context';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
-
-import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
 const SORTS: ExploreSort[] = ['new', 'top', 'best'];
 
@@ -35,44 +29,7 @@ export async function GET(request: Request) {
     .split(',')
     .filter(IdUtils.isValid)
     .filter(id => id !== topicId);
-  const walletAddress = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
-  let personalMemberSpaceId: string | null = null;
-  let memberOrEditorSpaceIds: string[] = [];
-
-  if (walletAddress) {
-    personalMemberSpaceId = await resolveMemberSpaceFromWalletSafe(walletAddress);
-    if (personalMemberSpaceId) {
-      try {
-        const context = await getGovernanceHomeSpaceContext(personalMemberSpaceId);
-        memberOrEditorSpaceIds = [
-          ...new Set([...context.editorIds, ...context.myProposalSpaceIds, personalMemberSpaceId]),
-        ];
-      } catch {
-        memberOrEditorSpaceIds = [personalMemberSpaceId];
-      }
-    }
-  }
-
-  let browse: BrowseSidebarData;
-  try {
-    browse = await fetchBrowseSidebarData(personalMemberSpaceId);
-  } catch {
-    browse = {
-      featured: [],
-      editorOf: [],
-      memberOf: [],
-      documentationImage: null,
-      personalSpaceId: null,
-    };
-  }
-
-  const visibleSpaceIds = new Set([...browse.featured, ...browse.editorOf, ...browse.memberOf].map(space => space.id));
-  if (!visibleSpaceIds.has(routeSpaceId)) {
-    browse = {
-      ...browse,
-      featured: [{ id: routeSpaceId, name: routeSpaceId.slice(0, 8), image: null }, ...browse.featured],
-    };
-  }
+  const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveTopicFeedRequestContext(routeSpaceId);
 
   try {
     const result = await fetchExploreFeed({

@@ -15,6 +15,8 @@ import { EntityFeed } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
+  facetQueryOptions: null as Record<string, unknown> | null,
+  facetData: null as { counts: Record<string, number> } | null,
   /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
   queryKeys: [] as unknown[][],
   fetch: vi.fn(),
@@ -46,6 +48,7 @@ function createLocalStorage(): Storage {
 }
 
 vi.mock('@tanstack/react-query', () => ({
+  keepPreviousData: Symbol('keepPreviousData'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -55,6 +58,15 @@ vi.mock('@tanstack/react-query', () => ({
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
       hasNextPage: false,
+      error: null,
+    };
+  },
+  useQuery: (options: Record<string, unknown>) => {
+    mocks.facetQueryOptions = options;
+    return {
+      data: mocks.facetData ?? undefined,
+      isLoading: Boolean(options.enabled) && mocks.facetData === null,
+      isPlaceholderData: false,
       error: null,
     };
   },
@@ -100,6 +112,8 @@ vi.mock('~/partials/explore/explore-feed-card', () => ({
 beforeEach(() => {
   vi.stubGlobal('localStorage', createLocalStorage());
   mocks.queryOptions = null;
+  mocks.facetQueryOptions = null;
+  mocks.facetData = null;
   mocks.pages = null;
   mocks.cardProps = null;
   mocks.queryKeys = [];
@@ -483,6 +497,29 @@ describe('EntityFeed contextual filters', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search topics' }), { target: { value: 'AI' } });
     expect(onSearchChange).toHaveBeenCalledWith('AI');
     expect(screen.getByLabelText('Loading options')).not.toBeNull();
+  });
+
+  it('shows entity counts and removes settled zero-result Topic options', () => {
+    mocks.facetData = {
+      counts: {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: 4,
+        cccccccccccccccccccccccccccccccc: 0,
+      },
+    };
+
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        topicFacetEndpoint="/api/topics/facets"
+        showSpaceFilter={false}
+        showTopicFilter
+        topicOptions={topicOptions}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route' }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Alignment.*4/ })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
   });
 });
 
