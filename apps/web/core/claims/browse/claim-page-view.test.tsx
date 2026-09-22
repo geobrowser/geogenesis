@@ -13,6 +13,8 @@ import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
+  /** How many responses the claim has; zero means the hero draws no verdict column. */
+  responseTotal: 11,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
@@ -101,6 +103,9 @@ vi.mock('./use-claim-response-state', () => ({
   useClaimResponseState: () => ({
     responseKind: 'stance',
     summary: {
+      isLoading: false,
+      hasCounts: true,
+      total: mocks.responseTotal,
       isControversial: false,
       viewerDirection: 'positive',
       viewerSpaceId: 'viewer-space',
@@ -138,11 +143,19 @@ vi.mock('./claim-comment-position', () => ({
   },
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
+// The prefetching link reaches for the sync engine; the topic chips only need to be links.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));
-vi.mock('./claim-verdict', () => ({
-  ClaimVerdict: ({ children }: { children?: React.ReactNode }) => <div data-testid="verdict">{children}</div>,
+vi.mock('~/partials/explore/claim-explore-feed-card', () => ({
+  ClaimVerdictColumn: () => <div data-testid="verdict" />,
 }));
 vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
@@ -187,6 +200,7 @@ function claimEntity(description: string | null) {
 }
 
 beforeEach(() => {
+  mocks.responseTotal = 11;
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
@@ -263,7 +277,12 @@ describe('ClaimPageView record', () => {
     ]);
   });
 
-  it('heads the page with the claim, its verdict and the position controls, above the tabs', () => {
+  it('heads the page like an Explore claim card: the claim, the pills, then the verdict column', () => {
+    mocks.entity = {
+      ...mocks.entity,
+      types: [{ id: 'claim-type', name: 'Claim' }],
+      relations: [{ id: 'relation-1', type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-1', name: 'Ethics' } }],
+    };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     const heading = screen.getByRole('heading', { level: 1 });
@@ -271,9 +290,21 @@ describe('ClaimPageView record', () => {
     const verdict = screen.getByTestId('verdict');
     const tabs = screen.getByTestId('tabs');
 
-    expect(verdict).toContainElement(position);
-    expect(heading.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Topics are on their own tab for now, not above the claim.
+    expect(screen.queryByRole('navigation', { name: 'Topics' })).toBeNull();
+    expect(heading.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(position.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(verdict.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // No type chip: every claim on this page is a Claim.
+    expect(screen.queryByText('Claim')).toBeNull();
+  });
+
+  it('draws no verdict column on a claim nobody has answered, as Explore does', () => {
+    mocks.responseTotal = 0;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByTestId('verdict')).toBeNull();
+    expect(screen.getByTestId('position')).toBeInTheDocument();
   });
 
   it('orders Overview as activity, then comments', () => {
@@ -401,38 +432,38 @@ describe('ClaimPageView comments', () => {
   });
 });
 
-// GEO-2781. Topics used to be a run of chips crammed into the header's meta row, capped at three
-// and with a `+N` that only counted. It is now the topic view's Subtopics section, which is the
-// same question asked of the reader and so should not be a second thing that merely looks like it.
+// Topics live on their own tab for now; the hero's row is switched off (`SHOW_HERO_TOPICS`). The
+// Overview no longer repeats them either.
 describe('ClaimPageView topics', () => {
-  const topicRelation = {
-    id: 'relation-1',
+  const topic = (n: number) => ({
+    id: `relation-${n}`,
     type: { id: TOPICS_PROPERTY_ID },
-    toEntity: { id: 'topic-1', name: 'Ethics' },
-  };
+    toEntity: { id: `topic-${n}`, name: `Topic ${n}` },
+  });
+  const tagRelation = { id: 'relation-tag', type: { id: TAG_PROPERTY_ID }, toEntity: { id: 'tag-1', name: 'Draft' } };
 
-  it('draws them with the shared chip section, under the label Topics', () => {
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation] };
+  it('draws every topic, and only topics, on the Topics tab', () => {
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'topics', setActiveSystemTab: vi.fn() };
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1), tagRelation] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Topics');
-    expect(screen.getByTestId('activity').nextElementSibling).toBe(screen.getByTestId('chip-section'));
-  });
-
-  it('hands the section the topic relations, scoped to the viewing space', () => {
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation] };
-    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
-
-    expect(mocks.chipSection?.relations).toEqual([topicRelation]);
+    expect(mocks.chipSection?.relations).toEqual([topic(1)]);
+    expect(mocks.chipSection?.cap).toBe(Infinity);
     expect(mocks.chipSection?.spaceId).toBe('space-1');
   });
 
-  // Tags share the header row with the type and are a different relation; only Topics moved.
-  it('passes only topic relations, not the tags beside the type', () => {
-    const tagRelation = { id: 'relation-2', type: { id: TAG_PROPERTY_ID }, toEntity: { id: 'tag-1', name: 'Draft' } };
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation, tagRelation] };
+  it('no longer repeats them on the Overview', () => {
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.chipSection?.relations).toEqual([topicRelation]);
+    expect(screen.queryByTestId('chip-section')).toBeNull();
+  });
+
+  it('offers a Topics tab only when the claim has topics', () => {
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toContain('Topics');
   });
 });

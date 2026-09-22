@@ -372,8 +372,12 @@ export function ClaimExploreFeedCard({
  * `ClaimSummary`'s responder cluster read the *same* `entityRespondersQueryKey`, so react-query
  * serves both from one cache entry and one request. That is worth knowing before either side is
  * repointed at a query of its own.
+ *
+ * Exported for the claim page's hero, which is this card's layout at page scale: the same column,
+ * so the page and the feed cannot describe one claim in two shapes. The caller supplies the
+ * `@container` the `claim-card-narrow` rules measure.
  */
-function ClaimVerdictColumn({
+export function ClaimVerdictColumn({
   entityId,
   spaceId,
   responseKind,
