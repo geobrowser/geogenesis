@@ -16,6 +16,7 @@ import {
   useRequestDebateMediaProcessing,
   useSpaceDebates,
 } from '~/core/debates/hooks';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -46,9 +47,11 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   const currentUserId = getCurrentGeoChatUserId();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
+  // The flag reads its default until hydration, so redirecting before then ignores a stored `true`.
+  const hydrated = useHydrated();
   React.useEffect(() => {
-    if (!enabled) router.replace(`/space/${spaceId}`);
-  }, [enabled, router, spaceId]);
+    if (hydrated && !enabled) router.replace(`/space/${spaceId}`);
+  }, [hydrated, enabled, router, spaceId]);
 
   const debates = React.useMemo(
     () => [...(debatesQuery.data?.debates ?? [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
