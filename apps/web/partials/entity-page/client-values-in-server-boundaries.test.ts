@@ -88,7 +88,13 @@ function dynamicImportSpecifiers(sourceFile: ts.SourceFile): string[] {
   const found: string[] = [];
 
   const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+    // `require('…')` counts as well. There is one in this tree — `markdown-adapter.ts` reaches the
+    // tiptap extensions that way — and while nothing server-reachable imports that module today,
+    // the call is real and the subtree beyond it would be unguarded the day something does.
+    const isRequire =
+      ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'require';
+
+    if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || isRequire)) {
       const [specifier] = node.arguments;
       // `isStringLiteralLike`, unlike the directive check: `import(`./helper`)` is a legal and
       // statically resolvable specifier, where `` `use client` `` is not a legal directive. A
@@ -199,7 +205,7 @@ type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
  */
 
 /** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
-const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef']);
+const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef', 'lazy']);
 
 /** The local names in one module that actually refer to React's wrappers and base classes. */
 type ReactBindings = { wrappers: Set<string>; bases: Set<string>; namespaces: Set<string> };
@@ -235,6 +241,9 @@ function reactBindingsOf(sourceFile: ts.SourceFile): ReactBindings {
       for (const element of clause.namedBindings.elements) {
         if (element.isTypeOnly) continue;
         const exported = (element.propertyName ?? element.name).text;
+        // `import { default as React } from 'react'` is a default import in named clothing, so the
+        // binding it makes is a namespace like any other default React import.
+        if (exported === 'default') namespaces.add(element.name.text);
         if (COMPONENT_WRAPPERS.has(exported)) wrappers.add(element.name.text);
         if (COMPONENT_BASES.has(exported)) bases.add(element.name.text);
       }
@@ -429,7 +438,14 @@ function exportKindsOf(
     if (ts.isClassDeclaration(node) || ts.isClassExpression(node)) return classifyClass(node, react);
     if (ts.isTaggedTemplateExpression(node)) return 'value';
     if (ts.isCallExpression(node)) return isComponentWrapper(node.expression, react) ? 'component' : 'value';
-    if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isSatisfiesExpression(node)) {
+    // The same transparent wrappers `returnsAValue` sees through, including `!`, which this half
+    // was missing — the two halves of one classifier disagreeing is how several of these started.
+    if (
+      ts.isParenthesizedExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isNonNullExpression(node)
+    ) {
       return classify(node.expression, seen);
     }
     if (ts.isIdentifier(node)) {
@@ -706,6 +722,13 @@ describe('server components take only components from client modules', () => {
             reexported: true,
           });
         } else {
+          // An empty list still evaluates the target, the same way `import {}` does. This is that
+          // check's other half, and it should have gone in with it.
+          if (statement.exportClause.elements.length === 0) {
+            found.push({ specifier, local: '' });
+            continue;
+          }
+
           for (const element of statement.exportClause.elements) {
             if (element.isTypeOnly) continue;
             found.push({
@@ -757,17 +780,12 @@ describe('server components take only components from client modules', () => {
     expect(serverGraph.size).toBeGreaterThan(100);
   });
 
-  /** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
-  function isCapitalised(name: string): boolean {
-    return /^[A-Z]/.test(name) && name !== name.toUpperCase();
-  }
-
   /**
    * Every binding a server-graph module takes from a client module, with what the source says it
    * is. A name that is not capitalised cannot be a component whatever its declaration says, so it
    * is reported without asking.
    */
-  function* clientBindings(): Generator<{ offence: string; kind: ExportKind; capitalised: boolean }> {
+  function* clientBindings(): Generator<{ offence: string | null; kind: ExportKind; capitalised: boolean }> {
     for (const file of serverGraph) {
       const from = file.split(path.sep).join('/');
 
@@ -789,55 +807,36 @@ describe('server components take only components from client modules', () => {
           for (const [exported, kind] of kindsFor(target)) {
             // `export *` does not carry the default export, so reading one here invents an offence.
             if (exported === 'default') continue;
-            if (kind === 'component' || kind === 'erased') continue;
-            if (isCapitalised(exported)) {
-              const label = kind === 'unknown' ? 'unclassifiable ' : '';
-              yield { offence: `${from} -> re-exports ${exported} (${label}from ${source})`, kind, capitalised: true };
-            } else {
-              yield {
-                offence: `${from} -> re-exports ${exported} (from ${source})`,
-                kind: 'value',
-                capitalised: false,
-              };
-            }
+
+            const verdict = verdictFor(exported, kind);
+
+            yield {
+              offence: verdict ? `${from} -> re-exports ${exported} (${verdict.label}from ${source})` : null,
+              kind,
+              capitalised: verdict?.capitalised ?? isCapitalised(exported),
+            };
           }
           continue;
         }
 
         if (!reference.exported) continue;
 
-        /*
-         * The gate reads the exported name, because that is the declaration being classified and
-         * React cannot render a lowercase binding as an element. A default import is judged by its
-         * local name instead, which is the only name it has.
-         *
-         * `export { default } from './client'` has neither — `default` is not a name anyone chose —
-         * so there is nothing for capitalisation to say and the declaration decides alone. Review
-         * also asked for `{ panel as Panel }` to be judged by the local alias; that one is declined
-         * below, in the reply, because the opposite alias `{ Button as button }` wants the opposite
-         * rule and neither spelling exists here.
-         */
         const named = reference.exported === 'default' ? reference.local : reference.exported;
-        if (named !== 'default' && !isCapitalised(named)) {
-          yield {
-            offence: `${from} -> ${reference.local} (from ${source})${suffix}`,
-            kind: 'value',
-            capitalised: false,
-          };
-          continue;
-        }
-
         const kind = kindsFor(target).get(reference.exported) ?? 'unknown';
-        const label = kind === 'unknown' ? `${reference.local} (unclassifiable` : `${reference.local} (`;
-        yield { offence: `${from} -> ${label}from ${source})${suffix}`, kind, capitalised: true };
+        const verdict = verdictFor(named, kind);
+
+        yield {
+          offence: verdict ? `${from} -> ${reference.local} (${verdict.label}from ${source})${suffix}` : null,
+          kind,
+          capitalised: verdict?.capitalised ?? isCapitalised(named),
+        };
       }
     }
   }
 
   function* clientValuesInServerGraph(): Generator<string> {
-    for (const { offence, kind } of clientBindings()) {
-      if (kind === 'component' || kind === 'erased') continue;
-      yield offence;
+    for (const { offence } of clientBindings()) {
+      if (offence) yield offence;
     }
   }
 
@@ -896,6 +895,68 @@ describe('server components take only components from client modules', () => {
  * changelog. They were verified by hand at the time, by planting them in the tree and watching the
  * previous version disagree; written down here, they stay verified.
  */
+/**
+ * The verdict rule, which decides whether a binding may cross the boundary.
+ *
+ * Its own describe because it had two callers that disagreed: one exempted components before
+ * asking about capitalisation, the other asked about capitalisation before resolving the kind. The
+ * cases below are the disagreement, written down.
+ */
+/** Only a capitalised name can be a component. `useFeatureFlag` is a function and still a value. */
+function isCapitalised(name: string): boolean {
+  return /^[A-Z]/.test(name) && name !== name.toUpperCase();
+}
+
+/**
+ * Whether this binding is an offence, and how to describe it — or nothing, if it may cross.
+ *
+ * Written once because the two callers had drifted. The star-re-export path exempted anything
+ * classified as a component *before* asking about capitalisation, so a lowercase export slipped
+ * through a barrel while the same name imported directly was rejected; and the direct path asked
+ * about capitalisation *before* resolving the kind, so a lowercase erased type was reported as a
+ * runtime value. One order, three questions: erased crosses, lowercase never does, a component
+ * crosses.
+ *
+ * `default` is exempt from the capitalisation question because it is not a name anyone chose.
+ */
+function verdictFor(named: string, kind: ExportKind): { label: string; capitalised: boolean } | null {
+  if (kind === 'erased') return null;
+  if (named !== 'default' && !isCapitalised(named)) return { label: '', capitalised: false };
+  if (kind === 'component') return null;
+
+  return { label: kind === 'unknown' ? 'unclassifiable ' : '', capitalised: true };
+}
+
+describe('verdictFor', () => {
+  const offends = (named: string, kind: ExportKind) => verdictFor(named, kind) !== null;
+
+  it('lets an erased export cross whatever it is called', () => {
+    // `export interface options {}` is gone before anything runs, so its lowercase name is not a
+    // reason to report it. This order was the other way round, and reported it.
+    expect(offends('options', 'erased')).toBe(false);
+    expect(offends('Options', 'erased')).toBe(false);
+  });
+
+  it('rejects a lowercase name even when the source calls it a component', () => {
+    // React cannot render `<buildOptions />`, so a lowercase export is a value however it is
+    // declared — and it has to be rejected through a barrel as surely as it is directly. The star
+    // path exempted it, because it asked about the kind first.
+    expect(offends('buildOptions', 'component')).toBe(true);
+    expect(offends('BuildOptions', 'component')).toBe(false);
+  });
+
+  it('rejects a value and an unclassifiable export', () => {
+    expect(offends('Thing', 'value')).toBe(true);
+    expect(offends('Thing', 'unknown')).toBe(true);
+    expect(verdictFor('Thing', 'unknown')?.label).toBe('unclassifiable ');
+  });
+
+  it('asks nothing about the capitalisation of `default`', () => {
+    expect(offends('default', 'component')).toBe(false);
+    expect(offends('default', 'value')).toBe(true);
+  });
+});
+
 describe('exportKindsOf', () => {
   const kindOf = (source: string, exported = 'Subject') =>
     exportKindsOf(parse('fixture.tsx', source), () => null).get(exported);
@@ -915,6 +976,13 @@ describe('exportKindsOf', () => {
       'a class extending an aliased React base',
       "import { Component as Base } from 'react';\nexport class Subject extends Base {}",
     ],
+    // `lazy` produces a component as surely as `memo` does.
+    ['lazy', "import { lazy } from 'react';\nexport const Subject = lazy(() => import('./panel'));"],
+    [
+      'a wrapper reached through a default-as-named React import',
+      "import { default as React } from 'react';\nexport const Subject = React.memo(() => <div />);",
+    ],
+    ['a non-null asserted arrow', 'export const Subject = (() => <div />)!;'],
     ['an identifier default', 'const Inner = () => <div />;\nexport default Inner;'],
     ['a parenthesised arrow', 'export const Subject = ((props) => <div />);'],
     ['an arrow returning a component call', 'export const Subject = () => renderThing();'],
@@ -996,6 +1064,10 @@ describe('exportKindsOf', () => {
     expect(kindOf("export type { Subject } from './x';")).toBe('erased');
     // Keyed as `default`, which is what a default import looks it up as.
     expect(kindOf('export default interface Subject { a: 1 }', 'default')).toBe('erased');
+  });
+
+  it("does not take an unrelated lazy for React's", () => {
+    expect(kindOf("import { lazy } from 'other';\nexport const Subject = lazy(() => 1);")).toBe('value');
   });
 
   it('records a namespace export, so a barrel over it keeps the binding', () => {
