@@ -168,7 +168,7 @@ describe('player layout', () => {
   });
 });
 
-describe('reduced overlays', () => {
+describe('overlay variants', () => {
   it('removes inline claim cards while leaving claim details to the card action', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     mocks.ticker = {
@@ -201,6 +201,17 @@ describe('reduced overlays', () => {
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
     rerender(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    expect(queryByText(subtitle)).not.toBeNull();
+  });
+
+  it('preserves the current subtitle when a regular debate is paused or inactive', () => {
+    const subtitle = 'The current regular-player subtitle';
+    mocks.controller = controllerFixture({ mutedByUser: false, playing: false, turnSlot: 1, subtitle });
+    const { queryByText, rerender } = render(<DebateFeedPlayer debate={debate} active votes={votes} />);
+    expect(queryByText(subtitle)).not.toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, subtitle });
+    rerender(<DebateFeedPlayer debate={debate} active={false} votes={votes} />);
     expect(queryByText(subtitle)).not.toBeNull();
   });
 });

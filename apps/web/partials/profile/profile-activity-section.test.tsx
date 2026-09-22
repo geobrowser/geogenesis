@@ -262,6 +262,26 @@ describe('ProfileActivitySection', () => {
     expect(gate).toHaveAttribute('data-allowed-id', 'd2');
   });
 
+  it('returns playback to the first debate after switching to another Activity collection', () => {
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind({ rows: [row('d1'), row('d2')] }),
+          kind({ key: 'claims', label: 'Claims', rows: [claimRow('c1')] }),
+        ]}
+      />
+    );
+
+    const gate = screen.getByTestId('playback-gate');
+    fireEvent.click(screen.getByRole('button', { name: 'd2' }));
+    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Debates/ }));
+
+    expect(screen.getByTestId('playback-gate')).toHaveAttribute('data-allowed-id', 'd1');
+  });
+
   it('keeps Claim cards wide enough for side-by-side response buttons', () => {
     render(
       <ProfileActivitySection

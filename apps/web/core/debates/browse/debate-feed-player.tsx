@@ -460,7 +460,7 @@ export function DebateFeedPlayer({
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
           seam. */}
-      {subtitle && active && playing && (!reducedOverlays || mutedByUser) && (
+      {subtitle && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>

@@ -167,6 +167,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
           <p className="px-4 py-6 text-metadata text-grey-04">Couldn’t load {selected.label.toLowerCase()}.</p>
         ) : (
           <ActivityGallery
+            // Each tab is a distinct playback collection. Remounting clears an explicit card
+            // selection before any player in a revisited tab can resume from stale ownership.
+            key={selected.key}
             rows={selected.rows}
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
