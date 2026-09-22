@@ -30,7 +30,6 @@ describe('POST /api/topics/facets', () => {
         body: JSON.stringify({
           selectedTopicIds: [CANDIDATE_TOPIC],
           typeIds: [CLAIM_TYPE_ID],
-          sort: 'new',
           fixedParams: { topicId: PAGE_TOPIC, spaceId: SPACE, spaceIds: SPACE },
         }),
       })
@@ -46,7 +45,6 @@ describe('POST /api/topics/facets', () => {
         spaceIds: [SPACE],
         selectedTopicIds: [CANDIDATE_TOPIC],
         typeIds: [CLAIM_TYPE_ID],
-        sort: 'new',
       })
     );
   });

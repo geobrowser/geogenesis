@@ -535,7 +535,6 @@ describe('EntityFeed contextual filters', () => {
 
     const body = JSON.parse(mocks.fetch.mock.calls.at(-1)?.[1]?.body as string);
     expect(body).toMatchObject({
-      sort: 'new',
       selectedTopicIds: [],
       fixedParams: { topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' },
     });

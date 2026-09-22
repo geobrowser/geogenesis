@@ -10,6 +10,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
+import { exploreBestCompleteIndexDocument } from './explore-best-complete-index-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import {
   type ExploreCardEntity,
@@ -48,6 +49,18 @@ export type { ExploreFeedItem };
 export type ExploreFeedResult = {
   items: ExploreFeedItem[];
   nextCursor: string | null;
+};
+
+/**
+ * One disjoint branch of a contextual feed's complete Best population.
+ *
+ * Topic feeds use separate direct-entity and Debate branches because the generic predicate's OR
+ * across those relation shapes is much slower. Each branch must include every entity that belongs
+ * to the feed for its supplied types; the results are merged and ranked here.
+ */
+export type ExploreBestPopulationScope = {
+  typeIds: readonly string[];
+  entityFilter: EntityFilter;
 };
 
 function normId(id: string): string {
@@ -127,6 +140,16 @@ type ExploreEntitiesPageResponse = {
 
 type EntitiesConnectionShape = {
   nodes?: unknown[];
+  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
+} | null;
+
+type CompleteBestIndexNode = {
+  id?: string | null;
+  rankingScore?: string | number | null;
+};
+
+type CompleteBestIndexConnection = {
+  nodes?: CompleteBestIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -271,6 +294,132 @@ async function fetchExploreEntitiesPage(args: {
       },
     })
   );
+}
+
+const COMPLETE_BEST_INDEX_PAGE_SIZE = 500;
+
+async function fetchCompleteBestIndexScope(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  entityFilter: EntityFilter;
+}): Promise<CompleteBestIndexNode[]> {
+  const rows: CompleteBestIndexNode[] = [];
+  let after: string | null = null;
+
+  while (true) {
+    const page: CompleteBestIndexConnection = await Effect.runPromise(
+      graphql({
+        query: exploreBestCompleteIndexDocument,
+        decoder: (data: { entitiesConnection?: CompleteBestIndexConnection }) => data.entitiesConnection ?? null,
+        variables: {
+          limit: COMPLETE_BEST_INDEX_PAGE_SIZE,
+          after,
+          filter: buildExploreFeedFilter({
+            spaceIds: args.spaceIds,
+            time: args.time,
+            typeIds: args.typeIds,
+            requireName: args.requireName,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+            entityFilter: args.entityFilter,
+          }),
+          spaceIds: { in: args.spaceIds },
+          typeIds: { in: [...args.typeIds] },
+        },
+      })
+    );
+
+    rows.push(...(page?.nodes ?? []));
+    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
+    after = page.pageInfo.endCursor;
+  }
+
+  return rows;
+}
+
+function rankingScore(value: CompleteBestIndexNode['rankingScore']): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
+}
+
+/**
+ * Complete, contextual Best ordering without the generic connection's expensive database sort.
+ * Ranked entities retain score order; entities that do not have a ranking score remain reachable
+ * at the end instead of disappearing from the feed.
+ */
+async function fetchCompleteBestEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  scopes: readonly ExploreBestPopulationScope[];
+}): Promise<ExploreEntitiesPageResponse> {
+  const scopeRows = await Promise.all(
+    args.scopes
+      .filter(scope => scope.typeIds.length > 0)
+      .map(scope =>
+        fetchCompleteBestIndexScope({
+          spaceIds: args.spaceIds,
+          time: args.time,
+          typeIds: scope.typeIds,
+          requireName: args.requireName,
+          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+          entityFilter: scope.entityFilter,
+        })
+      )
+  );
+
+  const byId = new Map<string, CompleteBestIndexNode>();
+  for (const row of scopeRows.flat()) {
+    if (!row.id) continue;
+    byId.set(normId(row.id), row);
+  }
+
+  const ordered = [...byId.values()].sort((left, right) => {
+    const leftScore = rankingScore(left.rankingScore);
+    const rightScore = rankingScore(right.rankingScore);
+    if (leftScore === null && rightScore !== null) return 1;
+    if (leftScore !== null && rightScore === null) return -1;
+    if (leftScore !== null && rightScore !== null && leftScore !== rightScore) return rightScore - leftScore;
+    return (right.id ?? '').localeCompare(left.id ?? '');
+  });
+
+  const indexPage = ordered.slice(args.offset, args.offset + args.limit);
+  const ids = indexPage.flatMap(row => (row.id ? [row.id] : []));
+  if (ids.length === 0) {
+    return { entities: [], endCursor: null, hasNextPage: false };
+  }
+
+  // The compact index already proved these ids belong to the contextual population. Repeating the
+  // relation-heavy Topic predicate here would throw away the speedup, so the card query narrows by
+  // those exact ids and retains the ordinary display/name/space guards.
+  const cardPage = await fetchExploreEntitiesPage({
+    spaceIds: args.spaceIds,
+    time: args.time,
+    limit: ids.length,
+    after: null,
+    orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    typeIds: args.typeIds,
+    requireName: args.requireName,
+    requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+    entityFilter: { id: { in: ids } },
+  });
+  const cardById = new Map(cardPage.entities.map(entity => [normId(entity.id), entity]));
+
+  return {
+    entities: ids.flatMap(id => {
+      const entity = cardById.get(normId(id));
+      return entity ? [entity] : [];
+    }),
+    endCursor: String(args.offset + ids.length),
+    hasNextPage: args.offset + ids.length < ordered.length,
+  };
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
@@ -418,6 +567,11 @@ export async function fetchExploreFeed(args: {
   requireDebateTagOnClaims?: boolean;
   /** Additional server-side scope shared by Best, Top and New. */
   entityFilter?: EntityFilter;
+  /**
+   * Complete population branches for a contextual Best feed. When supplied, Best ranks this full
+   * population from a compact id/score index instead of relying on the denormalized candidate set.
+   */
+  bestPopulationScopes?: readonly ExploreBestPopulationScope[];
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -487,53 +641,65 @@ export async function fetchExploreFeed(args: {
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
   // connection cannot serve — it matches nothing without `typeIds`.
-  const bestFiltersServerSide = args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  const completeBestPopulation = args.sort === 'best' && (args.bestPopulationScopes?.length ?? 0) > 0;
+  const bestFiltersServerSide = !completeBestPopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
 
   const fetchWindow = (windowAfter: string | null) =>
-    bestFiltersServerSide
-      ? fetchBestEntitiesByTypePage({
+    completeBestPopulation
+      ? fetchCompleteBestEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
           limit: windowSize,
-          // This path paginates by offset, and the window cursor's `after` slot carries it as
-          // a decimal string. Anything unparseable restarts at 0, matching the tolerance
-          // `decodeExploreWindowCursor` already documents.
           offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
           typeIds: args.typeIds ?? [],
+          requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          entityFilter: args.entityFilter,
+          scopes: args.bestPopulationScopes ?? [],
         })
-      : args.sort === 'best'
-        ? fetchBestEntitiesPage({
+      : bestFiltersServerSide
+        ? fetchBestEntitiesByTypePage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
-            after: windowAfter,
+            // This path paginates by offset, and the window cursor's `after` slot carries it as
+            // a decimal string. Anything unparseable restarts at 0, matching the tolerance
+            // `decodeExploreWindowCursor` already documents.
+            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+            typeIds: args.typeIds ?? [],
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,
           })
-        : args.sort === 'top'
-          ? fetchTopEntitiesPage({
+        : args.sort === 'best'
+          ? fetchBestEntitiesPage({
               spaceIds: baseIds,
               time: args.time,
               limit: windowSize,
               after: windowAfter,
-              typeIds: args.typeIds,
-              requireName: args.requireName,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
               entityFilter: args.entityFilter,
             })
-          : fetchExploreEntitiesPage({
-              spaceIds: baseIds,
-              time: args.time,
-              limit: windowSize,
-              after: windowAfter,
-              orderBy: [EntitiesOrderBy.CreatedAtDesc],
-              typeIds: args.typeIds,
-              requireName: args.requireName,
-              requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-              entityFilter: args.entityFilter,
-            });
+          : args.sort === 'top'
+            ? fetchTopEntitiesPage({
+                spaceIds: baseIds,
+                time: args.time,
+                limit: windowSize,
+                after: windowAfter,
+                typeIds: args.typeIds,
+                requireName: args.requireName,
+                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+                entityFilter: args.entityFilter,
+              })
+            : fetchExploreEntitiesPage({
+                spaceIds: baseIds,
+                time: args.time,
+                limit: windowSize,
+                after: windowAfter,
+                orderBy: [EntitiesOrderBy.CreatedAtDesc],
+                typeIds: args.typeIds,
+                requireName: args.requireName,
+                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+                entityFilter: args.entityFilter,
+              });
 
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
     const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);

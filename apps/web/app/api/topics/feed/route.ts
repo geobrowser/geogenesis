@@ -2,8 +2,10 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { NextResponse } from 'next/server';
 
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
-import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
+import { ID } from '~/core/id';
+import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
 import { resolveTopicFeedRequestContext } from '~/core/topics/browse/topic-feed-request-context';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 
@@ -31,6 +33,31 @@ export async function GET(request: Request) {
     .filter(id => id !== topicId);
   const requestedSpaceIds = (searchParams.get('spaceIds') ?? '').split(',').filter(IdUtils.isValid).slice(0, 100);
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveTopicFeedRequestContext(routeSpaceId);
+  const directTypeIds = typeIds.filter(id => !ID.equals(id, DEBATE_TYPE_ID));
+  const includesDebates = typeIds.some(id => ID.equals(id, DEBATE_TYPE_ID));
+  const bestPopulationScopes = [
+    ...(directTypeIds.length > 0
+      ? [
+          {
+            typeIds: directTypeIds,
+            entityFilter: {
+              and: [
+                { not: { typeIds: { overlaps: [DEBATE_TYPE_ID] } } },
+                directTopicFeedFilter(topicId, selectedTopicIds),
+              ],
+            },
+          },
+        ]
+      : []),
+    ...(includesDebates
+      ? [
+          {
+            typeIds: [DEBATE_TYPE_ID],
+            entityFilter: debateTopicFeedFilter(topicId, selectedTopicIds),
+          },
+        ]
+      : []),
+  ];
 
   try {
     const result = await fetchExploreFeed({
@@ -44,6 +71,7 @@ export async function GET(request: Request) {
       typeIds,
       requireName: true,
       entityFilter: topicFeedFilter(topicId, selectedTopicIds),
+      bestPopulationScopes,
     });
     return NextResponse.json(result);
   } catch (error) {

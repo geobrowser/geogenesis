@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { EXPLORE_DIVERSITY_WINDOW_SIZE } from '~/core/explore/explore-diversity';
 
 import { fetchTopicFeedCompositionCounts, fetchTopicFeedFacets } from './topic-feed-facets';
 
@@ -70,23 +69,6 @@ vi.mock('~/core/io/graphql-client', async () => {
           })
         );
       }
-      if (operation?.name?.value === 'TopicFeedBestFacets') {
-        return Effect.succeed(
-          decoder({
-            entitiesRankedForFeedByTypeConnection: {
-              nodes: [
-                {
-                  id: 'ranked-claim',
-                  typeIds: [CLAIM_TYPE_ID],
-                  directTopics: [{ toEntity: { id: TOPIC_A } }, { toEntity: { id: TOPIC_C } }],
-                  debateClaims: [],
-                },
-              ],
-              pageInfo: { hasNextPage: false },
-            },
-          })
-        );
-      }
       if (operation?.name?.value === 'TopicFeedComposition') {
         return Effect.succeed(
           decoder({ claims: { totalCount: 1 }, debates: { totalCount: 2 }, news: { totalCount: 3 } })
@@ -110,7 +92,6 @@ describe('fetchTopicFeedFacets', () => {
       topicId: PAGE_TOPIC,
       selectedTopicIds: [],
       typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
-      sort: 'new',
     });
 
     expect(topics).toEqual([
@@ -126,29 +107,24 @@ describe('fetchTopicFeedFacets', () => {
       topicId: PAGE_TOPIC,
       selectedTopicIds: [],
       typeIds: [CLAIM_TYPE_ID],
-      sort: 'new',
     });
 
     expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
   });
 
-  it('derives Best facets only from entities in the Best-ranked connection', async () => {
+  it('uses the complete feed population for Best facets too', async () => {
     const topics = await fetchTopicFeedFacets({
       spaceIds,
       topicId: PAGE_TOPIC,
       selectedTopicIds: [TOPIC_A],
       typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
-      sort: 'best',
     });
 
     expect(topics).toEqual([
-      { id: TOPIC_A, name: 'Alignment', count: 1 },
+      { id: TOPIC_A, name: 'Alignment', count: 5 },
       { id: TOPIC_C, name: 'Governance', count: 1 },
     ]);
-    expect(mocks.calls.map(call => call.operation)).toEqual(['TopicFeedBestFacets']);
-    expect(mocks.calls[0]?.variables.filter).toEqual(expect.objectContaining({ and: expect.any(Array) }));
-    expect(mocks.calls[0]?.variables.first).toBe(EXPLORE_DIVERSITY_WINDOW_SIZE);
-    expect(mocks.calls[0]?.variables.maxPerType).toBe(EXPLORE_DIVERSITY_WINDOW_SIZE);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter', 'TopicFeedDebateTopics']);
   });
 });
 

@@ -5,8 +5,7 @@ import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { EXPLORE_DIVERSITY_WINDOW_SIZE } from '~/core/explore/explore-diversity';
-import { type ExploreSort, buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
+import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
@@ -15,7 +14,7 @@ import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/re
 import { normId } from '~/core/utils/norm-id';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
-import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedFilter } from './topic-feed-filter';
+import { debateTopicFeedFilter, directTopicFeedFilter } from './topic-feed-filter';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
 
@@ -24,85 +23,8 @@ type TopicFacetArgs = {
   topicId: string;
   selectedTopicIds: readonly string[];
   typeIds: readonly string[];
-  sort: ExploreSort;
   signal?: AbortSignal;
 };
-
-type BestTopicNode = {
-  id?: string | null;
-  typeIds?: string[] | null;
-  directTopics?: Array<{ toEntity?: { id?: string | null } | null } | null> | null;
-  debateClaims?: Array<{
-    toEntity?: {
-      relationsList?: Array<{ toEntity?: { id?: string | null } | null } | null> | null;
-    } | null;
-  } | null> | null;
-} | null;
-
-type BestTopicsResponse = {
-  entitiesRankedForFeedByTypeConnection?: {
-    nodes?: BestTopicNode[] | null;
-    pageInfo?: { hasNextPage?: boolean | null } | null;
-  } | null;
-};
-
-const BEST_TOPICS_SOURCE = /* GraphQL */ `
-  query TopicFeedBestFacets(
-    $first: Int!
-    $offset: Int!
-    $spaceIds: [UUID!]!
-    $typeIds: [UUID!]!
-    $filter: EntityFilter!
-    $maxPerType: Int!
-    $topicsPropertyId: UUID!
-    $debateClaimsPropertyId: UUID!
-  ) {
-    entitiesRankedForFeedByTypeConnection(
-      first: $first
-      offset: $offset
-      spaceIds: $spaceIds
-      typeIds: $typeIds
-      filter: $filter
-      maxPerType: $maxPerType
-    ) {
-      nodes {
-        id
-        typeIds
-        directTopics: relationsList(first: 1000, filter: { typeId: { is: $topicsPropertyId } }) {
-          toEntity {
-            id
-          }
-        }
-        debateClaims: relationsList(first: 100, filter: { typeId: { is: $debateClaimsPropertyId } }) {
-          toEntity {
-            relationsList(first: 1000, filter: { typeId: { is: $topicsPropertyId } }) {
-              toEntity {
-                id
-              }
-            }
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-      }
-    }
-  }
-`;
-
-export const topicFeedBestFacetsDocument = parse(BEST_TOPICS_SOURCE) as TypedDocumentNode<
-  BestTopicsResponse,
-  {
-    first: number;
-    offset: number;
-    spaceIds: string[];
-    typeIds: string[];
-    filter: EntityFilter;
-    maxPerType: number;
-    topicsPropertyId: string;
-    debateClaimsPropertyId: string;
-  }
->;
 
 type DebateTopicNode = {
   id?: string | null;
@@ -241,63 +163,6 @@ async function fetchDebateTopicCounts(filter: EntityFilter, signal?: AbortSignal
   return counts;
 }
 
-async function fetchBestTopicCounts(
-  spaceIds: string[],
-  topicId: string,
-  selectedTopicIds: readonly string[],
-  typeIds: readonly string[],
-  signal?: AbortSignal
-) {
-  const counts = new Map<string, number>();
-  // The same window the Best feed asks the ranked-by-type connection for. Keeping both `first`
-  // and `maxPerType` aligned matters: that connection's candidate cap is part of which entities
-  // Best can actually reach, which is precisely the population this facet must describe.
-  const pageSize = EXPLORE_DIVERSITY_WINDOW_SIZE;
-  let offset = 0;
-
-  while (true) {
-    const page = await Effect.runPromise(
-      graphql({
-        query: topicFeedBestFacetsDocument,
-        decoder: (response: BestTopicsResponse) => response.entitiesRankedForFeedByTypeConnection ?? null,
-        variables: {
-          first: pageSize,
-          offset,
-          spaceIds,
-          typeIds: [...typeIds],
-          filter: topicFeedFilter(topicId, selectedTopicIds),
-          maxPerType: offset + pageSize,
-          topicsPropertyId: TOPICS_PROPERTY_ID,
-          debateClaimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-        },
-        signal,
-      })
-    );
-
-    const nodes = page?.nodes ?? [];
-    for (const node of nodes) {
-      const ids = new Set<string>();
-      if (node?.typeIds?.some(id => ID.equals(id, DEBATE_TYPE_ID))) {
-        for (const claim of node.debateClaims ?? []) {
-          for (const relation of claim?.toEntity?.relationsList ?? []) {
-            if (relation?.toEntity?.id) ids.add(normId(relation.toEntity.id));
-          }
-        }
-      } else {
-        for (const relation of node?.directTopics ?? []) {
-          if (relation?.toEntity?.id) ids.add(normId(relation.toEntity.id));
-        }
-      }
-      for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-
-    if (!page?.pageInfo?.hasNextPage || nodes.length === 0) break;
-    offset += nodes.length;
-  }
-
-  return counts;
-}
-
 async function fetchTopicNames(ids: string[], signal?: AbortSignal) {
   const batches: string[][] = [];
   for (let index = 0; index < ids.length; index += 50) batches.push(ids.slice(index, index + 50));
@@ -323,18 +188,9 @@ export async function fetchTopicFeedFacets({
   topicId,
   selectedTopicIds,
   typeIds,
-  sort,
   signal,
 }: TopicFacetArgs): Promise<TopicFeedFacet[]> {
   if (typeIds.length === 0 || spaceIds.length === 0) return [];
-
-  if (sort === 'best') {
-    return namedFacets(
-      await fetchBestTopicCounts(spaceIds, topicId, selectedTopicIds, typeIds, signal),
-      topicId,
-      signal
-    );
-  }
 
   const directTypeIds = typeIds.filter(id => !ID.equals(id, DEBATE_TYPE_ID));
   const includesDebates = typeIds.some(id => ID.equals(id, DEBATE_TYPE_ID));

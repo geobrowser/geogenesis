@@ -287,3 +287,35 @@ describe('a type selection filters server-side (GEO-2885)', () => {
     expect((sent().filter as { or?: unknown } | undefined)?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
   });
 });
+
+describe('a complete contextual Best population', () => {
+  it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'unscored', rankingScore: null },
+          { id: 'ranked', rankingScore: '42.5' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('unscored', CLAIM_TYPE_ID), entity('ranked', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const scopeFilter = { id: { in: ['ranked', 'unscored'] } };
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      bestPopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
+    expect(windows.calls).toBe(2);
+    expect((windows.variables[0]?.filter as { and?: unknown[] }).and).toContainEqual(scopeFilter);
+    expect(windows.variables[1]?.filter).toEqual(
+      expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
+    );
+  });
+});

@@ -171,7 +171,6 @@ type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count
 async function fetchTopicFacets(
   endpoint: string,
   params: {
-    sort: ExploreSort;
     selectedTopicIds: readonly string[];
     typeIds: readonly string[] | undefined;
     fixedParams: Record<string, string>;
@@ -183,7 +182,6 @@ async function fetchTopicFacets(
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      sort: params.sort,
       selectedTopicIds: params.selectedTopicIds,
       typeIds: params.typeIds,
       fixedParams: params.fixedParams,
@@ -261,7 +259,6 @@ export function EntityFeed({
     queryKey: [
       'entity-feed-topic-facets',
       topicFacetEndpoint ?? null,
-      sort,
       topicIdsKey,
       showTypeFilter ? typeIdsKey : null,
       fixedParamsKey,
@@ -270,7 +267,6 @@ export function EntityFeed({
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
-        sort,
         selectedTopicIds,
         typeIds: showTypeFilter ? typeIds : undefined,
         fixedParams,
