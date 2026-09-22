@@ -174,6 +174,19 @@ export type SpaceActivityFilters = {
   /** AND, not OR: a claim has to carry every picked topic. Matches the tagged-claims rule. */
   topicIds: string[];
   /**
+   * The debounced text, carried for the *facet* rather than for the rows.
+   *
+   * The rows are narrowed by {@link searchClaimIds} — resolved text, see below. The topic menu
+   * beside them resolves its own through `useTaggedTopicFacet`, which reads `TaggedClaimFilters.
+   * search`, so leaving this empty counted the menu over every tagged claim in the space while the
+   * list showed a search's worth. The menu could then offer a topic whose intersection with the
+   * matches was empty — the one thing a co-occurrence menu promises it will not do.
+   *
+   * Both resolutions go through one react-query entry, keyed on tag and text, so naming it twice
+   * costs no second request.
+   */
+  search: string;
+  /**
    * The claims a text search matched, or `null` when nothing is being searched for.
    *
    * `null` and `[]` are opposite answers and only one of them narrows: nothing asked leaves the
@@ -182,7 +195,7 @@ export type SpaceActivityFilters = {
   searchClaimIds: string[] | null;
 };
 
-export const NO_SPACE_ACTIVITY_FILTERS: SpaceActivityFilters = { topicIds: [], searchClaimIds: null };
+export const NO_SPACE_ACTIVITY_FILTERS: SpaceActivityFilters = { topicIds: [], search: '', searchClaimIds: null };
 
 /**
  * The filters a claims list applies, in the shape the tagged-claims machinery already speaks.
@@ -194,8 +207,10 @@ export const NO_SPACE_ACTIVITY_FILTERS: SpaceActivityFilters = { topicIds: [], s
  */
 export function spaceTaggedClaimFilters(spaceId: string, filters: SpaceActivityFilters): TaggedClaimFilters {
   return {
-    // The text itself never reaches the graph; it arrives resolved to ids. See `searchClaimIds`.
-    search: '',
+    // The text never reaches the graph *filter* — `taggedEntityFilter` reads the resolved ids, not
+    // this. It is what `useTaggedTopicFacet` resolves its own ids from, so the menu counts the
+    // searched set rather than the whole space.
+    search: filters.search,
     topicIds: filters.topicIds,
     spaceIds: [spaceId],
     eligibleSpaceIds: [spaceId],

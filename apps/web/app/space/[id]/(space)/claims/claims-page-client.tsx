@@ -77,8 +77,15 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const [search, setSearch] = React.useState('');
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
-  const { claimIds, isPending: isSearchPending } = useSpaceClaimSearch(search, true);
-  const filters = React.useMemo(() => ({ topicIds, searchClaimIds: claimIds }), [claimIds, topicIds]);
+  const {
+    claimIds,
+    isPending: isSearchPending,
+    error: searchError,
+    retry: retrySearch,
+  } = useSpaceClaimSearch(search, true);
+  // The text rides along for the topic menu, which resolves its own ids from it; the rows are
+  // narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
+  const filters = React.useMemo(() => ({ topicIds, search, searchClaimIds: claimIds }), [claimIds, search, topicIds]);
 
   const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useSpaceActivityRowsInfinite(spaceId, 'claims', sort, filters);
@@ -92,8 +99,9 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   });
 
   // The rows on screen describe the previous question while the next answer is out. Dimming says
-  // so without taking them away, which is what an empty list between two filters would imply.
-  const isStale = isPending || isSearchPending;
+  // so without taking them away, which is what an empty list between two filters would imply. A
+  // failed search is not stale — it has an error to draw, and dimming behind one reads as loading.
+  const isStale = (isPending || isSearchPending) && searchError === null;
   const hasNarrowed = search.trim().length > 0 || topicIds.length > 0;
 
   // `toggleId`, not a local include/filter. It compares canonically, because the facet answers in
@@ -132,11 +140,24 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
         onTopicToggle={toggleTopic}
         onTopicsClear={() => setTopicIds([])}
         topics={facet.topics}
-        countsPending={!facet.settled}
+        countsPending={!facet.settled && facet.error === null}
       />
 
       <div className={cx('mt-5 transition-opacity', isStale && 'opacity-60')}>
-        {isError && rows.length === 0 ? (
+        {searchError ? (
+          /*
+           * Its own state, ahead of the list's. A failed `/search` leaves the ids unresolved, so
+           * the rows below cannot be narrowed to what was typed — listing the space unfiltered
+           * would answer a question nobody asked, and holding the dim would claim it is still
+           * coming when nothing is in flight.
+           */
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+            <Text color="grey-04">Could not search claims.</Text>
+            <Button type="button" variant="secondary" onClick={retrySearch}>
+              Retry
+            </Button>
+          </div>
+        ) : isError && rows.length === 0 ? (
           <Text color="grey-04">Could not load claims.</Text>
         ) : isLoading ? (
           <ClaimsSkeleton />

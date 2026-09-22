@@ -231,8 +231,34 @@ export function useSpaceClaimTopicFacet(spaceId: string, filters: SpaceActivityF
     isLoading: facet.isLoading,
     /** Whether there are counts to draw at all; the menu renders a row without one rather than a 0. */
     settled: facet.settled,
+    /**
+     * The counts could not be read.
+     *
+     * `settled` is false on a failure as well as during a load, so a caller driving skeletons off
+     * it alone draws them forever. The menu is still usable without counts — the topics are named —
+     * so a failure drops the numbers rather than the menu.
+     */
+    error: facet.error,
   };
 }
+
+/**
+ * How many pages of matched ids one search reads before it stops.
+ *
+ * `/search` answers 100 rows a page and is *not* scoped to a space — the space gate is applied
+ * afterwards, in the graph filter these ids narrow — so a page is a hundred of the tag's global
+ * matches, of which one space holds a fraction. Narrowing by the first page alone therefore lost
+ * most of a broad search. Measured against the AI space:
+ *
+ *     "regulation"   40 matches globally   18 in-space either way
+ *     "AI"          436 matches globally   76 in-space from page one, 223 read whole
+ *     "should"    1,133 matches globally   14 in-space from page one,  86 read whole
+ *
+ * Ten pages covers every query measured. Past it the search is too broad to enumerate and the list
+ * is a large subset rather than all of it, which is the same trade the first page was making —
+ * only three orders of magnitude further along.
+ */
+const SEARCH_ID_PAGE_CAP = 10;
 
 /**
  * The claims a search matched, as ids.
@@ -248,9 +274,45 @@ export function useSpaceClaimSearch(search: string, enabled: boolean) {
   const { value, pending } = useDebouncedSearch(search);
   const result = useTaggedClaimSearch({ tagId: DEBATE_TAG_ID, search: value, enabled });
 
+  const { hasNextPage, fetchNextPage, isFetchingNextPage, idPages, settled, error, refetch } = result;
+  const atCap = idPages.length >= SEARCH_ID_PAGE_CAP;
+
+  // Read every page before filtering, rather than narrowing by the first hundred. See the cap.
+  React.useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage || atCap) return;
+    fetchNextPage();
+  }, [atCap, fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  /**
+   * Still collecting: the viewer has typed since the last answer, the first page is out, or there
+   * are pages left to read. A failure is not settling — there is an error to draw, and holding the
+   * page dim behind it would say the list is still coming.
+   */
+  const settling = error === null && (pending || !settled || (hasNextPage && !atCap));
+
+  /**
+   * The rows are narrowed by the last *complete* id set.
+   *
+   * A partial one re-keys the rows query once per page of ids arriving — a graph request each, for
+   * an answer already known to be short — and shows a subset in between. So while a search
+   * accumulates, the previous complete set stays in force and the rows on screen do not move; on a
+   * first search there is no previous set and `null` is the unfiltered list this surface already
+   * showed before the reader typed.
+   *
+   * Not `useLastSettled`, whose one difference is the one that matters here: before its first
+   * settle it lets the unsettled value through, because its callers want a first load to show
+   * something rather than nothing. Here that value is the partial id set this exists to withhold.
+   */
+  const lastCompleteRef = React.useRef<string[] | null>(null);
+  if (!settling) lastCompleteRef.current = result.claimIds;
+  const claimIds = settling ? lastCompleteRef.current : result.claimIds;
+
   return {
-    claimIds: result.claimIds,
-    /** The viewer has typed since the last answer, so the list on screen is about the old text. */
-    isPending: pending || !result.settled,
+    claimIds,
+    /** The list on screen is about the previous text. */
+    isPending: settling,
+    /** `/search` failed. The list cannot be narrowed, so the page says so instead of listing. */
+    error,
+    retry: refetch,
   };
 }

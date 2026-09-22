@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   searchCalls: [] as string[],
   topics: [] as { id: string; name: string | null; count: number }[],
   searchClaimIds: null as string[] | null,
+  retrySearch: vi.fn(),
+  search: { isPending: false, error: null as Error | null },
+  facet: { settled: true, error: null as Error | null },
   rows: [] as { entityId: string; spaceId: string }[],
   listState: { isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false },
 }));
@@ -42,10 +45,20 @@ vi.mock('~/core/space/use-space-debate-activity', () => ({
       fetchNextPage: mocks.fetchNextPage,
     };
   },
-  useSpaceClaimTopicFacet: () => ({ topics: mocks.topics, isLoading: false, settled: true }),
+  useSpaceClaimTopicFacet: () => ({
+    topics: mocks.topics,
+    isLoading: false,
+    settled: mocks.facet.settled,
+    error: mocks.facet.error,
+  }),
   useSpaceClaimSearch: (search: string) => {
     mocks.searchCalls.push(search);
-    return { claimIds: mocks.searchClaimIds, isPending: false };
+    return {
+      claimIds: mocks.searchClaimIds,
+      isPending: mocks.search.isPending,
+      error: mocks.search.error,
+      retry: mocks.retrySearch,
+    };
   },
 }));
 
@@ -107,6 +120,8 @@ beforeEach(() => {
     { id: 't3', name: 'Industry', count: 31 },
   ];
   mocks.searchClaimIds = null;
+  mocks.search = { isPending: false, error: null };
+  mocks.facet = { settled: true, error: null };
   mocks.rows = [
     { entityId: 'c1', spaceId: 'space-1' },
     { entityId: 'c2', spaceId: 'space-1' },
@@ -320,6 +335,56 @@ describe('ClaimsPageClient', () => {
     fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches' } });
     expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
     view.unmount();
+  });
+
+  /**
+   * `useTaggedClaimSearch` holds `settled` false on a failure, so a page reading only that dims
+   * forever with nothing in flight. The list cannot be narrowed to what was typed either, and
+   * listing the space unfiltered would answer a question nobody asked.
+   */
+  it('shows a retryable error instead of a list when the search fails', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('Could not search claims.')).toBeInTheDocument();
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.retrySearch).toHaveBeenCalled();
+  });
+
+  // A failure is not "still coming"; dimming behind an error reads as loading.
+  it('does not dim the list behind a search error', () => {
+    mocks.search = { isPending: true, error: new Error('search down') };
+    const { container } = render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(container.querySelector('.opacity-60')).toBeNull();
+  });
+
+  /**
+   * The facet's `settled` is false on a failure as well as during a load, so driving skeletons off
+   * it alone draws them forever. The topics are still named, so a failure drops the counts rather
+   * than the menu.
+   */
+  it('stops the topic menu waiting on counts that failed', () => {
+    mocks.facet = { settled: false, error: new Error('counts down') };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      render(<ClaimsPageClient spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+      // The menu waits out its skeleton delay before drawing them, so a synchronous assertion
+      // passes whether or not the counts are reported pending. Past the delay it does not.
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+      expect(topicRow('Industry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // The staging form is unrelated to how the list is ordered, and it is the only place in the app

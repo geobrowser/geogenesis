@@ -85,15 +85,30 @@ describe('decodeSpaceDebateActivityCounts', () => {
     expect(counts.debates).toBe(1);
   });
 
-  // Past the 500-row window the distinct count is a lower bound over a partial read, and a number
-  // that silently stops growing is worse than one that over-counts by a few percent.
-  it('falls back to the reported total when the window was truncated', () => {
+  /**
+   * A truncated window cannot be deduplicated, and `totalCount` counts relations — the very
+   * duplicates this decoder exists to remove. Reporting it would state a number of the wrong noun
+   * about the largest space, where the count matters most, so the answer is that there isn't one.
+   */
+  it('reports a truncated window as unreadable rather than as the relation total', () => {
     const counts = decodeSpaceDebateActivityCounts({
       debateTypeRelations: { totalCount: 900, nodes: [{ fromEntityId: 'a' }, { fromEntityId: 'b' }] },
       taggedClaims: { totalCount: 1 },
     });
 
-    expect(counts.debates).toBe(900);
+    expect(counts.debates).toBeNull();
+    // The other half is a separate read and is unaffected by it.
+    expect(counts.claims).toBe(1);
+  });
+
+  // The boundary either side: a window that exactly fills is whole, not truncated.
+  it('trusts a window that exactly reaches the total', () => {
+    const counts = decodeSpaceDebateActivityCounts({
+      debateTypeRelations: { totalCount: 2, nodes: [{ fromEntityId: 'a' }, { fromEntityId: 'b' }] },
+      taggedClaims: { totalCount: 0 },
+    });
+
+    expect(counts.debates).toBe(2);
   });
 
   // `null` means "could not be read", which the card draws as a dash. A zero here would be the

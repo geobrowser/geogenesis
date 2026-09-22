@@ -9,6 +9,7 @@ import { DEBATE_TAG_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID } from '~/core/explore/explore-constants';
 
 import {
+  NO_SPACE_ACTIVITY_FILTERS,
   SPACE_ACTIVITY_SORTS,
   decodeSpaceActivityRows,
   spaceActivityRowsByScoreDocument,
@@ -16,6 +17,7 @@ import {
   spaceActivityRowsDocumentFor,
   spaceActivityRowsFilter,
   spaceActivityRowsVariables,
+  spaceTaggedClaimFilters,
 } from './space-activity-rows';
 
 /**
@@ -179,7 +181,7 @@ describe('sorts', () => {
   });
 
   it('carries the same filter whichever sort is asked for', () => {
-    const filters = { topicIds: ['t1'], searchClaimIds: null };
+    const filters = { topicIds: ['t1'], search: '', searchClaimIds: null };
     for (const sort of SPACE_ACTIVITY_SORTS) {
       const vars = spaceActivityRowsVariables({
         spaceId: SPACE,
@@ -238,7 +240,11 @@ describe('spaceActivityRowsFilter', () => {
   // AND, not OR (GEO-2696): a claim has to carry every picked topic, which is what makes the
   // co-occurrence menu beside the list honest about what ticking another one will do.
   it('requires every picked topic, one clause each', () => {
-    const filter = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: ['t1', 't2'], searchClaimIds: null });
+    const filter = spaceActivityRowsFilter(SPACE, 'claims', {
+      topicIds: ['t1', 't2'],
+      search: '',
+      searchClaimIds: null,
+    });
     const clauses = (filter as { and: Record<string, any>[] }).and;
 
     const topicTargets = clauses
@@ -255,14 +261,47 @@ describe('spaceActivityRowsFilter', () => {
    * that found nothing.
    */
   it('narrows by the ids a search matched, and not at all when none was asked', () => {
-    const searched = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: ['c1', 'c2'] });
+    const searched = spaceActivityRowsFilter(SPACE, 'claims', {
+      topicIds: [],
+      search: 'x',
+      searchClaimIds: ['c1', 'c2'],
+    });
     expect((searched as { and: Record<string, any>[] }).and).toContainEqual({ id: { in: ['c1', 'c2'] } });
 
-    const empty = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: [] });
+    const empty = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], search: 'x', searchClaimIds: [] });
     expect((empty as { and: Record<string, any>[] }).and).toContainEqual({ id: { in: [] } });
 
-    const unsearched = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], searchClaimIds: null });
+    const unsearched = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], search: '', searchClaimIds: null });
     expect((unsearched as { and: Record<string, any>[] }).and.some(clause => 'id' in clause)).toBe(false);
+  });
+});
+
+describe('spaceTaggedClaimFilters', () => {
+  /**
+   * The rows are narrowed by resolved ids, but the topic menu resolves its own from
+   * `TaggedClaimFilters.search`. Left empty, the menu counted every tagged claim in the space while
+   * the list showed a search's worth — and could then offer a topic whose intersection with the
+   * matches was empty, which is the one thing a co-occurrence menu promises it will not do.
+   */
+  it('carries the search text through for the facet', () => {
+    expect(spaceTaggedClaimFilters(SPACE, { topicIds: [], search: 'tariffs', searchClaimIds: ['c1'] })).toMatchObject({
+      search: 'tariffs',
+    });
+  });
+
+  it('names this space on both space fields', () => {
+    expect(spaceTaggedClaimFilters(SPACE, NO_SPACE_ACTIVITY_FILTERS)).toMatchObject({
+      spaceIds: [SPACE],
+      eligibleSpaceIds: [SPACE],
+    });
+  });
+
+  // The rows take ids, not text: `taggedEntityFilter` reads the third argument, never this field.
+  it('leaves the row filter unchanged by the text', () => {
+    const withText = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], search: 'x', searchClaimIds: null });
+    const without = spaceActivityRowsFilter(SPACE, 'claims', { topicIds: [], search: '', searchClaimIds: null });
+
+    expect(withText).toEqual(without);
   });
 });
 

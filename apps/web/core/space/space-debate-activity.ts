@@ -90,9 +90,13 @@ export const NO_SPACE_DEBATE_ACTIVITY_COUNTS: SpaceDebateActivityCounts = { deba
  * 29 debates, one debate typed three times — which is the trap `fetch-profile-facts` documents for
  * the debate-side counts and solves the same way: take the nodes and count distinct sources. The
  * window is 500, which is comfortable: the whole graph held 88 `Types -> Debate` relations when
- * this was written. Past that the distinct count would be a lower bound over a partial window, so
- * a truncated read falls back to `totalCount` — an over-count of a few percent beats a number that
- * silently stops growing at 500.
+ * this was written, so a truncated read is not reachable today.
+ *
+ * If it ever is, the answer is that there isn't one. `totalCount` counts *relations*, and the
+ * duplicates it counts are the entire reason this decoder deduplicates — so handing it back states
+ * a number of the wrong noun, about the largest space, where the count matters most. A dash says
+ * what is true, and it is the distinction this card already draws everywhere else: "—" for a count
+ * that could not be read, never a confident figure nobody stands behind.
  *
  * ## Why claims are counted as entities
  *
@@ -158,10 +162,10 @@ export function decodeSpaceDebateActivityCounts(data: SpaceDebateActivityCountsR
     for (const node of nodes) {
       if (node?.fromEntityId) distinct.add(normId(node.fromEntityId));
     }
-    // A full window is exact; a truncated one is not, and `totalCount` is the honest answer there.
-    debates = totalCount != null && nodes.length < totalCount ? totalCount : distinct.size;
-  } else if (totalCount != null) {
-    debates = totalCount;
+    // A full window is exact. A truncated one cannot be deduplicated, and the relation total is not
+    // a substitute for the entity count — see the note above.
+    const truncated = totalCount != null && nodes.length < totalCount;
+    debates = truncated ? null : distinct.size;
   }
 
   return { debates, claims: data.taggedClaims?.totalCount ?? null };
