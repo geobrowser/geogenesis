@@ -2,18 +2,13 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { NextResponse } from 'next/server';
 
-import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
-import { ID } from '~/core/id';
-import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
-import { resolveTopicFeedRequestContext } from '~/core/topics/browse/topic-feed-request-context';
+import { parseExploreSort } from '~/core/explore/explore-feed-params';
+import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
+import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
+import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
+import { parseTopicFeedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
-
-const SORTS: ExploreSort[] = ['new', 'top', 'best'];
-
-function parseSort(raw: string | null): ExploreSort {
-  return raw && (SORTS as string[]).includes(raw) ? (raw as ExploreSort) : 'best';
-}
+import { normId } from '~/core/utils/norm-id';
 
 /** Mixed Topic rabbit-hole feed: direct topic entities plus Debates reached through their Claim. */
 export async function GET(request: Request) {
@@ -27,42 +22,15 @@ export async function GET(request: Request) {
   const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
   if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
 
-  const selectedTopicIds = (searchParams.get('topicIds') ?? '')
-    .split(',')
-    .filter(IdUtils.isValid)
-    .filter(id => id !== topicId);
-  const requestedSpaceIds = (searchParams.get('spaceIds') ?? '').split(',').filter(IdUtils.isValid).slice(0, 100);
-  const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveTopicFeedRequestContext(routeSpaceId);
-  const directTypeIds = typeIds.filter(id => !ID.equals(id, DEBATE_TYPE_ID));
-  const includesDebates = typeIds.some(id => ID.equals(id, DEBATE_TYPE_ID));
-  const bestPopulationScopes = [
-    ...(directTypeIds.length > 0
-      ? [
-          {
-            typeIds: directTypeIds,
-            entityFilter: {
-              and: [
-                { not: { typeIds: { overlaps: [DEBATE_TYPE_ID] } } },
-                directTopicFeedFilter(topicId, selectedTopicIds),
-              ],
-            },
-          },
-        ]
-      : []),
-    ...(includesDebates
-      ? [
-          {
-            typeIds: [DEBATE_TYPE_ID],
-            entityFilter: debateTopicFeedFilter(topicId, selectedTopicIds),
-          },
-        ]
-      : []),
-  ];
+  const selectedTopicIds = parseTopicFeedIds(searchParams.get('topicIds')).filter(id => normId(id) !== normId(topicId));
+  const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'));
+  const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(routeSpaceId);
+  const completePopulationScopes = topicFeedPopulationScopes(topicId, selectedTopicIds, typeIds);
 
   try {
     const result = await fetchExploreFeed({
       browse,
-      sort: parseSort(searchParams.get('sort')),
+      sort: parseExploreSort(searchParams.get('sort')),
       time: 'all',
       spaceFilterIds: requestedSpaceIds.length > 0 ? requestedSpaceIds : null,
       cursor: searchParams.get('cursor'),
@@ -71,7 +39,7 @@ export async function GET(request: Request) {
       typeIds,
       requireName: true,
       entityFilter: topicFeedFilter(topicId, selectedTopicIds),
-      bestPopulationScopes,
+      completePopulationScopes,
     });
     return NextResponse.json(result);
   } catch (error) {

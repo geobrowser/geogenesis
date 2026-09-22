@@ -7,14 +7,13 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
-import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
 import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
-import { debateTopicFeedFilter, directTopicFeedFilter } from './topic-feed-filter';
+import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedPopulationScopes } from './topic-feed-filter';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
 
@@ -103,23 +102,14 @@ export const topicFeedCompositionDocument = parse(COMPOSITION_SOURCE) as TypedDo
   { claims: EntityFilter; debates: EntityFilter; news: EntityFilter }
 >;
 
-function scopedFeedFilter(
-  spaceIds: string[],
-  topicId: string,
-  typeIds: readonly string[],
-  selectedTopicIds: string[],
-  kind: 'direct' | 'debate'
-) {
+function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entityFilter: EntityFilter) {
   return buildExploreFeedFilter({
     spaceIds,
     time: 'all',
     typeIds,
     requireName: true,
     includeEntityScopeInFilter: true,
-    entityFilter:
-      kind === 'debate'
-        ? debateTopicFeedFilter(topicId, selectedTopicIds)
-        : directTopicFeedFilter(topicId, selectedTopicIds),
+    entityFilter,
   });
 }
 
@@ -192,32 +182,29 @@ export async function fetchTopicFeedFacets({
 }: TopicFacetArgs): Promise<TopicFeedFacet[]> {
   if (typeIds.length === 0 || spaceIds.length === 0) return [];
 
-  const directTypeIds = typeIds.filter(id => !ID.equals(id, DEBATE_TYPE_ID));
-  const includesDebates = typeIds.some(id => ID.equals(id, DEBATE_TYPE_ID));
+  const scopes = topicFeedPopulationScopes(topicId, selectedTopicIds, typeIds);
+  const directScope = scopes.find(scope => scope.kind === 'direct');
+  const debateScope = scopes.find(scope => scope.kind === 'debate');
 
-  const directCountsPromise =
-    directTypeIds.length === 0
-      ? Promise.resolve([])
-      : Effect.runPromise(
-          graphql({
-            query: relationFacetByFilterDocument,
-            decoder: decodeRelationFacet,
-            variables: {
-              filter: {
-                typeId: { is: TOPICS_PROPERTY_ID },
-                fromEntity: scopedFeedFilter(spaceIds, topicId, directTypeIds, [...selectedTopicIds], 'direct'),
-              } satisfies RelationFilter,
-              groupBy: ['TO_ENTITY_ID'],
-            },
-            signal,
-          })
-        );
+  const directCountsPromise = !directScope
+    ? Promise.resolve([])
+    : Effect.runPromise(
+        graphql({
+          query: relationFacetByFilterDocument,
+          decoder: decodeRelationFacet,
+          variables: {
+            filter: {
+              typeId: { is: TOPICS_PROPERTY_ID },
+              fromEntity: scopedFeedFilter(spaceIds, directScope.typeIds, directScope.entityFilter),
+            } satisfies RelationFilter,
+            groupBy: ['TO_ENTITY_ID'],
+          },
+          signal,
+        })
+      );
 
-  const debateCountsPromise = includesDebates
-    ? fetchDebateTopicCounts(
-        scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], [...selectedTopicIds], 'debate'),
-        signal
-      )
+  const debateCountsPromise = debateScope
+    ? fetchDebateTopicCounts(scopedFeedFilter(spaceIds, debateScope.typeIds, debateScope.entityFilter), signal)
     : Promise.resolve(new Map<string, number>());
 
   const [directCounts, debateCounts] = await Promise.all([directCountsPromise, debateCountsPromise]);
@@ -247,9 +234,9 @@ export async function fetchTopicFeedCompositionCounts({
         news: Number(response.news?.totalCount ?? 0),
       }),
       variables: {
-        claims: scopedFeedFilter(spaceIds, topicId, [CLAIM_TYPE_ID], [], 'direct'),
-        debates: scopedFeedFilter(spaceIds, topicId, [DEBATE_TYPE_ID], [], 'debate'),
-        news: scopedFeedFilter(spaceIds, topicId, [NEWS_STORY_TYPE_ID], [], 'direct'),
+        claims: scopedFeedFilter(spaceIds, [CLAIM_TYPE_ID], directTopicFeedFilter(topicId)),
+        debates: scopedFeedFilter(spaceIds, [DEBATE_TYPE_ID], debateTopicFeedFilter(topicId)),
+        news: scopedFeedFilter(spaceIds, [NEWS_STORY_TYPE_ID], directTopicFeedFilter(topicId)),
       },
       signal,
     })

@@ -288,7 +288,7 @@ describe('a type selection filters server-side (GEO-2885)', () => {
   });
 });
 
-describe('a complete contextual Best population', () => {
+describe('a complete contextual population', () => {
   it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
     windows.queue = [
       {
@@ -308,7 +308,7 @@ describe('a complete contextual Best population', () => {
     const result = await fetchExploreFeed({
       ...feedArgs,
       requireDebateTagOnClaims: false,
-      bestPopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
     });
 
     expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
@@ -317,5 +317,33 @@ describe('a complete contextual Best population', () => {
     expect(windows.variables[1]?.filter).toEqual(
       expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
     );
+  });
+
+  it('uses the same compact population for New and orders it by creation time', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'older-high-rank', rankingScore: '100', createdAt: '1700000000' },
+          { id: 'newer-low-rank', rankingScore: '1', createdAt: '1800000000' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('older-high-rank', CLAIM_TYPE_ID), entity('newer-low-rank', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      sort: 'new',
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [
+        { typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: ['older-high-rank', 'newer-low-rank'] } } },
+      ],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
+    expect(windows.calls).toBe(2);
   });
 });

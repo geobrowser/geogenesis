@@ -12,16 +12,16 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
-vi.mock('../use-topic-space-scope', () => ({
-  useTopicSpaceScope: () => ['00000000000000000000000000000003'],
-}));
-
 afterEach(cleanup);
 
 describe('TopicComposition', () => {
   it('summarizes only debates, claims, and news stories', () => {
     render(
-      <TopicComposition topicId="00000000-0000-0000-0000-000000000001" spaceId="00000000-0000-0000-0000-000000000002" />
+      <TopicComposition
+        topicId="00000000-0000-0000-0000-000000000001"
+        spaceId="00000000-0000-0000-0000-000000000002"
+        spaceIds={['00000000000000000000000000000003']}
+      />
     );
 
     const composition = screen.getByRole('region', { name: 'What this topic holds' });

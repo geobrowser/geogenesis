@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedFilter } from './topic-feed-filter';
+import {
+  debateTopicFeedFilter,
+  directTopicFeedFilter,
+  topicFeedFilter,
+  topicFeedPopulationScopes,
+} from './topic-feed-filter';
 
 describe('topicFeedFilter', () => {
   it('matches direct topic relations and debates through their claim', () => {
@@ -55,9 +60,10 @@ describe('topicFeedFilter', () => {
     expect(topicFeedFilter('topic-1', ['topic-2', 'topic-2']).and).toHaveLength(2);
   });
 
-  it('uses only direct Topic relations when the caller already excludes Debates', () => {
+  it('uses only direct Topic relations and excludes Debates itself', () => {
     expect(directTopicFeedFilter('topic-1')).toEqual({
       and: [
+        { not: { typeIds: { overlaps: [DEBATE_TYPE_ID] } } },
         {
           relations: {
             some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
@@ -67,9 +73,10 @@ describe('topicFeedFilter', () => {
     });
   });
 
-  it('uses only inherited Claim Topics when the caller already selects Debates', () => {
+  it('uses only inherited Claim Topics and selects Debates itself', () => {
     expect(debateTopicFeedFilter('topic-1')).toEqual({
       and: [
+        { typeIds: { overlaps: [DEBATE_TYPE_ID] } },
         {
           relations: {
             some: {
@@ -84,5 +91,16 @@ describe('topicFeedFilter', () => {
         },
       ],
     });
+  });
+
+  it('builds disjoint direct and Debate population scopes once for all consumers', () => {
+    const scopes = topicFeedPopulationScopes('topic-1', ['topic-2'], ['claim-type', DEBATE_TYPE_ID]);
+
+    expect(scopes.map(scope => ({ kind: scope.kind, typeIds: scope.typeIds }))).toEqual([
+      { kind: 'direct', typeIds: ['claim-type'] },
+      { kind: 'debate', typeIds: [DEBATE_TYPE_ID] },
+    ]);
+    expect(scopes[0]?.entityFilter).toEqual(directTopicFeedFilter('topic-1', ['topic-2']));
+    expect(scopes[1]?.entityFilter).toEqual(debateTopicFeedFilter('topic-1', ['topic-2']));
   });
 });

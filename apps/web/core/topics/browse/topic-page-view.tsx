@@ -30,8 +30,10 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';
+import { limitTopicFeedSpaceIds } from './topic-feed-params';
 import { useTopicAncestors } from './use-topic-ancestors';
 
 /** Shared with the cover/avatar header so its left edge stays aligned with the topic column. */
@@ -99,6 +101,8 @@ export function TopicPageView({
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
   const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
+  const fullTopicSpaceIds = useTopicSpaceScope(spaceId);
+  const topicSpaceIds = React.useMemo(() => limitTopicFeedSpaceIds(fullTopicSpaceIds), [fullTopicSpaceIds]);
 
   const isCurated = React.useMemo(
     () =>
@@ -215,7 +219,7 @@ export function TopicPageView({
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
           </div>
 
-          <TopicComposition topicId={entityId} spaceId={spaceId} />
+          <TopicComposition topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />
         </header>
 
         <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
@@ -230,16 +234,26 @@ export function TopicPageView({
           />
         </div>
 
-        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} />
+        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} topicSpaceIds={topicSpaceIds} />
         {footer}
       </div>
     </div>
   );
 }
 
-function TopicTabPanel({ activeTab, entityId, spaceId }: { activeTab: TopicTab; entityId: string; spaceId: string }) {
+function TopicTabPanel({
+  activeTab,
+  entityId,
+  spaceId,
+  topicSpaceIds,
+}: {
+  activeTab: TopicTab;
+  entityId: string;
+  spaceId: string;
+  topicSpaceIds: string[] | undefined;
+}) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
   if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} variant="tab" />;
 
-  return <TopicFeed topicId={entityId} spaceId={spaceId} />;
+  return <TopicFeed topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />;
 }

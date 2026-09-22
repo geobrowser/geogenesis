@@ -8,8 +8,16 @@ import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
-/** Auth and visible-space scope shared by the Topic feed and its Topic facet counts. */
-export async function resolveTopicFeedRequestContext(routeSpaceId: string) {
+const EMPTY_BROWSE: BrowseSidebarData = {
+  featured: [],
+  editorOf: [],
+  memberOf: [],
+  documentationImage: null,
+  personalSpaceId: null,
+};
+
+/** Auth, memberships, and visible spaces shared by Explore and contextual Topic feeds. */
+export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
   const walletAddress = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];
@@ -32,23 +40,27 @@ export async function resolveTopicFeedRequestContext(routeSpaceId: string) {
   try {
     browse = await fetchBrowseSidebarData(personalMemberSpaceId);
   } catch {
-    browse = {
-      featured: [],
-      editorOf: [],
-      memberOf: [],
-      documentationImage: null,
-      personalSpaceId: null,
-    };
+    if (personalMemberSpaceId) {
+      try {
+        browse = await fetchBrowseSidebarData(null);
+      } catch {
+        browse = EMPTY_BROWSE;
+      }
+    } else {
+      browse = EMPTY_BROWSE;
+    }
   }
 
-  const visibleSpaceIds = new Set(
-    [...browse.featured, ...browse.editorOf, ...browse.memberOf].map(space => normId(space.id))
-  );
-  if (!visibleSpaceIds.has(normId(routeSpaceId))) {
-    browse = {
-      ...browse,
-      featured: [{ id: routeSpaceId, name: routeSpaceId.slice(0, 8), image: null }, ...browse.featured],
-    };
+  if (routeSpaceId) {
+    const visibleSpaceIds = new Set(
+      [...browse.featured, ...browse.editorOf, ...browse.memberOf].map(space => normId(space.id))
+    );
+    if (!visibleSpaceIds.has(normId(routeSpaceId))) {
+      browse = {
+        ...browse,
+        featured: [{ id: routeSpaceId, name: routeSpaceId.slice(0, 8), image: null }, ...browse.featured],
+      };
+    }
   }
 
   return { browse, memberOrEditorSpaceIds, walletAddress };

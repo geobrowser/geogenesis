@@ -9,8 +9,6 @@ import { ID } from '~/core/id';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { useTopicSpaceScope } from '../use-topic-space-scope';
-
 type CompositionCounts = { claims: number; debates: number; news: number };
 
 type Bucket = { key: string; label: string; count: number; className: string };
@@ -34,9 +32,15 @@ export function useTopicComposition(topicId: string, spaceId: string, spaceIds: 
 /**
  * A compact summary of the three entity types that make up the Topic Explore feed.
  */
-export function TopicComposition({ topicId, spaceId }: { topicId: string; spaceId: string }) {
-  const fullSpaceIds = useTopicSpaceScope(spaceId);
-  const spaceIds = React.useMemo(() => fullSpaceIds?.slice(0, 100), [fullSpaceIds]);
+export function TopicComposition({
+  topicId,
+  spaceId,
+  spaceIds,
+}: {
+  topicId: string;
+  spaceId: string;
+  spaceIds: string[] | undefined;
+}) {
   const { counts, isLoading } = useTopicComposition(topicId, spaceId, spaceIds);
 
   const buckets = React.useMemo<Bucket[]>(() => {

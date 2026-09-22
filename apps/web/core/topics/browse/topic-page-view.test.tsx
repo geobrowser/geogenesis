@@ -77,6 +77,9 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
+vi.mock('../use-topic-space-scope', () => ({
+  useTopicSpaceScope: () => ['11111111111111111111111111111111'],
+}));
 vi.mock('./topic-composition', () => ({
   TopicComposition: (props: Record<string, unknown>) => {
     mocks.composition = props;
@@ -170,6 +173,7 @@ describe('TopicPageView explore feed', () => {
     expect(mocks.feed).toMatchObject({
       topicId: 'topic-1',
       spaceId: 'space-1',
+      spaceIds: ['11111111111111111111111111111111'],
     });
     expect(mocks.feed).not.toHaveProperty('topicOptions');
   });
@@ -210,7 +214,11 @@ describe('TopicPageView composition', () => {
 
     const composition = screen.getByTestId('topic-composition');
     expect(composition.closest('header')).not.toBeNull();
-    expect(mocks.composition).toEqual({ topicId: 'topic-1', spaceId: 'space-1' });
+    expect(mocks.composition).toEqual({
+      topicId: 'topic-1',
+      spaceId: 'space-1',
+      spaceIds: ['11111111111111111111111111111111'],
+    });
   });
 });
 

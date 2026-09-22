@@ -8,9 +8,9 @@ import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { normId } from '~/core/utils/norm-id';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
-import { exploreBestCompleteIndexDocument } from './explore-best-complete-index-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import {
   type ExploreCardEntity,
@@ -19,6 +19,7 @@ import {
   buildExploreFeedRows,
   decodeExploreCardEntity,
 } from './explore-card-item';
+import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
@@ -32,6 +33,7 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
@@ -52,20 +54,16 @@ export type ExploreFeedResult = {
 };
 
 /**
- * One disjoint branch of a contextual feed's complete Best population.
+ * One disjoint branch of a contextual feed's complete population.
  *
  * Topic feeds use separate direct-entity and Debate branches because the generic predicate's OR
  * across those relation shapes is much slower. Each branch must include every entity that belongs
  * to the feed for its supplied types; the results are merged and ranked here.
  */
-export type ExploreBestPopulationScope = {
+export type ExploreCompletePopulationScope = {
   typeIds: readonly string[];
   entityFilter: EntityFilter;
 };
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 // Entities we never want to surface in any feed.
 // - `System type` relation to the `System` entity: marks system-managed rows.
@@ -143,13 +141,14 @@ type EntitiesConnectionShape = {
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
-type CompleteBestIndexNode = {
+type CompleteIndexNode = {
   id?: string | null;
   rankingScore?: string | number | null;
+  createdAt?: string | number | null;
 };
 
-type CompleteBestIndexConnection = {
-  nodes?: CompleteBestIndexNode[] | null;
+type CompleteIndexConnection = {
+  nodes?: CompleteIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -296,26 +295,26 @@ async function fetchExploreEntitiesPage(args: {
   );
 }
 
-const COMPLETE_BEST_INDEX_PAGE_SIZE = 500;
+const COMPLETE_INDEX_PAGE_SIZE = 500;
 
-async function fetchCompleteBestIndexScope(args: {
+async function fetchCompleteIndexScope(args: {
   spaceIds: string[];
   time: ExploreTime;
   typeIds: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter: EntityFilter;
-}): Promise<CompleteBestIndexNode[]> {
-  const rows: CompleteBestIndexNode[] = [];
+}): Promise<CompleteIndexNode[]> {
+  const rows: CompleteIndexNode[] = [];
   let after: string | null = null;
 
   while (true) {
-    const page: CompleteBestIndexConnection = await Effect.runPromise(
+    const page: CompleteIndexConnection = await Effect.runPromise(
       graphql({
-        query: exploreBestCompleteIndexDocument,
-        decoder: (data: { entitiesConnection?: CompleteBestIndexConnection }) => data.entitiesConnection ?? null,
+        query: exploreCompleteIndexDocument,
+        decoder: (data: { entitiesConnection?: CompleteIndexConnection }) => data.entitiesConnection ?? null,
         variables: {
-          limit: COMPLETE_BEST_INDEX_PAGE_SIZE,
+          limit: COMPLETE_INDEX_PAGE_SIZE,
           after,
           filter: buildExploreFeedFilter({
             spaceIds: args.spaceIds,
@@ -339,32 +338,32 @@ async function fetchCompleteBestIndexScope(args: {
   return rows;
 }
 
-function rankingScore(value: CompleteBestIndexNode['rankingScore']): number | null {
+function rankingScore(value: CompleteIndexNode['rankingScore']): number | null {
   if (value === null || value === undefined || value === '') return null;
   const score = Number(value);
   return Number.isFinite(score) ? score : null;
 }
 
 /**
- * Complete, contextual Best ordering without the generic connection's expensive database sort.
- * Ranked entities retain score order; entities that do not have a ranking score remain reachable
- * at the end instead of disappearing from the feed.
+ * Complete contextual ordering without the generic connection's expensive combined predicate.
+ * Best keeps ranking-score order (with unscored entities last); New keeps creation-time order.
  */
-async function fetchCompleteBestEntitiesPage(args: {
+async function fetchCompleteEntitiesPage(args: {
   spaceIds: string[];
+  sort: Extract<ExploreSort, 'best' | 'new'>;
   time: ExploreTime;
   limit: number;
   offset: number;
   typeIds: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
-  scopes: readonly ExploreBestPopulationScope[];
+  scopes: readonly ExploreCompletePopulationScope[];
 }): Promise<ExploreEntitiesPageResponse> {
   const scopeRows = await Promise.all(
     args.scopes
       .filter(scope => scope.typeIds.length > 0)
       .map(scope =>
-        fetchCompleteBestIndexScope({
+        fetchCompleteIndexScope({
           spaceIds: args.spaceIds,
           time: args.time,
           typeIds: scope.typeIds,
@@ -375,13 +374,20 @@ async function fetchCompleteBestEntitiesPage(args: {
       )
   );
 
-  const byId = new Map<string, CompleteBestIndexNode>();
+  const byId = new Map<string, CompleteIndexNode>();
   for (const row of scopeRows.flat()) {
     if (!row.id) continue;
     byId.set(normId(row.id), row);
   }
 
   const ordered = [...byId.values()].sort((left, right) => {
+    if (args.sort === 'new') {
+      const created =
+        parseEntityUpdatedAtToUnixSec(String(right.createdAt ?? '')) -
+        parseEntityUpdatedAtToUnixSec(String(left.createdAt ?? ''));
+      return created || (right.id ?? '').localeCompare(left.id ?? '');
+    }
+
     const leftScore = rankingScore(left.rankingScore);
     const rightScore = rankingScore(right.rankingScore);
     if (leftScore === null && rightScore !== null) return 1;
@@ -568,10 +574,10 @@ export async function fetchExploreFeed(args: {
   /** Additional server-side scope shared by Best, Top and New. */
   entityFilter?: EntityFilter;
   /**
-   * Complete population branches for a contextual Best feed. When supplied, Best ranks this full
-   * population from a compact id/score index instead of relying on the denormalized candidate set.
+   * Complete population branches for a contextual feed. When supplied, Best and New order this
+   * full population from a compact index rather than applying one expensive combined predicate.
    */
-  bestPopulationScopes?: readonly ExploreBestPopulationScope[];
+  completePopulationScopes?: readonly ExploreCompletePopulationScope[];
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -641,20 +647,25 @@ export async function fetchExploreFeed(args: {
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
   // connection cannot serve — it matches nothing without `typeIds`.
-  const completeBestPopulation = args.sort === 'best' && (args.bestPopulationScopes?.length ?? 0) > 0;
-  const bestFiltersServerSide = !completeBestPopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  const completeSort =
+    (args.completePopulationScopes?.length ?? 0) > 0 && (args.sort === 'best' || args.sort === 'new')
+      ? args.sort
+      : null;
+  const usesCompletePopulation = completeSort !== null;
+  const bestFiltersServerSide = !usesCompletePopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
 
   const fetchWindow = (windowAfter: string | null) =>
-    completeBestPopulation
-      ? fetchCompleteBestEntitiesPage({
+    completeSort !== null
+      ? fetchCompleteEntitiesPage({
           spaceIds: baseIds,
+          sort: completeSort,
           time: args.time,
           limit: windowSize,
           offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
           typeIds: args.typeIds ?? [],
           requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          scopes: args.bestPopulationScopes ?? [],
+          scopes: args.completePopulationScopes ?? [],
         })
       : bestFiltersServerSide
         ? fetchBestEntitiesByTypePage({

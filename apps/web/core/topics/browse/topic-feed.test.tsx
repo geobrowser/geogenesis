@@ -16,15 +16,17 @@ vi.mock('~/partials/feed/entity-feed', () => ({
   },
 }));
 
-vi.mock('../use-topic-space-scope', () => ({
-  useTopicSpaceScope: () => ['11111111111111111111111111111111'],
-}));
-
 afterEach(cleanup);
 
 describe('TopicFeed', () => {
   it('configures a Best-ranked feed whose Topic options come from feed facets', () => {
-    render(<TopicFeed topicId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" spaceId="space-1" />);
+    render(
+      <TopicFeed
+        topicId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        spaceId="space-1"
+        spaceIds={['11111111111111111111111111111111']}
+      />
+    );
 
     expect(mocks.feed).toMatchObject({
       apiEndpoint: '/api/topics/feed',

@@ -2,8 +2,8 @@ import { type DocumentNode, type FieldNode, Kind, type OperationDefinitionNode, 
 import { describe, expect, it } from 'vitest';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
-import { exploreBestCompleteIndexDocument } from './explore-best-complete-index-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
+import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 
@@ -135,11 +135,11 @@ describe('the type-filtered Best sort (GEO-2885)', () => {
   });
 });
 
-describe('the complete contextual Best index', () => {
-  it('reads only ids and ranking scores from the ordinary entity connection', () => {
-    expect(rootField(exploreBestCompleteIndexDocument).name.value).toBe('entitiesConnection');
-    expect(nodeFieldNames(exploreBestCompleteIndexDocument)).toEqual(['id', 'rankingScore']);
-    expect(argNames(rootField(exploreBestCompleteIndexDocument))).toEqual(
+describe('the complete contextual feed index', () => {
+  it('reads only the fields needed to order Best and New from the ordinary entity connection', () => {
+    expect(rootField(exploreCompleteIndexDocument).name.value).toBe('entitiesConnection');
+    expect(nodeFieldNames(exploreCompleteIndexDocument)).toEqual(['createdAt', 'id', 'rankingScore']);
+    expect(argNames(rootField(exploreCompleteIndexDocument))).toEqual(
       ['after', 'filter', 'first', 'orderBy', 'spaceIds', 'typeIds'].sort()
     );
   });

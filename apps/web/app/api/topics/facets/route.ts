@@ -3,19 +3,9 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { NextResponse } from 'next/server';
 
 import { fetchTopicFeedFacets } from '~/core/topics/browse/topic-feed-facets';
+import { parseTopicFeedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 import { normId } from '~/core/utils/norm-id';
-
-function parseIds(raw: unknown) {
-  return [
-    ...new Map(
-      (Array.isArray(raw) ? raw : [])
-        .filter((id): id is string => typeof id === 'string')
-        .filter(IdUtils.isValid)
-        .map(id => [normId(id), id])
-    ).values(),
-  ];
-}
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -25,9 +15,7 @@ export async function POST(request: Request) {
   } | null;
   const topicId = body?.fixedParams?.topicId;
   const routeSpaceId = body?.fixedParams?.spaceId;
-  const spaceIds = parseIds(
-    typeof body?.fixedParams?.spaceIds === 'string' ? body.fixedParams.spaceIds.split(',') : []
-  ).slice(0, 100);
+  const spaceIds = parseTopicFeedSpaceIds(body?.fixedParams?.spaceIds);
   if (
     typeof topicId !== 'string' ||
     !IdUtils.isValid(topicId) ||
@@ -38,7 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ topics: [] }, { status: 400 });
   }
 
-  const selectedTopicIds = parseIds(body?.selectedTopicIds).filter(id => normId(id) !== normId(topicId));
+  const selectedTopicIds = parseTopicFeedIds(body?.selectedTopicIds).filter(id => normId(id) !== normId(topicId));
   const typeIds = Array.isArray(body?.typeIds)
     ? parseTopicFeedTypeIds(body.typeIds.filter((id): id is string => typeof id === 'string').join(','))
     : parseTopicFeedTypeIds(null);

@@ -3,16 +3,13 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { NextResponse } from 'next/server';
 
 import { fetchTopicFeedCompositionCounts } from '~/core/topics/browse/topic-feed-facets';
-
-function parseSpaceIds(raw: string | null) {
-  return [...new Set((raw ?? '').split(',').filter(IdUtils.isValid))].slice(0, 100);
-}
+import { parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const topicId = searchParams.get('topicId');
   const routeSpaceId = searchParams.get('spaceId');
-  const spaceIds = parseSpaceIds(searchParams.get('spaceIds'));
+  const spaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'));
   if (
     !topicId ||
     !IdUtils.isValid(topicId) ||
