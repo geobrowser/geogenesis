@@ -106,6 +106,7 @@ vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   ClaimSummary: ({ className }: { className?: string }) => <div data-testid="inline-summary" className={className} />,
   ClaimSplitAvailableAfterVote: ({ summary }: { summary: { total: number } }) => (
     <div>
+      <span>??%</span>
       <span>Vote split available after vote</span>
       <span>{summary.total} votes</span>
       <span data-testid="responder-avatars" />
@@ -521,6 +522,7 @@ describe('ClaimExploreFeedCard', () => {
     scrollIntoRange();
 
     expect(screen.getByText('Vote split available after vote')).toBeInTheDocument();
+    expect(screen.getByText('??%')).toBeInTheDocument();
     expect(screen.getByText('12 votes')).toBeInTheDocument();
     expect(screen.getByTestId('responder-avatars')).toBeInTheDocument();
     expect(screen.queryByText('75%')).toBeNull();

@@ -760,8 +760,8 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
  * vocabulary and publish the response, so a factual claim still reads Verify/Dispute here and the
  * share is the same number the claim page prints.
  *
- * The crowd split appears only after the viewer answers. Until then the total remains visible, so
- * the card can still communicate participation without nudging which side the viewer chooses.
+ * The crowd split appears only after the viewer answers. Until then a masked share occupies the
+ * same slot, so revealing the result does not reflow the attribution row.
  */
 function TickerClaimHeader({
   claimId,
@@ -839,7 +839,7 @@ function TickerClaimHeader({
             <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
               {position !== null
                 ? `${percent}% ${copy.positiveAction.toLowerCase()}`
-                : `${summary.total} ${summary.total === 1 ? 'vote' : 'votes'} · split after vote`}
+                : `??% ${copy.positiveAction.toLowerCase()}`}
             </span>
           </>
         )}

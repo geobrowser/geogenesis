@@ -59,12 +59,14 @@ describe('ClaimSummary', () => {
     renderSummary(summary({ ...summarizeClaimResponses(17, 3), viewerDirection: 'positive' }));
 
     expect(screen.getByText('85%')).toBeInTheDocument();
+    expect(screen.getByText('20 votes')).toBeInTheDocument();
   });
 
   it('withholds the split before voting while keeping the total and combined voter list', async () => {
     renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
 
     expect(screen.getByText('Vote split available after vote')).toBeInTheDocument();
+    expect(screen.getByText('??%')).toBeInTheDocument();
     expect(screen.getByText('20 votes')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
 

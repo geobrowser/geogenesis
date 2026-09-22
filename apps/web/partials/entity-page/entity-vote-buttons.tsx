@@ -271,9 +271,9 @@ export function EntityVoteButtons({
 
   const isClaimVariant = variant !== 'default';
   const viewerHasResponded = activeResponse === 'positive' || activeResponse === 'negative';
-  // A claim's aggregate split is withheld until the viewer contributes their own response. Keep
-  // the total visible before then: it communicates participation without nudging the answer.
-  const displayLabel = isClaimVariant ? (viewerHasResponded ? percentLabel : String(effectiveTotal)) : scoreLabel;
+  // A claim's aggregate split is withheld until the viewer contributes their own response. The
+  // accessible label still reports the total, without nudging the answer.
+  const displayLabel = isClaimVariant ? (viewerHasResponded ? percentLabel : '??%') : scoreLabel;
 
   const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
     if (variant === 'chevrons') {

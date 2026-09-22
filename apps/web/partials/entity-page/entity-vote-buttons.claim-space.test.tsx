@@ -186,7 +186,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     // The claim controls show participation without the split before voting; curation shows a net
     // score.
     expect(await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' })).toHaveTextContent(
-      '3'
+      '??%'
     );
     expect(screen.queryByText('1')).not.toBeInTheDocument();
   });

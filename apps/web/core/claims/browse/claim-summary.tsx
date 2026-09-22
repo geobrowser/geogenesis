@@ -100,20 +100,26 @@ export function ClaimSummary({
         responseKind={responseKind}
         summary={summary}
         layout={layout}
+        scale={layout === 'stacked' ? 'summary' : 'card'}
         className={className}
       />
     );
   }
 
   const responders = (
-    <ClaimResponders
-      entityId={entityId}
-      spaceId={spaceId}
-      responseKind={responseKind}
-      summary={summary}
-      label={copy.viewResponders}
-      revealDirections
-    />
+    <span className="flex items-center gap-2">
+      <Text as="span" variant="metadata" color="grey-04" className="shrink-0 tabular-nums">
+        {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
+      </Text>
+      <ClaimResponders
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        label={copy.viewResponders}
+        revealDirections
+      />
+    </span>
   );
 
   const percent = summary.percent ?? 0;
@@ -173,6 +179,7 @@ export function ClaimSplitAvailableAfterVote({
   summary,
   className,
   layout = 'stacked',
+  scale = 'card',
 }: {
   entityId: string;
   spaceId: string;
@@ -180,7 +187,10 @@ export function ClaimSplitAvailableAfterVote({
   summary: ClaimResponseSummary;
   className?: string;
   layout?: 'stacked' | 'inline';
+  /** Matches the percentage and bar dimensions of the surface this placeholder replaces. */
+  scale?: 'summary' | 'card' | 'verdict';
 }) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
   const voters = (
     <ClaimResponders
       entityId={entityId}
@@ -203,24 +213,83 @@ export function ClaimSplitAvailableAfterVote({
         className={cx('flex min-w-0 items-center gap-3', className)}
         style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
       >
-        <Text as="span" variant="metadataMedium" color="text" className="min-w-0 flex-1 truncate">
-          Vote split available after vote
-        </Text>
+        <span
+          className="flex shrink-0 items-center gap-1.5"
+          title="Vote split available after vote"
+          aria-label="Vote split available after vote"
+        >
+          <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+            ??%
+          </Text>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
+        </span>
+        <span aria-hidden className="h-0.5 min-w-0 flex-1 rounded-full bg-grey-02" />
         {total}
         {voters}
       </div>
     );
   }
 
+  if (scale === 'summary') {
+    return (
+      <div className={className}>
+        <span aria-hidden className="block h-1.5 w-full rounded-full bg-grey-02" />
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <span
+            className="flex shrink-0 items-center gap-1.5"
+            title="Vote split available after vote"
+            aria-label="Vote split available after vote"
+          >
+            <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+              ??%
+            </Text>
+            <Text as="span" variant="metadata" color="grey-04">
+              {copy.positiveAction.toLowerCase()}
+            </Text>
+          </span>
+          <span className="flex items-center gap-2">
+            {total}
+            {voters}
+          </span>
+        </div>
+        <span className="sr-only">Vote split available after vote</span>
+      </div>
+    );
+  }
+
   return (
     <div className={className}>
-      <Text as="p" variant="metadataMedium" color="text">
-        Vote split available after vote
-      </Text>
-      <div className="mt-2 flex items-center gap-2">
-        {total}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <span
+          className="flex items-baseline gap-1.5"
+          title="Vote split available after vote"
+          aria-label="Vote split available after vote"
+        >
+          <span
+            className={cx(
+              'leading-none font-semibold text-text tabular-nums',
+              scale === 'verdict' ? 'text-[2.5rem] tracking-[-1px]' : 'text-[2rem] tracking-[-0.8px]'
+            )}
+          >
+            ??%
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
+        </span>
+        {scale === 'verdict' ? total : null}
+      </div>
+      <span
+        aria-hidden
+        className={cx('block w-full rounded-full bg-grey-02', scale === 'verdict' ? 'mt-4 h-2' : 'mt-3 h-1.5')}
+      />
+      <div className="mt-3 flex items-center gap-2">
+        {scale === 'card' ? total : null}
         {voters}
       </div>
+      <span className="sr-only">Vote split available after vote</span>
     </div>
   );
 }

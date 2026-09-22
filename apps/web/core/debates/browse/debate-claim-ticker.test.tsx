@@ -196,13 +196,13 @@ describe('DebateClaimTickerCard', () => {
 
   // The card above the newest one dissolves into the video; the newest sits at full strength. In
   // Figma that is one gradient over the whole stack, reproduced per-card — see `OLDER_CARD_FADE`.
-  it('withholds the crowd split before the viewer has answered while showing participation', () => {
+  it('withholds the crowd split before the viewer has answered while preserving its percentage slot', () => {
     mocks.percent = 65;
     mocks.total = 20;
 
     renderCard();
 
-    expect(screen.getByText('20 votes · split after vote')).toBeInTheDocument();
+    expect(screen.getByText('??% agree')).toBeInTheDocument();
     expect(screen.queryByText('65% agree')).toBeNull();
   });
 
