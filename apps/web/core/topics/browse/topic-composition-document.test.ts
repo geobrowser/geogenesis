@@ -32,10 +32,8 @@ describe('the topic composition document', () => {
     expect(printed).toContain('toEntity: {relations: {some: {typeId: {is: $topicsPropertyId}');
   });
 
-  it('counts every other bucket over the Topics relation', () => {
-    // The remainder is `total` minus these, so a bucket that counted something else would silently
-    // eat into "other" instead of adding to the bar.
-    for (const alias of ['total', 'claims', 'episodes', 'news', 'tweets', 'posts']) {
+  it('counts claims and news stories over the Topics relation', () => {
+    for (const alias of ['claims', 'news']) {
       expect(bucket(alias).name.value).toBe('relationsConnection');
     }
   });
@@ -45,6 +43,6 @@ describe('the topic composition document', () => {
       buckets()
         .map(f => f.alias?.value ?? f.name.value)
         .sort()
-    ).toEqual(['claims', 'debates', 'episodes', 'news', 'posts', 'total', 'tweets'].sort());
+    ).toEqual(['claims', 'debates', 'news'].sort());
   });
 });

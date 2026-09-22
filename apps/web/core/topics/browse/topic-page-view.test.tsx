@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   /** Props the chip section received, or null if the page rendered none. */
   feed: null as Record<string, unknown> | null,
   comments: null as Record<string, unknown> | null,
+  composition: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   pathname: '/space/space-1/topic-1',
   /**
@@ -78,7 +79,12 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
-vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
+vi.mock('./topic-composition', () => ({
+  TopicComposition: (props: Record<string, unknown>) => {
+    mocks.composition = props;
+    return <div data-testid="topic-composition" />;
+  },
+}));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: (props: Record<string, unknown>) => {
     mocks.comments = props;
@@ -102,6 +108,7 @@ beforeEach(() => {
   mocks.clamp = null;
   mocks.feed = null;
   mocks.comments = null;
+  mocks.composition = null;
   mocks.tabs = null;
   mocks.pathname = '/space/space-1/topic-1';
 });
@@ -207,10 +214,12 @@ describe('TopicPageView explore feed', () => {
 });
 
 describe('TopicPageView composition', () => {
-  it('does not render the entity distribution bar', () => {
+  it('renders the entity distribution bar in the topic header', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-    expect(screen.queryByTestId('topic-composition')).toBeNull();
+    const composition = screen.getByTestId('topic-composition');
+    expect(composition.closest('header')).not.toBeNull();
+    expect(mocks.composition).toEqual({ topicId: 'topic-1', spaceId: 'space-1' });
   });
 });
 

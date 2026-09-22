@@ -31,6 +31,7 @@ import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
+import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';
 import { useTopicAncestors } from './use-topic-ancestors';
 
@@ -231,6 +232,8 @@ export function TopicPageView({
             <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
           </div>
+
+          <TopicComposition topicId={entityId} spaceId={spaceId} />
         </header>
 
         <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>

@@ -16,7 +16,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { EPISODE_TYPE_ID, NEWS_STORY_TYPE_ID, POST_TYPE_ID, TWEET_TYPE_ID } from '../ontology';
+import { NEWS_STORY_TYPE_ID } from '../ontology';
 import { useTopicSpaceScope } from '../use-topic-space-scope';
 
 /**
@@ -27,34 +27,19 @@ import { useTopicSpaceScope } from '../use-topic-space-scope';
  * proportion of whatever the first page happened to hold, which is why this is a query of its own
  * rather than something derived from the sections below.
  *
- * One request: each bucket is an aliased count over the same relation, narrowed by the type of the
- * entity doing the pointing.
+ * Claims and news stories are aliased counts over the same topic relation. Debates require a
+ * two-hop entity count because they point to claims rather than directly to topics.
  */
 const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
   query TopicComposition(
     $topicsPropertyId: UUID!
     $topicId: UUID!
     $claim: [UUID!]
-    $episode: [UUID!]
     $news: [UUID!]
-    $tweet: [UUID!]
-    $post: [UUID!]
     $debate: [UUID!]
     $debateClaimsPropertyId: UUID!
     $spaceIds: [UUID!]
   ) {
-    # Scoped like every other bucket. The remainder is \`total\` minus the named buckets, so leaving
-    # this one wide would turn everything the scope excludes into "other" — a bar that grows as the
-    # page shows less.
-    total: relationsConnection(
-      filter: {
-        typeId: { is: $topicsPropertyId }
-        toEntityId: { is: $topicId }
-        fromEntity: { spaceIds: { overlaps: $spaceIds } }
-      }
-    ) {
-      totalCount
-    }
     claims: relationsConnection(
       filter: {
         typeId: { is: $topicsPropertyId }
@@ -64,38 +49,11 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
     ) {
       totalCount
     }
-    episodes: relationsConnection(
-      filter: {
-        typeId: { is: $topicsPropertyId }
-        toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $episode }, spaceIds: { overlaps: $spaceIds } }
-      }
-    ) {
-      totalCount
-    }
     news: relationsConnection(
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
         fromEntity: { typeIds: { overlaps: $news }, spaceIds: { overlaps: $spaceIds } }
-      }
-    ) {
-      totalCount
-    }
-    tweets: relationsConnection(
-      filter: {
-        typeId: { is: $topicsPropertyId }
-        toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $tweet }, spaceIds: { overlaps: $spaceIds } }
-      }
-    ) {
-      totalCount
-    }
-    posts: relationsConnection(
-      filter: {
-        typeId: { is: $topicsPropertyId }
-        toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $post }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -140,22 +98,15 @@ export function useTopicComposition(topicId: string, spaceIds?: string[]) {
         graphql({
           query: topicCompositionDocument,
           decoder: (response: CompositionResponse) => ({
-            total: response.total?.totalCount ?? 0,
             claims: response.claims?.totalCount ?? 0,
-            episodes: response.episodes?.totalCount ?? 0,
             news: response.news?.totalCount ?? 0,
-            tweets: response.tweets?.totalCount ?? 0,
-            posts: response.posts?.totalCount ?? 0,
             debates: response.debates?.totalCount ?? 0,
           }),
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
             topicId: ID.uuidToHex(topicId),
             claim: [ID.uuidToHex(CLAIM_TYPE_ID)],
-            episode: [ID.uuidToHex(EPISODE_TYPE_ID)],
             news: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
-            tweet: [ID.uuidToHex(TWEET_TYPE_ID)],
-            post: [ID.uuidToHex(POST_TYPE_ID)],
             debate: [ID.uuidToHex(DEBATE_TYPE_ID)],
             debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
             spaceIds: spaceIds?.map(ID.uuidToHex),
@@ -170,12 +121,7 @@ export function useTopicComposition(topicId: string, spaceIds?: string[]) {
 }
 
 /**
- * One strip saying what this topic holds, before any of it is shown.
- *
- * Orientation rather than navigation — the section order below is fixed, so this doesn't decide
- * anything. What it does is answer "is this a podcast topic or a news topic" without scrolling,
- * which matters because the mix changes completely between topics: measured, one is 227 claims to
- * 73 episodes and another is 150 episodes to 56 news stories.
+ * A compact summary of the three entity types that make up the Topic Explore feed.
  */
 export function TopicComposition({ topicId, spaceId }: { topicId: string; spaceId: string }) {
   // Scoped exactly like the sections below it, or the strip would promise content the page can't
@@ -186,34 +132,14 @@ export function TopicComposition({ topicId, spaceId }: { topicId: string; spaceI
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];
 
-    // Ordered as the page is — debates, then claims, then the kinds that make up Coverage — so the
-    // strip reads as a map of what is below it rather than an unrelated ranking.
-    const named: Bucket[] = [
+    return [
       { key: 'debates', label: 'debates', count: counts.debates, className: 'bg-purple' },
       { key: 'claims', label: 'claims', count: counts.claims, className: 'bg-green' },
-      { key: 'episodes', label: 'episodes', count: counts.episodes, className: 'bg-ctaPrimary' },
       { key: 'news', label: 'news stories', count: counts.news, className: 'bg-orange' },
-      { key: 'tweets', label: 'posts', count: counts.tweets + counts.posts, className: 'bg-red-01' },
     ].filter(bucket => bucket.count > 0);
-
-    // Everything the named buckets don't cover — articles, official documents, papers, datasets and
-    // the rest of the tail. Counted as a remainder rather than queried type by type: the tail is
-    // long and each type in it is worth one or two links on a given topic.
-    //
-    // Debates are excluded from the subtraction because they are not `Topics` relations and so were
-    // never part of `total`. Counting them here would eat into the remainder and shrink a bar that
-    // has nothing to do with them.
-    const remainder =
-      counts.total - named.filter(b => b.key !== 'debates').reduce((sum, bucket) => sum + bucket.count, 0);
-    if (remainder > 0) {
-      named.push({ key: 'other', label: 'other', count: remainder, className: 'bg-grey-03' });
-    }
-    return named;
   }, [counts]);
 
-  // For the same reason: the bar is divided by everything it draws, and debates are additional to
-  // the `Topics` relations `total` counts rather than a slice of them.
-  const denominator = (counts?.total ?? 0) + (counts?.debates ?? 0);
+  const denominator = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
 
   if (isLoading) return <Skeleton className="h-[52px] w-full rounded-lg" />;
   if (!counts || denominator === 0 || buckets.length === 0) return null;
