@@ -137,10 +137,24 @@ export function ClaimPageView({
   const { responseKind, summary } = state;
   // Explore's rule for drawing the verdict column at all: counts that answered, and at least one.
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
+  // Whether the hero keeps a second track, which is deliberately not the same question.
+  //
+  // `hasVerdict` cannot be true until the counts answer, so a grid template derived from it alone
+  // painted every claim one-column and then re-wrapped the title the moment the column appeared —
+  // a layout shift at the very top of the page, on every load, that the old below-header verdict
+  // never had. An answered claim is the common case on this page, so the unknown state reserves
+  // the column and only a settled zero takes it away.
+  const reserveVerdictColumn = summary.isLoading || hasVerdict;
 
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
   const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
+
+  // Whether anything is drawn above the claim. The hero pins its parts to explicit rows so the
+  // verdict can start on the title's, and row 1 belongs to this strip — so when nothing fills it,
+  // the rows have to move up rather than leave a `gap-y-4` above the claim that belongs to a row
+  // nothing occupies. Visible in the side panel and at phone widths, where that gap is set.
+  const hasChipsRow = (SHOW_HERO_TOPICS && topics.length > 0) || summary.isControversial;
 
   const requestedTab = resolveClaimTab({
     pathname,
@@ -209,14 +223,14 @@ export function ClaimPageView({
             <div
               className={cx(
                 'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
-                hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
+                reserveVerdictColumn ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
               )}
             >
               {/* Above the claim and across both columns: what it is about. Capped, with the rest a
                   tab away rather than a wall of chips over the title. No type or tag chips — every
                   claim on this page is a Claim. Drawn only when there is something to draw, so a claim
                   with neither leaves no empty track behind. */}
-              {(SHOW_HERO_TOPICS && topics.length > 0) || summary.isControversial ? (
+              {hasChipsRow ? (
                 <ClaimTopicsRow
                   topics={SHOW_HERO_TOPICS ? topics : []}
                   spaceId={spaceId}
@@ -227,7 +241,9 @@ export function ClaimPageView({
                 />
               ) : null}
 
-              <div className="col-start-1 row-start-2 flex min-w-0 flex-col gap-3">
+              <div
+                className={cx('col-start-1 flex min-w-0 flex-col gap-3', hasChipsRow ? 'row-start-2' : 'row-start-1')}
+              >
                 {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
                     which on a claim — a full sentence running to three or four lines — leaves each one
                     breaking well short of the measure and reads as wrapping early. Pretty only avoids a
@@ -263,7 +279,9 @@ export function ClaimPageView({
                 )}
               </div>
 
-              <div className="col-start-1 row-start-3 mt-4 claim-card-narrow:mt-0">
+              <div
+                className={cx('col-start-1 mt-4 claim-card-narrow:mt-0', hasChipsRow ? 'row-start-3' : 'row-start-2')}
+              >
                 <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
               </div>
 
@@ -271,7 +289,14 @@ export function ClaimPageView({
                   than the chips above it; the rule runs beside the claim and the pills. Explore's own
                   column, not a copy of it. */}
               {hasVerdict ? (
-                <div className="col-start-2 row-span-2 row-start-2 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-4 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
+                <div
+                  className={cx(
+                    'col-start-2 row-span-2 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:border-l-0 claim-card-narrow:pl-0',
+                    hasChipsRow
+                      ? 'row-start-2 claim-card-narrow:row-start-4'
+                      : 'row-start-1 claim-card-narrow:row-start-3'
+                  )}
+                >
                   <ClaimVerdictColumn
                     entityId={entityId}
                     spaceId={spaceId}

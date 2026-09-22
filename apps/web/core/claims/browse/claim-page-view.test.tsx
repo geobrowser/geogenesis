@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
   /** How many responses the claim has; zero means the hero draws no verdict column. */
   responseTotal: 11,
+  /** Whether the response counts are still out, which is what the hero reserves its column for. */
+  summaryLoading: false,
+  /** Drives the one strip that can occupy the hero's first grid row. */
+  isControversial: false,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
@@ -115,10 +119,10 @@ vi.mock('./use-claim-response-state', () => ({
   useClaimResponseState: () => ({
     responseKind: 'stance',
     summary: {
-      isLoading: false,
+      isLoading: mocks.summaryLoading,
       hasCounts: true,
       total: mocks.responseTotal,
-      isControversial: false,
+      isControversial: mocks.isControversial,
       viewerDirection: 'positive',
       viewerSpaceId: 'viewer-space',
       isViewerResponseLoading: true,
@@ -213,6 +217,8 @@ function claimEntity(description: string | null) {
 
 beforeEach(() => {
   mocks.responseTotal = 11;
+  mocks.summaryLoading = false;
+  mocks.isControversial = false;
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
@@ -318,6 +324,45 @@ describe('ClaimPageView record', () => {
 
     expect(screen.queryByTestId('verdict')).toBeNull();
     expect(screen.getByTestId('position')).toBeInTheDocument();
+  });
+
+  it('keeps both hero tracks while the counts are still out', () => {
+    // `hasVerdict` cannot be true until they answer, so a template derived from it alone painted
+    // one column and then re-wrapped the claim when the second appeared — a shift at the top of
+    // the page on every load.
+    mocks.summaryLoading = true;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const grid = container.querySelector('header > div');
+    expect(grid?.className).toContain('grid-cols-[minmax(0,1fr)_220px]');
+    // Reserved, not filled: nothing has said what the verdict is yet.
+    expect(screen.queryByTestId('verdict')).toBeNull();
+  });
+
+  it('gives the column back once the counts settle on nobody having answered', () => {
+    mocks.responseTotal = 0;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(container.querySelector('header > div')?.className).toContain('grid-cols-1');
+  });
+
+  it('leaves no empty row above the claim when nothing is drawn there', () => {
+    // The hero pins its parts to explicit rows so the verdict can start on the title's. With the
+    // chips row empty, row 1 is a `gap-y-4` above the claim belonging to a row nothing occupies —
+    // visible in the side panel and at phone widths, where that gap is set.
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-1');
+    expect(container.querySelector('[data-testid="position"]')?.closest('.col-start-1')?.className).toContain(
+      'row-start-2'
+    );
+  });
+
+  it('moves the rows down again when the claim is controversial', () => {
+    mocks.isControversial = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-2');
   });
 
   it('orders Overview as activity, then comments', () => {
