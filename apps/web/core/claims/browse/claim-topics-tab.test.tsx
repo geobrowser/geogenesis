@@ -138,6 +138,31 @@ describe('ClaimTopicsTab', () => {
     );
   });
 
+  it('keeps the claim’s order when only some count batches answered', () => {
+    // The counts arrive in batches, so one can fail while another succeeds. Sorting the partial
+    // map ranks every unmeasured topic as zero and then alphabetises it — neither the claim's
+    // order nor largest-first — and nothing on screen says which topics were measured.
+    mocks.rows = [row('topic-a', 'A'), row('topic-b', 'B'), row('topic-c', 'C')];
+    mocks.countsError = true;
+    mocks.counts = { [normId('topic-c')]: counts(1, 0, 0) };
+
+    render(<ClaimTopicsTab topics={topics} spaceId="space-1" />);
+
+    expect(drawnTopics()).toEqual(['topic-a', 'topic-b', 'topic-c']);
+  });
+
+  it('still gives the cards whose batch answered their counts', () => {
+    mocks.rows = [row('topic-a', 'A'), row('topic-b', 'B')];
+    mocks.countsError = true;
+    mocks.counts = { [normId('topic-b')]: counts(4, 1, 2) };
+
+    render(<ClaimTopicsTab topics={topics} spaceId="space-1" />);
+
+    const [first, second] = screen.getAllByTestId('topic-card');
+    expect(first).toHaveAttribute('data-counts', 'null');
+    expect(second).toHaveAttribute('data-counts', JSON.stringify({ claims: 4, news: 1, debates: 2, total: 7 }));
+  });
+
   it('keeps the claim’s own order, and no counts, when the count could not be read', () => {
     mocks.rows = [row('topic-a', 'A'), row('topic-b', 'B'), row('topic-c', 'C')];
     mocks.countsError = true;

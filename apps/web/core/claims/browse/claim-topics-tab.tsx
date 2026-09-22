@@ -53,8 +53,15 @@ export function ClaimTopicsTab({ topics, spaceId }: { topics: Relation[]; spaceI
   const rows = useClaimExploreRows(topicIds, spaceId, topicIds.length > 0);
 
   const countsByTopicId = counts.countsByTopicId;
+  const countsFailed = counts.isError;
   const ordered = React.useMemo(() => {
-    if (!countsByTopicId) return rows.data;
+    // Ordering is a promise about *all* the numbers, so a partial answer cannot keep it. The
+    // counts arrive in batches, and one batch can fail while another succeeds — which leaves a map
+    // covering some topics and not others. Sorting on that ranks every unmeasured topic as zero
+    // and then alphabetises it: neither the claim's order nor largest-first, and nothing on screen
+    // says which. So any failure falls back to the claim's order, exactly as a total failure
+    // already did. The counts that did arrive still reach their own cards.
+    if (!countsByTopicId || countsFailed) return rows.data;
 
     const totalOf = (entityId: string) => countsByTopicId[normId(entityId)];
 
@@ -64,7 +71,7 @@ export function ClaimTopicsTab({ topics, spaceId }: { topics: Relation[]; spaceI
         (totalOf(b.entityId)?.claims ?? 0) - (totalOf(a.entityId)?.claims ?? 0) ||
         a.title.localeCompare(b.title)
     );
-  }, [countsByTopicId, rows.data]);
+  }, [countsByTopicId, countsFailed, rows.data]);
 
   // The parent only offers this tab when the claim has topics. The route stays addressable
   // directly, matching the Sources tab, so a stale bookmark still gets an honest empty state.

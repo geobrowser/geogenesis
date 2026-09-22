@@ -569,9 +569,10 @@ function ClaimTopicsRow({
   className?: string;
 }) {
   const seeAllClass = `${META_CHIP_CLASS} text-grey-04 transition-colors hover:border-text hover:text-text`;
+  const rowClass = cx('flex min-w-0 flex-wrap items-center gap-1.5', className);
 
-  return (
-    <nav aria-label="Topics" className={cx('flex min-w-0 flex-wrap items-center gap-1.5', className)}>
+  const chips = (
+    <>
       {/* First in the row: "contested" is a fact about the claim rather than one of its topics. The
           chips' own shape and type — `META_CHIP_CLASS`, spelled out because its border and fill are
           the parts that change — in the tag's red, so it reads as one of the row's labels and still
@@ -602,6 +603,20 @@ function ClaimTopicsRow({
           </Link>
         )
       ) : null}
+    </>
+  );
+
+  // A navigation landmark has to contain navigation. With `SHOW_HERO_TOPICS` off, the only thing
+  // that puts this row on the page is a claim being controversial — and that row holds one status
+  // chip and no links, so naming it "Topics" announced an empty region under a heading that
+  // describes something else entirely to anyone moving through the page by landmark.
+  if (topics.length === 0) {
+    return <div className={rowClass}>{chips}</div>;
+  }
+
+  return (
+    <nav aria-label="Topics" className={rowClass}>
+      {chips}
     </nav>
   );
 }

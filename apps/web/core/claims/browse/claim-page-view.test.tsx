@@ -365,6 +365,23 @@ describe('ClaimPageView record', () => {
     expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-2');
   });
 
+  it('announces no Topics landmark over a row that is only the Controversial chip', () => {
+    // `SHOW_HERO_TOPICS` is off, so being controversial is the only thing that puts this row on
+    // the page — and it holds one status chip and no links. A navigation landmark named "Topics"
+    // over that is both empty and misnamed to anyone moving through the page by landmark.
+    mocks.isControversial = true;
+    // With topics on the claim, so this is about the row having no *links* rather than the claim
+    // having no topics.
+    mocks.entity = {
+      ...claimEntity('Anything'),
+      relations: [{ id: 'relation-1', type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-1', name: 'Ethics' } }],
+    };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText('Controversial')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Topics' })).toBeNull();
+  });
+
   it('orders Overview as activity, then comments', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 

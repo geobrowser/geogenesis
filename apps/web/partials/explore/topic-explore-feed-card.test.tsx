@@ -98,10 +98,13 @@ describe('TopicExploreFeedCard', () => {
     expect(screen.queryByText(/debate/)).toBeNull();
   });
 
-  it('says so once when a topic has nothing attached', () => {
+  it('names the kinds it measured rather than claiming a topic is empty', () => {
+    // A topic also carries episodes, tweets and posts, which this card never counts — so "nothing
+    // attached" would be a claim about buckets it did not measure.
     render(<TopicExploreFeedCard item={item()} counts={{ claims: 0, news: 0, debates: 0, total: 0 }} />);
 
-    expect(screen.getByText('Nothing attached yet')).toBeInTheDocument();
+    expect(screen.getByText('No debates, claims or news stories yet')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing attached yet')).toBeNull();
   });
 
   it('draws no metadata at all when the count could not be read', () => {

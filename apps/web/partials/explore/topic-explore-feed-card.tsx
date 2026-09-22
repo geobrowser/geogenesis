@@ -78,9 +78,15 @@ export function TopicConnectionMeta({
   ].filter(segment => segment.count > 0);
 
   // Zeros are dropped rather than printed: "0 news stories" on a topic that is entirely claims is
-  // three words about something that isn't there. A topic with nothing attached says so once.
+  // three words about something that isn't there. A topic with none of the three says so once.
+  //
+  // Named rather than summarised: a topic also carries episodes, tweets, posts and the rest — the
+  // topic page's composition strip counts six kinds and a remainder — so "nothing attached" would
+  // be a claim about buckets this card never measured. On a claim's Topics tab the line is close
+  // to unreachable anyway, since the claim being read is itself a claim attached to every topic
+  // listed; it can show while that relation is still indexing, and wherever else the card is used.
   if (segments.length === 0) {
-    return <p className={cx(META_SEGMENT_CLASS, className)}>Nothing attached yet</p>;
+    return <p className={cx(META_SEGMENT_CLASS, className)}>No debates, claims or news stories yet</p>;
   }
 
   return (
