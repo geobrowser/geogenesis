@@ -32,7 +32,7 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
     // and `mb-5` is 20px less the description's own `-mt-3`, which pulls itself
     // up to sit tight under the name — right when it *is* under the name, wrong
     // with three roles in between. Both come out at 8px.
-    <ul className="mt-2 mb-5 flex flex-col gap-1">
+    <ul className="mt-2 mb-5 flex flex-col">
       {roles.map(role => (
         <li
           key={`${role.kind}-${role.organizationId}-${role.subject}`}

@@ -16,7 +16,27 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   small?: boolean;
 };
 
-const buttonClassNames = (className = '') =>
+/** The pill's shape and type, shared by both of its colourings below. */
+const PILL_BUTTON_SHAPE =
+  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none';
+
+/**
+ * The black pill: the navbar's Log in button.
+ * Layered over the `primary` variant, whose colours it overrides.
+ */
+export const PILL_BUTTON_CLASS_NAME = `${PILL_BUTTON_SHAPE} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text`;
+
+/**
+ * The same pill in the `secondary` variant's colours — white, a grey outline that
+ * darkens on hover. Layered over `secondary`, which supplies those colours.
+ */
+export const PILL_BUTTON_SECONDARY_CLASS_NAME = PILL_BUTTON_SHAPE;
+
+/**
+ * The button's classes on their own, for a link that should look like one. A
+ * `<Button>` inside a `<Link>` nests two interactive elements.
+ */
+export const buttonClassNames = (className = '') =>
   cva(
     `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-hidden ${className}`,
     {

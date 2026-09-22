@@ -161,7 +161,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
-      seeAllLabel: 'See all debates',
+      seeAllLabel: 'View all debates',
     },
     {
       key: 'claims',
@@ -176,7 +176,7 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError && responses.isError,
       isError: positions.isError,
       href: `/space/${spaceId}/positions`,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all claims',
     },
   ];
 

@@ -1,9 +1,11 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -12,6 +14,7 @@ import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
@@ -20,13 +23,14 @@ import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
+import { useValue } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { LinkableChip } from '~/design-system/chip';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
+import { ClampedText } from '~/design-system/clamped-text';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { EditSmall } from '~/design-system/icons/edit-small';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
@@ -46,16 +50,15 @@ export type ProfileRailProps = ProfileRailFacts & {
 /**
  * The facts a profile states about an account (GEO-2859).
  *
- * Three sections, in the order a reader wants them: where this person works in
- * the graph, how to reach them, then the facts — ending in the space's own
- * record, folded away.
+ * Three sections: who this person is — ending in the space's own record,
+ * folded away — then how to reach them, then where they work in the graph.
  *
  * Rule-separated sections rather than bordered cards, which is how every other
  * rail in the app composes.
  */
 export function ProfileRail(props: ProfileRailProps) {
   return (
-    <StickySideRail>
+    <StickySideRail flushTop divider>
       <ProfileRailSections {...props} />
     </StickySideRail>
   );
@@ -72,7 +75,6 @@ export function ProfileRail(props: ProfileRailProps) {
 export function ProfileRailSections({
   spaceId,
   personEntityId,
-  types,
   links,
   systemEntityId,
   address,
@@ -86,8 +88,21 @@ export function ProfileRailSections({
   const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
 
   return (
-    <div className="flex flex-col gap-4">
-      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
+    // A rule between sections, 24px either side — the same divider the Explore
+    // and space rails draw (`SideRailSections`). Spacing lives on the sections
+    // rather than the rules, because any of them can be absent.
+    <div className="flex flex-col divide-y divide-divider [&>*]:py-6 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+      <AboutSection
+        facts={facts}
+        isLoading={isLoading}
+        isError={isError}
+        positionsCount={positionsCount}
+        spaceId={spaceId}
+        personEntityId={personEntityId}
+        systemEntityId={systemEntityId}
+        address={address}
+        spaceType={spaceType}
+      />
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
       ) : (
@@ -95,31 +110,14 @@ export function ProfileRailSections({
         // nowhere to put a link even for its owner.
         links.length > 0 && <LinksSection links={links} spaceId={spaceId} personEntityId={''} />
       )}
-      <AboutSection
-        facts={facts}
-        isLoading={isLoading}
-        isError={isError}
-        positionsCount={positionsCount}
-        types={types}
-        spaceId={spaceId}
-        systemEntityId={systemEntityId}
-        address={address}
-        spaceType={spaceType}
-      />
+      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
     </div>
   );
 }
 
 /**
- * One card in the rail.
- *
- * Bordered cards rather than rule-separated sections: this rail holds three
- * kinds of thing that have nothing to do with each other — a list of spaces, a
- * set of handles, and a table of facts — and a rule between them says they are
- * one document with three parts.
- *
- * `overflow-hidden` is what lets the system-data strip sit flush inside the
- * bottom corners of the About card.
+ * One section in the rail: a titled header over its body, with no border and
+ * no inset — the title and content sit flush with the rail's edges.
  */
 function RailCard({
   title,
@@ -135,12 +133,12 @@ function RailCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-grey-02 bg-white">
-      <header className="flex items-center justify-between gap-2.5 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">{title}</h3>
+    <section className="bg-white">
+      <header className="flex items-center justify-between gap-2.5">
+        <h3 className="text-mediumTitle text-text">{title}</h3>
         {action}
       </header>
-      <div className="px-4 py-3">{children}</div>
+      <div className="pt-3">{children}</div>
       {footer}
     </section>
   );
@@ -150,38 +148,59 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   const [showAll, setShowAll] = React.useState(false);
   const shown = showAll ? spaces : spaces.slice(0, 6);
 
+  // Only the rows on screen, so the collapsed list asks for six images rather than all of them.
+  const { spacesById } = useSpacesByIds(shown.map(space => space.id));
+  const activeSpaceId = useSpaceId();
+
   return (
-    <RailCard
-      title="Spaces"
-      action={
-        spaces.length > 6 ? (
-          <button
-            type="button"
-            onClick={() => setShowAll(value => !value)}
-            className="text-smallButton text-ctaPrimary hover:underline"
-          >
-            {showAll ? 'Show fewer' : `See all ${spaces.length}`}
-          </button>
-        ) : null
-      }
-    >
-      <ul className="flex flex-col gap-1">
-        {shown.map(space => (
-          <li key={space.id}>
-            <Link
-              href={NavUtils.toSpace(space.id)}
-              className="flex items-center gap-2 rounded py-1 transition-colors hover:bg-grey-01"
-            >
-              {/* Nine of the reference account's 33 have no name. A blank row in
-                  a list of 33 reads as a loading failure. */}
-              <span className="min-w-0 flex-1 truncate text-metadata text-text">{space.name ?? 'Untitled space'}</span>
-              {space.isEditor && (
-                <span className="shrink-0 rounded-full border border-grey-02 px-2 text-tag text-grey-04">Editor</span>
-              )}
-            </Link>
-          </li>
-        ))}
+    <RailCard title="Spaces">
+      {/* Rows styled as the browse sidebar draws its spaces (`SpaceRowLink`), so
+          a space looks and responds the same wherever it is listed. Pulled 10px
+          left — the row's own padding — so the icons line up under the title and
+          only the hover background reaches past it. */}
+      <ul className="-ml-2.5 space-y-0.5">
+        {shown.map(space => {
+          // Nine of the reference account's 33 have no name. A blank row in a
+          // list of 33 reads as a loading failure.
+          const name = space.name ?? 'Untitled space';
+          const image = spacesById.get(space.id)?.entity.image;
+
+          return (
+            <li key={space.id}>
+              <Link
+                href={NavUtils.toSpace(space.id)}
+                className={cx(
+                  'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic',
+                  activeSpaceId === space.id ? 'bg-divider text-text' : 'text-text hover:bg-grey-01'
+                )}
+              >
+                {image && image !== PLACEHOLDER_SPACE_IMAGE ? (
+                  <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
+                    <FallbackImage value={image} sizes="32px" className="object-cover" />
+                  </span>
+                ) : (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04 ring-1 ring-grey-02/40 ring-inset">
+                    {name.trim().slice(0, 1).toUpperCase() || '?'}
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+                  <p className="-my-0.5 truncate leading-5">{name}</p>
+                </span>
+                {space.isEditor && <span className="shrink-0 leading-5 text-grey-03">Editor</span>}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
+      {spaces.length > 6 && (
+        <Button
+          variant="secondary"
+          onClick={() => setShowAll(value => !value)}
+          className={`mt-2 ${PILL_BUTTON_SECONDARY_CLASS_NAME}`}
+        >
+          {showAll ? 'Show fewer' : `See all ${spaces.length}`}
+        </Button>
+      )}
     </RailCard>
   );
 }
@@ -372,8 +391,8 @@ function AboutSection({
   isLoading,
   isError,
   positionsCount,
-  types,
   spaceId,
+  personEntityId,
   systemEntityId,
   address,
   spaceType,
@@ -384,13 +403,21 @@ function AboutSection({
   isError: boolean;
   /** Positions actually held, or null while the vote table is still out. */
   positionsCount: number | null;
-  types: ProfileRailProps['types'];
   spaceId: string;
+  personEntityId: string | null;
   systemEntityId: string;
   address: string | null;
   spaceType: ProfileRailProps['spaceType'];
 }) {
   const joined = formatJoined(facts.joinedAt);
+
+  // The person's description, read here rather than under their name. It is still edited in the
+  // header, which is where its edit field is; the header shows it only while editing
+  // (`hideWhenReading`).
+  const description = useValue({
+    selector: v =>
+      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  })?.value;
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
@@ -406,26 +433,22 @@ function AboutSection({
        * and are the rows a returning reader scans for, so they sit last, next to
        * each other, where a set of numbers reads as a set.
        */}
+      {description && (
+        <div className="mb-2">
+          <ClampedText
+            text={description}
+            maxLines={6}
+            variant="metadata"
+            textClassName="wrap-break-word text-text"
+            togglePlacement="below"
+          />
+        </div>
+      )}
+
       <dl className="flex flex-col">
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
 
         <Fact label="Space type" value={spaceType === 'PERSONAL' ? 'Personal' : 'DAO'} />
-
-        {types.length > 0 && (
-          <Row label="Types">
-            {/* `LinkableChip` is the relation pill every other surface draws —
-                bordered, text-coloured, border-text on hover. The bespoke blue
-                pill this replaced read as a link, which is the one thing a
-                relation chip is not. */}
-            <span className="flex flex-wrap justify-end gap-1">
-              {types.map(type => (
-                <LinkableChip key={type.id} href={NavUtils.toEntity(spaceId, type.id)}>
-                  {type.name ?? 'Untitled'}
-                </LinkableChip>
-              ))}
-            </span>
-          </Row>
-        )}
 
         {facts.verifiedBy.length > 0 && (
           <Row label="Verified by">
@@ -468,7 +491,7 @@ function AboutSection({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-divider py-2 last:border-b-0">
+    <div className="flex items-baseline justify-between gap-3 py-2">
       <dt className="shrink-0 text-metadata text-grey-04">{label}</dt>
       <dd className="min-w-0 text-right">{children}</dd>
     </div>
@@ -624,18 +647,17 @@ function SystemRecord({
   spaceType: ProfileRailProps['spaceType'];
 }) {
   return (
-    // A grey strip flush to the card's bottom edge, with an arrow that turns as
-    // it opens. Grey because it is a different register from the rows above it:
-    // those are facts about a person, these are ids for whoever is debugging
-    // the page.
-    <details className="group border-t border-dashed border-grey-02 bg-grey-01 [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-smallButton text-grey-04 hover:text-text">
+    // An accordion, closed by default, in the rows' own type: the label reads like
+    // "Positions" above it, and opening it lays the ids out as more rows of the
+    // same kind. The standard chevron, flipped when open.
+    <details className="group [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-metadata text-grey-04 hover:text-text">
         <span>Space system data</span>
-        <span className="text-grey-04 transition-transform duration-150 group-open:rotate-90">
-          <RightArrowLongSmall />
+        <span className="flex transition-transform duration-150 group-open:rotate-180">
+          <ChevronDownSmall color="grey-04" />
         </span>
       </summary>
-      <dl className="flex flex-col px-4 pb-3">
+      <dl className="flex flex-col">
         <SystemRow label="Space id" value={spaceId} />
         <SystemRow label="Entity id" value={systemEntityId} />
         <SystemRow label="Type" value={spaceType} />
@@ -647,9 +669,8 @@ function SystemRecord({
 
 function SystemRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 border-b border-grey-02 py-1 last:border-b-0">
-      <dt className="text-smallButton text-grey-04">{label}</dt>
-      <dd className="font-mono text-tag break-all text-text">{value}</dd>
-    </div>
+    <Row label={label}>
+      <span className="text-metadata break-all text-text">{value}</span>
+    </Row>
   );
 }

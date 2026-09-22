@@ -5,7 +5,7 @@ import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet
 
 import * as React from 'react';
 
-import { Button } from '~/design-system/button';
+import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
@@ -73,11 +73,7 @@ function PrivyConnectButton() {
   };
 
   return (
-    <Button
-      variant="primary"
-      className="h-7 shrink-0 !gap-0 !rounded-full !border-transparent !bg-[#151515] !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !text-white !shadow-none hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text"
-      onClick={onLogin}
-    >
+    <Button variant="primary" className={PILL_BUTTON_CLASS_NAME} onClick={onLogin}>
       Log in
     </Button>
   );
