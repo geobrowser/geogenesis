@@ -68,6 +68,19 @@ describe('TopicExploreFeedCard', () => {
     expect(screen.getByText(/debates/)).toBeInTheDocument();
   });
 
+  it('leads with debates, then claims, then news stories', () => {
+    const { container } = render(
+      <TopicExploreFeedCard
+        item={item({ description: null })}
+        counts={{ claims: 117, news: 2, debates: 3, total: 122 }}
+      />
+    );
+
+    // The only paragraph on a card with no description is the metadata line. The dots carry their
+    // spacing as margins rather than as whitespace, so they sit flush in `textContent`.
+    expect(container.querySelector('p')?.textContent).toBe('3 debates·117 claims·2 news stories');
+  });
+
   it('agrees with the count', () => {
     render(<TopicExploreFeedCard item={item()} counts={{ claims: 1, news: 1, debates: 1, total: 3 }} />);
 

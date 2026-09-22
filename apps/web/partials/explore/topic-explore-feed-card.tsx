@@ -93,7 +93,7 @@ export function TopicExploreFeedCard({
 
 const SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
 
-/** "117 claims · 2 news stories · 3 debates", in the meta row's own type and separator. */
+/** "3 debates · 117 claims · 2 news stories", in the meta row's own type and separator. */
 export function TopicConnectionMeta({
   counts,
   pending = false,
@@ -108,10 +108,13 @@ export function TopicConnectionMeta({
   if (pending) return <Skeleton className="h-[13px] w-40" />;
   if (!counts) return null;
 
+  // Debates first, then claims, then news stories: rarest and most specific to least. A topic with
+  // debates on it is the interesting case and the count that most often distinguishes two topics,
+  // and it would otherwise be the segment most likely to be pushed onto a second line.
   const segments = [
+    { key: 'debates', count: counts.debates, noun: ['debate', 'debates'] as const },
     { key: 'claims', count: counts.claims, noun: ['claim', 'claims'] as const },
     { key: 'news', count: counts.news, noun: ['news story', 'news stories'] as const },
-    { key: 'debates', count: counts.debates, noun: ['debate', 'debates'] as const },
   ].filter(segment => segment.count > 0);
 
   // Zeros are dropped rather than printed: "0 news stories" on a topic that is entirely claims is
