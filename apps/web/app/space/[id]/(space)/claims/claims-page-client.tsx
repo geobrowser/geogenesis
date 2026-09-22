@@ -42,12 +42,16 @@ const relatedFields: RelatedField[] = [
 ];
 
 /**
- * A space's claims, ranked, as the browse feed a reader arrives at from Overview's Activity card.
+ * A space's claims, ranked, as their own full-bleed browse surface.
  *
  * This was a fixed list of up to fifty claims in whatever order the entity store happened to hold
- * them, on a route the space's own tab bar does not link to. It is now the destination of "See all
- * claims", so it has to answer the question that link asks — what is worth reading here — which
- * means ranked order and no floor on how far you can scroll.
+ * them, framed inside the space's tab bar. It is now the destination of "See all claims", so it has
+ * to answer the question that link asks — what is worth reading here — which means ranked order,
+ * no floor on how far you can scroll, and a surface of its own rather than a tab of the space page.
+ *
+ * Edge-to-edge like the debates feed on the sibling route: `Main` drops its max-width and padding
+ * here and `SpaceChromeGate` strips the space header and tabs, so the column and the top padding
+ * below are this page's to supply. The app navbar stays, which is the way back.
  *
  * The rows come from `entitiesConnection` ordered by ranking score, which is the same ordering the
  * Activity card above it draws its six from. Deliberately not the explore feed: that path reaches
@@ -77,7 +81,7 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   });
 
   return (
-    <div className="py-8">
+    <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16 md:px-4">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Text as="h2" variant="smallTitle" color="text">
           Claims

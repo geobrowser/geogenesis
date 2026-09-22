@@ -129,13 +129,13 @@ describe('SpaceDebateActivitySection', () => {
     expect(screen.getByTestId('activity-card')).toBeInTheDocument();
   });
 
-  // The debates index is full-bleed, so `#space-tabs` has nothing to land on there and would only
-  // ride along in a copied URL. The claims route has tabs and keeps it.
-  it('drops the tab-bar fragment for debates and keeps it for claims', () => {
+  // Both destinations are full-bleed, so `#space-tabs` has nothing to land on and would only ride
+  // along in a copied URL.
+  it('drops the tab-bar fragment for both kinds', () => {
     render(<SpaceDebateActivitySection spaceId="space-1" />);
 
     expect(screen.getByTestId('kind-debates')).toHaveAttribute('data-skip-anchor', 'true');
-    expect(screen.getByTestId('kind-claims')).toHaveAttribute('data-skip-anchor', 'false');
+    expect(screen.getByTestId('kind-claims')).toHaveAttribute('data-skip-anchor', 'true');
   });
 
   // The card decides whether it renders at all, so the gap under it has to travel with it.
