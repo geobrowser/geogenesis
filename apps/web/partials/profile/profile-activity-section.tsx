@@ -475,7 +475,8 @@ function ActivityGallery({
 /**
  * Own autoplay for a row where several debates can be visible at once.
  *
- * The first debate with a mounted player starts. A click transfers ownership immediately.
+ * The first debate with a mounted player starts. A click on an active player transfers ownership
+ * immediately; a click on an inactive visible edge centers that card and transfers once active.
  * Scrolling the rail or page keeps that owner until less than 40% of its two-dimensional area is
  * visible, then advances to a mounted card that is at least 60% visible. Those are the same
  * hysteresis edges and visibility dimensions used by the player itself, so the gate hands off at

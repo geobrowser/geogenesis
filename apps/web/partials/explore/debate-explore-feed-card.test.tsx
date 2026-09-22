@@ -339,6 +339,29 @@ describe('DebateExploreFeedCard', () => {
     expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
   });
 
+  it('brings an inactive player into view before requesting playback', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const onPlaybackRequest = vi.fn();
+    const { container } = renderCard({ onPlaybackRequest });
+
+    // The media look-ahead mounts the player before the card is active. Clicking that visible
+    // edge must not transfer the gate to a player which will immediately pause itself.
+    intersectAll(0.1);
+    const card = container.querySelector('article');
+    expect(card).not.toBeNull();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(card, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+
+    fireEvent.click(screen.getByTestId('player'));
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+
+    // Ownership transfers only after the observer confirms that the clicked player can run.
+    intersectAll(0.6);
+    expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+  });
+
   it('registers playback availability only while a playable player is mounted', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };

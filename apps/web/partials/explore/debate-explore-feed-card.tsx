@@ -81,8 +81,9 @@ type DebateExploreFeedCardProps = {
   /** Compact title and metadata treatment used by the narrow profile Activity rail. */
   compactChrome?: boolean;
   /**
-   * Called before a pointer or keyboard click reaches this card's player. A surface with several
-   * visible debates uses it to transfer playback ownership before the clicked player starts.
+   * Called before a pointer or keyboard click reaches an active player. A surface with several
+   * visible debates uses it to transfer playback ownership before the clicked player starts. An
+   * inactive clicked player is centered first, then requests ownership when it becomes active.
    */
   onPlaybackRequest?: (debateId: string) => void;
   /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
@@ -193,6 +194,38 @@ export function DebateExploreFeedCard({
    * the way past.
    */
   const mediaMounted = readyDebate != null && nearViewport;
+
+  // A card enters the media look-ahead band before it is active. Its visible edge can therefore
+  // receive a click while the player still has `active={false}`. Giving that card ownership at
+  // once would stop the current player only for the new owner to pause itself. Bring the clicked
+  // card into the active range first, then complete the same capture-phase handoff once its
+  // observer confirms that the player can run.
+  const pendingPlaybackRequestRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!mediaMounted || !onPlaybackRequest) {
+      pendingPlaybackRequestRef.current = false;
+      return;
+    }
+
+    if (!active || !pendingPlaybackRequestRef.current) return;
+
+    pendingPlaybackRequestRef.current = false;
+    onPlaybackRequest(debateId);
+  }, [active, debateId, mediaMounted, onPlaybackRequest]);
+
+  const requestPlayback = () => {
+    if (!onPlaybackRequest) return;
+    if (active) {
+      pendingPlaybackRequestRef.current = false;
+      onPlaybackRequest(debateId);
+      return;
+    }
+
+    if (!container) return;
+    pendingPlaybackRequestRef.current = true;
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  };
 
   React.useEffect(() => {
     if (!mediaMounted || !onPlaybackAvailabilityChange) return;
@@ -334,7 +367,7 @@ export function DebateExploreFeedCard({
           showFullTextOnHover={compactChrome}
         />
 
-        <div onClickCapture={mediaMounted ? () => onPlaybackRequest?.(debateId) : undefined}>
+        <div onClickCapture={mediaMounted && onPlaybackRequest ? requestPlayback : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
