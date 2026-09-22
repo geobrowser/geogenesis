@@ -111,6 +111,17 @@ describe('EntityPageActions', () => {
     }
   });
 
+  it('puts voting before history and the menu for a profile header', () => {
+    render(<EntityPageActions entityId="entity-1" spaceId="space-1" isVoteable votesFirst />);
+
+    const order = ['vote-buttons', 'history', 'context-menu'].map(id => screen.getByTestId(id));
+    expect(order[0].parentElement).toHaveClass('gap-4');
+
+    for (let i = 0; i < order.length - 1; i++) {
+      expect(order[i].compareDocumentPosition(order[i + 1]) & 4).toBe(4);
+    }
+  });
+
   it('votes only where the caller asked for it', () => {
     const { rerender } = render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
     expect(screen.queryByTestId('vote-buttons')).toBeNull();

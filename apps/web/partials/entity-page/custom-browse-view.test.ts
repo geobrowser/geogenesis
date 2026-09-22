@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
 
-import { customBrowseView, needsSpaceForView } from './entity-page-body';
+import { customBrowseView, needsSpaceForView } from './custom-browse-view';
 
 /**
  * Which read surface an entity gets.

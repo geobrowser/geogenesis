@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -9,17 +10,30 @@ import { EntityPageBody } from './entity-page-body';
 
 const mocks = vi.hoisted(() => ({
   actions: null as Record<string, unknown> | null,
+  entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
+  isLoadingSpace: false,
+  space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => false }));
+// Node's built-in localStorage shim can shadow jsdom with a partial object. This
+// layout test only reaches the pending-space atom through transitive UI imports.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({ entity: { id: 'entity-1', types: [] }, isLoading: false }),
+  useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
 // `useCustomBrowseView` asks for the space to tell a person's profile from an
 // ordinary entity. This file renders without a QueryClient on purpose — it is
 // about the header row, not about data — so the space is stubbed like the rest.
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null, isLoading: false }) }));
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: mocks.space, isLoading: mocks.isLoadingSpace }),
+}));
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMediaUrl: () => null,
   useImageUrlFromEntity: () => null,
@@ -43,6 +57,12 @@ vi.mock('~/partials/entity-page/editable-entity-header', () => ({
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   EntityPageInlineDescription: () => <div data-testid="description" />,
   ENTITY_DESCRIPTION_MAX_LINES: 3,
+}));
+vi.mock('~/partials/profile/person-profile-view', () => ({
+  PersonProfileView: () => <div data-testid="person-profile" />,
+}));
+vi.mock('~/partials/profile/personal-space-profile', () => ({
+  PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
 }));
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
@@ -77,7 +97,10 @@ function renderPanel(overrides?: { isRelationPage?: boolean; previewName?: strin
 
 beforeEach(() => {
   mocks.actions = null;
+  mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
+  mocks.isLoadingSpace = false;
+  mocks.space = null;
 });
 
 afterEach(cleanup);
@@ -121,6 +144,40 @@ describe('EntityPageBody relation side panel', () => {
     expect(screen.getByTestId('metadata')).toBeInTheDocument();
     expect(screen.getByTestId('description')).toBeInTheDocument();
     expect(mocks.actions).toMatchObject({ isVoteable: true });
+  });
+
+  it('puts profile actions beside the name and hides Person and Space types', () => {
+    const personType = { id: SystemIds.PERSON_TYPE };
+    mocks.entity = { id: 'entity-1', types: [personType] };
+    mocks.space = { type: 'PERSONAL', entity: { id: 'entity-1', types: [personType] } };
+
+    renderPanel();
+
+    expect(screen.getByTestId('person-profile')).toBeInTheDocument();
+    expect(screen.queryByTestId('metadata')).toBeNull();
+    expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
+    expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
+      4
+    );
+    expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
+    expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
+  });
+
+  it('withholds generic-only chrome while the Person space lookup is pending', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: SystemIds.PERSON_TYPE }] };
+    mocks.isLoadingSpace = true;
+
+    renderPanel();
+
+    // The identity shared by both outcomes remains visible; metadata and
+    // actions cannot be placed correctly until the space identifies a profile.
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('description')).toBeInTheDocument();
+    expect(screen.queryByTestId('metadata')).toBeNull();
+    expect(screen.queryByTestId('actions')).toBeNull();
+    expect(screen.queryByTestId('profile-headline')).toBeNull();
+    expect(screen.queryByTestId('person-profile')).toBeNull();
+    expect(mocks.actions).toBeNull();
   });
 
   // The title is outside the gate entirely — a relation page is still titled.

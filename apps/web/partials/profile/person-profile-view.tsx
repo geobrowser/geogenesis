@@ -2,9 +2,6 @@
 
 import * as React from 'react';
 
-import { Spacer } from '~/design-system/spacer';
-
-import { PersonalSpaceHeadline } from './personal-space-profile';
 import { ProfileRecordTabs } from './profile-record-tabs';
 
 /**
@@ -20,11 +17,10 @@ import { ProfileRecordTabs } from './profile-record-tabs';
  * sits in its own `(entity)` group and so shares neither the layout nor the rail.
  *
  * **This is the body, not the page.** `EntityPageBody` already draws the cover,
- * the avatar, the name and the bio on both surfaces — an earlier version of this
- * returned early and threw all four away, which is how the panel came to open on
- * a bare Activity card with nothing above it saying whose it was. What is left
- * to supply is what the *layout* would have: the roles under the name, and the
- * record tabs.
+ * avatar, name, roles and bio on both surfaces — an earlier version of this
+ * returned early and threw the header away, which is how the panel came to open
+ * on a bare Activity card with nothing above it saying whose it was. What is
+ * left to supply is the record tabs.
  *
  * **The model is the mobile layout**, deliberately. Below 1024px the space route
  * is already a single column with no rail, its facts moved into an About tab —
@@ -44,15 +40,5 @@ export function PersonProfileView({
    */
   authoredTabs?: React.ReactNode;
 }) {
-  return (
-    <div className="flex flex-col">
-      {/* The roles line the space layout draws under the name. Renders nothing
-          for somebody with no employment or education on record. */}
-      <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />
-
-      <Spacer height={16} />
-
-      <ProfileRecordTabs entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />
-    </div>
-  );
+  return <ProfileRecordTabs entityId={entityId} spaceId={spaceId} authoredTabs={authoredTabs} />;
 }
