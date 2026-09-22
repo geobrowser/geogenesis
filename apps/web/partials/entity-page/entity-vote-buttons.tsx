@@ -273,7 +273,7 @@ export function EntityVoteButtons({
   const viewerHasResponded = activeResponse === 'positive' || activeResponse === 'negative';
   // A claim's aggregate split is withheld until the viewer contributes their own response. The
   // accessible label still reports the total, without nudging the answer.
-  const displayLabel = isClaimVariant ? (viewerHasResponded ? percentLabel : '??%') : scoreLabel;
+  const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
 
   const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
     if (variant === 'chevrons') {
@@ -380,17 +380,21 @@ export function EntityVoteButtons({
               effectiveTotal > 0
                 ? viewerHasResponded || !isClaimVariant
                   ? responseCopy.viewResponders
-                  : `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Vote split available after vote.`
+                  : `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. See split after vote.`
                 : undefined
             }
             aria-label={
               isClaimVariant && !viewerHasResponded && effectiveTotal > 0
-                ? `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. Vote split available after vote.`
+                ? `${effectiveTotal} ${effectiveTotal === 1 ? 'vote' : 'votes'}. See split after vote.`
                 : undefined
             }
             disabled={effectiveTotal === 0}
           >
-            {displayLabel}
+            {isClaimVariant && !viewerHasResponded ? (
+              <Skeleton aria-hidden className="mx-auto h-4 w-8" />
+            ) : (
+              displayLabel
+            )}
           </button>
         </Popover.Trigger>
         {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's

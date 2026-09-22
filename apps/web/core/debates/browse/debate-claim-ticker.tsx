@@ -836,11 +836,20 @@ function TickerClaimHeader({
               </span>
             )}
             {/* Same privacy rule and wording as the verdict on the claim page. */}
-            <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
-              {position !== null
-                ? `${percent}% ${copy.positiveAction.toLowerCase()}`
-                : `??% ${copy.positiveAction.toLowerCase()}`}
-            </span>
+            {position !== null ? (
+              <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
+                {percent}% {copy.positiveAction.toLowerCase()}
+              </span>
+            ) : (
+              <span
+                className="flex shrink-0 items-center gap-1 [text-box:trim-both_cap_alphabetic]"
+                title="See split after vote"
+                aria-label="See split after vote"
+              >
+                <span aria-hidden className="h-3 w-7 animate-pulse rounded-sm bg-white/30" />
+                <span aria-hidden>{copy.positiveAction.toLowerCase()}</span>
+              </span>
+            )}
           </>
         )}
       </span>

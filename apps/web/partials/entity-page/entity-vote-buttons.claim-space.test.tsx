@@ -185,9 +185,8 @@ describe('EntityVoteButtons claim detection across spaces', () => {
 
     // The claim controls show participation without the split before voting; curation shows a net
     // score.
-    expect(await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' })).toHaveTextContent(
-      '??%'
-    );
+    const split = await screen.findByRole('button', { name: '3 votes. See split after vote.' });
+    expect(split.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.queryByText('1')).not.toBeInTheDocument();
   });
 
@@ -206,7 +205,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     renderButtons();
 
     expect(await screen.findByText('1')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Vote split available after vote/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /See split after vote/ })).not.toBeInTheDocument();
   });
 
   // Which *kind* of claim response is asked for stays a per-space question: the space passed in is
@@ -215,7 +214,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     mocks.entity = claimEntity({ isFactualIn: BLOCK_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     // Veracity draws chevrons, which are the only 16x16 icons among the response controls.
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
@@ -225,7 +224,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(false);
   });
@@ -242,7 +241,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity();
     renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     expect(mocks.countsSpaceIds).toContain(CLAIM_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(BLOCK_SPACE);
   });
@@ -251,7 +250,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity();
     renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     expect(mocks.responseSpaceIds.at(-1)).toBe(CLAIM_SPACE);
   });
 
@@ -261,7 +260,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE });
     const view = renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
   });
@@ -302,7 +301,7 @@ describe('EntityVoteButtons response space resolution', () => {
     mocks.entity = claimEntity({ alsoIn: BLOCK_SPACE });
     renderButtons();
 
-    await screen.findByRole('button', { name: '3 votes. Vote split available after vote.' });
+    await screen.findByRole('button', { name: '3 votes. See split after vote.' });
     expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
   });

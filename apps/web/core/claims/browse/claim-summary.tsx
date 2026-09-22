@@ -19,6 +19,7 @@ import {
 } from '~/core/responses/entity-response';
 
 import { Fire } from '~/design-system/icons/fire';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
@@ -202,9 +203,14 @@ export function ClaimSplitAvailableAfterVote({
     />
   );
   const total = (
-    <Text as="span" variant="metadata" color="grey-04" className="shrink-0 tabular-nums">
-      {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
-    </Text>
+    <span className={cx('flex shrink-0 flex-col gap-0.5', scale === 'verdict' && 'items-end')}>
+      <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+        {summary.total} {summary.total === 1 ? 'vote' : 'votes'}
+      </Text>
+      <Text as="span" variant="footnote" color="grey-04">
+        See split after vote
+      </Text>
+    </span>
   );
 
   if (layout === 'inline') {
@@ -213,18 +219,16 @@ export function ClaimSplitAvailableAfterVote({
         className={cx('flex min-w-0 items-center gap-3', className)}
         style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
       >
-        <span
+        <div
           className="flex shrink-0 items-center gap-1.5"
-          title="Vote split available after vote"
-          aria-label="Vote split available after vote"
+          title="See split after vote"
+          aria-hidden
         >
-          <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-            ??%
-          </Text>
+          <Skeleton aria-hidden className="h-4 w-9" />
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>
-        </span>
+        </div>
         <span aria-hidden className="h-0.5 min-w-0 flex-1 rounded-full bg-grey-02" />
         {total}
         {voters}
@@ -237,24 +241,21 @@ export function ClaimSplitAvailableAfterVote({
       <div className={className}>
         <span aria-hidden className="block h-1.5 w-full rounded-full bg-grey-02" />
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <span
+          <div
             className="flex shrink-0 items-center gap-1.5"
-            title="Vote split available after vote"
-            aria-label="Vote split available after vote"
+            title="See split after vote"
+            aria-hidden
           >
-            <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-              ??%
-            </Text>
+            <Skeleton aria-hidden className="h-4 w-9" />
             <Text as="span" variant="metadata" color="grey-04">
               {copy.positiveAction.toLowerCase()}
             </Text>
-          </span>
+          </div>
           <span className="flex items-center gap-2">
             {total}
             {voters}
           </span>
         </div>
-        <span className="sr-only">Vote split available after vote</span>
       </div>
     );
   }
@@ -262,23 +263,12 @@ export function ClaimSplitAvailableAfterVote({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <span
-          className="flex items-baseline gap-1.5"
-          title="Vote split available after vote"
-          aria-label="Vote split available after vote"
-        >
-          <span
-            className={cx(
-              'leading-none font-semibold text-text tabular-nums',
-              scale === 'verdict' ? 'text-[2.5rem] tracking-[-1px]' : 'text-[2rem] tracking-[-0.8px]'
-            )}
-          >
-            ??%
-          </span>
+        <div className="flex items-end gap-1.5" title="See split after vote" aria-hidden>
+          <Skeleton aria-hidden className={cx('shrink-0', scale === 'verdict' ? 'h-10 w-20' : 'h-8 w-16')} />
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>
-        </span>
+        </div>
         {scale === 'verdict' ? total : null}
       </div>
       <span
@@ -289,7 +279,6 @@ export function ClaimSplitAvailableAfterVote({
         {scale === 'card' ? total : null}
         {voters}
       </div>
-      <span className="sr-only">Vote split available after vote</span>
     </div>
   );
 }

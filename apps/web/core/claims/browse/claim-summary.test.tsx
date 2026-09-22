@@ -63,10 +63,10 @@ describe('ClaimSummary', () => {
   });
 
   it('withholds the split before voting while keeping the total and combined voter list', async () => {
-    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+    const { container } = renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
 
-    expect(screen.getByText('Vote split available after vote')).toBeInTheDocument();
-    expect(screen.getByText('??%')).toBeInTheDocument();
+    expect(screen.getByText('See split after vote')).toBeInTheDocument();
+    expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.getByText('20 votes')).toBeInTheDocument();
     expect(screen.queryByText('85%')).toBeNull();
 

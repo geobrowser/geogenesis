@@ -189,8 +189,8 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('masks the claim percentage while preserving the vote total in its accessible label', () => {
     const view = renderButtons(true, true, 'stance', null);
 
-    const total = view.getByRole('button', { name: '3 votes. Vote split available after vote.' });
-    expect(total).toHaveTextContent('??%');
+    const total = view.getByRole('button', { name: '3 votes. See split after vote.' });
+    expect(total.querySelector('.animate-pulse')).not.toBeNull();
     expect(view.queryByText('67%')).toBeNull();
   });
 
@@ -233,7 +233,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       ),
     });
 
-    await waitFor(() => expect(view.container.querySelector('.animate-pulse')).not.toBeInTheDocument());
+    await waitFor(() => expect(view.getAllByTitle(/^(Agree|Verify)$/)).toHaveLength(50));
     expect(mocks.getSummaryPage).toHaveBeenCalledOnce();
     expect(mocks.getCounts).not.toHaveBeenCalled();
     expect(mocks.getViewerResponse).not.toHaveBeenCalled();

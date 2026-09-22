@@ -200,9 +200,10 @@ describe('DebateClaimTickerCard', () => {
     mocks.percent = 65;
     mocks.total = 20;
 
-    renderCard();
+    const { container } = renderCard();
 
-    expect(screen.getByText('??% agree')).toBeInTheDocument();
+    expect(screen.getByLabelText('See split after vote')).toBeInTheDocument();
+    expect(container.querySelector('.animate-pulse')).not.toBeNull();
     expect(screen.queryByText('65% agree')).toBeNull();
   });
 
