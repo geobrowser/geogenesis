@@ -9,6 +9,7 @@ import { useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
@@ -75,20 +76,10 @@ export const FlowBar = () => {
     flowBarEnterSettled,
   });
 
-  // Publish the flow-bar's footprint as `--app-bottom-inset` while it's visible
-  // so dropdowns (placement hook, table-filter results, etc.) can avoid sliding
-  // underneath. 20px margin + 40px height + ~36px shadow/breathing room.
-  // useLayoutEffect (not useEffect) so dropdowns that compute placement in their
-  // own useLayoutEffect during the same commit see the updated inset rather than
-  // a stale 0.
-  React.useLayoutEffect(() => {
-    if (hideFlowbar) return;
-    const root = document.documentElement;
-    root.style.setProperty('--app-bottom-inset', '96px');
-    return () => {
-      root.style.removeProperty('--app-bottom-inset');
-    };
-  }, [hideFlowbar]);
+  // Publish the flow-bar's footprint so dropdowns (placement hook, table-filter results, etc.)
+  // and the bottom-right assistant can avoid sliding underneath. 20px margin + 40px height +
+  // ~36px shadow/breathing room.
+  useAppBottomInset('flow-bar', 96, flowBarVisible);
 
   return (
     <>
