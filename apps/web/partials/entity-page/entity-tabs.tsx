@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
@@ -38,10 +38,12 @@ export function EntityTabs({
   reservedSystemLabels = [],
   divideBeforeAuthored = false,
 }: EntityTabsProps) {
-  // The global toggle is intent, not permission. `useUserIsEditing` intersects it with current
-  // space access (and uses the panel's own intent when mounted there), so a toggle carried from a
-  // different space cannot expose tab editing to a reader of this one.
-  const effectiveEditable = useUserIsEditing(spaceId);
+  // `useUserIsEditing` preserves edit intent while access is loading to avoid whole-page hydration
+  // flicker. Tab mutation controls must be stricter: do not expose them until this space's access
+  // has positively resolved.
+  const editingIntent = useUserIsEditing(spaceId);
+  const canEdit = useCanUserEdit(spaceId);
+  const effectiveEditable = editingIntent && canEdit;
   const sidePanelTab = useEntitySidePanelActiveTab();
   const { entity } = useQueryEntity({ id: entityId, spaceId });
 

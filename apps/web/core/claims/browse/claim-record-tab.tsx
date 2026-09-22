@@ -191,7 +191,7 @@ function ClaimRecordTabContent({
           isFiltered
             ? `No ${isClaims ? 'claims' : 'debates'} match these filters.`
             : isClaims
-              ? 'No related debate claims yet.'
+              ? 'No related claims yet.'
               : 'No debates on this claim yet.'
         }
         errorLabel={isClaims ? 'Couldn’t load claims.' : 'Couldn’t load debates.'}

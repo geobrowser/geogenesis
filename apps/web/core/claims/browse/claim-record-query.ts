@@ -29,6 +29,7 @@ const CLAIMS_SOURCE = /* GraphQL */ `
     $spaceIdsForLists: [UUID!]!
     $topicFilter: EntityFilter!
     $extractedFilter: EntityFilter!
+    $relatedFilter: EntityFilter!
     $matchingFilter: RelationFilter!
     $orderBy: [EntitiesOrderBy!]!
     $scorePropertyId: UUID!
@@ -37,8 +38,7 @@ const CLAIMS_SOURCE = /* GraphQL */ `
     $extractedAfter: Cursor
     $skipTopicClaims: Boolean!
     $skipExtractedClaims: Boolean!
-    $fetchTopicClaimsTop: Boolean!
-    $fetchExtractedClaimsTop: Boolean!
+    $fetchRelatedClaimsTop: Boolean!
   ) {
     topicClaims: entitiesConnection(
       first: $first
@@ -54,37 +54,6 @@ const CLAIMS_SOURCE = /* GraphQL */ `
       nodes {
         rankingScore
         updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
-        matchingRelations: relationsList(filter: $matchingFilter) {
-          spaceId
-        }
-        ${exploreCardNodeFields(CLAIM_FRAGMENT)}
-      }
-    }
-
-    topicClaimsTop: entitiesOrderedByPropertyConnection(
-      first: $first
-      after: $topicAfter
-      filter: $topicFilter
-      propertyId: $scorePropertyId
-      dataType: "integer"
-      sortDirection: DESC
-      includeWithoutValue: true
-      spaceIds: $spaceIds
-      typeIds: [$claimTypeId]
-    ) @include(if: $fetchTopicClaimsTop) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        rankingScore
-        updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
         matchingRelations: relationsList(filter: $matchingFilter) {
           spaceId
         }
@@ -106,9 +75,6 @@ const CLAIMS_SOURCE = /* GraphQL */ `
       nodes {
         rankingScore
         updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
         matchingRelations: relationsList(filter: $matchingFilter) {
           spaceId
         }
@@ -116,17 +82,17 @@ const CLAIMS_SOURCE = /* GraphQL */ `
       }
     }
 
-    extractedClaimsTop: entitiesOrderedByPropertyConnection(
+    relatedClaimsTop: entitiesOrderedByPropertyConnection(
       first: $first
-      after: $extractedAfter
-      filter: $extractedFilter
+      after: $topicAfter
+      filter: $relatedFilter
       propertyId: $scorePropertyId
       dataType: "integer"
       sortDirection: DESC
       includeWithoutValue: true
       spaceIds: $spaceIds
       typeIds: [$claimTypeId]
-    ) @include(if: $fetchExtractedClaimsTop) {
+    ) @include(if: $fetchRelatedClaimsTop) {
       pageInfo {
         hasNextPage
         endCursor
@@ -134,9 +100,6 @@ const CLAIMS_SOURCE = /* GraphQL */ `
       nodes {
         rankingScore
         updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
         matchingRelations: relationsList(filter: $matchingFilter) {
           spaceId
         }
@@ -175,9 +138,6 @@ const DEBATES_SOURCE = /* GraphQL */ `
       nodes {
         rankingScore
         updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
         matchingRelations: relationsList(filter: $matchingFilter) {
           spaceId
         }
@@ -203,9 +163,6 @@ const DEBATES_SOURCE = /* GraphQL */ `
       nodes {
         rankingScore
         updatedAt
-        scoreValues: valuesList(filter: { spaceId: { in: $spaceIds }, propertyId: { is: $scorePropertyId } }) {
-          integer
-        }
         matchingRelations: relationsList(filter: $matchingFilter) {
           spaceId
         }
@@ -249,6 +206,7 @@ export type ClaimRecordFilters = {
   hasTopics: boolean;
   topicClaims: EntityFilter;
   extractedClaims: EntityFilter;
+  relatedClaims: EntityFilter;
   debates: EntityFilter;
   claimRelations: RelationFilter;
   /** Topics carried by the exact Related claims union, grouped for the Topics menu. */
@@ -331,7 +289,7 @@ export function claimRecordFilters({
   const relatedClaim = (spaceId: string): EntityFilter => ({
     ...narrowedClaimScope(spaceId),
     or: [
-      { relations: { some: topicRelation(spaceId) } },
+      ...(topicIds.length > 0 ? [{ relations: { some: topicRelation(spaceId) } }] : []),
       { relations: { some: extractedSourceRelation(spaceId) } },
     ],
   });
@@ -376,6 +334,7 @@ export function claimRecordFilters({
     hasTopics: topicIds.length > 0,
     topicClaims: { or: scopes.map(topicClaim) },
     extractedClaims: { or: scopes.map(extractedClaim) },
+    relatedClaims: { or: scopes.map(relatedClaim) },
     debates: debateBranches.length === 1 ? debateBranches[0] : { or: debateBranches },
     claimRelations: { or: claimRelationBranches },
     claimTopicRelations: { or: claimTopicRelationBranches },
@@ -388,7 +347,6 @@ export type RankedClaimRecordEntity = ExploreCardEntity & {
   /** Spaces where this entity satisfied the complete record relation predicate. */
   matchingSpaceIds: string[];
   rankingScore: number | null;
-  score: number | null;
   updatedAt: string;
 };
 
@@ -425,12 +383,9 @@ function decodeConnection(connection: ConnectionShape): ClaimRecordConnectionPag
     const raw = node as {
       rankingScore?: string | number | null;
       updatedAt?: string | null;
-      scoreValues?: Array<{ integer?: string | number | null }> | null;
       matchingRelations?: Array<{ spaceId?: string | null }> | null;
     };
     const parsedScore = raw.rankingScore == null ? null : Number(raw.rankingScore);
-    const rawTopScore = raw.scoreValues?.[0]?.integer;
-    const parsedTopScore = rawTopScore == null ? null : Number(rawTopScore);
     entities.push({
       ...decoded,
       matchingSpaceIds: [
@@ -442,7 +397,6 @@ function decodeConnection(connection: ConnectionShape): ClaimRecordConnectionPag
         ).values(),
       ],
       rankingScore: parsedScore !== null && Number.isFinite(parsedScore) ? parsedScore : null,
-      score: parsedTopScore !== null && Number.isFinite(parsedTopScore) ? parsedTopScore : null,
       updatedAt: raw.updatedAt ?? '',
     });
   }
@@ -456,13 +410,12 @@ function decodeConnection(connection: ConnectionShape): ClaimRecordConnectionPag
 
 export function decodeClaimRecordClaims(data: {
   topicClaims?: ConnectionShape;
-  topicClaimsTop?: ConnectionShape;
   extractedClaims?: ConnectionShape;
-  extractedClaimsTop?: ConnectionShape;
+  relatedClaimsTop?: ConnectionShape;
 }): ClaimRecordClaimsPage {
   return {
-    topicClaims: decodeConnection(data.topicClaims ?? data.topicClaimsTop ?? null),
-    extractedClaims: decodeConnection(data.extractedClaims ?? data.extractedClaimsTop ?? null),
+    topicClaims: decodeConnection(data.topicClaims ?? data.relatedClaimsTop ?? null),
+    extractedClaims: decodeConnection(data.extractedClaims ?? null),
   };
 }
 
@@ -504,7 +457,6 @@ export function mergeSortedRecordEntities<
   T extends {
     id: string;
     rankingScore: number | null;
-    score?: number | null;
     createdAt?: string | null;
     updatedAt: string | null;
   },
@@ -518,14 +470,19 @@ export function mergeSortedRecordEntities<
     if (!byId.has(key)) byId.set(key, entity);
   }
 
-  return [...byId.values()].sort((a, b) => {
+  const entities = [...byId.values()];
+  // Top connections already own the score aggregation, tie-breaking, and cursor order. Re-sorting
+  // their nodes from entity values is both redundant and wrong for entities scored in many spaces.
+  if (sort === 'top') return entities;
+
+  return entities.sort((a, b) => {
     if (sort === 'new') {
       const created = updatedAtMillis(b.createdAt) - updatedAtMillis(a.createdAt);
       return created || normId(a.id).localeCompare(normId(b.id));
     }
 
-    const left = sort === 'top' ? (a.score ?? null) : a.rankingScore;
-    const right = sort === 'top' ? (b.score ?? null) : b.rankingScore;
+    const left = a.rankingScore;
+    const right = b.rankingScore;
     if (left !== right) {
       if (left === null) return 1;
       if (right === null) return -1;
@@ -592,6 +549,7 @@ export async function fetchClaimRecordClaimsPage({
         spaceIdsForLists: spaceIds,
         topicFilter: filters.topicClaims,
         extractedFilter: filters.extractedClaims,
+        relatedFilter: filters.relatedClaims,
         matchingFilter: filters.claimRelations,
         orderBy: claimRecordOrderBy(sort),
         scorePropertyId: SCORE_SYSTEM_PROPERTY,
@@ -600,8 +558,7 @@ export async function fetchClaimRecordClaimsPage({
         extractedAfter: pageParam.extractedAfter,
         skipTopicClaims: pageParam.skipTopicClaims || isTop,
         skipExtractedClaims: pageParam.skipExtractedClaims || isTop,
-        fetchTopicClaimsTop: !pageParam.skipTopicClaims && isTop,
-        fetchExtractedClaimsTop: !pageParam.skipExtractedClaims && isTop,
+        fetchRelatedClaimsTop: isTop,
       },
       signal,
     })

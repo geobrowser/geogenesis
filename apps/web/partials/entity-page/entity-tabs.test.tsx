@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EntityTabs } from './entity-tabs';
 
 const mocks = vi.hoisted(() => ({
+  canEdit: false,
   editable: false,
   editingSpace: null as string | null,
   readTabs: null as Array<{ label: string; href: string }> | null,
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({
+  useCanUserEdit: () => mocks.canEdit,
   useUserIsEditing: (spaceId: string) => {
     mocks.editingSpace = spaceId;
     return mocks.editable;
@@ -56,6 +58,7 @@ const RELATIONS = [
 ];
 
 beforeEach(() => {
+  mocks.canEdit = false;
   mocks.editable = false;
   mocks.editingSpace = null;
   mocks.readTabs = null;
@@ -66,6 +69,7 @@ afterEach(cleanup);
 
 describe('EntityTabs access and system tabs', () => {
   it('uses the access-controlled editing state for the current space', () => {
+    mocks.canEdit = true;
     mocks.editable = true;
 
     render(
@@ -79,6 +83,22 @@ describe('EntityTabs access and system tabs', () => {
 
     expect(mocks.editingSpace).toBe('space-1');
     expect(screen.getByTestId('editable-tabs')).toBeInTheDocument();
+  });
+
+  it('keeps edit controls hidden until current-space access resolves', () => {
+    mocks.editable = true;
+
+    render(
+      <EntityTabs
+        entityId="claim-1"
+        spaceId="space-1"
+        initialTabRelations={RELATIONS as never[]}
+        tabEntities={[{ id: 'tab-1', name: 'Debates' }]}
+      />
+    );
+
+    expect(screen.queryByTestId('editable-tabs')).not.toBeInTheDocument();
+    expect(screen.getByTestId('read-tabs')).toBeInTheDocument();
   });
 
   it('keeps product tabs and hides colliding authored labels in browse mode', () => {

@@ -132,6 +132,7 @@ describe('ClaimRecordTab', () => {
       selectedTopicIds: [],
       sourceTopicIds: ['topic-1', 'topic-2'],
     });
+    expect(mocks.feedProps?.emptyLabel).toBe('No related claims yet.');
   });
 
   it('updates the server query when a sort or Related claims filter changes', () => {

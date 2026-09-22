@@ -33,14 +33,18 @@ describe('claim record GraphQL', () => {
     expect(claims).toContain('after: $topicAfter');
     expect(claims).toContain('after: $extractedAfter');
     expect(claims).toContain('orderBy: $orderBy');
-    expect(claims).toContain('topicClaimsTop: entitiesOrderedByPropertyConnection');
-    expect(claims).toContain('extractedClaimsTop: entitiesOrderedByPropertyConnection');
+    expect(claims).toContain('relatedClaimsTop: entitiesOrderedByPropertyConnection');
+    expect(claims).toMatch(/relatedClaimsTop: entitiesOrderedByPropertyConnection\([\s\S]*?filter: \$relatedFilter/);
+    expect(claims).not.toContain('topicClaimsTop: entitiesOrderedByPropertyConnection');
+    expect(claims).not.toContain('extractedClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).toContain('@skip(if: $skipTopicClaims)');
     expect(claims).toContain('@skip(if: $skipExtractedClaims)');
-    expect(claims.match(/matchingRelations: relationsList/g)).toHaveLength(4);
+    expect(claims.match(/matchingRelations: relationsList/g)).toHaveLength(3);
     expect(debates).toContain('debates: entitiesConnection');
     expect(debates).toContain('orderBy: $orderBy');
     expect(debates).toContain('debatesTop: entitiesOrderedByPropertyConnection');
+    expect(claims).not.toContain('scoreValues');
+    expect(debates).not.toContain('scoreValues');
     expect(debates.match(/matchingRelations: relationsList/g)).toHaveLength(2);
     expect(counts.match(/distinctCount/g)).toHaveLength(2);
     expect(counts.match(/fromEntityId/g)).toHaveLength(2);
@@ -90,6 +94,45 @@ describe('claim record GraphQL', () => {
           typeIds: { overlaps: [CLAIM_TYPE_ID] },
           spaceIds: { overlaps: [SPACE_ID] },
           and: [
+            {
+              relations: {
+                some: {
+                  typeId: { is: SOURCES_PROPERTY_ID },
+                  spaceId: { is: SPACE_ID },
+                  toEntity: {
+                    typeIds: { overlaps: [DEBATE_TYPE_ID] },
+                    spaceIds: { overlaps: [SPACE_ID] },
+                    relations: {
+                      some: {
+                        typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+                        spaceId: { is: SPACE_ID },
+                        toEntityId: { is: CLAIM_ID },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(filters.relatedClaims).toEqual({
+      or: [
+        {
+          id: { isNot: CLAIM_ID },
+          typeIds: { overlaps: [CLAIM_TYPE_ID] },
+          spaceIds: { overlaps: [SPACE_ID] },
+          or: [
+            {
+              relations: {
+                some: {
+                  typeId: { is: TOPICS_PROPERTY_ID },
+                  spaceId: { is: SPACE_ID },
+                  toEntityId: { in: [TOPIC_ID] },
+                },
+              },
+            },
             {
               relations: {
                 some: {
@@ -184,6 +227,10 @@ describe('claim record GraphQL', () => {
     });
 
     expect(filters.hasTopics).toBe(false);
+    expect(filters.relatedClaims.or?.[0]?.or).toHaveLength(1);
+    expect(filters.relatedClaims.or?.[0]?.or?.[0]).toMatchObject({
+      relations: { some: { typeId: { is: SOURCES_PROPERTY_ID } } },
+    });
     expect(filters.claimRelations.or).toHaveLength(1);
     expect(filters.claimRelations.or?.[0]).toMatchObject({ typeId: { is: SOURCES_PROPERTY_ID } });
     expect(filters.debates.relations?.some?.toEntity).toEqual({ id: { is: CLAIM_ID } });
@@ -228,6 +275,34 @@ describe('claim record GraphQL', () => {
     });
 
     expect(page.topicClaims.entities[0]?.matchingSpaceIds).toEqual([secondSpace]);
+  });
+
+  it('decodes the combined server-ranked Top connection as the Related claims page', () => {
+    const page = decodeClaimRecordClaims({
+      relatedClaimsTop: {
+        nodes: [
+          {
+            id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+            name: 'A top related claim',
+            description: null,
+            spaceIds: [SPACE_ID],
+            createdAt: '1788802463',
+            backlinks: { totalCount: 0 },
+            types: [],
+            valuesList: [],
+            relationsList: [],
+            matchingRelations: [{ spaceId: SPACE_ID }],
+            rankingScore: 10,
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        pageInfo: { endCursor: 'next', hasNextPage: true },
+      },
+    });
+
+    expect(page.topicClaims.entities.map(entity => entity.id)).toEqual(['eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee']);
+    expect(page.topicClaims).toMatchObject({ endCursor: 'next', hasNextPage: true });
+    expect(page.extractedClaims.entities).toEqual([]);
   });
 
   it('requires every selected topic in the same selected space', () => {
@@ -314,7 +389,7 @@ describe('claim record ranked union', () => {
     ]);
   });
 
-  it('merges Top and New branches by their corresponding server sort values', () => {
+  it('preserves server-ranked Top order and merges New by its server sort values', () => {
     const rows = [
       {
         id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -333,8 +408,8 @@ describe('claim record ranked union', () => {
     ];
 
     expect(mergeSortedRecordEntities('top', rows).map(entity => entity.id)).toEqual([
-      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     ]);
     expect(mergeSortedRecordEntities('new', rows).map(entity => entity.id)).toEqual([
       'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
