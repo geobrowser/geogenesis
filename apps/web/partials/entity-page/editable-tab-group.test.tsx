@@ -93,4 +93,22 @@ describe('EditableTabGroup active indicator', () => {
     expect(activeLink).not.toContainElement(indicator);
     expect(indicator?.parentElement).toBe(activeLink.parentElement?.parentElement);
   });
+
+  it('shows counters on fixed system tabs while editing', () => {
+    render(
+      <EditableTabGroup
+        entityId="topic-1"
+        spaceId="space-1"
+        editableTabs={[]}
+        systemTabsBefore={[
+          { label: 'Overview', href: '/claim' },
+          { label: 'Comments', href: '/claim/comments', badge: '7' },
+        ]}
+        overviewHref="/claim"
+      />
+    );
+
+    expect(screen.getByText('Comments')).toBeInTheDocument();
+    expect(screen.getByText('7')).toBeInTheDocument();
+  });
 });

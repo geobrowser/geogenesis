@@ -5,6 +5,7 @@ import * as React from 'react';
 import { usePathname } from 'next/navigation';
 
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
@@ -37,9 +38,10 @@ import { useTopicAncestors } from './use-topic-ancestors';
 export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
-type TopicTab = 'overview' | 'custom';
+type TopicTab = 'overview' | 'comments' | 'custom';
 
 export function resolveTopicTab({
+  pathname,
   authoredTabId,
   panel,
 }: {
@@ -49,10 +51,12 @@ export function resolveTopicTab({
 }): TopicTab {
   if (panel) {
     if (panel.activeTabId) return 'custom';
+    if (panel.activeSystemTab === 'comments') return 'comments';
     return 'overview';
   }
 
   if (authoredTabId) return 'custom';
+  if (pathname.endsWith('/comments')) return 'comments';
   return 'overview';
 }
 
@@ -94,6 +98,7 @@ export function TopicPageView({
   const pathname = usePathname();
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
+  const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
 
   const subtopics = React.useMemo(() => {
     // Both hierarchy properties, merged and deduplicated. The named `Subtopics` and the unnamed
@@ -128,7 +133,15 @@ export function TopicPageView({
   const ancestors = useTopicAncestors(entityId, spaceId);
   const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
-  const systemTabs = [{ label: 'Overview', href: overviewHref, sidePanelKey: 'overview' }];
+  const systemTabs = [
+    { label: 'Overview', href: overviewHref, sidePanelKey: 'overview' },
+    {
+      label: 'Comments',
+      href: `${overviewHref}/comments`,
+      sidePanelKey: 'comments',
+      badge: commentCountLoading ? undefined : String(commentCount),
+    },
+  ];
 
   if (isLoading && !entity) {
     return (
@@ -251,11 +264,7 @@ function TopicTabPanel({
   subtopics: Relation[];
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
+  if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} />;
 
-  return (
-    <>
-      <TopicFeed topicId={entityId} spaceId={spaceId} topicOptions={subtopics} />
-      <CommentSection entityId={entityId} spaceId={spaceId} />
-    </>
-  );
+  return <TopicFeed topicId={entityId} spaceId={spaceId} topicOptions={subtopics} />;
 }

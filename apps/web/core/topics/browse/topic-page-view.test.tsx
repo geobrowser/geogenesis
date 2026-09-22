@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   /** Props the chip section received, or null if the page rendered none. */
   feed: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
+  pathname: '/space/space-1/topic-1',
   /**
    * Deliberately not 3.
    *
@@ -35,8 +36,11 @@ vi.mock('~/partials/entity-page/editable-entity-header', () => ({
   EditableHeading: () => <div data-testid="editable-heading" />,
 }));
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/space/space-1/topic-1',
+  usePathname: () => mocks.pathname,
   useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('~/core/hooks/use-entity-comment-count', () => ({
+  useEntityCommentCount: () => ({ count: 7, isLoading: false }),
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
@@ -74,7 +78,9 @@ vi.mock('~/core/sync/use-store', () => ({
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
 vi.mock('./topic-composition', () => ({ TopicComposition: () => <div data-testid="topic-composition" /> }));
-vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+vi.mock('~/partials/comments/comments-section', () => ({
+  CommentSection: () => <div data-testid="comments" />,
+}));
 
 function topicEntity(description: string | null) {
   return {
@@ -92,6 +98,7 @@ beforeEach(() => {
   mocks.clamp = null;
   mocks.feed = null;
   mocks.tabs = null;
+  mocks.pathname = '/space/space-1/topic-1';
 });
 
 afterEach(cleanup);
@@ -164,13 +171,32 @@ describe('TopicPageView explore feed', () => {
     });
   });
 
-  it('keeps only Overview as a built-in tab so authored tabs can follow it', () => {
+  it('keeps Overview and counted Comments as built-in tabs so authored tabs can follow them', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toEqual([
       { label: 'Overview', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
+      {
+        label: 'Comments',
+        href: '/space/space-1/topic-1/comments',
+        sidePanelKey: 'comments',
+        badge: '7',
+      },
     ]);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview', 'Comments']);
+  });
+
+  it('keeps comments out of Overview and renders them only on the Comments tab', () => {
+    const { rerender } = render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(screen.queryByTestId('comments')).toBeNull();
+
+    mocks.pathname = '/space/space-1/topic-1/comments';
+    rerender(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-feed')).toBeNull();
   });
 });
 
@@ -183,6 +209,10 @@ describe('TopicPageView composition', () => {
 });
 
 describe('resolveTopicTab', () => {
+  it('resolves the Comments route', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe('comments');
+  });
+
   it('resolves legacy system routes to the single overview', () => {
     expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('overview');
     expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('overview');
@@ -200,5 +230,15 @@ describe('resolveTopicTab', () => {
         panel: { activeTabId: null, activeSystemTab: 'debates' },
       })
     ).toBe('overview');
+  });
+
+  it('resolves the side-panel Comments selection independently of the route behind it', () => {
+    expect(
+      resolveTopicTab({
+        pathname: '/space/a/b',
+        authoredTabId: null,
+        panel: { activeTabId: null, activeSystemTab: 'comments' },
+      })
+    ).toBe('comments');
   });
 });
