@@ -36,15 +36,12 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import type { RemoteParticipant } from 'livekit-client';
 
-// Voice auto-joins muted. Nothing here asked the user to open their microphone — the dock connects
-// on its own the moment they land — and an open mic they never chose reads as intrusive. They still
-// hear the other side immediately; unmuting is one click on the local row.
-//
-// Joining muted also stops `<LiveKitRoom>` capturing on connect: no track is published and nothing
-// is held open behind a call the user has running elsewhere. That covers LiveKit's automatic
-// capture only — `usePrimedMicrophonePermission` below still opens the device once, deliberately,
-// when the permission has never been answered, and hands the stream straight back.
-const JOIN_MIC_ENABLED = false;
+// A pair arriving from a recorded debate was already speaking with the microphone open, so the
+// debate-again room preserves that live conversation. A profile challenge has no preceding call or
+// user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
+function microphoneEnabledByDefault(session: DebateRematchSession) {
+  return session.source_debate_id !== null;
+}
 
 /** How long "You're muted" stays up before it stops being information and starts being noise. */
 const MUTED_NUDGE_MS = 4000;
@@ -72,7 +69,7 @@ async function microphonePermissionState(): Promise<PermissionState | 'unsupport
 /**
  * Ask for the microphone once, up front, and hand it straight back.
  *
- * Joining muted means nothing would otherwise call `getUserMedia` until the user clicks unmute —
+ * A muted challenge means nothing would otherwise call `getUserMedia` until the user clicks unmute —
  * and a permission dialog that lands the moment someone starts talking is its own kind of
  * intrusive. Priming it here moves the prompt to a point where the user is not mid-sentence, and
  * leaves the unmute click instant. It also gives the settings panel real device labels, which
@@ -131,11 +128,11 @@ function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
 /**
  * "You're muted", once.
  *
- * The pair lands here muted by a default they did not choose, so the first time the other person
- * actually says something is both when that default is most likely to surprise them and when a
- * silent reply starts reading as being ignored. Firing on the opponent's voice rather than on the
- * user's own keeps the microphone closed: a muted track publishes silence, so detecting that the
- * user is talking would mean holding a second live stream open for the whole session.
+ * A profile-challenge pair lands here muted by a default they did not choose, so the first time the
+ * other person actually says something is both when that default is most likely to surprise them
+ * and when a silent reply starts reading as being ignored. Firing on the opponent's voice rather
+ * than on the user's own keeps the microphone closed: a muted track publishes silence, so detecting
+ * that the user is talking would mean holding a second live stream open for the whole session.
  *
  * Once per visit, and only while muted — a nudge that returns on every turn is just a mute button
  * that shouts. `spentRef` is owned by the dock's outermost component rather than declared here on
@@ -269,7 +266,7 @@ export function RematchVoicePill({
   // would put a muted user back on air the moment they hit Retry. The prop has to track what the
   // user wants. (A plain reconnect is not the risk here: that republishes the existing tracks and
   // preserves their mute state, without re-running the handler.)
-  const [micIntent, setMicIntent] = React.useState(JOIN_MIC_ENABLED);
+  const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
 
   // Owned here, where nothing below the page itself can remount it, so "You're muted" is shown
   // once per visit rather than once per connection.

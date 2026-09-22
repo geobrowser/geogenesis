@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
+  routePrefetch: vi.fn(),
+  prefetchRematchClaims: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
@@ -75,7 +77,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace, prefetch: mocks.routePrefetch }),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -117,6 +119,10 @@ vi.mock('~/core/debates/hooks', () => ({
     refetch: mocks.refetchDebate,
   }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
+  useDebateRematchClaims: (sessionId: string, claimIds: string[], enabled: boolean) => {
+    mocks.prefetchRematchClaims(sessionId, claimIds, enabled);
+    return { data: undefined, isLoading: enabled, error: null };
+  },
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
@@ -297,6 +303,8 @@ beforeEach(() => {
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
+  mocks.routePrefetch.mockReset();
+  mocks.prefetchRematchClaims.mockReset();
   mocks.abortMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
   mocks.consentMutateAsync.mockReset();
@@ -4227,6 +4235,8 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('browsing');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
+    expect(mocks.routePrefetch).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+    expect(mocks.prefetchRematchClaims).toHaveBeenLastCalledWith('rematch-1', [], true);
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 

@@ -43,6 +43,7 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateRematch,
+  useDebateRematchClaims,
   useEndDebateTurn,
   useLeaveDebateRematch,
   useLiveKitJoin,
@@ -200,6 +201,7 @@ const rematchAutoConsentLeadSeconds = 5;
 const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
+const noRematchClaimIds: string[] = [];
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
   // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
@@ -457,6 +459,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) &&
     !rematchQueryFailed &&
     !['ended', 'expired'].includes(rematchSessionStatus ?? 'deciding');
+
+  // The picker opens on data tied to the rematch session. Once both participants have consented,
+  // spend the remaining thank-you seconds loading its first claim payload into React Query so the
+  // destination can draw immediately instead of beginning that request after navigation.
+  useDebateRematchClaims(
+    debate?.rematch_session_id ?? '',
+    noRematchClaimIds,
+    rematchSessionStatus === 'browsing' || rematchSessionStatus === 'request_pending'
+  );
+
+  React.useEffect(() => {
+    const session = rematchQuery.data;
+    if (!session || !['deciding', 'browsing', 'request_pending'].includes(session.status)) return;
+    router.prefetch(`/space/${session.source_space_id}/debates/rematches/${session.id}`);
+  }, [rematchQuery.data, router]);
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
   // debate's thank-you screen, so tell the banner which debate that is.
