@@ -129,6 +129,26 @@ describe('HubMultiFilterMenu search', () => {
     { value: 'topic-3', label: 'Artificial intelligence', count: 3 },
   ];
 
+  /** Opens a menu whose list still fits, and hands back a row to interact with. */
+  async function openMenuAndFindRow() {
+    render(
+      <HubMultiFilterMenu
+        align="start"
+        label="Any topic"
+        options={TOPICS}
+        values={[]}
+        onToggle={() => {}}
+        onClear={() => {}}
+        clearLabel="Any topic"
+        searchPlaceholder="Search topics"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
+    await waitFor(() => expect(screen.getByText('Climate policy')).toBeInTheDocument());
+    return screen.getByText('Climate policy').closest('button')!;
+  }
+
   function renderTopicMenu(overrides?: {
     onToggle?: (value: string) => void;
     onClear?: () => void;
@@ -219,6 +239,50 @@ describe('HubMultiFilterMenu search', () => {
 
     await waitFor(() => expect(screen.getByText('Monetary policy')).toBeInTheDocument());
     expect(await screen.findByLabelText('Search topics')).toHaveValue('');
+  });
+
+  it('leaves focus alone for an activation that emits only a click', async () => {
+    // Assistive technology and `HTMLElement.click()` activate a row without a pointer or key event
+    // ever reaching it. The viewer is no less mid-pick for that, and the guard has to agree.
+    hasFinePointer = true;
+    const row = await openMenuAndFindRow();
+
+    row.click();
+    stubOverflow(true);
+    act(fireResize);
+
+    const field = await screen.findByLabelText('Search topics');
+    // Long enough for the autofocus timer and its frame to have come and gone.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(field).not.toHaveFocus();
+  });
+
+  it('leaves focus alone while a row is still held down', async () => {
+    // The press has landed and the release has not. A facet that widens in between would otherwise
+    // put the field up and take focus out of the row under the viewer's finger.
+    hasFinePointer = true;
+    const row = await openMenuAndFindRow();
+
+    fireEvent.pointerDown(row);
+    stubOverflow(true);
+    act(fireResize);
+
+    const field = await screen.findByLabelText('Search topics');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(field).not.toHaveFocus();
+  });
+
+  it('leaves focus alone while the viewer is moving through the rows by keyboard', async () => {
+    hasFinePointer = true;
+    const row = await openMenuAndFindRow();
+
+    fireEvent.keyDown(row, { key: 'Tab' });
+    stubOverflow(true);
+    act(fireResize);
+
+    const field = await screen.findByLabelText('Search topics');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(field).not.toHaveFocus();
   });
 
   it('offers no search field without the prop', async () => {
@@ -329,24 +393,8 @@ describe('HubMultiFilterMenu search', () => {
 
   it('leaves focus alone when the field only appears after the viewer has started picking', async () => {
     hasFinePointer = true;
-    render(
-      <HubMultiFilterMenu
-        align="start"
-        label="Any topic"
-        options={TOPICS}
-        values={[]}
-        onToggle={() => {}}
-        onClear={() => {}}
-        clearLabel="Any topic"
-        searchPlaceholder="Search topics"
-      />
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
-    await waitFor(() => expect(screen.getByText('Climate policy')).toBeInTheDocument());
-
     // Ticking a topic widens the co-occurrence facet, and the menu stays open for it.
-    const row = screen.getByText('Climate policy').closest('button')!;
+    const row = await openMenuAndFindRow();
     fireEvent.pointerDown(row);
     fireEvent.click(row);
     stubOverflow(true);

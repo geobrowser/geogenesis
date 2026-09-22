@@ -246,6 +246,14 @@ export function HubMultiFilterMenu<T extends string>({
    * can cross the end of the viewport under a cursor that is mid-pick. Focus must not jump to a
    * field that appears then — it would take the keyboard out of the row they are in and leave the
    * next arrow key scrolling a text box.
+   *
+   * Three events rather than one, because they answer two different questions and neither is
+   * enough alone. Pointer and key say the viewer is *engaged* with the list — scrolling it, holding
+   * a row, arrowing through it — none of which ends in an activation. Click says a row was
+   * *activated*, and it is the only one of the three that a screen reader, voice control or a bare
+   * `HTMLElement.click()` is guaranteed to emit: those drive the activation directly and no pointer
+   * or key event ever reaches the row. Listening for the modality rather than the act would have
+   * left exactly those viewers with the focus yanked out from under them.
    */
   const touchedRef = React.useRef(false);
   const markTouched = React.useCallback(() => {
@@ -382,7 +390,15 @@ export function HubMultiFilterMenu<T extends string>({
         {/* One node whose height is exactly "how much list there is", which is what makes the
             options' own growth observable — the viewport stops changing size once it reaches its
             max-height, and `scrollHeight` alone reports no event when it moves. */}
-        <div ref={setListNode} onPointerDownCapture={markTouched} onKeyDownCapture={markTouched}>
+        <div
+          ref={setListNode}
+          onPointerDownCapture={markTouched}
+          onKeyDownCapture={markTouched}
+          // Capture like its siblings, not because the ordering within the event matters — the
+          // toggle's re-render cannot land until the event is over either way — but so a row that
+          // ever stops propagation cannot quietly take the guard with it.
+          onClickCapture={markTouched}
+        >
           {searching ? null : (
             <button
               type="button"
