@@ -246,7 +246,7 @@ export function DebateExploreFeedCard({
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
   // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
-  const share = useDebateShareAction();
+  const share = useDebateShareAction(readyDebate, item.spaceId);
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
   // cache entry with the Claims panel, so opening the panel doesn't refetch what this loaded.
@@ -288,8 +288,11 @@ export function DebateExploreFeedCard({
     // another space, and only the lookup finds that space's votes.
     responseKind: 'infer' as const,
     onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
-    onShare: mediaMounted ? share.onOpen : undefined,
-    shareOpen: share.open,
+    onShare: mediaMounted ? share.onShare : undefined,
+    // See the same line on the full-screen feed: no dialog to announce when Share opens the OS sheet.
+    shareOpen: share.opensDialog ? share.open : undefined,
+    sharePending: share.sharePending,
+    shareLabel: share.shareLabel,
   };
 
   return (

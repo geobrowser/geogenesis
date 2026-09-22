@@ -424,7 +424,7 @@ function DebateFeedItem({
   onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const share = useDebateShareAction();
+  const share = useDebateShareAction(debate, spaceId);
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
   // Same arguments as the Comments panel's own useComments, so the two share a
@@ -456,8 +456,12 @@ function DebateFeedItem({
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
-    onShare: share.onOpen,
-    shareOpen: share.open,
+    onShare: share.onShare,
+    // Undefined where Share opens the OS sheet: that button opens no dialog, so it must not
+    // announce one. See {@link DebateShareControls.opensDialog}.
+    shareOpen: share.opensDialog ? share.open : undefined,
+    sharePending: share.sharePending,
+    shareLabel: share.shareLabel,
   };
 
   return (
