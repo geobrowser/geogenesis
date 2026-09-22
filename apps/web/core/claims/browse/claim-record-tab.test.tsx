@@ -8,6 +8,7 @@ import { ClaimRecordTab } from './claim-record-tab';
 const mocks = vi.hoisted(() => ({
   hookCalls: [] as Array<Record<string, unknown>>,
   facetHookCalls: [] as Array<Record<string, unknown>>,
+  facetError: false,
   filterProps: null as Record<string, any> | null,
   feedProps: null as Record<string, unknown> | null,
 }));
@@ -49,7 +50,7 @@ vi.mock('./use-claim-record-facets', () => ({
       ],
       countsPending: false,
       facetsSettled: true,
-      isError: false,
+      isError: mocks.facetError,
     };
   },
 }));
@@ -86,6 +87,7 @@ const common = {
 beforeEach(() => {
   mocks.hookCalls = [];
   mocks.facetHookCalls = [];
+  mocks.facetError = false;
   mocks.filterProps = null;
   mocks.feedProps = null;
 });
@@ -150,6 +152,26 @@ describe('ClaimRecordTab', () => {
     );
     expect(mocks.hookCalls.at(-1)).toMatchObject({ filterTopicIds: ['topic-1'] });
     expect(mocks.facetHookCalls.at(-1)).toMatchObject({ selectedTopicIds: ['topic-1'] });
+  });
+
+  it('keeps active filters visible and clearable after a terminal facet error', () => {
+    const view = render(<ClaimRecordTab {...common} kind="claims" />);
+
+    act(() =>
+      (mocks.filterProps?.dimensions as Array<Record<string, any>>)
+        .find(dimension => dimension.key === 'topics')
+        ?.onToggle('topic-1')
+    );
+    mocks.facetError = true;
+    view.rerender(<ClaimRecordTab {...common} kind="claims" />);
+
+    const dimensions = mocks.filterProps?.dimensions as Array<Record<string, any>>;
+    expect(dimensions.map(dimension => dimension.key)).toEqual(['spaces', 'topics']);
+    expect(dimensions.find(dimension => dimension.key === 'spaces')?.values).toEqual(['space-1']);
+    expect(dimensions.find(dimension => dimension.key === 'topics')?.values).toEqual(['topic-1']);
+
+    act(() => dimensions.find(dimension => dimension.key === 'topics')?.onClear());
+    expect(mocks.hookCalls.at(-1)).toMatchObject({ filterTopicIds: [] });
   });
 
   it('resets sort and filters before rendering a different claim or space', () => {

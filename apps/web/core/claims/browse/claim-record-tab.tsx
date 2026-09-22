@@ -176,7 +176,7 @@ function ClaimRecordTabContent({
     <div className="flex flex-col gap-4">
       <RecordFilterRow
         sort={{ value: sort, options: SORT_OPTIONS, onChange: value => setSort(value as ClaimRecordSort) }}
-        dimensions={facets.isError ? [] : dimensions}
+        dimensions={dimensions}
       />
 
       <PersonRecordFeed
