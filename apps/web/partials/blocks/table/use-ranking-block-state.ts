@@ -242,8 +242,14 @@ export function useRankingBlockState({
 
   const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
   const initialGlobalEntries = initialGlobalRanking?.entries ?? EMPTY_RANKING_ENTRIES;
-  const initialSharedOrderedIds = initialSharedRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
-  const initialSharedEntries = initialSharedRanking?.entries ?? EMPTY_RANKING_ENTRIES;
+
+  const isSeededRankingActive = ID.equals(activeSharedRankEntityId, sharedRankEntityId);
+  const initialSharedOrderedIds = isSeededRankingActive
+    ? (initialSharedRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS)
+    : EMPTY_ENTITY_IDS;
+  const initialSharedEntries = isSeededRankingActive
+    ? (initialSharedRanking?.entries ?? EMPTY_RANKING_ENTRIES)
+    : EMPTY_RANKING_ENTRIES;
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
