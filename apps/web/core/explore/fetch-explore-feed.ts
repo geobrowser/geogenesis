@@ -153,6 +153,28 @@ function decodeExploreBest(data: {
 }
 
 /**
+ * How much wider than the rows it serves a widened by-type window asks for, and the ceiling on that.
+ *
+ * `maxPerType` caps the *candidate* list, and `filter` is applied to those candidates afterwards
+ * while `offset` indexes the survivors. So a budget of exactly `offset + first` can only be enough
+ * when nothing is filtered out: with Explore's debate-tag clause on claims, a 30-candidate budget
+ * yielded 18 rows against a `first` of 30 — a short page the connection then reports as the end,
+ * because it returned fewer rows than asked for.
+ *
+ * Measured on testnet against one space's claims (2026-09-22), `first: 30`, offset 0:
+ *
+ *     maxPerType    30 -> 18 rows, hasNextPage false, 574ms
+ *     maxPerType   240 -> 30 rows, hasNextPage true,  575ms
+ *     maxPerType   960 -> 30 rows, hasNextPage true,  680ms
+ *     maxPerType  4000 -> 30 rows, hasNextPage true, 1248ms
+ *
+ * Eight-fold is free at the head and the ceiling keeps the deep end from drifting into seconds; the
+ * tagged corpus a widened feed reads is a few hundred rows per space, well inside it.
+ */
+const BEST_BY_TYPE_CANDIDATE_FACTOR = 8;
+const BEST_BY_TYPE_MAX_CANDIDATES = 2_000;
+
+/**
  * "Best", type-filtered by the server (GEO-2885).
  *
  * `fetchBestEntitiesPage` above cannot send `typeIds`, so Explore filters the returned rows
@@ -165,6 +187,14 @@ function decodeExploreBest(data: {
  * ordering, so anything below `offset + first` silently returns short. `offset + first` is the
  * smallest provably exact value. It is computed here, from numbers this function owns, rather
  * than defaulted in the document — see `exploreBestByTypeConnectionDocument`.
+ *
+ * Smallest exact *for an unfiltered read*, which is the part `widenBestCandidateBudget` exists for.
+ * A `filter` runs against the candidates this caps and `offset` indexes what survives, so a budget
+ * equal to the row budget guarantees a short page the moment anything is filtered out — and a
+ * connection that returns fewer rows than `first` reports `hasNextPage: false`, which reads as the
+ * end of the feed. Callers whose filter removes most candidates — a claims feed under the debate-tag
+ * gate — ask for the wider budget; Explore's own mixed feed keeps the exact one, unchanged. See
+ * `BEST_BY_TYPE_CANDIDATE_FACTOR`.
  */
 async function fetchBestEntitiesByTypePage(args: {
   spaceIds: string[];
@@ -173,8 +203,10 @@ async function fetchBestEntitiesByTypePage(args: {
   offset: number;
   typeIds: readonly string[];
   requireDebateTagOnClaims?: boolean;
+  widenBestCandidateBudget?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
+  const rowBudget = args.offset + args.limit;
   return Effect.runPromise(
     graphql({
       query: exploreBestByTypeConnectionDocument,
@@ -190,7 +222,9 @@ async function fetchBestEntitiesByTypePage(args: {
         offset: args.offset,
         spaceIds: args.spaceIds,
         typeIds: [...args.typeIds],
-        maxPerType: args.offset + args.limit,
+        maxPerType: args.widenBestCandidateBudget
+          ? Math.min(rowBudget * BEST_BY_TYPE_CANDIDATE_FACTOR, BEST_BY_TYPE_MAX_CANDIDATES)
+          : rowBudget,
         createdAfter: t != null ? String(t) : undefined,
         filter: args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
         spaceIdsForLists: args.spaceIds,
@@ -388,6 +422,14 @@ export async function fetchExploreFeed(args: {
    * precisely the kind of edit it exists to show.
    */
   requireDebateTagOnClaims?: boolean;
+  /**
+   * Ask the ranked by-type connection for more candidates than the page serves.
+   *
+   * For feeds whose `filter` removes most of what the ranking returns, where the exact budget
+   * serves a short page and the connection then reports the end of the feed. Off by default, so
+   * Explore's own request is byte-for-byte what it was. See `fetchBestEntitiesByTypePage`.
+   */
+  widenBestCandidateBudget?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const wanted = args.spaceFilterIds === null ? null : new Set(args.spaceFilterIds.map(normId));
@@ -472,6 +514,7 @@ export async function fetchExploreFeed(args: {
           offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
           typeIds: args.typeIds ?? [],
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+          widenBestCandidateBudget: args.widenBestCandidateBudget,
         })
       : args.sort === 'best'
         ? fetchBestEntitiesPage({

@@ -84,7 +84,21 @@ export type ActivityKind = {
  * that would be a second, worse copy of all of it — the bespoke one drew a
  * video inside an `<img>` and showed a grey box.
  */
-export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
+export function ProfileActivitySection({
+  kinds,
+  className,
+}: {
+  kinds: ActivityKind[];
+  /**
+   * Spacing owned by the surface rather than by the card.
+   *
+   * A profile stacks this in a `gap-6` column and needs none; a space's Overview puts it above an
+   * authored page and needs a gap under it. Passed in rather than set here because the card decides
+   * whether it renders at all — it returns `null` once both kinds settle empty — and a margin
+   * applied by the caller would survive that disappearance as a band of blank space.
+   */
+  className?: string;
+}) {
   // A failed kind is available: it has something to say, even if the something
   // is that it could not be read.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
@@ -107,14 +121,14 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
   // draw it immediately rather than holding the whole card behind the slower request.
-  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton />;
+  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton className={className} />;
 
   // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
   // and a permanent heading over blank space would imply that content failed to render.
   if (available.length === 0 || !selected) return null;
 
   return (
-    <div>
+    <div className={className}>
       <section
         ref={sectionRef}
         data-activity-section
@@ -225,9 +239,9 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
-function ProfileActivitySkeleton() {
+function ProfileActivitySkeleton({ className }: { className?: string }) {
   return (
-    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col')}>
+    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
       <header className="flex flex-col gap-3 pb-3">
         <h3 className="text-mediumTitle text-text">Activity</h3>
         <div className="flex items-center gap-2">

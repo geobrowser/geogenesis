@@ -122,6 +122,10 @@ describe('isPossibleSpacePath', () => {
     '/space/c9f267dcb0d270718c2a3c45a64afd32/3970e24854164ed5a4792d3e418088ef/activity',
     '/space/1310f810454cd482e35ce81cb86ca383/de318eede32a47b2a34a442afe86cef1/opengraph-image-7wh9xe',
     // The space's own OG image. Every space page puts this URL in `og:image`.
+    // The space-scoped explore feeds the Overview activity card links to. Only the second segment
+    // is checked, so both of them ride on `explore` being listed — and nothing else does.
+    '/space/c9f267dcb0d270718c2a3c45a64afd32/explore/debates',
+    '/space/c9f267dcb0d270718c2a3c45a64afd32/explore/claims',
     '/space/c9f267dcb0d270718c2a3c45a64afd32/opengraph-image',
     '/space/c9f267dcb0d270718c2a3c45a64afd32/opengraph-image-7wh9xe',
     '/space/12a21058-4706-4d9c-b8c8-813732ef63b2',

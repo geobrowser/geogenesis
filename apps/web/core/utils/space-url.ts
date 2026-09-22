@@ -57,6 +57,7 @@ export const SPACE_TAB_SEGMENTS = [
   'debates',
   'debug-availability',
   'debug-debates',
+  'explore',
   'governance',
   'import',
   'positions',

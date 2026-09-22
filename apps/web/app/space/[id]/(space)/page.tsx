@@ -28,6 +28,7 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
+import { SpaceDebateActivitySection } from '~/partials/space-page/space-debate-activity-section';
 import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
@@ -124,6 +125,20 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
+      {/*
+       * Debate activity first, on Overview only (GEO "space activity section").
+       *
+       * The same card a person's profile leads with, and it leads here for the same reason: the
+       * space's authored page is what the space is *for*, but it is also the part that changes
+       * least, while the debates argued here and the claims queued up for debating are what
+       * somebody arriving wants to know is happening. It renders nothing at all unless the space is
+       * set up for debates and actually holds some, so every other space is unchanged — including
+       * the vertical rhythm, since an absent section contributes no height.
+       *
+       * Not rendered on a tab: `tabId` means an authored page of the space's own, and an activity
+       * card above it would read as a section of that page rather than of the space.
+       */}
+      {!tabId && <SpaceDebateActivitySection spaceId={spaceId} />}
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
       </React.Suspense>
