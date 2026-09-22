@@ -10,29 +10,105 @@ import { usePathname } from 'next/navigation';
 import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
-import { validateEntityId } from '~/core/utils/utils';
+import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+export type TabGroupTab = {
+  href: string;
+  label: string;
+  badge?: string;
+  disabled?: boolean;
+  hidden?: boolean;
+  /** In-place product tab key used when this tab group renders in an entity side panel. */
+  sidePanelKey?: string;
+  /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
+  dividerBefore?: boolean;
+  /**
+   * Only shown where the side rail is not.
+   *
+   * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
+   * `StickySideRail` drops itself at exactly that width — so a tab reaching
+   * the rail's content appears precisely when the rail stops being there.
+   */
+  onlyWhenNarrow?: boolean;
+};
+
 interface TabGroupProps {
-  tabs: Array<{
-    href: string;
-    label: string;
-    badge?: string;
-    disabled?: boolean;
-    hidden?: boolean;
-    /** Draws a rule before this tab, marking where one group of tabs ends and another begins. */
-    dividerBefore?: boolean;
-    /**
-     * Only shown where the side rail is not.
-     *
-     * Breakpoints here are desktop-first (`lg` is max-width 1023px), and
-     * `StickySideRail` drops itself at exactly that width — so a tab reaching
-     * the rail's content appears precisely when the rail stops being there.
-     */
-    onlyWhenNarrow?: boolean;
-  }>;
+  tabs: TabGroupTab[];
   className?: string;
+}
+
+export type ActiveTabIndicatorPosition = { left: number; width: number };
+
+/**
+ * Measures one active tab for a row-owned indicator.
+ *
+ * Keeping the marker outside the tab links means route changes only animate its horizontal
+ * position and width. A layout marker inside each link can also interpolate the page's vertical
+ * scroll offset and travel through the labels when Next mounts the destination route.
+ */
+export function useActiveTabIndicator(layoutKey: unknown) {
+  const activeTabElement = useRef<HTMLElement | null>(null);
+  const activeTabObserver = useRef<ResizeObserver | null>(null);
+  const [indicator, setIndicator] = useState<ActiveTabIndicatorPosition | null>(null);
+
+  const measureActiveTab = React.useCallback(() => {
+    const element = activeTabElement.current;
+    if (!element) {
+      setIndicator(null);
+      return;
+    }
+
+    setIndicator(previous => {
+      const next = { left: element.offsetLeft, width: element.offsetWidth };
+      return previous?.left === next.left && previous.width === next.width ? previous : next;
+    });
+  }, []);
+
+  const registerActiveTab = React.useCallback(
+    (element: HTMLElement | null) => {
+      activeTabObserver.current?.disconnect();
+      activeTabObserver.current = null;
+      activeTabElement.current = element;
+      measureActiveTab();
+
+      if (element && typeof ResizeObserver !== 'undefined') {
+        activeTabObserver.current = new ResizeObserver(measureActiveTab);
+        activeTabObserver.current.observe(element);
+      }
+    },
+    [measureActiveTab]
+  );
+
+  // Re-measure when the row's tabs settle or responsive tabs appear. The active element itself is
+  // observed from its ref callback, so switching active tabs also moves the observer immediately.
+  React.useLayoutEffect(() => measureActiveTab(), [layoutKey, measureActiveTab]);
+
+  useEffect(() => {
+    window.addEventListener('resize', measureActiveTab);
+    return () => {
+      window.removeEventListener('resize', measureActiveTab);
+      activeTabObserver.current?.disconnect();
+    };
+  }, [measureActiveTab]);
+
+  return { indicator, registerActiveTab };
+}
+
+export function ActiveTabIndicator({ indicator }: { indicator: ActiveTabIndicatorPosition | null }) {
+  if (!indicator) return null;
+
+  return (
+    <motion.div
+      aria-hidden
+      data-active-tab-indicator
+      initial={false}
+      animate={{ x: indicator.left, width: indicator.width }}
+      transition={{ duration: 0.2 }}
+      className="absolute bottom-0 left-0 z-100 h-px bg-text"
+    />
+  );
 }
 
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
@@ -43,6 +119,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const dragStartX = useRef<number>(0);
   const scrollStartLeft = useRef<number>(0);
   const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
+  const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
 
   useEffect(() => {
     const checkScroll = () => {
@@ -136,13 +213,30 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
               {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
               {t.onlyWhenNarrow ? (
                 <span className="hidden lg:contents">
-                  <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                  <Tab
+                    href={t.href}
+                    label={t.label}
+                    badge={t.badge}
+                    disabled={t.disabled}
+                    hidden={t.hidden}
+                    sidePanelKey={t.sidePanelKey}
+                    activeRef={registerActiveTab}
+                  />
                 </span>
               ) : (
-                <Tab href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+                <Tab
+                  href={t.href}
+                  label={t.label}
+                  badge={t.badge}
+                  disabled={t.disabled}
+                  hidden={t.hidden}
+                  sidePanelKey={t.sidePanelKey}
+                  activeRef={registerActiveTab}
+                />
               )}
             </React.Fragment>
           ))}
+          <ActiveTabIndicator indicator={indicator} />
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
@@ -162,6 +256,8 @@ interface TabProps {
   badge?: React.ReactNode;
   disabled?: boolean;
   hidden?: boolean;
+  sidePanelKey?: string;
+  activeRef: (element: HTMLElement | null) => void;
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
@@ -184,14 +280,7 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
-function tabIdFromEntityTabHref(href: string): string | null {
-  const idx = href.indexOf('tabId=');
-  if (idx === -1) return null;
-  const raw = href.slice(idx + 6).split('&')[0];
-  return validateEntityId(raw) ? raw : null;
-}
-
-function Tab({ href, label, badge, disabled, hidden }: TabProps) {
+function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -199,11 +288,14 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const sidePanelTab = useEntitySidePanelActiveTab();
 
   const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
-  const active = sidePanelTab
-    ? tabIdFromEntityTabHref(href) === null
-      ? activeTabId === null
-      : activeTabId === tabIdFromEntityTabHref(href)
-    : href === fullPath;
+  const active = isEntityTabActive({
+    href,
+    activeTabId,
+    fullPath,
+    sidePanel: Boolean(sidePanelTab),
+    sidePanelKey,
+    activeSystemTab: sidePanelTab?.activeSystemTab,
+  });
 
   if (!editable && hidden) {
     return null;
@@ -211,33 +303,27 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
 
   if (disabled) {
     return (
-      <div className={tabGroupTabLinkStyles({ active, disabled })}>
+      <div ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active, disabled })}>
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
     );
   }
 
-  const hrefTabId = tabIdFromEntityTabHref(href);
+  const hrefTabId = entityTabIdFromHref(href);
 
   if (sidePanelTab) {
     return (
       <button
+        ref={active ? activeRef : undefined}
         type="button"
         className={tabGroupTabLinkStyles({ active, disabled })}
-        onClick={() => sidePanelTab.setActiveTabId(hrefTabId)}
+        onClick={() =>
+          sidePanelKey ? sidePanelTab.setActiveSystemTab(sidePanelKey) : sidePanelTab.setActiveTabId(hrefTabId)
+        }
       >
         {label}
         {badge && <Badge>{badge}</Badge>}
-        {active && (
-          <motion.div
-            layoutId="tab-group-active-border"
-            layout
-            initial={false}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-          />
-        )}
       </button>
     );
   }
@@ -248,24 +334,16 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
     // preserving the offset for all of them lands a reader who switched tabs
     // near the bottom of a long list somewhere past the end of a shorter one.
     //
-    // What it was added for is real — Next's jump to the top makes the underline
-    // fly up through the label, because the shared-layout animation measures the
-    // marker before and after and animates through the scroll delta. That wants
-    // scrolling *to the tab bar* rather than to the top or not at all, which is
-    // a behaviour to design alongside the sticky bar in GEO-2923 rather than a
-    // flag to set here.
-    <Link className={tabGroupTabLinkStyles({ active, disabled })} href={href} prefetch>
+    // The underline is one sibling owned by `TabGroup`, animated with x + width only. A shared
+    // layout marker measured the page's vertical scroll between routes and flew through the label.
+    <Link
+      ref={active ? activeRef : undefined}
+      className={tabGroupTabLinkStyles({ active, disabled })}
+      href={href}
+      prefetch
+    >
       {label}
       {badge && <Badge>{badge}</Badge>}
-      {active && (
-        <motion.div
-          layoutId="tab-group-active-border"
-          layout
-          initial={false}
-          transition={{ duration: 0.2 }}
-          className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-        />
-      )}
     </Link>
   );
 }

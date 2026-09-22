@@ -2,7 +2,11 @@
 
 import * as React from 'react';
 
-import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
+import {
+  CLAIM_PAGE_CONTENT_INSET_CLASS,
+  CLAIM_PAGE_CONTENT_MAX_WIDTH,
+  ClaimPageView,
+} from '~/core/claims/browse/claim-page-view';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -105,7 +109,6 @@ function EditorFooter({
         <>
           <Spacer height={24} />
           {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
-          <AutomaticModeToggle />
         </>
       ) : hideProperties ? null : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
@@ -126,15 +129,16 @@ function EditorFooter({
 /**
  * Which custom read view this entity gets, if any.
  *
- * Editing always falls through to the generic page: these are read surfaces with no property editor
- * behind them, so an editor who lost the value sheet would have no way to change the entity.
+ * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
+ * tabs stay visible and fixed while authored tabs can be managed. `EntityPageBody` appends the
+ * property editor beneath the claim surface, so keeping the custom UI does not hide raw fields.
+ * Other custom views still fall through to the generic editor.
  *
  * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseView {
-  const isEditing = useUserIsEditing(spaceId);
+function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean): CustomBrowseView {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
   /*
@@ -163,7 +167,8 @@ function useCustomBrowseView(entityId: string, spaceId: string): CustomBrowseVie
 
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
-  const customView = useCustomBrowseView(entityId, spaceId);
+  const isEditing = useUserIsEditing(spaceId);
+  const customView = useCustomBrowseView(entityId, spaceId, isEditing);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -187,12 +192,55 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // generic value sheet and swapping it out from under the reader.
   if (customView === 'pending') return null;
 
+  // Mounted independently of edit-only content so a direct `?edit=true` route can turn editing on.
+  // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
+  // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
+  const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
+
   if (customView === 'claim') {
-    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+    const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
+
+    return (
+      <>
+        {showClaimMedia ? (
+          props.variant === 'route' && props.coverSlot ? (
+            props.coverSlot
+          ) : (
+            <EntityPageCover
+              // Only an actual Avatar relation belongs in the circular treatment. The generic
+              // media and preview fallbacks may be a cover image, which remains a cover here.
+              avatarUrl={props.avatarUrl}
+              coverUrl={props.coverUrl}
+              compact={props.variant === 'sidePanel'}
+              contentMaxWidth={CLAIM_PAGE_CONTENT_MAX_WIDTH}
+              contentInsetClassName={CLAIM_PAGE_CONTENT_INSET_CLASS}
+              // Claims use both media properties as part of their identity. The generic fitted
+              // side-panel header suppresses avatars because they are usually just list
+              // thumbnails, but doing that here would make a claim's configured avatar vanish.
+              withAvatar
+            />
+          )
+        ) : null}
+        {routeEditInitializer}
+        <ClaimPageView
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+          isEditing={isEditing}
+          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+        />
+      </>
+    );
   }
 
   if (customView === 'topic') {
-    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+    return (
+      <>
+        {routeEditInitializer}
+        <TopicPageView entityId={entityId} spaceId={spaceId} />
+      </>
+    );
   }
 
   /*
@@ -271,7 +319,14 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         {/* A profile brings its avatar: it is the person's face, and the panel
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}
-        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} compact withAvatar={isPersonProfile} />
+        <EntityPageCover
+          // A person's compact avatar must follow the same rule as a claim's: a cover-only entity
+          // cannot reuse its rectangular cover/preview as a circular portrait.
+          avatarUrl={isPersonProfile ? props.avatarUrl : avatarUrl}
+          coverUrl={props.coverUrl}
+          compact
+          withAvatar={isPersonProfile}
+        />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
@@ -348,6 +403,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   return (
     <>
+      {routeEditInitializer}
       {showCover && (coverSlot ?? <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />)}
       <EntityPageContentContainer>
         <EntityPageHeader

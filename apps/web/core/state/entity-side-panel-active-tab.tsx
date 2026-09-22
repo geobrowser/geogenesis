@@ -6,32 +6,53 @@ import { validateEntityId } from '~/core/utils/utils';
 
 export type EntitySidePanelActiveTabContextValue = {
   activeTabId: string | null;
+  activeSystemTab: string | null;
   setActiveTabId: (tabId: string | null) => void;
+  setActiveSystemTab: (tab: string) => void;
 };
 
 export const EntitySidePanelActiveTabContext = React.createContext<EntitySidePanelActiveTabContextValue | null>(null);
 
 export function EntitySidePanelActiveTabProvider({
   entityId,
+  spaceId,
   children,
 }: {
   entityId: string;
+  spaceId: string;
   children: React.ReactNode;
 }) {
-  const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+  return (
+    <ScopedEntitySidePanelActiveTabProvider key={`${spaceId}:${entityId}`}>
+      {children}
+    </ScopedEntitySidePanelActiveTabProvider>
+  );
+}
 
-  React.useEffect(() => {
-    setActiveTabId(null);
-  }, [entityId]);
+/** A keyed boundary synchronously clears selections before children render in a new entity scope. */
+function ScopedEntitySidePanelActiveTabProvider({ children }: { children: React.ReactNode }) {
+  const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+  const [activeSystemTab, setActiveSystemTab] = React.useState<string | null>(null);
 
   const setActiveTabIdValidated = React.useCallback((tabId: string | null) => {
     if (tabId !== null && !validateEntityId(tabId)) return;
     setActiveTabId(tabId);
+    setActiveSystemTab(null);
+  }, []);
+
+  const selectSystemTab = React.useCallback((tab: string) => {
+    setActiveTabId(null);
+    setActiveSystemTab(tab);
   }, []);
 
   const value = React.useMemo(
-    () => ({ activeTabId, setActiveTabId: setActiveTabIdValidated }),
-    [activeTabId, setActiveTabIdValidated]
+    () => ({
+      activeTabId,
+      activeSystemTab,
+      setActiveTabId: setActiveTabIdValidated,
+      setActiveSystemTab: selectSystemTab,
+    }),
+    [activeSystemTab, activeTabId, selectSystemTab, setActiveTabIdValidated]
   );
 
   return <EntitySidePanelActiveTabContext.Provider value={value}>{children}</EntitySidePanelActiveTabContext.Provider>;

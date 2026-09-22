@@ -31,7 +31,6 @@ export function customBrowseView({
   isLoadingSpace: boolean;
   isEditing: boolean;
 }): CustomBrowseView {
-  if (isEditing) return 'generic';
   // The types decide which page this is, so until they are known there is no page to draw. Falling
   // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
   // replaced it a moment later, which read as the page loading twice.
@@ -40,6 +39,7 @@ export function customBrowseView({
   const byType = viewFromTypes(entity);
 
   if (byType === 'claim') return 'claim';
+  if (isEditing) return 'generic';
   if (byType === 'topic') return 'topic';
 
   /*

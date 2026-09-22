@@ -57,6 +57,7 @@ export const EditableCoverAvatarHeader = ({
   coverUrl,
   compact = false,
   withAvatar = false,
+  contentInsetClassName,
 }: {
   avatarUrl: string | null;
   /**
@@ -65,6 +66,8 @@ export const EditableCoverAvatarHeader = ({
    * — a profile — passes the wider with-sidebar width instead.
    */
   contentMaxWidth?: number;
+  /** Responsive inline padding inside the aligned content column. */
+  contentInsetClassName?: string;
   coverUrl: string | null;
   compact?: boolean;
   /** Whether the compact header shows the avatar too — see the `compact` branch. */
@@ -106,7 +109,7 @@ export const EditableCoverAvatarHeader = ({
     if (!hasCoverImage && !(withAvatar && hasAvatar)) return null;
 
     return (
-      <div className={cx('relative mx-auto w-full', withAvatar && hasAvatar ? 'mb-14' : 'mb-8')}>
+      <div className={cx('@container relative mx-auto w-full', withAvatar && hasAvatar ? 'mb-14' : 'mb-8')}>
         {hasCoverImage && (
           <AvatarCoverInput
             entityId={id}
@@ -123,7 +126,7 @@ export const EditableCoverAvatarHeader = ({
             // page. Aligned to this container rather than to a text column:
             // the panel has one width, so the cover and the name below it
             // already start in the same place.
-            className={cx('flex justify-start', hasCoverImage && 'absolute left-0')}
+            className={cx('flex justify-start', contentInsetClassName, hasCoverImage && 'absolute left-0')}
             style={hasCoverImage ? { bottom: -AVATAR_OVERFLOW } : undefined}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
@@ -150,7 +153,7 @@ export const EditableCoverAvatarHeader = ({
       initial={false}
       animate={layout}
       transition={TRANSITION}
-      className={`relative mx-auto w-full ${mobileCoverHeightClass} ${mobileCoverAvatarMarginClass}`}
+      className={`@container relative mx-auto w-full ${mobileCoverHeightClass} ${mobileCoverAvatarMarginClass}`}
     >
       {/* Cover — fixed size, fades in/out. The inner div clips it via overflow-hidden
           so during the height animation the cover is revealed, not scaled. */}
@@ -201,6 +204,7 @@ export const EditableCoverAvatarHeader = ({
             // one band of widths.
             className={cx(
               'absolute right-0 left-0 mx-auto flex justify-start',
+              contentInsetClassName,
               isWideColumn &&
                 'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]'
             )}

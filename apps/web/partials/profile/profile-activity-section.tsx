@@ -9,20 +9,22 @@ import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
+import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
 
-/** How many cards a gallery holds before the reader is sent to the tab. */
-const SHOWN = 6;
+const SEE_ALL_CLASS =
+  'flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text';
 const GALLERY_ACTIVATE_RATIO = 0.6;
 const GALLERY_DEACTIVATE_RATIO = 0.4;
 
@@ -64,6 +66,8 @@ export type ActivityKind = {
   /** The tab holding the rest. */
   href: string;
   seeAllLabel: string;
+  /** Selects an in-place tab when the record is rendered inside a side panel. */
+  onSeeAll?: () => void;
 };
 
 /**
@@ -88,16 +92,25 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
   const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (available[0] && !available.some(kind => kind.key === selectedKey)) setSelectedKey(available[0].key);
+  }, [available, selectedKey]);
+
   // Whichever the reader picked, or the first with anything in it. Held as a key
   // rather than an index so a kind arriving late — the two load separately —
   // cannot shift the selection out from under them.
   const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
+  const isLoading = kinds.some(kind => kind.isLoading);
 
-  // Nothing at all rather than an empty card. A heading over a blank space reads
-  // as a page that failed to load, and most accounts have never been in a debate.
-  if (kinds.some(kind => kind.isLoading) || available.length === 0 || !selected) return null;
+  // Reserve the section while its first usable record is on the way. Once either kind resolves,
+  // draw it immediately rather than holding the whole card behind the slower request.
+  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton />;
+
+  // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
+  // and a permanent heading over blank space would imply that content failed to render.
+  if (available.length === 0 || !selected) return null;
 
   return (
     <div>
@@ -175,21 +188,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
             personName={selected.personName}
           />
         )}
-        {/*
-         * Lands on the tab bar, not the page top.
-         *
-         * A navigation lands at the top of the page, which on a phone is a screenful of cover,
-         * avatar, name, roles and bio — none of it what "See all debates" was clicked for. The
-         * fragment puts the tab row under the navbar instead, so the list opens at the top of the
-         * screen with the underlined tab above it saying where the reader has been sent.
-         */}
-        <Link
-          href={withSpaceTabsAnchor(selected.href)}
-          className="flex items-center justify-center gap-2 border-t border-divider py-3 text-metadataMedium text-grey-04 transition-colors hover:text-text"
-        >
-          {selected.seeAllLabel}
-          <RightArrowLongSmall />
-        </Link>
+        <ActivitySeeAll kind={selected} />
       </section>
 
       {/*
@@ -206,6 +205,56 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
        */}
       <div ref={reserveRef} data-activity-scroll-reserve aria-hidden className="pointer-events-none hidden md:block" />
     </div>
+  );
+}
+
+function ProfileActivitySkeleton() {
+  return (
+    <section
+      aria-label="Loading activity"
+      aria-busy="true"
+      className={cx(
+        'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white',
+        'md:overflow-visible md:rounded-none md:border-0 md:bg-transparent'
+      )}
+    >
+      <header className="flex items-center justify-between gap-4 border-b border-divider px-4 py-3 md:px-0">
+        <h3 className="text-metadataMedium text-text">Activity</h3>
+        <Skeleton className="h-7 w-24 rounded-full" />
+      </header>
+      <div className="p-4 md:px-0">
+        <Skeleton className="h-44 w-full rounded-lg" />
+      </div>
+      <div className="flex justify-center border-t border-divider py-4">
+        <Skeleton className="h-4 w-28 rounded" />
+      </div>
+    </section>
+  );
+}
+
+function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
+  const content = (
+    <>
+      {kind.seeAllLabel}
+      <RightArrowLongSmall />
+    </>
+  );
+
+  if (kind.onSeeAll) {
+    return (
+      <button type="button" onClick={kind.onSeeAll} className={SEE_ALL_CLASS}>
+        {content}
+      </button>
+    );
+  }
+
+  // A route navigation lands at the top of the page, which on a phone is a screenful of profile
+  // chrome. The fragment puts the tab row under the navbar instead. Side panels use `onSeeAll`
+  // above because their tabs are selected in place and have no route fragment to follow.
+  return (
+    <Link href={withSpaceTabsAnchor(kind.href)} className={SEE_ALL_CLASS}>
+      {content}
+    </Link>
   );
 }
 
@@ -400,7 +449,7 @@ function ActivityGallery({
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
 }) {
-  const shown = React.useMemo(() => rows.slice(0, SHOWN), [rows]);
+  const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
   // Looked up once for the gallery. These are routinely spaces the viewer has
   // never opened, which the browse sidebar cannot name.

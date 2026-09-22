@@ -44,7 +44,6 @@ import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import {
-  
   PageImageField,
   PageStringField,
   PageVideoField,

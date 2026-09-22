@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
+import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
-import { ClaimPageView } from './claim-page-view';
+import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -16,6 +17,33 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
+  tabs: null as Record<string, unknown> | null,
+  activity: null as Record<string, unknown> | null,
+  recordTab: null as Record<string, unknown> | null,
+  sidePanel: null as {
+    activeTabId: string | null;
+    activeSystemTab: string | null;
+    setActiveSystemTab: ReturnType<typeof vi.fn>;
+  } | null,
+  record: {
+    relatedClaimIds: [],
+    claimRows: [],
+    debateRows: [],
+    claimsTotal: 0,
+    debatesTotal: 0,
+    claimsLoading: false,
+    debatesLoading: false,
+    claimsError: false,
+    debatesError: false,
+    claimsCountUnavailable: false,
+    debatesCountUnavailable: false,
+    claimsFetchingNextPage: false,
+    debatesFetchingNextPage: false,
+    claimsHasNextPage: false,
+    debatesHasNextPage: false,
+    fetchNextClaimsPage: () => {},
+    fetchNextDebatesPage: () => {},
+  },
   /** Claim response context supplied to the otherwise generic comment thread. */
   commentPosition: null as Record<string, unknown> | null,
   /**
@@ -29,8 +57,17 @@ const mocks = vi.hoisted(() => ({
   maxLines: 5,
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/space/space-1/claim-1',
+}));
+vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
+
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
+  EntityPageInlineDescription: () => <div data-testid="editable-description" />,
+}));
+vi.mock('~/partials/entity-page/editable-entity-header', () => ({
+  EditableHeading: () => <div data-testid="editable-heading" />,
 }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
@@ -81,7 +118,6 @@ vi.mock('./use-claim-response-state', () => ({
 // The page's modules each reach for the sync engine, geo-chat or Privy. None of them is what this
 // file is asserting, and the hero renders above all of them.
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  PositionRow: () => null,
   useClaimPositionControl: () => ({
     optimisticPositions: [],
     viewerPosition: null,
@@ -89,9 +125,12 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     canRespond: false,
     actionTitle: () => undefined,
     responseError: null,
+    isConnected: false,
   }),
 }));
-vi.mock('./claim-position-comment', () => ({ ClaimPositionCommentControl: () => null }));
+vi.mock('./claim-position-comment', () => ({
+  ClaimPositionCommentControl: () => <div data-testid="position" />,
+}));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
     mocks.commentPosition = props;
@@ -102,13 +141,38 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));
-vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => null }));
-vi.mock('./claim-debates', () => ({ ClaimDebates: () => null }));
-vi.mock('./claim-provenance', () => ({ ClaimProvenance: () => null }));
-vi.mock('./claim-related-claims', () => ({ ClaimRelatedClaims: () => null }));
+vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => <div data-testid="verdict" /> }));
+vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
+vi.mock('./claim-record-tab', () => ({
+  ClaimRecordTab: (props: Record<string, unknown>) => {
+    mocks.recordTab = props;
+    return <div data-testid="record-tab" />;
+  },
+}));
 vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
-vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+vi.mock('./use-claim-record', () => ({
+  useClaimRecord: () => mocks.record,
+}));
+vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
+  useEntitySidePanelActiveTab: () => mocks.sidePanel,
+}));
+vi.mock('~/partials/entity-page/entity-tabs', () => ({
+  EntityTabs: (props: Record<string, unknown>) => {
+    mocks.tabs = props;
+    return <div data-testid="tabs" />;
+  },
+}));
+vi.mock('~/partials/profile/profile-activity-section', () => ({
+  ProfileActivitySection: (props: Record<string, unknown>) => {
+    mocks.activity = props;
+    return <div data-testid="activity" />;
+  },
+}));
+vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/comments/comments-section', () => ({
+  CommentSection: () => <div data-testid="comments" />,
+}));
 
 function claimEntity(description: string | null) {
   return {
@@ -124,7 +188,159 @@ beforeEach(() => {
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
+  mocks.tabs = null;
+  mocks.activity = null;
+  mocks.recordTab = null;
+  mocks.sidePanel = null;
+  mocks.record.claimsTotal = 0;
+  mocks.record.claimsLoading = false;
+  mocks.record.claimsError = false;
+  mocks.record.claimsCountUnavailable = false;
+  mocks.record.claimsFetchingNextPage = false;
+  mocks.record.claimsHasNextPage = false;
+  mocks.record.fetchNextClaimsPage = () => {};
+  mocks.record.debatesTotal = 0;
+  mocks.record.debatesLoading = false;
+  mocks.record.debatesError = false;
+  mocks.record.debatesCountUnavailable = false;
+  mocks.record.debatesFetchingNextPage = false;
+  mocks.record.debatesHasNextPage = false;
+  mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
+});
+
+describe('ClaimPageView record', () => {
+  it('offers product tabs before authored claim tabs', () => {
+    mocks.record.claimsTotal = 1;
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.tabs).toMatchObject({
+      reservedSystemLabels: ['Overview', 'Related claims'],
+      divideBeforeAuthored: true,
+    });
+    expect(mocks.tabs?.systemTabsBefore).toEqual([
+      expect.objectContaining({ label: 'Overview', sidePanelKey: 'overview' }),
+      expect.objectContaining({ label: 'Related claims', sidePanelKey: 'claims' }),
+    ]);
+  });
+
+  it('exposes the shared tabs anchor on routes but not inside side panels', () => {
+    const route = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(document.getElementById('space-tabs')).toContainElement(screen.getByTestId('tabs'));
+
+    route.unmount();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: null, setActiveSystemTab: vi.fn() };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(document.getElementById('space-tabs')).not.toBeInTheDocument();
+  });
+
+  it('hides empty system tabs and shows them once they have content', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toEqual(['Overview']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Overview']);
+
+    cleanup();
+    mocks.record.claimsTotal = 1;
+    mocks.record.debatesTotal = 1;
+    mocks.entity = {
+      ...claimEntity('Anything'),
+      relations: [{ id: 'source-relation', type: { id: SOURCES_PROPERTY_ID }, toEntity: { id: 'source-1' } }],
+    };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toEqual([
+      'Overview',
+      'Debates',
+      'Related claims',
+      'Sources',
+    ]);
+  });
+
+  it('orders Overview as response summary, position, activity, then comments', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const position = screen.getByTestId('position');
+    const verdict = screen.getByTestId('verdict');
+    const activity = screen.getByTestId('activity');
+    const comments = screen.getByTestId('comments');
+
+    expect(verdict.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(position.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(activity.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the claim heading and description editable on the custom surface', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
+    expect(screen.getByTestId('editable-description')).toBeInTheDocument();
+  });
+
+  it('makes Activity select claim record tabs inside a side panel', () => {
+    const setActiveSystemTab = vi.fn();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: null, setActiveSystemTab };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string; onSeeAll?: () => void }>;
+    kinds.find(kind => kind.key === 'debates')?.onSeeAll?.();
+    kinds.find(kind => kind.key === 'claims')?.onSeeAll?.();
+
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
+  });
+
+  it('marks only failed record counts unavailable in Activity', () => {
+    mocks.record.claimsError = true;
+    mocks.record.claimsCountUnavailable = true;
+    mocks.record.debatesError = true;
+    mocks.record.debatesCountUnavailable = false;
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string; isCountUnavailable?: boolean }>;
+    expect(kinds.find(kind => kind.key === 'claims')?.isCountUnavailable).toBe(true);
+    expect(kinds.find(kind => kind.key === 'debates')?.isCountUnavailable).toBe(false);
+  });
+
+  it('hands the full side-panel tab the claim record scope', () => {
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'claims', setActiveSystemTab: vi.fn() };
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.recordTab).toMatchObject({
+      kind: 'claims',
+      claimId: 'claim-1',
+      spaceId: 'space-1',
+    });
+  });
+});
+
+describe('resolveClaimTab', () => {
+  it('does not borrow the underlying route or authored query for a side panel', () => {
+    expect(
+      resolveClaimTab({
+        pathname: '/space/space-1/claim-1/debates',
+        authoredTabId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        panel: { activeTabId: null, activeSystemTab: null },
+      })
+    ).toBe('overview');
+  });
+
+  it('uses the panel selection when one is present', () => {
+    expect(
+      resolveClaimTab({
+        pathname: '/space/space-1/claim-1',
+        authoredTabId: null,
+        panel: { activeTabId: null, activeSystemTab: 'sources' },
+      })
+    ).toBe('sources');
+  });
 });
 
 afterEach(cleanup);
@@ -187,6 +403,7 @@ describe('ClaimPageView topics', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Topics');
+    expect(screen.getByTestId('activity').nextElementSibling).toBe(screen.getByTestId('chip-section'));
   });
 
   it('hands the section the topic relations, scoped to the viewing space', () => {
