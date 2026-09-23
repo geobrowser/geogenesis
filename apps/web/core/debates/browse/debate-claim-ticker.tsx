@@ -20,7 +20,7 @@ import {
   tickerWindows,
 } from '~/core/debates/claim-ticker';
 import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
-import { recordingOverlayTextShadow } from '~/core/debates/debate-video-tile';
+import { smallOverlayTextShadow } from '~/core/debates/debate-video-tile';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { cueOpacity } from '~/core/debates/turn-cues';
@@ -32,8 +32,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
+import { Warning } from '~/design-system/icons/warning';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -746,7 +746,9 @@ export function DebateClaimTickerStack({
  * paid the other way; the count arriving as the claim lands is what buys it back.
  *
  * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
- * same set of claims. Two different icons for one idea would be the harder thing to learn.
+ * same set of claims. Two different icons for one idea would be the harder thing to learn — which
+ * is what this was until now: that button draws `Warning`, the circled exclamation, and the chip
+ * drew `InfoSmall`, a circled question mark, while claiming in this very comment to match it.
  */
 function ClaimBacklogChip({
   count,
@@ -806,21 +808,22 @@ function ClaimBacklogChip({
        */
       className="pointer-events-auto relative flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50"
     >
-      <InfoSmall color="white" />
+      <Warning color="white" />
       <span className={cx('tabular-nums transition-colors', onARun && 'font-medium text-green')}>
         {expanded ? 'Hide' : onARun ? `${tally.run} in a row` : `${count} ${count === 1 ? 'claim' : 'claims'}`}
       </span>
 
       {/* Outside the pill, climbing away from it. White in a black outline, which is the treatment
-          every other number over this video wears — see `debate-turn-cues.tsx`. */}
+          every other number over this video wears — at the weight that outline wants at this size,
+          rather than the count-in's; see {@link smallOverlayTextShadow}. */}
       <span
         aria-hidden
         data-claim-burst
-        className="pointer-events-none absolute right-1 bottom-full text-[0.875rem] leading-none font-bold text-white tabular-nums"
+        className="pointer-events-none absolute right-1 bottom-full pb-0.5 text-[1rem] leading-none font-bold text-white tabular-nums"
         style={{
           opacity: burstOpacity,
           transform: `translateY(${burstRisePx}px)`,
-          ...recordingOverlayTextShadow,
+          ...smallOverlayTextShadow,
         }}
       >
         +1

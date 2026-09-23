@@ -469,6 +469,24 @@ describe('DebateClaimTickerStack', () => {
     expect(Number(burst.style.opacity)).toBeGreaterThan(0);
   });
 
+  it("outlines the +1 at the weight small type wants, not the count-in's", () => {
+    renderStack({ onTogglePinned: vi.fn(), tally: { count: 3, ageMs: 200, run: 1 } });
+    const shadow = (document.querySelector('[data-claim-burst]') as HTMLElement).style.textShadow;
+    // Eight 1px copies make a solid hairline halo. The count-in's four 2px copies are thicker than
+    // the strokes of a 16px glyph and close up its counters — which is what read as broken.
+    expect(shadow).not.toContain('2px');
+    expect(shadow.match(/0 #000/g)).toHaveLength(8);
+  });
+
+  it('wears the same glyph as the Claims button, which is the circled exclamation', () => {
+    const { container } = renderStack({ onTogglePinned: vi.fn() });
+    const chip = screen.getByRole('button', { name: /claims said so far/ });
+    // `Warning`'s mark: a 1×6 bar over a 1×1 dot, inside the same 16px circle the bar's button
+    // draws. `InfoSmall` — the circled question mark this used to draw — has neither.
+    expect(chip.querySelector('svg rect[height="6"]')).not.toBeNull();
+    expect(container).toBeTruthy();
+  });
+
   it('calls out a run in place of the total, and only above the bar', () => {
     renderStack({ onTogglePinned: vi.fn(), tally: { count: 9, ageMs: 200, run: 3 } });
     expect(screen.getByText('3 in a row')).toBeInTheDocument();
