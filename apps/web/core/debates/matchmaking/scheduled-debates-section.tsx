@@ -13,11 +13,8 @@ import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 /**
- * Scheduled debates in the Requests tab (GEO-2939, GEO-2940).
- *
- * Answering here is the route, not a fallback for the email: the invited person accepts in the
- * app rather than going to find a message. The same rule covers joining, so an open room carries
- * its own Join and its own "they are waiting" line, and a dismissed popup loses nothing.
+ * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
+ * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
   const { answerable, upcoming } = content;

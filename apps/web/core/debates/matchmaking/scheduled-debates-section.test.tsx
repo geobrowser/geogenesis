@@ -63,7 +63,6 @@ describe('answering in the tab', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  // The whole point of the tab: accepting without going to find an email.
   it('accepts a request pointed at the viewer', async () => {
     const { user } = setup({ answerable: [request()] });
 
@@ -102,7 +101,7 @@ describe('answering in the tab', () => {
 });
 
 describe('joining from the tab', () => {
-  // GEO-2940: the tab is the reliable route, so it carries what the popup carries.
+  // The tab carries what the popup carries, since the popup can be dismissed.
   it('offers the way in, and says who is already there', () => {
     setup({ upcoming: [room({ others_present: true, due: true })] });
 
