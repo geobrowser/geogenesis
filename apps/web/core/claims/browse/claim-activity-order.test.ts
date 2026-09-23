@@ -130,6 +130,61 @@ describe('mergeActivityRows', () => {
     expect(merged.map(entry => entry.row.id)).toEqual(['c1', 'd1']);
   });
 
+  describe('ranked orders', () => {
+    const scores: Record<string, { positive: number; negative: number }> = {
+      c1: { positive: 1, negative: 0 },
+      c2: { positive: 9, negative: 8 },
+      d1: { positive: 6, negative: 0 },
+      d2: { positive: 0, negative: 0 },
+    };
+    const scoreFor = (row: { id: string }) => scores[row.id] ?? null;
+
+    it('puts the highest net score first under Best', () => {
+      expect(mergeActivityRows(comments, debates, 'best', scoreFor).map(entry => entry.row.id)).toEqual([
+        'd1',
+        'c2',
+        'c1',
+        'd2',
+      ]);
+    });
+
+    // Same rows, different question: c2 is divisive (9 up, 8 down) and outranks a quietly-liked
+    // row on Top while falling behind it on Best.
+    it('counts upvotes alone under Top, so a divisive row keeps its place', () => {
+      expect(mergeActivityRows(comments, debates, 'top', scoreFor).map(entry => entry.row.id)).toEqual([
+        'c2',
+        'd1',
+        'c1',
+        'd2',
+      ]);
+    });
+
+    it('breaks a score tie on recency rather than leaving it to arrival order', () => {
+      const flat = () => ({ positive: 2, negative: 0 });
+      expect(mergeActivityRows(comments, debates, 'best', flat).map(entry => entry.row.id)).toEqual([
+        'd2',
+        'c2',
+        'd1',
+        'c1',
+      ]);
+    });
+
+    // Scores arrive from a cache the rows themselves fill, so an unranked row is "not yet known"
+    // rather than "zero" — treating it as zero is what keeps the list stable while they land.
+    it('treats an unknown score as zero', () => {
+      expect(mergeActivityRows(comments, debates, 'best', () => null).map(entry => entry.row.id)).toEqual([
+        'd2',
+        'c2',
+        'd1',
+        'c1',
+      ]);
+    });
+
+    it('needs no score lookup at all', () => {
+      expect(mergeActivityRows(comments, debates, 'best').map(entry => entry.row.id)).toHaveLength(4);
+    });
+  });
+
   // A row with no usable date is not the newest thing that ever happened.
   it('sorts a row with an unreadable date to the end of a newest-first list', () => {
     const merged = mergeActivityRows(comments, [{ id: 'dx', createdAt: 'not a date' }], 'newest');

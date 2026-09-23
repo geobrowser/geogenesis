@@ -452,7 +452,13 @@ function ClaimOverviewTab({
   hrefs: { debates: string; claims: string };
   onSelectSystemTab?: (tab: ClaimSystemTab) => void;
 }) {
-  const activity = useClaimActivityRows({ claimId: entityId, spaceId });
+  // The claim's own vocabulary carries into the thread: a debater's side reads Agree/Disagree on
+  // an opinion claim and Verify/Dispute on a factual one, the same as every commenter's badge.
+  const activity = useClaimActivityRows({
+    claimId: entityId,
+    spaceId,
+    responseVocabulary: responseKind === 'veracity' ? 'veracity' : 'stance',
+  });
 
   const kinds: ActivityKind[] = [
     {
@@ -508,6 +514,9 @@ function ClaimOverviewTab({
           targetEntityType="claim"
           title="Activity"
           activityRows={activity.rows}
+          // Best rather than most-recent: this list is the record of an argument, not a running
+          // conversation, and the thing worth reading first is what the thread rates highest.
+          defaultSortOrder="best"
         />
       </ClaimCommentPositionProvider>
     </>

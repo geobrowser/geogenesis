@@ -114,22 +114,38 @@ export function ClaimCommentPositionProvider({
   return <ClaimCommentPositionContext.Provider value={value}>{children}</ClaimCommentPositionContext.Provider>;
 }
 
+/**
+ * Which side somebody is on, in the claim's own vocabulary — Agree/Disagree or Verify/Dispute.
+ *
+ * Shared by the comment rows, where it reports the author's current response, and by the extracted
+ * claim rows, where it reports the side the debater argued. Two different facts wearing one badge on
+ * purpose: to a reader scanning the thread they are the same question, and the tag that answers it
+ * should not change shape depending on which kind of row it sits on.
+ */
+export function ResponsePositionTag({
+  responseKind,
+  position,
+}: {
+  responseKind: DebateResponseKind;
+  position: boolean;
+}) {
+  return (
+    <span
+      className={cx(
+        'inline-flex shrink-0 items-center rounded-xs px-1 py-px text-[0.6875rem] font-medium text-text',
+        position ? 'bg-successTertiary' : 'bg-errorTertiary'
+      )}
+    >
+      {responsePositionLabel(responseKind, position)}
+    </span>
+  );
+}
+
 /** Current Agree/Disagree or Verify/Dispute state, rendered only inside a claim comment thread. */
 export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: string }) {
   const context = React.useContext(ClaimCommentPositionContext);
   const direction = context?.directions.get(uuidToHex(authorSpaceId));
   if (!context || !direction) return null;
 
-  const positive = direction === 'positive';
-
-  return (
-    <span
-      className={cx(
-        'inline-flex shrink-0 items-center rounded-xs px-1 py-px text-[0.6875rem] font-medium text-text',
-        positive ? 'bg-successTertiary' : 'bg-errorTertiary'
-      )}
-    >
-      {responsePositionLabel(context.responseKind, positive)}
-    </span>
-  );
+  return <ResponsePositionTag responseKind={context.responseKind} position={direction === 'positive'} />;
 }

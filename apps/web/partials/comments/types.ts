@@ -55,7 +55,14 @@ export interface CreateCommentParams {
   ancestorComments?: Array<{ id: string; spaceId: string }>;
 }
 
-export type CommentSortOrder = 'newest' | 'oldest';
+/**
+ * How the thread orders its top level.
+ *
+ * `best` and `top` both read the rows' vote counts and differ in what they reward: `best` takes the
+ * net score, so a divisive row falls; `top` takes upvotes alone, so a row lots of people backed
+ * stays up regardless of how many pushed back. `newest`/`oldest` are the thread's original orders.
+ */
+export type CommentSortOrder = 'best' | 'top' | 'newest' | 'oldest';
 export type CommentFilter = 'all' | 'editors';
 
 /**
@@ -69,5 +76,8 @@ export interface CommentActivityRow {
   id: string;
   /** ISO timestamp, compared against each comment's `createdAt` to place the row. */
   createdAt: string;
+  /** The entity whose votes rank this row, and the space they were cast in. */
+  entityId: string;
+  spaceId: string;
   content: React.ReactNode;
 }

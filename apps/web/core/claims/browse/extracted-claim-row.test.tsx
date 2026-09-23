@@ -62,7 +62,9 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ExtractedClaim
       debateId="debate-1"
       debateSpaceId="debate-space"
       responseKind="stance"
+      responseVocabulary="stance"
       speaker={{ spaceId: 'speaker-space', name: 'Ada Reyes' }}
+      speakerPosition={null}
       {...overrides}
     />
   );
@@ -113,6 +115,31 @@ describe('ExtractedClaimRow', () => {
     renderRow({ claim: claim({ timing: null }) });
 
     expect(screen.getByText('moment not found')).toBeInTheDocument();
+  });
+
+  it('tags the speaker with the side they argued in the debate', () => {
+    renderRow({ speakerPosition: true });
+
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+
+    cleanup();
+    renderRow({ speakerPosition: false });
+
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+  });
+
+  it('uses the claim’s own vocabulary for that tag', () => {
+    renderRow({ speakerPosition: false, responseVocabulary: 'veracity' });
+
+    expect(screen.getByText('Dispute')).toBeInTheDocument();
+  });
+
+  // A debater the debate does not record on either side gets no tag rather than a guessed one.
+  it('draws no side tag when the debate records no side for the speaker', () => {
+    renderRow({ speakerPosition: null });
+
+    expect(screen.queryByText('Agree')).not.toBeInTheDocument();
+    expect(screen.queryByText('Disagree')).not.toBeInTheDocument();
   });
 
   it('passes the resolved response kind and trailing avatars to the vote control', () => {

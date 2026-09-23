@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { DebateResponseKind } from '~/core/debates/api';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
@@ -10,8 +11,11 @@ import {
 } from '~/core/debates/ontology';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 
 import type { CommentActivityRow } from '~/partials/comments/types';
+
+import { ID } from '~/core/id';
 
 import { debateDate, relationTargets } from './claim-debates';
 import { DebateActivityRow } from './debate-activity-row';
@@ -43,10 +47,13 @@ const NO_ROWS: CommentActivityRow[] = [];
 export function useClaimActivityRows({
   claimId,
   spaceId,
+  responseVocabulary,
   enabled = true,
 }: {
   claimId: string;
   spaceId: string;
+  /** The claim's own Agree/Disagree or Verify/Dispute wording, for the debaters' side tags. */
+  responseVocabulary: DebateResponseKind;
   enabled?: boolean;
 }): { rows: CommentActivityRow[]; isLoading: boolean } {
   const { entities: debates, isLoading } = useQueryEntities({
@@ -59,12 +66,21 @@ export function useClaimActivityRows({
     enabled,
   });
 
-  const participantsByDebateId = React.useMemo(() => {
-    const map = new Map<string, string[]>();
+  // Who argued, and which side they took. The side is what lets an extracted claim carry the same
+  // Agree/Disagree tag a comment does — fixed at the debate rather than tracking where the speaker
+  // stands today, because what they argued in a recorded debate cannot change afterwards.
+  const sidesByDebateId = React.useMemo(() => {
+    const map = new Map<string, Array<{ spaceId: string; position: boolean }>>();
     for (const debate of debates) {
       map.set(debate.id, [
-        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID),
-        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID),
+        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(spaceId => ({
+          spaceId,
+          position: true,
+        })),
+        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(spaceId => ({
+          spaceId,
+          position: false,
+        })),
       ]);
     }
     return map;
@@ -73,8 +89,8 @@ export function useClaimActivityRows({
   // Every debater on the page, and every speaker their extracted claims will be attributed to —
   // the same set, because a claim is extracted from a turn one of them took.
   const participantSpaceIds = React.useMemo(
-    () => [...new Set([...participantsByDebateId.values()].flat())],
-    [participantsByDebateId]
+    () => [...new Set([...sidesByDebateId.values()].flat().map(side => side.spaceId))],
+    [sidesByDebateId]
   );
   const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
   const keyframeByDebateId = useDebateKeyframes(debates);
@@ -84,6 +100,10 @@ export function useClaimActivityRows({
 
     return debates.map(debate => ({
       id: debate.id,
+      // The debate entity itself is what the row's upvotes are cast on, in the space the claim page
+      // is being read through — which is also where the debate was published.
+      entityId: debate.id,
+      spaceId,
       // `createdAt` rather than `updatedAt`: this row's place in the feed is when the debate
       // happened, and `updatedAt` moves whenever anything touches the entity — including a backlink
       // from an unrelated edit, which would float an old debate to the top of the thread.
@@ -93,13 +113,32 @@ export function useClaimActivityRows({
           debate={debate}
           spaceId={spaceId}
           profilesBySpaceId={profilesBySpaceId}
-          participantSpaceIds={participantsByDebateId.get(debate.id) ?? []}
+          sides={sidesByDebateId.get(debate.id) ?? []}
+          claimText={debatedClaimText(debate)}
+          responseVocabulary={responseVocabulary}
           keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
           publishedAt={debateDate(debate)}
         />
       ),
     }));
-  }, [debates, keyframeByDebateId, participantsByDebateId, profilesBySpaceId, spaceId]);
+  }, [debates, keyframeByDebateId, profilesBySpaceId, responseVocabulary, sidesByDebateId, spaceId]);
 
   return { rows, isLoading };
+}
+
+/**
+ * The claim the debate argued, as text.
+ *
+ * On this page that is the claim being read, so it is not new information — it is the row's body.
+ * A debate row otherwise carries only a byline and a control strip, which beside comments that each
+ * have something to say reads as a row that failed to load rather than as a debate.
+ *
+ * Taken from the debate's own `Claims` relation rather than from the page, so the row still says
+ * what it argued anywhere else this component is reused.
+ */
+function debatedClaimText(debate: Entity): string | null {
+  const relation = debate.relations.find(
+    candidate => candidate.isDeleted !== true && ID.equals(candidate.type.id, DEBATE_CLAIMS_PROPERTY_ID)
+  );
+  return relation?.toEntity.name?.trim() || null;
 }

@@ -61,6 +61,11 @@ export type ActivityOrderable = {
   createdAt: string;
 };
 
+/** How a caller looks up a row's votes. Null where nothing has answered for that row yet. */
+export type ActivityScoreLookup = (row: ActivityOrderable) => { positive: number; negative: number } | null;
+
+const NO_SCORES: ActivityScoreLookup = () => null;
+
 /**
  * The instant a row claims, for ordering purposes.
  *
@@ -88,17 +93,37 @@ export function activityTime(row: ActivityOrderable): number {
 export function mergeActivityRows<C extends ActivityOrderable, E extends ActivityOrderable>(
   comments: C[],
   extras: E[],
-  order: 'newest' | 'oldest'
+  order: 'best' | 'top' | 'newest' | 'oldest',
+  scoreFor: ActivityScoreLookup = NO_SCORES
 ): Array<{ kind: 'comment'; row: C } | { kind: 'extra'; row: E }> {
   const merged: Array<{ kind: 'comment'; row: C } | { kind: 'extra'; row: E }> = [
     ...comments.map(row => ({ kind: 'comment' as const, row })),
     ...extras.map(row => ({ kind: 'extra' as const, row })),
   ];
 
-  const direction = order === 'newest' ? -1 : 1;
-  // `sort` is stable in every engine we target, so equal timestamps keep insertion order — which
-  // above is "comments, then extras". Said out loud because the tie-break is a decision, not luck.
-  merged.sort((a, b) => direction * (activityTime(a.row) - activityTime(b.row)));
+  // `sort` is stable in every engine we target, so rows that compare equal keep insertion order —
+  // which above is "comments, then extras". Said out loud because the tie-break is a decision.
+  if (order === 'newest' || order === 'oldest') {
+    const direction = order === 'newest' ? -1 : 1;
+    merged.sort((a, b) => direction * (activityTime(a.row) - activityTime(b.row)));
+    return merged;
+  }
+
+  // Newest breaks a score tie, so a thread where nothing has been voted on yet still reads as a
+  // thread rather than as whatever order the two lists happened to arrive in. It is also what the
+  // list falls back to while the counts are still arriving, since an unanswered row scores zero.
+  const rank = order === 'best' ? netScoreOf : upvotesOf;
+  merged.sort((a, b) => rank(scoreFor(b.row)) - rank(scoreFor(a.row)) || activityTime(b.row) - activityTime(a.row));
 
   return merged;
+}
+
+/** Net of the two directions: a row people disagree about falls behind one they merely like. */
+function netScoreOf(counts: { positive: number; negative: number } | null): number {
+  return counts ? counts.positive - counts.negative : 0;
+}
+
+/** Upvotes alone: how many backed it, regardless of how many pushed back. */
+function upvotesOf(counts: { positive: number; negative: number } | null): number {
+  return counts?.positive ?? 0;
 }

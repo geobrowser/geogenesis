@@ -9,6 +9,7 @@ import { useAtom } from 'jotai';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { personProfileOpened } from '~/core/analytics';
 import { mergeActivityRows } from '~/core/claims/browse/claim-activity-order';
+import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
@@ -49,6 +50,7 @@ import {
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
+import { getRelativeTime } from './comment-time';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
@@ -56,6 +58,8 @@ const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
 const NO_REPLIES: never[] = [];
 /** Stable identity, so a host that passes no rows doesn't rebuild the merge every render. */
 const NO_ACTIVITY_ROWS: CommentActivityRow[] = [];
+/** Stable identity for the unranked case, so the score subscriptions aren't rebuilt each render. */
+const EMPTY_SCORE_TARGETS: Array<{ entityId: string; spaceId: string }> = [];
 
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
@@ -248,6 +252,11 @@ interface CommentSectionProps {
   activityRows?: CommentActivityRow[];
   /** Heading noun. "Comments" unless the list holds more than comments. */
   title?: string;
+  /**
+   * Where the sort starts. Threads default to most-recent; the claim page's activity feed opens on
+   * Best, because there the list is a record of an argument rather than a running conversation.
+   */
+  defaultSortOrder?: CommentSortOrder;
 }
 
 export function CommentSection({
@@ -257,6 +266,7 @@ export function CommentSection({
   variant = 'page',
   activityRows = NO_ACTIVITY_ROWS,
   title = 'Comments',
+  defaultSortOrder = 'newest',
 }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { publishComment, editComment } = usePublishComment(entityId, spaceId, {
@@ -320,7 +330,25 @@ export function CommentSection({
     enabled: totalCount > 0,
   });
 
-  const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
+  const [sortOrder, setSortOrder] = useState<CommentSortOrder>(defaultSortOrder);
+
+  // Vote counts for the top level, so Best and Top can order it. Read from the cache each row's own
+  // `EntityVoteButtons` fills rather than fetched here — see `useEntityResponseScores`. A comment's
+  // votes live in its author's personal space, not this thread's, which is why each row carries its
+  // own space rather than inheriting the page's.
+  const scoreTargets = React.useMemo(
+    () => [
+      ...comments.map(comment => ({ entityId: comment.id, spaceId: comment.spaceId })),
+      ...activityRows.map(row => ({ entityId: row.entityId, spaceId: row.spaceId })),
+    ],
+    [activityRows, comments]
+  );
+  const isRanked = sortOrder === 'best' || sortOrder === 'top';
+  const scoresById = useEntityResponseScores(isRanked ? scoreTargets : EMPTY_SCORE_TARGETS);
+  const scoreFor = React.useCallback(
+    (row: { id: string }) => scoresById.get(uuidToHex(row.id)) ?? null,
+    [scoresById]
+  );
   const [filter, setFilter] = useState<CommentFilter>('all');
 
   React.useEffect(() => {
@@ -467,6 +495,7 @@ export function CommentSection({
                       comments={filteredComments}
                       activityRows={activityRows}
                       activityOrder={sortOrder}
+                      activityScoreFor={scoreFor}
                       entityId={entityId}
                       spaceId={spaceId}
                       onReply={handleCreateComment}
@@ -526,6 +555,15 @@ function collectCommentAuthorSpaceIds(comments: CommentWithReplies[]): string[] 
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/** The order the options are offered in, which is also the order of preference they imply. */
+const SORT_ORDERS: CommentSortOrder[] = ['best', 'top', 'newest', 'oldest'];
+const SORT_LABELS: Record<CommentSortOrder, string> = {
+  best: 'Best',
+  top: 'Top',
+  newest: 'New',
+  oldest: 'Old',
+};
+
 function CommentFilters({
   sortOrder,
   onSortChange,
@@ -540,11 +578,13 @@ function CommentFilters({
   return (
     <div className="flex items-center gap-2">
       <Dropdown
-        trigger={<Text variant="smallButton">{sortOrder === 'newest' ? 'Most recent' : 'Oldest'}</Text>}
-        options={[
-          { label: 'Most recent', value: 'newest', disabled: false, onClick: () => onSortChange('newest') },
-          { label: 'Oldest', value: 'oldest', disabled: false, onClick: () => onSortChange('oldest') },
-        ]}
+        trigger={<Text variant="smallButton">{SORT_LABELS[sortOrder]}</Text>}
+        options={SORT_ORDERS.map(value => ({
+          label: SORT_LABELS[value],
+          value,
+          disabled: false,
+          onClick: () => onSortChange(value),
+        }))}
       />
       <Dropdown
         trigger={<Text variant="smallButton">{filter === 'all' ? 'All' : 'Editors replies'}</Text>}
@@ -745,6 +785,7 @@ function CommentList({
   comments,
   activityRows = NO_ACTIVITY_ROWS,
   activityOrder = 'newest',
+  activityScoreFor,
   entityId,
   spaceId,
   onReply,
@@ -766,6 +807,8 @@ function CommentList({
   /** Ordered into the top level alongside the comments; ignored at any other depth. */
   activityRows?: CommentActivityRow[];
   activityOrder?: CommentSortOrder;
+  /** Looks up a top-level row's votes, for the ranked orders. */
+  activityScoreFor?: (row: { id: string }) => { positive: number; negative: number } | null;
   entityId: string;
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
@@ -832,7 +875,7 @@ function CommentList({
   if (depth === 0) {
     // Activity rows only exist at the top level — a debate is not a reply to a comment — so the
     // merge lives inside this branch and the recursive one below is untouched.
-    const merged = mergeActivityRows(comments, activityRows, activityOrder);
+    const merged = mergeActivityRows(comments, activityRows, activityOrder, activityScoreFor);
 
     return (
       <div>
@@ -1449,19 +1492,3 @@ function CommentItem({
   );
 }
 
-function getRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 60) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes} mins`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
-}

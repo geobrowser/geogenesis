@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { DebateResponseKind } from '~/core/debates/api';
 import { isAssertableMoment } from '~/core/debates/claim-timing';
 import { debateSeekSeconds, formatTimecode, withDebateTimecode } from '~/core/debates/debate-timecode';
 import type { ResponseKind } from '~/core/responses/entity-response';
@@ -11,12 +12,13 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Text } from '~/design-system/text';
 
+import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import type { OrderedTranscriptClaim } from './claim-activity-order';
+import { ResponsePositionTag } from './claim-comment-position';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
 
@@ -29,9 +31,10 @@ export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null }
  * everything the reader needs to act without leaving: the split, who is on it, a vote, and the way
  * back to the moment it was said. The full treatment is one click away on the claim's own page.
  *
- * Nothing here is new machinery. `EntityVoteButtons` already draws responder faces beside the
- * control and already picks its icons from the response kind — thumbs for a stance, chevrons for
- * veracity — so a factual claim cannot end up with a thumb labelled "agree".
+ * Built out of what the thread around it already uses: the comment row's own density metrics, the
+ * same `Avatar` framing every other avatar in the app gets, `EntityVoteButtons` (which already
+ * draws responder faces beside the control and picks its icons from the response kind — thumbs for
+ * a stance, chevrons for veracity), and `EntityCommentsButton`. Nothing here is a new control.
  */
 export function ExtractedClaimRow({
   claim,
@@ -39,6 +42,9 @@ export function ExtractedClaimRow({
   debateSpaceId,
   responseKind,
   speaker,
+  speakerPosition,
+  responseVocabulary,
+  density = PAGE_DENSITY,
   className,
 }: {
   claim: OrderedTranscriptClaim;
@@ -55,6 +61,18 @@ export function ExtractedClaimRow({
   responseKind: ResponseKind;
   /** The debater this turn is attributed to, or null on a block with no `Authors` relation. */
   speaker: (SpeakerProfile & { spaceId: string }) | null;
+  /**
+   * The side that debater argued, from the debate's own `Supported by` / `Opposed by` relations.
+   *
+   * Not the same fact as a commenter's badge, which reports where they stand *now*. This one is
+   * fixed: it is the side they took in the debate this claim came out of, and it cannot drift.
+   * Null when the speaker is unknown or the debate does not record a side for them.
+   */
+  speakerPosition: boolean | null;
+  /** The claim page's vocabulary, so the tag reads Agree/Disagree or Verify/Dispute to match. */
+  responseVocabulary: DebateResponseKind;
+  /** The surrounding thread's metrics, so these rows sit on the same ramp as the comments. */
+  density?: CommentDensity;
   className?: string;
 }) {
   // Null where the graph reports no home space. The claim is then unlinkable and unrespondable —
@@ -72,16 +90,30 @@ export function ExtractedClaimRow({
     : null;
 
   return (
-    <div className={cx('flex min-w-0 gap-2.5', className)}>
-      <span className="mt-0.5 shrink-0">
-        <Avatar avatarUrl={speaker?.avatarUrl ?? null} value={speaker?.spaceId} size={24} />
+    // `gap-3` is the comment header's own 12px avatar gap, so a claim row and a comment row put
+    // their text on the same left edge.
+    <div className={cx('flex min-w-0 gap-3', className)}>
+      {/*
+        `Avatar` fills its container whenever it has a real `avatarUrl` to draw — `size` only sizes
+        the generated fallback — so the frame is the caller's job. Same shape the comment rows in
+        this thread use, off the same density, which is what keeps the two kinds of row aligned.
+      */}
+      <span
+        className="relative shrink-0 overflow-hidden rounded-full"
+        style={{ width: density.avatarPx, height: density.avatarPx }}
+      >
+        <Avatar avatarUrl={speaker?.avatarUrl ?? null} value={speaker?.spaceId} size={density.avatarPx} />
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <Text as="span" variant="metadataMedium" color="text" className="truncate">
+          <span className={cx(density.nameClass, 'truncate text-text')}>
             {speaker?.name?.trim() || 'Unnamed debater'}
-          </Text>
+          </span>
+
+          {speakerPosition !== null && (
+            <ResponsePositionTag responseKind={responseVocabulary} position={speakerPosition} />
+          )}
 
           {timecodeHref ? (
             <Link
@@ -89,7 +121,10 @@ export function ExtractedClaimRow({
               // The label says what pressing it does, because "12:04" on its own reads as a fact
               // about the claim rather than as a control.
               aria-label={`Watch from ${formatTimecode(moment!.startMs)}`}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-grey-02 px-2 py-px text-metadata text-ctaPrimary tabular-nums transition-colors hover:border-ctaPrimary"
+              className={cx(
+                density.metaClass,
+                'inline-flex shrink-0 items-center gap-1 rounded-full border border-grey-02 px-2 py-px text-ctaPrimary tabular-nums no-underline transition-colors hover:border-ctaPrimary'
+              )}
             >
               <PlayGlyph />
               {formatTimecode(moment!.startMs)}
@@ -97,25 +132,18 @@ export function ExtractedClaimRow({
           ) : (
             // Said, but not placed: a restated claim, or one the matcher could not find. Better to
             // say the moment is missing than to leave the row looking like it simply has no time.
-            <Text as="span" variant="metadata" color="grey-04" className="shrink-0 italic">
-              moment not found
-            </Text>
+            <span className={cx(density.metaClass, 'shrink-0 text-grey-04 italic')}>moment not found</span>
           )}
         </div>
 
         {claimSpaceId ? (
-          <Link
-            href={NavUtils.toEntity(claimSpaceId, claim.id)}
-            className="group/claim min-w-0 no-underline"
-          >
-            <Text as="span" variant="body" color="text" className="wrap-break-word group-hover/claim:underline">
+          <Link href={NavUtils.toEntity(claimSpaceId, claim.id)} className="group/claim min-w-0 no-underline">
+            <span className={cx(density.bodyClass, 'wrap-break-word text-text group-hover/claim:underline')}>
               {claim.text}
-            </Text>
+            </span>
           </Link>
         ) : (
-          <Text as="span" variant="body" color="text" className="wrap-break-word">
-            {claim.text}
-          </Text>
+          <span className={cx(density.bodyClass, 'wrap-break-word text-text')}>{claim.text}</span>
         )}
 
         {claimSpaceId ? (
