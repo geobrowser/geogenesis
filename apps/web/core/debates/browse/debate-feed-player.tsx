@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import type { ClaimMarker, ClaimTally } from '~/core/debates/claim-ticker';
+import { type ClaimMarker, type ClaimTally, finalClaimTally } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { type TurnCue, turnCueForSlot, turnCuesAt } from '~/core/debates/turn-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
@@ -160,6 +160,19 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     () => (playing && !reducedOverlays ? turnCuesAt(turnSpans, playheadSeconds) : []),
     [playheadSeconds, playing, reducedOverlays, turnSpans]
   );
+
+  /**
+   * Each debater's total, once the debate is over.
+   *
+   * The live tally is transient by design, so without this the video ends on an empty corner. The
+   * counts come off the same backlog the running tally walks, which by the end of playback is
+   * every claim they made — so the closing number cannot disagree with the ones that led to it.
+   */
+  const tallyFor = (slot: number): ClaimTally | null => {
+    if (reducedOverlays) return null;
+    if (playbackEnded) return finalClaimTally((ticker.historyBySlot.get(slot) ?? []).map(card => card.window));
+    return ticker.tallyBySlot.get(slot) ?? null;
+  };
 
   const showReplay = ready && playbackEnded;
   const showControls = ready && (awaitingTap || showReplay);
@@ -375,7 +388,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 1)}
-        claimTally={reducedOverlays ? null : (ticker.tallyBySlot.get(1) ?? null)}
+        claimTally={tallyFor(1)}
+        claimTallyFinal={playbackEnded}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -431,7 +445,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 2)}
-        claimTally={reducedOverlays ? null : (ticker.tallyBySlot.get(2) ?? null)}
+        claimTally={tallyFor(2)}
+        claimTallyFinal={playbackEnded}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -563,6 +578,7 @@ function DebaterVideo({
   countdown,
   turnCue,
   claimTally,
+  claimTallyFinal = false,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -586,6 +602,8 @@ function DebaterVideo({
   turnCue?: TurnCue | null;
   /** This debater's running claim count, while a claim of theirs has just landed. */
   claimTally?: ClaimTally | null;
+  /** The debate is over and this is their total, which stays up rather than passing. */
+  claimTallyFinal?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -830,7 +848,6 @@ function DebaterVideo({
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
 
       <DebateTurnCueOverlay cue={turnCue ?? null} />
-      <DebateClaimTally tally={claimTally ?? null} />
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -891,7 +908,7 @@ function DebaterVideo({
           than its box, which is how a second card used to push the newest one 78px below the
           corner and into the tile's own `overflow-hidden`. Nothing here may set a height the
           content can exceed. */}
-      {claims && (
+      {(claims || claimTally) && (
         <div
           data-claim-corner
           className={cx(
@@ -913,6 +930,10 @@ function DebaterVideo({
             clearScrubber === 'on-hover' && 'group-hover:pb-5'
           )}
         >
+          {/* Above the cards rather than beside them: the tally is counting the thing directly
+              below it, and riding in this box is what keeps the two together as the corner lifts
+              clear of the scrubber and widens for the backlog. */}
+          <DebateClaimTally tally={claimTally ?? null} final={claimTallyFinal} />
           {claims}
         </div>
       )}
@@ -954,6 +975,23 @@ function DebaterVideo({
   );
 }
 
+/**
+ * The ring's colour as a turn runs out.
+ *
+ * White, then amber, then the room's own warning red. The room does the last of these already —
+ * `RecordingCountdownRing` switches to `#FF4A26` at five seconds — and the amber step is new to
+ * both: it is the only cue on the tile that is *ambient*, readable in peripheral vision without
+ * anything firing, which is what lets the phrases stay as rare as they are. Thirty seconds
+ * because that is about when a debater starts to feel it.
+ */
+const COUNTDOWN_WARNING_SECONDS = 30;
+const COUNTDOWN_URGENT_SECONDS = 5;
+function countdownRingColor(seconds: number) {
+  if (seconds <= COUNTDOWN_URGENT_SECONDS) return '#FF4A26';
+  if (seconds <= COUNTDOWN_WARNING_SECONDS) return '#FFA134';
+  return '#ffffff';
+}
+
 function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
   // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
@@ -961,9 +999,10 @@ function CountdownBadge({ seconds, progress }: { seconds: number; progress: numb
   return (
     <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
       <span
-        className="col-start-1 row-start-1 size-7 rounded-full"
+        data-countdown-ring={countdownRingColor(seconds)}
+        className="col-start-1 row-start-1 size-7 rounded-full transition-[background-image] duration-500"
         style={{
-          backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
+          backgroundImage: `conic-gradient(${countdownRingColor(seconds)} ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
           // Hollowed into a 2px ring so the badge's own translucent backing shows through the
           // middle. The frame draws a stroked circle; a filled disc would print the number on a
           // grey plate the design does not have.

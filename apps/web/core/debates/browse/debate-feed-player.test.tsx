@@ -646,11 +646,18 @@ describe('the turn clock, replayed', () => {
     expect(phrases(container)).toContain('Wrap it up!');
   });
 
-  it('points at the tile about to speak as the hand-off approaches', () => {
-    mocks.controller = at(22);
+  it('announces the hand-off on the tile about to speak', () => {
+    mocks.controller = at(20.5);
     mocks.ticker = emptyTicker();
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(phrases(container)).toContain('Up next in 8s');
+    expect(phrases(container)).toContain('Up next in 10s');
+  });
+
+  it('names the round it has just opened', () => {
+    mocks.controller = at(1);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Round 1 · Opening');
   });
 
   it('stands down while the viewer has the debate paused', () => {
@@ -671,12 +678,69 @@ describe('the turn clock, replayed', () => {
 
   it("counts a debater's claims as they land, and not on a compact tile", () => {
     mocks.controller = at(12);
-    mocks.ticker = { ...emptyTicker(), tallyBySlot: new Map([[2, { count: 4, ageMs: 300 }]]) };
+    mocks.ticker = { ...emptyTicker(), tallyBySlot: new Map([[2, { count: 4, ageMs: 300, run: 1 }]]) };
 
     const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
     expect(container.querySelector('[data-claim-tally="4"]')).not.toBeNull();
 
     rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(container.querySelector('[data-claim-tally]')).toBeNull();
+  });
+
+  it('puts the tally in the claim corner, directly over the card it is counting', () => {
+    mocks.controller = at(12);
+    mocks.ticker = { ...emptyTicker(), tallyBySlot: new Map([[2, { count: 4, ageMs: 300, run: 1 }]]) };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const tally = container.querySelector('[data-claim-tally="4"]');
+    // Inside the corner, so it lifts clear of the scrubber and widens with the backlog rather
+    // than being parked somewhere of its own that has to be kept in step by hand.
+    expect(tally?.closest('[data-claim-corner]')).not.toBeNull();
+  });
+
+  it('keeps a corner for the tally when the debater has no card up', () => {
+    // The stack is drawn only while there is something in it; the tally arrives on its own at the
+    // instant a claim lands and at the end of the debate.
+    mocks.controller = at(12);
+    mocks.ticker = { ...emptyTicker(), tallyBySlot: new Map([[1, { count: 2, ageMs: 100, run: 1 }]]) };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-claim-tally="2"]')).not.toBeNull();
+  });
+
+  it('ends the video on both totals rather than an empty corner', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = {
+      ...emptyTicker(),
+      historyBySlot: new Map([
+        [1, [{ window: {} }, { window: {} }, { window: {} }]],
+        [2, [{ window: {} }]],
+      ]),
+    };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const totals = [...container.querySelectorAll('[data-claim-tally]')].map(node =>
+      node.getAttribute('data-claim-tally')
+    );
+    expect(totals).toEqual(['3', '1']);
+  });
+
+  it("ramps the ring from white through amber to the room's own red", () => {
+    const ringAt = (seconds: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1 }),
+        turnState: { slot: 1, seconds, progress: 0.5 },
+      };
+      mocks.ticker = emptyTicker();
+      const { container, unmount } = render(<DebateFeedPlayer debate={debate} active />);
+      const colour = container.querySelector('[data-countdown-ring]')?.getAttribute('data-countdown-ring');
+      unmount();
+      return colour;
+    };
+
+    expect(ringAt(45)).toBe('#ffffff');
+    expect(ringAt(20)).toBe('#FFA134');
+    // The same value `RecordingCountdownRing` uses in the room.
+    expect(ringAt(4)).toBe('#FF4A26');
   });
 });

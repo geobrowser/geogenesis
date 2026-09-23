@@ -292,11 +292,32 @@ export const TALLY_LINGER_MS = 2_600;
 /** The `+1` itself: up and gone well before the tally it lands in. */
 export const TALLY_BURST_MS = 900;
 
+/**
+ * How close together claims have to land to count as one passage of argument.
+ *
+ * Measured rather than chosen would be better, and cannot be yet: the corpus places most claims by
+ * matching them to a turn, so the gaps between them are only as good as the matcher. Thirty
+ * seconds is the length of a short turn, so a run is "several points inside about one speech" —
+ * which is the thing worth marking. It is deliberately not "claims in this turn", because the
+ * ticker has no turn boundaries and giving it some to answer this would be the tail wagging.
+ */
+export const RUN_WINDOW_MS = 30_000;
+/** Below this it is not a run, it is two claims. */
+export const RUN_LENGTH = 3;
+
 export type ClaimTally = {
   /** Claims this debater has made by this point in the debate. */
   count: number;
   /** How long ago the newest one landed. The animation's clock, and the playhead's, not the DOM's. */
   ageMs: number;
+  /**
+   * How many claims landed back to back inside {@link RUN_WINDOW_MS}, the newest included.
+   *
+   * Always at least 1. The tally says so once it reaches {@link RUN_LENGTH}, which is the only
+   * thing here that celebrates rather than reports — so it is held to a bar that a debater
+   * making their case at an ordinary pace will not trip.
+   */
+  run: number;
 };
 
 /**
@@ -312,16 +333,24 @@ export type ClaimTally = {
  * `null` for most of a debate, which is the resting state: nothing has just been said.
  */
 export function claimTally(windows: TickerWindow[], playheadMs: number): ClaimTally | null {
-  let count = 0;
-  let newestStartMs: number | null = null;
-  for (const window of windows) {
-    if (playheadMs < window.startMs) continue;
-    count += 1;
-    // `windows` arrives sorted, so the last one past the playhead is the newest.
-    newestStartMs = window.startMs;
-  }
-  if (count === 0 || newestStartMs === null) return null;
+  const said = windows.filter(window => playheadMs >= window.startMs);
+  const newest = said[said.length - 1];
+  if (!newest) return null;
 
-  const ageMs = playheadMs - newestStartMs;
-  return ageMs < TALLY_LINGER_MS ? { count, ageMs } : null;
+  const ageMs = playheadMs - newest.startMs;
+  if (ageMs >= TALLY_LINGER_MS) return null;
+
+  // Walk back from the newest while each claim is still inside the window of the one after it.
+  let run = 1;
+  for (let index = said.length - 1; index > 0; index -= 1) {
+    if (said[index].startMs - said[index - 1].startMs > RUN_WINDOW_MS) break;
+    run += 1;
+  }
+
+  return { count: said.length, ageMs, run };
+}
+
+/** The whole debate's count for one debater, for the card that closes the video. */
+export function finalClaimTally(windows: TickerWindow[]): ClaimTally | null {
+  return windows.length > 0 ? { count: windows.length, ageMs: 0, run: 1 } : null;
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DebateMediaTurnSegment, ParticipantSlot } from './api';
 import { type TurnSpan, turnSpansForDurations, turnSpansFromSegments } from './playback-utils';
-import { GO_MS, TIME_MS, type TurnCueKind, turnCueForSlot, turnCuesAt } from './turn-cues';
+import { GO_MS, ROUND_MS, TIME_MS, type TurnCueKind, roundLabel, turnCueForSlot, turnCuesAt } from './turn-cues';
 
 /** Two 60s turns, slot 1 first — the shape every assertion below reasons about. */
 const spans = turnSpansForDurations(1, [60_000, 60_000]);
@@ -18,6 +18,25 @@ function kindsAt(seconds: number, source: TurnSpan[] = spans): Record<Participan
 describe('turnCuesAt', () => {
   it('rests through the middle of a turn', () => {
     expect(turnCuesAt(spans, 30)).toEqual([]);
+  });
+
+  it('opens the video with a title rather than a shout', () => {
+    // The first turn has no `GO!` — nothing has happened yet for it to start — so the round card
+    // runs from the first frame and tells a feed viewer what they have scrolled into.
+    const opening = turnCueForSlot(turnCuesAt(spans, 0.5), 1);
+    expect(opening?.kind).toBe('round');
+    expect(opening?.label).toBe('Round 1 · Opening');
+  });
+
+  it('names the round once GO! is done with the tile', () => {
+    expect(kindsAt(60 + GO_MS / 2_000)[2]).toBe('go');
+    const after = turnCueForSlot(turnCuesAt(spans, 60 + (GO_MS + 400) / 1_000), 2);
+    expect(after?.kind).toBe('round');
+    expect(after?.label).toBe('Round 1 · Opening');
+  });
+
+  it('drops the round card before the turn is under way', () => {
+    expect(kindsAt(60 + (GO_MS + ROUND_MS) / 1_000 + 0.1)[2]).toBeNull();
   });
 
   it('says nothing at all when the debate has no turns', () => {
@@ -46,7 +65,7 @@ describe('turnCuesAt', () => {
     });
 
     it('does not shout GO! on the opening turn, which has nothing behind it', () => {
-      expect(kindsAt(0.5)[1]).toBeNull();
+      expect(kindsAt(0.5)[1]).toBe('round');
     });
   });
 
@@ -61,10 +80,16 @@ describe('turnCuesAt', () => {
       expect(kindsAt(at)).toEqual({ 1: null, 2: 'go' });
     });
 
-    it('points at the tile about to speak in the last ten seconds', () => {
-      const cue = turnCueForSlot(turnCuesAt(spans, 52), 2);
+    it('announces the hand-off once, ten seconds out', () => {
+      const cue = turnCueForSlot(turnCuesAt(spans, 50.5), 2);
       expect(cue?.kind).toBe('up-next');
-      expect(cue?.seconds).toBe(8);
+      expect(cue?.seconds).toBe(10);
+    });
+
+    it('leaves again rather than counting down over the other debater', () => {
+      // Ten seconds of anything across the middle of a tile is far past the budget every other
+      // phrase here is held to.
+      expect(kindsAt(55)[2]).toBeNull();
     });
 
     it('has nobody to point at on the final turn', () => {
@@ -142,5 +167,18 @@ describe('turnCuesAt', () => {
       expect(turnCueForSlot(turnCuesAt(earlyYield, 16.5), 1)?.kind).toBe('wrap-up');
       expect(turnCueForSlot(turnCuesAt(earlyYield, 20.5), 2)?.kind).toBe('go');
     });
+  });
+});
+
+describe('roundLabel', () => {
+  it('counts rounds rather than turns, because that is what a viewer counts', () => {
+    expect(roundLabel(0, 4)).toBe('Round 1 · Opening');
+    expect(roundLabel(1, 4)).toBe('Round 1 · Opening');
+    expect(roundLabel(2, 4)).toBe('Round 2 · Rebuttal');
+  });
+
+  it('gives a three-round format its closing arguments (GEO-2852)', () => {
+    expect(roundLabel(2, 6)).toBe('Round 2 · Rebuttal');
+    expect(roundLabel(4, 6)).toBe('Round 3 · Closing');
   });
 });

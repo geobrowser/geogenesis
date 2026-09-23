@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CLAIM_LINGER_MS,
+  RUN_LENGTH,
+  RUN_WINDOW_MS,
   TALLY_BURST_MS,
   TALLY_LINGER_MS,
   backlogWindows,
@@ -9,6 +11,7 @@ import {
   claimHistory,
   claimMarkers,
   claimTally,
+  finalClaimTally,
   tickerStack,
   tickerWindows,
 } from './claim-ticker';
@@ -436,7 +439,7 @@ describe('claimTally', () => {
   });
 
   it('counts every claim said so far and dates the newest', () => {
-    expect(claimTally(windows, 20_500)).toEqual({ count: 2, ageMs: 500 });
+    expect(claimTally(windows, 20_500)).toEqual({ count: 2, ageMs: 500, run: 2 });
   });
 
   it('counts the claims the backlog shows rather than only the assertable ones', () => {
@@ -453,5 +456,43 @@ describe('claimTally', () => {
   it('is a function of the playhead, so scrubbing back re-counts rather than accumulating', () => {
     expect(claimTally(windows, 30_100)?.count).toBe(3);
     expect(claimTally(windows, 10_100)?.count).toBe(1);
+  });
+});
+
+describe('claim runs', () => {
+  const runOf = (endsMs: number[], playheadMs: number) =>
+    claimTally(
+      backlogWindows(endsMs.map((endMs, index) => timed(String(index), confident(endMs - 1_000, endMs)))),
+      playheadMs
+    )?.run;
+
+  it("counts claims that land on each other's heels", () => {
+    expect(runOf([0, 10_000, 20_000], 20_100)).toBe(3);
+  });
+
+  it('breaks the run on a gap, so a steady pace never trips it', () => {
+    const gap = RUN_WINDOW_MS + 1_000;
+    expect(runOf([0, gap, gap * 2], gap * 2 + 100)).toBe(1);
+  });
+
+  it('starts counting again from the claim after the gap', () => {
+    const gap = RUN_WINDOW_MS + 1_000;
+    expect(runOf([0, gap, gap + 5_000, gap + 10_000], gap + 10_100)).toBe(3);
+  });
+
+  it('needs more than a pair before anything is said about it', () => {
+    expect(RUN_LENGTH).toBeGreaterThan(2);
+    expect(runOf([0, 5_000], 5_100)).toBeLessThan(RUN_LENGTH);
+  });
+});
+
+describe('finalClaimTally', () => {
+  it("holds the whole debate's count, past every window", () => {
+    const windows = backlogWindows([timed('a', confident(0, 1_000)), timed('b', confident(2_000, 3_000))]);
+    expect(finalClaimTally(windows)).toEqual({ count: 2, ageMs: 0, run: 1 });
+  });
+
+  it('has nothing to show for a debater who made no claims', () => {
+    expect(finalClaimTally([])).toBeNull();
   });
 });

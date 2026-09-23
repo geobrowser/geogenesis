@@ -1,4 +1,5 @@
 import type { ParticipantSlot } from './api';
+import { debateTurnRole } from './formats';
 import type { TurnSpan } from './playback-utils';
 
 /**
@@ -24,6 +25,8 @@ export type TurnCueKind =
   | 'countdown'
   /** The buzzer, on the tile that just finished. */
   | 'time'
+  /** What this round is for, once the shouting is over. */
+  | 'round'
   /** The hand-off, on the tile about to speak. */
   | 'up-next';
 
@@ -37,6 +40,8 @@ export type TurnCue = {
    * Whole seconds, because it is read rather than measured.
    */
   seconds?: number;
+  /** What a `round` cue says. Built here so the wording lives with the timing that shows it. */
+  label?: string;
 };
 
 /**
@@ -53,8 +58,33 @@ export const WRAP_UP_FROM_SECONDS = 5;
 export const COUNTDOWN_FROM_SECONDS = 3;
 /** The buzzer, over the outgoing tile while the incoming one is already saying `GO!`. */
 export const TIME_MS = 1_400;
-/** Long enough to look up and find the tile that is about to matter, short enough to still be soon. */
-export const UP_NEXT_FROM_SECONDS = 10;
+/**
+ * When the hand-off is announced on the tile about to speak, and for how long.
+ *
+ * Ten seconds out: long enough to look up and find the tile that is about to matter, short enough
+ * that it is still about to happen.
+ *
+ * It fires *once* and holds, rather than counting down for the whole ten seconds, and that is a
+ * placement decision as much as a pacing one. Every other phrase here crosses the middle of a tile
+ * for about two seconds; a cue that had to stay up for ten could not sit there, and the only other
+ * space on the tile is the bottom band, where the other debater's claim card may still be
+ * lingering. So it takes the same place as everything else and leaves again — and the number is
+ * read at the moment it is true.
+ */
+export const UP_NEXT_AT_SECONDS = 10;
+export const UP_NEXT_MS = 2_200;
+/**
+ * How long the round card holds, and where it sits relative to `GO!`.
+ *
+ * After it rather than instead of it. `GO!` is the room's own signature and says *go*; this says
+ * what to go and do, which is a different sentence and a quieter one. Reading them at once would
+ * be two shouts over one face.
+ *
+ * On the opening turn there is no `GO!` to follow, so this runs from the first frame and doubles
+ * as the video's title card — which is the one moment a feed viewer has no idea what they have
+ * scrolled into.
+ */
+export const ROUND_MS = 1_800;
 
 /** Long enough to register as arriving rather than blinking into place — `claim-ticker.ts`'s value. */
 const FADE_IN_MS = 250;
@@ -116,23 +146,55 @@ export function turnCuesAt(spans: TurnSpan[], playheadSeconds: number): TurnCue[
     // No `GO!` on the opening turn. The video has only just started and the viewer has not been
     // shown a clock yet, so the first thing they would see is a shout with no context.
     cues.push({ kind: 'go', slot: current.slot, opacity: cueOpacity(sinceStartMs, GO_MS) });
+  } else {
+    // The round card takes the same slot once `GO!` is done with it — see {@link ROUND_MS}.
+    const roundFromMs = previous ? GO_MS : 0;
+    const intoRoundMs = sinceStartMs - roundFromMs;
+    if (intoRoundMs >= 0 && intoRoundMs < ROUND_MS) {
+      cues.push({
+        kind: 'round',
+        slot: current.slot,
+        label: roundLabel(current.index, spans.length),
+        opacity: cueOpacity(intoRoundMs, ROUND_MS),
+      });
+    }
   }
 
   // --- the other tile.
   if (previous && sinceStartMs < TIME_MS) {
     cues.push({ kind: 'time', slot: previous.slot, opacity: cueOpacity(sinceStartMs, TIME_MS) });
-  } else if (next && remainingSeconds > 0 && remainingSeconds <= UP_NEXT_FROM_SECONDS) {
-    const windowMs = UP_NEXT_FROM_SECONDS * 1_000;
-    const ageMs = (UP_NEXT_FROM_SECONDS - remainingSeconds) * 1_000;
+  } else if (next && remainingSeconds > 0 && remainingSeconds <= UP_NEXT_AT_SECONDS) {
+    const ageMs = (UP_NEXT_AT_SECONDS - remainingSeconds) * 1_000;
     cues.push({
       kind: 'up-next',
       slot: next.slot,
-      seconds: Math.ceil(remainingSeconds),
-      opacity: cueOpacity(ageMs, windowMs),
+      seconds: UP_NEXT_AT_SECONDS,
+      opacity: cueOpacity(ageMs, UP_NEXT_MS),
     });
   }
 
   return cues.filter(cue => cue.opacity > 0);
+}
+
+/**
+ * What a turn is for, in the words the format already uses.
+ *
+ * `debateTurnRole` is the same function the room's countdown and the format details read, so a
+ * debate recorded under the old four-turn format labels its rounds the way it always has.
+ * Rounds rather than turns, because a viewer counts exchanges, not speeches.
+ */
+export function roundLabel(turnIndex: number, turnCount: number): string {
+  const round = Math.floor(turnIndex / 2) + 1;
+  switch (debateTurnRole(turnIndex, turnCount)) {
+    case 'opening':
+      return `Round ${round} · Opening`;
+    case 'rebuttal':
+      return `Round ${round} · Rebuttal`;
+    case 'closing':
+      return `Round ${round} · Closing`;
+    default:
+      return `Round ${round}`;
+  }
 }
 
 /** This tile's cue, or nothing. The shape every consumer actually wants. */
