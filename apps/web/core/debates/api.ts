@@ -1514,10 +1514,11 @@ export type UpcomingDebateRoom = {
   /** Whether anyone else is already inside, so the prompt can say they are waiting. */
   others_present: boolean;
   /**
-   * The debate-again session the room has handed out, `null` until someone joins. The coordinator
-   * reads it to tell a room's session from a challenge's, which `activity.rematch` cannot.
+   * The debate-again session the room has handed out, `null` until someone joins, `undefined` on a
+   * geo-chat that predates the field. The coordinator reads it to tell a room's session from a
+   * challenge's, which `activity.rematch` cannot.
    */
-  rematch_session_id: string | null;
+  rematch_session_id?: string | null;
 };
 
 export type UpcomingDebateRoomsResponse = {

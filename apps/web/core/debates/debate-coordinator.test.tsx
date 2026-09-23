@@ -638,6 +638,21 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  // Until geo-chat reports the field, no room's session can be identified, so an open room has to
+  // suppress the push the coarse way rather than redirecting someone out of a room.
+  it('does not push while a room list without session ids is open', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const { rematch_session_id: _omitted, ...legacyRoom } = upcomingRoom();
+    mocks.upcomingRooms = [legacyRoom as UpcomingDebateRoom];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
   // A joinable room with no session yet may have just minted this one on a join this tab has not
   // heard about, so the server is asked once before anyone is moved.
   it('checks the room list before pushing when a joinable room has no session yet', async () => {

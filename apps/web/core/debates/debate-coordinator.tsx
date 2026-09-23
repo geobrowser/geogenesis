@@ -224,6 +224,10 @@ export function DebateCoordinator() {
     [upcomingRooms]
   );
   const hasRoomAwaitingSession = joinableRooms.some(room => room.rematch_session_id === null);
+  // `undefined` is a geo-chat that predates the field, where no room's session can be identified.
+  // Until it deploys, an open room suppresses the push as it did before: a redirect into a room's
+  // session is what the ticket bans, and a delayed challenge push is the lesser cost.
+  const roomSessionsReported = upcomingRooms.every(room => room.rematch_session_id !== undefined);
   const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.
@@ -324,6 +328,7 @@ export function DebateCoordinator() {
     // Never out of, or on behalf of, a room (GEO-2941). Keyed on the session itself, so a
     // challenge's rematch still routes normally while a room is open.
     if (atRoom || roomSessionIds.has(rematch.id)) return;
+    if (!roomSessionsReported && joinableRooms.length > 0) return;
     // A joinable room with no session yet may have just minted this one on a join this tab has
     // not heard about. Ask the server once before moving anyone.
     if (hasRoomAwaitingSession && checkedSessionRef.current !== rematch.id) {
@@ -345,7 +350,9 @@ export function DebateCoordinator() {
     atRoom,
     hasAttention,
     hasRoomAwaitingSession,
+    joinableRooms,
     pathname,
+    roomSessionsReported,
     refetchUpcomingRooms,
     roomSessionIds,
     roomsChecked,
