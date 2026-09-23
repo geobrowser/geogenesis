@@ -409,6 +409,14 @@ export type DebateMatchmakingPresence = {
   in_debate: boolean;
   /** Server-authoritative. Requests target the candidate who has been online longest. */
   online_since: string | null;
+  /**
+   * When this person last did something only a human does — pointer, keyboard or scroll.
+   *
+   * The strict half of presence. `online` above answers "is a tab open", which never goes stale
+   * while the tab lives, so a pool ranked on it alone fills with abandoned tabs. `null` means the
+   * client has never reported, which is not the same as idle: the server ranks it between the two.
+   */
+  last_input_at: string | null;
 };
 
 export type DebatePerson = DebateParticipantSummary &
@@ -890,6 +898,23 @@ export async function getScheduleOverlaps(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/**
+ * Reports that a human did something. The strict half of presence.
+ *
+ * Deliberately not folded into the presence heartbeat: that fires on a timer and proves only that
+ * a tab exists, and conflating the two is what let the matchmaking pool fill with open tabs.
+ * Fire-and-forget — a dropped report costs a slightly stale ranking and nothing else, so it must
+ * never surface an error or block anything.
+ */
+export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<void>('/me/debate-interaction', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 

@@ -39,6 +39,7 @@ import {
   usePreparedSocialVideo,
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
+import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
 import { useScrollLock } from './use-scroll-lock';
 
 /**
@@ -102,6 +103,14 @@ export function DebateCoordinator() {
   // The polling gates in `hooks.ts` deliberately did NOT move with it — a hidden tab should stop
   // refetching even though it is still present. Splitting those two is GEO-2842.
   const debatePresence = useDebatePresence();
+  // The strict half of presence. Mounted beside the gateway because it answers the question the
+  // gateway's heartbeat cannot: that heartbeat proves a tab exists, this proves someone is in
+  // front of it. geo-chat ranks matchmaking by it and never gates on it.
+  useDebateInteractionReporter(
+    geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
   // Exactly one tab: visible *and* focused. See the rematch routing effect below.
   const hasAttention = useDebateAttention();
   const gateway = useDebateGateway(
