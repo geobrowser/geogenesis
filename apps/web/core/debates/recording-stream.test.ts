@@ -6,6 +6,9 @@ import type { db as database } from '~/core/database/indexeddb';
 
 import type * as RecordingStream from './recording-stream';
 
+const analytics = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock('~/core/analytics', () => analytics);
+
 let db: typeof database;
 let stream: typeof RecordingStream;
 let GeoChatRequestError: typeof import('./api').GeoChatRequestError;
@@ -82,6 +85,7 @@ describe('debate recording streaming', () => {
   });
 
   beforeEach(async () => {
+    analytics.capture.mockReset();
     db.close();
     await db.delete();
     await db.open();
@@ -200,6 +204,35 @@ describe('debate recording streaming', () => {
     });
   });
 
+  it('reports one summary of how the live upload went when the recording is handed over', async () => {
+    const wire = transport();
+    const live = stream.startLiveRecordingStream({
+      id: 'user-a:debate-1:1',
+      metadata: metadata(),
+      transport: {
+        ...wire,
+        startMultipart: async () => ({ filename: 'rec/1.local.webm', upload_id: 'upload-1', part_size: 5 }),
+      },
+      shouldPause: () => false,
+    });
+    live.append(new Blob(['0123456789ab']), 2_000);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    await live.finish();
+
+    expect(analytics.capture).toHaveBeenCalledWith(
+      'debate_recording_stream_finished',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        streaming: 'on',
+        bytes_recorded: 12,
+        parts_uploaded_live: 2,
+        total_parts: 3,
+        saved_locally: true,
+      })
+    );
+  });
+
   it('uploadRemainingParts sends only the parts that did not make it out live, tail included', async () => {
     const wire = transport();
     const progress: number[] = [];
@@ -269,6 +302,10 @@ describe('debate recording streaming', () => {
       expect(adopted).toMatchObject({ debateId: 'debate-1', startedAtMs: 1_000, lastChunkAtMs: 61_000 });
       expect(await text(blob)).toBe('recorded');
       expect(await stream.getRecordingStream(id)).toBeUndefined();
+      expect(analytics.capture).toHaveBeenCalledWith(
+        'debate_recording_orphan',
+        expect.objectContaining({ debate_id: 'debate-1', outcome: 'recovered', bytes: 8 })
+      );
     });
 
     it('leaves a recorder that is still writing alone', async () => {
@@ -309,6 +346,10 @@ describe('debate recording streaming', () => {
       expect(deps.enqueue).not.toHaveBeenCalled();
       expect(deps.abortMultipart).toHaveBeenCalledWith('debate-1', 'rec/1.local.webm', 'upload-1');
       expect(await stream.getRecordingStream(id)).toBeUndefined();
+      expect(analytics.capture).toHaveBeenCalledWith(
+        'debate_recording_orphan',
+        expect.objectContaining({ outcome: 'discarded_cancelled' })
+      );
     });
 
     it('discards the orphan when geo-chat already has this participant’s recording', async () => {
