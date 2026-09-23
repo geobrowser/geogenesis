@@ -1,7 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import * as React from 'react';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
 
@@ -88,23 +91,63 @@ describe('DebateRoundBadge', () => {
 });
 
 describe('DebateScorecard', () => {
+  const card = (props: Partial<React.ComponentProps<typeof DebateScorecard>> = {}) =>
+    render(
+      <DebateScorecard
+        name="Maya"
+        avatar={<img alt="" data-testid="avatar" />}
+        claims={9}
+        speakingTime="4:07"
+        won
+        onOpenProfile={vi.fn()}
+        {...props}
+      />
+    );
+
   it('closes the video on the figures rather than a stop', () => {
-    render(<DebateScorecard name="Maya" claims={9} speakingTime="4:07" won />);
+    card();
     expect(screen.getByText('Maya')).toBeInTheDocument();
     expect(screen.getByText('9')).toBeInTheDocument();
-    expect(screen.getByText('claims · 4:07 speaking')).toBeInTheDocument();
+    expect(screen.getByText('claims')).toBeInTheDocument();
+    expect(screen.getByText('4:07 speaking')).toBeInTheDocument();
+  });
+
+  it('opens with the person, not the number', () => {
+    card();
+    expect(screen.getByTestId('avatar')).toBeInTheDocument();
+  });
+
+  it('keeps the name a link to their profile', async () => {
+    const onOpenProfile = vi.fn();
+    card({ onOpenProfile });
+    await userEvent.click(screen.getByRole('button', { name: /Maya/ }));
+    expect(onOpenProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the rest of the card out of the way of the pointer', () => {
+    // Everything else on the tile is a click target for play/pause, and a full-cover layer that
+    // took events would swallow it.
+    const { container } = card();
+    expect([...(container.firstElementChild as HTMLElement).classList]).toContain('pointer-events-none');
   });
 
   it('reads correctly for a debater who made one claim', () => {
-    render(<DebateScorecard name="Dev" claims={1} speakingTime={null} won={false} />);
+    card({ claims: 1, speakingTime: null });
     expect(screen.getByText('claim')).toBeInTheDocument();
+  });
+
+  it('says nothing about time it does not have', () => {
+    card({ speakingTime: null });
+    expect(screen.queryByText(/speaking/)).toBeNull();
   });
 
   it('marks the higher count without calling the debate', () => {
     // The vote decides who won; this only says who said more, which is a different sentence.
-    const { container: winner } = render(<DebateScorecard name="Maya" claims={9} speakingTime={null} won />);
-    const { container: loser } = render(<DebateScorecard name="Dev" claims={4} speakingTime={null} won={false} />);
-    expect((winner.querySelector('[data-scorecard] span:nth-child(2)') as HTMLElement).style.color).not.toBe('');
-    expect((loser.querySelector('[data-scorecard] span:nth-child(2)') as HTMLElement).style.color).toBe('');
+    const { container: winner } = card({ won: true });
+    const { container: loser } = card({ name: 'Dev', claims: 4, won: false });
+    const figure = (root: HTMLElement, who: string) =>
+      root.querySelector(`[data-scorecard="${who}"] span.font-bold`) as HTMLElement;
+    expect(figure(winner, 'Maya').style.color).not.toBe('');
+    expect(figure(loser, 'Dev').style.color).toBe('');
   });
 });

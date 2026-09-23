@@ -716,6 +716,31 @@ describe('the turn clock, replayed', () => {
     expect(cards.map(card => card.textContent)).toEqual([expect.stringContaining('3'), expect.stringContaining('1')]);
   });
 
+  it('names each debater once at the end, not twice', () => {
+    // The scorecard lifts the tile's own name row into the middle of the tile — same avatar, same
+    // label, same link — so the row itself stands down rather than sitting dimmed under the scrim.
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const named = [...container.querySelectorAll('button')].filter(
+      button => button.textContent?.includes('space-1') && !button.hasAttribute('hidden')
+    );
+    expect(named).toHaveLength(1);
+    expect(named[0].closest('[data-scorecard]')).not.toBeNull();
+  });
+
+  it('drops the last subtitle once the debate is over', () => {
+    // A caption for speech that is playing. Held up after the last frame it is a fragment of a
+    // sentence nobody is saying, printed across the end card by a layer that outranks it.
+    const subtitle = 'a half-finished sentence';
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true, subtitle });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
   it('keeps the scorecard off a compact gallery tile', () => {
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
     mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };

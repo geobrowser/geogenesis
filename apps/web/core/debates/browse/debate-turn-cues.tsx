@@ -134,37 +134,62 @@ export function DebateRoundBadge({ badge }: { badge: { label: string; opacity: n
  * keep the seam it already sits on: each debater's figures land over their own face, and the
  * middle of the player stays clear without anything having to be laid out around a button.
  *
+ * It opens with the person rather than the number. A bare figure over a face the viewer has just
+ * spent four minutes with reads as a readout about a stranger; the avatar and name that already
+ * identify this tile, lifted out of the bottom band and set at the top of the card, make it a
+ * line about someone. It is the same avatar, the same label and the same link — the tile's own
+ * name row stands down while this is up rather than showing the name twice.
+ *
  * It is the only thing in this file that is not transient, and the only one allowed to cover a
  * face for as long as it likes. The debate is over; there is nothing behind it to watch.
  */
 export function DebateScorecard({
   name,
+  avatar,
   claims,
   speakingTime,
   won,
+  onOpenProfile,
 }: {
   name: string;
+  avatar: React.ReactNode;
   claims: number;
   speakingTime: string | null;
   /** Made more claims than the other debater. A nudge, not a verdict — the vote decides that. */
   won: boolean;
+  onOpenProfile: (event: React.MouseEvent) => void;
 }) {
   return (
     <div
       data-scorecard={name}
-      className="pointer-events-none absolute inset-0 z-[13] flex flex-col items-center justify-center gap-1 bg-black/45 px-4 text-center backdrop-blur-[2px]"
+      // `pointer-events-none` on the card, `auto` on the name: everything else on this tile is a
+      // click target for play/pause, and a full-cover layer would swallow it.
+      className="pointer-events-none absolute inset-0 z-[13] flex flex-col items-center justify-center gap-2 bg-black/55 px-4 text-center backdrop-blur-[3px]"
     >
-      <span className="text-[0.6875rem] tracking-[0.12em] text-white/70 uppercase">{name}</span>
-      <span
-        className="text-[clamp(2.25rem,11cqw,4rem)] leading-[0.9] font-bold text-white tabular-nums"
-        style={won ? { color: 'var(--color-green)' } : undefined}
+      <button
+        type="button"
+        onClick={onOpenProfile}
+        className="pointer-events-auto flex max-w-full items-center gap-2 text-left"
       >
-        {claims}
-      </span>
-      <span className="text-[0.8125rem] leading-none text-white">
-        {claims === 1 ? 'claim' : 'claims'}
-        {speakingTime ? ` · ${speakingTime} speaking` : ''}
-      </span>
+        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">{avatar}</span>
+        <span className="truncate text-[1rem] leading-none tracking-[-0.35px] text-white">{name}</span>
+      </button>
+
+      <div className="flex items-baseline gap-1.5">
+        <span
+          className="text-[clamp(2rem,10cqw,3.5rem)] leading-[0.9] font-bold text-white tabular-nums"
+          style={won ? { color: 'var(--color-green)' } : undefined}
+        >
+          {claims}
+        </span>
+        <span className="text-[0.9375rem] leading-none font-medium text-white">
+          {claims === 1 ? 'claim' : 'claims'}
+        </span>
+      </div>
+
+      {speakingTime && (
+        <span className="text-[0.75rem] leading-none text-white/70 tabular-nums">{speakingTime} speaking</span>
+      )}
     </div>
   );
 }

@@ -189,11 +189,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     const claims = ticker.historyBySlot.get(slot)?.length ?? 0;
     const other = ticker.historyBySlot.get(slot === 1 ? 2 : 1)?.length ?? 0;
     const seconds = speakingSeconds.get(slot);
-    const participant = slot === 1 ? slot1Participant : slot2Participant;
     return {
-      name: participant ? speakerLabel(participant) : 'Debater',
       claims,
       speakingTime: seconds ? formatSpeakingTime(seconds) : null,
+      // A draw marks neither, which is the honest reading of two equal counts.
       won: claims > other,
     };
   };
@@ -550,7 +549,11 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
           seam. */}
-      {subtitle && (!reducedOverlays || (active && playing && mutedByUser)) && (
+      {/* Gone once the debate is over. A subtitle is a caption for speech that is playing; held up
+          after the last frame it is a fragment of a sentence nobody is saying, and it outranks the
+          scorecard's own layer — so it printed half a line across the end card. Paused and
+          inactive still keep theirs: there the speech is only stopped, not finished. */}
+      {subtitle && !playbackEnded && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
@@ -627,8 +630,8 @@ function DebaterVideo({
   turnCue?: TurnCue | null;
   /** The round in progress, parked beside this tile's timer. Only the speaker's tile has one. */
   roundBadge?: { label: string; opacity: number } | null;
-  /** How this debater finished, once the debate has. */
-  scorecard?: { name: string; claims: number; speakingTime: string | null; won: boolean } | null;
+  /** How this debater finished, once the debate has. The tile supplies who they are. */
+  scorecard?: { claims: number; speakingTime: string | null; won: boolean } | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -876,10 +879,12 @@ function DebaterVideo({
       <DebateTurnCueOverlay cue={turnCue ?? null} />
       {scorecard && (
         <DebateScorecard
-          name={scorecard.name}
+          name={name}
+          avatar={<Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />}
           claims={scorecard.claims}
           speakingTime={scorecard.speakingTime}
           won={scorecard.won}
+          onOpenProfile={openProfile}
         />
       )}
 
@@ -984,6 +989,10 @@ function DebaterVideo({
       <button
         type="button"
         onClick={openProfile}
+        // Hidden, not faded: the scorecard lifts this exact row — same avatar, same label, same
+        // link — into the middle of the tile, and a second copy of it dimmed under the scrim reads
+        // as the card having failed to cover something.
+        hidden={Boolean(scorecard)}
         className={cx(
           'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
