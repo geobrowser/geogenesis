@@ -34,8 +34,6 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
-import { Minus } from '~/design-system/icons/minus';
-import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
@@ -55,7 +53,12 @@ import {
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
-import { THREAD_BRANCH_HIT_PX, ThreadSpine, branchPointerBlurProps } from './thread-branch';
+import {
+  ThreadCollapseToggle,
+  ThreadListSpine,
+  ThreadParentSpine,
+  branchPointerBlurProps,
+} from './thread-branch';
 import { getRelativeTime } from './comment-time';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
@@ -914,8 +917,8 @@ function CommentList({
     <div className="comment-branch-list-root relative" ref={containerRef}>
       {/* Single continuous vertical line from top to just before the last reply's curve */}
       {parentCommentId != null && (
-        <ThreadSpine
-          density={density}
+        <ThreadListSpine
+          reachPx={spineOffsetPx}
           heightPx={lastReplyTop}
           lit={listSpineLit}
           collapsed={isThreadCollapsed(parentCommentId)}
@@ -1137,7 +1140,6 @@ function CommentItem({
   const nestedSpineLeftPx = -threadSpineOffsetPx(density);
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
   const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? density.avatarCenterPx : nestedSpineLeftPx;
-  const threadLineStrokeCenterNudgePx = 0.5;
   /** X of thread line relative to body inner left (vote row). */
   const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - density.bodyInsetPx;
   const commentRef = React.useRef<HTMLDivElement>(null);
@@ -1278,24 +1280,15 @@ function CommentItem({
       {!isEditing && (
         <div className="relative mt-2 flex items-center gap-4">
           {showThreadToggle && showBranchCollapseButton && (
-            <button
-              type="button"
-              aria-expanded
-              aria-label="Collapse comment thread"
-              onClick={() => toggleThreadCollapsed(comment.id)}
-              onPointerEnter={() => hi.setParentThreadFocus(comment.id)}
-              onFocus={() => hi.setParentThreadFocus(comment.id)}
-              onPointerDown={() => hi.pressSpineForListParent(comment.id)}
-              {...parentThreadLeave}
-              className="comment-branch-parent-hit pointer-events-auto absolute top-1/2 z-[2] flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-grey-02 bg-bg text-grey-04 hover:bg-grey-01"
-              style={{
-                left: `calc(${threadToggleLeftInBodyPx}px + ${threadLineStrokeCenterNudgePx}px)`,
-              }}
-            >
-              <span className="inline-flex scale-[0.55] leading-none">
-                <Minus color="grey-04" />
-              </span>
-            </button>
+            <ThreadCollapseToggle
+              collapsed={false}
+              leftPx={threadToggleLeftInBodyPx}
+              label={{ expand: 'Expand comment thread', collapse: 'Collapse comment thread' }}
+              onToggle={() => toggleThreadCollapsed(comment.id)}
+              onFocusBranch={() => hi.setParentThreadFocus(comment.id)}
+              onPressBranch={() => hi.pressSpineForListParent(comment.id)}
+              onClearFocus={hi.clearFocus}
+            />
           )}
           <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
           <button
@@ -1371,17 +1364,14 @@ function CommentItem({
         <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
           <div className="flex shrink-0 items-center justify-center" style={{ width: density.avatarPx }}>
             {showThreadToggle && (
-              <button
-                type="button"
-                aria-expanded={false}
-                aria-label={hasReplies ? 'Expand comment thread' : 'Expand comment'}
-                onClick={() => toggleThreadCollapsed(comment.id)}
-                className="z-[2] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 bg-bg text-grey-04 hover:bg-grey-01"
-              >
-                <span className="inline-flex scale-[0.55] leading-none">
-                  <Plus color="grey-04" />
-                </span>
-              </button>
+              <ThreadCollapseToggle
+                collapsed
+                label={{
+                  expand: hasReplies ? 'Expand comment thread' : 'Expand comment',
+                  collapse: hasReplies ? 'Collapse comment thread' : 'Collapse comment',
+                }}
+                onToggle={() => toggleThreadCollapsed(comment.id)}
+              />
             )}
           </div>
           <div
@@ -1415,33 +1405,18 @@ function CommentItem({
         </div>
       ) : hasReplies ? (
         <div className="thread-branch-hover-root relative">
-          {parentLineHeight != null && parentLineHeight > 0 && (
-            <button
-              type="button"
-              aria-label="Collapse comment thread"
-              onClick={() => toggleThreadCollapsed(comment.id)}
-              onPointerEnter={() => hi.setParentThreadFocus(comment.id)}
-              onFocus={() => hi.setParentThreadFocus(comment.id)}
-              onPointerDown={() => hi.pressSpineForListParent(comment.id)}
-              {...parentThreadLeave}
-              className="comment-branch-parent-hit comment-branch-parent-spine absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
-              style={{
-                left: `${density.avatarCenterPx}px`,
-                // Starts just below the avatar it descends from.
-                top: `${avatarBottomInRowPx(density)}px`,
-                height: `${parentLineHeight}px`,
-                width: `${THREAD_BRANCH_HIT_PX}px`,
-              }}
-            >
-              <span
-                className={cx(
-                  THREAD_LEVEL_BRANCH_SEGMENT,
-                  'w-px shrink-0 transition-colors',
-                  parentSpineLineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
-                )}
-              />
-            </button>
-          )}
+          <ThreadParentSpine
+            leftPx={density.avatarCenterPx}
+            // Starts just below the avatar it descends from.
+            topPx={avatarBottomInRowPx(density)}
+            heightPx={parentLineHeight}
+            lit={parentSpineLineLit}
+            label="Collapse comment thread"
+            onToggle={() => toggleThreadCollapsed(comment.id)}
+            onFocusBranch={() => hi.setParentThreadFocus(comment.id)}
+            onPressBranch={() => hi.pressSpineForListParent(comment.id)}
+            onClearFocus={hi.clearFocus}
+          />
           {expandedHeaderRow}
           <div className="comment-body-slot mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}

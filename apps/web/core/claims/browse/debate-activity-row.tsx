@@ -4,11 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
 import type { DebateResponseKind } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
+import { useComments } from '~/core/hooks/use-comments';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { uuidToHex } from '~/core/id/normalize';
 import type { ResponseKind } from '~/core/responses/entity-response';
@@ -19,17 +20,48 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
+import { type CommentDensity, PAGE_DENSITY, threadArmCenterPx } from '~/partials/comments/comment-density';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-import { ThreadArm, ThreadElbow, ThreadSpine } from '~/partials/comments/thread-branch';
+import {
+  ThreadArm,
+  ThreadCollapseToggle,
+  ThreadElbow,
+  ThreadListSpine,
+  ThreadParentSpine,
+} from '~/partials/comments/thread-branch';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { orderExtractedClaims } from './claim-activity-order';
+import { DebateCommentRow } from './debate-comment-row';
 import { ExtractedClaimRow, type SpeakerProfile } from './extracted-claim-row';
 
-/** Same 48px the claim page's debates module uses, in the 540 × 820 the videos are published at. */
-const KEYFRAME_WIDTH_PX = 48;
+/**
+ * Geometry for a debate row, which is a comment row with a wider left column.
+ *
+ * A debate's thumbnail is the still it was published with — 540 × 820, so portrait — and it needs
+ * more than a 32px avatar's width to be legible at all. Everything downstream is derived from these
+ * numbers rather than assumed, which is what lets the branch beneath reach back to the right place
+ * without any of the connector code knowing a debate exists.
+ */
+const KEYFRAME_WIDTH_PX = 44;
+/** The still's own aspect, so it is never letterboxed or cropped. */
+const KEYFRAME_HEIGHT_PX = Math.round((KEYFRAME_WIDTH_PX * 820) / 540);
+/** Gap between the thumbnail's bottom edge and where its spine starts. */
+const SPINE_START_GAP_PX = 4;
+
+const DEBATE_DENSITY: CommentDensity = {
+  ...PAGE_DENSITY,
+  avatarPx: KEYFRAME_WIDTH_PX,
+  avatarCenterPx: KEYFRAME_WIDTH_PX / 2,
+  // The same 12px gap a comment puts between its avatar and its text, so the two rows' bodies line
+  // up on the left even though their left columns are different widths.
+  bodyInsetPx: KEYFRAME_WIDTH_PX + 12,
+  headerMinHeightPx: KEYFRAME_HEIGHT_PX,
+};
+
+/** How far the branch's connectors reach back to find this row's spine. */
+const BRANCH_REACH_PX = DEBATE_DENSITY.bodyInsetPx - DEBATE_DENSITY.avatarCenterPx;
 
 export type DebateActivityRowProps = {
   debate: Entity;
@@ -45,20 +77,18 @@ export type DebateActivityRowProps = {
   claimText: string | null;
   keyframeUrl: string | null;
   publishedAt: Date | null;
-  /** The surrounding thread's metrics, so this row sits on the same ramp as the comments. */
-  density?: CommentDensity;
 };
 
 /**
- * A debate, as a row in the claim's activity feed, with the claims pulled out of it as its replies.
+ * A debate, as a row in the claim's activity feed, with everything it produced hanging off it.
+ *
+ * Laid out exactly like a comment with replies, because that is what it is: a row, then a branch of
+ * rows that belong to it. The spine descends from the thumbnail, the ⊖ threaded onto it closes the
+ * branch, and the rows below connect back with the same arms and elbow a reply gets.
  *
  * The thumbnail is the still the debate was published with rather than a mounted player. Three
  * debate rows on a page would otherwise be three `DebateFeedPlayer`s fetching and decoding at once
  * for a reader who is scrolling past all of them; the still costs one image, and Watch is one click.
- *
- * The score is the ordinary entity upvote/downvote, not a who-won tally. Winner voting is being
- * sunset, and a row whose number needed a footnote to say which kind of voting produced it was
- * exactly the confusion worth removing.
  */
 export function DebateActivityRow({
   debate,
@@ -69,7 +99,6 @@ export function DebateActivityRow({
   claimText,
   keyframeUrl,
   publishedAt,
-  density = PAGE_DENSITY,
 }: DebateActivityRowProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const { openComments } = useEntityCommentsPanel();
@@ -85,48 +114,105 @@ export function DebateActivityRow({
     [sides]
   );
   const title = debaters.length > 0 ? debaters.join(' vs. ') : (debate.name ?? 'Debate');
+  const debateHref = NavUtils.toEntity(spaceId, debate.id);
+
+  // Measured from this row's top down to where the branch begins, so the spine stops exactly there
+  // rather than guessing at the body's height. Same approach, and the same reason, as `CommentItem`.
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  const branchRef = React.useRef<HTMLDivElement>(null);
+  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
+
+  const measureSpine = React.useCallback(() => {
+    const row = rowRef.current;
+    const branch = branchRef.current;
+    if (!row || !branch) {
+      setSpineHeightPx(null);
+      return;
+    }
+    // Starts below the thumbnail, so drop that much off its length.
+    setSpineHeightPx(
+      branch.getBoundingClientRect().top - row.getBoundingClientRect().top - KEYFRAME_HEIGHT_PX - SPINE_START_GAP_PX
+    );
+  }, []);
+
+  React.useLayoutEffect(() => {
+    measureSpine();
+    const row = rowRef.current;
+    if (row == null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureSpine());
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
+
+  const branchLabel = { expand: 'Expand this debate', collapse: 'Collapse this debate' };
 
   return (
-    <article className="flex min-w-0 flex-col">
-      <div className="mb-3 flex min-w-0 gap-3">
-        {/* Portrait, because that is the shape the video actually is: `Debate videos` declares
-            540 × 820, so a 16:9 tile would letterbox every still it ever showed. Same geometry
-            `ClaimDebates` uses, so the two surfaces show a debate the same way. */}
-        <Link
-          href={NavUtils.toEntity(spaceId, debate.id)}
-          aria-label={`Watch ${title}`}
-          className="relative block aspect-[540/820] shrink-0 overflow-hidden rounded-md bg-grey-01"
-          style={{ width: KEYFRAME_WIDTH_PX }}
-        >
-          {keyframeUrl && (
-            <GeoImage value={keyframeUrl} alt="" fill sizes={`${KEYFRAME_WIDTH_PX}px`} className="object-cover" />
+    <div ref={rowRef} className="thread-branch-hover-root relative">
+      {!collapsed && (
+        <ThreadParentSpine
+          leftPx={DEBATE_DENSITY.avatarCenterPx}
+          topPx={KEYFRAME_HEIGHT_PX + SPINE_START_GAP_PX}
+          heightPx={spineHeightPx}
+          lit={false}
+          label={branchLabel.collapse}
+          onToggle={() => setCollapsed(true)}
+        />
+      )}
+
+      <div className="flex items-start gap-3">
+        <div className="flex shrink-0 items-start justify-center" style={{ width: DEBATE_DENSITY.avatarPx }}>
+          {collapsed ? (
+            <ThreadCollapseToggle collapsed label={branchLabel} onToggle={() => setCollapsed(false)} />
+          ) : (
+            // Portrait, because that is the shape the video actually is: `Debate videos` declares
+            // 540 × 820, so a 16:9 tile would letterbox every still it ever showed.
+            <Link
+              href={debateHref}
+              aria-label={`Watch ${title}`}
+              className="relative block w-full shrink-0 overflow-hidden rounded-md bg-grey-01"
+              style={{ height: KEYFRAME_HEIGHT_PX }}
+            >
+              {keyframeUrl && (
+                <GeoImage value={keyframeUrl} alt="" fill sizes={`${KEYFRAME_WIDTH_PX}px`} className="object-cover" />
+              )}
+            </Link>
           )}
-        </Link>
+        </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={cx(density.nameClass, 'truncate text-text')}>{title}</span>
-            <span className={cx(density.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
+            <span className={cx(PAGE_DENSITY.nameClass, 'truncate text-text')}>{title}</span>
+            <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
               Debate
             </span>
             {publishedAt && (
-              // Same helper and same classes the comment rows use, so a debate and a comment in one
+              // Same helper and classes the comment rows use, so a debate and a comment in one
               // thread age identically rather than reading as two lists side by side.
-              <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
+              <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
                 {getRelativeTime(publishedAt.toISOString())}
               </span>
             )}
           </div>
 
           {claimText && (
-            <Link href={NavUtils.toEntity(spaceId, debate.id)} className="group/debate min-w-0 no-underline">
-              <span className={cx(density.bodyClass, 'wrap-break-word text-text group-hover/debate:underline')}>
+            <Link href={debateHref} className="group/debate min-w-0 no-underline">
+              <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text group-hover/debate:underline')}>
                 {claimText}
               </span>
             </Link>
           )}
 
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+            {!collapsed && (
+              <ThreadCollapseToggle
+                collapsed={false}
+                // Back out of the body box onto the spine, which is what threads the control onto
+                // the line rather than leaving it floating beside it.
+                leftPx={DEBATE_DENSITY.avatarCenterPx - DEBATE_DENSITY.bodyInsetPx}
+                label={branchLabel}
+                onToggle={() => setCollapsed(true)}
+              />
+            )}
             <EntityVoteButtons entityId={debate.id} spaceId={spaceId} responseKind="curation" />
             <EntityCommentsButton
               entityId={debate.id}
@@ -134,61 +220,59 @@ export function DebateActivityRow({
               count={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
             />
             {/* A reply to a debate is a comment on the debate, so it goes where that entity's
-                comments already live rather than into this claim's thread. The panel is the
-                existing surface for commenting on an entity you are not currently reading. */}
+                comments already live rather than into this claim's thread. */}
             <button
               type="button"
               data-entity-comments-opener
               onClick={() => openComments(debate.id, spaceId)}
-              className={cx(density.metaClass, 'text-grey-04 transition-colors hover:text-text')}
+              className={cx(PAGE_DENSITY.metaClass, 'text-grey-04 transition-colors hover:text-text')}
             >
               Reply
             </button>
             <Link
-              href={NavUtils.toEntity(spaceId, debate.id)}
-              className={cx(density.metaClass, 'text-ctaPrimary no-underline hover:underline')}
+              href={debateHref}
+              className={cx(PAGE_DENSITY.metaClass, 'text-ctaPrimary no-underline hover:underline')}
             >
               Watch debate
             </Link>
           </div>
+
+          {!collapsed && (
+            <div ref={branchRef} className="mt-4">
+              <DebateBranch
+                debateId={debate.id}
+                spaceId={spaceId}
+                profilesBySpaceId={profilesBySpaceId}
+                positionBySpaceId={positionBySpaceId}
+                responseVocabulary={responseVocabulary}
+                onCollapse={() => setCollapsed(true)}
+                branchLabel={branchLabel}
+                commentCount={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+              />
+            </div>
+          )}
         </div>
       </div>
-
-      <ExtractedClaims
-        debateId={debate.id}
-        spaceId={spaceId}
-        profilesBySpaceId={profilesBySpaceId}
-        positionBySpaceId={positionBySpaceId}
-        responseVocabulary={responseVocabulary}
-        density={density}
-        collapsed={collapsed}
-        onToggleCollapsed={() => setCollapsed(value => !value)}
-      />
-    </article>
+    </div>
   );
 }
 
 /**
- * The debate's extracted claims, in the order they were said.
+ * Everything that hangs off a debate: the claims it produced, then the comments people left on it.
  *
- * Loaded with the row rather than behind an expand. What a debate *produced* is the reason it is in
- * this feed at all, and a row that only says a debate happened is the state the feed was built to
- * replace — the reader should not have to ask twice to see the argument.
- *
- * The cost that bought the expand is smaller than it looks: the traversal is one request per
- * debate, and the timing resolver reaches for the Whisper transcript only when a debate has a claim
- * with no published offset — which, since the backfill, is two debates in the corpus. The breadth
- * cap below is what keeps a long transcript from owning the page.
+ * Claims first because they are what the debate *is* — the comments are a reaction to it, and a
+ * reaction reads better after the thing it reacts to. Within the claims the order is the order they
+ * were said; the comments keep the thread's own newest-first order.
  */
-function ExtractedClaims({
+function DebateBranch({
   debateId,
   spaceId,
   profilesBySpaceId,
   positionBySpaceId,
   responseVocabulary,
-  density,
-  collapsed,
-  onToggleCollapsed,
+  onCollapse,
+  branchLabel,
+  commentCount,
 }: {
   debateId: string;
   spaceId: string;
@@ -196,12 +280,22 @@ function ExtractedClaims({
   /** Debater space id (canonical) → the side they argued in this debate. */
   positionBySpaceId: Map<string, boolean>;
   responseVocabulary: DebateResponseKind;
-  density: CommentDensity;
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
+  onCollapse: () => void;
+  branchLabel: { expand: string; collapse: string };
+  /** From the feed's own aggregate. Zero means there is nothing here worth a request. */
+  commentCount: number;
 }) {
   const { claims, isLoading } = useDebateTranscriptClaims(debateId, spaceId);
   const { timings, isReady } = useClaimTimings(debateId, claims);
+  // The debate's own comments, on the same query key the comments panel uses — so opening the panel
+  // on this debate costs no extra request, and a comment posted there appears here too.
+  const { comments: debateComments } = useComments({
+    entityId: debateId,
+    spaceId,
+    // Most debates have no comments, and this feed already knows which. Fetching them anyway would
+    // be a backlink walk per debate row to discover a list we were told is empty.
+    enabled: commentCount > 0,
+  });
 
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
   // One call for every extracted claim on screen. Without it each row's own vote control would read
@@ -226,37 +320,28 @@ function ExtractedClaims({
 
   const ordered = React.useMemo(() => orderExtractedClaims(claims.all, timings), [claims.all, timings]);
 
-  // The branch hangs where a reply to this row would: indented to the parent's avatar centre and
-  // then out to the thread's body inset, so an extracted claim and a comment reply share a left
-  // edge and the connectors reach back to the same point.
-  const branchStyle = {
-    marginLeft: density.avatarCenterPx,
-    paddingLeft: density.bodyInsetPx - density.avatarCenterPx,
-  };
-
-  // Measured rather than computed: the spine has to stop at the last row's arm, and the rows are
-  // variable height (a claim sentence wraps to one line or three). Same approach `CommentList` takes
-  // for exactly the same reason.
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  // Measured rather than computed: the spine has to stop at the last row's elbow, and these rows are
+  // variable height — a claim sentence wraps to one line or three.
+  const listRef = React.useRef<HTMLDivElement>(null);
   const lastRowRef = React.useRef<HTMLDivElement>(null);
   const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
 
   const measureSpine = React.useCallback(() => {
-    const container = containerRef.current;
+    const list = listRef.current;
     const lastRow = lastRowRef.current;
-    if (!container || !lastRow) {
+    if (!list || !lastRow) {
       setSpineHeightPx(null);
       return;
     }
-    setSpineHeightPx(lastRow.getBoundingClientRect().top - container.getBoundingClientRect().top);
+    setSpineHeightPx(lastRow.getBoundingClientRect().top - list.getBoundingClientRect().top);
   }, []);
 
   React.useLayoutEffect(() => {
     measureSpine();
-    const container = containerRef.current;
-    if (container == null || typeof ResizeObserver === 'undefined') return;
+    const list = listRef.current;
+    if (list == null || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(() => measureSpine());
-    observer.observe(container);
+    observer.observe(list);
     return () => observer.disconnect();
   });
 
@@ -264,91 +349,49 @@ function ExtractedClaims({
     // Held rather than painted unordered. `isReady` is false only while a timing source is still
     // arriving, and it reports ready on a failed transcript fetch — so this cannot hang forever on
     // a debate whose transcript is gone; that degrades to "all untimed, arrival order".
-    return <Skeleton className="h-16 rounded" style={branchStyle} />;
+    return <Skeleton className="h-16 rounded" />;
   }
 
   // Timed first, in order, then the ones nothing could place. The tail is not sorted among itself:
   // there is nothing to sort it by, and imposing an order would say there was.
-  const rows = [...ordered.timed, ...ordered.untimed];
+  const claimsInOrder = [...ordered.timed, ...ordered.untimed];
+  const rowCount = claimsInOrder.length + debateComments.length;
 
   // Silent rather than apologetic. Claim extraction postdates a chunk of the corpus, so a debate
-  // with none is ordinary — and a line saying so under every old debate is noise in a feed.
-  if (rows.length === 0) return null;
+  // with nothing under it is ordinary — and a line saying so under every old debate is noise.
+  if (rowCount === 0) return null;
 
-  // Every claim, not a page of them. These are what the debate produced; a reader who has scrolled
-  // to a debate has asked for them, and "Show 17 more claims" was asking a second time. The spine
-  // collapses the whole branch in one press, which is the control that actually shortens the page.
-  const collapseLabel = {
-    expand: `Expand ${rows.length} claims from this debate`,
-    collapse: `Collapse ${rows.length} claims from this debate`,
-  };
-
-  if (collapsed) {
-    return (
-      <div style={branchStyle}>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className={cx(density.metaClass, 'text-ctaPrimary transition-colors hover:text-ctaHover')}
-        >
-          Show {rows.length} {rows.length === 1 ? 'claim' : 'claims'} from this debate
-        </button>
-      </div>
-    );
-  }
+  const armCenterPx = threadArmCenterPx(PAGE_DENSITY);
 
   return (
-    <div className="comment-branch-list-root relative flex flex-col gap-4" style={branchStyle} ref={containerRef}>
-      <ThreadSpine
-        density={density}
+    <div className="comment-branch-list-root relative flex flex-col gap-4" ref={listRef}>
+      <ThreadListSpine
+        reachPx={BRANCH_REACH_PX}
         heightPx={spineHeightPx}
         lit={false}
         collapsed={false}
-        onToggle={onToggleCollapsed}
-        onFocusBranch={noop}
-        onPressBranch={noop}
-        onClearFocus={noop}
-        label={collapseLabel}
+        onToggle={onCollapse}
+        label={branchLabel}
       />
 
-      {rows.map((claim, index) => {
+      {claimsInOrder.map((claim, index) => {
         const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
-        const isLast = index === rows.length - 1;
+        const isLast = index === rowCount - 1;
         return (
-          <div
-            key={claim.id}
-            className="comment-branch-row relative"
-            ref={isLast ? lastRowRef : undefined}
-          >
-            <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
-              {isLast ? (
-                <div
-                  className="absolute"
-                  style={{ left: `${-(density.bodyInsetPx - density.avatarCenterPx)}px`, top: 0 }}
-                >
-                  <ThreadElbow density={density} lit={false} />
-                </div>
-              ) : (
-                <ThreadArm density={density} lit={false} />
-              )}
-            </div>
-
+          <BranchRow key={claim.id} isLast={isLast} armCenterPx={armCenterPx} rowRef={isLast ? lastRowRef : undefined}>
             <ExtractedClaimRow
               claim={claim}
               debateId={debateId}
               debateSpaceId={spaceId}
-              density={density}
               commentCount={commentCounts.get(uuidToHex(claim.id)) ?? 0}
               // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
               // not that the claim is factual, and stance is what the graph defaults to as well.
               responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
               responseVocabulary={responseVocabulary}
               // A debater who is somehow not recorded on either side gets no tag rather than a
-              // guessed one — the same rule the speaker name follows a line below.
+              // guessed one — the same rule the speaker name follows below.
               speakerPosition={
-                speakerSpaceId && !claim.restated
-                  ? (positionBySpaceId.get(uuidToHex(speakerSpaceId)) ?? null)
-                  : null
+                speakerSpaceId && !claim.restated ? (positionBySpaceId.get(uuidToHex(speakerSpaceId)) ?? null) : null
               }
               speaker={
                 // A restated claim carries the first relation's block, which cannot answer for both
@@ -359,12 +402,49 @@ function ExtractedClaims({
                   : null
               }
             />
-          </div>
+          </BranchRow>
+        );
+      })}
+
+      {debateComments.map((comment, index) => {
+        const isLast = claimsInOrder.length + index === rowCount - 1;
+        return (
+          <BranchRow
+            key={comment.id}
+            isLast={isLast}
+            armCenterPx={armCenterPx}
+            rowRef={isLast ? lastRowRef : undefined}
+          >
+            <DebateCommentRow comment={comment} debateId={debateId} spaceId={spaceId} />
+          </BranchRow>
         );
       })}
     </div>
   );
 }
 
-/** The branch has no cross-row highlight of its own yet; the spine still collapses on press. */
-function noop() {}
+/** One row in a branch, with the connector that ties it back to the spine. */
+function BranchRow({
+  isLast,
+  armCenterPx,
+  rowRef,
+  children,
+}: {
+  isLast: boolean;
+  armCenterPx: number;
+  rowRef?: React.Ref<HTMLDivElement>;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="comment-branch-row relative" ref={rowRef}>
+      <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
+        {isLast ? (
+          <ThreadElbow reachPx={BRANCH_REACH_PX} armCenterPx={armCenterPx} lit={false} />
+        ) : (
+          <ThreadArm reachPx={BRANCH_REACH_PX} armCenterPx={armCenterPx} lit={false} />
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
