@@ -13,6 +13,8 @@ import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
+  /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
+  activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
   /** How many responses the claim has; zero means the hero draws no verdict column. */
   responseTotal: 11,
   /** Whether the response counts are still out, which is what the hero reserves its column for. */
@@ -113,6 +115,12 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
 
+// What the Overview puts in its activity thread besides comments. Its own fetching — debates,
+// profiles, keyframes — is covered by the rows' suites; this file is about page composition.
+vi.mock('./use-claim-activity-rows', () => ({
+  useClaimActivityRows: () => ({ rows: mocks.activityRows, isLoading: false }),
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: { claims: [] } }),
 }));
@@ -204,7 +212,9 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
 }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: () => <div data-testid="comments" />,
+  CommentSection: ({ title, activityRows }: { title?: string; activityRows?: Array<{ id: string }> }) => (
+    <div data-testid="comments" data-title={title} data-activity-rows={(activityRows ?? []).map(r => r.id).join(',')} />
+  ),
 }));
 
 function claimEntity(description: string | null) {
@@ -218,6 +228,7 @@ function claimEntity(description: string | null) {
 }
 
 beforeEach(() => {
+  mocks.activityRows = [];
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
   mocks.hasCounts = true;
@@ -463,11 +474,34 @@ describe('ClaimPageView record', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     const kinds = mocks.activity?.kinds as Array<{ key: string; onSeeAll?: () => void }>;
-    kinds.find(kind => kind.key === 'debates')?.onSeeAll?.();
     kinds.find(kind => kind.key === 'claims')?.onSeeAll?.();
 
-    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
-    expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'claims');
+  });
+
+  it('hands the debates on this claim to the thread, and names it Activity', () => {
+    mocks.activityRows = [
+      { id: 'debate-1', createdAt: '2026-09-20T10:00:00Z', content: null },
+      { id: 'debate-2', createdAt: '2026-09-21T10:00:00Z', content: null },
+    ];
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const comments = screen.getByTestId('comments');
+    expect(comments).toHaveAttribute('data-activity-rows', 'debate-1,debate-2');
+    // Not "Comments": the list holds more than comments now, and the count says how much has
+    // happened to this claim rather than how many people typed.
+    expect(comments).toHaveAttribute('data-title', 'Activity');
+  });
+
+  // GEO-3008: debates moved into the activity thread, where they are ordered among the comments.
+  // A gallery of them above that thread would have shown the same debates twice and left the
+  // reader working out whether they were the same ones.
+  it('leaves debates to the activity thread rather than giving them a gallery of their own', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string }>;
+    expect(kinds.map(kind => kind.key)).toEqual(['claims']);
   });
 
   it('marks only failed record counts unavailable in Activity', () => {
@@ -480,7 +514,6 @@ describe('ClaimPageView record', () => {
 
     const kinds = mocks.activity?.kinds as Array<{ key: string; isCountUnavailable?: boolean }>;
     expect(kinds.find(kind => kind.key === 'claims')?.isCountUnavailable).toBe(true);
-    expect(kinds.find(kind => kind.key === 'debates')?.isCountUnavailable).toBe(false);
   });
 
   it('hands the full side-panel tab the claim record scope', () => {

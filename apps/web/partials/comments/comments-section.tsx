@@ -8,6 +8,7 @@ import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { personProfileOpened } from '~/core/analytics';
+import { mergeActivityRows } from '~/core/claims/browse/claim-activity-order';
 import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
@@ -48,11 +49,13 @@ import {
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
-import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
+import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
 
 const NO_REPLIES: never[] = [];
+/** Stable identity, so a host that passes no rows doesn't rebuild the merge every render. */
+const NO_ACTIVITY_ROWS: CommentActivityRow[] = [];
 
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
@@ -235,6 +238,16 @@ interface CommentSectionProps {
    * layout already supplies its own gap.
    */
   variant?: CommentSectionVariant;
+  /**
+   * Rows for other entities, ordered into the same list as the comments.
+   *
+   * The claim page uses this to put the debates held on a claim in its thread, so the reader sees
+   * one account of what happened rather than a gallery above a comment list. The host renders them;
+   * this component only orders them.
+   */
+  activityRows?: CommentActivityRow[];
+  /** Heading noun. "Comments" unless the list holds more than comments. */
+  title?: string;
 }
 
 export function CommentSection({
@@ -242,6 +255,8 @@ export function CommentSection({
   spaceId,
   targetEntityType = 'entity',
   variant = 'page',
+  activityRows = NO_ACTIVITY_ROWS,
+  title = 'Comments',
 }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { publishComment, editComment } = usePublishComment(entityId, spaceId, {
@@ -409,7 +424,9 @@ export function CommentSection({
         <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
           {!isPanel && (
             <>
-              <div className="text-mediumTitle">Comments ({totalCount})</div>
+              <div className="text-mediumTitle">
+                {title} ({totalCount + activityRows.length})
+              </div>
               <Spacer height={16} />
             </>
           )}
@@ -423,7 +440,7 @@ export function CommentSection({
             viewerAvatarUrl={viewerAvatarUrl}
             viewerAvatarSeed={viewerAvatarSeed}
           />
-          {totalCount > 0 && (
+          {totalCount + activityRows.length > 0 && (
             <>
               <Spacer height={16} />
               <CommentFilters
@@ -441,13 +458,15 @@ export function CommentSection({
               </Text>
             </div>
           ) : (
-            filteredComments.length > 0 && (
+            (filteredComments.length > 0 || activityRows.length > 0) && (
               <>
                 <Spacer height={16} />
                 <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
                   <ProposalAttributionContext.Provider value={proposalAttribution}>
                     <CommentList
                       comments={filteredComments}
+                      activityRows={activityRows}
+                      activityOrder={sortOrder}
                       entityId={entityId}
                       spaceId={spaceId}
                       onReply={handleCreateComment}
@@ -724,6 +743,8 @@ export function CommentInput({
 
 function CommentList({
   comments,
+  activityRows = NO_ACTIVITY_ROWS,
+  activityOrder = 'newest',
   entityId,
   spaceId,
   onReply,
@@ -742,6 +763,9 @@ function CommentList({
   parentCommentId,
 }: {
   comments: CommentWithReplies[];
+  /** Ordered into the top level alongside the comments; ignored at any other depth. */
+  activityRows?: CommentActivityRow[];
+  activityOrder?: CommentSortOrder;
   entityId: string;
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
@@ -806,30 +830,40 @@ function CommentList({
   const density = useCommentDensity();
 
   if (depth === 0) {
+    // Activity rows only exist at the top level — a debate is not a reply to a comment — so the
+    // merge lives inside this branch and the recursive one below is untouched.
+    const merged = mergeActivityRows(comments, activityRows, activityOrder);
+
     return (
       <div>
-        {comments.map((comment, index) => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            entityId={entityId}
-            spaceId={spaceId}
-            onReply={onReply}
-            onEdit={onEdit}
-            personalSpaceId={personalSpaceId}
-            editorSpaceIds={editorSpaceIds}
-            isThreadCollapsed={isThreadCollapsed}
-            toggleThreadCollapsed={toggleThreadCollapsed}
-            sortReplies={sortReplies}
-            isLoggedIn={isLoggedIn}
-            onSignInRequired={onSignInRequired}
-            pendingReplyToId={pendingReplyToId}
-            onPendingReplyConsumed={onPendingReplyConsumed}
-            isLast={index === comments.length - 1}
-            depth={depth}
-            ancestors={ancestors}
-          />
-        ))}
+        {merged.map((entry, index) =>
+          entry.kind === 'extra' ? (
+            <div key={`activity:${entry.row.id}`} className={cx('py-4', index > 0 && 'border-t border-divider')}>
+              {entry.row.content}
+            </div>
+          ) : (
+            <CommentItem
+              key={entry.row.id}
+              comment={entry.row}
+              entityId={entityId}
+              spaceId={spaceId}
+              onReply={onReply}
+              onEdit={onEdit}
+              personalSpaceId={personalSpaceId}
+              editorSpaceIds={editorSpaceIds}
+              isThreadCollapsed={isThreadCollapsed}
+              toggleThreadCollapsed={toggleThreadCollapsed}
+              sortReplies={sortReplies}
+              isLoggedIn={isLoggedIn}
+              onSignInRequired={onSignInRequired}
+              pendingReplyToId={pendingReplyToId}
+              onPendingReplyConsumed={onPendingReplyConsumed}
+              isLast={index === merged.length - 1}
+              depth={depth}
+              ancestors={ancestors}
+            />
+          )
+        )}
       </div>
     );
   }

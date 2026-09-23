@@ -1,3 +1,5 @@
+import type * as React from 'react';
+
 export interface CommentEntity {
   id: string;
   name: string | null;
@@ -55,3 +57,17 @@ export interface CreateCommentParams {
 
 export type CommentSortOrder = 'newest' | 'oldest';
 export type CommentFilter = 'all' | 'editors';
+
+/**
+ * A non-comment row rendered in the same time-ordered list as the comments.
+ *
+ * The claim page's activity feed puts debates alongside comments on one thread, and the two are
+ * ordered together rather than stacked in blocks. Rather than teach the comment list what a debate
+ * is, the host hands it already-rendered content plus the one field the ordering needs.
+ */
+export interface CommentActivityRow {
+  id: string;
+  /** ISO timestamp, compared against each comment's `createdAt` to place the row. */
+  createdAt: string;
+  content: React.ReactNode;
+}

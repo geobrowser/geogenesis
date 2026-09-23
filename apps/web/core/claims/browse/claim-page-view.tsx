@@ -45,6 +45,7 @@ import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
@@ -409,19 +410,51 @@ function ClaimTabPanel({
     return <ClaimSourcesTab claimId={entityId} claimRelations={entityRelations} spaceId={spaceId} />;
   }
 
+  return (
+    <ClaimOverviewTab
+      entityId={entityId}
+      spaceId={spaceId}
+      responseKind={responseKind}
+      summary={summary}
+      record={record}
+      hrefs={hrefs}
+      onSelectSystemTab={onSelectSystemTab}
+    />
+  );
+}
+
+/**
+ * The claim's overview: the related-claims gallery, then everything that has happened to it.
+ *
+ * Debates used to have a gallery of their own beside Claims. They are rows in the activity feed
+ * now, which is the whole point of GEO-3008 — a debate belongs in the account of what happened to
+ * this claim rather than in a shelf above it, and two places showing the same debates left the
+ * reader to work out whether they were the same debates. The Debates *tab* is still the complete
+ * index; the gallery was the duplicate.
+ *
+ * Its own component because the panel above returns early for every other tab, and a hook cannot
+ * live behind an early return.
+ */
+function ClaimOverviewTab({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  record,
+  hrefs,
+  onSelectSystemTab,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ClaimResponseState['responseKind'];
+  summary: ClaimResponseState['summary'];
+  record: ReturnType<typeof useClaimRecord>;
+  hrefs: { debates: string; claims: string };
+  onSelectSystemTab?: (tab: ClaimSystemTab) => void;
+}) {
+  const activity = useClaimActivityRows({ claimId: entityId, spaceId });
+
   const kinds: ActivityKind[] = [
-    {
-      key: 'debates',
-      label: 'Debates',
-      rows: record.debateRows,
-      total: record.debatesTotal,
-      isLoading: record.debatesLoading,
-      isError: record.debatesError,
-      isCountUnavailable: record.debatesCountUnavailable,
-      href: hrefs.debates,
-      seeAllLabel: 'View all debates',
-      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
-    },
     {
       key: 'claims',
       label: 'Claims',
@@ -467,7 +500,15 @@ function ClaimTabPanel({
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
-        <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="claim" />
+        {/* "Activity", because the list now holds debates as well as comments — and the count says
+            how much has happened to this claim rather than how many people typed. */}
+        <CommentSection
+          entityId={entityId}
+          spaceId={spaceId}
+          targetEntityType="claim"
+          title="Activity"
+          activityRows={activity.rows}
+        />
       </ClaimCommentPositionProvider>
     </>
   );

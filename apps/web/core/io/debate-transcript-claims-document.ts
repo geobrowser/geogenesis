@@ -65,8 +65,8 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                 entityId
                 # The relation's own entity, which is where the claim's timecodes live — not on the
                 # claim, because one claim can be stated in two turns and each statement has its
-                # own moment. Empty for every debate published before timecodes existed, which is
-                # all of them bar the test debate; claim-timing.ts falls back to matching.
+                # own moment. Populated for most of the corpus since the backfill (921 of 1,072
+                # statements as of 2026-09-23); claim-timing.ts falls back to matching for the rest.
                 entity {
                   valuesList(filter: { propertyId: { in: $offsetPropertyIds }, spaceId: { is: $spaceId } }) {
                     propertyId
