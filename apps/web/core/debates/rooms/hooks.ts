@@ -61,9 +61,8 @@ function fallbackUuid() {
 }
 
 /**
- * Every presence request this document sends, in order. Wire order has to equal call order: a join
- * still in flight when the leave is sent would otherwise land after it, and occupancy is the latest
- * event per connection. StrictMode's mount, cleanup, mount is exactly that sequence.
+ * Every presence request this document sends, in order. Occupancy is the latest event per
+ * connection, so a join still in flight when the leave goes out must not land after it.
  */
 let presenceQueue: Promise<unknown> = Promise.resolve();
 

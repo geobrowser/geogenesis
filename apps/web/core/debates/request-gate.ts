@@ -49,9 +49,8 @@ export type DebateRequestGateInput = {
 export type DebateRequestGate = {
   canRequest: boolean;
   /**
-   * The request is the right offer and the position is settled; only the room has not said the
-   * opponent is there. Rendered disabled rather than hidden, since the button is what state 3
-   * turns on.
+   * The offer is right and the position settled; only the room has not said the opponent is there.
+   * Rendered disabled rather than hidden, since the button is what state 3 turns on.
    */
   awaitingOpponent: boolean;
   /** The request is the right offer to make, but geo-chat does not agree about the position yet. */
