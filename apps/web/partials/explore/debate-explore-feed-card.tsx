@@ -65,6 +65,22 @@ const DEBATE_CARD_COLUMN_STYLE = {
   '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
 } as React.CSSProperties;
 
+/**
+ * The same budget with the column, rather than 560px, as its ceiling.
+ *
+ * `fullWidth` means "this column is already the reading width, don't cap it at the card's 560px" —
+ * it does not mean "stop fitting the viewport". Dropping the budget outright made a debate on the
+ * claim page's 840px column about 1140px tall (two `aspect-480/289` tiles at ~800px), so on a
+ * 900px viewport the second debater and the interaction bar could not be seen together — which is
+ * the single thing the budget above exists to guarantee.
+ *
+ * `min` with `100%` rather than a larger constant: the ceiling is whatever column the card was
+ * given, so this is right at 840px and at any other width a host passes.
+ */
+const DEBATE_CARD_FULL_WIDTH_STYLE = {
+  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 178px), 100%))',
+} as React.CSSProperties;
+
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row (same semantics as ExploreFeedCard). */
@@ -75,6 +91,15 @@ type DebateExploreFeedCardProps = {
   titleOpensSidePanel?: boolean;
   /** Compact title and metadata treatment used by the narrow profile Activity rail. */
   compactChrome?: boolean;
+  /**
+   * Raise the column's ceiling from the card's 560px to the container's own width. For a surface
+   * whose column is already the reading width, where the capped card sat narrower than everything
+   * around it — the claim page's Debates tab.
+   *
+   * Not "uncapped": the viewport-height budget still applies, so the whole card still fits the
+   * screen it is watched on. See {@link DEBATE_CARD_FULL_WIDTH_STYLE}.
+   */
+  fullWidth?: boolean;
   /**
    * Called when a coordinated surface's player is clicked. An allowed active player transfers
    * before the click reaches it. A visible non-owner consumes that first click while ownership
@@ -108,6 +133,7 @@ export function DebateExploreFeedCard({
   hideJoinButton = false,
   titleOpensSidePanel = false,
   compactChrome = false,
+  fullWidth = false,
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
   fallback,
@@ -302,7 +328,7 @@ export function DebateExploreFeedCard({
           and what keeps the bar beneath the videos the same width as them. */}
       <div
         className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
-        style={DEBATE_CARD_COLUMN_STYLE}
+        style={fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
       >
         {/* The way out of the card and into the debate at full size. This corner used to hold
             "View all", a link to the space's whole debates list. Since GEO-2879 headed the card

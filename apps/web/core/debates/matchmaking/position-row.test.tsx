@@ -1,7 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 import type { DebateClaimPositionSummary } from '../api';
 import { PositionRow } from './matchmaking-claim-card';
@@ -139,5 +146,46 @@ describe('PositionRow', () => {
 
     expect(screen.getByText('Verify')).toBeInTheDocument();
     expect(screen.getByText('Dispute')).toBeInTheDocument();
+  });
+
+  /**
+   * The glyph a pill draws, pinned against the icon it should be.
+   *
+   * Not asserted as "not the chevron": a thumb, a vote arrow and an empty span all satisfy that,
+   * so a pill that never got the veracity branch — the bug this file's chevron cases exist to
+   * catch — would pass its own regression test. Comparing the rendered icon says which glyph it
+   * is, and re-rendering the expectation from the component means redrawing an icon's art does
+   * not fail these.
+   */
+  const glyphMarkup = (label: string) =>
+    screen.getByText(label).closest('span')?.parentElement?.querySelector('svg')?.outerHTML ?? null;
+
+  const iconMarkup = (node: React.ReactNode) => render(<>{node}</>).container.innerHTML;
+
+  // A thumb is an opinion and Verify/Dispute is not one — it says the claim is or is not true. The
+  // claim ticker over the video already splits its glyphs this way, so a pill that thumbed both
+  // kinds made the same claim read differently in the panel and on the video.
+  it('draws chevrons for a factual claim rather than thumbs', () => {
+    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
+
+    expect(glyphMarkup('Verify')).toBe(iconMarkup(<ChevronUp />));
+    expect(glyphMarkup('Dispute')).toBe(iconMarkup(<ChevronDown />));
+  });
+
+  it('keeps the thumbs on a stance claim', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled={false} />));
+    expect(glyphMarkup('Disagree')).toBe(iconMarkup(<ThumbDown filled={false} />));
+  });
+
+  // A chevron has no filled form, so the pill's own fill is the only thing left saying which side
+  // the viewer holds. Losing it would leave a factual claim with no visible record of a response.
+  it('still marks the held side on a factual claim, where the glyph cannot', () => {
+    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={true} />);
+
+    const verify = screen.getByText('Verify').closest('div.flex.min-h-7') as HTMLElement;
+
+    expect([...verify.classList]).toContain('bg-divider');
   });
 });

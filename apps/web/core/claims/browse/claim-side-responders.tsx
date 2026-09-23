@@ -44,7 +44,7 @@ export function ClaimSideResponders({
   spaceId: string;
   responseKind: ResponseKind;
   direction: ActiveResponseDirection;
-  /** Names the side in the claim's own vocabulary, for the panel's footer and the trigger's label. */
+  /** Names the side in the claim's own vocabulary, for the panel's title and the trigger's label. */
   label: string;
   /** The authoritative count for this side, which can exceed the faces the query returns. */
   totalResponders: number;
@@ -115,7 +115,7 @@ export function ClaimSideResponders({
 /**
  * The list itself: the space editors and members popover pattern — same scroll cap, same divided
  * rows, same counted footer — so a reader meets one list shape in the app rather than two that do
- * the same job differently.
+ * the same job differently — except that the count is a title above the rows, not a footer.
  *
  * Narrower than those, though. They hang off a page header with the width to spare; this hangs off a
  * count inside a card, and at 356px it arrived as a slab wider than the column that opened it. A row
@@ -128,21 +128,33 @@ function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; la
     staleTime: 30_000,
   });
 
+  // People with a profile picture first, so the top of the list is faces rather than generated
+  // placeholders. Stable within each group, so the order the responders came in otherwise holds.
+  const sortedProfiles = React.useMemo(
+    () => (profiles ? [...profiles].sort((a, b) => Number(Boolean(b.avatarUrl)) - Number(Boolean(a.avatarUrl))) : []),
+    [profiles]
+  );
+
   return (
     <div className="z-10 w-[248px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
+      {/* A title over the list rather than a counted footer under it: it says what the list is
+          before the reader scrolls it. The verb agrees with the count — "1 person agrees",
+          "6 people agree". */}
+      <p className="p-2 text-smallButton text-text">
+        {totalCount} {pluralize('person', totalCount)}{' '}
+        {totalCount === 1 ? pluralize(label.toLowerCase()) : label.toLowerCase()}
+      </p>
       {/* Contained, so a wheel past the end of the list does not chain through to the page behind. */}
-      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain">
+      {/* Inset, so each row's hover sits inside the box as a rounded highlight — the browse sidebar's
+          own rows, in shape and colour. */}
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain p-1">
         {isLoading || !profiles ? (
           <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />
         ) : (
-          profiles.map(profile => <MemberRow key={profile.id} user={profile} />)
+          sortedProfiles.map(profile => (
+            <MemberRow key={profile.id} user={profile} className="rounded-lg transition-colors hover:bg-grey-01" />
+          ))
         )}
-      </div>
-      <div className="flex items-center justify-between p-2">
-        <p className="text-smallButton text-text">
-          {totalCount} {pluralize('person', totalCount)}
-        </p>
-        <p className="text-smallButton text-grey-04">{label}</p>
       </div>
     </div>
   );

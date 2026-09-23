@@ -39,13 +39,7 @@ type ClaimRecordTabProps = {
  * difference is the initial space: a claim page opens scoped to the space in its URL, while
  * clearing Spaces broadens the tab to every space carrying that same claim.
  */
-export function ClaimRecordTab({
-  kind,
-  claimId,
-  spaceId,
-  availableSpaceIds,
-  sourceTopics,
-}: ClaimRecordTabProps) {
+export function ClaimRecordTab({ kind, claimId, spaceId, availableSpaceIds, sourceTopics }: ClaimRecordTabProps) {
   return (
     <ClaimRecordTabContent
       key={`${kind}:${normId(claimId)}:${normId(spaceId)}`}
@@ -58,13 +52,7 @@ export function ClaimRecordTab({
   );
 }
 
-function ClaimRecordTabContent({
-  kind,
-  claimId,
-  spaceId,
-  availableSpaceIds,
-  sourceTopics,
-}: ClaimRecordTabProps) {
+function ClaimRecordTabContent({ kind, claimId, spaceId, availableSpaceIds, sourceTopics }: ClaimRecordTabProps) {
   const [sort, setSort] = React.useState<ClaimRecordSort>('best');
   const spaces = useRecordSelection([spaceId]);
   const topics = useRecordSelection();
@@ -196,6 +184,9 @@ function ClaimRecordTabContent({
         }
         errorLabel={isClaims ? 'Couldn’t load claims.' : 'Couldn’t load debates.'}
         noun={isClaims ? 'claims' : 'debates'}
+        // The claim page's column is already the reading width; a capped debate sat narrower than
+        // everything else on the tab.
+        fullWidthDebates
       />
     </div>
   );
