@@ -61,6 +61,69 @@ describe('Menu triggerRef', () => {
   });
 });
 
+describe('Menu viewportRef', () => {
+  // The prop is typed as a full React ref, and React 19's callback-ref contract includes returning
+  // a cleanup. A caller that does — attaching an observer to the viewport, say — must have that
+  // cleanup honoured, not dropped, and must not then be handed `null` it was promised would not
+  // come.
+  //
+  // Both harnesses hold their callback stable. An inline one changes identity every render, and
+  // React detaches and reattaches a ref whose identity moved — real, but a different subject, and
+  // it would drown the semantics under test in churn.
+  it('honours a callback ref that returns a cleanup', () => {
+    const calls: (HTMLElement | null)[] = [];
+    let cleanupRan = 0;
+
+    function Harness({ open }: { open: boolean }) {
+      const viewportRef = React.useCallback((node: HTMLDivElement | null) => {
+        calls.push(node);
+        return () => {
+          cleanupRan += 1;
+        };
+      }, []);
+
+      return (
+        <Menu open={open} onOpenChange={() => {}} viewportRef={viewportRef} trigger={<span>Open</span>}>
+          <button type="button">Item</button>
+        </Menu>
+      );
+    }
+
+    const view = render(<Harness open={true} />);
+    expect(calls).toEqual([expect.any(HTMLDivElement)]);
+    expect(cleanupRan).toBe(0);
+
+    view.rerender(<Harness open={false} />);
+
+    expect(cleanupRan).toBe(1);
+    // Not called again with null: the cleanup replaces that call, and a caller written to the
+    // cleanup contract may well dereference the node it was given.
+    expect(calls).toEqual([expect.any(HTMLDivElement)]);
+  });
+
+  it('still clears a plain callback ref that returns nothing', () => {
+    const calls: (HTMLElement | null)[] = [];
+
+    function Harness({ open }: { open: boolean }) {
+      const viewportRef = React.useCallback((node: HTMLDivElement | null) => {
+        calls.push(node);
+      }, []);
+
+      return (
+        <Menu open={open} onOpenChange={() => {}} viewportRef={viewportRef} trigger={<span>Open</span>}>
+          <button type="button">Item</button>
+        </Menu>
+      );
+    }
+
+    const view = render(<Harness open={true} />);
+    view.rerender(<Harness open={false} />);
+
+    // The legacy path is untouched: no cleanup returned, so React clears it with null as before.
+    expect(calls).toEqual([expect.any(HTMLDivElement), null]);
+  });
+});
+
 describe('Menu alignment', () => {
   it('honors an explicit trigger-edge alignment', () => {
     render(
