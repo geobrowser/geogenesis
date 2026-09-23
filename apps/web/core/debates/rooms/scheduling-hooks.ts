@@ -13,9 +13,7 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
 
 /**
  * Proposing and answering a scheduled debate (GEO-2934). The second answer books the room, so this
- * is the only way to reach a room without writing one into the database by hand.
- *
- * Used by the debug page while GEO-2939 and GEO-2940 are unbuilt.
+ * is the only way to reach one without writing rows by hand.
  */
 export function useScheduledDebates(enabled = true) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();

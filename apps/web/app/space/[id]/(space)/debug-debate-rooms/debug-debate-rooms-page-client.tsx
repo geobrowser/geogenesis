@@ -22,9 +22,8 @@ const DEFAULT_MINUTES_AHEAD = 12;
 const DEFAULT_DURATION = 30;
 
 /**
- * Two halves of the booking flow on one page, because it takes two identities: propose here as
- * yourself, then open the same page signed in as the other person and accept. The second answer
- * books the room and this shows its link.
+ * Both halves of the booking on one page, because it takes two identities: propose here, accept as
+ * the other person in a second browser. That second answer books the room.
  */
 export function DebugDebateRoomsPageClient() {
   const enabled = useDebugDebatesPageEnabled();

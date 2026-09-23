@@ -10,8 +10,7 @@ interface Props {
 
 /**
  * Books a scheduled debate so a room exists to open (GEO-2941). Rooms are only created by accepting
- * one, and the scheduling UI is GEO-2939/GEO-2940, so without this there is no way to reach a room
- * from the browser at all.
+ * one, and the scheduling UI that would is unbuilt.
  */
 export default async function DebugDebateRoomsPage({ params }: Props) {
   const { id } = await params;
