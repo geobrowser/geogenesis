@@ -243,7 +243,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
     const ogImageId = createEntityId();
-    const ogImageName = `${debateName} share card`;
+    const ogImageName = `${debateName} | share card`;
     const ogImageRef = { id: ogImageId, name: ogImageName };
     setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
     setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
@@ -264,7 +264,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
     const videoId = createEntityId();
-    const videoName = `${debateName} video`;
+    const videoName = `${debateName} | video`;
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
     // Both carry the same URL: `Video URL` is what the debates ontology spec names, `Web URL` is
@@ -286,7 +286,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
     if (input.keyframeUrl) {
       const keyframeId = createEntityId();
-      const keyframeName = `${debateName} keyframe`;
+      const keyframeName = `${debateName} | keyframe`;
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
       setText(keyframeId, keyframeName, WEB_URL_PROPERTY_ID, input.keyframeUrl);
@@ -309,7 +309,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const turns = input.transcriptTurns.filter(turn => turn.text.trim().length > 0);
   if (turns.length > 0) {
     const transcriptId = createEntityId();
-    const transcriptName = `${debateName} transcript`;
+    const transcriptName = `${debateName} | transcript`;
     const transcriptRef = { id: transcriptId, name: transcriptName };
     setText(transcriptId, transcriptName, NAME_PROPERTY_ID, transcriptName);
     relate({
