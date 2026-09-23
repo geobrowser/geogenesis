@@ -9,7 +9,7 @@ import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
-import { releaseVideo } from '~/core/utils/video/release-video';
+import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
@@ -19,8 +19,33 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
-const CENTERED_PLAYBACK_CONTROL_CLASS =
-  'absolute top-1/2 left-1/2 size-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-text shadow-card';
+/**
+ * How many times a tile will rebuild a recording whose media pipeline died, per source (GEO-2985).
+ *
+ * The failure is Chrome giving up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed` — after the element has sat in the
+ * feed's look-ahead preload long enough for the browser to suspend its fetch and then resume it.
+ * Nothing in the pair notices, so the tile stays blank for as long as the card is on screen while
+ * its partner plays on beside it: the reported "one debater's video never loads in the explore
+ * feed, but the same debate is fine full screen", where a card is reached within seconds of being
+ * mounted and the window for this is far narrower.
+ *
+ * Three, because the repair either works on the first attempt or the source is genuinely
+ * unreadable, and a retry costs a fresh fetch of a multi-megabyte recording. The budget is per
+ * source rather than per element so a card that is re-ranked onto a different debate starts over.
+ */
+const MAX_MEDIA_RECOVERY_ATTEMPTS = 3;
+/**
+ * Spacing between those attempts, multiplied by the attempt number.
+ *
+ * Long enough that a transient fetch failure has a chance to be over, short enough that a viewer
+ * looking at the card sees it heal rather than reload.
+ */
+const MEDIA_RECOVERY_BACKOFF_MS = 400;
+
+/** How every big round control in the player looks, wherever it is put. */
+const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
+const CENTERED_PLAYBACK_CONTROL_CLASS = `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${PLAYBACK_CONTROL_CIRCLE_CLASS}`;
 
 type DebateFeedPlayerProps = {
   debate: Debate;
@@ -63,6 +88,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     turnState,
     subtitle,
     onPlaybackTick,
+    resyncSlot,
+    refreshSlotUrl,
     togglePlayback: togglePlaybackRaw,
     playFromStart: playFromStartRaw,
     resumeBoth,
@@ -331,6 +358,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
+        onRecovered={() => resyncSlot(1)}
+        onExhausted={() => void refreshSlotUrl(1)}
         onToggle={toggleFromVideo}
         claims={claimsFor(1)}
         claimsOpen={claimsOpenFor(1)}
@@ -383,6 +412,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
+        onRecovered={() => resyncSlot(2)}
+        onExhausted={() => void refreshSlotUrl(2)}
         onToggle={toggleFromVideo}
         claims={claimsFor(2)}
         claimsOpen={claimsOpenFor(2)}
@@ -510,6 +541,8 @@ function DebaterVideo({
   mutedByUser,
   isResuming,
   onPlaybackTick,
+  onRecovered,
+  onExhausted,
   onToggle,
   claims,
   claimsOpen = false,
@@ -527,6 +560,11 @@ function DebaterVideo({
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
+  /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
+   * partner. See {@link MAX_MEDIA_RECOVERY_ATTEMPTS}. */
+  onRecovered?: () => void;
+  /** Every rebuild of this recording failed — re-sign it, in case the URL is what is broken. */
+  onExhausted?: () => void;
   onToggle: () => void;
   /** This debater's claim corner, if they have anything to show right now. */
   claims?: React.ReactNode;
@@ -584,6 +622,103 @@ function DebaterVideo({
     return () => releaseVideo(video);
   }, [src, videoRef]);
 
+  /**
+   * Rebuild this recording when the browser gives up on it (GEO-2985).
+   *
+   * A `<video>` that reports an error is finished: nothing retries it, it paints nothing, and the
+   * debate goes on playing in the other tile with this debater simply absent. The pair's own
+   * machinery cannot help — every correction in `useDebatePlayback` is about *where* the two
+   * elements are, and this one is nowhere.
+   *
+   * The repair is to detach and re-fetch the source, which is enough on its own: the recording is
+   * fine, and the same URL loads to `HAVE_ENOUGH_DATA` on the second attempt. `onRecovered` then
+   * brings it back to wherever its partner has got to.
+   *
+   * Bounded and spaced, because the one thing worse than a blank tile is a tile refetching a
+   * multi-megabyte recording in a loop.
+   *
+   * What the budget covers is a pipeline that died on a URL that still works, which is what was
+   * diagnosed and what a rebuild answers. It cannot answer a URL that has itself stopped working
+   * — `error.code === 2` is `MEDIA_ERR_NETWORK` and covers both — because every attempt re-fetches
+   * the same bytes from the same signature. So exhausting it escalates once to `onExhausted`,
+   * which re-signs this recording; the new `src` resets everything here and the budget is spent
+   * again on a source that is genuinely new.
+   *
+   * Past that the tile says so rather than going quiet. Before this existed the state was
+   * undetectable, so silence was the only option; it is detected now, and a blank half of a
+   * playing debate with no account of itself is the report that opened this ticket.
+   */
+  const recoveryAttemptsRef = React.useRef(0);
+  const recoveryTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [exhausted, setExhausted] = React.useState(false);
+  /**
+   * Whether this source has already been escalated.
+   *
+   * A ref beside the state because `load()` on a dead source fires `error` again, and more than
+   * once inside a tick — so the render's copy of `exhausted` is stale exactly when it is being
+   * read. The hook's own ceiling would absorb the repeats, but a tile that keeps asking is a tile
+   * relying on somebody else's bound.
+   */
+  const escalatedRef = React.useRef(false);
+
+  const cancelRecovery = React.useCallback(() => {
+    if (recoveryTimerRef.current === null) return;
+    clearTimeout(recoveryTimerRef.current);
+    recoveryTimerRef.current = null;
+  }, []);
+
+  // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
+  // repair still pending belongs to the old one.
+  React.useEffect(() => {
+    recoveryAttemptsRef.current = 0;
+    escalatedRef.current = false;
+    setExhausted(false);
+    return cancelRecovery;
+  }, [cancelRecovery, src]);
+
+  const rebuild = React.useCallback(
+    (attempt: number) => {
+      recoveryTimerRef.current = setTimeout(() => {
+        recoveryTimerRef.current = null;
+        const current = videoRef.current;
+        // The tile may have been handed a different recording, or unmounted, while we waited.
+        if (!current || !src || current.getAttribute('src') !== src) return;
+        reattachVideoSource(current, src);
+        onRecovered?.();
+      }, MEDIA_RECOVERY_BACKOFF_MS * attempt);
+    },
+    [onRecovered, src, videoRef]
+  );
+
+  const onMediaError = () => {
+    const video = videoRef.current;
+    if (!video || !src) return;
+    // Already repairing. `load()` itself can fire `error` again, so this guard is what keeps a
+    // failing source from spinning.
+    if (recoveryTimerRef.current !== null) return;
+
+    if (recoveryAttemptsRef.current >= MAX_MEDIA_RECOVERY_ATTEMPTS) {
+      // Out of attempts on this URL. One escalation to a freshly signed one, then the tile is
+      // honest about it.
+      if (escalatedRef.current) return;
+      escalatedRef.current = true;
+      setExhausted(true);
+      onExhausted?.();
+      return;
+    }
+
+    rebuild(++recoveryAttemptsRef.current);
+  };
+
+  /** The viewer asking for what the automatic attempts could not get. */
+  const retry = () => {
+    if (recoveryTimerRef.current !== null) return;
+    recoveryAttemptsRef.current = 0;
+    escalatedRef.current = false;
+    setExhausted(false);
+    rebuild(1);
+  };
+
   const openProfile = useOpenDebaterProfile(participant);
 
   return (
@@ -605,6 +740,7 @@ function DebaterVideo({
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
             onEnded={onPlaybackTick}
+            onError={onMediaError}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPlaybackTick}
             onPlay={onPlaybackTick}
@@ -614,6 +750,39 @@ function DebaterVideo({
           <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
         )}
       </button>
+
+      {/* What a tile says when its recording cannot be revived.
+
+          Deliberately the same control the player uses for replay — a circle with `RetrySmall` in
+          it — because it is the same offer, made about one debater rather than about the debate.
+          Stacked with its own label rather than borrowing the centred position, so the two read as
+          one thing and neither lands on the bottom band: the scrim and the debater's name stay
+          visible underneath, which is what says *whose* video is missing.
+
+          The label is what makes the state legible rather than merely actionable. A lone button on
+          a grey rectangle reads as a video that has not started yet, which is the one conclusion a
+          viewer must not draw here.
+
+          `pointer-events-none` on the stack, `auto` on the button: everything else in this tile is
+          a click target for play/pause, and an invisible full-tile layer would swallow it. */}
+      {exhausted && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center gap-2">
+          <button
+            type="button"
+            aria-label={`Retry ${name}'s video`}
+            onClick={event => {
+              event.stopPropagation();
+              retry();
+            }}
+            className={cx(PLAYBACK_CONTROL_CIRCLE_CLASS, 'pointer-events-auto grid [&>svg]:scale-[1.5]')}
+          >
+            <RetrySmall />
+          </button>
+          <Text as="p" variant="metadata" color="grey-04">
+            This recording didn&rsquo;t load
+          </Text>
+        </div>
+      )}
 
       {/* Bottom gradient scrim for legibility of the overlaid controls. All the way to black, per
           the frame — the name that sits on it is regular weight and carries no text shadow. */}

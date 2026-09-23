@@ -28,8 +28,7 @@ import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils'
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -1062,6 +1061,7 @@ export function PositionRow({
             // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
             label={forSide?.position_label ?? copy.positiveAction}
             summary={forSide}
+            responseKind={responseKind}
             position
             selected={viewerPosition === true}
             onRespond={onRespond}
@@ -1074,6 +1074,7 @@ export function PositionRow({
           <PositionButton
             label={againstSide?.position_label ?? copy.negativeAction}
             summary={againstSide}
+            responseKind={responseKind}
             position={false}
             selected={viewerPosition === false}
             onRespond={onRespond}
@@ -1123,6 +1124,7 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
 function PositionButton({
   label,
   summary,
+  responseKind,
   position,
   selected,
   onRespond,
@@ -1131,6 +1133,7 @@ function PositionButton({
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
+  responseKind: MatchmakingReadiness['response_kind'];
   position: boolean;
   selected: boolean;
   onRespond?: (position: boolean) => void;
@@ -1142,8 +1145,8 @@ function PositionButton({
   // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
   // green or red, which made the pill argue the position as well as record it — and put white-ish
   // text on two saturated fills that nothing else in the product uses this way. Which side is
-  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
-  // bar below, where the colours still mean something.
+  // yours is said by the fill (and, on a stance claim, the filled thumb); which side is *which* is
+  // said by the summary bar below, where the colours still mean something.
   //
   // `border` on both states, transparent when held, so picking a side cannot change the pill's
   // width and shuffle the row.
@@ -1161,8 +1164,12 @@ function PositionButton({
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
     <span className="flex min-w-0 items-center gap-1.5">
-      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      {/* Thumbs for a stance, chevrons for a factual claim — see `ResponsePositionIcon`. Filled,
+          where the glyph has a filled form, so the pill reads as taken even in a screenshot; a
+          chevron has none, and leans on the pill's own fill below. */}
+      <span className="shrink-0">
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      </span>
       <span className="truncate">
         {label}
         {selected ? <span className="sr-only"> — your response</span> : null}

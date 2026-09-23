@@ -166,8 +166,11 @@ const interruption = () => new DOMException('The play() request was interrupted 
  * and the race under test cannot happen.
  */
 function fakeVideo() {
+  const listeners = new Map<string, Set<EventListener>>();
   const video = {
     paused: true,
+    /** HAVE_ENOUGH_DATA — the state an element that is playing normally reports. */
+    readyState: 4,
     // Both muted, so playBothWithMutedFallback takes the no-audio path and does not spend a
     // second confirm round retrying muted.
     muted: true,
@@ -251,8 +254,22 @@ function fakeVideo() {
       video.pending = null;
       return () => detached?.reject(refusal());
     },
+    addEventListener(type: string, listener: EventListener) {
+      const forType = listeners.get(type) ?? new Set<EventListener>();
+      forType.add(listener);
+      listeners.set(type, forType);
+    },
+    removeEventListener(type: string, listener: EventListener) {
+      listeners.get(type)?.delete(listener);
+    },
+    /** Fire a media event at whatever is listening — `loadeddata`, in practice. */
+    emit(type: string) {
+      for (const listener of [...(listeners.get(type) ?? [])]) listener(new Event(type));
+    },
   };
   return video as unknown as HTMLVideoElement & {
+    readyState: number;
+    emit: (type: string) => void;
     plays: number;
     settlePlay: () => void;
     rejectPlay: () => void;
@@ -1407,5 +1424,282 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
 
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     expect(result.current.urls.slot2).not.toBeNull();
+  });
+});
+
+/**
+ * GEO-2985. Chrome gives up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `FFmpegDemuxer: demuxer seek failed` — after the element has sat in the explore feed's
+ * look-ahead preload long enough for the browser to suspend its fetch and resume it. The tile is
+ * then permanently blank while its partner plays on beside it. `DebaterVideo` rebuilds the
+ * element; `resyncSlot` is the other half — putting the rebuilt recording back where the debate
+ * has got to, and holding the pair's own corrections off while it does.
+ */
+describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  async function mounted() {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+    return { result, slot1, slot2 };
+  }
+
+  it('seeks the rebuilt recording to its partner and starts it', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    // Slot 2 carried on while slot 1 was rebuilt, so it is the only record of the position.
+    slot2.browserResume();
+    slot2.currentTime = 12.5;
+
+    act(() => result.current.resyncSlot(1));
+
+    expect(slot1.currentTime).toBe(12.5);
+    expect(slot1.plays).toBe(1);
+  });
+
+  // A rebuild that lands before either element has played — the observed case, where the failure
+  // happens during preload. Seeking here would buy nothing and cost a demuxer parse walk on a
+  // cue-less recording (GEO-2828); the card's next resume aligns both anyway.
+  it('leaves a paused pair alone', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserPause();
+
+    act(() => result.current.resyncSlot(1));
+
+    expect(slot1.currentTime).toBe(0);
+    expect(slot1.plays).toBe(0);
+  });
+
+  it('waits for decoded data before seeking the rebuilt element', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 8;
+    slot1.readyState = 0; // straight out of load(), nothing opened yet
+
+    act(() => result.current.resyncSlot(1));
+    // Seeking a cue-less recording over data the element does not hold is what killed it.
+    expect(slot1.plays).toBe(0);
+
+    // The partner has moved on by the time the recording opens, and that is where it rejoins.
+    slot2.currentTime = 9.25;
+    act(() => slot1.emit('loadeddata'));
+
+    expect(slot1.currentTime).toBe(9.25);
+    expect(slot1.plays).toBe(1);
+  });
+
+  /**
+   * THE REGRESSION this guard exists for. Rebuilding detaches the source, which pauses that
+   * element while its partner plays on — and a split pair is exactly what `updateTurnState` reads
+   * as "the browser stopped playback on us". Left unguarded it would pause the half that is
+   * still fine and record it as a *user* pause, so the card stops dead and auto-resume refuses to
+   * undo it: a blank tile traded for a stopped debate.
+   */
+  it('does not let the split pair pause the half that is still playing', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    slot1.readyState = 0; // rebuilding
+
+    act(() => result.current.resyncSlot(1));
+    // Slot 1 is paused mid-rebuild, slot 2 is not. A tick lands in that window as a matter of
+    // course — `timeupdate` fires about four times a second on the element still running.
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  // The same window again, one step later. `play()` does not start an element synchronously, so
+  // the pair is still split between the call and the first frame — wider here than anywhere else,
+  // because a rebuilt cue-less recording is the slowest thing in this file to start.
+  it('holds the guard until the rebuilt recording is actually running', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+    act(() => slot1.emit('loadeddata'));
+    expect(slot1.plays).toBe(1); // asked to start, not started
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+  });
+
+  it('polices the pair again once the rebuild is running', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+    act(() => slot1.emit('loadeddata'));
+    await act(async () => {
+      slot1.settlePlay();
+      await Promise.resolve();
+    });
+
+    // A pair the browser really does split, now that the rebuild is over: corrected as before.
+    act(() => slot1.browserPause());
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(true);
+    expect(result.current.userPaused).toBe(true);
+  });
+
+  // A rebuild is allowed to fail. What it may not do is hold the pair's corrections down until
+  // the backstop while it is already known to have failed.
+  it('lets go as soon as the rebuild fails again', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+    act(() => slot1.emit('error'));
+    act(() => slot1.emit('loadeddata')); // whatever arrives after the failure is not a rejoin
+
+    expect(slot1.plays).toBe(0);
+  });
+
+  /**
+   * A rebuild outlives the render that started it, and the feed keys its cards by claim — so a
+   * re-rank hands a different debate to this same hook, and to this same `<video>` node, while one
+   * is pending. That rejoin must not fire against the new recording: it would seek it with the
+   * *previous* debate's offsets and start it.
+   */
+  it('drops a pending rejoin when the card is handed a different debate', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+    slot2.browserResume();
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+    rerender({ debate: debateFixture('debate-2') });
+    await waitFor(() => expect(mocks.recordingUrl).toHaveBeenCalledTimes(4));
+
+    // The element is now loading a different recording. Its `loadeddata` belongs to that one.
+    act(() => slot1.emit('loadeddata'));
+    expect(slot1.plays).toBe(0);
+  });
+
+  // The guard is a fact about the pair, not about what the partner happened to be doing when
+  // `onError` fired. The preload case — both paused — is where the original failure was observed,
+  // and it is the case where `resumeBoth` most needs to know a rebuild is under way.
+  it('guards the rebuild even while the partner is paused', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserPause();
+    slot1.readyState = 0;
+
+    act(() => result.current.resyncSlot(1));
+
+    // Nothing is seeked, as before — but the pair is now known to be mid-rebuild.
+    expect(slot1.plays).toBe(0);
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+    });
+    act(() => slot2.stallPlay());
+    await act(async () => {
+      slot1.stallPlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    // 'blocked' is what a half-open element looks like, and it is not something to tell the
+    // viewer about — the rebuild finishes on its own and the autoplay effect retries either way.
+    expect(result.current.error).toBeNull();
+  });
+
+  /**
+   * `error.code === 2` is `MEDIA_ERR_NETWORK` and covers a signature that has lapsed as well as a
+   * pipeline that died. Rebuilding re-fetches the same bytes from the same signature, so it
+   * provably cannot answer the first — this is the escalation that can.
+   */
+  it('re-signs one recording without disturbing the other', async () => {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const untouched = result.current.urls.slot2;
+    mocks.recordingUrl.mockResolvedValueOnce({ url: 'https://cdn.test/slot1.webm?sig=fresh' });
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+
+    expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=fresh');
+    // The healthy tile is mid-playback. Blanking its URL would drop it to "Loading…" and release
+    // a video the viewer is watching, which is a worse thing than the tile this is repairing.
+    expect(result.current.urls.slot2).toBe(untouched);
+  });
+
+  // Without a ceiling, a recording that is simply gone would mint a URL per round for as long as
+  // the card is on screen — the tile spends a fresh budget on every new `src`.
+  it('re-signs a recording once per card', async () => {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+      await result.current.refreshSlotUrl(1);
+    });
+
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(3);
+  });
+
+  it('gives a different debate its own re-sign', async () => {
+    const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
+      initialProps: { debate: debateFixture('debate-1') },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(3);
+
+    rerender({ debate: debateFixture('debate-2') });
+    await waitFor(() => expect(mocks.recordingUrl).toHaveBeenCalledTimes(5));
+
+    await act(async () => {
+      await result.current.refreshSlotUrl(1);
+    });
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(6);
+  });
+
+  /**
+   * A rebuild that exhausts its budget leaves an element that cannot play and cannot be made to.
+   * Before the rebuild existed, Chrome left such an element `paused === false` and the pair's
+   * corrections never noticed — one blank tile, the debate playing on. Detaching the source to
+   * rebuild it flips that to `true`, so without this the fix would trade a blank tile for a
+   * stopped debate: a strictly worse outcome than the bug.
+   */
+  it('leaves the healthy half playing when a recording cannot be revived', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    slot2.browserResume();
+    slot2.currentTime = 12;
+    // Out of attempts: paused, holding a MediaError, with no rebuild in flight to hide behind.
+    Object.assign(slot1, { error: { code: 2 }, paused: true });
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(false);
+    expect(result.current.userPaused).toBe(false);
+    // And the speaker still has a turn, so the audio gate does not mute the half that works.
+    expect(result.current.turnState).not.toBeNull();
   });
 });
