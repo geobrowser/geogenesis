@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
-import { type ReactElement, StrictMode } from 'react';
+import { type ReactElement, type ReactNode, StrictMode } from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,7 +200,11 @@ vi.mock('next/navigation', () => ({
 // drag the LiveKit stack into every page test. Stubbed as a marker rather than as nothing, so the
 // tests below can still say where in the page it lands.
 vi.mock('./rematch-voice', () => ({
-  RematchVoiceHeader: () => <div data-testid="rematch-pair-header" />,
+  // Renders its `leaveAction`, which really does live in the header now — stubbing it away would
+  // take the Leave button off the page for every test below.
+  RematchVoiceHeader: ({ leaveAction }: { leaveAction?: ReactNode }) => (
+    <div data-testid="rematch-pair-header">{leaveAction}</div>
+  ),
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {

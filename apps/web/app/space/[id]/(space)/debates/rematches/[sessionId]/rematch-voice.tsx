@@ -200,6 +200,7 @@ type PairContext = {
   onOpenOpponentSpace: (() => void) | null;
   lockedClaim: { claim: string; spaceName?: string | null } | null;
   positions: PairHeaderPositions | null;
+  leaveAction?: React.ReactNode;
 };
 
 function toHeaderParticipant(participant: DebateRematchParticipant | null): PairHeaderParticipant | null {
@@ -226,6 +227,8 @@ function toHeaderParticipant(participant: DebateRematchParticipant | null): Pair
 type RematchVoiceHeaderProps = {
   session: DebateRematchSession;
   currentUserId: string;
+  /** The page's Leave button. It lives in your card's corner now, not at the end of the tab row. */
+  leaveAction?: React.ReactNode;
 };
 
 export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
@@ -235,7 +238,7 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoiceHeader({ session, currentUserId }: RematchVoiceHeaderProps) {
+function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: RematchVoiceHeaderProps) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
@@ -429,7 +432,9 @@ function SessionRematchVoiceHeader({ session, currentUserId }: RematchVoiceHeade
       : { localAgrees: request.recipient_position, opponentAgrees: request.requester_position }
     : null;
 
-  if (!opponent) return null;
+  // No pair to draw, but the viewer is still in a session they must be able to leave — and Leave
+  // lives in the header now. The row is the header's, minus everything that needs two people.
+  if (!opponent) return leaveAction ? <div className="flex justify-end">{leaveAction}</div> : null;
 
   const pair: PairContext = {
     local: toHeaderParticipant(local),
@@ -438,6 +443,7 @@ function SessionRematchVoiceHeader({ session, currentUserId }: RematchVoiceHeade
     onOpenOpponentSpace,
     lockedClaim,
     positions,
+    leaveAction,
   };
 
   const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;

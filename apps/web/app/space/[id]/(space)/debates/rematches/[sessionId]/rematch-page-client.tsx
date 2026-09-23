@@ -1972,10 +1972,28 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               that scrolls away has the dock's problem in a different place. */}
           {session && currentUserId ? (
             <div className="mb-4">
-              <RematchVoiceHeader session={session} currentUserId={currentUserId} />
+              {/* Leave rides in the header rather than at the end of the tab row: it belongs to
+                  you, so it sits in your card, opposite "View profile" on theirs. That leaves the
+                  tab strip the full width it was sharing. */}
+              <RematchVoiceHeader
+                session={session}
+                currentUserId={currentUserId}
+                leaveAction={
+                  <button
+                    type="button"
+                    aria-label="Leave debate"
+                    title="Leave debate"
+                    onClick={leave}
+                    disabled={leaveSession.isPending}
+                    className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+                  >
+                    <LeaveIcon />
+                  </button>
+                }
+              />
             </div>
           ) : null}
-          <header className="mb-4 flex items-end justify-between gap-4">
+          <header className="mb-4 flex items-end gap-4">
             {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
                 reaches the end from chaining into the browser's back gesture. The baseline sits
@@ -2022,16 +2040,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   1px marker drawn over it. */}
               <div aria-hidden className="h-px bg-grey-02" />
             </div>
-            <button
-              type="button"
-              aria-label="Leave debate"
-              title="Leave debate"
-              onClick={leave}
-              disabled={leaveSession.isPending}
-              className="mb-1 grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-            >
-              <LeaveIcon />
-            </button>
           </header>
 
           <div className="flex flex-col gap-3">

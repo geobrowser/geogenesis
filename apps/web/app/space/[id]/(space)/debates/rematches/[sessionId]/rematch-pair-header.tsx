@@ -94,6 +94,14 @@ type RematchPairHeaderProps = {
   positions?: PairHeaderPositions | null;
   /** Null while the opponent's personal space has not resolved; the card stays, inert. */
   onOpenOpponentSpace: (() => void) | null;
+  /**
+   * Leaving the session, drawn in your card's top-right corner.
+   *
+   * Owned by the page, which holds the mutation — this only says where it goes. It sits opposite
+   * "View profile" on the other card, so each card's corner is that person's secondary action, and
+   * the row it used to occupy at the end of the tab strip is now the tabs' alone.
+   */
+  leaveAction?: React.ReactNode;
 };
 
 export function RematchPairHeader({
@@ -106,6 +114,7 @@ export function RematchPairHeader({
   lockedClaim,
   positions,
   onOpenOpponentSpace,
+  leaveAction,
 }: RematchPairHeaderProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -114,7 +123,13 @@ export function RematchPairHeader({
       {/* Three tracks on desktop, stacked on a phone. Two 150px cards side by side at 375px leaves
           no room for a labelled pill, and a labelled pill is the entire point of this change. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
-        <YouCard local={local} voice={voice} opponentName={opponentName} agrees={positions?.localAgrees} />
+        <YouCard
+          local={local}
+          voice={voice}
+          opponentName={opponentName}
+          agrees={positions?.localAgrees}
+          leaveAction={leaveAction}
+        />
         <VsBadge />
         <OpponentCard
           opponent={opponent}
@@ -184,11 +199,13 @@ function YouCard({
   voice,
   opponentName,
   agrees,
+  leaveAction,
 }: {
   local: PairHeaderParticipant | null;
   voice: PairHeaderVoice;
   opponentName: string;
   agrees?: boolean;
+  leaveAction?: React.ReactNode;
 }) {
   const live = voice.kind === 'live';
   const muted = live && voice.muted;
@@ -201,7 +218,9 @@ function YouCard({
     if (voice.kind === 'message') return voice.message;
     if (voice.micFailureMessage) return voice.micFailureMessage;
     if (talkingWhileMuted) return `Muted · ${firstName(opponentName)} can’t hear you`;
-    return muted ? 'Muted' : 'Live';
+    // The state, in the same word the button uses: "Live" is a fourth vocabulary for the two
+    // states this page has, and the pill next to it already says "Unmute".
+    return muted ? 'Muted' : 'Unmuted';
   })();
 
   const captionTone = (() => {
@@ -236,25 +255,31 @@ function YouCard({
             </span>
           ) : null}
         </div>
-        {voice.kind === 'live' ? (
-          <div
-            className={cx(
-              'flex shrink-0 items-center',
-              muted && voice.opponentState === 'talking' && 'rounded-full ring-3 ring-grey-02'
-            )}
-          >
-            {voice.controls}
-          </div>
-        ) : voice.kind === 'message' && voice.actionLabel && voice.onAction ? (
-          <button
-            type="button"
-            onClick={voice.onAction}
-            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-          >
-            {voice.actionLabel}
-          </button>
-        ) : null}
+        {leaveAction ? <div className="flex shrink-0 items-center">{leaveAction}</div> : null}
       </div>
+
+      {/* Under the name rather than beside it. Sharing the identity row meant the pill competed
+          with the avatar and the caption for a half-card's width — it fit on a desktop and barely
+          fit on a phone, which is a poor trade for the one control this page exists to surface.
+          Its own row gives it the full card and leaves the corner for Leave. */}
+      {voice.kind === 'live' ? (
+        <div
+          className={cx(
+            'flex items-center',
+            muted && voice.opponentState === 'talking' && 'w-max rounded-full ring-3 ring-grey-02'
+          )}
+        >
+          {voice.controls}
+        </div>
+      ) : voice.kind === 'message' && voice.actionLabel && voice.onAction ? (
+        <button
+          type="button"
+          onClick={voice.onAction}
+          className="self-start rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
+        >
+          {voice.actionLabel}
+        </button>
+      ) : null}
 
       {live && voice.micFailureMessage ? (
         // A disabled button is out of the tab order, so the reason — and the only way back — has to
@@ -307,7 +332,7 @@ function OpponentCard({
         </div>
         {onOpen ? (
           <span className="flex shrink-0 items-center gap-0.5 text-chat text-grey-04 mobile:sr-only">
-            View space
+            View profile
             <ChevronRight />
           </span>
         ) : null}
@@ -383,7 +408,8 @@ function OpponentMicChip({ state, name }: { state: PairMicState; name: string })
           ? `${name} is talking`
           : `${name} is unmuted`;
 
-  const text = state === 'waiting' ? 'Waiting' : state === 'muted' ? 'Muted' : state === 'talking' ? 'Talking' : 'Live';
+  const text =
+    state === 'waiting' ? 'Waiting' : state === 'muted' ? 'Muted' : state === 'talking' ? 'Talking' : 'Unmuted';
 
   return (
     <>

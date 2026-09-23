@@ -1367,7 +1367,10 @@ describe('RematchVoiceHeader', () => {
 
     mocks.isMicrophoneEnabled = true;
     rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
-    expect(screen.getByText('Live')).toBeInTheDocument();
+    // "Unmuted", not "Live": the page has two states and a button that says "Unmute", and a third
+    // word for the same thing is a third thing to learn.
+    expect(screen.getByText('Unmuted')).toBeInTheDocument();
+    expect(screen.queryByText('Live')).toBeNull();
   });
 
   // GEO-2992: the opponent's card is a way into their space, and the only control in the header is
@@ -1460,11 +1463,53 @@ describe('RematchVoiceHeader', () => {
     const session = makeSession('browsing');
     const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.getByTitle('Salina is unmuted')).toHaveTextContent('Live');
+    expect(screen.getByTitle('Salina is unmuted')).toHaveTextContent('Unmuted');
 
     mocks.isSpeaking = true;
     rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
+  });
+
+  // Leaving belongs to you, so it sits in your card — opposite "View profile" on theirs — and the
+  // tab strip gets back the width it was sharing.
+  it('draws the leave action in the viewer card, beside the mic control rather than in its place', async () => {
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-you-card');
+    const leave = screen.getByRole('button', { name: 'Leave debate' });
+    const mic = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
+    expect(card).toContainElement(leave);
+    expect(card).toContainElement(mic);
+    // The pill has its own row under the name; sharing the identity row left it a half-card wide.
+    expect(leave.closest('div')).not.toBe(mic.closest('div'));
+  });
+
+  // The session is still leavable when there is nobody to draw a pair with.
+  it('keeps the leave action reachable without an opponent', async () => {
+    const session = makeSession('browsing');
+    const solo = { ...session, participants: [session.participants[0]] };
+    render(
+      <RematchVoiceHeader session={solo} currentUserId="me" leaveAction={<button type="button">Leave debate</button>} />
+    );
+    await flushOwnership();
+
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.queryByTestId('rematch-you-card')).toBeNull();
+  });
+
+  // The card opens a person, so it says so — "space" is the plumbing, not what the viewer wants.
+  it('offers the opponent card as a way into their profile', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent('View profile');
   });
 
   // GEO-2992 instrumentation: the share of participants who ever unmute, and how long it takes
