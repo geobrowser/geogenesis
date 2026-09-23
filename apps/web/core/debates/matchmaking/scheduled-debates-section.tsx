@@ -23,23 +23,13 @@ import { HubPillButton } from './hub-pill-button';
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, error } = content;
+  const { answerable, upcoming, requestsError, roomsError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0);
 
-  if (error) {
-    return (
-      <Section label="Scheduled">
-        <Text as="p" variant="footnote" color="red-01">
-          Could not read your scheduled debates: {error.message}
-        </Text>
-      </Section>
-    );
-  }
-
-  if (answerable.length === 0 && upcoming.length === 0) return null;
+  if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
 
   const answer = (requestId: string, accepted: boolean) => {
     setConflict(null);
@@ -58,16 +48,18 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 
   return (
     <>
-      {upcoming.length > 0 && (
+      {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId }) => (
             <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} />
           ))}
+          {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </Section>
       )}
 
-      {answerable.length > 0 && (
+      {(answerable.length > 0 || requestsError) && (
         <Section label="Scheduled">
+          {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
           {answerable.map(request => (
             <ScheduledRow
               key={request.request_id}
@@ -95,8 +87,9 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
-  /** A read that failed. Reported rather than drawn as an empty schedule. */
-  error: Error | null;
+  /** Kept apart: one read failing must not hide what the other returned. */
+  requestsError: Error | null;
+  roomsError: Error | null;
 };
 
 /** A room carries no participants, so its opponent comes from the request that booked it. */
@@ -127,7 +120,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [rooms.data, rows, viewerId]
   );
 
-  return { answerable, upcoming, error: requests.error ?? rooms.error ?? null };
+  return { answerable, upcoming, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
 
 /** `null` whenever the answer would be a guess, so nothing reads the viewer as their own opponent. */
@@ -281,6 +274,14 @@ function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
 
 function shortName(opponent: DebateParticipantSummary | null) {
   return opponent?.display_name || 'Your opponent';
+}
+
+function ReadFailed({ children }: { children: React.ReactNode }) {
+  return (
+    <Text as="p" variant="footnote" color="red-01">
+      {children}
+    </Text>
+  );
 }
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {

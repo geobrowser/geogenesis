@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   clearDebateActivity: vi.fn(),
   rememberDebateReturnDestination: vi.fn(),
   upcomingRooms: [] as UpcomingDebateRoom[],
+  /** False is a first load still in flight, which is not the same as no rooms. */
+  roomsSettled: true,
   refetchRooms: vi.fn(() => Promise.resolve()),
 }));
 
@@ -75,7 +77,12 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./rooms/hooks', () => ({
-  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.upcomingRooms }, refetch: mocks.refetchRooms }),
+  useUpcomingDebateRooms: () => ({
+    data: mocks.roomsSettled ? { rooms: mocks.upcomingRooms } : undefined,
+    isSuccess: mocks.roomsSettled,
+    isError: false,
+    refetch: mocks.refetchRooms,
+  }),
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -149,6 +156,7 @@ beforeEach(() => {
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
+  mocks.roomsSettled = true;
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
   mocks.prompts = [];
@@ -618,6 +626,21 @@ describe('DebateCoordinator', () => {
     const activity = activityWithRematch('browsing');
     mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
     mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'rematch-1' })];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A deep link into a room disables this query, so leaving one is the first load. Every guard
+  // below reads vacuously safe on `[]`, which routed the room's own session into the picker --
+  // where Leave ends the session for both people.
+  it('waits for the first room load rather than reading it as no rooms', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
 
     render(<DebateCoordinator />);
 

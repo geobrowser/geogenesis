@@ -48,7 +48,7 @@ export function RequestsTab() {
   );
 }
 
-const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], error: null };
+const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
 
 function ScheduledRequestsTab() {
   return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
@@ -116,7 +116,7 @@ function RequestsTabBody({
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const hasScheduled = scheduled.answerable.length > 0 || scheduled.upcoming.length > 0 || scheduled.error !== null;
+  const hasScheduled = scheduled.answerable.length > 0 || scheduled.upcoming.length > 0 || scheduled.requestsError !== null || scheduled.roomsError !== null;
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
 
   return (

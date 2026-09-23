@@ -77,7 +77,8 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
-  error?: Error | null;
+  requestsError?: Error | null;
+  roomsError?: Error | null;
 }) => ({
   user: userEvent.setup(),
   ...render(
@@ -85,7 +86,8 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
-        error: content.error ?? null,
+        requestsError: content.requestsError ?? null,
+        roomsError: content.roomsError ?? null,
       }}
     />
   ),
@@ -231,7 +233,7 @@ describe('a schedule that could not be read', () => {
   // An unread schedule drawn as an empty one tells someone with a debate in four minutes that
   // they have nothing on.
   it('says so rather than rendering as nothing scheduled', () => {
-    setup({ error: new Error('Service unavailable.') });
+    setup({ requestsError: new Error('Service unavailable.') });
 
     expect(screen.getByText(/Could not read your scheduled debates: Service unavailable./)).toBeInTheDocument();
   });
@@ -241,6 +243,23 @@ describe('a schedule that could not be read', () => {
 
     const { result } = renderHook(() => useScheduledContent(true));
 
-    expect(result.current.error?.message).toBe('Rooms are down.');
+    expect(result.current.roomsError?.message).toBe('Rooms are down.');
+    expect(result.current.requestsError).toBeNull();
+  });
+
+  // One read failing must not take the other's rows with it: a joinable room is the most
+  // time-critical thing this tab shows.
+  it('still offers an open room when the request read failed', () => {
+    setup({ upcoming: [upcomingRow()], requestsError: new Error('Requests are down.') });
+
+    expect(screen.getByRole('link', { name: 'Join debate' })).toBeInTheDocument();
+    expect(screen.getByText(/Could not read your scheduled debates/)).toBeInTheDocument();
+  });
+
+  it('still offers Accept when the room read failed', () => {
+    setup({ answerable: [request()], roomsError: new Error('Rooms are down.') });
+
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(screen.getByText(/Could not read your upcoming debates/)).toBeInTheDocument();
   });
 });
