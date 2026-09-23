@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const topicId = searchParams.get('topicId');
   const routeSpaceId = searchParams.get('spaceId');
-  const spaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'));
+  const spaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId ?? undefined);
   if (
     !topicId ||
     !IdUtils.isValid(topicId) ||

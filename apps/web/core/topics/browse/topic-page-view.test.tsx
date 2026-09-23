@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
    * makes the assertion about where the number came from rather than what it happens to be.
    */
   maxLines: 5,
+  topicSpaceIds: ['11111111111111111111111111111111'],
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -78,7 +79,7 @@ vi.mock('~/core/sync/use-store', () => ({
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
 vi.mock('../use-topic-space-scope', () => ({
-  useTopicSpaceScope: () => ['11111111111111111111111111111111'],
+  useTopicSpaceScope: () => mocks.topicSpaceIds,
 }));
 vi.mock('./topic-composition', () => ({
   TopicComposition: (props: Record<string, unknown>) => {
@@ -112,6 +113,7 @@ beforeEach(() => {
   mocks.composition = null;
   mocks.tabs = null;
   mocks.pathname = '/space/space-1/topic-1';
+  mocks.topicSpaceIds = ['11111111111111111111111111111111'];
 });
 
 afterEach(cleanup);
@@ -176,6 +178,20 @@ describe('TopicPageView explore feed', () => {
       spaceIds: ['11111111111111111111111111111111'],
     });
     expect(mocks.feed).not.toHaveProperty('topicOptions');
+  });
+
+  it('keeps the route space when the curated scope exceeds its request cap', () => {
+    const routeSpaceId = 'ffffffffffffffffffffffffffffffff';
+    mocks.topicSpaceIds = [
+      ...Array.from({ length: 100 }, (_, index) => (index + 1).toString(16).padStart(32, '0')),
+      routeSpaceId,
+    ];
+
+    render(<TopicPageView entityId="topic-1" spaceId={routeSpaceId} />);
+
+    expect(mocks.feed?.spaceIds).toHaveLength(100);
+    expect(mocks.feed?.spaceIds).toContain(routeSpaceId);
+    expect(mocks.composition?.spaceIds).toEqual(mocks.feed?.spaceIds);
   });
 
   it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {

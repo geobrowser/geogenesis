@@ -119,6 +119,8 @@ type EntityFeedProps = {
   };
   /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
   fixedParams?: Record<string, string>;
+  /** Optional bound for contextual AND-composed Topic selections. */
+  maxTopicSelections?: number;
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
@@ -215,6 +217,7 @@ export function EntityFeed({
   showTopicFilter = false,
   topicSearch,
   fixedParams = {},
+  maxTopicSelections,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
@@ -345,11 +348,16 @@ export function EntityFeed({
     setSelectedTypeIds(current => (current.length === typeOptions.length ? [] : typeOptions.map(type => type.id)));
   }, [typeOptions]);
 
-  const toggleTopic = React.useCallback((topicId: string) => {
-    setSelectedTopicIds(current =>
-      current.includes(topicId) ? current.filter(id => id !== topicId) : [...current, topicId]
-    );
-  }, []);
+  const toggleTopic = React.useCallback(
+    (topicId: string) => {
+      setSelectedTopicIds(current => {
+        if (current.includes(topicId)) return current.filter(id => id !== topicId);
+        if (maxTopicSelections !== undefined && current.length >= maxTopicSelections) return current;
+        return [...current, topicId];
+      });
+    },
+    [maxTopicSelections]
+  );
 
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier

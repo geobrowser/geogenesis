@@ -102,7 +102,10 @@ export function TopicPageView({
   const sidePanelTab = useEntitySidePanelActiveTab();
   const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
   const fullTopicSpaceIds = useTopicSpaceScope(spaceId);
-  const topicSpaceIds = React.useMemo(() => limitTopicFeedSpaceIds(fullTopicSpaceIds), [fullTopicSpaceIds]);
+  const topicSpaceIds = React.useMemo(
+    () => limitTopicFeedSpaceIds(fullTopicSpaceIds, spaceId),
+    [fullTopicSpaceIds, spaceId]
+  );
 
   const isCurated = React.useMemo(
     () =>

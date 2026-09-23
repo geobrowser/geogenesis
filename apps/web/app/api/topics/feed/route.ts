@@ -6,9 +6,8 @@ import { parseExploreSort } from '~/core/explore/explore-feed-params';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
-import { parseTopicFeedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
+import { parseTopicFeedSelectedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
-import { normId } from '~/core/utils/norm-id';
 
 /** Mixed Topic rabbit-hole feed: direct topic entities plus Debates reached through their Claim. */
 export async function GET(request: Request) {
@@ -22,8 +21,8 @@ export async function GET(request: Request) {
   const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
   if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
 
-  const selectedTopicIds = parseTopicFeedIds(searchParams.get('topicIds')).filter(id => normId(id) !== normId(topicId));
-  const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'));
+  const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), topicId);
+  const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId);
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(routeSpaceId);
   const completePopulationScopes = topicFeedPopulationScopes(topicId, selectedTopicIds, typeIds);
 

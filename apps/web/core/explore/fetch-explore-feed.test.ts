@@ -23,10 +23,20 @@ const windows = vi.hoisted(() => ({
    * stopped being forwarded.
    */
   variables: [] as Record<string, unknown>[],
+  operations: [] as string[],
+  responder: null as null | ((operation: string, variables: Record<string, unknown>) => unknown),
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ variables }: { variables: Record<string, unknown> }) => {
+  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+    const operation =
+      query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
+    windows.operations.push(operation);
+    if (windows.responder) {
+      windows.calls += 1;
+      windows.variables.push(variables);
+      return Effect.succeed(windows.responder(operation, variables));
+    }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
@@ -96,6 +106,8 @@ beforeEach(() => {
   windows.queue = [];
   windows.calls = 0;
   windows.variables = [];
+  windows.operations = [];
+  windows.responder = null;
 });
 
 /**
@@ -345,5 +357,33 @@ describe('a complete contextual population', () => {
 
     expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
     expect(windows.calls).toBe(2);
+  });
+
+  it('reuses the ordered compact population when infinite scroll advances', async () => {
+    const rows = Array.from({ length: 31 }, (_, index) => ({
+      id: `entity-${index.toString().padStart(2, '0')}`,
+      rankingScore: String(31 - index),
+      createdAt: String(1_800_000_000 - index),
+    }));
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? { nodes: rows, pageInfo: { hasNextPage: false, endCursor: null } }
+        : windowOf(
+            rows.map(row => entity(row.id, CLAIM_TYPE_ID)),
+            { hasNextPage: false, endCursor: null }
+          );
+
+    const args = {
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: rows.map(row => row.id) } } }],
+    };
+    const first = await fetchExploreFeed(args);
+    expect(first.nextCursor).not.toBeNull();
+
+    await fetchExploreFeed({ ...args, cursor: first.nextCursor });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+    expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
   });
 });

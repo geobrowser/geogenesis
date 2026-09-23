@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { EntityFeed } from '~/partials/feed/entity-feed';
 
+import { MAX_TOPIC_FEED_SELECTED_TOPICS } from './topic-feed-params';
 import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export function TopicFeed({
@@ -43,6 +44,7 @@ export function TopicFeed({
         emptyLabel: 'No topics found',
       }}
       fixedParams={fixedParams}
+      maxTopicSelections={MAX_TOPIC_FEED_SELECTED_TOPICS}
       dividerBeforeFeed
       feedTopSpacingClassName="mt-5"
       titleOpensSidePanel

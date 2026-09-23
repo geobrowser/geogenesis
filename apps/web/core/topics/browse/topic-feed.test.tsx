@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicFeed } from './topic-feed';
+import { MAX_TOPIC_FEED_SELECTED_TOPICS } from './topic-feed-params';
 import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 const mocks = vi.hoisted(() => ({
@@ -51,6 +52,7 @@ describe('TopicFeed', () => {
         spaceId: 'space-1',
         spaceIds: '11111111111111111111111111111111',
       },
+      maxTopicSelections: MAX_TOPIC_FEED_SELECTED_TOPICS,
       titleOpensSidePanel: true,
     });
   });
