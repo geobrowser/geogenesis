@@ -82,13 +82,6 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
 };
 
 /**
- * What to call one side of a claim: Agree or Disagree.
- *
- * It used to take the response kind, because a factual claim's sides were called Verify and
- * Dispute. Every claim is answered the same way now, so there is nothing left to choose between
- * and no caller has to work out which vocabulary a claim is in before it can name a side.
- */
-/**
  * The one kind a claim is answered with.
  *
  * The authority on this, so that no surface has to read it off geo-chat's row. That field can
@@ -115,6 +108,13 @@ export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
  */
 export const CLAIM_RESPONSE_COPY = ENTITY_RESPONSE_COPY[CLAIM_RESPONSE_KIND];
 
+/**
+ * What to call one side of a claim: Agree or Disagree.
+ *
+ * It used to take the response kind, because a factual claim's sides were called Verify and
+ * Dispute. Every claim is answered the same way now, so there is nothing left to choose between
+ * and no caller has to work out which vocabulary a claim is in before it can name a side.
+ */
 export function responsePositionLabel(position: boolean) {
   return position ? CLAIM_RESPONSE_COPY.positiveAction : CLAIM_RESPONSE_COPY.negativeAction;
 }

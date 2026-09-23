@@ -755,8 +755,7 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
  * query that stacks its two pills vertically below ~230px, which is exactly the width this card
  * wants to be. Reusing it would force the card wide enough to cover the face it sits beside. What
  * matters is shared underneath — `useClaimResponseState` and `useClaimPositionControl` resolve the
- * vocabulary and publish the response, so a factual claim still reads Verify/Dispute here and the
- * share is the same number the claim page prints.
+ * response and publish it, so the share is the same number the claim page prints.
  *
  * The crowd split is shown up front, per the Figma card. It is worth knowing that this cuts against
  * the usual argument for withholding it — a viewer who sees "65% agree" before answering is being
@@ -835,8 +834,8 @@ function TickerClaimHeader({
                 ·
               </span>
             )}
-            {/* Same wording as the verdict on the claim page — "65% agree", or "65% verify" on a
-                factual claim, so the share reads the same wherever it is printed. */}
+            {/* Same wording as the verdict on the claim page — "65% agree" — so the share reads
+                the same wherever it is printed. */}
             <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
@@ -878,9 +877,9 @@ function TickerClaimHeader({
  * about it. The label survives as the accessible name and the tooltip, so nothing is lost to
  * anyone reading it aloud or hovering.
  *
- * Thumbs for a stance claim, chevrons for a factual one, which is the split the rest of the app
- * already draws: agreeing with a position and verifying a fact are different acts, and a thumb on
- * "the SEC sued Coinbase" reads as approval rather than confirmation.
+ * Thumbs, on every claim. A factual one used to draw chevrons here, because verifying a fact and
+ * agreeing with a position were different acts; claims ask one question now, so there is one
+ * glyph.
  */
 function ClaimIconButton({
   responseKind,

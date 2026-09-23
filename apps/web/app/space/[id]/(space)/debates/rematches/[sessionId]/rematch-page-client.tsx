@@ -2086,14 +2086,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? session.participants.map(participant => {
           const requester = participant.user_id === incomingRequest.requester_user_id;
           const position = requester ? incomingRequest.requester_position : incomingRequest.recipient_position;
-          const positionLabel = requester
-            ? incomingRequest.requester_position_label
-            : incomingRequest.recipient_position_label;
-
           return {
             ...participant,
             position,
-            position_label: positionLabel ?? responsePositionLabel(position),
+            // Our word, not the request's. geo-chat labels the sides of a claim it still calls
+            // factual "Verify" and "Dispute", and this pair sits beside pills that can only
+            // publish an Agree — see `positionSummariesFromCounts`.
+            position_label: responsePositionLabel(position),
           };
         })
       : [];
@@ -2691,10 +2690,7 @@ function RematchClaimCard({
     request != null &&
     idEquals(request.claim.claim_entity_id, claim.claim.claim_entity_id);
 
-  const positions = React.useMemo(
-    () => rematchPositionSummaries(claim, session),
-    [claim, session]
-  );
+  const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
   // geo-chat's copy, deliberately — not the optimistic one. The card reads the viewer's own
   // in-flight response off the indexing snapshot for display, and uses this field for the two
@@ -2839,8 +2835,10 @@ function rematchPositionSummaries(
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
-      position_label: holders.find(holder => holder.position_label)?.position_label ?? responsePositionLabel(position),
+      // Our word, not the holder's — see `positionSummariesFromCounts`. This used to prefer a
+      // server-supplied label so that an authoritative Verify/Dispute survived, which is exactly
+      // what must not happen now.
+      position_label: responsePositionLabel(position),
       total_count: holders.length,
       // Only meaningful for the hub's "available now" counts; a rematch is already a fixed pair,
       // so there is nobody here the viewer would send a request to.

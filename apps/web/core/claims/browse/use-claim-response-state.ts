@@ -16,18 +16,17 @@ import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from '
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 
 export type ClaimResponseState = {
-  /** Which vocabulary labels the sides: Agree/Disagree, or Verify/Dispute on a factual claim. */
+  /** How a claim's sides are labelled. One vocabulary: Agree/Disagree. */
   responseKind: DebateResponseKind;
   /**
-   * Whether `responseKind` is an answer or still the fallback.
+   * Whether this claim's own data has arrived.
    *
-   * Callers gate their pills on this. `stance` is what we assume before either lookup answers, and
-   * a click made inside that window publishes a *stance* response against a claim that wants
-   * Verify/Dispute — the kind selects `voteKind` on the write, so it is the wrong vote rather than
-   * the wrong label.
-   *
-   * Answered, not merely settled: a failed graph read stops loading too, and reading that as "no
-   * factual flag" is the same bug with a longer fuse. Something has to have said so.
+   * Callers gate their pills on it. It used to mean "the vocabulary is an answer rather than the
+   * `stance` fallback", back when a factual claim wanted Verify/Dispute and a click made before
+   * the lookups answered published the wrong *vote kind* rather than merely the wrong label.
+   * There is one kind now, so nothing about the write depends on this — what still does is the
+   * viewer's own side, which a pill needs before a click can clear a position rather than
+   * republish it.
    */
   isResponseKindResolved: boolean;
   /**
@@ -113,13 +112,13 @@ export function useClaimResponseState({
   // An unpublished edit to the claim's own vocabulary blocks responding, as it did before.
   //
   // `EntityVoteButtons` — the control every one of these surfaces used to render — refused outright
-  // while the "Is factual" value or the Claim type had a local edit that had not been published,
-  // and said so. Replacing it with the shared card dropped that, and the failure it prevents is the
-  // one this file exists to stop: the kind selects `voteKind` on the write, so a draft flag would
-  // publish a veracity response against a claim the graph still calls a stance one, or the reverse.
+  // while the Claim type had a local edit that had not been published, and said so. Replacing it
+  // with the shared card dropped that, and the failure it prevents is real: the kind selects
+  // `voteKind` on the write, so a draft type edit would publish a claim's stance against an entity
+  // the graph still calls an ordinary one, or the reverse.
   //
-  // A row does not settle it either. geo-chat indexes the *published* graph, so its kind is the
-  // stale half of exactly the disagreement the edit creates.
+  // It used to watch the "Is factual" value for the same reason. That flag no longer chooses a
+  // kind, so a draft edit to it cannot change what gets published.
   //
   // Only ever true where the entity carries local edits at all: the surfaces that read it through a
   // narrow projection have no `isLocal` to find, and this is false for them.
@@ -127,12 +126,12 @@ export function useClaimResponseState({
     ? 'Publish the claim type change before responding.'
     : null;
 
-  // Withheld until the vocabulary is an answer rather than the `stance` fallback.
+  // Withheld until the claim's own data has arrived.
   //
-  // The kind is part of both query keys, so asking early does not just waste a pair of requests on
-  // a factual claim — it populates the summary from the *stance* counts, and a card can draw that
-  // split for as long as the entity takes to arrive, then swap it for the veracity one. The pills
-  // being disabled stops the wrong write; it does not stop the wrong number.
+  // This used to be about the vocabulary: the kind is part of both query keys, so asking before it
+  // was known populated the summary from the wrong counts and a card could draw that split until
+  // the entity landed. One kind now, so the keys are stable — what is still worth waiting for is
+  // the row, which carries the viewer's own side.
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled && isResponseKindResolved);
 
   const claim = React.useMemo(

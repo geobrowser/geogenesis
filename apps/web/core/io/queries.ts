@@ -1464,14 +1464,14 @@ export function getUserEntityResponse(
 /**
  * Has this user cast a vote of any of the given kinds?
  *
- * Takes the kinds rather than assuming them: curation (0) is an entity upvote, stance (1) and
- * veracity (2) are a position on a claim, and the onboarding checklist counts those as two
- * different things a person can have done.
- */
-/**
- * `number` rather than `ResponseVoteKind`, because this asks the vote table a historical question
- * and the table holds kinds the app no longer publishes — the retired veracity kind, `2`, is a
- * real value here even though nothing can write one any more.
+ * Takes the kinds rather than assuming them: curation (0) is an entity upvote and stance (1) is a
+ * position on a claim, and the onboarding checklist counts those as two different things a person
+ * can have done.
+ *
+ * `number` rather than `ResponseVoteKind`, because this asks the vote table a *historical*
+ * question and the table holds kinds the app no longer publishes. The retired veracity kind, 2, is
+ * a real value here — the onboarding checklist still passes it, since somebody who answered a
+ * claim back when it asked Verify or Dispute has done the thing the checklist asks about.
  */
 export function getUserHasVoteOfKind(userId: string, voteKinds: readonly number[], signal?: AbortController['signal']) {
   return graphql({

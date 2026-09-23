@@ -8,7 +8,7 @@ import { VoteArrow } from '~/design-system/icons/vote-arrow';
 
 type Props = {
   responseKind: ResponseKind;
-  /** The side this glyph stands for: `true` is the positive one (Upvote / Agree / Verify). */
+  /** The side this glyph stands for: `true` is the positive one (Upvote / Agree). */
   position: boolean;
   /** Whether the viewer holds this side, which fills the glyph. */
   selected?: boolean;

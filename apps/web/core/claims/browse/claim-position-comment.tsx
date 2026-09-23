@@ -57,7 +57,7 @@ export function ClaimPositionCommentControl({
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
-  /** Compact action rendered after Disagree/Dispute, such as the Explore comments-panel opener. */
+  /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
 }) {
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
