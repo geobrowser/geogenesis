@@ -194,6 +194,19 @@ function VsBadge() {
  */
 const CARD_SURFACE = 'rounded-lg border bg-white p-3';
 
+/**
+ * The shape both sides of the pair wear.
+ *
+ * Your mute control and their mic chip sit at the same height in mirrored cards, so anything they
+ * do not share reads as an accident — and they were two hand-written sets of paddings and type
+ * sizes that were close but not equal. Exported rather than copied: `rematch-voice.tsx` owns the
+ * button (it needs the settings popover) but not the right to size it differently.
+ *
+ * The corners are deliberately left out. The chip is a whole pill; the button is the left half of
+ * one, with the settings chevron making up the right.
+ */
+export const PAIR_PILL = 'flex h-6 shrink-0 items-center gap-1 px-2 text-chatMedium [&>svg]:size-3';
+
 function YouCard({
   local,
   voice,
@@ -283,7 +296,7 @@ function YouCard({
         <div
           className={cx(
             'flex items-center',
-            muted && voice.opponentState === 'talking' && 'w-max rounded-full ring-3 ring-grey-02'
+            muted && voice.opponentState === 'talking' && 'w-max rounded-full ring-2 ring-grey-02'
           )}
         >
           {voice.controls}
@@ -292,7 +305,7 @@ function YouCard({
         <button
           type="button"
           onClick={voice.onAction}
-          className="self-start rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
+          className={cx(PAIR_PILL, 'self-start rounded-full bg-text text-white transition-opacity hover:opacity-80')}
         >
           {voice.actionLabel}
         </button>
@@ -433,7 +446,8 @@ function OpponentMicChip({ state, name }: { state: PairMicState; name: string })
       <span
         title={label}
         className={cx(
-          'flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-chatMedium [&>svg]:size-3',
+          PAIR_PILL,
+          'rounded-full',
           state === 'waiting' && 'bg-grey-01 text-grey-04',
           state === 'muted' && 'bg-errorTertiary text-red-01',
           (state === 'live' || state === 'talking') && 'bg-successTertiary text-green'

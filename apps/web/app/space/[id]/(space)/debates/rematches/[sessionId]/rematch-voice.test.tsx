@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 
+import { PAIR_PILL } from './rematch-pair-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
@@ -1515,6 +1516,30 @@ describe('RematchVoiceHeader', () => {
     mocks.isSpeaking = true;
     rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
+  });
+
+  // Your control and their chip sit at the same height in mirrored cards, so anything they do not
+  // share reads as an accident rather than a decision. They were two hand-written sets of paddings
+  // and type sizes that were close but not equal; this is what keeps them from drifting apart
+  // again.
+  it('gives the mute button and the opponent chip the same shape', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const button = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
+    const chip = screen.getByTitle('Salina is muted');
+    for (const shared of PAIR_PILL.split(' ')) {
+      expect(button).toHaveClass(shared);
+      expect(chip).toHaveClass(shared);
+    }
+
+    // The corners are the one difference, and it is the real one: the chip is a whole pill, the
+    // button is the left half of one with the settings chevron making up the right.
+    expect(button).toHaveClass('rounded-l-full');
+    expect(chip).toHaveClass('rounded-full');
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toHaveClass('size-6', 'rounded-r-full');
   });
 
   // Leaving belongs to you, so it sits in your card — opposite "View profile" on theirs — and the

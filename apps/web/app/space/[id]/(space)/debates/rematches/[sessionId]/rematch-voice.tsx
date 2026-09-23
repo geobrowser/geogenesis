@@ -38,6 +38,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import {
+  PAIR_PILL,
   type PairHeaderParticipant,
   type PairHeaderPositions,
   type PairHeaderToast,
@@ -916,7 +917,9 @@ function LocalAudioControls({
       aria-expanded={open}
       onClick={isMobile ? () => setOpen(current => !current) : undefined}
       className={cx(
-        'grid h-full w-[30px] shrink-0 place-items-center rounded-r-full transition-colors',
+        // Square on the pill's own height, so the joined control is one shape rather than a pill
+        // with a tab on the end.
+        'grid size-6 shrink-0 place-items-center rounded-r-full transition-colors',
         primary
           ? 'border-l border-grey-05 bg-text text-white hover:opacity-80'
           : 'border border-l-0 border-grey-02 bg-white text-grey-04 hover:text-text'
@@ -929,7 +932,7 @@ function LocalAudioControls({
   );
 
   return (
-    <span className="flex h-8 shrink-0 items-center">
+    <span className="flex h-6 shrink-0 items-center">
       <button
         type="button"
         // Both derived from `muted`, like the glyph and the disabled state. Deriving the label from
@@ -940,7 +943,10 @@ function LocalAudioControls({
         onClick={onToggle}
         disabled={Boolean(micFailure)}
         className={cx(
-          'flex h-full shrink-0 items-center gap-1.5 rounded-l-full pr-3 pl-2.5 text-metadataMedium transition [&>svg]:size-3.5',
+          // The opponent's mic chip, to the pixel — see `PAIR_PILL`. The two sit at the same
+          // height in mirrored cards, so any difference between them reads as an accident.
+          PAIR_PILL,
+          'rounded-l-full transition',
           micFailure
             ? 'border border-r-0 border-grey-02 bg-white text-red-01 opacity-60'
             : primary
