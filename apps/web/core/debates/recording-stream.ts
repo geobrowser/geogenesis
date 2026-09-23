@@ -1,3 +1,4 @@
+import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
@@ -196,6 +197,8 @@ export class RecordingPartStreamer {
   private failures = 0;
   private disabled = false;
   private stopped = false;
+  private pausedMs = 0;
+  private partFailures = 0;
 
   constructor(options: RecordingPartStreamerOptions) {
     this.options = {
@@ -247,6 +250,19 @@ export class RecordingPartStreamer {
     }
   }
 
+  /** How this recording's live upload went, for the one summary event it reports. */
+  stats() {
+    const partSize = this.multipart?.partSize ?? null;
+    return {
+      streaming: this.multipart ? 'on' : this.disabled ? 'unavailable' : 'never_started',
+      bytes_recorded: this.byteSize,
+      parts_uploaded_live: this.uploaded.size,
+      total_parts: partSize ? totalPartCount(this.byteSize, partSize) : null,
+      paused_ms: this.pausedMs,
+      part_failures: this.partFailures,
+    } as const;
+  }
+
   snapshot(): StreamedRecordingMultipart | null {
     if (!this.multipart) return null;
     return { ...this.multipart, uploadedPartNumbers: [...this.uploaded].sort((a, b) => a - b) };
@@ -279,6 +295,7 @@ export class RecordingPartStreamer {
   private async pump(): Promise<void> {
     if (this.stopped || this.disabled || this.inFlight) return;
     if (this.options.shouldPause()) {
+      this.pausedMs += PAUSE_RECHECK_MS;
       this.schedule(PAUSE_RECHECK_MS);
       return;
     }
@@ -289,6 +306,7 @@ export class RecordingPartStreamer {
       this.failures = 0;
     } catch (error) {
       this.failures += 1;
+      if (this.multipart) this.partFailures += 1;
       if (!this.multipart && isMissingRouteError(error)) {
         // A geo-chat without the multipart routes. The recording still uploads after the debate,
         // as one PUT, exactly as it did before.
@@ -474,6 +492,13 @@ export function startLiveRecordingStream({
     async finish() {
       const multipart = await streamer.finish();
       await writes;
+      // One event per recording: whether streaming ran, how much went out live, and how long it
+      // stood down for the call. The whole point of GEO-2955 is invisible without it.
+      capture('debate_recording_stream_finished', {
+        debate_id: metadata.debateId,
+        saved_locally: durable,
+        ...streamer.stats(),
+      });
       return multipart;
     },
     async release() {
@@ -530,6 +555,13 @@ export async function recoverOrphanedRecordingStreams(
       }
       await deleteRecordingStream(stream.id);
     };
+    const report = (outcome: string) =>
+      capture('debate_recording_orphan', {
+        debate_id: stream.debateId,
+        outcome,
+        bytes: stream.byteSize,
+        streamed_parts: stream.multipart?.uploadedPartNumbers.length ?? 0,
+      });
     try {
       const queued = await dependencies.hasQueuedUpload(userId, stream.debateId);
       if (queued) {
@@ -540,6 +572,7 @@ export async function recoverOrphanedRecordingStreams(
         } else {
           await discard();
         }
+        report('discarded_already_queued');
         continue;
       }
       let debate: Awaited<ReturnType<OrphanRecoveryDependencies['getDebate']>>;
@@ -548,24 +581,29 @@ export async function recoverOrphanedRecordingStreams(
       } catch (error) {
         if (error instanceof GeoChatRequestError && error.status === 404) {
           await discard();
+          report('discarded_debate_gone');
         }
         continue;
       }
       if (debate.recording_cancelled_at !== null || debate.status === 'cancelled') {
         await discard();
+        report('discarded_cancelled');
         continue;
       }
       if (debate.recordings.some(recording => recording.user_id === userId)) {
         await discard();
+        report('discarded_already_uploaded');
         continue;
       }
       if (!FINALIZABLE_STATUSES.has(debate.status)) continue;
       if (stream.byteSize === 0) {
         await discard();
+        report('discarded_empty');
         continue;
       }
       await dependencies.enqueue(stream, await readRecordingStreamBlob(stream));
       await deleteRecordingStream(stream.id);
+      report('recovered');
     } catch (error) {
       console.warn('[DebateRecording] could not recover an interrupted recording:', error);
     }

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { capture } from '~/core/analytics';
 import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -123,6 +124,7 @@ export async function processDebateRecordingUpload(
         if (!isMissingRouteError(error)) throw error;
         multipart = null;
         await dependencies.setMultipart?.(upload.id, null);
+        capture('debate_recording_upload_fallback', { debate_id: upload.debateId, reason: 'multipart_route_missing' });
       }
     }
     if (!multipart) {
@@ -157,6 +159,7 @@ export async function processDebateRecordingUpload(
     // what it believed, so the retry sends every part again instead of completing the same gap.
     if (multipart && error instanceof GeoChatRequestError && error.code === 'recording_upload_incomplete') {
       await dependencies.requeueParts?.(upload.id);
+      capture('debate_recording_parts_requeued', { debate_id: upload.debateId });
     }
     throw error;
   }
