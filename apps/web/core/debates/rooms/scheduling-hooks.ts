@@ -9,7 +9,11 @@ import {
   listScheduledDebates,
   respondToScheduledDebate,
 } from '../api';
+import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+
+/** geo-chat publishes no event for these, so the poll is the mechanism rather than a backstop. */
+const SCHEDULED_POLL_MS = 10_000;
 
 /**
  * Proposing and answering a scheduled debate (GEO-2934). The second answer books the room, so this
@@ -17,12 +21,16 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
  */
 export function useScheduledDebates(enabled = true) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const present = useDebateVisibility();
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.scheduledDebates(accountKey),
     queryFn: ({ signal }) => listScheduledDebates(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    refetchInterval: present ? SCHEDULED_POLL_MS : false,
+    // Coming back to the tab is exactly when an answer is most likely to have landed already.
+    refetchOnWindowFocus: true,
   });
 }
 

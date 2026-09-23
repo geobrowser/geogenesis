@@ -13,10 +13,10 @@ import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import Link from 'next/link';
 
 import { Avatar } from '~/design-system/avatar';
-import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
+import { HubPillButton } from './hub-pill-button';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
@@ -168,10 +168,7 @@ function UpcomingRow({ room, opponent }: { room: UpcomingDebateRoom; opponent: D
       urgent={room.others_present}
       action={
         room.joinable && (
-          <Link
-            href={debateRoomPath(room.room_id)}
-            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white"
-          >
+          <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
             Join debate
           </Link>
         )
@@ -198,19 +195,24 @@ function ScheduledRow({
       note={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
       below={
         request.viewer_must_answer && (
-          <div className="flex gap-2">
-            <Button onClick={() => onAnswer(request.request_id, true)} disabled={busy}>
-              Accept
-            </Button>
-            <Button variant="secondary" onClick={() => onAnswer(request.request_id, false)} disabled={busy}>
+          // Decline first, Accept primary on the right: the order every other request card uses.
+          <div className="grid grid-cols-2 gap-2">
+            <HubPillButton onClick={() => onAnswer(request.request_id, false)} disabled={busy}>
               Decline
-            </Button>
+            </HubPillButton>
+            <HubPillButton variant="primary" onClick={() => onAnswer(request.request_id, true)} disabled={busy}>
+              Accept
+            </HubPillButton>
           </div>
         )
       }
     />
   );
 }
+
+/** The hub's pill, as a link. `HubPillButton` renders a button, which this cannot be. */
+const JOIN_PILL =
+  'inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-text px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90';
 
 /** One shape for both kinds of row: who, when, one line of why, and at most one action. */
 function Row({
