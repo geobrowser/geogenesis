@@ -19,11 +19,7 @@
 export const UNNAMED_SUBTOPIC_PROPERTY_ID = '4b5bbddf32b247bab0a6dbbab27f457d';
 
 /**
- * Content types counted in the composition strip.
- *
- * Only the buckets worth naming: measured across topics these are the ones that reach double
- * figures, and everything else — articles, official documents, papers, datasets, organizations —
- * runs to one or two links on any given topic and is counted as a remainder instead.
+ * Content types surfaced by the Topic Explore feed and its composition strip.
  */
 export const EPISODE_TYPE_ID = '972d201ad78045689e01543f67b26bee';
 export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';

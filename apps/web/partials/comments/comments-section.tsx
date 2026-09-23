@@ -219,7 +219,7 @@ function branchPointerBlurProps(
   };
 }
 
-export type CommentSectionVariant = 'page' | 'panel';
+export type CommentSectionVariant = 'page' | 'panel' | 'tab';
 
 interface CommentSectionProps {
   entityId: string;
@@ -227,7 +227,9 @@ interface CommentSectionProps {
   /**
    * 'page' (default) is the entity page treatment. 'panel' matches the side
    * panel design: no built-in heading (the host supplies one), compact rows,
-   * and the avatar + "Join the conversation..." composer.
+   * and the avatar + "Join the conversation..." composer. 'tab' keeps the
+   * page treatment but omits the page-section top padding because the tab
+   * layout already supplies its own gap.
    */
   variant?: CommentSectionVariant;
 }
@@ -393,7 +395,7 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   return (
     <CommentDensityContext.Provider value={density}>
       <CommentBranchHighlightProvider>
-        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', !isPanel && 'pt-10')}>
+        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
           {!isPanel && (
             <>
               <div className="text-mediumTitle">Comments ({totalCount})</div>

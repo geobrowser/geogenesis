@@ -5,16 +5,18 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
-
-import { TopicPageView } from './topic-page-view';
+import { TopicPageView, resolveTopicTab } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
-  chipSection: null as Record<string, unknown> | null,
+  feed: null as Record<string, unknown> | null,
+  comments: null as Record<string, unknown> | null,
+  composition: null as Record<string, unknown> | null,
+  tabs: null as Record<string, unknown> | null,
+  pathname: '/space/space-1/topic-1',
   /**
    * Deliberately not 3.
    *
@@ -24,11 +26,30 @@ const mocks = vi.hoisted(() => ({
    * makes the assertion about where the number came from rather than what it happens to be.
    */
   maxLines: 5,
+  topicSpaceIds: ['11111111111111111111111111111111'],
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
+  EntityPageInlineDescription: () => <div data-testid="editable-description" />,
 }));
+vi.mock('~/partials/entity-page/editable-entity-header', () => ({
+  EditableHeading: () => <div data-testid="editable-heading" />,
+}));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mocks.pathname,
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('~/core/hooks/use-entity-comment-count', () => ({
+  useEntityCommentCount: () => ({ count: 7, isLoading: false }),
+}));
+vi.mock('~/partials/entity-page/entity-tabs', () => ({
+  EntityTabs: (props: Record<string, unknown>) => {
+    mocks.tabs = props;
+    return <div data-testid="entity-tabs" />;
+  },
+}));
+vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -40,13 +61,13 @@ vi.mock('~/design-system/clamped-text', () => ({
   },
 }));
 
-// The section moved out of this file in GEO-2781 and is shared with the claim view. Its own suite
-// covers the chips and the expander; this only checks that subtopics still reach it unchanged.
 vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   META_CHIP_CLASS: 'meta-chip',
-  RelationChipSection: (props: Record<string, unknown>) => {
-    mocks.chipSection = props;
-    return <div data-testid="chip-section" data-label={props.label as string} />;
+}));
+vi.mock('./topic-feed', () => ({
+  TopicFeed: (props: Record<string, unknown>) => {
+    mocks.feed = props;
+    return <div data-testid="topic-feed" />;
   },
 }));
 
@@ -57,11 +78,21 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
-vi.mock('./topic-composition', () => ({ TopicComposition: () => null }));
-vi.mock('./topic-debates', () => ({ TopicDebates: () => null }));
-vi.mock('./topic-claims', () => ({ TopicClaims: () => null }));
-vi.mock('./topic-coverage', () => ({ TopicCoverage: () => null }));
-vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+vi.mock('../use-topic-space-scope', () => ({
+  useTopicSpaceScope: () => mocks.topicSpaceIds,
+}));
+vi.mock('./topic-composition', () => ({
+  TopicComposition: (props: Record<string, unknown>) => {
+    mocks.composition = props;
+    return <div data-testid="topic-composition" />;
+  },
+}));
+vi.mock('~/partials/comments/comments-section', () => ({
+  CommentSection: (props: Record<string, unknown>) => {
+    mocks.comments = props;
+    return <div data-testid="comments" />;
+  },
+}));
 
 function topicEntity(description: string | null) {
   return {
@@ -77,7 +108,12 @@ function topicEntity(description: string | null) {
 beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
-  mocks.chipSection = null;
+  mocks.feed = null;
+  mocks.comments = null;
+  mocks.composition = null;
+  mocks.tabs = null;
+  mocks.pathname = '/space/space-1/topic-1';
+  mocks.topicSpaceIds = ['11111111111111111111111111111111'];
 });
 
 afterEach(cleanup);
@@ -131,22 +167,108 @@ describe('TopicPageView title', () => {
   });
 });
 
-// GEO-2781 lifted this section out of this file so the claim view could draw its Topics with it.
-// Extracting a component is where a caller quietly loses an argument, so the subtopics side is
-// pinned too rather than only the new one.
-describe('TopicPageView subtopics', () => {
-  const subtopicRelation = {
-    id: 'relation-1',
-    type: { id: SUBTOPIC_RELATION_TYPE_ID },
-    toEntity: { id: 'subtopic-1', name: 'Alignment' },
-  };
-
-  it('still draws them with the shared chip section, under the label Subtopics', () => {
-    mocks.entity = { ...topicEntity('Anything'), relations: [subtopicRelation] };
+describe('TopicPageView explore feed', () => {
+  it('renders one mixed feed whose filters are derived from that feed', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Subtopics');
-    expect(mocks.chipSection?.relations).toEqual([subtopicRelation]);
-    expect(mocks.chipSection?.spaceId).toBe('space-1');
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(mocks.feed).toMatchObject({
+      topicId: 'topic-1',
+      spaceId: 'space-1',
+      spaceIds: ['11111111111111111111111111111111'],
+    });
+    expect(mocks.feed).not.toHaveProperty('topicOptions');
+  });
+
+  it('keeps the route space when the curated scope exceeds its request cap', () => {
+    const routeSpaceId = 'ffffffffffffffffffffffffffffffff';
+    mocks.topicSpaceIds = [
+      ...Array.from({ length: 100 }, (_, index) => (index + 1).toString(16).padStart(32, '0')),
+      routeSpaceId,
+    ];
+
+    render(<TopicPageView entityId="topic-1" spaceId={routeSpaceId} />);
+
+    expect(mocks.feed?.spaceIds).toHaveLength(100);
+    expect(mocks.feed?.spaceIds).toContain(routeSpaceId);
+    expect(mocks.composition?.spaceIds).toEqual(mocks.feed?.spaceIds);
+  });
+
+  it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toEqual([
+      { label: 'Explore', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
+      {
+        label: 'Comments',
+        href: '/space/space-1/topic-1/comments',
+        sidePanelKey: 'comments',
+        badge: '7',
+      },
+    ]);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments']);
+  });
+
+  it('keeps comments out of Explore and renders them only on the Comments tab', () => {
+    const { rerender } = render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(screen.queryByTestId('comments')).toBeNull();
+
+    mocks.pathname = '/space/space-1/topic-1/comments';
+    rerender(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-feed')).toBeNull();
+    expect(mocks.comments).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1', variant: 'tab' });
+  });
+});
+
+describe('TopicPageView composition', () => {
+  it('renders the entity distribution bar in the topic header', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    const composition = screen.getByTestId('topic-composition');
+    expect(composition.closest('header')).not.toBeNull();
+    expect(mocks.composition).toEqual({
+      topicId: 'topic-1',
+      spaceId: 'space-1',
+      spaceIds: ['11111111111111111111111111111111'],
+    });
+  });
+});
+
+describe('resolveTopicTab', () => {
+  it('resolves the Comments route', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe('comments');
+  });
+
+  it('resolves legacy system routes to the single overview', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('overview');
+    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('overview');
+  });
+
+  it('lets an authored tab take precedence over the route', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/claims', authoredTabId: 'tab-1', panel: null })).toBe('custom');
+  });
+
+  it('uses the side panel selection instead of the page behind it', () => {
+    expect(
+      resolveTopicTab({
+        pathname: '/space/a/b/coverage',
+        authoredTabId: 'page-tab',
+        panel: { activeTabId: null, activeSystemTab: 'debates' },
+      })
+    ).toBe('overview');
+  });
+
+  it('resolves the side-panel Comments selection independently of the route behind it', () => {
+    expect(
+      resolveTopicTab({
+        pathname: '/space/a/b',
+        authoredTabId: null,
+        panel: { activeTabId: null, activeSystemTab: 'comments' },
+      })
+    ).toBe('comments');
   });
 });

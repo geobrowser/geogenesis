@@ -1,0 +1,41 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { GET } from './route';
+
+const mocks = vi.hoisted(() => ({
+  fetchCounts: vi.fn(),
+}));
+
+vi.mock('~/core/topics/browse/topic-feed-facets', () => ({
+  emptyTopicFeedCompositionCounts: () => ({ typeCounts: {} }),
+  fetchTopicFeedCompositionCounts: (args: unknown) => mocks.fetchCounts(args),
+}));
+
+const TOPIC = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+
+beforeEach(() => {
+  mocks.fetchCounts.mockReset();
+  mocks.fetchCounts.mockResolvedValue({ typeCounts: { claim: 1, debate: 2, news: 3 } });
+});
+
+describe('GET /api/topics/composition', () => {
+  it('returns unique counts from the Topic feed population', async () => {
+    const response = await GET(
+      new Request(`https://example.com/api/topics/composition?topicId=${TOPIC}&spaceId=${SPACE}&spaceIds=${SPACE}`)
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ typeCounts: { claim: 1, debate: 2, news: 3 } });
+    expect(mocks.fetchCounts).toHaveBeenCalledWith(expect.objectContaining({ topicId: TOPIC, spaceIds: [SPACE] }));
+  });
+
+  it('rejects an invalid Topic or route Space', async () => {
+    const response = await GET(
+      new Request(`https://example.com/api/topics/composition?topicId=invalid&spaceId=${SPACE}&spaceIds=${SPACE}`)
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.fetchCounts).not.toHaveBeenCalled();
+  });
+});

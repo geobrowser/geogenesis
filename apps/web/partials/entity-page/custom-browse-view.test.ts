@@ -113,7 +113,10 @@ describe('customBrowseView', () => {
 
   it('falls through to the generic page for other custom views while editing', () => {
     expect(view({ isEditing: true })).toBe('generic');
-    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('generic');
+  });
+
+  it('keeps the topic view while editing so authored tabs remain manageable', () => {
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('topic');
   });
 
   it('draws nothing until the entity itself is known', () => {
