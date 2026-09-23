@@ -141,14 +141,15 @@ type EntitiesConnectionShape = {
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
-type CompleteIndexNode = {
+export type ExploreCompleteIndexNode = {
   id?: string | null;
+  typeIds?: Array<string | null> | null;
   rankingScore?: string | number | null;
   createdAt?: string | number | null;
 };
 
 type CompleteIndexConnection = {
-  nodes?: CompleteIndexNode[] | null;
+  nodes?: ExploreCompleteIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -304,8 +305,8 @@ async function fetchCompleteIndexScope(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter: EntityFilter;
-}): Promise<CompleteIndexNode[]> {
-  const rows: CompleteIndexNode[] = [];
+}): Promise<ExploreCompleteIndexNode[]> {
+  const rows: ExploreCompleteIndexNode[] = [];
   let after: string | null = null;
 
   while (true) {
@@ -338,7 +339,7 @@ async function fetchCompleteIndexScope(args: {
   return rows;
 }
 
-function rankingScore(value: CompleteIndexNode['rankingScore']): number | null {
+function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
   if (value === null || value === undefined || value === '') return null;
   const score = Number(value);
   return Number.isFinite(score) ? score : null;
@@ -356,7 +357,7 @@ type CompletePopulationIndexArgs = {
 
 type CompletePopulationCacheEntry = {
   expiresAtMs: number;
-  promise: Promise<CompleteIndexNode[]>;
+  promise: Promise<ExploreCompleteIndexNode[]>;
 };
 
 /** Matches the Topic facet/composition query freshness while bounding stale feed membership. */
@@ -367,17 +368,20 @@ const completePopulationCache = new Map<string, CompletePopulationCacheEntry>();
 
 function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
   return JSON.stringify({
-    spaceIds: args.spaceIds,
+    // These are set-valued GraphQL filters. Canonicalizing their order lets the header request
+    // reuse the feed request even though the browse sidebar and Topic scope assemble the same
+    // spaces in different orders.
+    spaceIds: args.spaceIds.map(normId).sort(),
     sort: args.sort,
     time: args.time,
-    typeIds: args.typeIds,
+    typeIds: args.typeIds.map(normId).sort(),
     requireName: args.requireName ?? null,
     requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
     scopes: args.scopes,
   });
 }
 
-async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<CompleteIndexNode[]> {
+async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<ExploreCompleteIndexNode[]> {
   const scopeRows = await Promise.all(
     args.scopes
       .filter(scope => scope.typeIds.length > 0)
@@ -393,7 +397,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
       )
   );
 
-  const byId = new Map<string, CompleteIndexNode>();
+  const byId = new Map<string, ExploreCompleteIndexNode>();
   for (const row of scopeRows.flat()) {
     if (!row.id) continue;
     byId.set(normId(row.id), row);
@@ -423,7 +427,9 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
  * downloading and sorting the complete Topic population again. Rejected requests are evicted, and
  * both entry count and freshness are bounded so a wide range of filters cannot grow memory forever.
  */
-async function getCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<CompleteIndexNode[]> {
+export async function fetchCompleteExplorePopulationIndex(
+  args: CompletePopulationIndexArgs
+): Promise<ExploreCompleteIndexNode[]> {
   const key = completePopulationCacheKey(args);
   const now = Date.now();
   const cached = completePopulationCache.get(key);
@@ -471,7 +477,7 @@ async function fetchCompleteEntitiesPage(args: {
   requireDebateTagOnClaims?: boolean;
   scopes: readonly ExploreCompletePopulationScope[];
 }): Promise<ExploreEntitiesPageResponse> {
-  const ordered = await getCompletePopulationIndex(args);
+  const ordered = await fetchCompleteExplorePopulationIndex(args);
 
   const indexPage = ordered.slice(args.offset, args.offset + args.limit);
   const ids = indexPage.flatMap(row => (row.id ? [row.id] : []));

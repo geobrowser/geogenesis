@@ -8,6 +8,7 @@ import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-fee
 
 const mocks = vi.hoisted(() => ({
   feed: null as Record<string, unknown> | null,
+  typeCounts: {} as Record<string, number>,
 }));
 
 vi.mock('~/partials/feed/entity-feed', () => ({
@@ -17,10 +18,18 @@ vi.mock('~/partials/feed/entity-feed', () => ({
   },
 }));
 
+vi.mock('./topic-composition', () => ({
+  useTopicComposition: () => ({
+    counts: { typeCounts: mocks.typeCounts },
+    isLoading: false,
+  }),
+}));
+
 afterEach(cleanup);
 
 describe('TopicFeed', () => {
   it('configures a Best-ranked feed whose Topic options come from feed facets', () => {
+    mocks.typeCounts = Object.fromEntries(TOPIC_FEED_ENTITY_TYPES.map((type, index) => [type.id, index + 1]));
     render(
       <TopicFeed
         topicId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -38,6 +47,9 @@ describe('TopicFeed', () => {
       showTypeFilter: true,
       initialTypeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
       typeOptions: TOPIC_FEED_ENTITY_TYPES,
+      typeCounts: TOPIC_FEED_ENTITY_TYPES.map((type, index) => ({ id: type.id, count: index + 1 })),
+      typeCountsPending: false,
+      selectTypesWithResultsByDefault: true,
       persistTypeSelection: false,
       topicFacetEndpoint: '/api/topics/facets',
       showTopicFilter: true,

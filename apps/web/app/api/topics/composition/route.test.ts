@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/topics/browse/topic-feed-facets', () => ({
+  emptyTopicFeedCompositionCounts: () => ({ typeCounts: {} }),
   fetchTopicFeedCompositionCounts: (args: unknown) => mocks.fetchCounts(args),
 }));
 
@@ -15,7 +16,7 @@ const SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 
 beforeEach(() => {
   mocks.fetchCounts.mockReset();
-  mocks.fetchCounts.mockResolvedValue({ claims: 1, debates: 2, news: 3 });
+  mocks.fetchCounts.mockResolvedValue({ typeCounts: { claim: 1, debate: 2, news: 3 } });
 });
 
 describe('GET /api/topics/composition', () => {
@@ -25,7 +26,7 @@ describe('GET /api/topics/composition', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ claims: 1, debates: 2, news: 3 });
+    expect(await response.json()).toEqual({ typeCounts: { claim: 1, debate: 2, news: 3 } });
     expect(mocks.fetchCounts).toHaveBeenCalledWith(expect.objectContaining({ topicId: TOPIC, spaceIds: [SPACE] }));
   });
 

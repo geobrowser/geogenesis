@@ -3,17 +3,17 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { DEBATE_CLAIMS_PROPERTY_ID } from '~/core/debates/ontology';
+import { buildExploreFeedFilter, fetchCompleteExplorePopulationIndex } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
 import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
-import { NEWS_STORY_TYPE_ID } from '../ontology';
-import { debateTopicFeedFilter, directTopicFeedFilter, topicFeedPopulationScopes } from './topic-feed-filter';
+import { topicFeedPopulationScopes } from './topic-feed-filter';
+import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
 
@@ -79,27 +79,6 @@ export const topicFeedDebateTopicsDocument = parse(DEBATE_TOPICS_SOURCE) as Type
     debateClaimsPropertyId: string;
     topicsPropertyId: string;
   }
->;
-
-type CompositionResponse = Record<string, { totalCount?: number | string | null } | null | undefined>;
-
-const COMPOSITION_SOURCE = /* GraphQL */ `
-  query TopicFeedComposition($claims: EntityFilter!, $debates: EntityFilter!, $news: EntityFilter!) {
-    claims: entitiesConnection(filter: $claims) {
-      totalCount
-    }
-    debates: entitiesConnection(filter: $debates) {
-      totalCount
-    }
-    news: entitiesConnection(filter: $news) {
-      totalCount
-    }
-  }
-`;
-
-export const topicFeedCompositionDocument = parse(COMPOSITION_SOURCE) as TypedDocumentNode<
-  CompositionResponse,
-  { claims: EntityFilter; debates: EntityFilter; news: EntityFilter }
 >;
 
 function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entityFilter: EntityFilter) {
@@ -213,32 +192,48 @@ export async function fetchTopicFeedFacets({
   return namedFacets(counts, topicId, signal);
 }
 
-/** Unique, display-eligible entities in the exact visible-space scope used by the Topic feed. */
+export type TopicFeedCompositionCounts = { typeCounts: Record<string, number> };
+
+export function emptyTopicFeedCompositionCounts(): TopicFeedCompositionCounts {
+  return { typeCounts: Object.fromEntries(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [id, 0])) };
+}
+
+/**
+ * Counts the exact compact population the Topic feed orders.
+ *
+ * The old implementation issued one relation-heavy `totalCount` connection per displayed type.
+ * This instead reuses the feed's complete-population promise/cache and counts its tiny `typeIds`
+ * field locally. That makes the header, dropdown and cards agree by construction while avoiding a
+ * second graph scan on the common Best-first page load.
+ */
 export async function fetchTopicFeedCompositionCounts({
   spaceIds,
   topicId,
-  signal,
 }: {
   spaceIds: string[];
   topicId: string;
-  signal?: AbortSignal;
-}) {
-  if (spaceIds.length === 0) return { claims: 0, debates: 0, news: 0 };
+}): Promise<TopicFeedCompositionCounts> {
+  if (spaceIds.length === 0) return emptyTopicFeedCompositionCounts();
 
-  return Effect.runPromise(
-    graphql({
-      query: topicFeedCompositionDocument,
-      decoder: (response: CompositionResponse) => ({
-        claims: Number(response.claims?.totalCount ?? 0),
-        debates: Number(response.debates?.totalCount ?? 0),
-        news: Number(response.news?.totalCount ?? 0),
-      }),
-      variables: {
-        claims: scopedFeedFilter(spaceIds, [CLAIM_TYPE_ID], directTopicFeedFilter(topicId)),
-        debates: scopedFeedFilter(spaceIds, [DEBATE_TYPE_ID], debateTopicFeedFilter(topicId)),
-        news: scopedFeedFilter(spaceIds, [NEWS_STORY_TYPE_ID], directTopicFeedFilter(topicId)),
-      },
-      signal,
-    })
-  );
+  const rows = await fetchCompleteExplorePopulationIndex({
+    spaceIds,
+    sort: 'best',
+    time: 'all',
+    typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+    requireName: true,
+    scopes: topicFeedPopulationScopes(topicId, [], TOPIC_FEED_ENTITY_TYPE_IDS),
+  });
+  const normalizedIdToCanonicalId = new Map(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [normId(id), id]));
+  const counts = emptyTopicFeedCompositionCounts();
+
+  for (const row of rows) {
+    // An entity can carry more than one selected type. Count it once in each matching bucket,
+    // mirroring the dropdown's OR semantics without double-counting duplicate ids on the row.
+    for (const normalizedTypeId of new Set((row.typeIds ?? []).flatMap(id => (id ? [normId(id)] : [])))) {
+      const typeId = normalizedIdToCanonicalId.get(normalizedTypeId);
+      if (typeId) counts.typeCounts[typeId] = (counts.typeCounts[typeId] ?? 0) + 1;
+    }
+  }
+
+  return counts;
 }

@@ -466,6 +466,37 @@ describe('EntityFeed contextual filters', () => {
     expect(mocks.allowlistEnabled).toBe(false);
   });
 
+  it('defaults to types with results, shows their counts, and keeps the unfiltered feed request', async () => {
+    const [claim, debate, article] = EXPLORE_ENTITY_TYPES;
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        initialSort="best"
+        showTimeFilter={false}
+        showSpaceFilter={false}
+        showTypeFilter
+        initialTypeIds={[claim.id, debate.id, article.id]}
+        typeOptions={[claim, debate, article]}
+        typeCounts={[
+          { id: claim.id, count: 31 },
+          { id: debate.id, count: 1 },
+          { id: article.id, count: 0 },
+        ]}
+        selectTypesWithResultsByDefault
+        persistTypeSelection={false}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
+      />
+    );
+
+    await screen.findByText('2 types');
+    expect(screen.getByRole('button', { name: new RegExp(`${claim.label}.*31.*Selected`) })).not.toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(`${debate.label}.*1.*Selected`) })).not.toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(`${article.label}.*0.*Not selected`) })).not.toBeNull();
+
+    const request = new URL(await requestedUrl(), 'https://example.com');
+    expect(request.searchParams.get('typeIds')).toBeNull();
+  });
+
   it('sends selected child topics as additional narrowing', async () => {
     renderTopicFeed();
 

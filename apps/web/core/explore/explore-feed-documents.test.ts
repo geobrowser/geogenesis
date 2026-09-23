@@ -136,9 +136,9 @@ describe('the type-filtered Best sort (GEO-2885)', () => {
 });
 
 describe('the complete contextual feed index', () => {
-  it('reads only the fields needed to order Best and New from the ordinary entity connection', () => {
+  it('reads only the fields needed to order the feed and count its types', () => {
     expect(rootField(exploreCompleteIndexDocument).name.value).toBe('entitiesConnection');
-    expect(nodeFieldNames(exploreCompleteIndexDocument)).toEqual(['createdAt', 'id', 'rankingScore']);
+    expect(nodeFieldNames(exploreCompleteIndexDocument)).toEqual(['createdAt', 'id', 'rankingScore', 'typeIds']);
     expect(argNames(rootField(exploreCompleteIndexDocument))).toEqual(
       ['after', 'filter', 'first', 'orderBy', 'spaceIds', 'typeIds'].sort()
     );

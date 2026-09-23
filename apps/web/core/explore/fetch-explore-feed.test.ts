@@ -49,7 +49,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { fetchExploreFeed } = await import('./fetch-explore-feed');
+const { fetchCompleteExplorePopulationIndex, fetchExploreFeed } = await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -301,6 +301,30 @@ describe('a type selection filters server-side (GEO-2885)', () => {
 });
 
 describe('a complete contextual population', () => {
+  it('shares one compact population when equivalent space filters arrive in a different order', async () => {
+    const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? {
+            nodes: [{ id: 'cache-order', typeIds: [CLAIM_TYPE_ID], rankingScore: '1', createdAt: '1' }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          }
+        : windowOf([], { hasNextPage: false, endCursor: null });
+    const args = {
+      spaceIds: [SPACE, secondSpace],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      requireName: true,
+      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { is: 'cache-order' } } }],
+    };
+
+    await fetchCompleteExplorePopulationIndex(args);
+    await fetchCompleteExplorePopulationIndex({ ...args, spaceIds: [secondSpace, SPACE] });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+  });
+
   it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
     windows.queue = [
       {

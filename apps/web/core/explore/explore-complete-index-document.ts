@@ -29,6 +29,7 @@ const EXPLORE_COMPLETE_INDEX_SOURCE = /* GraphQL */ `
     ) {
       nodes {
         id
+        typeIds
         rankingScore
         createdAt
       }

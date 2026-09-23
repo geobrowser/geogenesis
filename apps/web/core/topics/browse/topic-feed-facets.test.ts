@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { fetchTopicFeedCompositionCounts, fetchTopicFeedFacets } from './topic-feed-facets';
+import { NEWS_STORY_TYPE_ID } from '../ontology';
+import {
+  emptyTopicFeedCompositionCounts,
+  fetchTopicFeedCompositionCounts,
+  fetchTopicFeedFacets,
+} from './topic-feed-facets';
 
 const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const PAGE_TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -69,10 +74,15 @@ vi.mock('~/core/io/graphql-client', async () => {
           })
         );
       }
-      if (operation?.name?.value === 'TopicFeedComposition') {
-        return Effect.succeed(
-          decoder({ claims: { totalCount: 1 }, debates: { totalCount: 2 }, news: { totalCount: 3 } })
-        );
+      if (operation?.name?.value === 'ExploreCompleteIndex') {
+        const requestedTypeIds = variables.typeIds.in as string[];
+        const nodes = requestedTypeIds.includes(DEBATE_TYPE_ID)
+          ? [{ id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' }]
+          : [
+              { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
+              { id: 'claim-news', typeIds: [CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID], rankingScore: null, createdAt: '3' },
+            ];
+        return Effect.succeed(decoder({ entitiesConnection: { nodes, pageInfo: { hasNextPage: false } } }));
       }
       throw new Error(`Unexpected operation ${operation?.name?.value}`);
     },
@@ -129,18 +139,24 @@ describe('fetchTopicFeedFacets', () => {
 });
 
 describe('fetchTopicFeedCompositionCounts', () => {
-  it('counts unique feed-eligible entities with the same Topic and visible-space filters', async () => {
-    await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual({
-      claims: 1,
-      debates: 2,
-      news: 3,
-    });
+  it('counts every selected type from the same compact population the feed orders', async () => {
+    const expected = emptyTopicFeedCompositionCounts();
+    expected.typeCounts[CLAIM_TYPE_ID] = 2;
+    expected.typeCounts[DEBATE_TYPE_ID] = 1;
+    expected.typeCounts[NEWS_STORY_TYPE_ID] = 1;
 
-    const variables = mocks.calls[0]?.variables;
-    for (const filter of [variables.claims, variables.debates, variables.news]) {
-      const feedScope = filter.and[0];
-      expect(feedScope.spaceIds.overlaps).toEqual(['11111111111111111111111111111111']);
-      expect(feedScope.values.some.text).toEqual({ isNull: false, isNot: '' });
+    await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
+
+    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreCompleteIndex');
+    expect(populationCalls).toHaveLength(2);
+    expect(populationCalls.flatMap(call => call.variables.typeIds.in)).toEqual(
+      expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID])
+    );
+    for (const { variables } of populationCalls) {
+      expect(variables.spaceIds).toEqual({ in: spaceIds });
+      expect(variables.filter.and).toEqual(
+        expect.arrayContaining([expect.objectContaining({ and: expect.any(Array) })])
+      );
     }
   });
 });

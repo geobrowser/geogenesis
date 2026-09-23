@@ -101,6 +101,12 @@ type EntityFeedProps = {
   initialTypeIds?: readonly string[];
   /** Type checklist options. Defaults to the standard Explore set. */
   typeOptions?: readonly { id: string; label: string }[];
+  /** Counts for this contextual feed's unfiltered population, shown beside each type. */
+  typeCounts?: readonly { id: string; count: number }[];
+  /** Whether contextual type counts are still loading. */
+  typeCountsPending?: boolean;
+  /** Start contextual feeds on only the types whose population count is non-zero. */
+  selectTypesWithResultsByDefault?: boolean;
   /** Restore and save the Explore route's type choice. Disable for contextual feeds. */
   persistTypeSelection?: boolean;
   /** Optional Topic facet shown beside the type picker. */
@@ -203,6 +209,9 @@ export function EntityFeed({
   showSpaceFilter = true,
   initialTypeIds = DEFAULT_EXPLORE_TYPE_IDS,
   typeOptions = EXPLORE_ENTITY_TYPES,
+  typeCounts,
+  typeCountsPending = false,
+  selectTypesWithResultsByDefault = false,
   persistTypeSelection = true,
   topicOptions = [],
   topicFacetEndpoint,
@@ -235,6 +244,8 @@ export function EntityFeed({
   const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
   const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter || !persistTypeSelection);
   const shouldPersistTypeSelectionRef = React.useRef(false);
+  const typeSelectionTouchedRef = React.useRef(false);
+  const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter and there is no menu to reconcile it with; otherwise it is
   // whatever is ticked, and nothing ticked means every space the reader may see.
   const requestedSpaceIds = React.useMemo(
@@ -242,7 +253,21 @@ export function EntityFeed({
     [lockedSpaceId, showSpaceFilter, spaceIds]
   );
   const spaceIdsKey = requestedSpaceIds.join(',');
-  const typeIds = showTypeFilter && selectedTypeIds.length !== typeOptions.length ? selectedTypeIds : undefined;
+  const nonEmptyTypeIds = React.useMemo(() => {
+    if (!typeCounts || typeCountsPending) return null;
+    const countById = new Map(typeCounts.map(type => [normId(type.id), type.count]));
+    return typeOptions.filter(type => (countById.get(normId(type.id)) ?? 0) > 0).map(type => type.id);
+  }, [typeCounts, typeCountsPending, typeOptions]);
+  const selectedTypeIdSet = React.useMemo(() => new Set(selectedTypeIds.map(normId)), [selectedTypeIds]);
+  const selectsWholePopulation = React.useMemo(() => {
+    if (selectedTypeIds.length === typeOptions.length) return true;
+    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds || nonEmptyTypeIds.length === 0) return false;
+    return (
+      selectedTypeIds.length === nonEmptyTypeIds.length &&
+      nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
+    );
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
+  const typeIds = showTypeFilter && !selectsWholePopulation ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
   const fixedParamsKey = Object.entries(fixedParams)
@@ -310,6 +335,19 @@ export function EntityFeed({
   }, [persistTypeSelection, showTypeFilter]);
 
   React.useEffect(() => {
+    if (
+      !showTypeFilter ||
+      !selectTypesWithResultsByDefault ||
+      !nonEmptyTypeIds ||
+      contextualTypeDefaultAppliedRef.current
+    ) {
+      return;
+    }
+    contextualTypeDefaultAppliedRef.current = true;
+    if (!typeSelectionTouchedRef.current) setSelectedTypeIds(nonEmptyTypeIds);
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, showTypeFilter]);
+
+  React.useEffect(() => {
     if (!showTypeFilter || !persistTypeSelection || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current)
       return;
     shouldPersistTypeSelectionRef.current = false;
@@ -322,6 +360,7 @@ export function EntityFeed({
 
   const toggleType = React.useCallback(
     (typeId: string) => {
+      typeSelectionTouchedRef.current = true;
       shouldPersistTypeSelectionRef.current = true;
       setSelectedTypeIds(current => {
         const selected = new Set(current);
@@ -334,6 +373,7 @@ export function EntityFeed({
   );
 
   const toggleAllTypes = React.useCallback(() => {
+    typeSelectionTouchedRef.current = true;
     shouldPersistTypeSelectionRef.current = true;
     setSelectedTypeIds(current => (current.length === typeOptions.length ? [] : typeOptions.map(type => type.id)));
   }, [typeOptions]);
@@ -580,6 +620,8 @@ export function EntityFeed({
                 <ExploreTypeFilterMenu
                   selectedTypeIds={selectedTypeIds}
                   typeOptions={typeOptions}
+                  typeCounts={typeCounts}
+                  countsPending={typeCountsPending}
                   onToggleType={toggleType}
                   onToggleAll={toggleAllTypes}
                 />
