@@ -415,8 +415,11 @@ export type DebateMatchmakingPresence = {
    * The strict half of presence. `online` above answers "is a tab open", which never goes stale
    * while the tab lives, so a pool ranked on it alone fills with abandoned tabs. `null` means the
    * client has never reported, which is not the same as idle: the server ranks it between the two.
+   *
+   * Optional, mirroring the server's `#[serde(default)]`: a payload minted before this shipped,
+   * or held in a cache, simply omits it.
    */
-  last_input_at: string | null;
+  last_input_at?: string | null;
 };
 
 export type DebatePerson = DebateParticipantSummary &

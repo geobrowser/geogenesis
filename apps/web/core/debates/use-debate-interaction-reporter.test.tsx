@@ -2,8 +2,10 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const reportDebateInteraction = vi.fn(() => Promise.resolve(undefined));
-vi.mock('./api', () => ({ reportDebateInteraction: (...args: unknown[]) => reportDebateInteraction(...args) }));
+const reportDebateInteraction = vi.fn((_token: unknown, _accountKey: unknown) => Promise.resolve(undefined));
+vi.mock('./api', () => ({
+  reportDebateInteraction: (token: unknown, accountKey: unknown) => reportDebateInteraction(token, accountKey),
+}));
 
 const { INTERACTION_REPORT_INTERVAL_MS, useDebateInteractionReporter } =
   await import('./use-debate-interaction-reporter');
