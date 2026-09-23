@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity } from '../hooks';
@@ -14,6 +16,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useUnexpiredRequests } from './use-request-countdown';
 
@@ -36,6 +39,31 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  const debugEnabled = useDebugDebatesPageEnabled();
+
+  // Split rather than branched inside, so a viewer who cannot schedule mounts none of the
+  // scheduling reads (GEO-2938, GEO-2940).
+  return peerAvailabilityEnabled || debugEnabled ? (
+    <ScheduledRequestsTab />
+  ) : (
+    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} />
+  );
+}
+
+const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [] };
+
+function ScheduledRequestsTab() {
+  return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
+}
+
+function RequestsTabBody({
+  scheduled,
+  schedulingEnabled,
+}: {
+  scheduled: ScheduledContent;
+  schedulingEnabled: boolean;
+}) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -91,7 +119,8 @@ export function RequestsTab() {
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge;
+  const hasScheduled = scheduled.answerable.length > 0 || scheduled.upcoming.length > 0;
+  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
 
   return (
     <div className="flex flex-col">
@@ -135,6 +164,11 @@ export function RequestsTab() {
           }
         >
           <div className="flex flex-col gap-4">
+            {/* Above the live requests: a debate that is due now outranks one somebody just sent.
+                The filters above narrow claim requests, which a scheduled debate has none of.
+                Mounted only with scheduling on, so its mutation needs no query client otherwise. */}
+            {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+
             {sent || outgoingChallenge ? (
               <RequestSection label="Sent">
                 <div className="flex flex-col gap-2">
