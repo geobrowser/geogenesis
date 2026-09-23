@@ -41,7 +41,7 @@ import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
-import { HubCardList } from './hub-motion';
+import { HubCardList, HubPinnedSlot } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState, HubSkeleton } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
@@ -976,7 +976,7 @@ export function ClaimsTab({
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <HubPinnedSlot>{outbound ? <OutboundRequestCard request={outbound} /> : null}</HubPinnedSlot>
 
         <Input
           withSearchIcon
