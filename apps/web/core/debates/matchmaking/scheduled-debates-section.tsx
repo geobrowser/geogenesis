@@ -23,11 +23,21 @@ import { useDebatePeople } from './hooks';
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming } = content;
+  const { answerable, upcoming, error } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0);
+
+  if (error) {
+    return (
+      <Section label="Scheduled">
+        <Text as="p" variant="footnote" color="red-01">
+          Could not read your scheduled debates: {error.message}
+        </Text>
+      </Section>
+    );
+  }
 
   if (answerable.length === 0 && upcoming.length === 0) return null;
 
@@ -85,6 +95,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
+  /** A read that failed. Reported rather than drawn as an empty schedule. */
+  error: Error | null;
 };
 
 /** A room carries no participants, so its opponent comes from the request that booked it. */
@@ -115,7 +127,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [rooms.data, rows, viewerId]
   );
 
-  return { answerable, upcoming };
+  return { answerable, upcoming, error: requests.error ?? rooms.error ?? null };
 }
 
 /** `null` whenever the answer would be a guess, so nothing reads the viewer as their own opponent. */

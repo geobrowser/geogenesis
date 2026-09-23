@@ -48,7 +48,7 @@ export function RequestsTab() {
   );
 }
 
-const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [] };
+const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], error: null };
 
 function ScheduledRequestsTab() {
   return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
@@ -116,7 +116,7 @@ function RequestsTabBody({
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const hasScheduled = scheduled.answerable.length > 0 || scheduled.upcoming.length > 0;
+  const hasScheduled = scheduled.answerable.length > 0 || scheduled.upcoming.length > 0 || scheduled.error !== null;
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
 
   return (
@@ -139,6 +139,10 @@ function RequestsTabBody({
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
+            must not vanish because an unrelated read failed. */}
+        {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+
         <HubQueryState
           isLoading={requestsQuery.isLoading}
           error={requestsQuery.error}
@@ -161,11 +165,6 @@ function RequestsTabBody({
           }
         >
           <div className="flex flex-col gap-4">
-            {/* Above the live requests: a debate that is due now outranks one somebody just sent.
-                The filters above narrow claim requests, which a scheduled debate has none of.
-                Mounted only with scheduling on, so its mutation needs no query client otherwise. */}
-            {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
-
             {sent || outgoingChallenge ? (
               <RequestSection label="Sent">
                 <div className="flex flex-col gap-2">

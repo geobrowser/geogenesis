@@ -101,6 +101,9 @@ export function PeerAvailabilityView({
   // can ask for, and the footer needs to name the one that is.
   const [selectedStart, setSelectedStart] = React.useState<string | null>(null);
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
+  // The week starts at today's midnight, so its early columns are already gone. geo-chat refuses a
+  // past start outright, so a booking caller must not be able to pick one.
+  const notBefore = (now ?? new Date()).getTime();
   const name = peerName || shortId(schedule.userId);
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
@@ -135,7 +138,14 @@ export function PeerAvailabilityView({
         // its own rather than a wall (GEO-2938).
         <Empty
           action={
-            booking && <RequestAnyway booking={booking} peerName={name} peerTimezone={schedule.peerTimezone} />
+            booking && (
+              <RequestAnyway
+                booking={booking}
+                peerName={name}
+                peerTimezone={schedule.peerTimezone}
+                notBefore={notBefore}
+              />
+            )
           }
         >
           {schedule.peerHasSchedule
@@ -151,7 +161,13 @@ export function PeerAvailabilityView({
               the times you both have free.
             </Hint>
           )}
-          <WeekGrid days={days} peerName={name} selectedStart={selectedStart} onSelect={setSelectedStart} />
+          <WeekGrid
+            days={days}
+            peerName={name}
+            selectedStart={selectedStart}
+            onSelect={setSelectedStart}
+            notBefore={booking ? notBefore : null}
+          />
           {booking && (
             <BookingFooter
               booking={booking}
@@ -245,13 +261,17 @@ function RequestAnyway({
   booking,
   peerName,
   peerTimezone,
+  notBefore,
 }: {
   booking: PeerAvailabilityBooking;
   peerName: string;
   peerTimezone?: string | null;
+  notBefore: number;
 }) {
   const [local, setLocal] = React.useState('');
-  const startsAt = local ? new Date(local).toISOString() : null;
+  const picked = local ? new Date(local) : null;
+  // geo-chat refuses a past start, so one never leaves here.
+  const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
 
   if (booking.requestedStart) {
     return (
@@ -270,6 +290,7 @@ function RequestAnyway({
         <input
           type="datetime-local"
           aria-label="Time to request"
+          min={localInputValue(notBefore)}
           value={local}
           onChange={event => setLocal(event.target.value)}
           className="rounded border border-grey-02 px-2 py-1 text-footnote"
@@ -288,6 +309,13 @@ function RequestAnyway({
       )}
     </div>
   );
+}
+
+/** `datetime-local` wants the viewer's own wall clock, with no zone and no seconds. */
+function localInputValue(at: number) {
+  const date = new Date(at);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /** `undefined` zone means the viewer's own, which is what `toLocaleString` does by default. */
@@ -309,16 +337,26 @@ function WeekGrid({
   peerName,
   selectedStart,
   onSelect,
+  notBefore,
 }: {
   days: PeerDay[];
   peerName: string;
   selectedStart: string | null;
   onSelect: (start: string | null) => void;
+  /** Instants at or before this cannot be picked. `null` leaves the week read-only and pickable. */
+  notBefore: number | null;
 }) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-7 gap-3 overflow-y-auto overscroll-contain mobile:grid-cols-1 mobile:gap-2">
       {days.map(day => (
-        <DayColumn key={day.date} day={day} peerName={peerName} selectedStart={selectedStart} onSelect={onSelect} />
+        <DayColumn
+          key={day.date}
+          day={day}
+          peerName={peerName}
+          selectedStart={selectedStart}
+          onSelect={onSelect}
+          notBefore={notBefore}
+        />
       ))}
     </div>
   );
@@ -329,11 +367,13 @@ function DayColumn({
   peerName,
   selectedStart,
   onSelect,
+  notBefore,
 }: {
   day: PeerDay;
   peerName: string;
   selectedStart: string | null;
   onSelect: (start: string | null) => void;
+  notBefore: number | null;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const empty = day.slots.length === 0;
@@ -377,6 +417,7 @@ function DayColumn({
               dayLabel={dayLabel}
               peerName={peerName}
               selected={slot.start === selectedStart}
+              past={notBefore !== null && new Date(slot.start).getTime() <= notBefore}
               onSelect={() => onSelect(slot.start === selectedStart ? null : slot.start)}
             />
           ))}
@@ -409,12 +450,14 @@ function SlotChip({
   dayLabel,
   peerName,
   selected,
+  past = false,
   onSelect,
 }: {
   slot: PeerDaySlot;
   dayLabel: string;
   peerName: string;
   selected: boolean;
+  past?: boolean;
   onSelect: () => void;
 }) {
   // Per slot rather than per week: a week spanning a DST change carries two offsets, and one can
@@ -432,6 +475,7 @@ function SlotChip({
       : slot.viewerIsFree
         ? 'you are both free'
         : `only ${peerName} is free`,
+    past ? 'already passed' : null,
   ]
     .filter(Boolean)
     .join(', ');
@@ -441,14 +485,17 @@ function SlotChip({
       type="button"
       aria-label={label}
       aria-pressed={selected}
+      disabled={past}
       data-viewer-free={slot.viewerIsFree === true || undefined}
+      data-past={past || undefined}
       onClick={onSelect}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
         slot.viewerIsFree === true
           ? 'border-solid border-grey-02 bg-[#F6F6F6] text-text hover:bg-grey-01'
           : 'border-dashed border-grey-02 bg-transparent text-grey-04 hover:text-text',
-        selected && 'border-solid border-text bg-[#EFE2FF] text-text'
+        selected && 'border-solid border-text bg-[#EFE2FF] text-text',
+        past && 'cursor-not-allowed opacity-40'
       )}
     >
       <span>{slot.label}</span>

@@ -323,24 +323,24 @@ describe('booking a slot', () => {
 
   it('sends the picked slot, and not before one is picked', async () => {
     const book = booking();
-    const { user } = setupBooking(book, { slots: [slot(13), slot(14)] });
+    const { user } = setupBooking(book, { slots: [slot(16), slot(17)] });
 
     const request = screen.getByRole('button', { name: 'Send request' });
     expect(request).toBeDisabled();
 
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /2pm/ }));
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /5pm/ }));
     await user.click(request);
 
     expect(book.onRequest).toHaveBeenCalledTimes(1);
     // The instant, not its spelling: the view normalizes and would otherwise fail on the `.000`.
     const sent = (book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(new Date(sent).getTime()).toBe(new Date('2026-09-21T14:00:00Z').getTime());
+    expect(new Date(sent).getTime()).toBe(new Date('2026-09-21T17:00:00Z').getTime());
   });
 
   it('keeps one pick at a time, so the request cannot mean two times', async () => {
-    const { user } = setupBooking(booking(), { slots: [slot(13), slot(14)] });
-    const first = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
-    const second = within(day('2026-09-21')).getByRole('button', { name: /2pm/ });
+    const { user } = setupBooking(booking(), { slots: [slot(16), slot(17)] });
+    const first = within(day('2026-09-21')).getByRole('button', { name: /4pm/ });
+    const second = within(day('2026-09-21')).getByRole('button', { name: /5pm/ });
 
     await user.click(first);
     await user.click(second);
@@ -364,23 +364,27 @@ describe('booking a slot', () => {
 
 describe('what the footer has to say', () => {
   it('names both zones for the picked time', async () => {
-    const { user } = setupBooking(booking(), { viewerTimezone: 'UTC', peerTimezone: 'Asia/Tokyo' });
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+    const { user } = setupBooking(booking(), {
+      viewerTimezone: 'UTC',
+      peerTimezone: 'Asia/Tokyo',
+      slots: [slot(16)],
+    });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
 
     expect(screen.getByText(/^Your time:/)).toBeInTheDocument();
     expect(screen.getByText(/Ada.s time:/)).toBeInTheDocument();
   });
 
   it('says an outside-your-week slot is a one-off', async () => {
-    const { user } = setupBooking(booking(), { slots: [slot(13, false)] });
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+    const { user } = setupBooking(booking(), { slots: [slot(16, false)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
 
     expect(screen.getByText(/doesn.t change your availability/)).toBeInTheDocument();
   });
 
   it('says nothing of the sort for a slot you are free for', async () => {
-    const { user } = setupBooking(booking(), { slots: [slot(13, true)] });
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+    const { user } = setupBooking(booking(), { slots: [slot(16, true)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
 
     expect(screen.queryByText(/doesn.t change your availability/)).not.toBeInTheDocument();
   });
@@ -404,5 +408,41 @@ describe('a week with nothing in it', () => {
   it('stays read-only without a booking caller', () => {
     setup({ peerHasSchedule: false, slots: [] });
     expect(screen.queryByLabelText('Time to request')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('times that have already gone', () => {
+  // The week starts at today's midnight and geo-chat refuses a past start, so a booking caller
+  // must not be able to send one.
+  it('cannot pick one', async () => {
+    const book = booking();
+    const { user } = setupBooking(book, { slots: [slot(13), slot(16)] });
+    const gone = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
+
+    expect(gone).toBeDisabled();
+    await user.click(gone);
+
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeDisabled();
+    expect(book.onRequest).not.toHaveBeenCalled();
+  });
+
+  it('leaves the read-only week pickable, which is what it has always been', async () => {
+    const { user } = setup({ slots: [slot(13)] });
+    const chip = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
+
+    expect(chip).not.toBeDisabled();
+    await user.click(chip);
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('will not send a past time typed into the free-time field', async () => {
+    const book = booking();
+    const { user } = setupBooking(book, { peerHasSchedule: false, slots: [] });
+
+    await user.type(screen.getByLabelText('Time to request'), '2026-09-20T09:00');
+
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeDisabled();
+    expect(book.onRequest).not.toHaveBeenCalled();
   });
 });

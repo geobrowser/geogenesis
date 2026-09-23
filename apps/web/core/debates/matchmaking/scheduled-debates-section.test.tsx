@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   people: [] as { user_id: string; profile_space_id: string; display_name: string | null; avatar_cid: string | null }[],
   requests: [] as ScheduledDebateRequest[],
   rooms: [] as UpcomingDebateRoom[],
+  requestsError: null as Error | null,
+  roomsError: null as Error | null,
 }));
 
 const ADA = {
@@ -27,11 +29,11 @@ const ADA = {
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
   useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
-  useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
+  useScheduledDebates: () => ({ data: { requests: mocks.requests }, error: mocks.requestsError }),
 }));
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
-  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms } }),
+  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -75,10 +77,17 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+  error?: Error | null;
 }) => ({
   user: userEvent.setup(),
   ...render(
-    <ScheduledDebatesSection content={{ answerable: content.answerable ?? [], upcoming: content.upcoming ?? [] }} />
+    <ScheduledDebatesSection
+      content={{
+        answerable: content.answerable ?? [],
+        upcoming: content.upcoming ?? [],
+        error: content.error ?? null,
+      }}
+    />
   ),
 });
 
@@ -95,6 +104,8 @@ afterEach(() => {
   mocks.people = [];
   mocks.requests = [];
   mocks.rooms = [];
+  mocks.requestsError = null;
+  mocks.roomsError = null;
 });
 
 describe('answering in the tab', () => {
@@ -212,5 +223,24 @@ describe('pairing a room with the request that booked it', () => {
     const { result } = renderHook(() => useScheduledContent(true));
 
     expect(result.current.answerable).toHaveLength(0);
+  });
+});
+
+
+describe('a schedule that could not be read', () => {
+  // An unread schedule drawn as an empty one tells someone with a debate in four minutes that
+  // they have nothing on.
+  it('says so rather than rendering as nothing scheduled', () => {
+    setup({ error: new Error('Service unavailable.') });
+
+    expect(screen.getByText(/Could not read your scheduled debates: Service unavailable./)).toBeInTheDocument();
+  });
+
+  it('reports a failed room read too, not only a failed request read', () => {
+    mocks.roomsError = new Error('Rooms are down.');
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.error?.message).toBe('Rooms are down.');
   });
 });
