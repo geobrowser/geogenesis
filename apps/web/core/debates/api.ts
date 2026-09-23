@@ -832,6 +832,67 @@ export async function replaceDebateSchedule(
   });
 }
 
+/** One window of availability, as absolute UTC instants — the only form two zones can compare. */
+export type ScheduleOverlapSlot = {
+  start: string;
+  end: string;
+};
+
+/** One of *their* slots, flagged with whether the viewer is free for it too (geo-chat#134). */
+export type AnnotatedSlot = ScheduleOverlapSlot & {
+  viewer_free: boolean;
+};
+
+/** What `/matchmaking/schedule-overlaps` answers. */
+export type ScheduleOverlapResponse = {
+  /** The other person's user id, echoed back. */
+  with: string;
+  /**
+   * Unused. Hard-coded true whenever *they* have a schedule, so it does not mean what its name or
+   * its server-side doc say. Read `viewer_has_schedule` and `with_timezone` instead.
+   */
+  both_have_schedules: boolean;
+  /** IANA zones. `with_timezone` is empty exactly when they have no saved schedule. */
+  viewer_timezone: string;
+  with_timezone: string;
+  /** The intersection, for surfaces wanting a few suggested times rather than a grid. */
+  slots: ScheduleOverlapSlot[];
+  /**
+   * Their whole week, populated whenever they have a schedule. Optional because deployments
+   * before geo-chat#134 omit it, and an absent field is not an empty week.
+   */
+  their_slots?: AnnotatedSlot[];
+  /** Absent on the same older deployments, where `both_have_schedules` still meant the conjunction. */
+  viewer_has_schedule?: boolean;
+  /** `limit` cut `slots` short. It never caps `their_slots`. */
+  truncated: boolean;
+};
+
+/**
+ * When the viewer and one other person are both free (GEO-2938).
+ *
+ * `days` counts forward from the server's clock, so the far edge of the range is its call rather
+ * than ours — the adapter buckets by date and drops anything landing outside the drawn week.
+ */
+export async function getScheduleOverlaps(
+  withUserId: string,
+  { days, limit }: { days?: number; limit?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ with: withUserId });
+  if (days !== undefined) params.set('days', String(days));
+  if (limit !== undefined) params.set('limit', String(limit));
+
+  return geoChatRequest<ScheduleOverlapResponse>(`/matchmaking/schedule-overlaps?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 export async function updateDebateAvailability(
   availableToDebate: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
