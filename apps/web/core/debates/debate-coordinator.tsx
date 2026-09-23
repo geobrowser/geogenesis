@@ -20,6 +20,7 @@ import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } fr
 import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
+import { debateRematchPath } from './debate-routes';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -273,7 +274,7 @@ export function DebateCoordinator() {
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
+      const path = debateRematchPath(rematch);
       if (pathname !== path) {
         rememberDebateReturnDestination();
         router.push(path);

@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -82,13 +82,15 @@ function controllerFixture(overrides: {
   playing?: boolean;
   playbackEnded?: boolean;
   subtitle?: string | null;
+  /** A freshly signed recording, as `refreshSlotUrl` produces. */
+  urls?: { slot1: string; slot2: string };
 }) {
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
     slot1Participant: participant(1),
     slot2Participant: participant(2),
-    urls: { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
+    urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
     ready: true,
     error: null,
     playing: overrides.playing ?? true,
@@ -105,6 +107,8 @@ function controllerFixture(overrides: {
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
+    resyncSlot: vi.fn(),
+    refreshSlotUrl: vi.fn(),
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
@@ -423,5 +427,187 @@ describe('a backlog latch outliving its stack', () => {
     mocks.ticker = withCardsForSlot1();
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+});
+
+/**
+ * GEO-2985. Chrome gives up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `FFmpegDemuxer: demuxer seek failed` — after the element has sat in the explore feed's
+ * look-ahead preload long enough for the browser to suspend its fetch and resume it. A `<video>`
+ * that reports an error is finished: nothing retries it, it paints nothing, and the debate plays
+ * on in the other tile with that debater simply absent. That is the reported "one debater's video
+ * never loads in the explore feed, while the same debate is fine full screen".
+ */
+describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
+  const controller = () => mocks.controller as ReturnType<typeof controllerFixture>;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function renderPair() {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    return {
+      slot1,
+      slot2,
+      container,
+      /** What `refreshSlotUrl` does to this tile: the same recording, signed again. */
+      resign(url: string) {
+        mocks.controller = controllerFixture({
+          mutedByUser: true,
+          turnSlot: 2,
+          urls: { slot1: url, slot2: 'https://cdn.test/slot2.webm' },
+        });
+        rerender(<DebateFeedPlayer debate={debate} active />);
+      },
+    };
+  }
+
+  /** The control an exhausted tile offers, if it is offering one. */
+  const retryButton = (container: HTMLElement) =>
+    container.querySelector<HTMLButtonElement>('[aria-label^="Retry"][aria-label$="video"]');
+
+  it('re-attaches the source and asks the controller to put it back in step', () => {
+    const { slot1 } = renderPair();
+    const src = slot1.getAttribute('src');
+
+    fireEvent.error(slot1);
+    // Spaced rather than immediate, so a transient failure has a chance to be over.
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(500));
+
+    // `load()` alone cannot revive an element holding a MediaError — resource selection would run
+    // against the src it already has. Detaching first is what makes this a new fetch.
+    expect(slot1.getAttribute('src')).toBe(src);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+    expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  it('repairs each tile independently', () => {
+    const { slot2 } = renderPair();
+
+    fireEvent.error(slot2);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(controller().resyncSlot).toHaveBeenCalledWith(2);
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // A genuinely unreadable source answers every rebuild with another error. Unbounded, that is a
+  // tile re-fetching a multi-megabyte recording forever — worse than the blank tile it replaces.
+  it('gives up after a bounded number of attempts', () => {
+    const { slot1 } = renderPair();
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * `error.code === 2` covers a dead URL as well as a dead pipeline, and every rebuild re-fetches
+   * the same bytes from the same signature — so the budget running out is the moment to ask
+   * whether the signature is what expired, rather than the moment to give up.
+   */
+  it('escalates to a freshly signed URL once the budget is spent', () => {
+    const { slot1 } = renderPair();
+
+    const exhaust = () => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        fireEvent.error(slot1);
+        act(() => vi.advanceTimersByTime(2_000));
+      }
+    };
+    exhaust();
+
+    expect(controller().refreshSlotUrl).toHaveBeenCalledWith(1);
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+
+    // And it stays one ask. `load()` on a dead source answers with another `error`, so without a
+    // bound here the tile would re-ask on every one of them and lean on the hook's ceiling to
+    // absorb it.
+    exhaust();
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('spends a fresh budget on the re-signed recording', () => {
+    const { slot1, resign } = renderPair();
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(3);
+
+    resign('https://cdn.test/slot1-resigned.webm');
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * Before the rebuild existed this state was undetectable, so saying nothing was the only option.
+   * It is detected now, and a blank half of a playing debate that accounts for itself in no way is
+   * the report that opened this ticket.
+   */
+  it('offers the viewer a retry once it has run out of its own', () => {
+    const { slot1, container } = renderPair();
+    expect(retryButton(container)).toBeNull();
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+
+    const retry = retryButton(container);
+    expect(retry).not.toBeNull();
+    expect(container.textContent).toContain('This recording didn’t load');
+
+    act(() => {
+      fireEvent.click(retry as HTMLButtonElement);
+      vi.advanceTimersByTime(2_000);
+    });
+
+    // A person asking is worth a fresh budget, and the tile goes back to showing the recording.
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(4);
+    expect(retryButton(container)).toBeNull();
+  });
+
+  it('does not offer it over a recording that repaired itself', () => {
+    const { slot1, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(retryButton(container)).toBeNull();
+  });
+
+  // `load()` itself can fire `error` again before the first repair has finished, and each of
+  // those must not book its own rebuild.
+  it('does not stack repairs while one is pending', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // The feed keys its cards by claim, so a re-rank hands a different debate to the same tile. A
+  // repair booked for the recording that has just been replaced must not touch the new one.
+  it('drops a pending repair when the tile is handed a different recording', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    slot1.setAttribute('src', 'https://cdn.test/another.webm');
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
   });
 });
