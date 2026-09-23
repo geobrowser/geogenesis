@@ -17,13 +17,13 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
+import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 import { PeerAvailabilityModal } from '~/partials/availability/peer-availability-modal';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
-import { useCreateScheduledDebate } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
@@ -50,9 +50,6 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  */
 const EMPTY_SPACE_IDS: string[] = [];
 
-/** How long a booked room runs. A slot is 30 minutes, so a booking is one slot. */
-const SCHEDULED_DEBATE_MINUTES = 30;
-
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
 }
@@ -78,8 +75,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const spacesPopoverPortal = useElevatedPopoverPortal();
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
-  const bookingEnabled = useDebugDebatesPageEnabled();
-  const propose = useCreateScheduledDebate();
+  const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
   // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
   // moment its person goes offline, and a dialog inside it would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{ userId: string; name: string } | null>(null);
@@ -365,32 +361,23 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       </div>
 
       {/* Closing returns to the hub, which is where it was opened from. */}
-      <PeerAvailabilityModal
-        open={viewingTimes !== null}
-        userId={viewingTimes?.userId ?? ''}
-        peerName={viewingTimes?.name}
-        onClose={() => {
-          setViewingTimes(null);
-          // Otherwise the next person's week opens already showing the last one's outcome.
-          propose.reset();
-        }}
-        openerRef={seeTimesOpenerRef}
-        booking={
-          (peerAvailabilityEnabled || bookingEnabled) && viewingTimes
-            ? {
-                onRequest: startsAt =>
-                  propose.mutate({
-                    opponentUserId: viewingTimes.userId,
-                    startsAt: new Date(startsAt),
-                    minutes: SCHEDULED_DEBATE_MINUTES,
-                  }),
-                pending: propose.isPending,
-                error: propose.error?.message ?? null,
-                requestedStart: propose.data?.scheduled_start_at ?? null,
-              }
-            : undefined
-        }
-      />
+      {bookingEnabled ? (
+        <PeerAvailabilityBookingModal
+          open={viewingTimes !== null}
+          userId={viewingTimes?.userId ?? ''}
+          peerName={viewingTimes?.name}
+          onClose={() => setViewingTimes(null)}
+          openerRef={seeTimesOpenerRef}
+        />
+      ) : (
+        <PeerAvailabilityModal
+          open={viewingTimes !== null}
+          userId={viewingTimes?.userId ?? ''}
+          peerName={viewingTimes?.name}
+          onClose={() => setViewingTimes(null)}
+          openerRef={seeTimesOpenerRef}
+        />
+      )}
     </div>
   );
 }
