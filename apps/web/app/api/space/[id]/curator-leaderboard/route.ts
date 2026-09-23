@@ -2,10 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { NextResponse } from 'next/server';
 
-import type { CuratorLeaderboardPeriod } from '~/core/community/curator-leaderboard-types';
+import { parseCuratorLeaderboardPeriod } from '~/core/community/curator-leaderboard-types';
 import { fetchCuratorLeaderboard } from '~/core/community/fetch-curator-leaderboard';
-
-const VALID_PERIODS = new Set<CuratorLeaderboardPeriod>(['week', 'month', 'year', 'all']);
 
 export const revalidate = 60;
 
@@ -21,10 +19,7 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   const { searchParams } = new URL(request.url);
-  const periodParam = searchParams.get('period') ?? 'week';
-  const period = VALID_PERIODS.has(periodParam as CuratorLeaderboardPeriod)
-    ? (periodParam as CuratorLeaderboardPeriod)
-    : 'week';
+  const period = parseCuratorLeaderboardPeriod(searchParams.get('period'));
   const currentUserSpaceId = searchParams.get('currentUserSpaceId');
 
   try {
