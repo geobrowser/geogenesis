@@ -34,6 +34,7 @@ type Props = {
   spaceId: string;
   initialData?: CuratorLeaderboardResult;
   expanded?: boolean;
+  initialPeriod?: CuratorLeaderboardPeriod;
 };
 
 const DEFAULT_PERIOD: CuratorLeaderboardPeriod = 'week';
@@ -253,8 +254,10 @@ function IncompleteCountsNotice() {
   return <p className="text-[16px] leading-[20px] text-grey-04">Some activity was not included in these counts.</p>;
 }
 
-export function CuratorLeaderboardSection({ spaceId, initialData, expanded = false }: Props) {
-  const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
+export function CuratorLeaderboardSection({ spaceId, initialData, expanded = false, initialPeriod }: Props) {
+  const [period, setPeriodState] = React.useState<CuratorLeaderboardPeriod>(
+    initialData?.period ?? initialPeriod ?? DEFAULT_PERIOD
+  );
   const [page, setPage] = React.useState(0);
   const { personalSpaceId } = usePersonalSpaceId();
 
@@ -311,7 +314,7 @@ export function CuratorLeaderboardSection({ spaceId, initialData, expanded = fal
           />
           {!expanded && rows.length > 0 ? (
             <Link
-              href={NavUtils.toCommunityLeaderboard(spaceId)}
+              href={NavUtils.toCommunityLeaderboard(spaceId, period)}
               aria-label="View the full leaderboard"
               className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
             >

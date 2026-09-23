@@ -2,6 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { parseCuratorLeaderboardPeriod } from '~/core/community/curator-leaderboard-types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -11,14 +12,17 @@ import { CuratorLeaderboardSection } from '~/partials/community-tab/curator-lead
 
 type Props = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ period?: string }>;
 };
 
 export default async function CommunityLeaderboardPage(props: Props) {
-  const params = await props.params;
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams]);
 
   if (!IdUtils.isValid(params.id)) {
     notFound();
   }
+
+  const period = parseCuratorLeaderboardPeriod(searchParams.period);
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-4 px-4 py-8">
@@ -30,7 +34,7 @@ export default async function CommunityLeaderboardPage(props: Props) {
         Community
       </Link>
 
-      <CuratorLeaderboardSection spaceId={params.id} expanded />
+      <CuratorLeaderboardSection spaceId={params.id} expanded initialPeriod={period} />
     </div>
   );
 }

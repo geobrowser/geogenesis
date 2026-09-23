@@ -7,6 +7,16 @@ export const CURATOR_LEADERBOARD_PERIOD_OPTIONS: { value: CuratorLeaderboardPeri
   { value: 'all', label: 'All time' },
 ];
 
+const CURATOR_LEADERBOARD_PERIODS = new Set<CuratorLeaderboardPeriod>(
+  CURATOR_LEADERBOARD_PERIOD_OPTIONS.map(option => option.value)
+);
+
+export function parseCuratorLeaderboardPeriod(value: string | null | undefined): CuratorLeaderboardPeriod {
+  return CURATOR_LEADERBOARD_PERIODS.has(value as CuratorLeaderboardPeriod)
+    ? (value as CuratorLeaderboardPeriod)
+    : 'week';
+}
+
 export const CURATOR_LEADERBOARD_PAGE_SIZE = 5;
 
 export type CuratorLeaderboardMetrics = {
