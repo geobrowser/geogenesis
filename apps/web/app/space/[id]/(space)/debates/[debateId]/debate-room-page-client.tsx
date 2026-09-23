@@ -12,10 +12,14 @@ import { capture } from '~/core/analytics';
 import {
   type Debate,
   type DebateRematchSession,
+  type GetPrivyIdentityToken,
   type LiveKitJoinResponse,
   type ParticipantSlot,
+  abortLocalRecordingMultipart,
   getCurrentGeoChatUserId,
+  getLocalRecordingPartUrls,
   getServerTime,
+  startLocalRecordingMultipart,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
@@ -44,6 +48,7 @@ import {
   useDebate,
   useDebateRematch,
   useEndDebateTurn,
+  useGeoChatAuth,
   useLeaveDebateRematch,
   useLiveKitJoin,
   useMarkDebateCapturing,
@@ -58,6 +63,7 @@ import {
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
+import { type LiveRecordingStream, putRecordingPart, startLiveRecordingStream } from '~/core/debates/recording-stream';
 import {
   debateRecordingUploadId,
   deleteDebateRecordingUpload,
@@ -197,6 +203,63 @@ const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
 
+/** Opens the stream that makes one recording durable while it is made (GEO-2955). */
+function startRoomRecordingStream({
+  debateId,
+  userId,
+  auth,
+  recorder,
+  stream,
+  mimeType,
+  startedAtMs,
+  shouldPause,
+}: {
+  debateId: string;
+  userId: string;
+  auth: { getPrivyIdentityToken: GetPrivyIdentityToken; accountKey: string | null };
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  mimeType: string;
+  startedAtMs: number;
+  shouldPause: () => boolean;
+}): LiveRecordingStream {
+  const { getPrivyIdentityToken, accountKey } = auth;
+  const videoSettings = stream.getVideoTracks()[0]?.getSettings?.();
+  return startLiveRecordingStream({
+    id: `${userId}:${debateId}:${Math.round(startedAtMs)}`,
+    metadata: {
+      userId,
+      debateId,
+      mimeType,
+      startedAtMs,
+      width: videoSettings?.width ?? null,
+      height: videoSettings?.height ?? null,
+      framerate: videoSettings?.frameRate ?? null,
+      videoBitsPerSecond: recorder.videoBitsPerSecond || null,
+    },
+    transport: {
+      startMultipart: () =>
+        startLocalRecordingMultipart(
+          debateId,
+          { mime_type: mimeType, started_at_ms: Math.round(startedAtMs) },
+          getPrivyIdentityToken,
+          accountKey
+        ),
+      getPartUrls: (filename, uploadId, partNumbers) =>
+        getLocalRecordingPartUrls(
+          debateId,
+          { filename, upload_id: uploadId, part_numbers: partNumbers },
+          getPrivyIdentityToken,
+          accountKey
+        ),
+      putPart: putRecordingPart,
+      abortMultipart: (filename, uploadId) =>
+        abortLocalRecordingMultipart(debateId, { filename, upload_id: uploadId }, getPrivyIdentityToken, accountKey),
+    },
+    shouldPause,
+  });
+}
+
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
   // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
   // Root space's topic tree — about thirteen sequential round trips on a cold cache, and the tab is
@@ -331,6 +394,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const recordingChunksRef = React.useRef<Blob[]>([]);
+  // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
+  // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
+  const liveRecordingStreamRef = React.useRef<LiveRecordingStream | null>(null);
+  // The streamed upload shares the upstream with the call, so it stands down while the call
+  // struggles. Set from LiveKit's own quality reports for the local participant.
+  const callConnectionPoorRef = React.useRef(false);
   const recordingStartedAtRef = React.useRef<number | null>(null);
   const recordingEndedAtRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
@@ -419,6 +488,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
+  const currentUserIdRef = React.useRef(currentUserId);
+  currentUserIdRef.current = currentUserId;
+  const geoChatAuth = useGeoChatAuth();
+  const geoChatAuthRef = React.useRef(geoChatAuth);
+  geoChatAuthRef.current = geoChatAuth;
+  const debateIdRef = React.useRef(debateId);
+  debateIdRef.current = debateId;
   const preScreenLocalParticipant =
     debate?.participants.find(participant => participant.user_id === currentUserId) ?? debate?.participants[0] ?? null;
   const preScreenRemoteParticipant =
@@ -850,6 +926,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       'start',
       () => {
         recordingStartedAtRef.current = serverNowRef.current();
+        const userId = currentUserIdRef.current;
+        if (userId) {
+          liveRecordingStreamRef.current = startRoomRecordingStream({
+            debateId: debateIdRef.current,
+            userId,
+            auth: geoChatAuthRef.current,
+            recorder,
+            stream,
+            mimeType: recorder.mimeType || mimeType || 'video/webm',
+            startedAtMs: recordingStartedAtRef.current,
+            shouldPause: () =>
+              callConnectionPoorRef.current ||
+              roomStateRef.current !== 'connected' ||
+              (typeof navigator !== 'undefined' && navigator.onLine === false),
+          });
+        }
         // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
         // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
         // room connection, both before LiveKit has published the tracks this recorder consumes —
@@ -874,6 +966,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recorder.ondataavailable = event => {
       if (event.data.size > 0) {
         recordingChunksRef.current.push(event.data);
+        liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
       }
     };
     recorder.start(1_000);
@@ -949,6 +1042,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const recording = stoppedRecordingRef.current;
+    // Whatever went out during the debate is handed to the queue, which sends only the rest.
+    const multipart = (await liveRecordingStreamRef.current?.finish()) ?? null;
     const storage = await estimateRecordingStorage();
     if (storage?.quota !== undefined && storage.usage !== undefined) {
       const availableBytes = storage.quota - storage.usage;
@@ -973,6 +1068,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         height: recording.height,
         framerate: recording.framerate,
         videoBitsPerSecond: recording.videoBitsPerSecond,
+        multipart,
       });
     } catch (error) {
       if (isStorageQuotaError(error)) {
@@ -984,6 +1080,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     persistedRecordingDebateIdRef.current = debate.id;
+    // The queue row is the recording's home now; the chunks written as it was made are redundant.
+    void liveRecordingStreamRef.current?.release();
+    liveRecordingStreamRef.current = null;
     recorderRef.current = null;
     recordingChunksRef.current = [];
     stoppedRecordingRef.current = null;
@@ -1015,9 +1114,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       });
   }, [debate, persistStoppedLocalRecording]);
 
+  /**
+   * This recording must never publish — the debate was cancelled or abandoned — so the parts
+   * streamed during it and the chunks saved locally go too.
+   */
   const discardLocalRecorder = React.useCallback(async () => {
     clearRecordingTimers();
     setCapturing(false);
+    void liveRecordingStreamRef.current?.abort();
+    liveRecordingStreamRef.current = null;
     const recorder = recorderRef.current;
     if (!recorder) {
       recordingChunksRef.current = [];
@@ -1046,6 +1151,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingPersistencePromiseRef.current = null;
     persistedRecordingDebateIdRef.current = null;
   }, [clearRecordingTimers]);
+
+  /**
+   * This tab is letting go of a recording it could not finish, after a dropped connection or an
+   * unmount. The chunks saved as it was made are kept, and the upload coordinator decides once the
+   * debate settles whether they are the participant's only copy (GEO-2955).
+   */
+  const detachLocalRecorder = React.useCallback(() => {
+    liveRecordingStreamRef.current = null;
+    return discardLocalRecorder();
+  }, [discardLocalRecorder]);
 
   const initializeNoiseFilter = React.useCallback(async (tracks: LocalTrackLike[], isCurrent: () => boolean) => {
     noiseFilterProcessorRef.current = null;
@@ -1254,6 +1369,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // blips sees "Reconnecting" instead of a silently frozen call. Clear the remote
         // tiles on the way out so stale elements from the dropped session don't linger behind the
         // re-subscribed tracks.
+        // GEO-2955. The recording streams over the same upstream as the call; LiveKit's quality
+        // report for the local participant is what tells it to stand down.
+        room.on(livekit.RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          if (!(participant as { isLocal?: boolean } | undefined)?.isLocal) return;
+          callConnectionPoorRef.current =
+            quality === livekit.ConnectionQuality.Poor || quality === livekit.ConnectionQuality.Lost;
+        });
         room.on(livekit.RoomEvent.Reconnecting, () => {
           if (!isCurrent() || roomRef.current !== room) return;
           // `detach`, not just `replaceChildren`: an element removed from the DOM keeps playing,
@@ -1873,7 +1996,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
     clearTimedOutDebateActivity(debateId);
     clearRecordingTimers();
-    void discardLocalRecorder();
+    void detachLocalRecorder();
     disconnectConnectingRoom(connectingRoomRef);
     disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
     ownershipRef.current?.release();
@@ -1885,7 +2008,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     clearRecordingTimers,
     clearTimedOutDebateActivity,
     debateId,
-    discardLocalRecorder,
+    detachLocalRecorder,
     localMediaStreamRef,
     localTracksRef,
   ]);
@@ -1957,12 +2080,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         postJoinRecoveryTimerRef.current = null;
       }
       clearRecordingTimers();
-      void discardLocalRecorder();
+      void detachLocalRecorder();
       disconnectConnectingRoom(connectingRoomRef);
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
     };
-  }, [clearRecordingTimers, discardLocalRecorder, localMediaStreamRef, localTracksRef]);
+  }, [clearRecordingTimers, detachLocalRecorder, localMediaStreamRef, localTracksRef]);
 
   React.useEffect(() => {
     if (!shouldReturnFromTerminalDebate) return;

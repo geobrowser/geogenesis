@@ -711,6 +711,21 @@ export type LocalRecordingCompleteRequest = {
   height?: number | null;
   framerate?: number | null;
   video_bits_per_second?: number | null;
+  /** Set when the recording was streamed as a multipart upload; the server assembles the parts. */
+  multipart_upload_id?: string | null;
+};
+
+/** A multipart upload opened when recording starts, so the file can go out while it is made. */
+export type LocalRecordingMultipartStartResponse = {
+  filename: string;
+  upload_id: string;
+  /** Every part but the last must be exactly this many bytes. */
+  part_size: number;
+};
+
+export type LocalRecordingPartUrl = {
+  part_number: number;
+  upload: ObjectStoreUpload;
 };
 
 export type RecordingCompleteResponse = {
@@ -1569,6 +1584,55 @@ export async function completeLocalRecordingUpload(
   accountKey: string | null
 ) {
   return geoChatRequest<RecordingCompleteResponse>(`/debates/${debateId}/recordings/local-upload-complete`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function startLocalRecordingMultipart(
+  debateId: string,
+  request: LocalRecordingUploadRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<LocalRecordingMultipartStartResponse>(`/debates/${debateId}/recordings/local-multipart`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function getLocalRecordingPartUrls(
+  debateId: string,
+  request: { filename: string; upload_id: string; part_numbers: number[] },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const response = await geoChatRequest<{ parts: LocalRecordingPartUrl[] }>(
+    `/debates/${debateId}/recordings/local-multipart/part-urls`,
+    {
+      method: 'POST',
+      body: request,
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+    }
+  );
+  return response.parts;
+}
+
+export async function abortLocalRecordingMultipart(
+  debateId: string,
+  request: { filename: string; upload_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  await geoChatRequest<void>(`/debates/${debateId}/recordings/local-multipart/abort`, {
     method: 'POST',
     body: request,
     auth: true,

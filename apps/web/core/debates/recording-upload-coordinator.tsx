@@ -15,22 +15,40 @@ import {
   GeoChatRequestError,
   type GetPrivyIdentityToken,
   type LocalRecordingCompleteRequest,
+  type LocalRecordingPartUrl,
   type LocalRecordingUploadRequest,
   type LocalRecordingUploadResponse,
+  type ObjectStoreUpload,
+  abortLocalRecordingMultipart,
   cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
+  getDebate,
+  getLocalRecordingPartUrls,
   resolveCurrentGeoChatUserId,
   retryDebatePhaseBoundaryRequest,
 } from './api';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
+  RECORDING_STREAM_ORPHAN_AFTER_MS,
+  type StreamedRecordingMultipart,
+  isMissingRouteError,
+  partRange,
+  putRecordingPart,
+  recoverOrphanedRecordingStreams,
+  uploadRemainingParts,
+} from './recording-stream';
+import {
   type DebateRecordingUpload,
+  debateRecordingUploadId,
   deleteDebateRecordingUpload,
+  enqueueDebateRecordingUpload,
   getDebateRecordingUpload,
   markDebateRecordingUploaded,
   observeDebateRecordingUploads,
+  requeueDebateRecordingParts,
   scheduleDebateRecordingRetry,
+  setDebateRecordingMultipart,
 } from './recording-upload-queue';
 import {
   usePublishOptOutRequest,
@@ -73,6 +91,17 @@ type RecordingUploadDependencies = {
   markUploaded: (id: string, filename: string) => Promise<void>;
   completeUpload: (debateId: string, request: LocalRecordingCompleteRequest) => Promise<unknown>;
   deleteUpload: (id: string) => Promise<void>;
+  /** GEO-2955: the parts of a recording that was streamed during the debate. */
+  getPartUrls?: (
+    debateId: string,
+    filename: string,
+    uploadId: string,
+    partNumbers: number[]
+  ) => Promise<LocalRecordingPartUrl[]>;
+  putPart?: (upload: ObjectStoreUpload, body: Blob) => Promise<void>;
+  setMultipart?: (id: string, multipart: StreamedRecordingMultipart | null) => Promise<void>;
+  requeueParts?: (id: string) => Promise<void>;
+  onPartsProgress?: (uploadedBytes: number) => void;
 };
 
 export async function processDebateRecordingUpload(
@@ -82,31 +111,97 @@ export async function processDebateRecordingUpload(
   const startedAtMs = Math.round(upload.startedAtMs);
   const endedAtMs = Math.round(upload.endedAtMs);
   let filename = upload.filename;
+  let multipart = streamedMultipart(upload, dependencies);
   if (upload.stage === 'queued' || !filename) {
-    const target = await dependencies.createUpload(upload.debateId, {
-      mime_type: upload.mimeType,
-      started_at_ms: startedAtMs,
-    });
-    await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
-    filename = target.filename;
-    await dependencies.markUploaded(upload.id, filename);
+    if (multipart) {
+      try {
+        await sendRemainingParts(upload, multipart, dependencies);
+        filename = multipart.filename;
+      } catch (error) {
+        // A geo-chat that has lost the multipart routes since the debate started. The recording
+        // is whole in the queue, so send it the old way rather than failing the upload.
+        if (!isMissingRouteError(error)) throw error;
+        multipart = null;
+        await dependencies.setMultipart?.(upload.id, null);
+      }
+    }
+    if (!multipart) {
+      const target = await dependencies.createUpload(upload.debateId, {
+        mime_type: upload.mimeType,
+        started_at_ms: startedAtMs,
+      });
+      await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
+      filename = target.filename;
+    }
+    await dependencies.markUploaded(upload.id, filename!);
   }
 
-  await retryDebatePhaseBoundaryRequest(() =>
-    dependencies.completeUpload(upload.debateId, {
-      filename,
-      mime_type: upload.mimeType,
-      started_at_ms: startedAtMs,
-      ended_at_ms: endedAtMs,
-      duration_seconds: upload.durationSeconds,
-      byte_size: upload.byteSize,
-      width: upload.width,
-      height: upload.height,
-      framerate: upload.framerate,
-      video_bits_per_second: upload.videoBitsPerSecond,
-    })
-  );
+  try {
+    await retryDebatePhaseBoundaryRequest(() =>
+      dependencies.completeUpload(upload.debateId, {
+        filename: filename!,
+        mime_type: upload.mimeType,
+        started_at_ms: startedAtMs,
+        ended_at_ms: endedAtMs,
+        duration_seconds: upload.durationSeconds,
+        byte_size: upload.byteSize,
+        width: upload.width,
+        height: upload.height,
+        framerate: upload.framerate,
+        video_bits_per_second: upload.videoBitsPerSecond,
+        ...(multipart ? { multipart_upload_id: multipart.uploadId } : {}),
+      })
+    );
+  } catch (error) {
+    // The server listed the parts and something this client believed sent is not there. Forget
+    // what it believed, so the retry sends every part again instead of completing the same gap.
+    if (multipart && error instanceof GeoChatRequestError && error.code === 'recording_upload_incomplete') {
+      await dependencies.requeueParts?.(upload.id);
+    }
+    throw error;
+  }
   await dependencies.deleteUpload(upload.id);
+}
+
+/** The streamed upload to finish, when this row has one and the transport to finish it. */
+function streamedMultipart(
+  upload: DebateRecordingUpload,
+  dependencies: RecordingUploadDependencies
+): StreamedRecordingMultipart | null {
+  if (!upload.multipart || !dependencies.getPartUrls || !dependencies.putPart) return null;
+  return upload.multipart;
+}
+
+async function sendRemainingParts(
+  upload: DebateRecordingUpload,
+  multipart: StreamedRecordingMultipart,
+  dependencies: RecordingUploadDependencies
+) {
+  const progress = { ...multipart, uploadedPartNumbers: [...multipart.uploadedPartNumbers] };
+  await uploadRemainingParts(
+    upload.blob,
+    multipart,
+    {
+      getPartUrls: (partFilename, uploadId, partNumbers) =>
+        dependencies.getPartUrls!(upload.debateId, partFilename, uploadId, partNumbers),
+      putPart: dependencies.putPart!,
+    },
+    async (partNumber, uploadedBytes) => {
+      progress.uploadedPartNumbers = [...progress.uploadedPartNumbers, partNumber];
+      await dependencies.setMultipart?.(upload.id, progress);
+      dependencies.onPartsProgress?.(uploadedBytes);
+    }
+  );
+}
+
+/** Bytes of a queued recording already in storage, from the parts streamed during the debate. */
+export function streamedRecordingBytes(upload: DebateRecordingUpload): number {
+  const multipart = upload.multipart;
+  if (!multipart) return 0;
+  return multipart.uploadedPartNumbers.reduce((total, partNumber) => {
+    const range = partRange(partNumber, multipart.partSize, upload.byteSize);
+    return total + Math.max(0, range.end - range.start);
+  }, 0);
 }
 
 export function recordingUploadRetryDelay(attemptCount: number) {
@@ -217,6 +312,50 @@ export function DebateRecordingUploadCoordinator() {
     });
     return () => subscription.unsubscribe();
   }, [userId]);
+
+  // GEO-2955. A tab that died mid-debate left its recording in IndexedDB, chunk by chunk, with no
+  // queue row pointing at it. Adopt it once its debate can accept it; see
+  // `recoverOrphanedRecordingStreams` for what is recovered and what is discarded.
+  React.useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const recover = () =>
+      recoverOrphanedRecordingStreams(userId, {
+        getDebate: debateId => getDebate(debateId, getPrivyIdentityToken, accountKey),
+        hasQueuedUpload: async (streamUserId, debateId) => {
+          const queued = await getDebateRecordingUpload(debateRecordingUploadId(streamUserId, debateId));
+          return queued ? { multipartUploadId: queued.multipart?.uploadId ?? null } : null;
+        },
+        enqueue: async (stream, blob) => {
+          await enqueueDebateRecordingUpload({
+            userId: stream.userId,
+            debateId: stream.debateId,
+            blob,
+            mimeType: stream.mimeType,
+            startedAtMs: stream.startedAtMs,
+            endedAtMs: stream.lastChunkAtMs,
+            durationSeconds: Math.max(1, Math.round((stream.lastChunkAtMs - stream.startedAtMs) / 1_000)),
+            width: stream.width,
+            height: stream.height,
+            framerate: stream.framerate,
+            videoBitsPerSecond: stream.videoBitsPerSecond,
+            multipart: stream.multipart,
+          });
+        },
+        abortMultipart: (debateId, filename, uploadId) =>
+          abortLocalRecordingMultipart(debateId, { filename, upload_id: uploadId }, getPrivyIdentityToken, accountKey),
+      }).catch(error => console.warn('[DebateRecordingUploadCoordinator] recording recovery failed:', error));
+    void recover();
+    // A stream whose debate was still running is looked at again, as is one that only now went
+    // quiet long enough to count as orphaned.
+    const timer = window.setInterval(() => {
+      if (!cancelled) void recover();
+    }, RECORDING_STREAM_ORPHAN_AFTER_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accountKey, getPrivyIdentityToken, userId]);
 
   // Recording persistence and cancellation can finish in either order at the phase
   // boundary. If a cancelled debate appears in IndexedDB afterward, keep it hidden, never start
@@ -455,8 +594,11 @@ export function DebateRecordingUploadCoordinator() {
   const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
   const transferredBytes = publishableUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
-    if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
-    return transferred;
+    // A streamed recording arrives with most of its bytes already out, and a multipart attempt
+    // reports whole parts; count whichever is further along.
+    const streamed = streamedRecordingBytes(upload);
+    const live = uploadProgress?.id === upload.id ? uploadProgress.loaded : 0;
+    return transferred + Math.min(Math.max(streamed, live), upload.byteSize);
   }, 0);
   // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
   // stuck, so fall back to the plain in-progress copy.
@@ -505,6 +647,17 @@ export function DebateRecordingUploadCoordinator() {
         // Cancelling ends the debate and the rematch it anchored. Until activity says so the
         // viewer still reads as mid-flow, which greys out every Debate control on every surface.
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      }
+      // The server has refused publication already; this only stops the parts streamed during
+      // the debate from sitting in storage until R2's own 7-day cleanup. Best effort.
+      for (const upload of uploads) {
+        if (!isSameDebateId(upload.debateId, cancelTargetDebateId) || !upload.multipart) continue;
+        void abortLocalRecordingMultipart(
+          upload.debateId,
+          { filename: upload.multipart.filename, upload_id: upload.multipart.uploadId },
+          getPrivyIdentityToken,
+          accountKey
+        ).catch(() => undefined);
       }
       try {
         await Promise.all(
@@ -755,6 +908,17 @@ function recordingUploadDependencies(
     completeUpload: (debateId, request) =>
       completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
+    getPartUrls: (debateId, filename, uploadId, partNumbers) =>
+      getLocalRecordingPartUrls(
+        debateId,
+        { filename, upload_id: uploadId, part_numbers: partNumbers },
+        getPrivyIdentityToken,
+        accountKey
+      ),
+    putPart: putRecordingPart,
+    setMultipart: setDebateRecordingMultipart,
+    requeueParts: requeueDebateRecordingParts,
+    onPartsProgress: onProgress,
   };
 }
 
