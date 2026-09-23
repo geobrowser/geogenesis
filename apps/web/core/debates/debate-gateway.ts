@@ -557,7 +557,7 @@ export class DebateGatewayClient {
     for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
     const changedResponseTargets = new Set(
       [...changedClaims].flatMap(entityId =>
-        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+        (['stance'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
       )
     );
     this.queueInvalidation(`claims:${spaceId}`, {

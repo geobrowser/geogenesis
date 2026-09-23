@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -98,7 +98,7 @@ describe('claim comment position badges', () => {
         <ClaimCommentPositionProvider
           entityId="claim-1"
           spaceId="space-1"
-          responseKind="veracity"
+          responseKind="stance"
           viewerDirection="positive"
           viewerSpaceId="viewer-space"
           isViewerResponseLoading
@@ -108,8 +108,8 @@ describe('claim comment position badges', () => {
       )
     );
 
-    expect(await screen.findByText('Verify')).toBeInTheDocument();
-    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+    expect(await screen.findByText('Agree')).toBeInTheDocument();
+    expect(screen.queryByText('Disagree')).not.toBeInTheDocument();
   });
 
   it('preserves the indexed viewer position while their own response query is unresolved', async () => {
@@ -198,7 +198,7 @@ describe('claim comment position badges', () => {
       )
     );
 
-    expect(await screen.findByText('Dispute')).toBeInTheDocument();
-    expect(mocks.summaryArgs).toEqual(['claim-1', 'space-1', 'veracity', true]);
+    expect(await screen.findByText('Disagree')).toBeInTheDocument();
+    expect(mocks.summaryArgs).toEqual(['claim-1', 'space-1', 'stance', true]);
   });
 });

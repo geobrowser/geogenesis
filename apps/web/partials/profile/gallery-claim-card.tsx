@@ -57,7 +57,6 @@ export function GalleryClaimCard({
     isResponseKindResolved,
     isViewerResponseResolved,
     responseBlockedReason,
-    responseKind,
     claim,
     positions,
     readiness,
@@ -101,12 +100,7 @@ export function GalleryClaimCard({
           // with no tag.
           noteFor={position =>
             isResponseKindResolved ? (
-              <ClaimResponseTag
-                response={response}
-                responseKind={responseKind}
-                personName={personName}
-                forPosition={position}
-              />
+              <ClaimResponseTag response={response} personName={personName} forPosition={position} />
             ) : null
           }
         />

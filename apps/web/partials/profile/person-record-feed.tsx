@@ -158,7 +158,6 @@ export function PersonRecordFeed({
                     ? (responseKind, position) => (
                         <ClaimResponseTag
                           response={responseByClaimId[normId(item.entityId)]}
-                          responseKind={responseKind}
                           personName={personName}
                           forPosition={position}
                         />

@@ -43,7 +43,6 @@ import {
   type ActiveResponseDirection,
   type ResponseKind,
   type ResponseObjectType,
-  type ResponseVoteKind,
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
@@ -1469,11 +1468,12 @@ export function getUserEntityResponse(
  * veracity (2) are a position on a claim, and the onboarding checklist counts those as two
  * different things a person can have done.
  */
-export function getUserHasVoteOfKind(
-  userId: string,
-  voteKinds: readonly ResponseVoteKind[],
-  signal?: AbortController['signal']
-) {
+/**
+ * `number` rather than `ResponseVoteKind`, because this asks the vote table a historical question
+ * and the table holds kinds the app no longer publishes — the retired veracity kind, `2`, is a
+ * real value here even though nothing can write one any more.
+ */
+export function getUserHasVoteOfKind(userId: string, voteKinds: readonly number[], signal?: AbortController['signal']) {
   return graphql({
     query: UserHasVoteOfKindDocument,
     decoder: data => (data.userVotes?.length ?? 0) > 0,

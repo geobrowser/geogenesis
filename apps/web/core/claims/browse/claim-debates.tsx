@@ -66,12 +66,10 @@ const VOTE_FETCH_CAP = 500;
 export function ClaimDebates({
   claimId,
   spaceId,
-  responseKind,
 }: {
   claimId: string;
   spaceId: string;
   /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
-  responseKind: 'stance' | 'veracity';
 }) {
   // A page at a time rather than an accumulating list: appending pushes everything below the
   // section down the page as the reader loads more, where swapping keeps the layout where they
@@ -144,7 +142,6 @@ export function ClaimDebates({
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
               keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-              responseKind={responseKind}
             />
           </li>
         ))}
@@ -295,7 +292,6 @@ export function DebateRow({
   profilesBySpaceId,
   winnerShare,
   keyframeUrl,
-  responseKind,
 }: {
   debate: Entity;
   spaceId: string;
@@ -303,7 +299,6 @@ export function DebateRow({
   profilesBySpaceId: Map<string, { name?: string | null; avatarUrl?: string | null }>;
   winnerShare: WinnerShare | null;
   keyframeUrl: string | null;
-  responseKind: 'stance' | 'veracity';
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
 
@@ -344,7 +339,7 @@ export function DebateRow({
                       side.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
                     )}
                   >
-                    {responsePositionLabel(responseKind, side.position)}
+                    {responsePositionLabel(side.position)}
                   </span>
                 </span>
               </React.Fragment>

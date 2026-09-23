@@ -9,7 +9,17 @@ export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' 
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
-export type DebateResponseKind = 'stance' | 'veracity';
+/**
+ * How a claim's two sides are labelled: Agree and Disagree, for every claim.
+ *
+ * This used to be `'stance' | 'veracity'`, and a claim carrying the "Is factual" flag took the
+ * second vocabulary — Verify and Dispute, published as its own vote kind. That split is gone.
+ *
+ * geo-chat may still put `"veracity"` on the wire for a claim minted before the change. Nothing
+ * reads the field to pick a vocabulary any more — every consumer uses `'stance'` outright — so a
+ * stale value cannot reach a label, a glyph or a vote kind. We send `'stance'` on the way back.
+ */
+export type DebateResponseKind = 'stance';
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -484,7 +494,7 @@ export type DebateResponseSummary = {
 
 /** Everything the hub needs to render a claim's readiness state alongside the viewer's response. */
 export type MatchmakingReadiness = {
-  /** Which vocabulary labels the sides: Agree/Disagree for `stance`, Verify/Dispute for `veracity`. */
+  /** Legacy; see {@link DebateResponseKind}. Every claim is Agree/Disagree. */
   response_kind: DebateResponseKind;
   /** Present whenever the viewer has an active response — including while readiness is off. */
   viewer_response: DebateResponseSummary | null;

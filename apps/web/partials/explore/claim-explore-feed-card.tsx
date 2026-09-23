@@ -17,7 +17,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
@@ -91,7 +91,7 @@ export function ClaimExploreFeedCard({
    * only this card knows. Absent everywhere else, which is every surface where
    * the only answer worth reporting is the reader's own.
    */
-  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  responseNote?: (responseKind: ResponseKind, position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -387,11 +387,11 @@ export function ClaimVerdictColumn({
 }: {
   entityId: string;
   spaceId: string;
-  responseKind: 'stance' | 'veracity';
+  responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   matchDebatePanelOnMobile: boolean;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
 
   const percent = summary.percent ?? 0;
 
@@ -416,7 +416,7 @@ export function ClaimVerdictColumn({
             {copy.positiveAction.toLowerCase()}
           </Text>
         </div>
-        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+        <ClaimSplitBar percent={percent} className="mt-3 h-1.5" />
         {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
         {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's

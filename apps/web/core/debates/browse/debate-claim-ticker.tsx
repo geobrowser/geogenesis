@@ -21,7 +21,7 @@ import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { uuidToHex } from '~/core/id/normalize';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -799,7 +799,7 @@ function TickerClaimHeader({
     onAnswered(claimId, position);
   }, [position, claimId, onAnswered]);
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   // Null on a claim nobody has answered, which is most of them — and a genuine 0% is a different
   // statement from "no responses", so the share drops out rather than printing a zero.
   const percent = summary.percent;
@@ -891,7 +891,7 @@ function ClaimIconButton({
   title,
   onClick,
 }: {
-  responseKind: 'stance' | 'veracity' | 'curation';
+  responseKind: ResponseKind;
   position: boolean;
   label: string;
   selected: boolean;
@@ -931,8 +931,6 @@ function ClaimIconButton({
           : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
-      {/* A veracity chevron has no filled form to switch to, so its selected state is the
-          background and colour above rather than the glyph. See `ResponsePositionIcon`. */}
       <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
     </button>
   );

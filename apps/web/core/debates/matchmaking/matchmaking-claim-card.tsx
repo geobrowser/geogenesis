@@ -21,7 +21,7 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -431,7 +431,7 @@ export function useClaimPositionControl({
   // the claim page does.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
-  const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
+  const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
 
   // The offer and the faces it implies, from one fact. Same shared query the end slot reads, so this
@@ -471,7 +471,6 @@ export function useClaimPositionControl({
         ? positionsWithOpponents
         : withViewerPosition({
             positions: positionsWithOpponents,
-            responseKind: readiness.response_kind,
             // `undefined` where the host cannot say, which is not the same as "no position" — see
             // `viewerResponseUnknown`.
             serverPosition: viewerResponseUnknown ? undefined : (readiness.viewer_response?.position ?? null),
@@ -483,7 +482,6 @@ export function useClaimPositionControl({
     [
       personalSpaceId,
       positionsWithOpponents,
-      readiness.response_kind,
       readiness.viewer_response?.position,
       viewerIdentityPending,
       viewerPosition,
@@ -695,7 +693,6 @@ function RespondableControls({
       viewerResponse: readiness.viewer_response,
       indexedDirection: settledDirection === 'none' ? null : settledDirection,
       isIndexedLoading: settledDirection === null,
-      responseKind: readiness.response_kind,
     });
     return viewerResponse === (readiness.viewer_response ?? null)
       ? readiness
@@ -805,7 +802,6 @@ function RespondableControls({
  */
 export function withViewerPosition({
   positions,
-  responseKind,
   serverPosition,
   viewerPosition,
   viewerSpaceId,
@@ -813,7 +809,6 @@ export function withViewerPosition({
   viewerAvatarUrl,
 }: {
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
   /**
    * The position geo-chat currently reports for the viewer, or `undefined` where it has not
    * answered — which is not the same as an answer of "no position". See `viewerResponseUnknown`.
@@ -849,7 +844,6 @@ export function withViewerPosition({
     positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
   if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
     // Not geo-chat's id for this user — we don't have it here. Keyed on the personal space instead,
     // which is unique per viewer and is what the avatar renders from anyway.
@@ -914,7 +908,7 @@ export function withViewerPosition({
   if (viewerPosition !== null && !adjusted.some(side => side.position === viewerPosition)) {
     adjusted.push({
       position: viewerPosition,
-      position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
+      position_label: responsePositionLabel(viewerPosition),
       total_count: 1,
       available_now_count: 0,
       present_count: 1,
@@ -1019,7 +1013,7 @@ export function PositionRow({
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
 
@@ -1057,9 +1051,10 @@ export function PositionRow({
             the width the pill had as a grid item. */}
         <div className="flex flex-col">
           <PositionButton
-            // Server labels win when a side has responders; otherwise fall back to the vocabulary for
-            // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
-            label={forSide?.position_label ?? copy.positiveAction}
+            // This app's vocabulary, not the server's. A side's `position_label` used to win where
+            // it had one, which would now let geo-chat print "Verify" on a claim minted before the
+            // vocabularies merged — a word this app has no way to publish any more.
+            label={copy.positiveAction}
             summary={forSide}
             responseKind={responseKind}
             position
@@ -1072,7 +1067,7 @@ export function PositionRow({
         </div>
         <div className="flex flex-col">
           <PositionButton
-            label={againstSide?.position_label ?? copy.negativeAction}
+            label={copy.negativeAction}
             summary={againstSide}
             responseKind={responseKind}
             position={false}

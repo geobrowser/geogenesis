@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -140,7 +140,7 @@ export function ClaimPositionCommentControl({
     setIsSubmitting(false);
   };
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const action = promptedPosition === null ? null : promptedPosition ? copy.positiveAction : copy.negativeAction;
 
   return (

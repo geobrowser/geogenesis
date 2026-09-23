@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   /** The crowd's share of positive responses, or null on a claim nobody has answered. */
   percent: null as number | null,
-  responseKind: 'stance' as 'stance' | 'veracity',
+  responseKind: 'stance' as const,
   respond: vi.fn(),
 }));
 
@@ -215,15 +215,17 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('65% agree')).toBeInTheDocument();
   });
 
-  // "65% agree" on "the SEC sued Coinbase" is the wrong sentence; the share takes the same verb
-  // the rest of the app uses for the claim's own vocabulary.
-  it("reads the share with the claim's own vocabulary verb", () => {
+  // This used to read "65% verify" on a factual claim, from that claim's own vocabulary. There is
+  // one vocabulary now, so the share says "agree" whatever the claim is flagged as — asserted here
+  // on the case that used to differ.
+  it('reads the share with agree even on a claim geo-chat still calls factual', () => {
     mocks.percent = 65;
-    mocks.responseKind = 'veracity';
+    mocks.responseKind = 'veracity' as 'stance';
 
     renderCard();
 
-    expect(screen.getByText('65% verify')).toBeInTheDocument();
+    expect(screen.getByText('65% agree')).toBeInTheDocument();
+    expect(screen.queryByText('65% verify')).not.toBeInTheDocument();
   });
 
   // A genuine 0% and "nobody has answered" are different statements, and the great majority of

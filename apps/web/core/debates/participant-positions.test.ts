@@ -46,8 +46,8 @@ const REMOTE: DebateRematchParticipant = {
 
 describe('fetchParticipantPositions', () => {
   // Positions are on-chain claim responses, which the graph indexes as `userVotes` keyed on the
-  // responder's personal space. One filter for both people, active responses only, both kinds.
-  it('asks for both participants’ active stance and veracity responses in one filter', async () => {
+  // responder's personal space. One filter for both people, active responses only.
+  it('asks for both participants’ active stance responses in one filter', async () => {
     const fetchPage = vi.fn().mockResolvedValue([]);
 
     await fetchParticipantPositions([LOCAL.profile_space_id, REMOTE.profile_space_id], undefined, fetchPage);
@@ -57,7 +57,8 @@ describe('fetchParticipantPositions', () => {
       userId: { in: [LOCAL.profile_space_id, REMOTE.profile_space_id] },
       objectType: { is: 0 },
       voteType: { in: [0, 1] },
-      voteKind: { in: [1, 2] },
+      // Kind 2 — the retired veracity responses — is deliberately not asked for.
+      voteKind: { in: [1] },
     });
   });
 
@@ -67,9 +68,10 @@ describe('fetchParticipantPositions', () => {
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
-  it('decodes rows into sides, dropping anything that is not an active stance or veracity response', async () => {
+  it('decodes rows into sides, dropping anything that is not an active stance response', async () => {
     const fetchPage = vi.fn().mockResolvedValue([
       { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 1 },
+      // A retired veracity response. It is no longer a position this app reports.
       { userId: REMOTE.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 2 },
       // A curation vote is not a position.
       { userId: REMOTE.profile_space_id, objectId: 'claim-2', spaceId: 'space-1', voteType: 0, voteKind: 0 },
@@ -86,13 +88,6 @@ describe('fetchParticipantPositions', () => {
         spaceId: 'space-1',
         responseKind: 'stance',
         position: true,
-      },
-      {
-        profileSpaceId: REMOTE.profile_space_id,
-        claimId: 'claim-1',
-        spaceId: 'space-1',
-        responseKind: 'veracity',
-        position: false,
       },
     ]);
   });

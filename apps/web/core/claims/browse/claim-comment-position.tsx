@@ -42,7 +42,7 @@ export function ClaimCommentPositionBoundary({
   children: React.ReactNode;
 }) {
   const { entity } = useQueryEntity({ id: entityId, spaceId });
-  const responseKind = resolveEntityResponseKind(entity, spaceId);
+  const responseKind = resolveEntityResponseKind(entity);
   const summary = useClaimResponseSummary(entityId, spaceId, responseKind, responseKind !== 'curation');
 
   if (responseKind === 'curation') return children;
@@ -90,8 +90,7 @@ export function ClaimCommentPositionProvider({
   // the indexed viewer query is unresolved. Null needs the extra state: after a successful read it
   // means an explicit clear, but while loading (or after failure) it means "unknown" and must not
   // remove the viewer from the independently indexed responder list.
-  const viewerResponseOverlay =
-    viewerDirection ?? (isViewerResponseLoading ? undefined : null);
+  const viewerResponseOverlay = viewerDirection ?? (isViewerResponseLoading ? undefined : null);
   const { responders } = useEntityResponders({
     entityId,
     spaceId,
@@ -129,7 +128,7 @@ export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: st
         positive ? 'bg-successTertiary' : 'bg-errorTertiary'
       )}
     >
-      {responsePositionLabel(context.responseKind, positive)}
+      {responsePositionLabel(positive)}
     </span>
   );
 }

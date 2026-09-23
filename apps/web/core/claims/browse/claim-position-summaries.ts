@@ -11,14 +11,11 @@ import { type ActiveResponseDirection, responsePositionLabel } from '~/core/resp
  *
  * The on-chain summary resolves independently of geo-chat, so it can stand in for both cases.
  */
-export function viewerResponseFromDirection(
-  direction: ActiveResponseDirection | null,
-  responseKind: 'stance' | 'veracity'
-): DebateResponseSummary | null {
+export function viewerResponseFromDirection(direction: ActiveResponseDirection | null): DebateResponseSummary | null {
   if (direction === null) return null;
 
   const position = direction === 'positive';
-  return { position, position_label: responsePositionLabel(responseKind, position) };
+  return { position, position_label: responsePositionLabel(position) };
 }
 
 /**
@@ -28,15 +25,13 @@ export function viewerResponseWithIndexedFallback({
   viewerResponse,
   indexedDirection,
   isIndexedLoading,
-  responseKind,
 }: {
   viewerResponse: DebateResponseSummary | null | undefined;
   indexedDirection: ActiveResponseDirection | null | undefined;
   isIndexedLoading: boolean;
-  responseKind: 'stance' | 'veracity';
 }): DebateResponseSummary | null {
   if (viewerResponse || isIndexedLoading) return viewerResponse ?? null;
-  return viewerResponseFromDirection(indexedDirection ?? null, responseKind);
+  return viewerResponseFromDirection(indexedDirection ?? null);
 }
 
 /**
@@ -55,7 +50,6 @@ export function viewerResponseWithIndexedFallback({
 export function positionSummariesFromCounts(
   positive: number,
   negative: number,
-  responseKind: 'stance' | 'veracity',
   row: DebateClaim | null
 ): DebateClaimPositionSummary[] {
   return [true, false].map(position => {
@@ -64,8 +58,14 @@ export function positionSummariesFromCounts(
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
-      position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
+      // Our label, not geo-chat's.
+      //
+      // This used to prefer `choice.position_label` so that an authoritative Verify/Dispute
+      // survived. That is exactly what must not happen now: geo-chat still labels the sides of a
+      // claim minted before the vocabularies merged, so deferring to it would put "Verify" back on
+      // a pill this app no longer has a way to publish. The two sides of a claim are Agree and
+      // Disagree, and that is not geo-chat's to override.
+      position_label: responsePositionLabel(position),
       total_count: count,
       available_now_count: choice?.participant_count ?? 0,
       present_count: choice?.participants.length ?? 0,

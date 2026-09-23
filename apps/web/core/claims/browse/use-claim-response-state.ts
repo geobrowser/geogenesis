@@ -6,18 +6,18 @@ import type {
   DebateClaim,
   DebateClaimPositionSummary,
   DebateClaimSummary,
+  DebateResponseKind,
   MatchmakingReadiness,
 } from '~/core/debates/api';
 import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
-import { claimResponseKind } from '../response-kind';
 import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 
 export type ClaimResponseState = {
   /** Which vocabulary labels the sides: Agree/Disagree, or Verify/Dispute on a factual claim. */
-  responseKind: 'stance' | 'veracity';
+  responseKind: DebateResponseKind;
   /**
    * Whether `responseKind` is an answer or still the fallback.
    *
@@ -74,22 +74,16 @@ export type ClaimResponseState = {
  * differ is what happens to them afterwards, which is all of this.
  */
 /**
- * Which vocabulary a claim uses, from the two sources that can answer.
+ * Which vocabulary a claim uses. There is only one: Agree/Disagree.
  *
- * geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index. The
- * order matters and has to be the same everywhere, because this kind selects `voteKind` on both the
- * count query and the write — a surface that resolved it differently would count one vote kind
- * while publishing another, which is a bug this codebase has already had.
- *
- * Exported for the space claims page, which needs every claim's kind before it renders any of them
- * in order to batch the response reads. Everything else gets it from {@link useClaimResponseState}.
+ * Kept as a function, and still called where a kind is needed, because the thing it guarantees is
+ * worth a name — every claim surface publishes and counts the *same* vote kind. This used to read
+ * geo-chat's row first and the graph's "Is factual" flag second, and the order mattered: resolving
+ * it differently on one surface meant counting one vote kind while publishing another, a bug this
+ * codebase has already had. A constant cannot have that bug.
  */
-export function resolveClaimResponseKind(
-  row: Pick<DebateClaim, 'response_kind'> | null,
-  entity: Entity | null,
-  spaceId: string
-): 'stance' | 'veracity' {
-  return row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
+export function resolveClaimResponseKind(): DebateResponseKind {
+  return 'stance';
 }
 
 export function useClaimResponseState({
@@ -113,7 +107,7 @@ export function useClaimResponseState({
   /** False to hold the response reads back — a feed card below the fold. */
   enabled?: boolean;
 }): ClaimResponseState {
-  const responseKind = resolveClaimResponseKind(row, entity, spaceId);
+  const responseKind = resolveClaimResponseKind();
   const isResponseKindResolved = row !== null || entity !== null;
 
   // An unpublished edit to the claim's own vocabulary blocks responding, as it did before.
@@ -153,8 +147,8 @@ export function useClaimResponseState({
   );
 
   const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
+    () => positionSummariesFromCounts(summary.positive, summary.negative, row),
+    [row, summary.negative, summary.positive]
   );
 
   const readiness = React.useMemo(
@@ -168,7 +162,6 @@ export function useClaimResponseState({
         viewerResponse: row?.viewer_response,
         indexedDirection: summary.indexedViewerDirection,
         isIndexedLoading: summary.isViewerResponseLoading,
-        responseKind,
       }),
       viewer_debate_ready: row?.viewer_debate_ready ?? false,
       readiness_disabled_reason: row?.readiness_disabled_reason ?? null,

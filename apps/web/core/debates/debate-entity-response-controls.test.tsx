@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DebateEntityResponseControls } from './debate-entity-response-controls';
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ responseKind }: { responseKind?: 'stance' | 'veracity' | null }) => (
+  EntityVoteButtons: ({ responseKind }: { responseKind?: 'stance' | null }) => (
     <span>{responseKind ?? 'unavailable'}</span>
   ),
 }));
@@ -15,9 +15,9 @@ afterEach(cleanup);
 
 describe('DebateEntityResponseControls', () => {
   it('passes the backend response kind to the shared response controls', () => {
-    render(<DebateEntityResponseControls entityId="claim-1" spaceId="space-1" responseKind="veracity" />);
+    render(<DebateEntityResponseControls entityId="claim-1" spaceId="space-1" responseKind="stance" />);
 
-    expect(screen.getByText('veracity')).toBeInTheDocument();
+    expect(screen.getByText('stance')).toBeInTheDocument();
   });
 
   it('preserves an unavailable backend response kind instead of inferring curation', () => {
