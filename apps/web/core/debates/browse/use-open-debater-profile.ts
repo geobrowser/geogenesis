@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { DebateParticipant } from '~/core/debates/api';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { getSpaceSubtopicRootEntityId } from '~/core/utils/space/spaces';
 
 /**
  * Opens a debater's personal space in the side panel.
@@ -23,7 +24,7 @@ export function useOpenDebaterProfile(participant: Pick<DebateParticipant, 'prof
   const { space } = useSpace(profileSpaceId);
   // Prefer the declared topic even when its nested entity failed to decode and `space.entity` fell
   // back to the page. Never fall back to the space id: that id is the system entity, not the person.
-  const profileEntityId = space?.topicId || space?.entity.id;
+  const profileEntityId = space ? getSpaceSubtopicRootEntityId(space) : null;
   const pendingSpaceIdRef = React.useRef<string | null>(null);
 
   const openResolvedProfile = React.useCallback(() => {

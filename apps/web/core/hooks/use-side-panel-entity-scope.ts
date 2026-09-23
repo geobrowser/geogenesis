@@ -5,11 +5,15 @@ import * as React from 'react';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
+type SidePanelEntityScopeOptions = {
+  preferRequestedSpace: boolean;
+  forceRequestedSpace?: boolean;
+};
+
 export function useSidePanelEntityScope(
   entityId: string,
   requestedSpaceId: string,
-  preferRequestedSpace: boolean,
-  forceRequestedSpace = false
+  { preferRequestedSpace, forceRequestedSpace = false }: SidePanelEntityScopeOptions
 ) {
   const { entity: unscopedEntity, isLoading: isLoadingHydration } = useQueryEntity({
     id: entityId,

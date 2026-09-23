@@ -22,6 +22,7 @@ const { useOpenDebaterProfile } = await import('./use-open-debater-profile');
 const PERSONAL_SPACE_ID = '11111111111111111111111111111111';
 const TOPIC_ENTITY_ID = '22222222222222222222222222222222';
 const PAGE_ENTITY_ID = '33333333333333333333333333333333';
+const OTHER_PERSONAL_SPACE_ID = '44444444444444444444444444444444';
 
 function click(result: { current: (event: React.MouseEvent) => void }) {
   const stopPropagation = vi.fn();
@@ -71,5 +72,19 @@ describe('useOpenDebaterProfile', () => {
     expect(mocks.openSidePanel).toHaveBeenCalledWith(TOPIC_ENTITY_ID, PERSONAL_SPACE_ID, false, {
       forceRequestedSpace: true,
     });
+  });
+
+  it('does not carry a pending click over to a different participant', () => {
+    const { result, rerender } = renderHook(
+      ({ profileSpaceId }: { profileSpaceId: string }) => useOpenDebaterProfile({ profile_space_id: profileSpaceId }),
+      { initialProps: { profileSpaceId: PERSONAL_SPACE_ID } }
+    );
+
+    click(result);
+    rerender({ profileSpaceId: OTHER_PERSONAL_SPACE_ID });
+    mocks.space = { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } };
+    rerender({ profileSpaceId: OTHER_PERSONAL_SPACE_ID });
+
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
   });
 });

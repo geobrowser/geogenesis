@@ -290,12 +290,10 @@ export function EntitySidePanelSurface({
   onClose: () => void;
 }) {
   const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
-  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(
-    entityId,
-    requestedSpaceId,
+  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId, {
     preferRequestedSpace,
-    forceRequestedSpace
-  );
+    forceRequestedSpace,
+  });
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   return (

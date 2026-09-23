@@ -40,14 +40,21 @@ beforeEach(() => {
 
 describe('useSidePanelEntityScope', () => {
   it('keeps an explicitly forced personal-space scope for a multi-space entity', () => {
-    const { result } = renderHook(() => useSidePanelEntityScope(ENTITY_ID, PERSONAL_SPACE_ID, false, true));
+    const { result } = renderHook(() =>
+      useSidePanelEntityScope(ENTITY_ID, PERSONAL_SPACE_ID, {
+        preferRequestedSpace: false,
+        forceRequestedSpace: true,
+      })
+    );
 
     expect(result.current.effectiveSpaceId).toBe(PERSONAL_SPACE_ID);
     expect(mocks.calls.at(-1)?.spaceId).toBe(PERSONAL_SPACE_ID);
   });
 
   it('continues deriving the normal home space when the caller does not force a scope', () => {
-    const { result } = renderHook(() => useSidePanelEntityScope(ENTITY_ID, PERSONAL_SPACE_ID, false));
+    const { result } = renderHook(() =>
+      useSidePanelEntityScope(ENTITY_ID, PERSONAL_SPACE_ID, { preferRequestedSpace: false })
+    );
 
     expect(result.current.effectiveSpaceId).toBe(HIGHER_RANKED_SPACE_ID);
   });
