@@ -97,9 +97,10 @@ import { validateEntityId } from '~/core/utils/utils';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
+import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { RematchVoicePill } from './rematch-voice';
+import { RematchVoiceHeader } from './rematch-voice';
 import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
@@ -146,15 +147,6 @@ function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId
   }
 
   return ids;
-}
-
-/**
- * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
- * A name already ending in s takes the bare apostrophe: "Chris" -> "Chris’".
- */
-function firstNamePossessive(name: string) {
-  const firstName = name.trim().split(/\s+/)[0] || name;
-  return firstName.endsWith('s') ? `${firstName}’` : `${firstName}’s`;
 }
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
@@ -1972,43 +1964,63 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
         <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
-          <header className="mb-4 flex items-center justify-between gap-4">
-            <h1 className="sr-only">Rematch {remoteName}</h1>
+          <h1 className="sr-only">Rematch {remoteName}</h1>
+          {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
+              where the unmute control lives now — the 200px dock it replaced was pinned to the
+              bottom-right corner of the viewport, outside the column, and people were not finding
+              it. Inside the sticky block on purpose: the claim list pages forever, and a control
+              that scrolls away has the dock's problem in a different place. */}
+          {session && currentUserId ? (
+            <div className="mb-4">
+              <RematchVoiceHeader session={session} currentUserId={currentUserId} />
+            </div>
+          ) : null}
+          <header className="mb-4 flex items-end justify-between gap-4">
             {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
-                reaches the end from chaining into the browser's back gesture. */}
-            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
-              {/* First, because it is where the pair land: a tab strip that opens on its second
-                  item reads as though something moved. Rendered while the count is still out too —
-                  see `relatedOffered` for why the slot is held rather than filled late. */}
-              {relatedOffered ? (
-                <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
-                  Related
+                reaches the end from chaining into the browser's back gesture. The baseline sits
+                outside that scroller so it spans the row rather than the tabs' own width. */}
+            <div className="relative min-w-0 flex-1">
+              <div className="no-scrollbar flex items-center gap-6 overflow-x-auto overscroll-x-contain pb-2">
+                {/* First, because it is where the pair land: a tab strip that opens on its second
+                    item reads as though something moved. Rendered while the count is still out too —
+                    see `relatedOffered` for why the slot is held rather than filled late. */}
+                {relatedOffered ? (
+                  <TabButton active={tab === 'related'} onClick={() => setTab('related')}>
+                    Related
+                  </TabButton>
+                ) : null}
+                <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
+                  {/* "Lobby", not "{Name}'s positions" (GEO-2992). The header now says whose room
+                      this is, in their own words and with their face, so the tab no longer has to
+                      carry the name — and a fixed label keeps the strip from reflowing when it
+                      lands. Same list underneath: what this opponent has already taken a side on. */}
+                  Lobby
+                  <span
+                    className={cx(
+                      'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
+                      tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+                    )}
+                  >
+                    {/* The badge keeps its size either way, so the strip doesn't reflow when the
+                        number lands. See `opponentCountPending`: a skeleton says "still counting",
+                        where `0` said "none" and was usually wrong. */}
+                    {opponentCountPending ? (
+                      <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
+                    ) : (
+                      opponentPositionCount
+                    )}
+                  </span>
                 </TabButton>
-              ) : null}
-              <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
-                <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
-                <span
-                  className={cx(
-                    'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
-                    tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
-                  )}
-                >
-                  {/* The badge keeps its size either way, so the strip doesn't reflow when the
-                      number lands. See `opponentCountPending`: a skeleton says "still counting",
-                      where `0` said "none" and was usually wrong. */}
-                  {opponentCountPending ? (
-                    <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
-                  ) : (
-                    opponentPositionCount
-                  )}
-                </span>
-              </TabButton>
-              {/* Named for the hub's browse tab: the wider catalogue you reach for once neither the
-                  opponent's positions nor the debate you just had is what you want. */}
-              <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>
-                Explore
-              </TabButton>
+                {/* Named for the hub's browse tab: the wider catalogue you reach for once neither the
+                    opponent's positions nor the debate you just had is what you want. */}
+                <TabButton active={tab === 'explore'} onClick={() => setTab('explore')}>
+                  Explore
+                </TabButton>
+              </div>
+              {/* The hub panel's baseline: a hairline the whole row sits on, with the active tab's
+                  1px marker drawn over it. */}
+              <div aria-hidden className="h-px bg-grey-02" />
             </div>
             <button
               type="button"
@@ -2016,7 +2028,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               title="Leave debate"
               onClick={leave}
               disabled={leaveSession.isPending}
-              className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+              className="mb-1 grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
             >
               <LeaveIcon />
             </button>
@@ -2231,8 +2243,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
         ) : null}
       </main>
-
-      {session && currentUserId && <RematchVoicePill session={session} currentUserId={currentUserId} />}
 
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
@@ -2697,6 +2707,13 @@ function rematchCancellationMessage(reason: string) {
   }
 }
 
+/**
+ * The debates hub panel's tab, reused here (GEO-2992).
+ *
+ * Two surfaces that do the same job had two different tab treatments — a 1.4rem strip here, the
+ * hub's `text-quoteMedium` row with an underlined active tab there. `tabGroupTabLinkStyles` is the
+ * hub's, so this row now reads as the same control in a second place rather than as its own thing.
+ */
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -2706,14 +2723,15 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       // `tablist` around them, and `aria-selected` is not supported on a button — it was being
       // dropped, so nothing announced which tab was active.
       aria-pressed={active}
-      className={cx(
-        // `shrink-0` so a narrow screen scrolls the strip rather than squeezing three tabs into
-        // the width of one; `whitespace-nowrap` so a two-word tab can't wrap into two lines.
-        'flex shrink-0 items-center gap-2 text-[1.4rem] leading-tight font-medium whitespace-nowrap transition-colors',
-        active ? 'text-text' : 'text-grey-03 hover:text-grey-04'
-      )}
+      // `shrink-0` so a narrow screen scrolls the strip rather than squeezing three tabs into the
+      // width of one. The rest — `text-quoteMedium`, the active/inactive colours, `whitespace-nowrap`
+      // — comes from the shared styles.
+      className={cx(tabGroupTabLinkStyles({ active }), 'shrink-0')}
     >
       {children}
+      {/* Drawn over the row's baseline rather than instead of it, so the marker and the hairline
+          line up exactly. `-bottom-2` is the strip's own `pb-2`. */}
+      {active ? <span aria-hidden className="absolute inset-x-0 -bottom-2 h-px bg-text" /> : null}
     </button>
   );
 }
