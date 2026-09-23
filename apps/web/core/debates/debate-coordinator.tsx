@@ -35,7 +35,6 @@ import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { isDebateRoomPath } from './rooms/room-routes';
-import { isRoomSession, useRoomSessionIds } from './rooms/room-sessions';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -214,13 +213,22 @@ export function DebateCoordinator() {
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
   const atRoom = isDebateRoomPath(pathname);
-  const roomSessionIds = useRoomSessionIds();
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
-  const joinableRooms = React.useMemo(
-    () => (upcomingRoomsQuery.data?.rooms ?? []).filter(room => room.joinable),
-    [upcomingRoomsQuery.data]
+  const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
+  const joinableRooms = React.useMemo(() => upcomingRooms.filter(room => room.joinable), [upcomingRooms]);
+  // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
+  // from a challenge's on every device. A joinable room with none yet may be about to hand one out.
+  const roomSessionIds = React.useMemo(
+    () => new Set(upcomingRooms.flatMap(room => (room.rematch_session_id ? [room.rematch_session_id] : []))),
+    [upcomingRooms]
   );
+  const hasRoomAwaitingSession = joinableRooms.some(room => room.rematch_session_id === null);
+  const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
+  // One refetch per session before routing on it, and a tick so the effect re-runs even when the
+  // refetch changes nothing.
+  const checkedSessionRef = React.useRef<string | null>(null);
+  const [roomsChecked, setRoomsChecked] = React.useState(0);
   // `activeFlow` for the same reason every other prompt here carries it: a debate that overruns
   // into the next slot must not get a Join button floating over a recording, one click from
   // leaving it. That is prompt 2's job, and prompt 2 is gated on recording state (GEO-2946).
@@ -315,7 +323,14 @@ export function DebateCoordinator() {
     if (!hasAttention) return;
     // Never out of, or on behalf of, a room (GEO-2941). Keyed on the session itself, so a
     // challenge's rematch still routes normally while a room is open.
-    if (atRoom || isRoomSession(rematch.id)) return;
+    if (atRoom || roomSessionIds.has(rematch.id)) return;
+    // A joinable room with no session yet may have just minted this one on a join this tab has
+    // not heard about. Ask the server once before moving anyone.
+    if (hasRoomAwaitingSession && checkedSessionRef.current !== rematch.id) {
+      checkedSessionRef.current = rematch.id;
+      void refetchUpcomingRooms().finally(() => setRoomsChecked(tick => tick + 1));
+      return;
+    }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       const path = debateRematchPath(rematch);
       if (pathname !== path) {
@@ -325,9 +340,17 @@ export function DebateCoordinator() {
     }
     // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
     // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
-    // `roomSessionIds` is in the deps so a session learned after this ran re-evaluates rather than
-    // routing on a stale answer.
-  }, [activity, atRoom, hasAttention, pathname, roomSessionIds, router]);
+  }, [
+    activity,
+    atRoom,
+    hasAttention,
+    hasRoomAwaitingSession,
+    pathname,
+    refetchUpcomingRooms,
+    roomSessionIds,
+    roomsChecked,
+    router,
+  ]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);

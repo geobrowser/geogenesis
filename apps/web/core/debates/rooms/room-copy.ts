@@ -70,6 +70,9 @@ export const ROOM_SESSION_ENDED = {
   action: 'Find a debate',
 } as const;
 
+/** Under a disabled Request debate in a room, while the opponent has not arrived. */
+export const ROOM_REQUEST_WAITING = 'Waiting for your opponent to arrive';
+
 /** The popup on Explore after a redirect. A stale calendar link produces the second reason. */
 export const ROOM_NO_ACCESS = {
   denied: 'That debate isn’t yours to join.',

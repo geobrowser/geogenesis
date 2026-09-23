@@ -19,9 +19,9 @@ const ROOM_POLL_MS = 3_000;
 /** The join prompt is ambient rather than urgent, and the window it watches is minutes wide. */
 const UPCOMING_ROOMS_POLL_MS = 30_000;
 
-/** An arrival nobody recorded counts towards a no-show, so a dropped join is worth re-sending. */
-const JOIN_RETRIES = 3;
-const JOIN_RETRY_MS = 2_000;
+/** Both halves of presence are worth re-sending: an unrecorded arrival or departure misleads the opponent. */
+const PRESENCE_RETRIES = 3;
+const PRESENCE_RETRY_MS = 2_000;
 
 export function useDebateRoom(roomId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -61,17 +61,43 @@ function fallbackUuid() {
 }
 
 /**
+ * Every presence request this document sends, in order. Wire order has to equal call order: a join
+ * still in flight when the leave is sent would otherwise land after it, and occupancy is the latest
+ * event per connection. StrictMode's mount, cleanup, mount is exactly that sequence.
+ */
+let presenceQueue: Promise<unknown> = Promise.resolve();
+
+function enqueuePresence<T>(task: () => Promise<T>): Promise<T> {
+  const next = presenceQueue.catch(() => undefined).then(task);
+  presenceQueue = next.catch(() => undefined);
+  return next;
+}
+
+/** A few tries with a growing gap. `shouldStop` lets a cancelled join give up between attempts. */
+async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = () => false): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      if (attempt >= PRESENCE_RETRIES || shouldStop()) throw error;
+      await new Promise(resolve => setTimeout(resolve, PRESENCE_RETRY_MS * (attempt + 1)));
+    }
+  }
+}
+
+/**
  * Announces arrival once admitted, and departure on both exits: unmount is navigating within the
- * app, `pagehide` is closing the tab. A duplicate leave changes nothing. The leave is built inside
- * the effect, since a ref written during render already holds the next room by cleanup time.
+ * app, `pagehide` is closing the tab. A duplicate leave changes nothing. Everything the leave
+ * needs is captured inside the effect: a ref written during render already holds the next room by
+ * cleanup time.
  */
 export function useRoomPresence(roomId: string, admitted: boolean) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const connectionId = useConnectionId();
 
-  // `getPrivyIdentityToken` is not referentially stable, and it only reads the current session, so
-  // holding it in a ref keeps a token refresh from re-running the join/leave pair.
+  // `getPrivyIdentityToken` only reads the current session, so holding it in a ref keeps a token
+  // refresh from re-running the join/leave pair.
   const tokenRef = React.useRef(getPrivyIdentityToken);
   tokenRef.current = getPrivyIdentityToken;
 
@@ -79,58 +105,49 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     if (!admitted) return;
 
     const send = (joined: boolean, keepalive = false) =>
-      setDebateRoomPresence(
-        roomId,
-        { connection_id: connectionId, joined },
-        () => tokenRef.current(),
-        accountKey,
-        keepalive
+      enqueuePresence(() =>
+        setDebateRoomPresence(
+          roomId,
+          { connection_id: connectionId, joined },
+          () => tokenRef.current(),
+          accountKey,
+          keepalive
+        )
       );
 
     let cancelled = false;
-    let retry: ReturnType<typeof setTimeout> | undefined;
-    // Occupancy is last-event-per-connection, so a join still on the wire when the leave is sent
-    // can land after it and leave the viewer an occupant nothing will ever clear.
-    let inFlight: Promise<unknown> = Promise.resolve();
 
-    const announce = (attempt = 0) => {
-      // Both guards matter on the way out: a chain started before cleanup must not re-occupy the
-      // room afterwards, and `pageshow` starting a second chain must not orphan the first one's
-      // timer past the single `clearTimeout` in cleanup.
-      if (cancelled) return;
-      clearTimeout(retry);
-      inFlight = send(true)
+    // An arrival nobody recorded is invisible to the opponent and counts towards a no-show, so a
+    // dropped join is retried rather than swallowed. A refusal is reported by the room query's own
+    // `access`, which is the surface that explains it.
+    const announce = () =>
+      withRetry(
+        () => send(true),
+        () => cancelled
+      )
         .then(room => {
           if (!cancelled) queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
         })
-        .catch(() => {
-          // A refusal is reported by the room query's own `access`. A dropped request is not, and
-          // an unannounced arrival is invisible to the opponent and counts towards a no-show, so
-          // it is retried rather than swallowed.
-          if (cancelled || attempt >= JOIN_RETRIES) return;
-          retry = setTimeout(() => announce(attempt + 1), JOIN_RETRY_MS * (attempt + 1));
-        });
-    };
+        .catch(() => undefined);
 
-    announce();
+    void announce();
 
-    // `pageshow` is how a bfcached document comes back, restored without re-running effects — so
+    // A departure nobody recorded leaves the opponent looking at "is here" indefinitely, so the
+    // unmount leave is retried too. `pagehide` gets one keepalive attempt: there is no later.
+    const departOnce = () => void send(false, true).catch(() => undefined);
+    // `pageshow` is how a bfcached document comes back, restored without re-running effects, so
     // without it a back navigation reports a departure nothing ever takes back.
-    // `keepalive`, so the request survives the document being torn down. Nothing else records a
-    // departure: occupancy is an event log with no staleness window on the server.
-    const depart = () => void inFlight.catch(() => {}).then(() => send(false, true).catch(() => {}));
     const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) announce();
+      if (event.persisted) void announce();
     };
 
-    window.addEventListener('pagehide', depart);
+    window.addEventListener('pagehide', departOnce);
     window.addEventListener('pageshow', restore);
     return () => {
       cancelled = true;
-      clearTimeout(retry);
-      window.removeEventListener('pagehide', depart);
+      window.removeEventListener('pagehide', departOnce);
       window.removeEventListener('pageshow', restore);
-      void inFlight.catch(() => {}).then(() => send(false, true).catch(() => {}));
+      void withRetry(() => send(false, true)).catch(() => undefined);
     };
   }, [accountKey, admitted, connectionId, queryClient, roomId]);
 

@@ -48,6 +48,12 @@ export type DebateRequestGateInput = {
 
 export type DebateRequestGate = {
   canRequest: boolean;
+  /**
+   * The request is the right offer and the position is settled; only the room has not said the
+   * opponent is there. Rendered disabled rather than hidden, since the button is what state 3
+   * turns on.
+   */
+  awaitingOpponent: boolean;
   /** The request is the right offer to make, but geo-chat does not agree about the position yet. */
   pending: boolean;
   /** What to call the wait, or `null` when there is nothing to wait for. */
@@ -78,6 +84,7 @@ export function debateRequestGate({
 
   return {
     canRequest: opponentReady && positionSettled && opponentPresent,
+    awaitingOpponent: opponentReady && positionSettled && !opponentPresent,
     pending,
     pendingLabel: pending ? (indexingDelayed ? REQUEST_PENDING_DELAYED_LABEL : REQUEST_PENDING_LABEL) : null,
   };

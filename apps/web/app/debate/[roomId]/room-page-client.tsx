@@ -17,7 +17,6 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_NOT_YET_OPEN } from '~/core/debates/rooms/room-copy';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { rememberRoomSession } from '~/core/debates/rooms/room-sessions';
 
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
@@ -54,13 +53,6 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   useRoomPresence(roomId, admitted);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
-
-  // So the coordinator can tell this session from a challenge's and leave it alone. See
-  // `room-sessions`.
-  const sessionId = room?.rematch_session_id ?? null;
-  React.useEffect(() => {
-    if (sessionId) rememberRoomSession(sessionId);
-  }, [sessionId]);
 
   // Nothing renders for someone not in this room: not a degraded room, and not a 404 — the link is
   // valid, they are just not in this one.

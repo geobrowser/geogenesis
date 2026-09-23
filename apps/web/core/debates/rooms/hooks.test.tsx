@@ -118,4 +118,32 @@ describe('useRoomPresence', () => {
     expect(leave?.[4]).toBe(true);
     spy.mockRestore();
   });
+
+  // Occupancy is the latest event per connection, so a join still on the wire when the leave goes
+  // out would land after it and leave the viewer an occupant. StrictMode's mount, cleanup, mount is
+  // exactly that sequence.
+  it('sends the leave only after an in-flight join has settled', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    // Held on an object so TypeScript does not narrow it to `null` past the closure assignment.
+    const join: { settle: (() => void) | null } = { settle: null };
+    const spy = vi.spyOn(api, 'setDebateRoomPresence').mockImplementation((_room, body) =>
+      body.joined
+        ? new Promise(resolve => {
+            join.settle = () => resolve({} as never);
+          })
+        : Promise.resolve({} as never)
+    );
+
+    const { unmount } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    unmount();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    join.settle?.();
+    await vi.waitFor(() => expect(spy.mock.calls.some(call => call[1].joined === false)).toBe(true));
+    spy.mockRestore();
+  });
 });

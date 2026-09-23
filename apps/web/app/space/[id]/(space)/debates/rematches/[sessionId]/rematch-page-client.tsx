@@ -73,6 +73,7 @@ import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import { ROOM_REQUEST_WAITING } from '~/core/debates/rooms/room-copy';
 import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
@@ -2460,6 +2461,8 @@ function RematchClaimCard({
     indexingDelayed: responseIndexing.status === 'delayed',
   });
   const canRequest = requestGate.canRequest;
+  // In a room the button is what state 3 turns on, so it stays on screen, disabled, until then.
+  const awaitingOpponent = requestGate.awaitingOpponent;
   const awaitingResponse = requestGate.pending;
   const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
@@ -2514,7 +2517,7 @@ function RematchClaimCard({
       // Only when there is something to offer, the same way the side panel renders its control only
       // once a match exists. Rendering it unconditionally put a dead disabled button on every card.
       endSlot={
-        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
+        awaitingResponse || canRequest || awaitingOpponent || requesting || claim.recently_rejected ? (
           <RequestDebateControl
             onRequest={onRequest}
             disabled={!canRequest || busy || claim.recently_rejected}
@@ -2525,6 +2528,10 @@ function RematchClaimCard({
               claim.recently_rejected ? (
                 <Text as="span" variant="footnote" color="grey-04">
                   Recently rejected
+                </Text>
+              ) : awaitingOpponent ? (
+                <Text as="span" variant="footnote" color="grey-04">
+                  {ROOM_REQUEST_WAITING}
                 </Text>
               ) : null
             }

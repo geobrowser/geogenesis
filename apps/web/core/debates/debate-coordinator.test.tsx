@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
-import { clearRoomSessions, rememberRoomSession } from './rooms/room-sessions';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -44,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   clearDebateActivity: vi.fn(),
   rememberDebateReturnDestination: vi.fn(),
   upcomingRooms: [] as UpcomingDebateRoom[],
+  refetchRooms: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -75,7 +75,7 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./rooms/hooks', () => ({
-  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.upcomingRooms } }),
+  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.upcomingRooms }, refetch: mocks.refetchRooms }),
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -149,7 +149,7 @@ beforeEach(() => {
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
-  clearRoomSessions();
+  mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
@@ -617,7 +617,7 @@ describe('DebateCoordinator', () => {
     mocks.pathname = '/space/space-1/claims';
     const activity = activityWithRematch('browsing');
     mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
-    rememberRoomSession('rematch-1');
+    mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'rematch-1' })];
 
     render(<DebateCoordinator />);
 
@@ -629,12 +629,44 @@ describe('DebateCoordinator', () => {
   it('still pushes a challenge rematch while an unrelated room is open', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-unrelated' })];
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-unrelated', rematch_session_id: 'session-unrelated' })];
     const activity = activityWithRematch('browsing');
     mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
 
     render(<DebateCoordinator />);
 
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  // A joinable room with no session yet may have just minted this one on a join this tab has not
+  // heard about, so the server is asked once before anyone is moved.
+  it('checks the room list before pushing when a joinable room has no session yet', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+    mocks.refetchRooms.mockImplementation(async () => {
+      mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'rematch-1' })];
+    });
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.refetchRooms).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('still pushes once the room list shows the session is not a room’s', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.refetchRooms).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
@@ -1245,6 +1277,7 @@ function upcomingRoom(overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDeba
     joinable: true,
     due: false,
     others_present: false,
+    rematch_session_id: null,
     ...overrides,
   };
 }
