@@ -1334,6 +1334,11 @@ export function SpaceTopicFilters({
           onClear={onTopicsClear}
           clearLabel="Any topic"
           countsPending={countsPending}
+          // Only this menu takes a query. The space menu is the handful of spaces the viewer
+          // belongs to; the topic facet is every subject the corpus has been tagged with, which is
+          // a scrolling list on any space that has been used for a while.
+          searchPlaceholder="Search topics"
+          searchEmptyLabel="No topics match"
         />
       ) : null}
       {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases
