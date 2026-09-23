@@ -163,7 +163,9 @@ describe('DebateClaimTickerCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
 
-    expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false);
+    expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false, {
+      forceRequestedSpace: true,
+    });
   });
 
   // The video behind is one big play/pause button.
