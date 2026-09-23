@@ -1,9 +1,12 @@
+import { act, renderHook } from '@testing-library/react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createDebateAttentionStore,
   createDebateConnectionPresenceStore,
   createDebateVisibilityStore,
+  useDebatePresence,
 } from './debate-attention';
 
 describe('debate attention', () => {
@@ -301,5 +304,56 @@ describe('debate connection presence (GEO-2849)', () => {
   it('is present from the first read, before any event fires', () => {
     subscribe();
     expect(store.getSnapshot()).toBe(true);
+  });
+});
+
+// GEO-2849 was reversed on 2026-09-23: presence reads visibility again, with a longer grace than
+// polling uses. These two facts are the whole change, and both are a one-line edit away from being
+// undone by accident — the store the hook picks, and the number. Pinned here for that reason, and
+// asserted through the hook rather than the store so a swap back cannot pass.
+describe('useDebatePresence is visibility on a three-minute grace', () => {
+  let visibilityState: DocumentVisibilityState;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    visibilityState = 'visible';
+    vi.spyOn(document, 'hasFocus').mockImplementation(() => true);
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function hide() {
+    visibilityState = 'hidden';
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+
+  it('keeps a hidden tab present well past the sixty seconds polling uses, then drops it', () => {
+    const { result } = renderHook(() => useDebatePresence());
+    expect(result.current).toBe(true);
+
+    hide();
+    // The old grace. Dropping here would mean the hook is reading the polling store.
+    act(() => vi.advanceTimersByTime(179_000));
+    expect(result.current).toBe(true);
+
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(result.current).toBe(false);
+  });
+
+  // The regression that motivated the reversal: a tab that is merely open must not stay present
+  // forever. Under the connection store this stayed true for any duration.
+  it('does not treat an open-but-hidden tab as present indefinitely', () => {
+    const { result } = renderHook(() => useDebatePresence());
+
+    hide();
+    act(() => vi.advanceTimersByTime(60 * 60_000));
+
+    expect(result.current).toBe(false);
   });
 });
