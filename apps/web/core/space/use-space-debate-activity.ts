@@ -212,7 +212,9 @@ export function useSpaceActivityRowsInfinite(
 
   return {
     rows,
-    isLoading: query.isLoading,
+    // A disabled query reports pending, so the gate has to be read here too or a caller with no
+    // space to ask about waits on a request that was never made.
+    isLoading: spaceId !== '' && query.isLoading,
     isError: query.isError,
     /** Rows are on screen but describe the previous filters; the current ones are still out. */
     isPending: query.isPlaceholderData,
@@ -253,12 +255,14 @@ export function useSpaceClaimTopicFacet(spaceId: string, filters: SpaceActivityF
   const facet = useTaggedTopicFacet(
     DEBATE_TAG_ID,
     spaceTaggedClaimFilters(spaceId, filters),
-    enabled && spaceId !== '' && !filters.isSearchPending
+    enabled && spaceId !== '' && !filters.isSearchPending && filters.searchError == null
   );
 
-  // The options stay while the next set is counted, rather than the menu emptying under a reader
-  // who has it open. Reset on the space, because another space's topics are not these.
-  const topics = useLastSettled(facet.topics, !facet.settled && facet.error === null, spaceId);
+  // The options stay while the next set is counted — or fails — rather than the menu emptying
+  // under a reader who has it open. Reset on the space, because another space's topics are not
+  // these. Held on a failure too: the control staying put with its last numbers beats it vanishing
+  // beside an error about something else.
+  const topics = useLastSettled(facet.topics, !facet.settled, spaceId);
 
   return {
     topics,
@@ -266,13 +270,17 @@ export function useSpaceClaimTopicFacet(spaceId: string, filters: SpaceActivityF
     /** Whether there are counts to draw at all; the menu renders a row without one rather than a 0. */
     settled: facet.settled,
     /**
-     * The counts could not be read.
+     * The counts could not be read — by this query, or by the search it counts against.
      *
      * `settled` is false on a failure as well as during a load, so a caller driving skeletons off
      * it alone draws them forever. The menu is still usable without counts — the topics are named —
      * so a failure drops the numbers rather than the menu.
+     *
+     * The search half matters because its failure is invisible from here otherwise: the inner count
+     * query is disabled behind an unsettled search, a disabled query reports pending rather than
+     * failed, and `facet.error` stays null while nothing is ever coming.
      */
-    error: facet.error,
+    error: facet.error ?? filters.searchError ?? null,
   };
 }
 
@@ -332,11 +340,19 @@ export function useSpaceClaimSearch(search: string, enabled: boolean) {
   }, [atCap, fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   /**
-   * Still collecting: the viewer has typed since the last answer, the first page is out, or there
-   * are pages left to read. A failure is not settling — there is an error to draw, and holding the
-   * page dim behind it would say the list is still coming.
+   * Still collecting: the viewer has typed since the last answer, the first page is out, a page is
+   * in flight, or there are pages left to read.
+   *
+   * `isFetchingNextPage` is not covered by the clause beside it. `atCap` turns true as the last
+   * allowed request goes *out*, not when it comes back, and an infinite query with earlier pages
+   * reports `settled` throughout — so without this the hook called itself complete while the tenth
+   * page was still in flight, published nine pages as the whole answer, and fired the rows and the
+   * facet on it before firing them again when the tenth landed.
+   *
+   * A failure is not settling — there is an error to draw, and holding the page dim behind it
+   * would say the list is still coming.
    */
-  const settling = error === null && (pending || !settled || (hasNextPage && !atCap));
+  const settling = error === null && (pending || !settled || isFetchingNextPage || (hasNextPage && !atCap));
 
   /**
    * The rows are narrowed by the last *complete* id set.

@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   searchClaimIds: null as string[] | null,
   retrySearch: vi.fn(),
   retryRows: vi.fn(),
-  facetCalls: [] as { enabled: boolean; isSearchPending: boolean }[],
+  facetCalls: [] as { enabled: boolean; isSearchPending: boolean; sawSearchError: boolean }[],
   search: { isPending: false, error: null as Error | null },
   facet: { settled: true, error: null as Error | null },
   rows: [] as { entityId: string; spaceId: string }[],
@@ -48,8 +48,16 @@ vi.mock('~/core/space/use-space-debate-activity', () => ({
       retry: mocks.retryRows,
     };
   },
-  useSpaceClaimTopicFacet: (_spaceId: string, filters: { isSearchPending?: boolean }, enabled: boolean) => {
-    mocks.facetCalls.push({ enabled, isSearchPending: Boolean(filters.isSearchPending) });
+  useSpaceClaimTopicFacet: (
+    _spaceId: string,
+    filters: { isSearchPending?: boolean; searchError?: unknown },
+    enabled: boolean
+  ) => {
+    mocks.facetCalls.push({
+      enabled,
+      isSearchPending: Boolean(filters.isSearchPending),
+      sawSearchError: filters.searchError != null,
+    });
     return {
       topics: mocks.topics,
       isLoading: false,
@@ -476,6 +484,41 @@ describe('ClaimsPageClient', () => {
     render(<ClaimsPageClient spaceId="space-1" />);
 
     expect(mocks.facetCalls.at(-1)).toMatchObject({ isSearchPending: false });
+  });
+
+  /**
+   * The facet counts against the ids a search produced, so a search that produced none leaves its
+   * inner query disabled — and a disabled query reports pending rather than failed. The page has
+   * to hand the failure over, or the menu announces counts that are never coming, beside a search
+   * error it has already drawn.
+   */
+  it('tells the topic facet the search failed', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ sawSearchError: true });
+    expect(asked().filters.searchError).toBeInstanceOf(Error);
+  });
+
+  // The menu keeps its options — the control staying put beats it vanishing beside an error about
+  // something else — but stops claiming its numbers are on the way.
+  it('stops the count skeletons when the search fails', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    mocks.facet = { settled: false, error: new Error('search down') };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      render(<ClaimsPageClient spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+      expect(topicRow('Industry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // The staging form is unrelated to how the list is ordered, and it is the only place in the app

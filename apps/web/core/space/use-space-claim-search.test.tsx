@@ -175,6 +175,42 @@ describe('useSpaceClaimSearch', () => {
     expect(mocks.getResultsPage).toHaveBeenCalledTimes(10);
   });
 
+  /**
+   * The cap makes `atCap` true as the last request goes out, not when it comes back. With the
+   * pending test reading only `hasNextPage && !atCap`, the hook then called itself settled while
+   * that request was still in flight and published nine pages as a complete set — firing the rows
+   * and the facet once on a short answer and again when the tenth landed.
+   */
+  it('does not publish the ids while the last allowed page is in flight', async () => {
+    let n = 0;
+    let releaseLast: ((value: unknown) => void) | null = null;
+    mocks.getResultsPage.mockImplementation(() => {
+      n += 1;
+      // The tenth is the one the cap allows *and* the one `atCap` turns true for. Held open, so
+      // there is a render while it is genuinely in flight — which is the whole window. Resolved
+      // immediately it is invisible: React batches the microtask and never paints the gap.
+      if (n === 10) return deferred(new Promise(resolve => (releaseLast = resolve)));
+      return ok(page([`p${n}`], 10_000));
+    });
+
+    const { result } = renderHook(() => useSpaceClaimSearch('broad', true), { wrapper });
+    await settleDebounce();
+
+    await waitFor(() => expect(mocks.getResultsPage).toHaveBeenCalledTimes(10));
+    await waitFor(() => expect(releaseLast).not.toBeNull());
+
+    // Nine pages are in and the tenth is out. The set is not complete, so nothing is published.
+    expect(result.current.isPending).toBe(true);
+    expect(result.current.claimIds).toBeNull();
+
+    await act(async () => {
+      releaseLast!(page(['p10'], 10_000));
+    });
+
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+    expect(result.current.claimIds).toHaveLength(10);
+  });
+
   it('asks for nothing and narrows nothing when the box is empty', async () => {
     const { result } = renderHook(() => useSpaceClaimSearch('', true), { wrapper });
     await settleDebounce();
@@ -207,6 +243,28 @@ describe('useSpaceClaimTopicFacet', () => {
     renderHook(() => useSpaceClaimTopicFacet('space-1', NO_SPACE_ACTIVITY_FILTERS, true), { wrapper });
 
     expect(facetMocks.useTaggedTopicFacet.mock.calls.at(-1)?.[2]).toBe(true);
+  });
+
+  /**
+   * A failed `/search` leaves the facet's *inner* count query disabled — it is gated on the search
+   * having settled — and a disabled react-query reports pending, not failed. So `facet.error` stays
+   * null while nothing is ever coming, and a menu driving skeletons off `!settled` announced counts
+   * forever beside a search error the page had already drawn.
+   */
+  it('reports a failed search as the facet failing, not as counts loading', () => {
+    const { result } = renderHook(
+      () =>
+        useSpaceClaimTopicFacet(
+          'space-1',
+          { ...NO_SPACE_ACTIVITY_FILTERS, searchError: new Error('search down') },
+          true
+        ),
+      { wrapper }
+    );
+
+    expect(result.current.error).not.toBeNull();
+    // Nothing to count against, so nothing is asked for.
+    expect(facetMocks.useTaggedTopicFacet.mock.calls.at(-1)?.[2]).toBe(false);
   });
 
   // Its own caller can still turn it off, and a space with no id has nothing to count.

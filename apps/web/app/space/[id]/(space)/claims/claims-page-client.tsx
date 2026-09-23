@@ -88,8 +88,8 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   // the same query the hook above already filled — the raw box would key a second search per
   // keystroke. The rows are narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
   const filters = React.useMemo(
-    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds, isSearchPending }),
-    [claimIds, debouncedSearch, isSearchPending, topicIds]
+    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds, isSearchPending, searchError }),
+    [claimIds, debouncedSearch, isSearchPending, searchError, topicIds]
   );
 
   const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage, retry } =

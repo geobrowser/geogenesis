@@ -201,6 +201,15 @@ export type SpaceActivityFilters = {
    * withholds it), so nothing about them depends on this.
    */
   isSearchPending?: boolean;
+  /**
+   * The search could not be resolved.
+   *
+   * Only the topic facet reads this, and for the same reason as the flag above: it counts against
+   * the ids a search produced, so a search that produced none has nothing for it to count. Without
+   * it the facet stays enabled, its own inner query stays disabled behind the failed search, and a
+   * disabled query reports pending — so the menu announced counts that were never coming.
+   */
+  searchError?: unknown;
 };
 
 export const NO_SPACE_ACTIVITY_FILTERS: SpaceActivityFilters = { topicIds: [], search: '', searchClaimIds: null };
