@@ -1518,6 +1518,48 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
   });
 
+  /** The identity row's three tracks: avatar, the name-and-state column, the corner action. */
+  function cardTracks(card: HTMLElement) {
+    return Array.from((card.firstElementChild as HTMLElement).children) as HTMLElement[];
+  }
+
+  // The two cards sit side by side, so a difference in either one is a difference you read across
+  // the pair. The mute pill had drifted out to the card's left edge while the opponent's chip
+  // stayed indented under their name — invisible in either card alone, impossible to miss between
+  // them. Both are laid out by one component now, and this is what says so.
+  it('lays both cards out the same way, avatar then name over state then the corner action', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+
+    const you = screen.getByTestId('rematch-you-card');
+    const them = screen.getByTestId('rematch-opponent-card');
+    const [youAvatar, youColumn, youAction] = cardTracks(you);
+    const [themAvatar, themColumn, themAction] = cardTracks(them);
+
+    expect(youAvatar.className).toBe(themAvatar.className);
+    expect(youColumn.className).toBe(themColumn.className);
+    expect(youAction.className).toBe(themAction.className);
+
+    // The state belongs to the name, not to the card: the pill is indented past the avatar exactly
+    // as far as the chip is.
+    expect(youColumn).toContainElement(within(you).getByText('You'));
+    expect(youColumn).toContainElement(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
+    expect(themColumn).toContainElement(within(them).getByText('Salina'));
+    expect(themColumn).toContainElement(screen.getByTitle('Salina is muted'));
+
+    // And the corners hold each person's own secondary action, so they line up across the badge.
+    expect(youAction).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
+    expect(themAction).toHaveTextContent('View profile');
+  });
+
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
   // share reads as an accident rather than a decision. They were two hand-written sets of paddings
   // and type sizes that were close but not equal; this is what keeps them from drifting apart

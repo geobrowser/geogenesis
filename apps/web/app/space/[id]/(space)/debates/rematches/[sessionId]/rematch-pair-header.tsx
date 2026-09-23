@@ -207,6 +207,50 @@ const CARD_SURFACE = 'rounded-lg border bg-white p-3';
  */
 export const PAIR_PILL = 'flex h-6 shrink-0 items-center gap-1 px-2 text-chatMedium [&>svg]:size-3';
 
+/**
+ * The layout both cards wear.
+ *
+ * Avatar, then a column holding the name with that person's state directly under it, then that
+ * person's secondary action in the corner. One component rather than two similar ones, because
+ * these sit side by side: the mute pill drifting out to the card's left edge while the opponent's
+ * chip stayed indented under their name was invisible in either card alone and impossible to miss
+ * across the pair.
+ */
+function PairCardBody({
+  avatar,
+  name,
+  nameTitle,
+  state,
+  action,
+  footer,
+}: {
+  avatar: React.ReactNode;
+  name: string;
+  nameTitle?: string;
+  /** Directly under the name: the mute pill on your side, the mic chip on theirs. */
+  state?: React.ReactNode;
+  /** The corner: Leave on your side, View profile on theirs. */
+  action?: React.ReactNode;
+  /** Below the whole row, spanning the card — the locked position chip. */
+  footer?: React.ReactNode;
+}) {
+  return (
+    <>
+      <div className="flex w-full items-center gap-2.5">
+        {avatar}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+          <span title={nameTitle} className="w-full truncate text-left text-quoteMedium text-text">
+            {name}
+          </span>
+          {state}
+        </div>
+        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
+      </div>
+      {footer}
+    </>
+  );
+}
+
 function YouCard({
   local,
   voice,
@@ -263,65 +307,65 @@ function YouCard({
     return 'border-grey-02';
   })();
 
+  // Under the name, in the same slot their mic chip occupies. It is the same fact about the other
+  // person, so it belongs in the same place — the only difference is that yours can be pressed.
+  const control =
+    voice.kind === 'live' ? (
+      <div
+        className={cx(
+          'flex items-center',
+          muted && voice.opponentState === 'talking' && 'rounded-full ring-2 ring-grey-02'
+        )}
+      >
+        {voice.controls}
+      </div>
+    ) : voice.kind === 'message' && voice.actionLabel && voice.onAction ? (
+      <button
+        type="button"
+        onClick={voice.onAction}
+        className={cx(PAIR_PILL, 'rounded-full bg-text text-white transition-opacity hover:opacity-80')}
+      >
+        {voice.actionLabel}
+      </button>
+    ) : null;
+
   return (
     <div data-testid="rematch-you-card" className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5')}>
-      <div className="flex items-center gap-2.5">
-        <ParticipantAvatar
-          avatarUrl={local?.avatarCid ?? null}
-          value={local?.profileSpaceId}
-          name="You"
-          speaking={speaking}
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-quoteMedium text-text">You</span>
-          <span role="status" data-testid="rematch-you-state" className="sr-only">
-            {spokenState}
-          </span>
-          {caption ? (
-            // Only the things the button cannot say, and each of them arrives without the viewer
-            // doing anything — so it announces itself rather than waiting to be noticed.
-            <span role="status" className={cx('truncate text-chat', captionTone)} title={caption}>
-              {caption}
+      <PairCardBody
+        avatar={
+          <ParticipantAvatar
+            avatarUrl={local?.avatarCid ?? null}
+            value={local?.profileSpaceId}
+            name="You"
+            speaking={speaking}
+          />
+        }
+        name="You"
+        state={
+          <>
+            <span role="status" data-testid="rematch-you-state" className="sr-only">
+              {spokenState}
             </span>
-          ) : null}
-        </div>
-        {leaveAction ? <div className="flex shrink-0 items-center">{leaveAction}</div> : null}
-      </div>
-
-      {/* Under the name rather than beside it. Sharing the identity row meant the pill competed
-          with the avatar and the caption for a half-card's width — it fit on a desktop and barely
-          fit on a phone, which is a poor trade for the one control this page exists to surface.
-          Its own row gives it the full card and leaves the corner for Leave. */}
-      {voice.kind === 'live' ? (
-        <div
-          className={cx(
-            'flex items-center',
-            muted && voice.opponentState === 'talking' && 'w-max rounded-full ring-2 ring-grey-02'
-          )}
-        >
-          {voice.controls}
-        </div>
-      ) : voice.kind === 'message' && voice.actionLabel && voice.onAction ? (
-        <button
-          type="button"
-          onClick={voice.onAction}
-          className={cx(PAIR_PILL, 'self-start rounded-full bg-text text-white transition-opacity hover:opacity-80')}
-        >
-          {voice.actionLabel}
-        </button>
-      ) : null}
-
-      {live && voice.micFailureMessage ? (
-        // A disabled button is out of the tab order, so the reason — and the only way back — has to
-        // be text rather than a tooltip on a control nobody can reach.
-        <p className="text-footnote text-grey-04">
-          <button type="button" onClick={voice.onRetryMic} className="text-footnoteMedium text-text underline">
-            Try again
-          </button>
-        </p>
-      ) : null}
-
-      {agrees === undefined ? null : <PositionChip agrees={agrees} />}
+            {control}
+            {caption ? (
+              // Only the things the button cannot say, and each of them arrives without the viewer
+              // doing anything — so it announces itself rather than waiting to be noticed.
+              <span role="status" className={cx('w-full truncate text-chat', captionTone)} title={caption}>
+                {caption}
+              </span>
+            ) : null}
+            {live && voice.micFailureMessage ? (
+              // A disabled button is out of the tab order, so the way back has to be text rather
+              // than a tooltip on a control nobody can reach.
+              <button type="button" onClick={voice.onRetryMic} className="text-footnoteMedium text-text underline">
+                Try again
+              </button>
+            ) : null}
+          </>
+        }
+        action={leaveAction}
+        footer={agrees === undefined ? null : <PositionChip agrees={agrees} />}
+      />
     </div>
   );
 }
@@ -344,31 +388,30 @@ function OpponentCard({
   const talking = showMicState && state === 'talking';
 
   const body = (
-    <>
-      <div className="flex w-full items-center gap-2.5">
+    <PairCardBody
+      avatar={
         <ParticipantAvatar
           avatarUrl={opponent.avatarCid}
           value={opponent.profileSpaceId}
           name={name}
           speaking={talking}
         />
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <span title={name} className="w-full truncate text-left text-quoteMedium text-text">
-            {name}
-          </span>
-          {/* The label is the point. The dock's icon-only chip read as a button the viewer could
-              press, which it never was — the only control here is the pill in the other card. */}
-          {showMicState ? <OpponentMicChip state={state} name={name} /> : null}
-        </div>
-        {onOpen ? (
-          <span className="flex shrink-0 items-center gap-0.5 text-chat text-grey-04 mobile:sr-only">
+      }
+      name={name}
+      nameTitle={name}
+      // The label is the point. The dock's icon-only chip read as a button the viewer could press,
+      // which it never was — the only control here is the pill in the other card.
+      state={showMicState ? <OpponentMicChip state={state} name={name} /> : null}
+      action={
+        onOpen ? (
+          <span className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 mobile:sr-only">
             View profile
             <ChevronRight />
           </span>
-        ) : null}
-      </div>
-      {agrees === undefined ? null : <PositionChip agrees={agrees} />}
-    </>
+        ) : null
+      }
+      footer={agrees === undefined ? null : <PositionChip agrees={agrees} />}
+    />
   );
 
   if (!onOpen) {
