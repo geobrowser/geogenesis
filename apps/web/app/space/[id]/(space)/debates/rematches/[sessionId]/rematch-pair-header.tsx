@@ -16,7 +16,8 @@ import { CloseSmall } from '~/design-system/icons/close-small';
  * The voice controls used to live in a 200px dock pinned to the bottom-right corner, outside the
  * 720px column the viewer is actually reading. People were not finding it, so they never learned
  * they could unmute and talk while picking a claim. This puts the same controls in the page header,
- * inside the column, and gives the room a face: two participant cards either side of a VS badge.
+ * inside the column, and gives the room a face: two participant cards either side of a VS badge —
+ * them on the left, you on the right.
  *
  * Presentational only. Everything that needs a LiveKit room — mute state, the opponent's mic, the
  * one-shot nudges — is computed in `rematch-voice.tsx` and handed down as `voice`, so this file can
@@ -120,17 +121,11 @@ export function RematchPairHeader({
     <div className="flex flex-col gap-3">
       {lockedClaim ? <LockedClaim claim={lockedClaim.claim} spaceName={lockedClaim.spaceName} /> : null}
 
-      {/* Three tracks on desktop, stacked on a phone. Two 150px cards side by side at 375px leaves
-          no room for a labelled pill, and a labelled pill is the entire point of this change. */}
+      {/* Them, then the badge, then you — the home side of a scoreboard, and the side a reader's
+          eye lands on last. Three tracks on desktop, stacked on a phone: two 150px cards side by
+          side at 375px leave no room for a labelled pill, and a labelled pill is the entire point
+          of this change. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
-        <YouCard
-          local={local}
-          voice={voice}
-          opponentName={opponentName}
-          agrees={positions?.localAgrees}
-          leaveAction={leaveAction}
-        />
-        <VsBadge />
         <OpponentCard
           opponent={opponent}
           name={opponentName}
@@ -138,6 +133,14 @@ export function RematchPairHeader({
           showMicState={voice.kind === 'live'}
           agrees={positions?.opponentAgrees}
           onOpen={onOpenOpponentSpace}
+        />
+        <VsBadge />
+        <YouCard
+          local={local}
+          voice={voice}
+          opponentName={opponentName}
+          agrees={positions?.localAgrees}
+          leaveAction={leaveAction}
         />
       </div>
 

@@ -1541,6 +1541,17 @@ describe('RematchVoiceHeader', () => {
 
     const you = screen.getByTestId('rematch-you-card');
     const them = screen.getByTestId('rematch-opponent-card');
+
+    // Them, the badge, then you: the home side of a scoreboard, and where a reader's eye lands
+    // last. Order is not decoration here — the cards are identical, so position is the only thing
+    // saying which of them is you.
+    expect(them.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(them.parentElement!.children).map(child => child.textContent)).toEqual([
+      expect.stringContaining('Salina'),
+      'VS',
+      expect.stringContaining('You'),
+    ]);
+
     const [youAvatar, youColumn, youAction] = cardTracks(you);
     const [themAvatar, themColumn, themAction] = cardTracks(them);
 
