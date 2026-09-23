@@ -257,6 +257,38 @@ describe('ProfileActivitySection', () => {
      */
     expect(loading.querySelectorAll('.animate-pulse')).toHaveLength(3);
     expect(loading.querySelector('.border-t')).toBeNull();
+    // The title is in the tree before the rows are, not only after them.
+    expect(screen.getByRole('heading', { name: 'Activity' })).toHaveClass('sr-only');
+  });
+
+  /*
+   * The other half of the same jump, and the reason this asserts a match rather than `py-2`: the
+   * skeleton's gallery block has to keep whatever padding the real scroller has. Pinning the
+   * literal would hold this one line still while the scroller moved out from under it, which is
+   * how the footer above came to be stale in the first place.
+   */
+  it('gives the skeleton gallery the padding the loaded gallery has', () => {
+    const verticalPadding = (element: Element | null | undefined) =>
+      element?.className.match(/(?:^|\s)(py-\d+)(?:\s|$)/)?.[1] ?? null;
+
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind({ rows: [], isLoading: true }),
+          kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true }),
+        ]}
+      />
+    );
+
+    const loading = screen.getByRole('region', { name: 'Loading activity' });
+    const skeletonGallery = verticalPadding(loading.querySelector('.animate-pulse.h-44')?.parentElement);
+
+    cleanup();
+    const { container } = render(<ProfileActivitySection kinds={[kind()]} />);
+    const loadedGallery = verticalPadding(container.querySelector('.no-scrollbar'));
+
+    expect(loadedGallery).not.toBeNull();
+    expect(skeletonGallery).toBe(loadedGallery);
   });
 
   it('keeps the heading for screen readers while hiding it on screen', () => {
