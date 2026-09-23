@@ -8,6 +8,7 @@ import type { DebateResponseKind } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { uuidToHex } from '~/core/id/normalize';
 import type { ResponseKind } from '~/core/responses/entity-response';
@@ -21,20 +22,11 @@ import { Skeleton } from '~/design-system/skeleton';
 import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { ThreadArm, ThreadElbow, ThreadSpine } from '~/partials/comments/thread-branch';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { orderExtractedClaims } from './claim-activity-order';
 import { ExtractedClaimRow, type SpeakerProfile } from './extracted-claim-row';
-
-/**
- * How many extracted claims a debate shows before it asks.
- *
- * Depth is capped separately (replies below level two are behind their own button); this is the
- * breadth cap, and it is the one that actually bites. A debate can carry twenty extracted claims
- * without ever exceeding the depth cap, which would put the next debate below a screen and a half
- * of someone else's transcript.
- */
-const EXTRACTED_CLAIM_PAGE_SIZE = 4;
 
 /** Same 48px the claim page's debates module uses, in the 540 × 820 the videos are published at. */
 const KEYFRAME_WIDTH_PX = 48;
@@ -79,8 +71,11 @@ export function DebateActivityRow({
   publishedAt,
   density = PAGE_DENSITY,
 }: DebateActivityRowProps) {
-  const [visibleClaims, setVisibleClaims] = React.useState(EXTRACTED_CLAIM_PAGE_SIZE);
+  const [collapsed, setCollapsed] = React.useState(false);
   const { openComments } = useEntityCommentsPanel();
+  // One aggregate for this row's own comment count. Without it the button seeds itself at zero and
+  // only ever corrects downward, so a debate with comments read "0" until the panel was opened.
+  const debateCommentCount = useEntityCommentCounts(React.useMemo(() => [debate.id], [debate.id]));
 
   const debaters = sides
     .map(side => profilesBySpaceId.get(side.spaceId)?.name?.trim())
@@ -92,8 +87,8 @@ export function DebateActivityRow({
   const title = debaters.length > 0 ? debaters.join(' vs. ') : (debate.name ?? 'Debate');
 
   return (
-    <article className="flex min-w-0 flex-col gap-3">
-      <div className="flex min-w-0 gap-3">
+    <article className="flex min-w-0 flex-col">
+      <div className="mb-3 flex min-w-0 gap-3">
         {/* Portrait, because that is the shape the video actually is: `Debate videos` declares
             540 × 820, so a 16:9 tile would letterbox every still it ever showed. Same geometry
             `ClaimDebates` uses, so the two surfaces show a debate the same way. */}
@@ -133,7 +128,11 @@ export function DebateActivityRow({
 
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
             <EntityVoteButtons entityId={debate.id} spaceId={spaceId} responseKind="curation" />
-            <EntityCommentsButton entityId={debate.id} spaceId={spaceId} count={0} />
+            <EntityCommentsButton
+              entityId={debate.id}
+              spaceId={spaceId}
+              count={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+            />
             {/* A reply to a debate is a comment on the debate, so it goes where that entity's
                 comments already live rather than into this claim's thread. The panel is the
                 existing surface for commenting on an entity you are not currently reading. */}
@@ -162,8 +161,8 @@ export function DebateActivityRow({
         positionBySpaceId={positionBySpaceId}
         responseVocabulary={responseVocabulary}
         density={density}
-        visibleCount={visibleClaims}
-        onShowMore={() => setVisibleClaims(count => count + EXTRACTED_CLAIM_PAGE_SIZE)}
+        collapsed={collapsed}
+        onToggleCollapsed={() => setCollapsed(value => !value)}
       />
     </article>
   );
@@ -188,8 +187,8 @@ function ExtractedClaims({
   positionBySpaceId,
   responseVocabulary,
   density,
-  visibleCount,
-  onShowMore,
+  collapsed,
+  onToggleCollapsed,
 }: {
   debateId: string;
   spaceId: string;
@@ -198,8 +197,8 @@ function ExtractedClaims({
   positionBySpaceId: Map<string, boolean>;
   responseVocabulary: DebateResponseKind;
   density: CommentDensity;
-  visibleCount: number;
-  onShowMore: () => void;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const { claims, isLoading } = useDebateTranscriptClaims(debateId, spaceId);
   const { timings, isReady } = useClaimTimings(debateId, claims);
@@ -208,6 +207,7 @@ function ExtractedClaims({
   // One call for every extracted claim on screen. Without it each row's own vote control would read
   // the entity to work out whether it takes thumbs or chevrons — one request per row.
   const claimRows = useDebateClaims(spaceId, claimIds, claimIds.length > 0);
+  const commentCounts = useEntityCommentCounts(claimIds);
   const responseKindByClaimId = React.useMemo(() => {
     const map = new Map<string, ResponseKind>();
     for (const row of claimRows.data?.claims ?? []) {
@@ -226,15 +226,45 @@ function ExtractedClaims({
 
   const ordered = React.useMemo(() => orderExtractedClaims(claims.all, timings), [claims.all, timings]);
 
-  // The list hangs where a reply to this row would: the thread's own body inset, so an extracted
-  // claim and a comment reply sit on the same left edge.
-  const nestedStyle = { marginLeft: density.avatarCenterPx, paddingLeft: density.bodyInsetPx - density.avatarCenterPx };
+  // The branch hangs where a reply to this row would: indented to the parent's avatar centre and
+  // then out to the thread's body inset, so an extracted claim and a comment reply share a left
+  // edge and the connectors reach back to the same point.
+  const branchStyle = {
+    marginLeft: density.avatarCenterPx,
+    paddingLeft: density.bodyInsetPx - density.avatarCenterPx,
+  };
+
+  // Measured rather than computed: the spine has to stop at the last row's arm, and the rows are
+  // variable height (a claim sentence wraps to one line or three). Same approach `CommentList` takes
+  // for exactly the same reason.
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const lastRowRef = React.useRef<HTMLDivElement>(null);
+  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
+
+  const measureSpine = React.useCallback(() => {
+    const container = containerRef.current;
+    const lastRow = lastRowRef.current;
+    if (!container || !lastRow) {
+      setSpineHeightPx(null);
+      return;
+    }
+    setSpineHeightPx(lastRow.getBoundingClientRect().top - container.getBoundingClientRect().top);
+  }, []);
+
+  React.useLayoutEffect(() => {
+    measureSpine();
+    const container = containerRef.current;
+    if (container == null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureSpine());
+    observer.observe(container);
+    return () => observer.disconnect();
+  });
 
   if (isLoading || !isReady) {
     // Held rather than painted unordered. `isReady` is false only while a timing source is still
     // arriving, and it reports ready on a failed transcript fetch — so this cannot hang forever on
     // a debate whose transcript is gone; that degrades to "all untimed, arrival order".
-    return <Skeleton className="h-16 rounded" style={nestedStyle} />;
+    return <Skeleton className="h-16 rounded" style={branchStyle} />;
   }
 
   // Timed first, in order, then the ones nothing could place. The tail is not sorted among itself:
@@ -245,52 +275,96 @@ function ExtractedClaims({
   // with none is ordinary — and a line saying so under every old debate is noise in a feed.
   if (rows.length === 0) return null;
 
-  const visible = rows.slice(0, visibleCount);
-  const remaining = rows.length - visible.length;
+  // Every claim, not a page of them. These are what the debate produced; a reader who has scrolled
+  // to a debate has asked for them, and "Show 17 more claims" was asking a second time. The spine
+  // collapses the whole branch in one press, which is the control that actually shortens the page.
+  const collapseLabel = {
+    expand: `Expand ${rows.length} claims from this debate`,
+    collapse: `Collapse ${rows.length} claims from this debate`,
+  };
 
-  return (
-    <div className="flex flex-col gap-4 border-l border-grey-02" style={nestedStyle}>
-      {visible.map(claim => {
-        const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
-        return (
-          <ExtractedClaimRow
-            key={claim.id}
-            claim={claim}
-            debateId={debateId}
-            debateSpaceId={spaceId}
-            density={density}
-            // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
-            // not that the claim is factual, and stance is what the graph defaults to as well.
-            responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
-            responseVocabulary={responseVocabulary}
-            // A debater who is somehow not recorded on either side gets no tag rather than a
-            // guessed one — the same rule the speaker name follows a line below.
-            speakerPosition={
-              speakerSpaceId && !claim.restated
-                ? (positionBySpaceId.get(uuidToHex(speakerSpaceId)) ?? null)
-                : null
-            }
-            speaker={
-              // A restated claim carries the first relation's block, which cannot answer for both
-              // statements — `transcript-claims.ts` flags it rather than letting one stand in for
-              // the other, so the row declines to name a speaker instead of guessing.
-              speakerSpaceId && !claim.restated
-                ? { spaceId: speakerSpaceId, ...(profilesBySpaceId.get(speakerSpaceId) ?? {}) }
-                : null
-            }
-          />
-        );
-      })}
-
-      {remaining > 0 && (
+  if (collapsed) {
+    return (
+      <div style={branchStyle}>
         <button
           type="button"
-          onClick={onShowMore}
-          className={cx(density.metaClass, 'self-start text-ctaPrimary transition-colors hover:text-ctaHover')}
+          onClick={onToggleCollapsed}
+          className={cx(density.metaClass, 'text-ctaPrimary transition-colors hover:text-ctaHover')}
         >
-          Show {remaining} more {remaining === 1 ? 'claim' : 'claims'}
+          Show {rows.length} {rows.length === 1 ? 'claim' : 'claims'} from this debate
         </button>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="comment-branch-list-root relative flex flex-col gap-4" style={branchStyle} ref={containerRef}>
+      <ThreadSpine
+        density={density}
+        heightPx={spineHeightPx}
+        lit={false}
+        collapsed={false}
+        onToggle={onToggleCollapsed}
+        onFocusBranch={noop}
+        onPressBranch={noop}
+        onClearFocus={noop}
+        label={collapseLabel}
+      />
+
+      {rows.map((claim, index) => {
+        const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
+        const isLast = index === rows.length - 1;
+        return (
+          <div
+            key={claim.id}
+            className="comment-branch-row relative"
+            ref={isLast ? lastRowRef : undefined}
+          >
+            <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
+              {isLast ? (
+                <div
+                  className="absolute"
+                  style={{ left: `${-(density.bodyInsetPx - density.avatarCenterPx)}px`, top: 0 }}
+                >
+                  <ThreadElbow density={density} lit={false} />
+                </div>
+              ) : (
+                <ThreadArm density={density} lit={false} />
+              )}
+            </div>
+
+            <ExtractedClaimRow
+              claim={claim}
+              debateId={debateId}
+              debateSpaceId={spaceId}
+              density={density}
+              commentCount={commentCounts.get(uuidToHex(claim.id)) ?? 0}
+              // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
+              // not that the claim is factual, and stance is what the graph defaults to as well.
+              responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
+              responseVocabulary={responseVocabulary}
+              // A debater who is somehow not recorded on either side gets no tag rather than a
+              // guessed one — the same rule the speaker name follows a line below.
+              speakerPosition={
+                speakerSpaceId && !claim.restated
+                  ? (positionBySpaceId.get(uuidToHex(speakerSpaceId)) ?? null)
+                  : null
+              }
+              speaker={
+                // A restated claim carries the first relation's block, which cannot answer for both
+                // statements — `transcript-claims.ts` flags it rather than letting one stand in for
+                // the other, so the row declines to name a speaker instead of guessing.
+                speakerSpaceId && !claim.restated
+                  ? { spaceId: speakerSpaceId, ...(profilesBySpaceId.get(speakerSpaceId) ?? {}) }
+                  : null
+              }
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
+
+/** The branch has no cross-row highlight of its own yet; the spine still collapses on press. */
+function noop() {}

@@ -46,10 +46,16 @@ import {
   type CommentDensity,
   PAGE_DENSITY,
   PANEL_DENSITY,
+  THREAD_LEVEL_BRANCH_SEGMENT,
+  THREAD_SEGMENT_DIM,
+  THREAD_SEGMENT_DIM_STROKE,
+  THREAD_SEGMENT_HI,
+  THREAD_SEGMENT_HI_STROKE,
   avatarBottomInRowPx,
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
+import { THREAD_BRANCH_HIT_PX, ThreadSpine, branchPointerBlurProps } from './thread-branch';
 import { getRelativeTime } from './comment-time';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
@@ -64,14 +70,6 @@ const EMPTY_SCORE_TARGETS: Array<{ entityId: string; spaceId: string }> = [];
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
 }
-const COMMENT_THREAD_LINE_HIT_PX = 20;
-
-const THREAD_LEVEL_BRANCH_SEGMENT = 'thread-level-branch-segment';
-
-const THREAD_SEGMENT_DIM = 'bg-grey-02';
-const THREAD_SEGMENT_DIM_STROKE = 'stroke-[var(--color-grey-02)]';
-const THREAD_SEGMENT_HI = 'bg-grey-03';
-const THREAD_SEGMENT_HI_STROKE = 'stroke-[var(--color-grey-03)]';
 
 type BranchFocus = { kind: 'parent-thread'; threadCommentId: string } | { kind: 'row-connectors'; commentId: string };
 
@@ -209,23 +207,6 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
   return false;
 }
 
-function branchPointerBlurProps(
-  clearFocus: () => void
-): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
-  return {
-    onPointerLeave: e => {
-      const next = e.relatedTarget;
-      // relatedTarget is EventTarget | null; only Node is valid for Element.contains().
-      if (next instanceof Node && e.currentTarget.contains(next)) return;
-      clearFocus();
-    },
-    onBlur: e => {
-      const next = e.relatedTarget;
-      if (next instanceof Node && e.currentTarget.contains(next)) return;
-      clearFocus();
-    },
-  };
-}
 
 export type CommentSectionVariant = 'page' | 'panel' | 'tab';
 
@@ -932,32 +913,18 @@ function CommentList({
   return (
     <div className="comment-branch-list-root relative" ref={containerRef}>
       {/* Single continuous vertical line from top to just before the last reply's curve */}
-      {lastReplyTop != null && parentCommentId != null && (
-        <button
-          type="button"
-          aria-expanded={!isThreadCollapsed(parentCommentId)}
-          aria-label={isThreadCollapsed(parentCommentId) ? 'Expand comment thread' : 'Collapse comment thread'}
-          onClick={() => toggleThreadCollapsed(parentCommentId)}
-          onPointerEnter={() => hi.setParentThreadFocus(parentCommentId)}
-          onFocus={() => hi.setParentThreadFocus(parentCommentId)}
-          onPointerDown={() => hi.pressSpineForListParent(parentCommentId)}
-          {...branchLeave}
-          className="comment-branch-hit comment-branch-parent-hit comment-branch-spine-hit absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
-          style={{
-            left: `calc(${-spineOffsetPx}px + 0.5px)`,
-            top: 0,
-            height: `${lastReplyTop}px`,
-            width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
-          }}
-        >
-          <span
-            className={cx(
-              THREAD_LEVEL_BRANCH_SEGMENT,
-              'w-px shrink-0 transition-colors',
-              listSpineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
-            )}
-          />
-        </button>
+      {parentCommentId != null && (
+        <ThreadSpine
+          density={density}
+          heightPx={lastReplyTop}
+          lit={listSpineLit}
+          collapsed={isThreadCollapsed(parentCommentId)}
+          onToggle={() => toggleThreadCollapsed(parentCommentId)}
+          onFocusBranch={() => hi.setParentThreadFocus(parentCommentId)}
+          onPressBranch={() => hi.pressSpineForListParent(parentCommentId)}
+          onClearFocus={hi.clearFocus}
+          label={{ expand: 'Expand comment thread', collapse: 'Collapse comment thread' }}
+        />
       )}
       {comments.map((comment, index) => {
         const isLastReply = index === comments.length - 1;
@@ -1463,7 +1430,7 @@ function CommentItem({
                 // Starts just below the avatar it descends from.
                 top: `${avatarBottomInRowPx(density)}px`,
                 height: `${parentLineHeight}px`,
-                width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
+                width: `${THREAD_BRANCH_HIT_PX}px`,
               }}
             >
               <span

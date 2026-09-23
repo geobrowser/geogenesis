@@ -44,6 +44,7 @@ export function ExtractedClaimRow({
   speaker,
   speakerPosition,
   responseVocabulary,
+  commentCount = 0,
   density = PAGE_DENSITY,
   className,
 }: {
@@ -71,6 +72,14 @@ export function ExtractedClaimRow({
   speakerPosition: boolean | null;
   /** The claim page's vocabulary, so the tag reads Agree/Disagree or Verify/Dispute to match. */
   responseVocabulary: DebateResponseKind;
+  /**
+   * How many comments the claim has, counted by the server.
+   *
+   * Passed rather than left to the button's own seed: that seed only ever corrects *downward*, from
+   * a list somebody has opened, so a row with no count to give reads "0" on a claim that has
+   * comments — a number wrong in the one direction that tells the reader not to look.
+   */
+  commentCount?: number;
   /** The surrounding thread's metrics, so these rows sit on the same ramp as the comments. */
   density?: CommentDensity;
   className?: string;
@@ -158,14 +167,7 @@ export function ExtractedClaimRow({
               // read as one group.
               claimResponderAvatarsPosition="trailing"
             />
-            <EntityCommentsButton
-              entityId={claim.id}
-              spaceId={claimSpaceId}
-              // No server-rendered seed on this surface. The button's live count takes over the
-              // moment the list is read, and a zero that corrects itself upward is better than a
-              // number invented here.
-              count={0}
-            />
+            <EntityCommentsButton entityId={claim.id} spaceId={claimSpaceId} count={commentCount} />
           </div>
         ) : null}
       </div>

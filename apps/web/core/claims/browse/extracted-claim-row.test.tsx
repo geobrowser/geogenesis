@@ -32,8 +32,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/comments/entity-comments-button', () => ({
-  EntityCommentsButton: ({ entityId }: { entityId: string }) => (
-    <div data-testid="comments-button" data-entity={entityId} />
+  EntityCommentsButton: ({ entityId, count }: { entityId: string; count: number }) => (
+    <div data-testid="comments-button" data-entity={entityId} data-count={String(count)} />
   ),
 }));
 
@@ -165,6 +165,12 @@ describe('ExtractedClaimRow', () => {
     expect(screen.queryByTestId('comments-button')).not.toBeInTheDocument();
     // The sentence is still readable, just not actionable.
     expect(screen.getByText('Practical effects age better than CGI.')).toBeInTheDocument();
+  });
+
+  it('shows the server-counted comments rather than seeding the button at zero', () => {
+    renderRow({ commentCount: 4 });
+
+    expect(screen.getByTestId('comments-button')).toHaveAttribute('data-count', '4');
   });
 
   it('links the sentence to the claim in its own space', () => {
