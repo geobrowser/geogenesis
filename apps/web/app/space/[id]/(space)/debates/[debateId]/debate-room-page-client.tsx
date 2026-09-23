@@ -38,8 +38,8 @@ import {
   createDebateRoomOwnershipCoordinator,
   debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
-import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import { debateRematchPath } from '~/core/debates/debate-routes';
+import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import { debateTurnRole } from '~/core/debates/formats';
 import {
   useAbortDebate,
@@ -57,6 +57,11 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
+import {
+  type LocalAudioGateInput,
+  MIC_OVERRUN_AFTER_TURN_MS,
+  shouldEnableLocalAudio,
+} from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -602,12 +607,42 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     thankingRecordingCancelled,
   ]);
   React.useLayoutEffect(() => () => setThankingDebate(null), [setThankingDebate]);
-  const localAudioEnabled = shouldEnableLocalAudio(
-    debate ? countdown.effectiveStatus : null,
-    countdown.activeSlot,
+  // GEO-2915. The mic has to outlive the turn, or the speaker's last words are never recorded --
+  // the `MediaRecorder` holds the very track the gate disables. Held as a timestamp rather than a
+  // flag so the threshold lives in one place, in `local-audio-gate`, where it is tested.
+  const [localTurnEndedAt, setLocalTurnEndedAt] = React.useState<number | null>(null);
+  const localSlotWasActiveRef = React.useRef(false);
+  // Read through a ref: a deliberate yield must suppress the overrun, but it must not be a
+  // dependency of the effect below, which fires on the turn changing and nothing else.
+  const pendingTurnYieldRef = React.useRef(pendingTurnYield);
+  pendingTurnYieldRef.current = pendingTurnYield;
+  React.useEffect(() => {
+    const active = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot;
+    const wasActive = localSlotWasActiveRef.current;
+    localSlotWasActiveRef.current = active;
+    if (active) {
+      setLocalTurnEndedAt(null);
+      return;
+    }
+    if (!wasActive) return;
+    // Their turn just ended. A deliberate yield means they chose to stop, so there is nothing to
+    // rescue and the mic closes at once as before.
+    if (pendingTurnYieldRef.current) return;
+    setLocalTurnEndedAt(Date.now());
+    const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_AFTER_TURN_MS);
+    return () => window.clearTimeout(timer);
+  }, [countdown.activeSlot, countdown.effectiveStatus, localSlot]);
+
+  const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
+  const localAudioGate: LocalAudioGateInput = {
+    effectiveStatus: debate ? countdown.effectiveStatus : null,
+    activeSlot: countdown.activeSlot,
     localSlot,
-    audioMuted || pendingTurnYield !== null
-  );
+    audioMuted: audioMuted || pendingTurnYield !== null,
+    msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
+    msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
+  };
+  const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
   // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
   // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
@@ -618,12 +653,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     videoEnabled: true,
   }));
   localTrackPreferencesRef.current = slot => ({
-    audioEnabled: shouldEnableLocalAudio(
-      debate ? countdown.effectiveStatus : null,
-      countdown.activeSlot,
-      slot,
-      audioMuted || pendingTurnYield !== null
-    ),
+    audioEnabled: shouldEnableLocalAudio({ ...localAudioGate, localSlot: slot }),
     videoEnabled,
   });
   const connectionConflict = connectionConflictSource !== null;
@@ -672,8 +702,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // the generic "Leaving the debate" spinner here is the extra screen the user sees between the
   // thank-you period and the claim picker.
   const showRecordingModal = roomState !== 'idle' || idleRematchDestination !== null;
-  const recordingModalRoomState: DebateRecordingModalRoomState =
-    roomState === 'idle' ? 'transitioning' : roomState;
+  const recordingModalRoomState: DebateRecordingModalRoomState = roomState === 'idle' ? 'transitioning' : roomState;
 
   // Between the intro and the recording view, the debate connection has not set `roomState` yet:
   // either the auto-connect effect has not run, or `connect` is waiting on tab ownership. A spent
@@ -3396,20 +3425,6 @@ function setRemoteMediaAudioEnabled(
       element.muted = !remoteAudioEnabled;
     }
   }
-}
-
-function shouldEnableLocalAudio(
-  effectiveStatus: Debate['status'] | null,
-  activeSlot: ParticipantSlot | null,
-  localSlot: ParticipantSlot | null,
-  audioMuted: boolean
-) {
-  if (audioMuted || !effectiveStatus || !localSlot) return false;
-  // The intro is an open two-way call; turn-taking starts with the debate. Load-bearing: the turn
-  // rule below would otherwise disable the published microphone track and the mic meter with it.
-  if (effectiveStatus === 'ready') return true;
-  if (effectiveStatus === 'thanking') return true;
-  return effectiveStatus === 'in_progress' && activeSlot === localSlot;
 }
 
 function localTurnStartsInSeconds(
