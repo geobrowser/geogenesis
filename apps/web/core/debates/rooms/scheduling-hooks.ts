@@ -1,0 +1,63 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import {
+  type ScheduledDebateRequest,
+  type ScheduledDebateResponseResult,
+  createScheduledDebate,
+  listScheduledDebates,
+  respondToScheduledDebate,
+} from '../api';
+import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+
+/**
+ * Proposing and answering a scheduled debate (GEO-2934). The second answer books the room, so this
+ * is the only way to reach a room without writing one into the database by hand.
+ *
+ * Used by the debug page while GEO-2939 and GEO-2940 are unbuilt.
+ */
+export function useScheduledDebates(enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.scheduledDebates(accountKey),
+    queryFn: ({ signal }) => listScheduledDebates(getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && authenticated,
+  });
+}
+
+export function useCreateScheduledDebate() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation<ScheduledDebateRequest, Error, { opponentUserId: string; startsAt: Date; minutes: number }>({
+    mutationFn: ({ opponentUserId, startsAt, minutes }) =>
+      createScheduledDebate(
+        {
+          opponent_user_id: opponentUserId,
+          scheduled_start_at: startsAt.toISOString(),
+          scheduled_end_at: new Date(startsAt.getTime() + minutes * 60_000).toISOString(),
+        },
+        getPrivyIdentityToken,
+        accountKey
+      ),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) }),
+  });
+}
+
+export function useRespondToScheduledDebate() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation<ScheduledDebateResponseResult, Error, { requestId: string; accepted: boolean }>({
+    mutationFn: ({ requestId, accepted }) =>
+      respondToScheduledDebate(requestId, accepted, getPrivyIdentityToken, accountKey),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+      // An acceptance books the room, which the join prompt reads from a different key.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+    },
+  });
+}

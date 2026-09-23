@@ -1564,6 +1564,100 @@ export async function setDebateRoomPresence(
   });
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Scheduled debates (GEO-2934). One person proposes, the other answers, and the second answer
+ * books the room. The proposer counts as having accepted.
+ * -----------------------------------------------------------------------------------------------*/
+
+export type ScheduledDebateStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  | 'cancelled'
+  /** Auto-declined because this person accepted something overlapping. Nobody turned them down. */
+  | 'superseded';
+
+/** `accepted: null` means they have not answered. */
+export type ScheduledDebateParticipant = {
+  user_id: string;
+  accepted: boolean | null;
+};
+
+export type ScheduledDebateRequest = {
+  request_id: string;
+  status: ScheduledDebateStatus;
+  scheduled_start_at: string;
+  scheduled_end_at: string;
+  /** `null` for an admin-arranged match, where neither debater invited the other. */
+  invited_by_user_id: string | null;
+  created_by_admin: boolean;
+  proposed_by_user_id: string | null;
+  reschedule_count: number;
+  /** Set once everyone accepted. The room outlives the request. */
+  room_id: string | null;
+  participants: ScheduledDebateParticipant[];
+  /** Whether the viewer is the one holding this up. */
+  viewer_must_answer: boolean;
+};
+
+export type ScheduledDebateRequestsResponse = {
+  requests: ScheduledDebateRequest[];
+};
+
+/** Accepting can fail without being an error: the slot went while you were deciding. */
+export type ScheduledDebateResponseResult =
+  | ({ outcome: 'recorded' } & ScheduledDebateRequest)
+  | {
+      outcome: 'conflict';
+      conflicting_request_id: string;
+      conflicting_start_at: string;
+      conflicting_end_at: string;
+    };
+
+export async function listScheduledDebates(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<ScheduledDebateRequestsResponse>('/me/scheduled-debates', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function createScheduledDebate(
+  body: { opponent_user_id: string; scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>('/me/scheduled-debates', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The second answer books the room, and the `recorded` outcome carries its id. */
+export async function respondToScheduledDebate(
+  requestId: string,
+  accepted: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateResponseResult>(`/scheduled-debates/${requestId}/response`, {
+    method: 'POST',
+    body: { accepted },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
