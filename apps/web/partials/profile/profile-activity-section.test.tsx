@@ -246,15 +246,16 @@ describe('ProfileActivitySection', () => {
     );
 
     expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
     // No tabs to draw until a kind arrives.
     expect(screen.queryByRole('button', { name: /Debates|Claims/ })).not.toBeInTheDocument();
   });
 
-  it('titles the section Activity, with the kinds as pills beneath it', () => {
+  it('leads with the kinds as pills, under no visible heading', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims' })]} />);
 
-    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    // The section keeps its name for assistive technology; only the visible title is gone.
+    expect(screen.getByRole('region', { name: 'Activity' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Activity' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
   });
