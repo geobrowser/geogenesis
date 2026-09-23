@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 
-import { type ClaimTally, RUN_LENGTH, TALLY_BURST_MS, TALLY_LINGER_MS } from '~/core/debates/claim-ticker';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from '~/core/debates/debate-video-tile';
-import { type TurnCue, cueOpacity } from '~/core/debates/turn-cues';
+import type { TurnCue } from '~/core/debates/turn-cues';
 
 /**
  * The turn clock, drawn over a finished debate.
@@ -107,53 +106,64 @@ function CuePhrase({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The running claim count for one debater, sitting directly on top of their claim card.
+ * The round, parked beside the turn timer.
  *
- * Stacked with the card rather than parked in a corner of its own. The card is what the number is
- * counting, so a tally anywhere else asks the eye to hold two places at once — and the corner is
- * the one part of the tile that already moves as a unit: it lifts clear of the scrubber, it widens
- * when the backlog opens, and anything that is going to sit above it has to do both.
- *
- * Transient, like every other cue here. A counter that is always up is furniture over somebody's
- * face, and the corner it sits in is empty for most of a debate — which is the resting state the
- * ticker was designed around. So the number arrives with the claim that moved it, says what it is,
- * and goes. `final` is the exception: once the debate is over there is no claim left to cover, and
- * the totals are the last thing the video has to say.
+ * Wears the timer's own backing rather than the phrases' outline, and that is the rule this file
+ * follows everywhere: what is *transient* is outlined type over the picture, and what *persists*
+ * sits on a surface. The label is persistent state about the turn in progress, exactly like the
+ * number next to it, so it reads as part of the same instrument.
  */
-export function DebateClaimTally({ tally, final = false }: { tally: ClaimTally | null; final?: boolean }) {
-  if (!tally) return null;
-
-  const chipOpacity = final ? 1 : cueOpacity(tally.ageMs, TALLY_LINGER_MS);
-  const burstOpacity = final ? 0 : cueOpacity(tally.ageMs, TALLY_BURST_MS);
-  // Rises as it fades, the whole distance over the burst's life. Linear, because it is on screen
-  // for well under a second and an easing curve is not legible at that length.
-  const burstRisePx = -18 * Math.min(1, tally.ageMs / TALLY_BURST_MS);
-  const onARun = !final && tally.run >= RUN_LENGTH;
+export function DebateRoundBadge({ badge }: { badge: { label: string; opacity: number } | null }) {
+  if (!badge) return null;
 
   return (
     <div
-      aria-hidden
-      data-claim-tally={tally.count}
-      data-claim-run={onARun ? tally.run : undefined}
-      // `self-end` so it sits over the card's right edge whatever width the corner is at, and
-      // `relative` so the burst can climb out of it without moving the row.
-      className="relative flex shrink-0 self-end pb-1"
+      data-round-badge={badge.label}
+      className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium whitespace-nowrap text-white"
+      style={{ opacity: badge.opacity }}
     >
+      {badge.label}
+    </div>
+  );
+}
+
+/**
+ * One debater's half of the card that closes the video.
+ *
+ * Drawn per tile rather than as one panel across the player, which is what lets the replay control
+ * keep the seam it already sits on: each debater's figures land over their own face, and the
+ * middle of the player stays clear without anything having to be laid out around a button.
+ *
+ * It is the only thing in this file that is not transient, and the only one allowed to cover a
+ * face for as long as it likes. The debate is over; there is nothing behind it to watch.
+ */
+export function DebateScorecard({
+  name,
+  claims,
+  speakingTime,
+  won,
+}: {
+  name: string;
+  claims: number;
+  speakingTime: string | null;
+  /** Made more claims than the other debater. A nudge, not a verdict — the vote decides that. */
+  won: boolean;
+}) {
+  return (
+    <div
+      data-scorecard={name}
+      className="pointer-events-none absolute inset-0 z-[13] flex flex-col items-center justify-center gap-1 bg-black/45 px-4 text-center backdrop-blur-[2px]"
+    >
+      <span className="text-[0.6875rem] tracking-[0.12em] text-white/70 uppercase">{name}</span>
       <span
-        className="absolute right-0 bottom-1 text-[0.875rem] leading-none font-bold text-white tabular-nums"
-        style={{
-          opacity: burstOpacity,
-          transform: `translateY(${burstRisePx}px)`,
-          ...recordingOverlayTextShadow,
-        }}
+        className="text-[clamp(2.25rem,11cqw,4rem)] leading-[0.9] font-bold text-white tabular-nums"
+        style={won ? { color: 'var(--color-green)' } : undefined}
       >
-        +1
+        {claims}
       </span>
-      <span
-        className="text-[0.9375rem] leading-none font-semibold text-text tabular-nums"
-        style={{ opacity: chipOpacity, ...recordingLabelTextShadow }}
-      >
-        {onARun ? `${tally.run} in a row` : `${tally.count} ${tally.count === 1 ? 'claim' : 'claims'}`}
+      <span className="text-[0.8125rem] leading-none text-white">
+        {claims === 1 ? 'claim' : 'claims'}
+        {speakingTime ? ` · ${speakingTime} speaking` : ''}
       </span>
     </div>
   );

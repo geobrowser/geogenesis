@@ -3,9 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { RUN_LENGTH, TALLY_BURST_MS } from '~/core/debates/claim-ticker';
-
-import { DebateClaimTally, DebateTurnCueOverlay } from './debate-turn-cues';
+import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
 
 afterEach(cleanup);
 
@@ -68,51 +66,45 @@ describe('DebateTurnCueOverlay', () => {
   });
 });
 
-describe('DebateClaimTally', () => {
-  it('draws nothing in the silences', () => {
-    const { container } = render(<DebateClaimTally tally={null} />);
+describe('DebateRoundBadge', () => {
+  it('draws nothing before the card announcing the round has handed over', () => {
+    const { container } = render(<DebateRoundBadge badge={null} />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('says how many claims that makes, and pluralises the first one', () => {
-    render(<DebateClaimTally tally={{ count: 1, ageMs: 400, run: 1 }} />);
-    expect(screen.getByText('1 claim')).toBeInTheDocument();
+  it('parks the round beside the timer', () => {
+    const { container } = render(<DebateRoundBadge badge={{ label: 'Round 2 · Rebuttal', opacity: 1 }} />);
+    expect(screen.getByText('Round 2 · Rebuttal')).toBeInTheDocument();
+    // Persistent state sits on a surface; only the transient phrases are outlined over the picture.
+    const badge = container.firstElementChild as HTMLElement;
+    expect(badge.style.textShadow).toBe('');
+    expect([...badge.classList]).toContain('pointer-events-none');
   });
 
-  it('counts up with the debater', () => {
-    render(<DebateClaimTally tally={{ count: 7, ageMs: 400, run: 1 }} />);
-    expect(screen.getByText('7 claims')).toBeInTheDocument();
+  it('ramps in at the strength the handover gave it', () => {
+    const { container } = render(<DebateRoundBadge badge={{ label: 'Round 1 · Opening', opacity: 0.5 }} />);
+    expect((container.firstElementChild as HTMLElement).style.opacity).toBe('0.5');
+  });
+});
+
+describe('DebateScorecard', () => {
+  it('closes the video on the figures rather than a stop', () => {
+    render(<DebateScorecard name="Maya" claims={9} speakingTime="4:07" won />);
+    expect(screen.getByText('Maya')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('claims · 4:07 speaking')).toBeInTheDocument();
   });
 
-  it('flies the +1 up and away before the number goes', () => {
-    const { container } = render(<DebateClaimTally tally={{ count: 3, ageMs: 400, run: 1 }} />);
-    const burst = screen.getByText('+1');
-    expect(burst.style.transform).toMatch(/translateY\(-/);
-    expect(container.querySelector('[data-claim-tally="3"]')).not.toBeNull();
+  it('reads correctly for a debater who made one claim', () => {
+    render(<DebateScorecard name="Dev" claims={1} speakingTime={null} won={false} />);
+    expect(screen.getByText('claim')).toBeInTheDocument();
   });
 
-  it('has already dropped the +1 while the number is still readable', () => {
-    render(<DebateClaimTally tally={{ count: 3, ageMs: TALLY_BURST_MS + 100, run: 1 }} />);
-    expect(screen.getByText('+1').style.opacity).toBe('0');
-    expect(Number(screen.getByText('3 claims').style.opacity)).toBeGreaterThan(0);
-  });
-
-  it('calls out a run instead of the total, which is the only thing here that celebrates', () => {
-    const { container } = render(<DebateClaimTally tally={{ count: 9, ageMs: 300, run: RUN_LENGTH }} />);
-    expect(screen.getByText(`${RUN_LENGTH} in a row`)).toBeInTheDocument();
-    expect(container.querySelector(`[data-claim-run="${RUN_LENGTH}"]`)).not.toBeNull();
-  });
-
-  it('goes back to reporting once the run is over', () => {
-    const { container } = render(<DebateClaimTally tally={{ count: 9, ageMs: 300, run: RUN_LENGTH - 1 }} />);
-    expect(screen.getByText('9 claims')).toBeInTheDocument();
-    expect(container.querySelector('[data-claim-run]')).toBeNull();
-  });
-
-  it('holds the total up at the end, where there is no claim left to cover', () => {
-    render(<DebateClaimTally final tally={{ count: 9, ageMs: 60_000, run: 1 }} />);
-    // Past every window, and still there — the video has to end on something.
-    expect(screen.getByText('9 claims').style.opacity).toBe('1');
-    expect(screen.getByText('+1').style.opacity).toBe('0');
+  it('marks the higher count without calling the debate', () => {
+    // The vote decides who won; this only says who said more, which is a different sentence.
+    const { container: winner } = render(<DebateScorecard name="Maya" claims={9} speakingTime={null} won />);
+    const { container: loser } = render(<DebateScorecard name="Dev" claims={4} speakingTime={null} won={false} />);
+    expect((winner.querySelector('[data-scorecard] span:nth-child(2)') as HTMLElement).style.color).not.toBe('');
+    expect((loser.querySelector('[data-scorecard] span:nth-child(2)') as HTMLElement).style.color).toBe('');
   });
 });

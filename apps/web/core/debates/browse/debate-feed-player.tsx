@@ -5,9 +5,15 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import { type ClaimMarker, type ClaimTally, finalClaimTally } from '~/core/debates/claim-ticker';
-import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
-import { type TurnCue, turnCueForSlot, turnCuesAt } from '~/core/debates/turn-cues';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import {
+  type TurnState,
+  clampSeconds,
+  formatSpeakingTime,
+  speakerLabel,
+  speakingSecondsBySlot,
+} from '~/core/debates/playback-utils';
+import { type TurnCue, roundBadgeAt, turnCueForSlot, turnCuesAt } from '~/core/debates/turn-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -17,7 +23,7 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
-import { DebateClaimTally, DebateTurnCueOverlay } from './debate-turn-cues';
+import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -161,17 +167,35 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     [playheadSeconds, playing, reducedOverlays, turnSpans]
   );
 
+  const roundBadge = React.useMemo(
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnSpans]
+  );
+
   /**
-   * Each debater's total, once the debate is over.
+   * How the debate finished, per debater.
    *
-   * The live tally is transient by design, so without this the video ends on an empty corner. The
-   * counts come off the same backlog the running tally walks, which by the end of playback is
-   * every claim they made — so the closing number cannot disagree with the ones that led to it.
+   * The claim counts come off the same backlog the running chip walks, which by the end of
+   * playback is every claim they made — so the closing number cannot disagree with the ones that
+   * led to it. Speaking time is the rendered turns rather than the format's allowance, so an early
+   * yield shows up as the thing it was.
+   *
+   * Off on a compact gallery tile, with everything else: there is no room for it, and the card
+   * there is a thumbnail rather than a viewing.
    */
-  const tallyFor = (slot: number): ClaimTally | null => {
-    if (reducedOverlays) return null;
-    if (playbackEnded) return finalClaimTally((ticker.historyBySlot.get(slot) ?? []).map(card => card.window));
-    return ticker.tallyBySlot.get(slot) ?? null;
+  const speakingSeconds = React.useMemo(() => speakingSecondsBySlot(turnSpans), [turnSpans]);
+  const scorecardFor = (slot: 1 | 2) => {
+    if (reducedOverlays || !playbackEnded) return null;
+    const claims = ticker.historyBySlot.get(slot)?.length ?? 0;
+    const other = ticker.historyBySlot.get(slot === 1 ? 2 : 1)?.length ?? 0;
+    const seconds = speakingSeconds.get(slot);
+    const participant = slot === 1 ? slot1Participant : slot2Participant;
+    return {
+      name: participant ? speakerLabel(participant) : 'Debater',
+      claims,
+      speakingTime: seconds ? formatSpeakingTime(seconds) : null,
+      won: claims > other,
+    };
   };
 
   const showReplay = ready && playbackEnded;
@@ -328,6 +352,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       <DebateClaimTickerStack
         cards={cards}
         history={history}
+        tally={ticker.tallyBySlot.get(slot) ?? null}
         open={claimsOpenFor(slot)}
         pinned={pinned}
         onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
@@ -388,8 +413,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 1)}
-        claimTally={tallyFor(1)}
-        claimTallyFinal={playbackEnded}
+        roundBadge={turnState?.slot === 1 ? roundBadge : null}
+        scorecard={scorecardFor(1)}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -445,8 +470,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 2)}
-        claimTally={tallyFor(2)}
-        claimTallyFinal={playbackEnded}
+        roundBadge={turnState?.slot === 2 ? roundBadge : null}
+        scorecard={scorecardFor(2)}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -577,8 +602,8 @@ function DebaterVideo({
   audible,
   countdown,
   turnCue,
-  claimTally,
-  claimTallyFinal = false,
+  roundBadge,
+  scorecard,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -600,10 +625,10 @@ function DebaterVideo({
   countdown: TurnState;
   /** This tile's turn-clock overlay right now, if one is firing. */
   turnCue?: TurnCue | null;
-  /** This debater's running claim count, while a claim of theirs has just landed. */
-  claimTally?: ClaimTally | null;
-  /** The debate is over and this is their total, which stays up rather than passing. */
-  claimTallyFinal?: boolean;
+  /** The round in progress, parked beside this tile's timer. Only the speaker's tile has one. */
+  roundBadge?: { label: string; opacity: number } | null;
+  /** How this debater finished, once the debate has. */
+  scorecard?: { name: string; claims: number; speakingTime: string | null; won: boolean } | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -846,8 +871,17 @@ function DebaterVideo({
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <DebateRoundBadge badge={roundBadge ?? null} />}
 
       <DebateTurnCueOverlay cue={turnCue ?? null} />
+      {scorecard && (
+        <DebateScorecard
+          name={scorecard.name}
+          claims={scorecard.claims}
+          speakingTime={scorecard.speakingTime}
+          won={scorecard.won}
+        />
+      )}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -908,7 +942,7 @@ function DebaterVideo({
           than its box, which is how a second card used to push the newest one 78px below the
           corner and into the tile's own `overflow-hidden`. Nothing here may set a height the
           content can exceed. */}
-      {(claims || claimTally) && (
+      {claims && (
         <div
           data-claim-corner
           className={cx(
@@ -930,10 +964,6 @@ function DebaterVideo({
             clearScrubber === 'on-hover' && 'group-hover:pb-5'
           )}
         >
-          {/* Above the cards rather than beside them: the tally is counting the thing directly
-              below it, and riding in this box is what keeps the two together as the corner lifts
-              clear of the scrubber and widens for the backlog. */}
-          <DebateClaimTally tally={claimTally ?? null} final={claimTallyFinal} />
           {claims}
         </div>
       )}

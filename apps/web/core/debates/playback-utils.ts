@@ -510,3 +510,18 @@ export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsM
     return span;
   });
 }
+
+/** How long each debater held the floor, in seconds, for the card that closes the video. */
+export function speakingSecondsBySlot(spans: TurnSpan[]): Map<ParticipantSlot, number> {
+  const totals = new Map<ParticipantSlot, number>();
+  for (const span of spans) {
+    totals.set(span.slot, (totals.get(span.slot) ?? 0) + Math.max(0, span.endSeconds - span.startSeconds));
+  }
+  return totals;
+}
+
+/** `4:07`. Minutes and seconds, the way a stopwatch reads. */
+export function formatSpeakingTime(seconds: number) {
+  const whole = Math.max(0, Math.round(seconds));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}

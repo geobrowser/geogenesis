@@ -438,16 +438,40 @@ describe('DebateClaimTickerStack', () => {
   });
 
   /**
-   * The chip sits under the card in the column, so one that stayed up while a claim was live held
-   * the card 43px higher than it needed to be — the difference, on a phone tile, between a card
-   * under the speaker's chin and a card across their face. It has nothing to announce in that
-   * moment either: the claim it would point at is already on screen.
+   * It used to give way to a live card, so the card could sit 26px lower on a phone tile.
+   *
+   * The chip carries the running count now, and a count that vanishes at the moment it changes is
+   * the one moment it had something to say — so it stays, above the card rather than under it,
+   * and the card gives up the height instead.
    */
-  it('gives way to a live claim so the card can sit at the bottom', () => {
+  it('stays up under a live claim, because that is when the count changes', () => {
     renderStack({ onTogglePinned: vi.fn() });
 
     expect(screen.getByText(/Supreme Court/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /claims said so far/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /claims said so far/ })).toBeInTheDocument();
+  });
+
+  it('is up on a pointer device too, not only where there is no hover', () => {
+    // It is the only thing on the tile that says the backlog exists; hiding it everywhere a
+    // pointer could hover meant a viewer who never pointed at a debater's half never found it.
+    const { container } = renderStack({ onTogglePinned: vi.fn() });
+    const chip = screen.getByRole('button', { name: /claims said so far/ });
+    expect([...chip.classList]).not.toContain('opacity-0');
+    expect([...chip.classList]).toContain('pointer-events-auto');
+    expect(container).toBeTruthy();
+  });
+
+  it('flies a +1 clear of the pill rather than over it', () => {
+    renderStack({ onTogglePinned: vi.fn(), tally: { count: 3, ageMs: 200, run: 1 } });
+    const burst = document.querySelector('[data-claim-burst]') as HTMLElement;
+    // Anchored to the top of the chip and climbing, so the two are never legible at once.
+    expect([...burst.classList]).toContain('bottom-full');
+    expect(Number(burst.style.opacity)).toBeGreaterThan(0);
+  });
+
+  it('calls out a run in place of the total, and only above the bar', () => {
+    renderStack({ onTogglePinned: vi.fn(), tally: { count: 9, ageMs: 200, run: 3 } });
+    expect(screen.getByText('3 in a row')).toBeInTheDocument();
   });
 
   // Still the way back out of an opened backlog, live card or not.

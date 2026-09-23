@@ -197,6 +197,30 @@ export function roundLabel(turnIndex: number, turnCount: number): string {
   }
 }
 
+/**
+ * The round label that stays beside the timer, once the card announcing it has gone.
+ *
+ * The card crosses the middle of the tile and leaves; this is the same sentence parked where the
+ * clock is, so "which round is this" is answerable at any moment rather than only in the two
+ * seconds after a turn begins. Read as the card handing over: it ramps up as the card ramps down,
+ * over the same 300ms, so the label appears to move rather than to be replaced.
+ *
+ * Only on the tile whose turn it is. The label belongs to the timer, and the timer is only drawn
+ * for the speaker.
+ */
+export function roundBadgeAt(spans: TurnSpan[], playheadSeconds: number): { label: string; opacity: number } | null {
+  const current = spans.find(span => playheadSeconds >= span.startSeconds && playheadSeconds < span.endSeconds);
+  if (!current) return null;
+
+  const sinceStartMs = (playheadSeconds - current.startSeconds) * 1_000;
+  const cardEndsMs = (current.index > 0 ? GO_MS : 0) + ROUND_MS;
+  const handoverMs = 300;
+  const opacity = Math.max(0, Math.min(1, (sinceStartMs - (cardEndsMs - handoverMs)) / handoverMs));
+  if (opacity === 0) return null;
+
+  return { label: roundLabel(current.index, spans.length), opacity };
+}
+
 /** This tile's cue, or nothing. The shape every consumer actually wants. */
 export function turnCueForSlot(cues: TurnCue[], slot: ParticipantSlot): TurnCue | null {
   return cues.find(cue => cue.slot === slot) ?? null;
