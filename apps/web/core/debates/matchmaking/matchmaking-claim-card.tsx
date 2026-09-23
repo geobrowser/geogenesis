@@ -21,7 +21,7 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
-import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, CLAIM_RESPONSE_KIND, responsePositionLabel } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -422,7 +422,9 @@ export function useClaimPositionControl({
     entityId: claim.claim_entity_id,
     entityName: claim.claim,
     spaceId: claim.space_id,
-    responseKind: readiness.response_kind,
+    // Not `readiness.response_kind`. This target drives the *write*, and geo-chat's field can still
+    // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
+    responseKind: CLAIM_RESPONSE_KIND,
   };
   const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
@@ -628,7 +630,7 @@ function RespondableControls({
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
-    readiness.response_kind,
+    CLAIM_RESPONSE_KIND,
     // Or where the index is allowed to answer for the side, since then the kind is the page's and
     // this read is the thing being waited *for* rather than something waiting behind it. Gating it
     // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
@@ -668,7 +670,7 @@ function RespondableControls({
    * a stance response is not an answer about a claim that has become Verify/Dispute, and treating
    * it as one would enable the controls over it.
    */
-  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${CLAIM_RESPONSE_KIND}`;
   const sideSettling = !summaryEnabled || summary.isViewerResponseLoading;
   // `'none'` rather than `null` for "settled on no side", so the two facts `null` would otherwise
   // carry stay apart: nothing held yet, against an answer of nobody. A string rather than an object
@@ -748,7 +750,7 @@ function RespondableControls({
       />
       <PositionRow
         positions={optimisticPositions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={viewerPosition}
         onRespond={respond}
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
@@ -776,7 +778,7 @@ function RespondableControls({
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
-          responseKind={readiness.response_kind}
+          responseKind={CLAIM_RESPONSE_KIND}
           summary={summary}
           layout="inline"
           className={cx(
@@ -972,7 +974,7 @@ function UnresolvableControls({
       />
       <PositionRow
         positions={positions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
       />
       <div className="mt-3">

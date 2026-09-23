@@ -36,29 +36,32 @@ describe('how a claim was answered', () => {
     expect(decodeVoteOrder([vote({ voteType: 2 })]).responseByClaimId).toEqual({});
   });
 
-  it('records a veracity vote under its own question', () => {
-    // Not dropped: a factual claim asks Verify or Dispute, and throwing this
-    // away is what left those claims with nothing to show.
+  /**
+   * These three used to assert the other half of a two-question record: a veracity vote decoded
+   * under its own key, both answers kept side by side, and a claim listed on a veracity answer
+   * alone. Nothing renders that key now, so a kind-2 row is not an answer this list can show —
+   * and listing a claim on one would print a row with no verdict under either button, which is
+   * the one thing the record exists to avoid.
+   */
+  it('gives no side to a retired veracity vote', () => {
     // Keyed normalised, so the default `claim-1` fixture lands as `claim1`.
-    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({
-      claim1: { veracity: 'disagree' },
-    });
+    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({});
   });
 
-  it('keeps both answers when somebody gave both', () => {
+  it('keeps only the stance when somebody answered both questions', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', voteKind: 1, voteType: 0 }),
       vote({ objectId: 'a', voteKind: 2, voteType: 1 }),
     ]);
 
-    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree', veracity: 'disagree' } });
+    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree' } });
   });
 
-  it('lists a claim answered only for veracity', () => {
+  it('does not list a claim answered only for veracity', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', voteKind: 2 })]);
 
-    expect(order.entityIds).toEqual(['a']);
-    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
+    expect(order.entityIds).toEqual([]);
+    expect(order.responseByClaimId).toEqual({});
   });
 
   it('keeps the newest answer when somebody voted twice', () => {
@@ -105,14 +108,15 @@ describe('how a claim was answered', () => {
     expect(order.entityIds).toEqual(['kept']);
   });
 
-  it('keeps a claim retracted for one question but answered for the other', () => {
+  // Retracting the stance retracts the record, even where a retired veracity answer sits beside it.
+  it('drops a claim whose stance was retracted, whatever the old veracity row says', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', voteKind: 1, voteType: 2 }),
       vote({ objectId: 'a', voteKind: 2, voteType: 0 }),
     ]);
 
-    expect(order.entityIds).toEqual(['a']);
-    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
+    expect(order.entityIds).toEqual([]);
+    expect(order.responseByClaimId).toEqual({});
   });
 
   it('does not let an older neutral vote clear the current side', () => {
@@ -156,8 +160,7 @@ describe('how a claim was answered', () => {
     expect(order.entityIds).toEqual([]);
   });
 
-  it('settles each question on its own newest vote', () => {
-    // A neutral veracity answer must not clear the stance, and vice versa.
+  it('settles the stance on its own newest vote, ignoring retired rows around it', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'claim1', voteKind: 2, voteType: 2 }),
       vote({ objectId: 'claim1', voteKind: 1, voteType: 0 }),
@@ -192,7 +195,7 @@ describe('the space a position was taken in', () => {
   it('takes the space of the answer that stands, not of a retraction beside it', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', voteKind: 1, voteType: 2, spaceId: 'withdrawn' }),
-      vote({ objectId: 'a', voteKind: 2, voteType: 0, spaceId: 'held' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 0, spaceId: 'held' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['held'] });
@@ -216,7 +219,7 @@ describe('the space a position was taken in', () => {
   it('keeps every space a claim was answered in, newest first', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', spaceId: 'personal' }),
-      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+      vote({ objectId: 'a', spaceId: 'relationships' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['personal', 'relationships'] });
@@ -224,8 +227,8 @@ describe('the space a position was taken in', () => {
 
   it('lists a space once however many answers were given in it', () => {
     const order = decodeVoteOrder([
-      vote({ objectId: 'a', voteKind: 1, spaceId: 'relationships' }),
-      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 0, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 1, spaceId: 'relationships' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['relationships'] });

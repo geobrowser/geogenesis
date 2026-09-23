@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY, getResponseActionMethod, type ResponseKind } from '~/core/responses/entity-response';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -531,6 +531,32 @@ describe('position avatar stack', () => {
       const agree = screen.getByRole('button', { name: /^Agree/ });
       expect(agree).toBeDisabled();
       expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+    });
+
+    /**
+     * The write must never be handed geo-chat's word for the kind.
+     *
+     * geo-chat still labels claims minted before the vocabularies merged `"veracity"`, and that
+     * value arrives typed as the narrowed kind it no longer matches, so nothing catches it. Handed
+     * to `getResponseActionMethod` it selects no SDK method at all, and the click throws on
+     * `undefined['positive']` rather than publishing — on every claim with existing verify or
+     * dispute activity.
+     */
+    it('publishes under a real response kind even when the row still says veracity', () => {
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ response_kind: 'veracity' as 'stance' })}
+        />
+      );
+
+      const passed = mocks.useEntityResponse.mock.calls.at(-1)?.[0] as { responseKind: ResponseKind };
+
+      expect(passed.responseKind).toBe('stance');
+      // The assertion that actually matters: whatever kind was passed, it names an SDK method.
+      expect(getResponseActionMethod(passed.responseKind, 'positive')).toBe('agree');
+      expect(getResponseActionMethod(passed.responseKind, 'negative')).toBe('disagree');
     });
 
     // A case that used to sit here — "does not carry a side across a change of vocabulary" — is

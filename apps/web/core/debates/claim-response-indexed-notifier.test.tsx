@@ -30,14 +30,14 @@ describe('useClaimResponseIndexedNotifier', () => {
     const { queryClient, wrapper } = createHarness();
     const getPrivyIdentityToken = vi.fn();
     renderHook(() => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, 'account-1'), { wrapper });
-    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'veracity'] as const;
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
     const indexed = {
       status: 'indexed',
       pending: {
         entityId: 'claim-1',
         expectedResponse: 'negative',
         personalSpaceId: 'profile-1',
-        responseKind: 'veracity',
+        responseKind: 'stance',
         spaceId: 'space-1',
       },
       runId: 'run-1',
@@ -48,7 +48,7 @@ describe('useClaimResponseIndexedNotifier', () => {
       expect(mocks.notify).toHaveBeenCalledWith(
         'space-1',
         'claim-1',
-        'veracity',
+        'stance',
         false,
         getPrivyIdentityToken,
         'account-1',

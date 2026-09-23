@@ -89,6 +89,20 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  * and no caller has to work out which vocabulary a claim is in before it can name a side.
  */
 /**
+ * The one kind a claim is answered with.
+ *
+ * The authority on this, so that no surface has to read it off geo-chat's row. That field can
+ * still say `"veracity"` for a claim minted before the vocabularies merged, and it arrives typed as
+ * the narrowed {@link DebateResponseKind} it no longer matches — so TypeScript cannot stop it being
+ * used as a key. Fed to `getResponseActionMethod` it selects no SDK method and the *write* throws
+ * on click; fed to `responseKindToVoteKind` it yields `undefined` and the read asks for no vote
+ * kind at all. Neither failure is visible until it happens to a real claim.
+ *
+ * So claim surfaces take the kind from here and never from the row.
+ */
+export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
+
+/**
  * The copy for a claim's two sides, reached without indexing anything.
  *
  * Claim surfaces must not do `ENTITY_RESPONSE_COPY[kind]` with a kind that came off the wire.
@@ -99,7 +113,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  *
  * So the claim surfaces read this instead, and the untrusted value is never a key.
  */
-export const CLAIM_RESPONSE_COPY = ENTITY_RESPONSE_COPY.stance;
+export const CLAIM_RESPONSE_COPY = ENTITY_RESPONSE_COPY[CLAIM_RESPONSE_KIND];
 
 export function responsePositionLabel(position: boolean) {
   return position ? CLAIM_RESPONSE_COPY.positiveAction : CLAIM_RESPONSE_COPY.negativeAction;

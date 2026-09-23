@@ -9,7 +9,7 @@ import type {
   DebateResponseKind,
   MatchmakingReadiness,
 } from '~/core/debates/api';
-import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_KIND, hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
 import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
@@ -83,7 +83,7 @@ export type ClaimResponseState = {
  * codebase has already had. A constant cannot have that bug.
  */
 export function resolveClaimResponseKind(): DebateResponseKind {
-  return 'stance';
+  return CLAIM_RESPONSE_KIND;
 }
 
 export function useClaimResponseState({
