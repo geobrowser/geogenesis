@@ -143,6 +143,10 @@ const baseTypography = {
   },
 };
 
+// Used in type position only — `type TypographyScale = typeof typography` at the top of this file,
+// which is what `TypographyName` and `textStyles` are both derived from. `no-unused-vars` does not
+// count a `typeof` reference as a use, so it reports this as dead. Deleting it does not compile.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const typography = {
   light: {
     ...baseTypography.light,

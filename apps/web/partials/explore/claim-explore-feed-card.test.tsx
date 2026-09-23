@@ -12,6 +12,15 @@ import type { Entity } from '~/core/types';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 
+// Node's built-in localStorage shim can shadow jsdom with a partial object. The card only needs the
+// pending-account hook indirectly, so keep this layout suite independent of that persisted atom.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
 const mocks = vi.hoisted(() => ({
   entity: null as Entity | null,
   /** Every `enabled` the entity hydration was called with, in render order. */
@@ -25,7 +34,12 @@ const mocks = vi.hoisted(() => ({
   summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
+  commentCount: 0,
   notifyClaimResponseIndexed: vi.fn(),
+}));
+
+vi.mock('~/core/hooks/use-comment-count', () => ({
+  useCommentCount: () => mocks.commentCount,
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -87,7 +101,7 @@ vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   // whose own suite covers what it draws; stubbing it here keeps this file about *layout* rather
   // than dragging in a query client, and stops the share matching twice while both arrangements
   // are mounted.
-  ClaimSummary: () => <div data-testid="inline-summary" />,
+  ClaimSummary: ({ className }: { className?: string }) => <div data-testid="inline-summary" className={className} />,
 }));
 
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
@@ -123,6 +137,42 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   }),
 }));
 
+vi.mock('~/core/claims/browse/claim-position-comment', () => ({
+  ClaimPositionCommentControl: ({
+    disabled,
+    responseKind,
+    titleFor,
+    positionRowEndSlot,
+  }: {
+    disabled?: boolean;
+    responseKind: string;
+    titleFor?: (position: boolean) => string;
+    positionRowEndSlot?: React.ReactNode;
+  }) => (
+    <div
+      data-testid="pills"
+      data-disabled={String(Boolean(disabled))}
+      data-response-kind={responseKind}
+      data-title={titleFor?.(true)}
+    >
+      {positionRowEndSlot}
+    </div>
+  ),
+}));
+
+vi.mock('~/partials/comments/entity-comments-button', () => ({
+  EntityCommentsButton: ({ count, className }: { count: number; className?: string }) => (
+    <button
+      type="button"
+      aria-label={`Comments (${mocks.commentCount})`}
+      className={className}
+      data-server-count={count}
+    >
+      {mocks.commentCount}
+    </button>
+  ),
+}));
+
 vi.mock('~/core/claims/browse/claim-end-slot', () => ({
   ClaimEndSlot: ({ enabled }: { enabled?: boolean }) => (
     <div data-testid="end-slot" data-enabled={String(enabled !== false)} />
@@ -145,7 +195,15 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 vi.mock('~/design-system/fallback-image', () => ({ FallbackImage: () => <div data-testid="image" /> }));
 
-vi.mock('./explore-join-space-button', () => ({ ExploreJoinSpaceButton: () => <button type="button">Join</button> }));
+vi.mock('./explore-join-space-button', () => ({
+  // The real component is rooted in Pending's div. Preserve that content model here so the compact
+  // metadata test catches invalid inline wrappers that browsers repair before hydration.
+  ExploreJoinSpaceButton: () => (
+    <div data-testid="join-root">
+      <button type="button">Join</button>
+    </div>
+  ),
+}));
 
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
@@ -169,6 +227,7 @@ const item: ExploreFeedItem = {
   commentCount: 0,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: null,
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -191,6 +250,7 @@ beforeEach(() => {
   mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
+  mocks.commentCount = 0;
   mocks.notifyClaimResponseIndexed.mockClear();
 
   class MockIntersectionObserver implements IntersectionObserver {
@@ -247,6 +307,22 @@ describe('ClaimExploreFeedCard', () => {
     expect(title.getAttribute('href')).toContain(CLAIM_ID);
     // No thumbnail well: a claim has no image, so the sentence takes the column.
     expect(screen.queryByTestId('image')).toBeNull();
+  });
+
+  it('does not add a comment action or third position-row column for an empty thread', () => {
+    render(<ClaimExploreFeedCard item={item} />);
+
+    expect(screen.queryByRole('button', { name: /^Comments/ })).toBeNull();
+  });
+
+  it('puts the live comment count button beside the position buttons once the thread has a comment', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} />);
+
+    const comments = screen.getByRole('button', { name: 'Comments (2)' });
+    expect(screen.getByTestId('pills')).toContainElement(comments);
+    expect(comments).toHaveAttribute('data-server-count', '0');
+    expect(comments).toHaveClass('h-7', 'shrink-0', 'gap-2', 'rounded-full', 'border', 'border-grey-02');
   });
 
   it('asks for nothing about a claim the reader has not scrolled near', () => {
@@ -330,6 +406,50 @@ describe('ClaimExploreFeedCard', () => {
     // The first is not `:last-child`, so its divider survives; only the final card drops it.
     expect(cards[0].matches(':last-child')).toBe(false);
     expect(cards[1].matches(':last-child')).toBe(true);
+  });
+
+  it('matches the debates-panel shell on mobile when Explore opts in', () => {
+    mocks.positive = 9;
+    mocks.negative = 3;
+    const { container } = render(<ClaimExploreFeedCard item={item} variant="debate-panel-mobile" />);
+    scrollIntoRange();
+
+    const card = container.querySelector(':scope > article') as HTMLElement;
+    expect(card).toHaveClass('md:claim-card-panel-surface', 'md:my-2');
+    expect(card.firstElementChild).toHaveClass('md:gap-y-0!');
+
+    const title = screen.getByRole('link', { name: item.title }).querySelector('h2');
+    expect(title).toHaveClass('md:claim-card-panel-title!');
+
+    const desktopMetadata = screen.getByText('Claim').closest('.contents');
+    expect(desktopMetadata).toHaveClass('md:hidden');
+
+    const summary = screen.getByTestId('inline-summary');
+    expect(summary).toHaveClass('claim-card-summary-band', 'md:-mx-3', 'md:-mb-3', 'md:mt-3', 'md:rounded-b-lg');
+  });
+
+  it('keeps mobile metadata semantic content single and preserves the Join action', () => {
+    mocks.positive = 6;
+    mocks.negative = 6;
+    render(<ClaimExploreFeedCard item={{ ...item, isMemberOrEditor: false }} variant="debate-panel-mobile" />);
+    scrollIntoRange();
+
+    expect(screen.getAllByText('Controversial')).toHaveLength(1);
+    const segmentWrapper = screen.getByTestId('join-root').closest('.contents');
+    expect(segmentWrapper).toHaveProperty('tagName', 'DIV');
+    expect(segmentWrapper).not.toHaveClass('md:hidden');
+    const metadataWrapper = segmentWrapper?.parentElement;
+    expect(metadataWrapper).toHaveProperty('tagName', 'DIV');
+    expect(metadataWrapper).toHaveClass('contents', 'md:flex', 'md:flex-1');
+    expect(metadataWrapper).not.toHaveClass('flex', 'flex-1');
+  });
+
+  it('leaves the existing feed-row shell unchanged outside the Explore opt-in', () => {
+    const { container } = render(<ClaimExploreFeedCard item={item} />);
+
+    const card = container.querySelector(':scope > article') as HTMLElement;
+    expect(card).not.toHaveClass('md:rounded-lg', 'md:p-3');
+    expect(screen.getByText('Claim').closest('.contents')).toBeNull();
   });
 
   it('puts the pills above the verdict on a phone, as the debates panel does', () => {

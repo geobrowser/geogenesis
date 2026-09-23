@@ -28,13 +28,7 @@ interface Props {
   proposalId: string;
 }
 
-export function ProposalVoteRow({
-  votes,
-  votesCount,
-  yesVotesPercentage,
-  noVotesPercentage,
-  proposalId,
-}: Props) {
+export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotesPercentage, proposalId }: Props) {
   const [showingVoters, setShowingVoters] = React.useState(false);
 
   // Detect whether the user's own vote is already in the server-provided list.

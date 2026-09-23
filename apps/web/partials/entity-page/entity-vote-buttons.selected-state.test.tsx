@@ -29,7 +29,11 @@ const mocks = vi.hoisted(() => ({
   optimisticResponse: undefined as 'positive' | 'negative' | undefined,
 }));
 
-vi.mock('@geogenesis/auth', () => ({ useGeoLogin: () => ({ login: vi.fn() }) }));
+vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
+  useGeoLogin: () => ({ login: vi.fn() }),
+}));
 
 vi.mock('~/core/analytics', () => ({
   downvoted: vi.fn(),

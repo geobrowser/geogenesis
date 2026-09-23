@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
@@ -6,10 +6,13 @@ import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   VOTE_DEBATES_PROPERTY_ID,
   VOTE_TYPE_ID,
@@ -85,6 +88,7 @@ import {
   spaceEditorsPageQuery,
   spaceMembersPageQuery,
   spaceQuery,
+  spaceRolesForParticipantsQuery,
   spacesQuery,
   spacesWhereMemberQuery,
   userEntityResponseQuery,
@@ -719,12 +723,22 @@ export function getDebateTranscriptClaims(debateEntityId: string, spaceId: strin
       claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
       spaceId,
       namePropertyId: NAME_PROPERTY_ID,
+      markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
+      offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
     },
     signal,
   });
 }
 
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
+  // `id` is `UUID!`, so a malformed one is rejected by the server with a 400 rather than
+  // answering "nothing links here". A space with no home entity hands this an empty string
+  // (see `getSpaceFrontPage`), which produced a steady stream of
+  // `Variable "$id" got invalid value ""` on /space/[id] — 322 events, all of them a
+  // question we already knew the answer to. Nothing can link to an entity that does not
+  // exist, so answer it here instead of paying a round trip to be told off.
+  if (!IdUtils.isValid(entityId)) return Effect.succeed([]);
+
   return graphql({
     query: entityBacklinksQuery,
     // prettier-ignore
@@ -812,6 +826,33 @@ export function getIsEditorOfSpace(spaceId: string, memberSpaceId: string, signa
     query: isEditorOfSpaceQuery,
     decoder: data => (data.space?.editorsList?.length ?? 0) > 0,
     variables: { spaceId, memberSpaceId },
+    signal,
+  });
+}
+
+export type SpaceRolesForParticipants = {
+  editorSpaceIds: string[];
+  memberSpaceIds: string[];
+};
+
+/**
+ * Which of `participantSpaceIds` are editors, and which are members, in one request.
+ *
+ * Chunked by the caller; `first` tracks the chunk size because it caps rows rather than filtering
+ * them, so asking about more people than `first` would silently under-report roles.
+ */
+export function getSpaceRolesForParticipants(
+  spaceId: string,
+  participantSpaceIds: string[],
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: spaceRolesForParticipantsQuery,
+    decoder: (data): SpaceRolesForParticipants => ({
+      editorSpaceIds: data.space?.editorsList?.map(e => e.memberSpaceId as string) ?? [],
+      memberSpaceIds: data.space?.membersList?.map(m => m.memberSpaceId as string) ?? [],
+    }),
+    variables: { spaceId, participantSpaceIds, first: Math.max(participantSpaceIds.length, 1) },
     signal,
   });
 }

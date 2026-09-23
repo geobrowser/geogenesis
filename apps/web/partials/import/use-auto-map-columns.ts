@@ -24,7 +24,7 @@ import { hydrateRelationValueTypes } from './import-generation';
  * - Exact match, 2+ results → pick the one from the highest-ranked space; if tied, leave unmapped
  * - No match → leave unmapped (manual review)
  */
-export function useAutoMapColumns(spaceId: string) {
+export function useAutoMapColumns(_spaceId: string) {
   const headers = useAtomValue(headersAtom);
   const typesColumnIndex = useAtomValue(typesColumnIndexAtom);
   const [columnMapping, setColumnMapping] = useAtom(columnMappingAtom);

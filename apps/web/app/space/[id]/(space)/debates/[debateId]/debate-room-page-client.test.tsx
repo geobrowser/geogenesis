@@ -18,12 +18,19 @@ const mocks = vi.hoisted(() => ({
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
+  routePrefetch: vi.fn(),
+  prefetchRematchClaims: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
   endTurnMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
+  startLiveStream: vi.fn(),
+  liveStreamAppend: vi.fn(),
+  liveStreamFinish: vi.fn(),
+  liveStreamRelease: vi.fn(),
+  liveStreamAbort: vi.fn(),
   getRecording: vi.fn(),
   deleteRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
@@ -75,7 +82,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace, prefetch: mocks.routePrefetch }),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -117,11 +124,35 @@ vi.mock('~/core/debates/hooks', () => ({
     refetch: mocks.refetchDebate,
   }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
+  useDebateRematchClaims: (sessionId: string, claimIds: string[], enabled: boolean) => {
+    mocks.prefetchRematchClaims(sessionId, claimIds, enabled);
+    return { data: undefined, isLoading: enabled, error: null };
+  },
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
   useMarkDebateCapturing: () => ({ mutateAsync: mocks.capturingMutateAsync, isPending: false }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'account-a',
+    getPrivyIdentityToken: async () => 'identity-token',
+  }),
+}));
+
+vi.mock('~/core/debates/recording-stream', () => ({
+  putRecordingPart: vi.fn(),
+  startLiveRecordingStream: (options: { id: string }) => {
+    mocks.startLiveStream(options);
+    return {
+      id: options.id,
+      append: mocks.liveStreamAppend,
+      finish: mocks.liveStreamFinish,
+      release: mocks.liveStreamRelease,
+      abort: mocks.liveStreamAbort,
+    };
+  },
 }));
 
 vi.mock('~/core/debates/recording-upload-queue', () => ({
@@ -297,12 +328,19 @@ beforeEach(() => {
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
+  mocks.routePrefetch.mockReset();
+  mocks.prefetchRematchClaims.mockReset();
   mocks.abortMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
   mocks.consentMutateAsync.mockReset();
   mocks.endTurnMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
+  mocks.startLiveStream.mockReset();
+  mocks.liveStreamAppend.mockReset();
+  mocks.liveStreamFinish.mockReset().mockResolvedValue(null);
+  mocks.liveStreamRelease.mockReset().mockResolvedValue(undefined);
+  mocks.liveStreamAbort.mockReset().mockResolvedValue(undefined);
   mocks.getRecording.mockReset();
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockReset();
@@ -507,6 +545,43 @@ describe('upcomingTurnLabel', () => {
     expect(upcomingTurnLabel(twoRounds, countdownAt(0))).toBeNull();
   });
 });
+
+/**
+ * Open a device settings menu once the intro connection can no longer close it.
+ *
+ * The intro screen opens its own LiveKit connection, and `devicesLocked` — `ready_at`, or
+ * `roomState` being 'connecting'/'reconnecting' — force-closes any open settings menu
+ * (`debate-pre-join-screen.tsx`, "an open popover or sheet keeps its radios clickable"). That
+ * behaviour is deliberate and has its own test. The problem is the race around it: a menu opened
+ * while the intro connection is still in flight gets shut underneath the test, and every query for
+ * a device radio then fails with `Unable to find role="radio"`.
+ *
+ * It reproduces at about one run in six under CPU contention, and deterministically by holding
+ * `roomConnect` pending across the interaction — which is why it surfaced on CI, on this branch
+ * and on master alike, while passing every time on an idle machine. An earlier attempt read it as
+ * a re-render between two clicks and switched to `findByRole`; waiting longer cannot help, because
+ * the menu is closed and stays closed.
+ *
+ * So wait for the connection to have been attempted *and* for the trigger to be enabled, which is
+ * exactly `devicesLocked === false`.
+ */
+/** As {@link openDeviceSettings}, but focused first — for the tests that assert focus return. */
+async function openDeviceSettingsFocused(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  trigger.focus();
+  fireEvent.click(trigger);
+  return trigger;
+}
+
+async function openDeviceSettings(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  return trigger;
+}
 
 describe('DebateRoomPageClient', () => {
   // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
@@ -796,7 +871,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
@@ -828,7 +903,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -984,19 +1059,25 @@ describe('DebateRoomPageClient', () => {
       expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
     });
 
-    it('holds a full-screen state while an idle room walks into the rematch', async () => {
+    it('keeps the recording surface visible while an idle room walks into the rematch', async () => {
+      setHistoryLength(2);
       mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
       mocks.rematch = rematchSession('browsing');
 
       render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+      const leaveButton = screen.getByRole('button', { name: 'Leave debate' });
+      expect(leaveButton).toBeEnabled();
+      fireEvent.click(leaveButton);
+      await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+      await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
     it('holds focus, the scroll lock and a visible label while the holding screen is up', async () => {
-      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
-      mocks.rematch = rematchSession('browsing');
+      mocks.debate = completedDebate();
 
       const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -1090,7 +1171,7 @@ describe('DebateRoomPageClient', () => {
 
     const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
     expect(audioTrigger).toHaveAttribute('data-state', 'closed');
-    fireEvent.click(audioTrigger);
+    await openDeviceSettings('Audio settings');
     const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
     expect(audioSettings).toHaveAttribute('data-side', 'top');
     expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
@@ -1109,7 +1190,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -1180,7 +1261,7 @@ describe('DebateRoomPageClient', () => {
     mocks.selectAudioOutput.mockReturnValueOnce(selectedOutput.promise);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
@@ -1225,9 +1306,9 @@ describe('DebateRoomPageClient', () => {
     mocks.supportsAudioOutputSelection.mockReturnValue(false);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
-    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(await screen.findByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
@@ -1238,7 +1319,7 @@ describe('DebateRoomPageClient', () => {
     mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
 
@@ -1269,9 +1350,13 @@ describe('DebateRoomPageClient', () => {
     );
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+    await openDeviceSettings('Audio settings');
+    // Awaited, not `getByRole`: the speaker list is populated from `enumerateDevices`, and
+    // selecting a speaker re-renders it while that selection is still pending — so a name can be
+    // briefly absent between two clicks. A synchronous query here made this test fail about one run
+    // in four, on this branch and on master alike.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Display Speakers' }));
 
     act(() =>
       latestSelection.resolve({
@@ -1294,9 +1379,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    trigger.focus();
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettingsFocused('Audio settings');
     const settings = screen.getByRole('dialog', { name: 'Audio settings' });
 
     fireEvent.keyDown(settings, { key: 'Escape' });
@@ -1309,8 +1392,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
     await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
 
@@ -1325,8 +1407,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -1338,7 +1419,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
     selectedCamera.focus();
 
@@ -1357,7 +1438,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     const pendingTracks =
       deferred<
         Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
@@ -1379,7 +1460,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
 
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     const videos = document.querySelectorAll('video');
@@ -1396,7 +1477,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     expect(screen.getByText('Select a microphone')).toBeInTheDocument();
@@ -1408,8 +1489,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Audio settings' }));
@@ -1422,8 +1502,8 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await openDeviceSettings('Audio settings');
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() =>
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },
@@ -1482,7 +1562,7 @@ describe('DebateRoomPageClient', () => {
       ] as MediaDeviceInfo[])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
   });
 
@@ -1681,7 +1761,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -1800,7 +1880,7 @@ describe('DebateRoomPageClient', () => {
     const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     expect(screen.getByRole('radio', { name: 'Desk Camera' })).toBeInTheDocument();
 
     mocks.debate = {
@@ -3036,7 +3116,7 @@ describe('DebateRoomPageClient', () => {
     const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
     await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -4148,13 +4228,367 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Debate again?')).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).not.toHaveLength(0);
-    const phaseTimers = screen.getAllByLabelText('Phase timer: 20 seconds remaining');
-    expect(phaseTimers).toHaveLength(2);
-    for (const phaseTimer of phaseTimers) {
-      expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
-    }
-    fireEvent.click(screen.getByRole('button', { name: "Let's go!" }));
+    expect(screen.queryByLabelText('Phase timer: 20 seconds remaining')).not.toBeInTheDocument();
+    const consentButton = screen.getByRole('button', { name: "Let's go!" });
+    expect(consentButton).toHaveTextContent("Let's go!0:20");
+    expect(consentButton).toHaveAccessibleDescription('20 seconds remaining');
+    fireEvent.click(consentButton);
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveTextContent('Waiting...0:20');
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveAccessibleDescription('20 seconds remaining');
+  });
+
+  it('automatically consents shortly before the thank-you countdown ends', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('automatically consents when the debate completes before the thank-you deadline', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('does not finalize a connected early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('does not redirect an idle early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('does not carry rematch consent state into a subsequent debate route', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+
+    mocks.debate = {
+      ...mocks.debate,
+      id: 'debate-2',
+      rematch_session_id: 'rematch-2',
+    };
+    mocks.rematch = {
+      ...rematchSession('deciding'),
+      id: 'rematch-2',
+      source_debate_id: 'debate-2',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-2" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not automatically consent after the user starts leaving', async () => {
+    const persistence = deferred<void>();
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
+    persistence.resolve();
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('preserves the rematch opt-out when leaving fails near the automatic-consent boundary', async () => {
+    mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('publishes an existing rematch opt-out before waiting for recording persistence', async () => {
+    const leaveRequest = deferred<void>();
+    const persistence = deferred<void>();
+    setHistoryLength(2);
+    mocks.leaveRematchMutateAsync.mockReturnValue(leaveRequest.promise);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    leaveRequest.resolve();
+    persistence.resolve();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+  });
+
+  it('publishes an opt-out after an in-flight rematch consent succeeds', async () => {
+    const consentRequest = deferred<DebateRematchSession>();
+    const persistence = deferred<void>();
+    mocks.consentMutateAsync.mockReturnValue(consentRequest.promise);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+
+    consentRequest.resolve(rematchSession('deciding', { localConsented: true }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    persistence.resolve();
+  });
+
+  it('does not finalize into the rematch after an already-consented leave fails', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('Could not leave the rematch.'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+  });
+
+  it('does not follow an idle rematch redirect after an explicit leave fails', async () => {
+    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('Could not leave the rematch.'));
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
+
+    act(() => emitRoomEvent('disconnected', 99));
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+  });
+
+  it('retries recording persistence after an already-published opt-out', async () => {
+    const firstPersistence = deferred<void>();
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockReturnValueOnce(firstPersistence.promise).mockResolvedValueOnce(undefined);
+    mocks.leaveRematchMutateAsync.mockResolvedValue(undefined);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await act(async () => {
+      firstPersistence.reject(new Error('Storage unavailable'));
+    });
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
+    expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce();
+    expect(mocks.abortMutateAsync).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+  });
+
+  it('enters the rematch browser at the thank-you deadline without waiting for a debate refresh', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.routePrefetch).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+    expect(mocks.prefetchRematchClaims).toHaveBeenLastCalledWith('rematch-1', [], true);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   it('disables rematch consent and shows waiting immediately after clicking yes', async () => {
@@ -4257,7 +4691,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalled());
@@ -4286,7 +4720,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -4299,6 +4733,80 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  describe('streaming the recording while it is made (GEO-2955)', () => {
+    const multipart = {
+      filename: 'recordings/debate-1/slot-1/user-a/1.local.webm',
+      uploadId: 'upload-1',
+      partSize: 5 * 1024 * 1024,
+      uploadedPartNumbers: [1, 2],
+    };
+
+    it('streams every timeslice and hands what went out live to the upload queue', async () => {
+      mocks.liveStreamFinish.mockResolvedValue(multipart);
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      expect(mocks.startLiveStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.stringMatching(/^user-a:debate-1:\d+$/),
+          metadata: expect.objectContaining({ userId: 'user-a', debateId: 'debate-1', mimeType: 'video/webm' }),
+        })
+      );
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      // The final timeslice reached the stream as well as the in-memory copy.
+      expect(mocks.liveStreamAppend).toHaveBeenCalledWith(expect.any(Blob), expect.any(Number));
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart }));
+      // Once the queue holds the recording, the chunks saved as it was made are released.
+      await waitFor(() => expect(mocks.liveStreamRelease).toHaveBeenCalledOnce());
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+    });
+
+    it('queues an ordinary recording when nothing was streamed', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart: null }));
+    });
+
+    it('discards the streamed parts when the debate is cancelled', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.liveStreamAbort).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
+
+    it('keeps the saved chunks for recovery when the room unmounts mid-debate', async () => {
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      view.unmount();
+
+      // Neither discarded nor released: the coordinator decides, once the debate settles.
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
   });
 
   it('does not render a cancelled room while cleaning up an active debate', async () => {
@@ -4363,7 +4871,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -4374,7 +4883,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
   });
 
   it('enters the rematch browser after the live connection drops before the debate completes', async () => {
@@ -4386,7 +4896,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
@@ -4408,7 +4918,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('deciding');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(screen.getByText('Debate complete.')).toBeInTheDocument());
@@ -4428,7 +4938,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
@@ -4454,7 +4964,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(
@@ -4720,6 +5230,15 @@ function completedDebate(): Debate {
   };
 }
 
+function completedDebateOutsideThankYou(): Debate {
+  return {
+    ...completedDebate(),
+    turn_started_at: '2026-07-02T00:00:00.000Z',
+    turn_ends_at: '2026-07-02T00:00:20.000Z',
+    completed_at: '2026-07-02T00:00:20.000Z',
+  };
+}
+
 function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteReady: boolean }): Debate {
   return {
     ...completedDebate(),
@@ -4741,7 +5260,13 @@ function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteR
   };
 }
 
-function rematchSession(status: DebateRematchSession['status']): DebateRematchSession {
+function rematchSession(
+  status: DebateRematchSession['status'],
+  {
+    localConsented = false,
+    remoteConsented = false,
+  }: { localConsented?: boolean; remoteConsented?: boolean } = {}
+): DebateRematchSession {
   return {
     id: 'rematch-1',
     source_debate_id: 'debate-1',
@@ -4754,7 +5279,7 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        consented_at: null,
+        consented_at: localConsented ? '2026-07-02T00:01:15.000Z' : null,
       },
       {
         user_id: 'user-b',
@@ -4762,7 +5287,7 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        consented_at: null,
+        consented_at: remoteConsented ? '2026-07-02T00:01:15.000Z' : null,
       },
     ],
     decision_expires_at: '2026-07-02T00:01:30.000Z',

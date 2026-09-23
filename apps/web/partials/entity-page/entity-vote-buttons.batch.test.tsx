@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 
@@ -148,10 +150,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       positive: 8,
       negative: 1,
     });
-    queryClient.setQueryData(
-      userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'),
-      'positive'
-    );
+    queryClient.setQueryData(userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'), 'positive');
 
     const view = render(
       <ClaimResponseBatchBoundary ready>

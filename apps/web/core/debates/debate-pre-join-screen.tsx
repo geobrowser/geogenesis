@@ -452,7 +452,7 @@ export function DebatePreScreen({
       {/* The claim is given the full width and the speakers a little less, as the design has it —
           a wide headline over the cards — so the caps are per band rather than on `main`. The
           cards are sized so each tile lands back at the ~415px the single-column layout gave it. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 sm:px-5 md:max-w-[430px]">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
         <div className="mb-5 flex w-full max-w-[900px] flex-col items-center gap-3 md:mb-4 md:max-w-none md:gap-2">
           {/* Replaces the paragraph that sat under the claim. The assurance it also carried — that
               this part is not recorded — is now the "Not recording" pill on your own tile. */}

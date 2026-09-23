@@ -11,8 +11,8 @@ import Link from 'next/link';
 
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
-
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
+
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**

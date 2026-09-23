@@ -1358,10 +1358,11 @@ export function useEditDispatcher(
   const controllers = React.useRef(new Map<string, AbortController>());
   React.useEffect(() => {
     const active = controllers.current;
+    const dispatched = dispatchedRef.current;
     return () => {
       for (const [id, controller] of active) {
         controller.abort();
-        dispatchedRef.current.delete(id);
+        dispatched.delete(id);
       }
       active.clear();
     };

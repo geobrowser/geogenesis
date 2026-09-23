@@ -20,6 +20,7 @@ import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } fr
 import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
+import { debateRematchPath } from './debate-routes';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -273,7 +274,7 @@ export function DebateCoordinator() {
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
+      const path = debateRematchPath(rematch);
       if (pathname !== path) {
         rememberDebateReturnDestination();
         router.push(path);
@@ -295,7 +296,7 @@ export function DebateCoordinator() {
           // Exposed in the DOM so a report can name the cause without needing the console. Two
           // weeks of GEO-2670 went into establishing which of six pauses a screenshot meant.
           data-pause-reason={gateway.pauseReason ?? 'unknown'}
-          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card sm:w-auto"
+          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card mobile:w-auto"
         >
           {pausedBannerText(gateway.pauseReason)}
         </div>

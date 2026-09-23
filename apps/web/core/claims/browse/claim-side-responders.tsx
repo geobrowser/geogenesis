@@ -8,15 +8,9 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
-import { ID } from '~/core/id';
-import { getEntityResponders } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import {
-  type ActiveResponseDirection,
-  type ResponseKind,
-  entityRespondersQueryKey,
-} from '~/core/responses/entity-response';
-import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { type ActiveResponseDirection, type ResponseKind } from '~/core/responses/entity-response';
+import { useEntityResponders } from '~/core/responses/use-entity-responders';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -50,7 +44,7 @@ export function ClaimSideResponders({
   spaceId: string;
   responseKind: ResponseKind;
   direction: ActiveResponseDirection;
-  /** Names the side in the claim's own vocabulary, for the panel's footer and the trigger's label. */
+  /** Names the side in the claim's own vocabulary, for the panel's title and the trigger's label. */
   label: string;
   /** The authoritative count for this side, which can exceed the faces the query returns. */
   totalResponders: number;
@@ -68,37 +62,18 @@ export function ClaimSideResponders({
   // opening anything at all.
   const elevatedPopoverPortal = useElevatedPopoverPortal();
 
-  // Stands down under a batch, the same as the other two callers of this key.
-  //
-  // `ClaimResponseBatchBoundary` primes exactly this key for every claim on the page, so asking
-  // here would be a per-row request for something already in the cache — and before the batch lands
-  // there is nothing to answer from anyway. Unreachable under a batch as things stand, since
-  // `ClaimSides` is only mounted by the claim page and the explore card; it was the odd one out of
-  // three otherwise-identical call sites, which is how the deferral got lost the last time.
-  const responseBatch = useClaimResponseBatchState();
-  const { data: responders } = useQuery({
-    queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
-    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed,
-    staleTime: 30_000,
+  const { responders } = useEntityResponders({
+    entityId,
+    spaceId,
+    objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+    responseKind,
+    viewerSpaceId,
+    optimisticViewerResponse: viewerDirection,
   });
 
-  // The viewer is placed from their own response rather than from the indexed rows, which trail it
-  // by a publish and an index. The counts above are adjusted the same way, so without this the
-  // number on a side moves while the face stays on the old one — or disappears from both.
-  //
-  // Removed from wherever the index still has them and added to the side they now hold, so
-  // switching sides and clearing both land correctly. Same overlay `ClaimResponderAvatars` does.
   const sideSpaceIds = React.useMemo(() => {
-    const indexed = (responders ?? [])
-      .filter(responder => responder.direction === direction)
-      .map(responder => responder.userId);
-
-    if (!viewerSpaceId) return indexed;
-
-    const withoutViewer = indexed.filter(id => !ID.equals(id, viewerSpaceId));
-    return viewerDirection === direction ? [viewerSpaceId, ...withoutViewer] : withoutViewer;
-  }, [direction, responders, viewerDirection, viewerSpaceId]);
+    return responders.filter(responder => responder.direction === direction).map(responder => responder.userId);
+  }, [direction, responders]);
 
   if (sideSpaceIds.length === 0) return null;
 
@@ -140,7 +115,7 @@ export function ClaimSideResponders({
 /**
  * The list itself: the space editors and members popover pattern — same scroll cap, same divided
  * rows, same counted footer — so a reader meets one list shape in the app rather than two that do
- * the same job differently.
+ * the same job differently — except that the count is a title above the rows, not a footer.
  *
  * Narrower than those, though. They hang off a page header with the width to spare; this hangs off a
  * count inside a card, and at 356px it arrived as a slab wider than the column that opened it. A row
@@ -153,21 +128,33 @@ function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; la
     staleTime: 30_000,
   });
 
+  // People with a profile picture first, so the top of the list is faces rather than generated
+  // placeholders. Stable within each group, so the order the responders came in otherwise holds.
+  const sortedProfiles = React.useMemo(
+    () => (profiles ? [...profiles].sort((a, b) => Number(Boolean(b.avatarUrl)) - Number(Boolean(a.avatarUrl))) : []),
+    [profiles]
+  );
+
   return (
     <div className="z-10 w-[248px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
+      {/* A title over the list rather than a counted footer under it: it says what the list is
+          before the reader scrolls it. The verb agrees with the count — "1 person agrees",
+          "6 people agree". */}
+      <p className="p-2 text-smallButton text-text">
+        {totalCount} {pluralize('person', totalCount)}{' '}
+        {totalCount === 1 ? pluralize(label.toLowerCase()) : label.toLowerCase()}
+      </p>
       {/* Contained, so a wheel past the end of the list does not chain through to the page behind. */}
-      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain">
+      {/* Inset, so each row's hover sits inside the box as a rounded highlight — the browse sidebar's
+          own rows, in shape and colour. */}
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain p-1">
         {isLoading || !profiles ? (
           <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />
         ) : (
-          profiles.map(profile => <MemberRow key={profile.id} user={profile} />)
+          sortedProfiles.map(profile => (
+            <MemberRow key={profile.id} user={profile} className="rounded-lg transition-colors hover:bg-grey-01" />
+          ))
         )}
-      </div>
-      <div className="flex items-center justify-between p-2">
-        <p className="text-smallButton text-text">
-          {totalCount} {pluralize('person', totalCount)}
-        </p>
-        <p className="text-smallButton text-grey-04">{label}</p>
       </div>
     </div>
   );

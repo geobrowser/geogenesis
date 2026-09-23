@@ -25,11 +25,13 @@ vi.mock('./claim-explore-feed-card', () => ({
   ClaimExploreFeedCard: ({
     item,
     titleOpensSidePanel,
+    variant,
   }: {
     item: { title: string };
     titleOpensSidePanel?: boolean;
+    variant?: string;
   }) => (
-    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)}>
+    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)} data-variant={variant}>
       {item.title}
     </div>
   ),
@@ -103,6 +105,7 @@ const item: ExploreFeedItem = {
   commentCount: 2,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: null,
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -124,6 +127,41 @@ describe('ExploreFeedCard', () => {
     expect(debateCard.contains(screen.getByText('A debate'))).toBe(true);
   });
 
+  /**
+   * The two renditions of a debate must head the card identically. `DebateExploreFeedCard` paints
+   * first, headed by the claim, and only swaps to this fallback once its viewport-gated geo-chat
+   * lookups come back saying the debate has no playable video. A fallback headed by the debate's
+   * own name would re-title the card under a reader mid-scroll — the very thing reading the claim
+   * off the graph, rather than out of geo-chat, exists to avoid.
+   */
+  it('heads the fallback with the claim too, so an unwatchable debate does not re-title itself', () => {
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+      title: 'Ada vs. Blaise on Fast fashion should be discouraged',
+      debateClaim: { entityId: 'claim-1', name: 'Fast fashion should be discouraged' },
+    };
+    render(<ExploreFeedCard item={debateItem} />);
+
+    const fallback = screen.getByTestId('debate-card');
+    expect(fallback.contains(screen.getByText('Fast fashion should be discouraged'))).toBe(true);
+    expect(screen.queryByText(debateItem.title)).toBeNull();
+  });
+
+  it('applies compact debate chrome to the unwatchable fallback', () => {
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+      title: 'Ada vs. Blaise on Fast fashion should be discouraged',
+      debateClaim: { entityId: 'claim-1', name: 'Fast fashion should be discouraged' },
+    };
+    render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
+
+    expect(screen.queryByText('Debate')).toBeNull();
+    expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
+    expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
+  });
+
   it('does not route non-debate items to the debate card', () => {
     render(<ExploreFeedCard item={item} />);
     expect(screen.queryByTestId('debate-card')).toBeNull();
@@ -139,6 +177,16 @@ describe('ExploreFeedCard', () => {
     render(<ExploreFeedCard item={claimItem} />);
 
     expect(screen.getByTestId('claim-card').textContent).toBe(claimItem.title);
+  });
+
+  it('forwards the mobile debates-panel variant only to Claim cards', () => {
+    const claimItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }],
+    };
+    render(<ExploreFeedCard item={claimItem} claimCardVariant="debate-panel-mobile" />);
+
+    expect(screen.getByTestId('claim-card')).toHaveAttribute('data-variant', 'debate-panel-mobile');
   });
 
   it('leaves every other type on the generic card', () => {

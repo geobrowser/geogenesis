@@ -1,6 +1,6 @@
 import type { EntityFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
-import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation } from '~/core/types';
 
 import { getOrderedRelationTargetIds } from './ranking-block-relations';

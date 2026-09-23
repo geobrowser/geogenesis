@@ -17,8 +17,7 @@ import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/substream-schema';
-import { Entity, Profile, Relation, Row } from '../types';
-import { Entities } from './entity';
+import { Profile, Relation, Row } from '../types';
 
 export const NavUtils = {
   toRoot: () => '/root',
@@ -213,7 +212,7 @@ export class GeoPoint {
         latitude: GeoPoint.clampLatForMap(latitude),
         longitude: GeoPoint.clampLngForMap(longitude),
       };
-    } catch (e) {
+    } catch {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
     }
@@ -476,7 +475,7 @@ export class GeoDate {
       const testDate = new Date();
       formatInTimeZone(testDate, 'UTC', format);
       return format;
-    } catch (e) {
+    } catch {
       console.warn(`Invalid date format: "${format}". Using default format instead.`);
       return this.defaultFormat;
     }
@@ -593,6 +592,50 @@ export const isRenderableImageSrc = (src: string) => {
   if (parsed.protocol === 'data:') return src.startsWith('data:image/');
 
   return RENDERABLE_IMAGE_PROTOCOLS.has(parsed.protocol);
+};
+
+/**
+ * Hosts whose images may go through our own image optimizer.
+ *
+ * Derived from `IPFS_GATEWAYS` rather than restated, so adding a gateway cannot silently create a
+ * class of image that renders unoptimized forever with nobody noticing.
+ */
+const OPTIMIZABLE_HOSTS = new Set(
+  IPFS_GATEWAYS.map(gateway => new URL(gateway).hostname).concat(['geobrowser.io', 'www.geobrowser.io'])
+);
+
+/**
+ * May this image be served through `/_next/image`?
+ *
+ * **Image values are free-text entity properties — an author can type any URL** — and
+ * `getImagePathAtLevel` passes non-IPFS values through unchanged. With `remotePatterns` set to
+ * `hostname: '**'`, that made the optimizer an open proxy: anyone could call
+ * `/_next/image?url=<any https url>` and have our deployment fetch, decode, resize and re-serve
+ * arbitrary remote content from our domain, under our certificate, on our bill (GEO-2984).
+ *
+ * The obvious fix — enumerate the hosts we use and narrow `remotePatterns` — does not work here,
+ * because "the hosts we use" is not a closed set: an entity's image can legitimately be any URL
+ * someone typed, and a host missed off the list renders as a broken image with no error anywhere.
+ *
+ * So the split is by *who fetches it*, not by whether it may be shown. Images from hosts we
+ * control go through the optimizer. Anything else is handed to the browser as-is, which still
+ * renders it — from its own origin, at its own expense, under its own name.
+ *
+ * `unoptimized` short-circuits `generateImgAttrs` before the default loader runs, so an
+ * unoptimized src is never checked against `remotePatterns` either. That is what lets the config
+ * be narrowed to the hosts that actually reach the optimizer without breaking anything else.
+ */
+export const isOptimizableImageSrc = (src: string) => {
+  // Same-origin: our own static assets and API routes.
+  if (src.startsWith('/')) return true;
+
+  try {
+    return OPTIMIZABLE_HOSTS.has(new URL(src).hostname);
+  } catch {
+    // Not a URL we can reason about. `isRenderableImageSrc` decides whether it renders at all;
+    // for this question the safe answer is "do not put it through our optimizer".
+    return false;
+  }
 };
 
 export const getVideoHash = getImageHash;

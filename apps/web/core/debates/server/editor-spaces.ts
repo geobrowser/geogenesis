@@ -63,10 +63,7 @@ export async function listEditorSpaceIds(memberSpaceId: string): Promise<string[
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const data = await client.request<{ editors: Array<{ spaceId: string }> }>(
-        EDITOR_SPACES_QUERY,
-        variables
-      );
+      const data = await client.request<{ editors: Array<{ spaceId: string }> }>(EDITOR_SPACES_QUERY, variables);
       return [...new Set(data.editors.map(editor => editor.spaceId))];
     } catch (error) {
       lastError = error;

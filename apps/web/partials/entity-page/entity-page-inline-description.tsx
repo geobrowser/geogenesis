@@ -24,10 +24,13 @@ export function EntityPageInlineDescription({
   entityId,
   spaceId,
   fallbackDescription,
+  hideWhenReading = false,
 }: {
   entityId: string;
   spaceId: string;
   fallbackDescription?: string | null;
+  /** Shown only while editing. A profile reads its description in the rail's About section instead. */
+  hideWhenReading?: boolean;
 }) {
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
@@ -80,7 +83,7 @@ export function EntityPageInlineDescription({
     );
   }
 
-  if (!description) {
+  if (!description || hideWhenReading) {
     return null;
   }
 

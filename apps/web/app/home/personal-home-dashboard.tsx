@@ -278,11 +278,14 @@ const Notices = () => {
         title="Welcome to your governance home"
         description="Your area to see any proposals, member requests, and editor requests across the spaces you are involved in."
         media={
-          <div className="relative h-[102px] w-[128px] shrink-0 overflow-hidden sm:h-[108px] sm:w-[136px]" aria-hidden>
+          <div
+            className="relative h-[102px] w-[128px] shrink-0 overflow-hidden mobile:h-[108px] mobile:w-[136px]"
+            aria-hidden
+          >
             <img
               src="/home.png"
               alt=""
-              className="pointer-events-none block h-[calc(100%+21px)] min-h-0 w-full min-w-0 -translate-y-[21px] object-cover object-left object-top select-none sm:h-[calc(100%+24px)] sm:-translate-y-6"
+              className="pointer-events-none block h-[calc(100%+21px)] min-h-0 w-full min-w-0 -translate-y-[21px] object-cover object-left object-top select-none mobile:h-[calc(100%+24px)] mobile:-translate-y-6"
             />
           </div>
         }

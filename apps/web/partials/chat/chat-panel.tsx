@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
+import { BOTTOM_INSET_MAX_HEIGHT_CLASS, BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import {
   DEFAULT_CHAT_SIZE,
   EXPANDED_CHAT_SIZE,
@@ -161,7 +162,7 @@ export function ChatPanel({
       exit={{ opacity: 0, y: 16, scale: 0.96 }}
       transition={{ duration: 0.15 }}
       style={{ transformOrigin: 'bottom right', width: size.width, height: size.height, containerType: 'size' }}
-      className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-1100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]"
+      className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${BOTTOM_INSET_MAX_HEIGHT_CLASS} z-1100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]`}
     >
       <ResizeHandle
         className="absolute inset-y-2 left-0 w-1 cursor-ew-resize"

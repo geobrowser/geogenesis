@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
@@ -45,9 +46,14 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  useEntityResponse: vi.fn(),
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
   // below this needs one here.
   debateQueryKeys: {
@@ -117,14 +123,17 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: () => ({
-    submitResponse: mocks.submitResponse,
-    optimisticResponse: undefined,
-    isProcessingResponse: false,
-    isResponseIndexingDelayed: false,
-    isConnected: true,
-    personalSpaceId: mocks.viewerSpaceId,
-  }),
+  useEntityResponse: (input: Record<string, unknown>) => {
+    mocks.useEntityResponse(input);
+    return {
+      submitResponse: mocks.submitResponse,
+      optimisticResponse: undefined,
+      isProcessingResponse: false,
+      isResponseIndexingDelayed: false,
+      isConnected: true,
+      personalSpaceId: mocks.viewerSpaceId,
+    };
+  },
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
@@ -224,6 +233,15 @@ function renderCard(card: ReactElement) {
 }
 
 beforeEach(() => {
+  // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
@@ -240,6 +258,7 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.useEntityResponse.mockReset();
 });
 
 afterEach(cleanup);
@@ -864,6 +883,17 @@ describe('faces borrowed from the match', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('attributes response events to the claim text as well as its id', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(mocks.useEntityResponse).toHaveBeenCalledWith({
+      entityId: CLAIM_ENTITY_ID,
+      entityName: CLAIM_TEXT,
+      spaceId: SPACE_ID,
+      responseKind: 'stance',
+    });
+  });
+
   /**
    * Reported on a freshly created account: the hub panel's pills are dead for the minute geo-chat
    * spends indexing it, while the same claims in the main feed take positions normally.
@@ -973,15 +1003,33 @@ describe('MatchmakingClaimCard', () => {
     expect(reserved).not.toHaveTextContent(/\S/);
   });
 
-  it('says why the offer cannot be taken rather than dimming it silently', () => {
+  it('says why the offer cannot be taken when its wrapper receives keyboard focus', async () => {
     mocks.match = { id: 'match-1', viewer_position: true };
     mocks.blockedReason = 'Withdraw your open request to send another.';
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
-    // Shown, not left to a `title`: native tooltips never appear on touch and are unreliable on a
-    // disabled button, which is exactly when the explanation matters.
-    expect(screen.getByText('Withdraw your open request to send another.')).toBeInTheDocument();
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    const trigger = request.parentElement!;
+    expect(request).toBeDisabled();
+    expect(screen.queryByText('Withdraw your open request to send another.')).not.toBeInTheDocument();
+
+    await userEvent.tab();
+
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
+  });
+
+  it('says why the offer cannot be taken when its wrapper is tapped', async () => {
+    mocks.match = { id: 'match-1', viewer_position: true };
+    mocks.blockedReason = 'Withdraw your open request to send another.';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+
+    fireEvent.pointerDown(request.parentElement!, { pointerType: 'touch' });
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });
 
   it('opens the room when a debate is running', () => {

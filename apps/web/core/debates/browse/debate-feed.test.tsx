@@ -69,16 +69,6 @@ vi.mock('./use-debates-best-order', async () => {
   };
 });
 
-vi.mock('~/core/debates/use-debate-votes', () => ({
-  useDebateVotes: () => ({
-    sharePercentFor: () => null,
-    isMyPick: () => false,
-    hasVoted: false,
-    isVoting: false,
-    castVote: vi.fn(),
-  }),
-}));
-
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
@@ -518,7 +508,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
     assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
     expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
-    expect(card.querySelectorAll('[aria-label="Comments"]').length).toBeGreaterThan(0);
+    expect(card.querySelectorAll('[aria-label^="Comments"]').length).toBeGreaterThan(0);
 
     expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
   });
@@ -559,7 +549,7 @@ describe('DebatesBrowseFeed comments', () => {
   it('shows the comment count and opens the comments panel for the clicked debate', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    const commentButtons = screen.getAllByRole('button', { name: 'Comments' });
+    const commentButtons = screen.getAllByRole('button', { name: /^Comments/ });
     expect(commentButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByText('7').length).toBeGreaterThan(0);
 
@@ -646,7 +636,7 @@ describe('DebatesBrowseFeed comments', () => {
   it('closes an open feed panel when the hub takes over', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
@@ -658,14 +648,14 @@ describe('DebatesBrowseFeed comments', () => {
   it('closes the claims panel when comments open, and vice versa', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
@@ -681,7 +671,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the comments panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -692,7 +682,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the claims panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -709,7 +699,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
     const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
     assert(adjacent, 'Expected a section for the adjacent debate');
 
-    fireEvent.click(within(adjacent).getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Comments/ })[0]);
 
     expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
@@ -792,19 +782,6 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
     expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
   });
 });
-
-async function advance(milliseconds: number) {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(milliseconds);
-  });
-}
-
-async function flushPromises() {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
 
 function activateDebate(claim: string) {
   const section = screen.getByRole('heading', { name: claim }).closest('section');

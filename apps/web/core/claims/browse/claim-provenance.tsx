@@ -12,12 +12,13 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+import { getClaimSources } from './claim-sources';
 
 /**
  * Where a claim came from.
@@ -49,15 +50,7 @@ export function ClaimProvenance({
   // already exists in the space is linked to the existing entity, which then collects one `Sources`
   // per debate that stated it. The first is rendered as the primary source and the rest listed, so
   // no debate is hidden behind another.
-  const sources = React.useMemo(
-    () =>
-      dedupeRelationsByToEntityId(
-        claimRelations.filter(
-          relation => relation.isDeleted !== true && ID.equals(relation.type.id, SOURCES_PROPERTY_ID)
-        )
-      ).map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name })),
-    [claimRelations]
-  );
+  const sources = React.useMemo(() => getClaimSources(claimRelations), [claimRelations]);
   const source = sources[0] ?? null;
   const otherSources = sources.slice(1);
 

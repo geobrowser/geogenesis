@@ -144,9 +144,7 @@ describe('convertWhereConditionToEntityFilter space handling', () => {
   it('emits no space clause at all when there is nothing to scope to', () => {
     // An empty list must not become `overlaps: []`, which the API reads as a filter matching
     // nothing rather than as no filter.
-    expect(
-      convertWhereConditionToEntityFilter({ spaces: [] }, { includeEmptyNames: true }).spaceIds
-    ).toBeUndefined();
+    expect(convertWhereConditionToEntityFilter({ spaces: [] }, { includeEmptyNames: true }).spaceIds).toBeUndefined();
     expect(convertWhereConditionToEntityFilter({}, { includeEmptyNames: true }).spaceIds).toBeUndefined();
   });
 });

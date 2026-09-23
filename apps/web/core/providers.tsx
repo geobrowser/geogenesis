@@ -14,6 +14,7 @@ import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { SyncEngineProvider } from './sync/use-sync-engine';
+import { EmbeddedWalletSync } from './wallet/embedded-wallet-sync';
 
 const LazyPrivyProvider = dynamic(() => import('./wallet/privy').then(m => ({ default: m.PrivyProvider })), {
   ssr: false,
@@ -33,6 +34,7 @@ export function Providers({ children }: Props) {
       <LazyPrivyProvider>
         <ReactQueryProvider>
           <LazyWalletProvider>
+            <EmbeddedWalletSync />
             <AnalyticsUserIdentifier />
             <SentryUserIdentifier />
             <JotaiProvider store={store}>

@@ -1,3 +1,5 @@
+import { releaseVideo } from './release-video';
+
 type ExtractKeyframeOptions = {
   /** Seconds into the video to grab the frame. A small positive offset avoids a black opening frame. */
   seekTime?: number;
@@ -49,8 +51,7 @@ export async function extractVideoKeyframe(
 
       const cleanup = () => {
         clearTimeout(timer);
-        video.removeAttribute('src');
-        video.load();
+        releaseVideo(video);
       };
 
       const finish = (result: Blob | null) => {

@@ -15,7 +15,6 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
@@ -34,7 +33,7 @@ import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
-import { exceedsLineClamp } from './line-clamp-overflow';
+import { useLineClampOverflow } from './line-clamp-overflow';
 import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
@@ -262,7 +261,12 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
-  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
+  // Memoised because both branches build a new array: the effect below is keyed on this, and an
+  // unmemoised ternary re-ran it on every render.
+  const visibleDebates = React.useMemo(
+    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, debates, visibleCount]
+  );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
   // hold above, and holds the nudge back while the media lookups land one at a time and
@@ -420,7 +424,6 @@ function DebateFeedItem({
   onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const winnerVotes = useDebateVotes(debate);
   const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
@@ -489,7 +492,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={winnerVotes} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
@@ -544,35 +547,16 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
-  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
-  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
 
   React.useEffect(() => setIsClaimExpanded(false), [claim]);
 
-  React.useLayoutEffect(() => {
-    const element = claimRef.current;
-    if (!element || isClaimExpanded) return;
-
-    const measureOverflow = () =>
-      setIsClaimOverflowing(
-        exceedsLineClamp({
-          contentHeight: element.scrollHeight,
-          clampedHeight: element.clientHeight,
-          // Read on every measure rather than once: the breakpoint swaps the whole type scale, so a
-          // rotation or a resize past 767px changes the line height this is counting in.
-          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
-          maxLines: CLAIM_CLAMP_LINES,
-        })
-      );
-    measureOverflow();
-
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(measureOverflow);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [claim, isClaimExpanded]);
+  const isClaimOverflowing = useLineClampOverflow(claimElement, {
+    maxLines: CLAIM_CLAMP_LINES,
+    enabled: !isClaimExpanded,
+    contentKey: claim,
+  });
 
   return (
     <div className="flex flex-col gap-1">
@@ -620,7 +604,7 @@ function DebateTitleHeader({
         </Button>
       </div>
       <h2
-        ref={claimRef}
+        ref={setClaimElement}
         title={isClaimOverflowing ? claim : undefined}
         className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'

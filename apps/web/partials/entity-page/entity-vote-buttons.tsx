@@ -8,11 +8,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useSetAtom } from 'jotai';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useStore } from 'jotai';
 
 import { trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
   type EntityResponder,
@@ -39,23 +39,17 @@ import { Profile } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
-import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+import { slideUpPopoverContainerAtom } from '~/atoms';
 
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
-
-type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
 type EntityVoteButtonsProps = {
   entityId: string;
@@ -72,6 +66,13 @@ export function EntityVoteButtons({
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
+  const prepareOnboarding = usePrepareOnboarding();
+  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
+  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
+  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
+  // anyway, so reading the store at that moment is current enough.
+  const store = useStore();
+  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -112,8 +113,6 @@ export function EntityVoteButtons({
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
   const queryResponseKind = responseKind ?? 'stance';
   const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
-  const variant: ResponseVariant =
-    queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
   const {
@@ -125,15 +124,6 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const enqueuePendingAction = useEnqueuePendingAction();
 
   // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
@@ -212,13 +202,7 @@ export function EntityVoteButtons({
 
   function openPrivySignIn() {
     // Stay on this page after onboarding instead of bouncing to the explore page.
-    const search = searchParams?.toString();
-    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
+    prepareOnboarding();
     login();
   }
 
@@ -280,23 +264,12 @@ export function EntityVoteButtons({
   const effectiveTotal = effectivePositive + effectiveNegative;
   const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectivePositive) / effectiveTotal)}%` : '0%';
 
-  const isClaimVariant = variant !== 'default';
-  const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
-
-  const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
-    if (variant === 'chevrons') {
-      return direction === 'up' ? <ChevronUp /> : <ChevronDown />;
-    }
-
-    if (variant === 'thumbs') {
-      return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
-    }
-
-    // No `color`: the arrow takes `currentColor` from the button, which is where the grey now lives
-    // for every variant. Pinning it here meant this one icon answered for its own colour while the
-    // other two read the button's, which is how the three drifted apart.
-    return <VoteArrow direction={direction} filled={active} />;
-  };
+  // A claim shows how the room split; everything else shows a score. This used to ask a `variant`
+  // that was itself computed from nothing but the response kind — a second vocabulary parallel to
+  // `ResponseKind`, which had to be kept in step by hand. Asking the kind directly removes the
+  // thing that could fall out of step.
+  const isClaimResponse = queryResponseKind !== 'curation';
+  const displayLabel = isClaimResponse ? percentLabel : scoreLabel;
 
   // Grey either way; the filled icon says which one you picked. The thumbs used to rest lighter
   // and darken when picked, and curation got no class at all, pinning its arrows' colour on the
@@ -311,9 +284,9 @@ export function EntityVoteButtons({
   // use that. Emitting `text-grey-03` alongside `text-[#2A2B2E]` leaves the winner to whichever
   // rule Tailwind happens to emit second, which is not something this file gets to decide.
   const responseButtonColor = (active: boolean) =>
-    variant === 'chevrons' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
+    queryResponseKind === 'veracity' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
 
-  const claimResponderAvatars = isClaimVariant ? (
+  const claimResponderAvatars = isClaimResponse ? (
     <ClaimResponderAvatars
       entityId={entityId}
       spaceId={spaceId}
@@ -378,7 +351,7 @@ export function EntityVoteButtons({
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
-        {renderResponseIcon('up', positiveActive)}
+        <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
       <Popover.Root open={respondersOpen} onOpenChange={setRespondersOpen}>
         <Popover.Trigger asChild>
@@ -390,7 +363,9 @@ export function EntityVoteButtons({
             {displayLabel}
           </button>
         </Popover.Trigger>
-        <Popover.Portal>
+        {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
+            scroll lock; the body otherwise, unchanged. */}
+        <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
           <Popover.Content
             align="center"
             side="bottom"
@@ -426,7 +401,7 @@ export function EntityVoteButtons({
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
-        {renderResponseIcon('down', negativeActive)}
+        <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
       {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>

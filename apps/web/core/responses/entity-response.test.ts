@@ -25,6 +25,9 @@ import {
 const SPACE_ID = '1234567890abcdef1234567890abcdef';
 const OTHER_SPACE_ID = 'abcdef1234567890abcdef1234567890';
 
+// `resolveEntityResponseKind` reads only `isDeleted`, `type.id`, `toEntity.id`, `spaceId`,
+// `property.id` and `value`, so the fixtures below carry only those. That is less than a full
+// `Value`/`Relation`, which is why the assertions go through `unknown`.
 type ResolveEntity = NonNullable<Parameters<typeof resolveEntityResponseKind>[0]>;
 
 function plainEntity(): ResolveEntity {
@@ -35,13 +38,8 @@ function claimEntity(factualValue?: string): ResolveEntity {
   return {
     relations: [
       {
-        id: 'claim-type-relation',
-        entityId: 'claim-type-relation-entity',
-        spaceId: SPACE_ID,
-        renderableType: 'RELATION',
-        fromEntity: { id: 'claim-entity', name: 'Claim' },
-        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-        toEntity: { id: CLAIM_TYPE_ID, name: 'Claim', value: CLAIM_TYPE_ID },
+        type: { id: SystemIds.TYPES_PROPERTY },
+        toEntity: { id: CLAIM_TYPE_ID },
         isDeleted: false,
       },
     ],
@@ -51,14 +49,12 @@ function claimEntity(factualValue?: string): ResolveEntity {
         : [
             {
               spaceId: SPACE_ID,
-              id: 'factual-value',
-              entity: { id: 'claim-entity', name: 'Claim' },
-              property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID, name: 'Factual', dataType: 'BOOLEAN' },
+              property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
               value: factualValue,
               isDeleted: false,
             },
           ],
-  };
+  } as unknown as ResolveEntity;
 }
 
 describe('entity response semantics', () => {
@@ -99,8 +95,23 @@ describe('entity response semantics', () => {
   });
 
   it('ignores factual values from other spaces when resolving kind', () => {
-    const entity = claimEntity('1');
-    entity.values[0].spaceId = OTHER_SPACE_ID;
+    const entity = {
+      relations: [
+        {
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isDeleted: false,
+        },
+      ],
+      values: [
+        {
+          spaceId: OTHER_SPACE_ID,
+          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          value: '1',
+          isDeleted: false,
+        },
+      ],
+    } as unknown as ResolveEntity;
 
     expect(resolveEntityResponseKind(entity, SPACE_ID)).toBe('stance');
   });

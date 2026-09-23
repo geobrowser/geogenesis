@@ -1,5 +1,6 @@
 'use client';
 
+import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 export type ParticipantSlot = 1 | 2;
@@ -710,6 +711,21 @@ export type LocalRecordingCompleteRequest = {
   height?: number | null;
   framerate?: number | null;
   video_bits_per_second?: number | null;
+  /** Set when the recording was streamed as a multipart upload; the server assembles the parts. */
+  multipart_upload_id?: string | null;
+};
+
+/** A multipart upload opened when recording starts, so the file can go out while it is made. */
+export type LocalRecordingMultipartStartResponse = {
+  filename: string;
+  upload_id: string;
+  /** Every part but the last must be exactly this many bytes. */
+  part_size: number;
+};
+
+export type LocalRecordingPartUrl = {
+  part_number: number;
+  upload: ObjectStoreUpload;
 };
 
 export type RecordingCompleteResponse = {
@@ -777,6 +793,42 @@ export async function getDebateActivity(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `/me/debate-schedule` answers. `is_set` is false for somebody who never saved one. */
+export type DebateScheduleResponse = {
+  is_set: boolean;
+  schedule: AvailabilityPayload;
+};
+
+/**
+ * The viewer's saved debate schedule (GEO-2932).
+ *
+ * Distinct from `/me/debate-availability` below, which is the "available to debate right now"
+ * toggle. This is the calendar: when someone is generally free. The paths differ by one word and
+ * mean unrelated things, which is why they are documented together.
+ */
+export async function getDebateSchedule(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Replaces the whole schedule; the modal holds all of it and saves all of it. */
+export async function replaceDebateSchedule(
+  schedule: AvailabilityPayload,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
+    method: 'PUT',
+    body: schedule,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1532,6 +1584,55 @@ export async function completeLocalRecordingUpload(
   accountKey: string | null
 ) {
   return geoChatRequest<RecordingCompleteResponse>(`/debates/${debateId}/recordings/local-upload-complete`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function startLocalRecordingMultipart(
+  debateId: string,
+  request: LocalRecordingUploadRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<LocalRecordingMultipartStartResponse>(`/debates/${debateId}/recordings/local-multipart`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function getLocalRecordingPartUrls(
+  debateId: string,
+  request: { filename: string; upload_id: string; part_numbers: number[] },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const response = await geoChatRequest<{ parts: LocalRecordingPartUrl[] }>(
+    `/debates/${debateId}/recordings/local-multipart/part-urls`,
+    {
+      method: 'POST',
+      body: request,
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+    }
+  );
+  return response.parts;
+}
+
+export async function abortLocalRecordingMultipart(
+  debateId: string,
+  request: { filename: string; upload_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  await geoChatRequest<void>(`/debates/${debateId}/recordings/local-multipart/abort`, {
     method: 'POST',
     body: request,
     auth: true,

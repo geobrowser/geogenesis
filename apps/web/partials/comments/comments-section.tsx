@@ -7,19 +7,24 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
 import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
 import type { DebateVoteRecord } from '~/core/debates/vote-tally';
+import {
+  type ProposalCommentAttribution,
+  proposalAttributionLabel,
+} from '~/core/governance/proposal-comment-attribution';
+import { useProposalCommentAttribution } from '~/core/governance/use-proposal-comment-attribution';
 import { useComments } from '~/core/hooks/use-comments';
-import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
+import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -45,6 +50,8 @@ import {
 import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
+
+const NO_REPLIES: never[] = [];
 
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
@@ -130,6 +137,44 @@ function CommentVoteBadge({ authorSpaceId }: { authorSpaceId: string }) {
   );
 }
 
+/**
+ * Author space id → where that person stands on the proposal being commented on. Context for the
+ * same reason as the debate map above: the badge would otherwise be threaded through every nesting
+ * level of CommentList. Empty for entities that aren't proposals.
+ */
+const ProposalAttributionContext = React.createContext<Map<string, ProposalCommentAttribution>>(new Map());
+
+/**
+ * Who is speaking, on a proposal (GEO-2907): whether they are an editor or a member of the space,
+ * and if an editor, how they voted.
+ *
+ * Nothing is drawn until the lookup answers. A badge that appears as "Editor" and becomes "Editor ·
+ * Rejected" a beat later reads as the page correcting itself about a person, and an absent badge is
+ * honest where a half-built one is not.
+ */
+function ProposalAttributionBadge({ authorSpaceId }: { authorSpaceId: string }) {
+  const attribution = React.useContext(ProposalAttributionContext).get(uuidToHex(authorSpaceId));
+  const label = proposalAttributionLabel(attribution);
+  if (!label) return null;
+
+  // The vote is a state, not a decoration, so it carries the same accept/reject colours the
+  // proposal's own vote bars do. A role with no vote behind it stays neutral.
+  const tone =
+    attribution?.vote === 'ACCEPT'
+      ? 'bg-successTertiary text-resultSuccess'
+      : attribution?.vote === 'REJECT'
+        ? 'bg-errorTertiary text-resultError'
+        : 'bg-divider text-grey-04';
+
+  return (
+    <span className={cx('inline-flex shrink-0 items-center rounded-full px-2 py-0.5', tone)}>
+      <Text variant="footnote" as="span">
+        {label}
+      </Text>
+    </span>
+  );
+}
+
 function replySubtreeContainsCommentId(node: CommentWithReplies, targetId: string): boolean {
   const replies = Array.isArray(node.replies) ? node.replies : [];
   for (const reply of replies) {
@@ -189,11 +234,10 @@ interface CommentSectionProps {
 
 export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
-  const { createComment, editComment } = useCreateComment(entityId);
+  const { publishComment, editComment } = usePublishComment(entityId, spaceId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
-  const enqueuePendingAction = useEnqueuePendingAction();
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
@@ -226,10 +270,27 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     setComposerExpanded(true);
   }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
-  const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  // Both roles from one request, so a badge cannot show half of someone's standing.
+  const {
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoading: isLoadingRoles,
+    isError: isRolesError,
+  } = useSpaceRoles(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
   // so entity pages without any don't pay for the lookup.
   const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
+  // Resolves to an empty map unless this entity is a Proposal. Reuses the editor set gathered just
+  // above rather than asking the same question twice.
+  const proposalAttribution = useProposalCommentAttribution({
+    entityId,
+    spaceId,
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoadingRoles,
+    isRolesError,
+    enabled: totalCount > 0,
+  });
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
@@ -269,36 +330,19 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   }, []);
 
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
-  // in the cache immediately (via useCreateComment) with a "Publishing…" tag; sessionNewIds
+  // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
       if (!smartAccount) return;
 
-      void createComment({
+      void publishComment({
         text,
-        targetSpaceId: spaceId,
         ancestorComments,
         onOptimistic: markSessionNew,
-      }).then(result => {
-        if (!result || result.published) return;
-        enqueuePendingAction({
-          id: `comment:${entityId}:${result.id}`,
-          label: 'your comment',
-          requires: 'personalSpace',
-          run: () =>
-            createComment({
-              text,
-              targetSpaceId: spaceId,
-              ancestorComments,
-              commentId: result.id,
-            }).then(published => {
-              if (!published?.published) throw new Error('Comment could not be published');
-            }),
-        });
       });
     },
-    [createComment, smartAccount, spaceId, entityId, enqueuePendingAction, markSessionNew]
+    [markSessionNew, publishComment, smartAccount]
   );
 
   const handleEditComment = React.useCallback(
@@ -388,22 +432,24 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
               <>
                 <Spacer height={16} />
                 <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
-                  <CommentList
-                    comments={filteredComments}
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    onReply={handleCreateComment}
-                    onEdit={handleEditComment}
-                    personalSpaceId={personalSpaceId}
-                    editorSpaceIds={editorSpaceIds}
-                    isThreadCollapsed={isThreadCollapsed}
-                    toggleThreadCollapsed={toggleThreadCollapsed}
-                    sortReplies={sortWithSessionPinned}
-                    isLoggedIn={isLoggedIn}
-                    onSignInRequired={requireSignInToComment}
-                    pendingReplyToId={pendingReplyToId}
-                    onPendingReplyConsumed={() => setPendingReplyToId(null)}
-                  />
+                  <ProposalAttributionContext.Provider value={proposalAttribution}>
+                    <CommentList
+                      comments={filteredComments}
+                      entityId={entityId}
+                      spaceId={spaceId}
+                      onReply={handleCreateComment}
+                      onEdit={handleEditComment}
+                      personalSpaceId={personalSpaceId}
+                      editorSpaceIds={editorSpaceIds}
+                      isThreadCollapsed={isThreadCollapsed}
+                      toggleThreadCollapsed={toggleThreadCollapsed}
+                      sortReplies={sortWithSessionPinned}
+                      isLoggedIn={isLoggedIn}
+                      onSignInRequired={requireSignInToComment}
+                      pendingReplyToId={pendingReplyToId}
+                      onPendingReplyConsumed={() => setPendingReplyToId(null)}
+                    />
+                  </ProposalAttributionContext.Provider>
                 </DebateVoteBadgeContext.Provider>
               </>
             )
@@ -547,6 +593,7 @@ function TopLevelCommentInput({
         onSubmit(text);
         onExpandedChange(false);
       }}
+      analyticsLabel="New comment"
       placeholder=""
       autoFocus
       onCancel={() => onExpandedChange(false)}
@@ -554,14 +601,17 @@ function TopLevelCommentInput({
   );
 }
 
-function CommentInput({
+/** Exported for the Escape test: this composer renders inside the proposal review sheet. */
+export function CommentInput({
   onSubmit,
+  analyticsLabel = 'Comment',
   placeholder,
   autoFocus = false,
   onCancel,
   initialValue = '',
 }: {
   onSubmit: (text: string) => void;
+  analyticsLabel?: string;
   placeholder: string;
   autoFocus?: boolean;
   onCancel?: () => void;
@@ -593,6 +643,13 @@ function CommentInput({
       handleSubmit();
     }
     if (e.key === 'Escape' && onCancel) {
+      // Marked handled, like the submit branch above. This composer renders inside the proposal review
+      // sheet, whose window listener closes it on any Escape it sees undefaulted — so without this,
+      // cancelling a draft also navigated off the proposal, taking the draft with it. Every layer above
+      // (the comments panel, the entity side panel, the sheet) already respects `defaultPrevented`; this
+      // is the one handler that acted without saying so.
+      e.preventDefault();
+      e.stopPropagation();
       onCancel();
     }
   };
@@ -614,6 +671,8 @@ function CommentInput({
     <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
       <textarea
         ref={textareaRef}
+        data-geo-analytics-label={analyticsLabel}
+        aria-label={analyticsLabel}
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -728,6 +787,11 @@ function CommentList({
     };
   }, [listLayoutKey, updateLastReplyTop]);
 
+  // Above the early return, because it is a hook: `depth` is a prop, so a list rendered at depth 0
+  // on one pass and deeper on the next would change how many hooks this component calls and React
+  // would throw. Cheap enough to read on every render.
+  const density = useCommentDensity();
+
   if (depth === 0) {
     return (
       <div>
@@ -764,7 +828,6 @@ function CommentList({
   // The elbow lands on the reply avatar's vertical centre, so its geometry
   // follows the density's avatar size rather than the 32px avatar these paths
   // were originally drawn against.
-  const density = useCommentDensity();
   const spineOffsetPx = threadSpineOffsetPx(density);
   const armCenterPx = threadArmCenterPx(density);
   const armY = armCenterPx - 0.5;
@@ -1007,7 +1070,11 @@ function CommentItem({
   }, [comment.createdAt]);
 
   const density = useCommentDensity();
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  // Memoised: the empty branch was a new array each render, and `sortedReplies` below is keyed on it.
+  const replies = React.useMemo(
+    () => (Array.isArray(comment.replies) ? comment.replies : NO_REPLIES),
+    [comment.replies]
+  );
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -threadSpineOffsetPx(density);
@@ -1041,6 +1108,9 @@ function CommentItem({
       // The spine starts below the avatar, so drop that much off its length.
       setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
+    // `density.avatarPx` rather than `density`: the object is rebuilt each render, and the pixel is
+    // the only part of it this measurement reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (
@@ -1064,12 +1134,14 @@ function CommentItem({
         <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
+        <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
         {/* While publishing, this stands in for the timestamp — a just-posted
             comment has no meaningful age yet, and showing both read as noise. */}
         <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
           {comment.isPublishing ? 'Publishing…' : relativeTime}
         </span>
         <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
+        <ProposalAttributionBadge authorSpaceId={comment.author.spaceId} />
         {comment.resolved && (
           <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1120,6 +1192,7 @@ function CommentItem({
       {isEditing ? (
         <CommentInput
           onSubmit={handleEdit}
+          analyticsLabel="Edit comment"
           placeholder="Edit your comment..."
           autoFocus
           onCancel={() => setIsEditing(false)}
@@ -1192,6 +1265,7 @@ function CommentItem({
         <div className="mt-3">
           <CommentInput
             onSubmit={handleReply}
+            analyticsLabel="Reply to comment"
             placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
             autoFocus
             onCancel={() => setIsReplying(false)}
@@ -1251,10 +1325,12 @@ function CommentItem({
             <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
+            <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
             <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
               {comment.isPublishing ? 'Publishing…' : relativeTime}
             </span>
             <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
+            <ProposalAttributionBadge authorSpaceId={comment.author.spaceId} />
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"

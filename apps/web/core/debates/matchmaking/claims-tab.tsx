@@ -814,7 +814,7 @@ export function ClaimsTab({
       const kept = current.filter(spaceShowsClaims);
       return kept.length === current.length ? current : kept;
     });
-  }, [spaceShowsClaims, spacesPending]);
+  }, [setSpaceIds, spaceShowsClaims, spacesPending]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
@@ -826,7 +826,7 @@ export function ClaimsTab({
   // draining the whole selection in a single tick, rather than one pick per server response.
   React.useEffect(() => {
     setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
-  }, [facetTopics, facetsComplete, topicsSettling]);
+  }, [facetTopics, facetsComplete, setTopicIds, topicsSettling]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and
@@ -1305,6 +1305,11 @@ export function SpaceTopicFilters({
     <div className="flex flex-wrap items-center gap-2">
       {leading}
       <HubMultiFilterMenu
+        // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
+        // Viewport-based alignment chooses the end there and hangs the menu over the page behind
+        // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
+        // their adaptive placement.
+        align="start"
         label={spaceMenuLabel}
         labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
@@ -1321,6 +1326,7 @@ export function SpaceTopicFilters({
         // together there — a menu and a switch, reading as one control. The menus belong with each
         // other; the switch is what the end of the row is for.
         <HubMultiFilterMenu
+          align="start"
           label={topicMenuLabel}
           options={topicOptions}
           values={topicIds}
@@ -1328,6 +1334,11 @@ export function SpaceTopicFilters({
           onClear={onTopicsClear}
           clearLabel="Any topic"
           countsPending={countsPending}
+          // Only this menu takes a query. The space menu is the handful of spaces the viewer
+          // belongs to; the topic facet is every subject the corpus has been tagged with, which is
+          // a scrolling list on any space that has been used for a while.
+          searchPlaceholder="Search topics"
+          searchEmptyLabel="No topics match"
         />
       ) : null}
       {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases

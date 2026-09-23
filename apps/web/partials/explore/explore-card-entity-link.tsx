@@ -41,11 +41,16 @@ type Props = {
 export function ExploreCardEntityLink({ item, opensSidePanel = false, className, children }: Props) {
   const { openSidePanel } = useEntitySidePanel();
 
-  // A debate is a full-screen video experience, so its title navigates even on Explore, where every
-  // other title opens the panel (GEO-2794 amending GEO-2757). Putting the exception here rather
-  // than at the four call sites is what makes it hold wherever a debate card is drawn — including
-  // when `DebateExploreFeedCard` falls back to the generic card, which is a debate the panel would
-  // serve especially badly.
+  // A debate is a full-screen video experience, so a title pointing at one navigates even on
+  // Explore, where every other title opens the panel (GEO-2794 amending GEO-2757). Putting the
+  // exception here rather than at the call sites is what makes it hold wherever such a title is
+  // drawn — including when `DebateExploreFeedCard` falls back to the generic card, which is a
+  // debate the panel would serve especially badly.
+  //
+  // Note this is keyed on what the title *opens*, not on what card it sits on: a debate card is
+  // normally headed by the claim it argued (`exploreCardHeading`), and that heading points at the
+  // Claim, which the panel serves well. The exception is for the debate itself, which a heading
+  // only names when the Claims relation is missing.
   const opensPanel = opensSidePanel && !isDebateEntity(item.types);
 
   const onClick = React.useCallback(
