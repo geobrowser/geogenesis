@@ -43,6 +43,15 @@ const MAX_MEDIA_RECOVERY_ATTEMPTS = 3;
  */
 const MEDIA_RECOVERY_BACKOFF_MS = 400;
 
+/**
+ * What a tile asks the browser for before anything has gone wrong.
+ *
+ * Enough to paint a frame and know the shape of the recording, without pulling a multi-megabyte
+ * file down for a card nobody has reached yet — the feed keeps several of these mounted at once.
+ * A tile whose pipeline dies raises it for that source alone; see `reattachVideoSource`.
+ */
+const TILE_PRELOAD = 'metadata';
+
 /** How every big round control in the player looks, wherever it is put. */
 const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
 const CENTERED_PLAYBACK_CONTROL_CLASS = `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${PLAYBACK_CONTROL_CIRCLE_CLASS}`;
@@ -630,9 +639,11 @@ function DebaterVideo({
    * machinery cannot help — every correction in `useDebatePlayback` is about *where* the two
    * elements are, and this one is nowhere.
    *
-   * The repair is to detach and re-fetch the source, which is enough on its own: the recording is
-   * fine, and the same URL loads to `HAVE_ENOUGH_DATA` on the second attempt. `onRecovered` then
-   * brings it back to wherever its partner has got to.
+   * The repair is to detach and re-fetch the source with `preload` raised to `auto`. The recording
+   * is fine and the URL is fine; what was wrong was how the element was asking for it, and the
+   * same URL loads to `HAVE_ENOUGH_DATA` on the first rebuild once it asks differently — see
+   * `reattachVideoSource`, which carries the measurement. `onRecovered` then brings the tile back
+   * to wherever its partner has got to.
    *
    * Bounded and spaced, because the one thing worse than a blank tile is a tile refetching a
    * multi-megabyte recording in a loop.
@@ -669,12 +680,18 @@ function DebaterVideo({
 
   // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
   // repair still pending belongs to the old one.
+  //
+  // The `preload` a rebuild raised goes back with it. `reattachVideoSource` writes the DOM
+  // property directly, which React cannot see and therefore never reconciles: left alone, one
+  // recording that needed the heavier fetch would hand it to every recording the tile is given
+  // afterwards. Most of them load from metadata perfectly well and should keep doing so.
   React.useEffect(() => {
     recoveryAttemptsRef.current = 0;
     escalatedRef.current = false;
     setExhausted(false);
+    if (videoRef.current) videoRef.current.preload = TILE_PRELOAD;
     return cancelRecovery;
-  }, [cancelRecovery, src]);
+  }, [cancelRecovery, src, videoRef]);
 
   const rebuild = React.useCallback(
     (attempt: number) => {
@@ -735,7 +752,7 @@ function DebaterVideo({
             ref={videoRef}
             className="h-full w-full object-cover"
             playsInline
-            preload="metadata"
+            preload={TILE_PRELOAD}
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}

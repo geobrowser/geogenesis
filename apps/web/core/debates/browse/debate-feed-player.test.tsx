@@ -484,6 +484,41 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     expect(controller().resyncSlot).toHaveBeenCalledWith(1);
   });
 
+  /**
+   * The rebuild's other half, and the half that makes it work at all.
+   *
+   * `preload="metadata"` is what kills these recordings: MediaRecorder WebM carries no duration
+   * and no cues, so the demuxer seeks to find the length, and metadata mode has already stopped
+   * fetching by then. A rebuild that keeps it therefore fails identically every time — which is a
+   * whole budget spent, a URL re-signed for nothing, and a tile that ends up saying the recording
+   * did not load while the same recording plays fine on a page that autoplays it.
+   */
+  it('raises preload past the mode that killed the pipeline', () => {
+    const { slot1, slot2 } = renderPair();
+    expect(slot1.preload).toBe('metadata');
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(slot1.preload).toBe('auto');
+    // The tile that is fine keeps the cheap fetch. Several of these are mounted at once.
+    expect(slot2.preload).toBe('metadata');
+  });
+
+  // Per source, not per element. A card re-ranked onto a different debate — or handed this
+  // recording's re-signed URL — starts from the light fetch that most recordings load from.
+  it('puts preload back when the tile is given a different recording', () => {
+    const { slot1, resign, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    resign('https://cdn.test/slot1-resigned.webm');
+
+    expect(Array.from(container.querySelectorAll('video'))[0].preload).toBe('metadata');
+  });
+
   it('repairs each tile independently', () => {
     const { slot2 } = renderPair();
 
