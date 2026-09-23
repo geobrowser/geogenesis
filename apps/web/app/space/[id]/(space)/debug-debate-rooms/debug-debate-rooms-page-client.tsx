@@ -49,6 +49,10 @@ export function DebugDebateRoomsPageClient() {
     setConflict(null);
     const ahead = Number(minutesAhead);
     if (!opponent.trim() || Number.isNaN(ahead)) return;
+    if (viewerId && opponent.trim().replace(/-/g, '') === viewerId.replace(/-/g, '')) {
+      setConflict('That is your own id. A debate needs two people.');
+      return;
+    }
     propose.mutate({
       opponentUserId: opponent.trim(),
       startsAt: new Date(Date.now() + ahead * 60_000),
@@ -66,6 +70,7 @@ export function DebugDebateRoomsPageClient() {
             setConflict(`Clashes with a debate from ${formatWhen(result.conflicting_start_at)}.`);
           }
         },
+        onError: error => setConflict(error.message),
       }
     );
   };
@@ -121,7 +126,8 @@ export function DebugDebateRoomsPageClient() {
           Your scheduled debates
         </Text>
         {requests.isLoading && <Text color="grey-04">Loading…</Text>}
-        {!requests.isLoading && rows.length === 0 && <Text color="grey-04">Nothing scheduled.</Text>}
+        {requests.error && <Text color="red-01">Could not read your schedule: {requests.error.message}</Text>}
+        {!requests.isLoading && !requests.error && rows.length === 0 && <Text color="grey-04">Nothing scheduled.</Text>}
         {rows.map(request => (
           <ScheduledRow key={request.request_id} request={request} busy={respond.isPending} onAnswer={answer} />
         ))}
