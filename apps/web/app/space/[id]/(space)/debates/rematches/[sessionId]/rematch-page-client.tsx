@@ -1948,6 +1948,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
       : [];
 
+  const leaveButton = (
+    <button
+      type="button"
+      aria-label="Leave debate"
+      title="Leave debate"
+      onClick={leave}
+      disabled={leaveSession.isPending}
+      className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+    >
+      <LeaveIcon />
+    </button>
+  );
+
   return (
     // Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
     // and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
@@ -1970,29 +1983,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               bottom-right corner of the viewport, outside the column, and people were not finding
               it. Inside the sticky block on purpose: the claim list pages forever, and a control
               that scrolls away has the dock's problem in a different place. */}
-          {session && currentUserId ? (
-            <div className="mb-4">
-              {/* Leave rides in the header rather than at the end of the tab row: it belongs to
-                  you, so it sits in your card, opposite "View profile" on theirs. That leaves the
-                  tab strip the full width it was sharing. */}
-              <RematchVoiceHeader
-                session={session}
-                currentUserId={currentUserId}
-                leaveAction={
-                  <button
-                    type="button"
-                    aria-label="Leave debate"
-                    title="Leave debate"
-                    onClick={leave}
-                    disabled={leaveSession.isPending}
-                    className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-                  >
-                    <LeaveIcon />
-                  </button>
-                }
-              />
-            </div>
-          ) : null}
+          {/* Leave rides in the header rather than at the end of the tab row: it belongs to you,
+              so it sits in your card, opposite "View profile" on theirs. That leaves the tab strip
+              the full width it was sharing.
+
+              Drawn either way, because this page is a `fixed inset-0` layer over the whole app and
+              this button is the only way off it. Signed out, mid identity exchange, or on a failed
+              session lookup there is no pair to draw — and a picker with no exit is worse than one
+              with no header. */}
+          <div className="mb-4">
+            {session && currentUserId ? (
+              <RematchVoiceHeader session={session} currentUserId={currentUserId} leaveAction={leaveButton} />
+            ) : (
+              <div className="flex justify-end">{leaveButton}</div>
+            )}
+          </div>
           <header className="mb-4 flex items-end gap-4">
             {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
                 gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
@@ -2016,7 +2021,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   Lobby
                   <span
                     className={cx(
-                      'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
+                      // `h-5`, not `min-h-6`: anything taller than the 22px label line makes this
+                      // tab taller than its neighbours, and the active marker is positioned from
+                      // each tab's own bottom — so Lobby's would sit a pixel below the rule that
+                      // every other tab's marker meets.
+                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
                       tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
                     )}
                   >
@@ -2036,9 +2045,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   Explore
                 </TabButton>
               </div>
-              {/* The hub panel's baseline: a hairline the whole row sits on, with the active tab's
-                  1px marker drawn over it. */}
-              <div aria-hidden className="h-px bg-grey-02" />
+              {/* Outside the scroll container so the rule spans the visible row rather than the
+                  scrollable width, and `z-0` so the active tab's marker paints over it rather than
+                  under. Same pairing as the debates hub panel. */}
+              <div aria-hidden className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
             </div>
           </header>
 
@@ -2738,8 +2748,9 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
       {/* Drawn over the row's baseline rather than instead of it, so the marker and the hairline
-          line up exactly. `-bottom-2` is the strip's own `pb-2`. */}
-      {active ? <span aria-hidden className="absolute inset-x-0 -bottom-2 h-px bg-text" /> : null}
+          line up exactly. `bottom-[-8px]` is the strip's own `pb-2`, and `z-100` keeps it above the
+          rule — the same marker the debates hub panel draws. */}
+      {active ? <span aria-hidden className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" /> : null}
     </button>
   );
 }

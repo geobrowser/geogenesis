@@ -3340,6 +3340,19 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A newly published claim').closest('.sticky')).toBeNull();
   });
 
+  // This page is a `fixed inset-0` layer over the whole app, and Leave is the only way off it.
+  // Moving it into the pair header put it behind `session && currentUserId` for a release —
+  // signed out, mid identity exchange, or on a failed session lookup the picker covered the screen
+  // with no exit at all.
+  it('draws Leave even when there is no pair to draw', async () => {
+    mocks.session = null;
+    mocks.sessionLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByTestId('rematch-pair-header')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+  });
+
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
   // viewport — outside the 720px column, and a scroll away from everything the viewer was reading.
   // Its replacement has to be in the column, above the tabs, and pinned with them.

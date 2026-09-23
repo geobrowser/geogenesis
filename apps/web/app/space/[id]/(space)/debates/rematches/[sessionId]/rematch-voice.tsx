@@ -26,12 +26,11 @@ import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-settings';
+import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-import { useSpace } from '~/core/hooks/use-space';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -198,7 +197,7 @@ type PairContext = {
   local: PairHeaderParticipant | null;
   opponent: PairHeaderParticipant;
   opponentName: string;
-  onOpenOpponentSpace: (() => void) | null;
+  onOpenOpponentSpace: (event: React.MouseEvent) => void;
   lockedClaim: { claim: string; spaceName?: string | null } | null;
   positions: PairHeaderPositions | null;
   leaveAction?: React.ReactNode;
@@ -411,17 +410,12 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
 
   // The opponent card opens their personal space rather than navigating to it: this picker is a
   // fixed layer over the app, and leaving it would drop the pair out of the session they are in.
-  // The space's home entity is what the side panel needs, and it is not the space id.
-  const { space: opponentSpace } = useSpace(opponent?.profile_space_id);
-  const { openSidePanel } = useEntitySidePanel();
-  const opponentSpaceEntityId = opponentSpace?.entity?.id || null;
-  const onOpenOpponentSpace = React.useMemo(() => {
-    if (!opponent || !opponentSpaceEntityId) return null;
-    return () => openSidePanel(opponentSpaceEntityId, opponent.profile_space_id, false);
-    // `openSidePanel` is rebuilt on every render by its hook, and depending on it would rebuild
-    // this callback just as often — which is harmless here but makes the card's identity churn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opponent, opponentSpaceEntityId]);
+  //
+  // The shared hook, not a local copy of its rule. A personal space's own id resolves to an ugly
+  // technical record rather than to the person, so the space's page entity is what has to open —
+  // and it falls back to the space id while that lookup is still out, which the local copy got
+  // wrong by leaving the card inert until it landed.
+  const openOpponentProfile = useOpenDebaterProfile(opponent);
 
   // Once the pair lock a claim the header stops being only about voice: it is who is arguing what,
   // which side each of them took, and the claim itself above both cards.
@@ -441,7 +435,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
     local: toHeaderParticipant(local),
     opponent: toHeaderParticipant(opponent) as PairHeaderParticipant,
     opponentName,
-    onOpenOpponentSpace,
+    onOpenOpponentSpace: openOpponentProfile,
     lockedClaim,
     positions,
     leaveAction,
@@ -641,54 +635,138 @@ function VoiceHeaderBody({
 
   const [opponentMuted, setOpponentMuted] = React.useState(true);
 
-  const header = (voice: PairHeaderVoice, toast?: PairHeaderToast | null) => (
-    <RematchPairHeader {...pair} voice={voice} toast={toast ?? null} />
+  // Everything below used to live in a `ConnectedPairHeader` this rendered instead of a message.
+  // Swapping one component for another at the same position is a remount, and this subtree is the
+  // wrong place for one: it would close an open Audio settings popover, drop focus from the Leave
+  // button that now sits in the card, and re-insert the `role="status"` regions with their text
+  // already in them — the one thing those regions are shaped to avoid. So the hooks run
+  // unconditionally and the connection state picks the `voice` rather than the component.
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const micFailed = Boolean(micFailure);
+  const muted = !isMicrophoneEnabled || micFailed;
+  // Muting publishes nothing, but it does not retract the active-speaker update that came just
+  // before it, so the ring has to answer to the mute state as well or it can stay lit on a
+  // microphone the room has stopped hearing.
+  const localSpeaking = useIsSpeaking(localParticipant) && isMicrophoneEnabled && !micFailed;
+
+  // On the microphone actually opening, not on the click that asked for it. A denial or a busy
+  // device rejects, and counting the attempt would inflate the very rate this measures — and spend
+  // the one-shot, so the retry that does succeed would never be counted.
+  React.useEffect(() => {
+    if (isMicrophoneEnabled && !micFailed) analytics.recordUnmuted();
+  }, [analytics, isMicrophoneEnabled, micFailed]);
+
+  const setMicrophone = React.useCallback(
+    (next: boolean) => {
+      // Record the intent before publishing it, so a reconnect restores this choice rather than the
+      // join-time default.
+      onMicIntentChange(next);
+      // Unmuting is the first thing to open the microphone, so this is where a denial lands.
+      // LiveKit reports it through `onMediaDeviceFailure`; catching only keeps the rejection from
+      // surfacing as an unhandled promise.
+      void localParticipant.setMicrophoneEnabled(next).catch(() => undefined);
+    },
+    [localParticipant, onMicIntentChange]
   );
 
-  if (connectionState === ConnectionState.Disconnected && everConnected) {
-    return header({ kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry });
-  }
+  // A dead microphone has its own note in the card, which says more than a nudge could.
+  const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
+    muted && !micFailed,
+    opponentAudible,
+    nudgeSpentRef
+  );
 
-  if (connectionState !== ConnectionState.Connected) {
-    const reconnecting =
-      connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
-    return header({ kind: 'message', message: reconnecting ? 'Reconnecting…' : 'Connecting voice…' });
-  }
+  React.useEffect(() => {
+    if (nudgeVisible) analytics.recordNudge('opponent_talking');
+  }, [analytics, nudgeVisible]);
 
-  // Blocked playback outranks everything else the header could say: the room is fine, the opponent
-  // may well be talking, and the viewer simply cannot hear it until they click.
-  if (!canPlayAudio) {
-    return header({
-      kind: 'message',
-      message: 'Audio is blocked',
-      actionLabel: 'Enable audio',
-      onAction: () => void startAudio(),
-    });
-  }
+  const unmute = React.useCallback(() => {
+    dismissNudge();
+    onDismissNotice();
+    setMicrophone(true);
+  }, [dismissNudge, onDismissNotice, setMicrophone]);
+
+  const toggle = React.useCallback(() => {
+    // Whichever way this click goes, the user has just found the control — so the notice and the
+    // nudge that exist to point at it have nothing left to say. Dismissing here also covers two
+    // states they would otherwise misread: muting on purpose looks exactly like the join default,
+    // and unmuting leaves `isMicrophoneEnabled` false for as long as the permission dialog is open,
+    // both of which would leave them up in front of someone already dealing with the microphone.
+    dismissNudge();
+    onDismissNotice();
+    setMicrophone(!isMicrophoneEnabled);
+  }, [dismissNudge, isMicrophoneEnabled, onDismissNotice, setMicrophone]);
+
+  /**
+   * What the room is doing, when that outranks what the microphone is doing.
+   *
+   * Blocked playback comes last but outranks the rest of the connected state: the room is fine, the
+   * opponent may well be talking, and the viewer simply cannot hear it until they click.
+   */
+  const connectionMessage = ((): Extract<PairHeaderVoice, { kind: 'message' }> | null => {
+    if (connectionState === ConnectionState.Disconnected && everConnected) {
+      return { kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry };
+    }
+    if (connectionState !== ConnectionState.Connected) {
+      const reconnecting =
+        connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+      return { kind: 'message', message: reconnecting ? 'Reconnecting…' : 'Connecting voice…' };
+    }
+    if (!canPlayAudio) {
+      return {
+        kind: 'message',
+        message: 'Audio is blocked',
+        actionLabel: 'Enable audio',
+        onAction: () => void startAudio(),
+      };
+    }
+    return null;
+  })();
+
+  const opponentState: PairMicState = !opponentParticipant
+    ? 'waiting'
+    : opponentMuted
+      ? 'muted'
+      : opponentAudible
+        ? 'talking'
+        : 'live';
+
+  const voice: PairHeaderVoice = connectionMessage ?? {
+    kind: 'live',
+    muted,
+    localSpeaking,
+    micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
+    onRetryMic: onRetry,
+    controls: <LocalAudioControls room={room} muted={muted} micFailure={micFailure} onToggle={toggle} />,
+    opponentState,
+    // See `TALKING_WHILE_MUTED`: the states are built, the detector is a product call.
+    talkingWhileMuted: TALKING_WHILE_MUTED,
+  };
+
+  // Only while muted, only with somebody to talk to, only once the room is actually up, and only
+  // until the viewer has answered it once.
+  const notice =
+    !connectionMessage && muted && !micFailed && !noticeDismissed && opponentParticipant
+      ? { onUnmute: unmute, onDismiss: onDismissNotice }
+      : null;
+
+  const toast: PairHeaderToast | null =
+    !connectionMessage && nudgeVisible ? { kind: 'opponent-talking', onUnmute: unmute, onDismiss: dismissNudge } : null;
 
   return (
     <>
-      {opponentParticipant ? (
+      {/* Dropped while the room is not up, not only when the opponent leaves. Its cleanup is what
+          clears "they are talking", and without that a value left over from before a blip is still
+          true on the render where the viewer comes back muted — which fires the nudge at a silent
+          room. The header itself stays mounted through all of it; only this subscription does not. */}
+      {opponentParticipant && !connectionMessage ? (
         <OpponentPresence
           participant={opponentParticipant}
           onAudibleChange={setOpponentAudible}
           onMutedChange={setOpponentMuted}
         />
       ) : null}
-      <ConnectedPairHeader
-        pair={pair}
-        room={room}
-        micFailure={micFailure}
-        onMicIntentChange={onMicIntentChange}
-        onRetry={onRetry}
-        opponentPresent={Boolean(opponentParticipant)}
-        opponentMuted={opponentMuted}
-        opponentAudible={opponentAudible}
-        nudgeSpentRef={nudgeSpentRef}
-        noticeDismissed={noticeDismissed}
-        onDismissNotice={onDismissNotice}
-        analytics={analytics}
-      />
+      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} />
     </>
   );
 }
@@ -725,127 +803,15 @@ function OpponentPresence({
     return () => onAudibleChange(false);
   }, [audible, onAudibleChange]);
 
+  // Reset on unmount for the same reason `onAudibleChange` does: the last value outlives the
+  // participant otherwise, and somebody who leaves unmuted and rejoins muted reads as live for a
+  // frame. Muted is the safe default — it is how everyone joins.
   React.useEffect(() => {
     onMutedChange(muted);
+    return () => onMutedChange(true);
   }, [muted, onMutedChange]);
 
   return null;
-}
-
-/**
- * The header once the room is up: the pair cards with live mic state, the unmute notice, and the
- * nudges.
- *
- * `useLocalParticipant` lives here rather than in the pill so the card, the notice and the toasts
- * all read the same mute state on the same render.
- */
-function ConnectedPairHeader({
-  pair,
-  room,
-  micFailure,
-  onMicIntentChange,
-  onRetry,
-  opponentPresent,
-  opponentMuted,
-  opponentAudible,
-  nudgeSpentRef,
-  noticeDismissed,
-  onDismissNotice,
-  analytics,
-}: {
-  pair: PairContext;
-  room: Room;
-  micFailure: MediaDeviceFailure | null;
-  onMicIntentChange: (enabled: boolean) => void;
-  onRetry: () => void;
-  opponentPresent: boolean;
-  opponentMuted: boolean;
-  opponentAudible: boolean;
-  nudgeSpentRef: React.MutableRefObject<boolean>;
-  noticeDismissed: boolean;
-  onDismissNotice: () => void;
-  analytics: VoiceAnalytics;
-}) {
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const muted = !isMicrophoneEnabled || Boolean(micFailure);
-  // Muting publishes nothing, but it does not retract the active-speaker update that came just
-  // before it, so the ring has to answer to the mute state as well or it can stay lit on a
-  // microphone the room has stopped hearing.
-  const localSpeaking = useIsSpeaking(localParticipant) && isMicrophoneEnabled && !micFailure;
-
-  const setMicrophone = React.useCallback(
-    (next: boolean) => {
-      // Record the intent before publishing it, so a reconnect restores this choice rather than the
-      // join-time default.
-      onMicIntentChange(next);
-      if (next) analytics.recordUnmuted();
-      // Unmuting is the first thing to open the microphone, so this is where a denial lands.
-      // LiveKit reports it through `onMediaDeviceFailure`; catching only keeps the rejection from
-      // surfacing as an unhandled promise.
-      void localParticipant.setMicrophoneEnabled(next).catch(() => undefined);
-    },
-    [analytics, localParticipant, onMicIntentChange]
-  );
-
-  // A dead microphone has its own note in the card, which says more than a nudge could.
-  const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
-    muted && !micFailure,
-    opponentAudible,
-    nudgeSpentRef
-  );
-
-  React.useEffect(() => {
-    if (nudgeVisible) analytics.recordNudge('opponent_talking');
-  }, [analytics, nudgeVisible]);
-
-  const unmute = React.useCallback(() => {
-    dismissNudge();
-    onDismissNotice();
-    setMicrophone(true);
-  }, [dismissNudge, onDismissNotice, setMicrophone]);
-
-  const toggle = React.useCallback(() => {
-    // Whichever way this click goes, the user has just found the control — so the notice and the
-    // nudge that exist to point at it have nothing left to say. Dismissing here also covers two
-    // states they would otherwise misread: muting on purpose looks exactly like the join default,
-    // and unmuting leaves `isMicrophoneEnabled` false for as long as the permission dialog is open,
-    // both of which would leave them up in front of someone already dealing with the microphone.
-    dismissNudge();
-    onDismissNotice();
-    setMicrophone(!isMicrophoneEnabled);
-  }, [dismissNudge, isMicrophoneEnabled, onDismissNotice, setMicrophone]);
-
-  const opponentState: PairMicState = !opponentPresent
-    ? 'waiting'
-    : opponentMuted
-      ? 'muted'
-      : opponentAudible
-        ? 'talking'
-        : 'live';
-
-  const voice: PairHeaderVoice = {
-    kind: 'live',
-    muted,
-    localSpeaking,
-    micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
-    onRetryMic: onRetry,
-    controls: <LocalAudioControls room={room} muted={muted} micFailure={micFailure} onToggle={toggle} />,
-    opponentState,
-    // See `TALKING_WHILE_MUTED`: the states are built, the detector is a product call.
-    talkingWhileMuted: TALKING_WHILE_MUTED,
-  };
-
-  // Only while muted, only with somebody to talk to, and only until the viewer has answered it once.
-  const notice =
-    muted && !micFailure && !noticeDismissed && opponentPresent
-      ? { onUnmute: unmute, onDismiss: onDismissNotice }
-      : null;
-
-  const toast: PairHeaderToast | null = nudgeVisible
-    ? { kind: 'opponent-talking', onUnmute: unmute, onDismiss: dismissNudge }
-    : null;
-
-  return <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} />;
 }
 
 /**

@@ -93,8 +93,8 @@ type RematchPairHeaderProps = {
   /** Set once the pair lock a claim — the claim sits above the cards and each card takes a side chip. */
   lockedClaim?: { claim: string; spaceName?: string | null } | null;
   positions?: PairHeaderPositions | null;
-  /** Null while the opponent's personal space has not resolved; the card stays, inert. */
-  onOpenOpponentSpace: (() => void) | null;
+  /** Opens the opponent's profile in the side panel — see `useOpenDebaterProfile`. */
+  onOpenOpponentSpace: (event: React.MouseEvent) => void;
   /**
    * Leaving the session, drawn in your card's top-right corner.
    *
@@ -386,7 +386,7 @@ function OpponentCard({
   state: PairMicState;
   showMicState: boolean;
   agrees?: boolean;
-  onOpen: (() => void) | null;
+  onOpen: (event: React.MouseEvent) => void;
 }) {
   const talking = showMicState && state === 'talking';
 
@@ -406,27 +406,14 @@ function OpponentCard({
       // which it never was — the only control here is the pill in the other card.
       state={showMicState ? <OpponentMicChip state={state} name={name} /> : null}
       action={
-        onOpen ? (
-          <span className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 mobile:sr-only">
-            View profile
-            <ChevronRight />
-          </span>
-        ) : null
+        <span className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 mobile:sr-only">
+          View profile
+          <ChevronRight />
+        </span>
       }
       footer={agrees === undefined ? null : <PositionChip agrees={agrees} />}
     />
   );
-
-  if (!onOpen) {
-    return (
-      <div
-        data-testid="rematch-opponent-card"
-        className={cx(CARD_SURFACE, talking ? 'border-green' : 'border-grey-02', 'flex flex-col gap-2.5')}
-      >
-        {body}
-      </div>
-    );
-  }
 
   return (
     <button
