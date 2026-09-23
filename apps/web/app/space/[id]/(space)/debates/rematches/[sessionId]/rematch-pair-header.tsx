@@ -213,21 +213,36 @@ function YouCard({
   const talkingWhileMuted = live && voice.talkingWhileMuted;
   const speaking = live && voice.localSpeaking;
 
+  /**
+   * What the card says in words, over and above the button.
+   *
+   * Deliberately nothing for a plain muted/unmuted: the pill under the name already carries both
+   * halves — a filled "Unmute" is a microphone that is off and an invitation to turn it on, an
+   * outlined "Mute" is one that is on. A "Muted" caption beside it is the same fact a second time,
+   * and it reads as though the two could disagree.
+   *
+   * What is left is everything the button cannot say: a connection that is not up, a microphone
+   * the browser will not open, and a mute the viewer is talking straight through.
+   */
   const caption = (() => {
     if (voice.kind === 'absent') return null;
     if (voice.kind === 'message') return voice.message;
     if (voice.micFailureMessage) return voice.micFailureMessage;
     if (talkingWhileMuted) return `Muted · ${firstName(opponentName)} can’t hear you`;
-    // The state, in the same word the button uses: "Live" is a fourth vocabulary for the two
-    // states this page has, and the pill next to it already says "Unmute".
-    return muted ? 'Muted' : 'Unmuted';
+    return null;
   })();
 
-  const captionTone = (() => {
-    if (voice.kind !== 'live') return 'text-grey-04';
-    if (failed || talkingWhileMuted) return 'text-red-01';
-    return muted ? 'text-grey-04' : 'text-green';
-  })();
+  const captionTone = voice.kind === 'live' ? 'text-red-01' : 'text-grey-04';
+
+  /**
+   * The same two states, for a screen reader.
+   *
+   * Dropping the visible caption cannot drop the announcement with it: the microphone mutes on its
+   * own — a reconnect, a takeover, a device failure — and the button's `aria-label` flipping is not
+   * reliably read unless it happens to be focused. So the state stays in a live region that is
+   * always mounted and only changes text.
+   */
+  const spokenState = voice.kind === 'live' && !voice.micFailureMessage ? (muted ? 'Muted' : 'Unmuted') : '';
 
   const border = (() => {
     if (talkingWhileMuted || failed) return 'border-red-01';
@@ -246,10 +261,12 @@ function YouCard({
         />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-quoteMedium text-text">You</span>
+          <span role="status" data-testid="rematch-you-state" className="sr-only">
+            {spokenState}
+          </span>
           {caption ? (
-            // The mute state changes without the viewer doing anything — a reconnect, a device
-            // failure, the pair arriving already unmuted — so it announces itself rather than
-            // waiting to be noticed. Replaces the live regions the dock carried.
+            // Only the things the button cannot say, and each of them arrives without the viewer
+            // doing anything — so it announces itself rather than waiting to be noticed.
             <span role="status" className={cx('truncate text-chat', captionTone)} title={caption}>
               {caption}
             </span>

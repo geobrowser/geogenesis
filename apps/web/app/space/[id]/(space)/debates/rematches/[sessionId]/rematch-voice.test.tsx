@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -1356,21 +1356,68 @@ describe('RematchVoiceHeader', () => {
     expect(button).toHaveClass('bg-text', 'text-white');
   });
 
-  // The caption is the only thing that says which of the two states the viewer is in once the
-  // button has been reduced to what pressing it does.
-  it('captions the viewer card with their own mic state', async () => {
+  // The button is the state as well as the action: a filled "Unmute" is a microphone that is off,
+  // an outlined "Mute" is one that is on. A caption saying the same thing beside it is the fact
+  // twice over, and reads as though the two could disagree.
+  it('lets the button carry the viewer mic state, with no caption repeating it', async () => {
     mocks.isMicrophoneEnabled = false;
     const session = makeSession('browsing');
     const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.getByText('Muted')).toBeInTheDocument();
+
+    /** Text the viewer can actually see — the state also lives in an `sr-only` live region. */
+    function visibleText(text: string) {
+      const card = screen.getByTestId('rematch-you-card');
+      return within(card)
+        .queryAllByText(text)
+        .filter(element => !element.classList.contains('sr-only'));
+    }
+
+    const card = screen.getByTestId('rematch-you-card');
+    expect(within(card).getByRole('button', { name: 'Unmute microphone' })).toHaveTextContent('Unmute');
+    expect(visibleText('Muted')).toHaveLength(0);
 
     mocks.isMicrophoneEnabled = true;
     rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
-    // "Unmuted", not "Live": the page has two states and a button that says "Unmute", and a third
-    // word for the same thing is a third thing to learn.
-    expect(screen.getByText('Unmuted')).toBeInTheDocument();
-    expect(screen.queryByText('Live')).toBeNull();
+    expect(within(card).getByRole('button', { name: 'Mute microphone' })).toHaveTextContent('Mute');
+    expect(visibleText('Unmuted')).toHaveLength(0);
+    expect(visibleText('Live')).toHaveLength(0);
+  });
+
+  // Dropping the visible caption cannot drop the announcement with it. The microphone mutes on its
+  // own — a reconnect, a takeover, a device failure — and a button's `aria-label` flipping is not
+  // reliably read unless it happens to be focused.
+  it('still announces the viewer mic state after the caption is gone', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const region = screen.getByTestId('rematch-you-state');
+    expect(region).toHaveAttribute('role', 'status');
+    expect(region).toHaveTextContent('Muted');
+
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    // The same region, with new text — a live region inserted with its content already in it is
+    // dropped often enough to be unreliable.
+    expect(screen.getByTestId('rematch-you-state')).toHaveTextContent('Unmuted');
+  });
+
+  // What the button cannot say still gets said. These are the states that arrive without the
+  // viewer doing anything, and the pill looks the same through all of them.
+  it('captions the viewer card only for what the button cannot express', async () => {
+    mocks.connectionState = 'reconnecting';
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(within(screen.getByTestId('rematch-you-card')).getByText('Reconnecting…')).toBeInTheDocument();
+
+    mocks.connectionState = 'connected';
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+    act(() => onMediaDeviceFailure('PermissionDenied'));
+    expect(screen.getByText(/Microphone blocked/)).toBeInTheDocument();
   });
 
   // GEO-2992: the opponent's card is a way into their space, and the only control in the header is
