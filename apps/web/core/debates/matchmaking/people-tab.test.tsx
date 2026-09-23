@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
+import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
 import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
@@ -25,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   outboundRequest: null as unknown,
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
+  personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
+  positionsByClaim: new Map() as ParticipantPositionsByClaim,
   createChallenge: vi.fn(),
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
@@ -142,6 +145,19 @@ vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
 }));
 
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isLoading: false }),
+}));
+
+vi.mock('../participant-positions', () => ({
+  useParticipantPositions: () => ({
+    byClaim: mocks.positionsByClaim,
+    isLoading: false,
+    isFetching: false,
+    error: null,
+  }),
+}));
+
 // `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
 // paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
@@ -245,6 +261,8 @@ beforeEach(() => {
   mocks.outboundRequest = null;
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
+  mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
+  mocks.positionsByClaim = new Map();
   mocks.createChallenge.mockReset();
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
@@ -291,6 +309,77 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('shows the number of distinct claims where the viewer and a person hold opposite positions', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const vytautas = PROFILE_SPACE_IDS['user-other'];
+    const context = {
+      spaceId: '019fedae-72b6-7ab2-927a-df044d57c600',
+      responseKind: 'stance' as const,
+    };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-1', position: true, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-2', position: true, ...context },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Disagree on 2 claims')).toBeInTheDocument();
+    expect(screen.queryByText('Disagree on 0 claims')).not.toBeInTheDocument();
+  });
+
+  it('uses singular copy for one disputed claim', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Disagree on 1 claim')).toBeInTheDocument();
+  });
+
+  it('does not show a disagreement count on the viewer own row', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.currentUserId = 'user-them';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByText(/Disagree on/)).not.toBeInTheDocument();
+  });
+
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in
   // one unpaginated list, so there is nothing to page back for.
   it('narrows the list to people matching the search', () => {

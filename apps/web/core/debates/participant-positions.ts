@@ -382,7 +382,7 @@ export function applyPendingPositions(
 }
 
 export function useParticipantPositions(
-  participants: DebateRematchParticipant[],
+  participants: Array<Pick<DebateRematchParticipant, 'profile_space_id'>>,
   /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
   localProfileSpaceId?: string | null
 ) {

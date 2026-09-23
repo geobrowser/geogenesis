@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
@@ -23,12 +24,14 @@ import { PeerAvailabilityModal } from '~/partials/availability/peer-availability
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
+import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
+import { disagreementCountsByProfile } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -70,6 +73,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
+  const { personalSpaceId } = usePersonalSpaceId();
   // One elevated portal for every row's space list. A portal per person would append a matching
   // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const spacesPopoverPortal = useElevatedPopoverPortal();
@@ -82,6 +86,23 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
+  // compare against, so they do not spend a public query fetching everybody else's positions.
+  const positionParticipants = React.useMemo(
+    () =>
+      authenticated && personalSpaceId
+        ? [
+            { profile_space_id: personalSpaceId },
+            ...allPeople.map(person => ({ profile_space_id: person.profile_space_id })),
+          ]
+        : [],
+    [allPeople, authenticated, personalSpaceId]
+  );
+  const { byClaim: positionsByClaim } = useParticipantPositions(positionParticipants, personalSpaceId);
+  const disagreementCounts = React.useMemo(
+    () => disagreementCountsByProfile(positionsByClaim, authenticated ? personalSpaceId : null),
+    [authenticated, personalSpaceId, positionsByClaim]
+  );
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
@@ -338,6 +359,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                 <PersonRow
                   key={person.user_id}
                   person={person}
+                  disagreementCount={
+                    (currentUserId !== null && person.user_id === currentUserId) ||
+                    (personalSpaceId !== null && normId(person.profile_space_id) === normId(personalSpaceId))
+                      ? 0
+                      : (disagreementCounts.get(normId(person.profile_space_id)) ?? 0)
+                  }
                   record={records.get(person.profile_space_id) ?? null}
                   spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                   labelsById={labelsById}
@@ -384,6 +411,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
 function PersonRow({
   person,
+  disagreementCount,
   record,
   spaceIds,
   labelsById,
@@ -394,6 +422,8 @@ function PersonRow({
   onSeeTimes,
 }: {
   person: DebatePerson;
+  /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
+  disagreementCount: number;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
   /** Debate-enabled spaces where this person has at least one claim position or recorded debate. */
@@ -464,9 +494,15 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in"
-            immediately above "On Geo since" makes both read as profile context, while the popup
-            gives the compact avatar stack somewhere to reveal its full answer. */}
+        {disagreementCount > 0 ? (
+          <Text as="p" variant="footnote" color="grey-04">
+            Disagree on {disagreementCount} {disagreementCount === 1 ? 'claim' : 'claims'}
+          </Text>
+        ) : null}
+        {/* Stats, active spaces and the join date stay in their existing order beneath the
+            viewer-relative disagreement line. Keeping "Active in" immediately above "On Geo
+            since" makes both read as profile context, while the popup gives the compact avatar
+            stack somewhere to reveal its full answer. */}
         {record || spaceIds.length > 0 ? (
           <div className="flex min-w-0 flex-col gap-0.5">
             {record ? <PersonRecordLine record={record} activeSpaces={activeSpaces} /> : activeSpaces}
