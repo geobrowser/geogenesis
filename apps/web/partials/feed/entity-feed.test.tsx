@@ -477,28 +477,6 @@ describe('EntityFeed contextual filters', () => {
     });
   });
 
-  it('keeps a searchable Topic picker visible before options arrive', () => {
-    const onSearchChange = vi.fn();
-    render(
-      <EntityFeed
-        apiEndpoint="/api/topics/feed"
-        showSpaceFilter={false}
-        showTopicFilter
-        topicSearch={{
-          value: '',
-          onChange: onSearchChange,
-          placeholder: 'Search topics',
-          isLoading: true,
-        }}
-      />
-    );
-
-    expect(screen.getAllByRole('button', { name: 'Any topic' })).toHaveLength(2);
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search topics' }), { target: { value: 'AI' } });
-    expect(onSearchChange).toHaveBeenCalledWith('AI');
-    expect(screen.getByLabelText('Loading options')).not.toBeNull();
-  });
-
   it('shows entity counts and removes settled zero-result Topic options', () => {
     mocks.facetData = {
       topics: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Alignment', count: 4 }],

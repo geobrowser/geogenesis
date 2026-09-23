@@ -16,7 +16,6 @@ export function TopicFeed({
   spaceId: string;
   spaceIds: string[] | undefined;
 }) {
-  const [topicQuery, setTopicQuery] = React.useState('');
   const fixedParams = React.useMemo(
     () => ({ topicId, spaceId, ...(spaceIds ? { spaceIds: spaceIds.join(',') } : {}) }),
     [spaceId, spaceIds, topicId]
@@ -36,13 +35,6 @@ export function TopicFeed({
       persistTypeSelection={false}
       topicFacetEndpoint={spaceIds ? '/api/topics/facets' : undefined}
       showTopicFilter
-      topicSearch={{
-        value: topicQuery,
-        onChange: setTopicQuery,
-        placeholder: 'Search topics',
-        isLoading: spaceIds === undefined,
-        emptyLabel: 'No topics found',
-      }}
       fixedParams={fixedParams}
       maxTopicSelections={MAX_TOPIC_FEED_SELECTED_TOPICS}
       dividerBeforeFeed

@@ -109,14 +109,6 @@ type EntityFeedProps = {
   topicFacetEndpoint?: string;
   /** Keep the Topic picker visible while its options load or when the default list is empty. */
   showTopicFilter?: boolean;
-  /** Optional search state for a dynamic Topic picker. */
-  topicSearch?: {
-    value: string;
-    onChange: (value: string) => void;
-    placeholder: string;
-    isLoading?: boolean;
-    emptyLabel?: string;
-  };
   /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
   fixedParams?: Record<string, string>;
   /** Optional bound for contextual AND-composed Topic selections. */
@@ -215,7 +207,6 @@ export function EntityFeed({
   topicOptions = [],
   topicFacetEndpoint,
   showTopicFilter = false,
-  topicSearch,
   fixedParams = {},
   maxTopicSelections,
   feedTopSpacingClassName,
@@ -286,9 +277,8 @@ export function EntityFeed({
           count: topic.count,
         }))
       : topicOptions;
-    const query = topicSearch?.value.trim().toLocaleLowerCase();
-    return query ? options.filter(option => option.label.toLocaleLowerCase().includes(query)) : options;
-  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions, topicSearch?.value]);
+    return options;
+  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions]);
 
   React.useEffect(() => {
     if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
@@ -603,14 +593,8 @@ export function EntityFeed({
                   onClear={() => setSelectedTopicIds([])}
                   clearLabel="Any topic"
                   showImages={false}
-                  search={
-                    topicSearch
-                      ? {
-                          ...topicSearch,
-                          isLoading: topicSearch.isLoading || (Boolean(topicFacetEndpoint) && topicFacets.isLoading),
-                        }
-                      : undefined
-                  }
+                  searchPlaceholder="Search topics"
+                  searchEmptyLabel="No topics found"
                   countsPending={topicCountsPending}
                 />
               ) : null}

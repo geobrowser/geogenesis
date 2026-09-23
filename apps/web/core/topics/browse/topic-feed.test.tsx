@@ -41,12 +41,6 @@ describe('TopicFeed', () => {
       persistTypeSelection: false,
       topicFacetEndpoint: '/api/topics/facets',
       showTopicFilter: true,
-      topicSearch: {
-        value: '',
-        onChange: expect.any(Function),
-        placeholder: 'Search topics',
-        emptyLabel: 'No topics found',
-      },
       fixedParams: {
         topicId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         spaceId: 'space-1',
