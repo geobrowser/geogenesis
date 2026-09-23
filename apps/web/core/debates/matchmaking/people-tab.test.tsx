@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
   peerAvailability: true,
+  debugBooking: false,
+  propose: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null as Error | null, data: undefined as unknown },
   usePeerSchedule: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
@@ -122,6 +124,12 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
   usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+  useDebugDebatesPageEnabled: () => mocks.debugBooking,
+}));
+
+// Reaches for a query client this suite does not stand up, and booking has its own coverage.
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useCreateScheduledDebate: () => mocks.propose,
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
@@ -204,6 +212,8 @@ beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.peerAvailability = true;
+  mocks.debugBooking = false;
+  mocks.propose = { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null, data: undefined };
   mocks.usePeerSchedule.mockReset();
   // Enough of a schedule that the view renders its heading, so a case can see the peer's name.
   mocks.usePeerSchedule.mockReturnValue({
@@ -676,6 +686,40 @@ describe('See times', () => {
     expect(screen.queryByRole('button', { name: /See times/ })).not.toBeInTheDocument();
     // The row is otherwise untouched.
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  // Booking a room is reached through the week, so the debug flag has to open it on its own.
+  it('opens on the booking flag even with availability off', () => {
+    mocks.peerAvailability = false;
+    mocks.debugBooking = true;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeInTheDocument();
+  });
+
+  it('proposes against the person whose week is open', async () => {
+    mocks.debugBooking = true;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    // The modal owns the week; what this asserts is the wiring it was handed.
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  it('clears a finished proposal so the next week does not open showing it', async () => {
+    mocks.debugBooking = true;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(mocks.propose.reset).toHaveBeenCalled());
   });
 
   it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {

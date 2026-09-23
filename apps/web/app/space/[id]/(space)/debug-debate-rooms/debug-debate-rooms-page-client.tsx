@@ -22,8 +22,8 @@ const DEFAULT_MINUTES_AHEAD = 12;
 const DEFAULT_DURATION = 30;
 
 /**
- * Both halves of the booking on one page, because it takes two identities: propose here, accept as
- * the other person in a second browser. That second answer books the room.
+ * Where an invited person accepts, since nothing else renders an incoming request yet (GEO-2940).
+ * The form is a fallback proposer for someone offline, who has no People row to pick from.
  */
 export function DebugDebateRoomsPageClient() {
   const enabled = useDebugDebatesPageEnabled();
@@ -84,12 +84,15 @@ export function DebugDebateRoomsPageClient() {
           Book a debate room
         </Text>
         <Text variant="footnote" color="grey-04">
-          Propose here, then accept as the other person in a second browser. The second answer books the room. Your own
-          id is {viewerId ?? 'still resolving'}.
+          Accept below as the person who was invited: that second answer is what books the room. To propose, use
+          Debates hub, People, See times, and pick a slot. Your own id is {viewerId ?? 'still resolving'}.
         </Text>
       </header>
 
       <form onSubmit={submit} className="flex flex-col gap-3 rounded-lg border border-grey-02 p-4">
+        <Text variant="footnote" color="grey-04">
+          Fallback proposer, for someone who is not online and so has no People row to pick from.
+        </Text>
         <label className="flex flex-col gap-1">
           <Text variant="metadataMedium">Opponent geo-chat user id</Text>
           <input

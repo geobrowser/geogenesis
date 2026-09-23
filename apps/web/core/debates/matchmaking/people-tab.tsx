@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
@@ -23,6 +23,7 @@ import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
+import { useCreateScheduledDebate } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
@@ -49,6 +50,9 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  */
 const EMPTY_SPACE_IDS: string[] = [];
 
+/** How long a debug-booked room runs. A slot is 30 minutes, so the booking is one slot. */
+const DEBUG_BOOKING_MINUTES = 30;
+
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
 }
@@ -73,6 +77,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const spacesPopoverPortal = useElevatedPopoverPortal();
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  // The debug flag also opens "See times", because booking a room is what it is there to make
+  // reachable and the week is where a time gets picked.
+  const bookingEnabled = useDebugDebatesPageEnabled();
+  const propose = useCreateScheduledDebate();
   // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
   // moment its person goes offline, and a dialog inside it would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{ userId: string; name: string } | null>(null);
@@ -343,7 +351,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
                   onSeeTimes={
-                    peerAvailabilityEnabled
+                    peerAvailabilityEnabled || bookingEnabled
                       ? (peer, opener) => {
                           seeTimesOpenerRef.current = opener;
                           setViewingTimes(peer);
@@ -362,8 +370,27 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         open={viewingTimes !== null}
         userId={viewingTimes?.userId ?? ''}
         peerName={viewingTimes?.name}
-        onClose={() => setViewingTimes(null)}
+        onClose={() => {
+          setViewingTimes(null);
+          // Otherwise the next person's week opens already showing the last one's outcome.
+          propose.reset();
+        }}
         openerRef={seeTimesOpenerRef}
+        booking={
+          bookingEnabled && viewingTimes
+            ? {
+                onRequest: slot =>
+                  propose.mutate({
+                    opponentUserId: viewingTimes.userId,
+                    startsAt: new Date(slot.start),
+                    minutes: DEBUG_BOOKING_MINUTES,
+                  }),
+                pending: propose.isPending,
+                error: propose.error?.message ?? null,
+                requestedStart: propose.data?.scheduled_start_at ?? null,
+              }
+            : undefined
+        }
       />
     </div>
   );

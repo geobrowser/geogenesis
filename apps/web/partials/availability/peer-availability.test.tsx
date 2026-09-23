@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PeerSchedule, PeerSlot } from '~/core/availability/peer-schedule';
 
-import { PeerAvailabilityView } from './peer-availability';
+import { type PeerAvailabilityBooking, PeerAvailabilityView } from './peer-availability';
 
 // A fixed clock, so the seven columns and their labels are the same on every run. A Monday.
 const NOW = new Date('2026-09-21T15:00:00Z');
@@ -34,6 +34,19 @@ const schedule = (overrides: Partial<PeerSchedule> = {}): PeerSchedule => ({
 const setup = (overrides: Partial<PeerSchedule> = {}, peerName: string | null = 'Ada') => ({
   user: userEvent.setup(),
   ...render(<PeerAvailabilityView schedule={schedule(overrides)} peerName={peerName} now={NOW} />),
+});
+
+const booking = (overrides: Partial<PeerAvailabilityBooking> = {}): PeerAvailabilityBooking => ({
+  onRequest: vi.fn(),
+  pending: false,
+  error: null,
+  requestedStart: null,
+  ...overrides,
+});
+
+const setupBooking = (book: PeerAvailabilityBooking, overrides: Partial<PeerSchedule> = {}) => ({
+  user: userEvent.setup(),
+  ...render(<PeerAvailabilityView schedule={schedule(overrides)} peerName="Ada" now={NOW} booking={book} />),
 });
 
 const day = (date: string) => screen.getByTestId(`peer-day-${date}`);
@@ -298,5 +311,52 @@ describe('PeerAvailabilityView', () => {
       slots: [slot(13), slot(14)],
     });
     expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}|T\d{2}:\d{2}|Z\b|UTC/);
+  });
+});
+
+
+describe('booking a slot', () => {
+  it('renders no action at all without a booking caller', () => {
+    setup({ slots: [slot(13)] });
+    expect(screen.queryByRole('button', { name: 'Request this time' })).not.toBeInTheDocument();
+  });
+
+  it('sends the picked slot, and not before one is picked', async () => {
+    const book = booking();
+    const { user } = setupBooking(book, { slots: [slot(13), slot(14)] });
+
+    const request = screen.getByRole('button', { name: 'Request this time' });
+    expect(request).toBeDisabled();
+
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /2pm/ }));
+    await user.click(request);
+
+    expect(book.onRequest).toHaveBeenCalledTimes(1);
+    // The instant, not its spelling: the view normalizes and would otherwise fail on the `.000`.
+    const sent = (book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0].start;
+    expect(new Date(sent).getTime()).toBe(new Date('2026-09-21T14:00:00Z').getTime());
+  });
+
+  it('keeps one pick at a time, so the request cannot mean two times', async () => {
+    const { user } = setupBooking(booking(), { slots: [slot(13), slot(14)] });
+    const first = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
+    const second = within(day('2026-09-21')).getByRole('button', { name: /2pm/ });
+
+    await user.click(first);
+    await user.click(second);
+
+    expect(first).toHaveAttribute('aria-pressed', 'false');
+    expect(second).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('reports a refusal rather than looking like nothing happened', () => {
+    setupBooking(booking({ error: 'Clashes with a debate at 2pm.' }));
+    expect(screen.getByText('Clashes with a debate at 2pm.')).toBeInTheDocument();
+  });
+
+  it('says the other person still has to accept', () => {
+    setupBooking(booking({ requestedStart: '2026-09-21T14:00:00Z' }));
+    expect(screen.getByText(/Ada has to accept/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request this time' })).not.toBeInTheDocument();
   });
 });
