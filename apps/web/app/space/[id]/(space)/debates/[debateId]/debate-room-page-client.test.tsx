@@ -2124,6 +2124,42 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
   });
 
+  it('does not show LiveKit\'s "invalid API key" wording when the media server rejects our token', async () => {
+    // The shape `Room.connect` throws when LiveKit answers the handshake with 401: an outer
+    // `serverUnreachable` error whose `reason` and `status` were overwritten from the inner
+    // rejection, leaving `reasonName` stale. Debaters read "invalid API key" as their own
+    // misconfiguration; it is geo-chat's LiveKit key the server would not accept.
+    const rejected = Object.assign(new Error('could not establish signal connection: invalid API key'), {
+      name: 'ConnectionError',
+      reason: 0,
+      reasonName: 'ServerUnreachable',
+      status: 401,
+    });
+    mocks.roomConnect.mockRejectedValue(rejected);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/This is a problem on our end, not with your setup/)).toBeInTheDocument()
+    );
+    expect(screen.queryByText(/invalid API key/)).not.toBeInTheDocument();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_failed',
+      expect.objectContaining({
+        stage: 'livekit_connect',
+        error_message: 'could not establish signal connection: invalid API key',
+        error_reason: 'NotAllowed',
+        error_status: 401,
+      })
+    );
+  });
+
   it('does not mint a token when another tab owns the participant connection', async () => {
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {

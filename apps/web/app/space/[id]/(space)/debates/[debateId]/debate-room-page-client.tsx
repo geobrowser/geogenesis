@@ -21,6 +21,11 @@ import {
   getServerTime,
   startLocalRecordingMultipart,
 } from '~/core/debates/api';
+import {
+  debateRoomConnectionErrorMessage,
+  liveKitConnectionErrorReason,
+  liveKitConnectionErrorStatus,
+} from '~/core/debates/debate-connection-error';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
@@ -1646,7 +1651,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           });
           ownershipRef.current?.release();
           setConnectionConflictSource(null);
-          setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
+          setRoomError(debateRoomConnectionErrorMessage(error));
           // The server already counts us as joined past this point, so it will never cancel the
           // pair with `connection_timeout` and rematch them. Keep a retry reachable even once the
           // debate has advanced out of `connecting`, and spend one silent re-attempt first.
@@ -3581,7 +3586,12 @@ function captureDebateRoomConnectionFailure({
       stage,
       elapsed_ms: Math.max(0, Math.round(elapsedMs)),
       error_name: error instanceof Error ? error.name : 'UnknownError',
+      // The raw message stays here even though the banner no longer shows it — it is the only
+      // place a LiveKit rejection ("invalid API key") is legible, and `error_reason` turns a
+      // fleet-wide auth failure into a breakdown rather than a string search.
       error_message: error instanceof Error ? error.message : String(error),
+      error_reason: liveKitConnectionErrorReason(error),
+      error_status: liveKitConnectionErrorStatus(error),
       online: typeof navigator === 'undefined' ? null : navigator.onLine,
       visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
       has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
