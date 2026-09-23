@@ -417,6 +417,44 @@ describe('RematchVoicePill', () => {
     expect(mocks.coordinatorOptions[0]?.debateId).toBe('rematch:session-1');
   });
 
+  it('keeps the microphone live when the pair arrives from a recorded debate', async () => {
+    render(
+      <RematchVoicePill session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
+    );
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('resets the microphone default when the route moves between rematch sessions', async () => {
+    const recordedDebateSession = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    const view = render(<RematchVoicePill session={recordedDebateSession} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+
+    view.rerender(
+      <RematchVoicePill
+        session={{ ...makeSession('browsing'), id: 'session-2', source_debate_id: null }}
+        currentUserId="me"
+      />
+    );
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+
+    view.rerender(
+      <RematchVoicePill
+        session={{ ...makeSession('browsing'), id: 'session-3', source_debate_id: 'debate-2' }}
+        currentUserId="me"
+      />
+    );
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+  });
+
   // "Other person is muted → red muted variant; not muted → green unmuted variant" (GEO-2511).
   it('shows the opponent as unmuted once their participant appears', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
