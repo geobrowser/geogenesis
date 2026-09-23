@@ -50,8 +50,8 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  */
 const EMPTY_SPACE_IDS: string[] = [];
 
-/** How long a debug-booked room runs. A slot is 30 minutes, so the booking is one slot. */
-const DEBUG_BOOKING_MINUTES = 30;
+/** How long a booked room runs. A slot is 30 minutes, so a booking is one slot. */
+const SCHEDULED_DEBATE_MINUTES = 30;
 
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
@@ -77,8 +77,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const spacesPopoverPortal = useElevatedPopoverPortal();
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  // The debug flag also opens "See times", because booking a room is what it is there to make
-  // reachable and the week is where a time gets picked.
+  // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled();
   const propose = useCreateScheduledDebate();
   // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
@@ -377,13 +376,13 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         }}
         openerRef={seeTimesOpenerRef}
         booking={
-          bookingEnabled && viewingTimes
+          (peerAvailabilityEnabled || bookingEnabled) && viewingTimes
             ? {
-                onRequest: slot =>
+                onRequest: startsAt =>
                   propose.mutate({
                     opponentUserId: viewingTimes.userId,
-                    startsAt: new Date(slot.start),
-                    minutes: DEBUG_BOOKING_MINUTES,
+                    startsAt: new Date(startsAt),
+                    minutes: SCHEDULED_DEBATE_MINUTES,
                   }),
                 pending: propose.isPending,
                 error: propose.error?.message ?? null,

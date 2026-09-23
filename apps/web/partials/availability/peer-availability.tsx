@@ -30,7 +30,8 @@ const SLOTS_PER_DAY = 4;
  * stays read-only and no CTA renders.
  */
 export type PeerAvailabilityBooking = {
-  onRequest: (slot: PeerDaySlot) => void;
+  /** An instant, not a chip: a week with no slots is still requestable (GEO-2938). */
+  onRequest: (startsAt: string) => void;
   pending: boolean;
   error: string | null;
   /** The instant the server accepted, which swaps the footer for a confirmation. */
@@ -129,17 +130,17 @@ export function PeerAvailabilityView({
         // An older geo-chat cannot send their week at all, and its intersection says nothing
         // about them. Better to say so than to report an empty week as theirs.
         <Empty>Can&rsquo;t show {name}&rsquo;s week from this server yet.</Empty>
-      ) : !schedule.peerHasSchedule ? (
-        <Empty>
-          {name} hasn&rsquo;t set any availability yet.
-          {/* Without a week there is no time to pick, so a booking caller is told what unblocks it
-              rather than being left at a dead end. */}
-          {booking ? ' They need to set theirs before a time can be requested.' : ''}
-        </Empty>
-      ) : !hasAnySlot ? (
-        <Empty>
-          {name} has no times free in the next 7 days.
-          {booking ? ' They need to open up a time before one can be requested.' : ''}
+      ) : !schedule.peerHasSchedule || !hasAnySlot ? (
+        // Availability is a preference, not a gate, so a caller that can book is offered a time of
+        // its own rather than a wall (GEO-2938).
+        <Empty
+          action={
+            booking && <RequestAnyway booking={booking} peerName={name} peerTimezone={schedule.peerTimezone} />
+          }
+        >
+          {schedule.peerHasSchedule
+            ? `${name} has no times free in the next 7 days.`
+            : `${name} hasn’t set any availability yet.`}
         </Empty>
       ) : (
         <>
@@ -151,7 +152,15 @@ export function PeerAvailabilityView({
             </Hint>
           )}
           <WeekGrid days={days} peerName={name} selectedStart={selectedStart} onSelect={setSelectedStart} />
-          {booking && <BookingFooter booking={booking} slot={selectedSlot} peerName={name} />}
+          {booking && (
+            <BookingFooter
+              booking={booking}
+              startsAt={selectedStart}
+              viewerIsFree={selectedSlot?.viewerIsFree ?? null}
+              peerName={name}
+              peerTimezone={schedule.peerTimezone}
+            />
+          )}
         </>
       )}
     </div>
@@ -161,37 +170,51 @@ export function PeerAvailabilityView({
 /** Only rendered for a caller that can act on the pick, so there is never a dead CTA here. */
 function BookingFooter({
   booking,
-  slot,
+  startsAt,
+  viewerIsFree,
   peerName,
+  peerTimezone,
 }: {
   booking: PeerAvailabilityBooking;
-  slot: PeerDaySlot | null;
+  startsAt: string | null;
+  viewerIsFree: boolean | null;
   peerName: string;
+  peerTimezone?: string | null;
 }) {
   if (booking.requestedStart) {
     return (
       <Hint>
-        Requested {new Date(booking.requestedStart).toLocaleString()}. {peerName} has to accept before the room is
-        booked.
+        Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
       </Hint>
     );
   }
 
+  const theirTime = startsAt && peerTimezone ? formatIn(startsAt, peerTimezone) : null;
+
   return (
     <div className="flex shrink-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <Text as="span" variant="footnote" color="grey-04">
-          {slot ? `${new Date(slot.start).toLocaleString()} in your zone` : 'Pick a time above.'}
-        </Text>
-        <button
-          type="button"
-          disabled={!slot || booking.pending}
-          onClick={() => slot && booking.onRequest(slot)}
-          className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
-        >
-          {booking.pending ? 'Requesting…' : 'Request this time'}
-        </button>
+        <div className="flex min-w-0 flex-col">
+          <Text as="span" variant="footnote" color="grey-04">
+            {startsAt ? `Your time: ${formatIn(startsAt)}` : 'Pick a time above.'}
+          </Text>
+          {theirTime && (
+            <Text as="span" variant="footnote" color="grey-04">
+              {peerName}&rsquo;s time: {theirTime}
+            </Text>
+          )}
+        </div>
+        <SendRequest booking={booking} startsAt={startsAt} />
       </div>
+
+      {/* A slot outside your own week is a one-off, and saying so is what keeps it from reading as
+          an edit to your availability (GEO-2938). */}
+      {viewerIsFree === false && (
+        <Text as="p" variant="footnote" color="grey-04">
+          This is outside the times you set. Requesting it doesn&rsquo;t change your availability.
+        </Text>
+      )}
+
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
@@ -199,6 +222,79 @@ function BookingFooter({
       )}
     </div>
   );
+}
+
+function SendRequest({ booking, startsAt }: { booking: PeerAvailabilityBooking; startsAt: string | null }) {
+  return (
+    <button
+      type="button"
+      disabled={!startsAt || booking.pending}
+      onClick={() => startsAt && booking.onRequest(startsAt)}
+      className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
+    >
+      {booking.pending ? 'Sending…' : 'Send request'}
+    </button>
+  );
+}
+
+/**
+ * A time of the viewer's own, for a week that offers none. `datetime-local` reads as local wall
+ * clock, so it is converted to an instant before it leaves here.
+ */
+function RequestAnyway({
+  booking,
+  peerName,
+  peerTimezone,
+}: {
+  booking: PeerAvailabilityBooking;
+  peerName: string;
+  peerTimezone?: string | null;
+}) {
+  const [local, setLocal] = React.useState('');
+  const startsAt = local ? new Date(local).toISOString() : null;
+
+  if (booking.requestedStart) {
+    return (
+      <Hint>
+        Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
+      </Hint>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex flex-col items-center gap-2">
+      <Text as="p" variant="footnote" color="grey-04">
+        You can still ask for a time.
+      </Text>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <input
+          type="datetime-local"
+          aria-label="Time to request"
+          value={local}
+          onChange={event => setLocal(event.target.value)}
+          className="rounded border border-grey-02 px-2 py-1 text-footnote"
+        />
+        <SendRequest booking={booking} startsAt={startsAt} />
+      </div>
+      {startsAt && peerTimezone && (
+        <Text as="span" variant="footnote" color="grey-04">
+          {peerName}&rsquo;s time: {formatIn(startsAt, peerTimezone)}
+        </Text>
+      )}
+      {booking.error && (
+        <Text as="p" variant="footnote" color="red-01">
+          {booking.error}
+        </Text>
+      )}
+    </div>
+  );
+}
+
+/** `undefined` zone means the viewer's own, which is what `toLocaleString` does by default. */
+function formatIn(iso: string, timeZone?: string | null) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  return at.toLocaleString(undefined, timeZone ? { timeZone } : undefined);
 }
 
 /**
@@ -375,12 +471,14 @@ function Hint({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+/** `action` sits outside the paragraph, so it may contain anything a `<p>` may not. */
+function Empty({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-grey-02 p-6">
+    <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-grey-02 p-6">
       <Text as="p" variant="metadata" color="grey-04">
         {children}
       </Text>
+      {action}
     </div>
   );
 }

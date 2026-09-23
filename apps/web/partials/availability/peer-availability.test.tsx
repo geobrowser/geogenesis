@@ -318,14 +318,14 @@ describe('PeerAvailabilityView', () => {
 describe('booking a slot', () => {
   it('renders no action at all without a booking caller', () => {
     setup({ slots: [slot(13)] });
-    expect(screen.queryByRole('button', { name: 'Request this time' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
   });
 
   it('sends the picked slot, and not before one is picked', async () => {
     const book = booking();
     const { user } = setupBooking(book, { slots: [slot(13), slot(14)] });
 
-    const request = screen.getByRole('button', { name: 'Request this time' });
+    const request = screen.getByRole('button', { name: 'Send request' });
     expect(request).toBeDisabled();
 
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /2pm/ }));
@@ -333,7 +333,7 @@ describe('booking a slot', () => {
 
     expect(book.onRequest).toHaveBeenCalledTimes(1);
     // The instant, not its spelling: the view normalizes and would otherwise fail on the `.000`.
-    const sent = (book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0].start;
+    const sent = (book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(new Date(sent).getTime()).toBe(new Date('2026-09-21T14:00:00Z').getTime());
   });
 
@@ -357,6 +357,52 @@ describe('booking a slot', () => {
   it('says the other person still has to accept', () => {
     setupBooking(booking({ requestedStart: '2026-09-21T14:00:00Z' }));
     expect(screen.getByText(/Ada has to accept/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Request this time' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
+  });
+});
+
+
+describe('what the footer has to say', () => {
+  it('names both zones for the picked time', async () => {
+    const { user } = setupBooking(booking(), { viewerTimezone: 'UTC', peerTimezone: 'Asia/Tokyo' });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+
+    expect(screen.getByText(/^Your time:/)).toBeInTheDocument();
+    expect(screen.getByText(/Ada.s time:/)).toBeInTheDocument();
+  });
+
+  it('says an outside-your-week slot is a one-off', async () => {
+    const { user } = setupBooking(booking(), { slots: [slot(13, false)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+
+    expect(screen.getByText(/doesn.t change your availability/)).toBeInTheDocument();
+  });
+
+  it('says nothing of the sort for a slot you are free for', async () => {
+    const { user } = setupBooking(booking(), { slots: [slot(13, true)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /1pm/ }));
+
+    expect(screen.queryByText(/doesn.t change your availability/)).not.toBeInTheDocument();
+  });
+});
+
+describe('a week with nothing in it', () => {
+  it('offers a time anyway rather than walling the viewer off', async () => {
+    const book = booking();
+    const { user } = setupBooking(book, { peerHasSchedule: false, slots: [] });
+
+    expect(screen.getByText(/hasn.t set any availability yet/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Time to request'), '2026-09-22T09:00');
+    await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect(book.onRequest).toHaveBeenCalledTimes(1);
+    expect(new Date((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0]).getTime()).toBe(
+      new Date('2026-09-22T09:00').getTime()
+    );
+  });
+
+  it('stays read-only without a booking caller', () => {
+    setup({ peerHasSchedule: false, slots: [] });
+    expect(screen.queryByLabelText('Time to request')).not.toBeInTheDocument();
   });
 });
