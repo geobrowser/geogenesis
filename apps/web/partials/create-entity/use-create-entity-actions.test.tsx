@@ -47,7 +47,6 @@ describe('useCreateEntityActions', () => {
     { name: 'an undefined space ID', spaceId: undefined },
     { name: 'an empty space ID', spaceId: '' },
     { name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' },
-    { name: 'the root-space sentinel', spaceId: ROOT_SPACE },
   ])('blocks entity routes for $name while preserving new-space creation', ({ spaceId }) => {
     const { result } = renderHook(() => useCreateEntityActions(spaceId));
 
@@ -59,5 +58,19 @@ describe('useCreateEntityActions', () => {
 
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.createSpace).toHaveBeenCalledWith();
+  });
+
+  // Root is an ordinary indexed space with working entity pages; it used to be
+  // excluded here, which left its "+" menu offering nothing but "New space".
+  it('offers entity and property creation in the root space', () => {
+    const { result } = renderHook(() => useCreateEntityActions(ROOT_SPACE));
+
+    expect(result.current.canCreateInSpace).toBe(true);
+
+    act(() => result.current.createEntity());
+    act(() => result.current.createProperty());
+
+    expect(mocks.push).toHaveBeenNthCalledWith(1, `/space/${ROOT_SPACE}/new-entity?edit=true`);
+    expect(mocks.push).toHaveBeenNthCalledWith(2, `/space/${ROOT_SPACE}/new-entity?edit=true&type=property`);
   });
 });

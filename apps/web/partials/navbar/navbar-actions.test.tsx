@@ -658,20 +658,40 @@ describe('NavbarActions profile menu', () => {
       expect(mocks.openCreateSpaceDialog).toHaveBeenCalledWith();
     });
 
-    it.each([
-      { name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' },
-      { name: 'the root-space sentinel', spaceId: ROOT_SPACE },
-    ])('does not expose entity creation for $name', async ({ spaceId }) => {
-      mocks.spaceId = spaceId;
+    it.each([{ name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' }])(
+      'does not expose entity creation for $name',
+      async ({ spaceId }) => {
+        mocks.spaceId = spaceId;
+        mocks.isMobileNavbar = true;
+        const user = userEvent.setup();
+        render(<NavbarActions />);
+
+        await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+
+        expect(screen.queryByRole('button', { name: 'Create new entity' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Create new property' })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Create new space' })).toBeInTheDocument();
+      }
+    );
+
+    // Root is an ordinary space as far as entity routes go, so the mobile menu
+    // offers the same three create actions there as it does anywhere else.
+    it('exposes entity and property creation in the root space', async () => {
+      mocks.spaceId = ROOT_SPACE;
       mocks.isMobileNavbar = true;
       const user = userEvent.setup();
       render(<NavbarActions />);
 
       await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
-
-      expect(screen.queryByRole('button', { name: 'Create new entity' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Create new property' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Create new space' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Create new entity' }));
+
+      expect(mocks.push).toHaveBeenCalledWith(`/space/${ROOT_SPACE}/new-entity?edit=true`);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      await user.click(screen.getByRole('button', { name: 'Create new property' }));
+
+      expect(mocks.push).toHaveBeenCalledWith(`/space/${ROOT_SPACE}/new-entity?edit=true&type=property`);
     });
   });
 });
