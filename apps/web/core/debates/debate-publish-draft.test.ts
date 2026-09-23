@@ -74,10 +74,10 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
 }
 
 describe('buildDebatePublishDraft', () => {
-  it('derives a deterministic dashless entity id and a "A vs. B on claim" name', () => {
+  it('derives a deterministic dashless entity id and a "claim | A vs. B" name', () => {
     const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
     expect(draft.debateEntityId).toBe('11112222333344445555666677778888');
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
   });
 
   it('names participants in slot order regardless of input order', () => {
@@ -90,7 +90,7 @@ describe('buildDebatePublishDraft', () => {
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
   });
 
   // Preston: "Can we also add a participants relation to both participants. This will be useful for

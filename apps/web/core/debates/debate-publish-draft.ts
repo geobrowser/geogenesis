@@ -153,7 +153,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const debateEntityId = ID.uuidToHex(input.debateId);
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
   const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
-  const debateName = `${bySlot.map(nameFor).join(' vs. ')} on ${claimText}`;
+  // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
+  // truncating surfaces — feed cards, side-panel headers, edit titles — where the first
+  // words are the ones that survive, and what a debate is about identifies it far better
+  // than who argued it. `join` rather than a two-name template: the shape is a pair today,
+  // but nothing in the publisher caps participants at two.
+  const debateName = `${claimText} | ${bySlot.map(nameFor).join(' vs. ')}`;
 
   const values: Value[] = [];
   const relations: Relation[] = [];
