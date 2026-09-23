@@ -4757,7 +4757,7 @@ describe('DebateRoomPageClient', () => {
         })
       );
 
-      mocks.debate = completedDebate();
+      mocks.debate = completedDebateOutsideThankYou();
       view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
       await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -4775,7 +4775,7 @@ describe('DebateRoomPageClient', () => {
       const view = await renderLiveDebate();
       await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-      mocks.debate = completedDebate();
+      mocks.debate = completedDebateOutsideThankYou();
       view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
       await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
