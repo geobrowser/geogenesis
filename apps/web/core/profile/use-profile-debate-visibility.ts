@@ -1,0 +1,111 @@
+'use client';
+
+import { useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { type PersonDebatesQueryData, personDebatesRowsQueryKey } from '~/core/debates/use-person-debates';
+import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
+import { usePublish } from '~/core/hooks/use-publish';
+import { personDebatesQueryKey } from '~/core/io/subgraph/fetch-person-debates';
+import {
+  type HiddenProfileRelation,
+  buildHideDebateRelation,
+  buildUnhideDebateRelations,
+} from '~/core/profile/profile-debate-visibility';
+import type { ProfileFacts } from '~/core/profile/profile-facts';
+import { normId } from '~/core/utils/norm-id';
+
+function publishOnce(
+  makeProposal: ReturnType<typeof usePublish>['makeProposal'],
+  args: Omit<Parameters<typeof makeProposal>[0], 'onSuccess' | 'onError'>
+): Promise<boolean> {
+  return new Promise(resolve => {
+    void makeProposal({ ...args, onSuccess: () => resolve(true), onError: () => resolve(false) });
+  });
+}
+
+/** Direct personal-space writes backing the profile card's hide/restore control. */
+export function useProfileDebateVisibility(personalSpaceId: string) {
+  const { makeProposal } = usePublish();
+  const queryClient = useQueryClient();
+  const [pendingIds, setPendingIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const pendingRef = React.useRef<Set<string>>(new Set());
+
+  const setPending = React.useCallback((debateId: string, pending: boolean) => {
+    const key = normId(debateId);
+    if (pending) pendingRef.current.add(key);
+    else pendingRef.current.delete(key);
+    setPendingIds(current => {
+      const next = new Set(current);
+      if (pending) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const invalidateSoon = React.useCallback(() => {
+    for (const delay of [3_000, 7_000, 12_000]) {
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: personDebatesQueryKey(personalSpaceId) });
+        void queryClient.invalidateQueries({ queryKey: ['profile-facts', personalSpaceId] });
+      }, delay);
+    }
+  }, [personalSpaceId, queryClient]);
+
+  const setHidden = React.useCallback(
+    async (item: ExploreFeedItem, hiddenRelations: readonly HiddenProfileRelation[], shouldHide: boolean) => {
+      const debateId = normId(item.entityId);
+      if (pendingRef.current.has(debateId)) return false;
+
+      setPending(item.entityId, true);
+      try {
+        const created = shouldHide
+          ? buildHideDebateRelation({
+              personalSpaceId,
+              debateId: item.entityId,
+              debateName: item.title,
+              debateSpaceId: item.spaceId,
+            })
+          : null;
+        const relations = created
+          ? [created.relation]
+          : buildUnhideDebateRelations({
+              personalSpaceId,
+              debateId: item.entityId,
+              debateName: item.title,
+              hidden: hiddenRelations,
+            });
+
+        if (relations.length === 0) return false;
+
+        const ok = await publishOnce(makeProposal, {
+          values: [],
+          relations,
+          spaceId: personalSpaceId,
+          name: `${shouldHide ? 'Hide' : 'Restore'} debate on profile: ${item.title || item.entityId}`,
+        });
+
+        if (!ok) return false;
+
+        queryClient.setQueryData<PersonDebatesQueryData>(personDebatesRowsQueryKey(personalSpaceId), current => {
+          if (!current) return current;
+          const next = new Map(current.hiddenRelationsByDebateId);
+          if (created) next.set(debateId, [created.hidden]);
+          else next.delete(debateId);
+          return { ...current, hiddenRelationsByDebateId: next };
+        });
+        queryClient.setQueriesData<ProfileFacts>({ queryKey: ['profile-facts', personalSpaceId] }, current =>
+          current ? { ...current, debates: Math.max(0, current.debates + (shouldHide ? -1 : 1)) } : current
+        );
+        invalidateSoon();
+        return true;
+      } finally {
+        setPending(item.entityId, false);
+      }
+    },
+    [invalidateSoon, makeProposal, personalSpaceId, queryClient, setPending]
+  );
+
+  return { setHidden, pendingIds };
+}

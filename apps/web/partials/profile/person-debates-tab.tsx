@@ -2,9 +2,12 @@
 
 import * as React from 'react';
 
+import { FilterSwitch } from '~/core/debates/matchmaking/filter-switch';
 import type { HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { usePersonDebates } from '~/core/debates/use-person-debates';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ID } from '~/core/id';
 import {
   DEFAULT_DEBATE_SORT,
   type DebateSort,
@@ -13,8 +16,11 @@ import {
   spaceFacetsFromRows,
 } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
+import { useProfileDebateVisibility } from '~/core/profile/use-profile-debate-visibility';
+import { normId } from '~/core/utils/norm-id';
 
 import { PersonRecordFeed } from './person-record-feed';
+import { ProfileDebateVisibilityButton } from './profile-debate-visibility-button';
 import { RecordFilterRow } from './record-filter-row';
 import { useRecordSelection } from './use-record-selection';
 
@@ -69,15 +75,25 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const [sort, setSort] = React.useState<DebateSort>(DEFAULT_DEBATE_SORT);
   const spaces = useRecordSelection();
 
-  const { rows, isLoading, isError } = usePersonDebates(spaceId, true);
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+  const { rows, hiddenRows, hiddenRelationsByDebateId, isLoading, isError } = usePersonDebates(spaceId, true);
+  const visibility = useProfileDebateVisibility(spaceId);
+  const [showHidden, setShowHidden] = React.useState(false);
 
-  const facets = React.useMemo(() => spaceFacetsFromRows(rows), [rows]);
+  React.useEffect(() => {
+    if (hiddenRows.length === 0) setShowHidden(false);
+  }, [hiddenRows.length]);
+
+  const sourceRows = showHidden ? hiddenRows : rows;
+
+  const facets = React.useMemo(() => spaceFacetsFromRows(sourceRows), [sourceRows]);
 
   // Only asked for when a ranked sort is showing, which by default it is. The
   // card carries neither number — Explore ranks by ordering rows server-side
   // rather than decorating them — so a list already complete in memory has to
   // look them up to rank itself.
-  const debateIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
+  const debateIds = React.useMemo(() => sourceRows.map(row => row.entityId), [sourceRows]);
   const {
     scores,
     rankings,
@@ -92,8 +108,8 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const ranks = React.useMemo(() => ({ scores, rankings }), [rankings, scores]);
 
   const shown = React.useMemo(
-    () => sortRows(filterRowsBySpace(rows, spaces.values), effectiveSort, ranks),
-    [effectiveSort, ranks, rows, spaces.values]
+    () => sortRows(filterRowsBySpace(sourceRows, spaces.values), effectiveSort, ranks),
+    [effectiveSort, ranks, sourceRows, spaces.values]
   );
 
   const spaceIds = React.useMemo(() => facets.map(facet => facet.id), [facets]);
@@ -121,7 +137,20 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
        * Hidden when there is nothing to control: ten of this account's eleven
        * debates sit in one space, and a menu with a single row cannot act.
        */}
-      {facets.length > 1 || rows.length > 1 ? (
+      {isOwner && hiddenRows.length > 0 ? (
+        <div className="flex justify-end">
+          <FilterSwitch
+            label={`Show hidden (${hiddenRows.length})`}
+            checked={showHidden}
+            onChange={next => {
+              spaces.clear();
+              setShowHidden(next);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {facets.length > 1 || sourceRows.length > 1 ? (
         <RecordFilterRow
           sort={{
             // Falls back to New rather than stranding the reader on a sort that
@@ -165,9 +194,26 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
         // Said here rather than by the browse feed, which offers "Start one from
         // the Claims tab" — right for a space with no debates in it, wrong for a
         // person who has never been in one.
-        emptyLabel={isFiltered ? 'No debates match these filters.' : 'No debates yet.'}
+        emptyLabel={
+          isFiltered ? 'No debates match these filters.' : showHidden ? 'No hidden debates.' : 'No debates yet.'
+        }
         errorLabel="Couldn’t load debates."
         noun="debates"
+        debateEndSlot={
+          isOwner
+            ? item => {
+                const id = normId(item.entityId);
+                const hidden = hiddenRelationsByDebateId.get(id) ?? [];
+                return (
+                  <ProfileDebateVisibilityButton
+                    hidden={showHidden}
+                    pending={visibility.pendingIds.has(id)}
+                    onClick={() => void visibility.setHidden(item, hidden, !showHidden)}
+                  />
+                );
+              }
+            : undefined
+        }
       />
     </div>
   );
