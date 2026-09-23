@@ -98,6 +98,7 @@ describe('DebateScorecard', () => {
         avatar={<img alt="" data-testid="avatar" />}
         claims={9}
         speakingTime="4:07"
+        agreement={{ percent: 68, word: 'agreed' }}
         won
         onOpenProfile={vi.fn()}
         {...props}
@@ -131,8 +132,25 @@ describe('DebateScorecard', () => {
     expect([...(container.firstElementChild as HTMLElement).classList]).toContain('pointer-events-none');
   });
 
+  it('says how the room received them, which is the reading a count cannot give', () => {
+    card();
+    expect(screen.getByText('68% agreed')).toBeInTheDocument();
+  });
+
+  it('borrows the vocabulary of the claims being counted', () => {
+    card({ agreement: { percent: 81, word: 'verified' } });
+    expect(screen.getByText('81% verified')).toBeInTheDocument();
+  });
+
+  it('says nothing where too few people have answered to characterise a split', () => {
+    // A share off three responses is arithmetic, not a reading, and this is the most confident
+    // place on the page to print one.
+    card({ agreement: null });
+    expect(screen.queryByText(/agreed|verified/)).toBeNull();
+  });
+
   it('reads correctly for a debater who made one claim', () => {
-    card({ claims: 1, speakingTime: null });
+    card({ claims: 1, speakingTime: null, agreement: null });
     expect(screen.getByText('claim')).toBeInTheDocument();
   });
 

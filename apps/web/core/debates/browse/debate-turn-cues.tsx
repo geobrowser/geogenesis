@@ -148,6 +148,7 @@ export function DebateScorecard({
   avatar,
   claims,
   speakingTime,
+  agreement,
   won,
   onOpenProfile,
 }: {
@@ -155,6 +156,14 @@ export function DebateScorecard({
   avatar: React.ReactNode;
   claims: number;
   speakingTime: string | null;
+  /**
+   * How the room received their claims, where enough people have answered to say.
+   *
+   * Null below the floor rather than a small number in small type. A share off three responses is
+   * arithmetic, not a reading, and the end of a debate is the most confident place on the page to
+   * print one.
+   */
+  agreement: { percent: number; word: string } | null;
   /** Made more claims than the other debater. A nudge, not a verdict — the vote decides that. */
   won: boolean;
   onOpenProfile: (event: React.MouseEvent) => void;
@@ -186,6 +195,19 @@ export function DebateScorecard({
           {claims === 1 ? 'claim' : 'claims'}
         </span>
       </div>
+
+      {agreement && (
+        <div className="flex w-full max-w-44 flex-col items-center gap-1">
+          {/* The split itself, green for the positive side — the same reading the claim card gives
+              one claim, over everything this debater said. */}
+          <span className="flex h-1 w-full overflow-hidden rounded-full bg-white/25">
+            <span className="h-full bg-green" style={{ width: `${agreement.percent}%` }} />
+          </span>
+          <span className="text-[0.75rem] leading-none text-white tabular-nums">
+            {agreement.percent}% {agreement.word}
+          </span>
+        </div>
+      )}
 
       {speakingTime && (
         <span className="text-[0.75rem] leading-none text-white/70 tabular-nums">{speakingTime} speaking</span>

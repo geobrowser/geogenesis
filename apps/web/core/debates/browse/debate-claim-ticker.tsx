@@ -671,19 +671,17 @@ export function DebateClaimTickerStack({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
       }}
     >
-      {/* Above the cards, because it is counting them — and because the corner reads top to bottom
-          as "this many so far, and here is the newest".
+      {/* Closed, the chip is a label and sits over the card: the corner reads top to bottom as
+          "this many so far, and here is the newest", and the `+1` has empty tile above it to climb
+          into.
 
-          `expanded` only where the chip is what is holding it open. A pointer closes the list by
-          leaving the tile, so a chip offering to Hide it would be describing something it cannot
-          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
-      {showChip && onTogglePinned && (
-        <ClaimBacklogChip
-          count={backlog.length}
-          tally={open ? null : tally}
-          expanded={open && pinned}
-          onClick={onTogglePinned}
-        />
+          Open, it is a control for the list and goes underneath it. A count standing at the head of
+          the backlog reads as a heading the list does not need — the claims are right there to be
+          counted — and it pushes the newest claim, which is what the list opens on, further from
+          the corner the reader's pointer is in. Below, it is where a control belongs and the list
+          grows away from it. */}
+      {showChip && onTogglePinned && !open && (
+        <ClaimBacklogChip count={backlog.length} tally={tally} expanded={false} onClick={onTogglePinned} />
       )}
 
       <div
@@ -727,6 +725,13 @@ export function DebateClaimTickerStack({
           />
         ))}
       </div>
+
+      {/* `expanded` only where the chip is what is holding it open. A pointer closes the list by
+          leaving the tile, so a chip offering to Hide it would be describing something it cannot
+          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
+      {showChip && onTogglePinned && open && (
+        <ClaimBacklogChip count={backlog.length} tally={null} expanded={pinned} onClick={onTogglePinned} />
+      )}
     </div>
   );
 }

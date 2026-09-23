@@ -25,6 +25,7 @@ import { Text } from '~/design-system/text';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { useDebateAgreement } from './use-debate-agreement';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 /**
@@ -184,14 +185,35 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
    * there is a thumbnail rather than a viewing.
    */
   const speakingSeconds = React.useMemo(() => speakingSecondsBySlot(turnSpans), [turnSpans]);
+
+  /**
+   * How each debater's claims were received, asked for only once the debate has actually finished.
+   *
+   * A claim count says how much someone said; this says whether the room went with them, which is
+   * the question a viewer is left holding at the end. It costs a request, so it is gated on the
+   * card the viewer watched to the finish rather than every card in the feed.
+   */
+  const agreementBySlot = useDebateAgreement({
+    spaceId: debate.claim.space_id,
+    historyBySlot: ticker.historyBySlot,
+    rowsByClaimId: ticker.rowsByClaimId,
+    entitiesByClaimId: ticker.entitiesByClaimId,
+    enabled: playbackEnded && !reducedOverlays,
+  });
+
   const scorecardFor = (slot: 1 | 2) => {
     if (reducedOverlays || !playbackEnded) return null;
     const claims = ticker.historyBySlot.get(slot)?.length ?? 0;
     const other = ticker.historyBySlot.get(slot === 1 ? 2 : 1)?.length ?? 0;
     const seconds = speakingSeconds.get(slot);
+    const agreement = agreementBySlot.get(slot);
     return {
       claims,
       speakingTime: seconds ? formatSpeakingTime(seconds) : null,
+      agreement:
+        agreement && agreement.meetsFloor && agreement.percent !== null
+          ? { percent: agreement.percent, word: agreement.positiveWord }
+          : null,
       // A draw marks neither, which is the honest reading of two equal counts.
       won: claims > other,
     };
@@ -631,7 +653,12 @@ function DebaterVideo({
   /** The round in progress, parked beside this tile's timer. Only the speaker's tile has one. */
   roundBadge?: { label: string; opacity: number } | null;
   /** How this debater finished, once the debate has. The tile supplies who they are. */
-  scorecard?: { claims: number; speakingTime: string | null; won: boolean } | null;
+  scorecard?: {
+    claims: number;
+    speakingTime: string | null;
+    agreement: { percent: number; word: string } | null;
+    won: boolean;
+  } | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -883,6 +910,7 @@ function DebaterVideo({
           avatar={<Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />}
           claims={scorecard.claims}
           speakingTime={scorecard.speakingTime}
+          agreement={scorecard.agreement}
           won={scorecard.won}
           onOpenProfile={openProfile}
         />

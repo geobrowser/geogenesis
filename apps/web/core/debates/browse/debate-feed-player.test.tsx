@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   stackOpens: [] as boolean[],
   /** The running counts the stack was handed, for the chip that draws them. */
   stackTallies: [] as unknown[],
+  /** What `useDebateAgreement` reports, which has a suite of its own. */
+  agreement: new Map<number, unknown>(),
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -47,6 +49,10 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 // The player carries a claim ticker now, which reaches for the transcript, the sync engine and a
 // query client. These tests are about the audio gate; the ticker has its own suite.
+vi.mock('./use-debate-agreement', () => ({
+  useDebateAgreement: () => mocks.agreement,
+}));
+
 vi.mock('./debate-claim-ticker', () => ({
   useDebateClaimTicker: () => mocks.ticker,
   // Stands in for the stack so the *player's* half is what is under test: whether it opens the
@@ -168,6 +174,8 @@ beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
   mocks.stackOpens = [];
+  mocks.stackTallies = [];
+  mocks.agreement = new Map();
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -347,7 +355,7 @@ describe('a refused autoplay', () => {
         autoplayBlocked: true,
         playing: false,
       });
-      return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
+      return render(<DebateFeedPlayer debate={debate} active />);
     })();
 
     expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
@@ -355,7 +363,7 @@ describe('a refused autoplay', () => {
 
   it('shows nothing extra while playback is running normally', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const { container } = render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
   });
@@ -739,6 +747,20 @@ describe('the turn clock, replayed', () => {
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
     expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it('says how the room received each debater, once enough people have answered', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };
+    mocks.agreement = new Map([
+      [1, { percent: 68, meetsFloor: true, positiveWord: 'agreed' }],
+      // Below the floor: the number exists and is still not a reading.
+      [2, { percent: 33, meetsFloor: false, positiveWord: 'agreed' }],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).toContain('68% agreed');
+    expect(container.textContent).not.toContain('33%');
   });
 
   it('keeps the scorecard off a compact gallery tile', () => {
