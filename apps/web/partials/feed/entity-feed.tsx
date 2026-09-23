@@ -258,7 +258,16 @@ export function EntityFeed({
     const countById = new Map(typeCounts.map(type => [normId(type.id), type.count]));
     return typeOptions.filter(type => (countById.get(normId(type.id)) ?? 0) > 0).map(type => type.id);
   }, [typeCounts, typeCountsPending, typeOptions]);
+  const visibleTypeOptions = React.useMemo(() => {
+    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds) return typeOptions;
+    const nonEmptyTypeIdSet = new Set(nonEmptyTypeIds.map(normId));
+    return typeOptions.filter(type => nonEmptyTypeIdSet.has(normId(type.id)));
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, typeOptions]);
   const selectedTypeIdSet = React.useMemo(() => new Set(selectedTypeIds.map(normId)), [selectedTypeIds]);
+  const visibleSelectedTypeIds = React.useMemo(
+    () => visibleTypeOptions.filter(type => selectedTypeIdSet.has(normId(type.id))).map(type => type.id),
+    [selectedTypeIdSet, visibleTypeOptions]
+  );
   const selectsWholePopulation = React.useMemo(() => {
     if (selectedTypeIds.length === typeOptions.length) return true;
     if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds || nonEmptyTypeIds.length === 0) return false;
@@ -375,8 +384,13 @@ export function EntityFeed({
   const toggleAllTypes = React.useCallback(() => {
     typeSelectionTouchedRef.current = true;
     shouldPersistTypeSelectionRef.current = true;
-    setSelectedTypeIds(current => (current.length === typeOptions.length ? [] : typeOptions.map(type => type.id)));
-  }, [typeOptions]);
+    setSelectedTypeIds(current => {
+      const currentSet = new Set(current.map(normId));
+      const allVisibleSelected =
+        visibleTypeOptions.length > 0 && visibleTypeOptions.every(type => currentSet.has(normId(type.id)));
+      return allVisibleSelected ? [] : visibleTypeOptions.map(type => type.id);
+    });
+  }, [visibleTypeOptions]);
 
   const toggleTopic = React.useCallback(
     (topicId: string) => {
@@ -618,8 +632,8 @@ export function EntityFeed({
               ) : null}
               {showTypeFilter ? (
                 <ExploreTypeFilterMenu
-                  selectedTypeIds={selectedTypeIds}
-                  typeOptions={typeOptions}
+                  selectedTypeIds={visibleSelectedTypeIds}
+                  typeOptions={visibleTypeOptions}
                   typeCounts={typeCounts}
                   countsPending={typeCountsPending}
                   onToggleType={toggleType}

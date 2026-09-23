@@ -57,7 +57,8 @@ export function TopicComposition({
           count,
           color: type.color,
         };
-      });
+      })
+      .filter(bucket => bucket.count > 0);
   }, [counts]);
 
   const denominator = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
@@ -68,14 +69,12 @@ export function TopicComposition({
   return (
     <section aria-label="What this topic holds">
       <div className="flex h-2.5 overflow-hidden rounded-full bg-grey-01">
-        {buckets
-          .filter(bucket => bucket.count > 0)
-          .map(bucket => (
-            <span
-              key={bucket.key}
-              style={{ backgroundColor: bucket.color, width: `${(100 * bucket.count) / denominator}%` }}
-            />
-          ))}
+        {buckets.map(bucket => (
+          <span
+            key={bucket.key}
+            style={{ backgroundColor: bucket.color, width: `${(100 * bucket.count) / denominator}%` }}
+          />
+        ))}
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5">
         {buckets.map(bucket => (

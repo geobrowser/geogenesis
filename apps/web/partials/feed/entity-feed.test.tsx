@@ -491,7 +491,8 @@ describe('EntityFeed contextual filters', () => {
     await screen.findByText('2 types');
     expect(screen.getByRole('button', { name: new RegExp(`${claim.label}.*31.*Selected`) })).not.toBeNull();
     expect(screen.getByRole('button', { name: new RegExp(`${debate.label}.*1.*Selected`) })).not.toBeNull();
-    expect(screen.getByRole('button', { name: new RegExp(`${article.label}.*0.*Not selected`) })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: new RegExp(article.label) })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Unselect all' })).not.toBeNull();
 
     const request = new URL(await requestedUrl(), 'https://example.com');
     expect(request.searchParams.get('typeIds')).toBeNull();

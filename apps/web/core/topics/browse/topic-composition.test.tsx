@@ -44,8 +44,7 @@ describe('TopicComposition', () => {
     expect(composition).toHaveTextContent('41 claims');
     expect(composition).toHaveTextContent('6 news stories');
     expect(composition).toHaveTextContent('2 episodes');
-    expect(composition).toHaveTextContent('0 articles');
-    expect(composition).toHaveTextContent('0 datasets');
+    expect(composition).not.toHaveTextContent(/articles|datasets/);
 
     const segments = composition.firstElementChild?.children;
     expect(segments).toHaveLength(4);
