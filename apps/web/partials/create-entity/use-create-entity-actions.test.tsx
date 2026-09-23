@@ -30,16 +30,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useCreateEntityActions', () => {
-  it('builds entity and property routes from a real space ID', () => {
-    const { result } = renderHook(() => useCreateEntityActions('space-1'));
+  // Root sits in this list rather than in a case of its own: it is an ordinary indexed space
+  // with working entity pages, and the point is that it builds the same routes as any other.
+  // It used to be excluded, which left its "+" menu offering nothing but "New space".
+  it.each([
+    { name: 'a real space ID', spaceId: 'space-1' },
+    { name: 'the root space', spaceId: ROOT_SPACE },
+  ])('builds entity and property routes from $name', ({ spaceId }) => {
+    const { result } = renderHook(() => useCreateEntityActions(spaceId));
 
     expect(result.current.canCreateInSpace).toBe(true);
 
     act(() => result.current.createEntity());
     act(() => result.current.createProperty());
 
-    expect(mocks.push).toHaveBeenNthCalledWith(1, '/space/space-1/new-entity?edit=true');
-    expect(mocks.push).toHaveBeenNthCalledWith(2, '/space/space-1/new-entity?edit=true&type=property');
+    expect(mocks.push).toHaveBeenNthCalledWith(1, `/space/${spaceId}/new-entity?edit=true`);
+    expect(mocks.push).toHaveBeenNthCalledWith(2, `/space/${spaceId}/new-entity?edit=true&type=property`);
   });
 
   it.each([
@@ -58,19 +64,5 @@ describe('useCreateEntityActions', () => {
 
     expect(mocks.push).not.toHaveBeenCalled();
     expect(mocks.createSpace).toHaveBeenCalledWith();
-  });
-
-  // Root is an ordinary indexed space with working entity pages; it used to be
-  // excluded here, which left its "+" menu offering nothing but "New space".
-  it('offers entity and property creation in the root space', () => {
-    const { result } = renderHook(() => useCreateEntityActions(ROOT_SPACE));
-
-    expect(result.current.canCreateInSpace).toBe(true);
-
-    act(() => result.current.createEntity());
-    act(() => result.current.createProperty());
-
-    expect(mocks.push).toHaveBeenNthCalledWith(1, `/space/${ROOT_SPACE}/new-entity?edit=true`);
-    expect(mocks.push).toHaveBeenNthCalledWith(2, `/space/${ROOT_SPACE}/new-entity?edit=true&type=property`);
   });
 });
