@@ -100,6 +100,18 @@ export function createDebateAttentionStore(
 const DEFAULT_HIDE_GRACE_MS = 60_000;
 
 /**
+ * Presence uses a longer grace than polling cadence does, because the cost of being wrong is not
+ * symmetric: a poll that pauses for a minute too long costs nothing, while dropping someone from
+ * matchmaking costs them a debate and costs the requester a reply that never comes.
+ *
+ * Three minutes is long enough that checking a calendar, reading a notification or answering a
+ * message does not take you out of the pool, and short enough that a closed laptop leaves it while
+ * the person is still plausibly coming back. It is deliberately a number to tune from evidence
+ * rather than a derived constant — measure before shortening it.
+ */
+const PRESENCE_HIDE_GRACE_MS = 180_000;
+
+/**
  * Is this tab on screen, or recently so?
  *
  * **This is no longer presence** (GEO-2849). It gates *polling cadence* — a hidden tab should stop
@@ -205,6 +217,10 @@ export function createDebateVisibilityStore(
 /**
  * Presence: is this tab still here?
  *
+ * **Not currently wired to anything (2026-09-23).** `useDebatePresence` reads a visibility store
+ * again — see the note there for why, and the trade that was accepted. Kept, with its tests, so
+ * putting it back is a one-line change in `getBrowserPresenceStore` rather than a rewrite.
+ *
  * True for the whole life of the document, false only once it is genuinely going away.
  *
  * **This used to be tab visibility, and that broke every onboarding call (GEO-2849).** On a video
@@ -287,7 +303,10 @@ function getBrowserVisibilityStore() {
 
 function getBrowserPresenceStore() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return serverAttentionStore;
-  if (!browserPresenceStore) browserPresenceStore = createDebateConnectionPresenceStore(window, document);
+  // Its own instance, not the polling store: they read the same signal but must keep separate
+  // graces, and sharing would silently give polling the presence grace.
+  if (!browserPresenceStore)
+    browserPresenceStore = createDebateVisibilityStore(window, document, PRESENCE_HIDE_GRACE_MS);
   return browserPresenceStore;
 }
 
@@ -308,9 +327,21 @@ export function useDebateVisibility() {
 }
 
 /**
- * Is this tab still here? Drives the gateway's `debate_presence`, and therefore `is_online`.
+ * Is the viewer here? Drives the gateway's `debate_presence`, and therefore `is_online`.
  *
- * Not visibility. See `createDebateConnectionPresenceStore`.
+ * **Visibility, with a three-minute grace — this reverses GEO-2849, deliberately.** That change
+ * made presence mean "a tab is open and heartbeating", which is true of an abandoned tab forever:
+ * `last_seen_at` never goes stale, so the 90-second server window never elapses and people sit in
+ * the matchmaking pool indefinitely. Yaniv requested debates from several such ghosts and got no
+ * reply in an hour; Preston reported the same and called it the bigger problem of the two.
+ *
+ * The cost is the case GEO-2849 was written for: someone on a call with this tab hidden reads as
+ * away after the grace, and an onboarding call is an hour of hidden tab. There is no exemption
+ * available for it — the call happens in another app, so this tab cannot know. Accepted knowingly
+ * as a product call by Preston, on the grounds that a pool full of ghosts hurts continuously while
+ * the call case is occasional and has a workaround (keep the tab visible).
+ *
+ * `createDebateConnectionPresenceStore` is kept, unused, so reverting is a one-line change.
  */
 export function useDebatePresence() {
   const store = getBrowserPresenceStore();
