@@ -76,6 +76,49 @@ describe('space chrome layout', () => {
     expect(screen.queryByText('Header')).toBeNull();
   });
 
+  /**
+   * Claims joined debates as a full-bleed browse surface: both are reached from Overview's Activity
+   * card rather than from the tab bar, and framing either inside the tab bar makes it read as a
+   * section of the space page instead of the thing you navigated to.
+   */
+  it('hides the shared chrome on the claims route', () => {
+    navigation.pathname = '/space/test-space/claims';
+
+    render(<SpaceChromeGate>Header</SpaceChromeGate>);
+
+    expect(screen.queryByText('Header')).toBeNull();
+  });
+
+  // The two patterns are one rule expressed twice; `/root` has to agree with `/space/<id>`.
+  it('hides the shared chrome on the root claims route', () => {
+    navigation.pathname = '/root/claims';
+
+    render(<SpaceChromeGate>Header</SpaceChromeGate>);
+
+    expect(screen.queryByText('Header')).toBeNull();
+  });
+
+  // Every other tab of the space keeps its header and tabs; only these two are taken over.
+  it.each(['/space/test-space', '/space/test-space/about', '/space/test-space/positions'])(
+    'keeps the shared chrome on %s',
+    pathname => {
+      navigation.pathname = pathname;
+
+      render(<SpaceChromeGate>Header</SpaceChromeGate>);
+
+      expect(screen.queryByText('Header')).not.toBeNull();
+    }
+  );
+
+  // A prefix match would strip the chrome from any route merely starting with the word.
+  it('keeps the shared chrome on a route that only starts like claims', () => {
+    navigation.pathname = '/space/test-space/claims-map';
+
+    render(<SpaceChromeGate>Header</SpaceChromeGate>);
+
+    expect(screen.queryByText('Header')).not.toBeNull();
+  });
+
   it('collapses the header when the rail reports empty, even if the server seeded a rail', () => {
     navigation.pathname = '/root';
     const store = createStore();
@@ -171,6 +214,20 @@ describe('keepChrome', () => {
 
   it('keeps the chrome on a debates route when asked', () => {
     navigation.pathname = '/space/f3dab79cb5a3d9d1759656dd5361d1c6/debates';
+
+    render(
+      <SpaceChromeGate keepChrome>
+        <div>header</div>
+      </SpaceChromeGate>
+    );
+
+    expect(screen.queryByText('header')).not.toBeNull();
+  });
+
+  // A personal space has no Claims tab — it keeps its claims at `/positions` — but the index
+  // exception covers both routes so the two patterns stay one rule.
+  it('keeps the chrome on a claims route when asked', () => {
+    navigation.pathname = '/space/f3dab79cb5a3d9d1759656dd5361d1c6/claims';
 
     render(
       <SpaceChromeGate keepChrome>

@@ -43,6 +43,14 @@ type Props<T extends string> = {
    * something else entirely and would otherwise tell a screen reader it was loading a space name.
    */
   labelPendingAnnouncement?: string;
+  /**
+   * What the trigger is called, where its label does not say on its own.
+   *
+   * The space and source menus name what they filter — "Any space", "Featured" — so the label is
+   * the whole answer. A sort menu's is just the order ("Best"), which tells a screen reader nothing
+   * about what it does.
+   */
+  triggerAriaLabel?: string;
 };
 
 /**
@@ -61,6 +69,7 @@ export function HubFilterMenu<T extends string>({
   showImages,
   labelPending,
   labelPendingAnnouncement = 'Loading space name',
+  triggerAriaLabel,
 }: Props<T>) {
   const [open, setOpen] = React.useState(false);
 
@@ -72,7 +81,7 @@ export function HubFilterMenu<T extends string>({
       className="max-w-[280px]"
       // Space names come from the knowledge graph and can be long enough to burst the pill.
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
+        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]" aria-label={triggerAriaLabel}>
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
             <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
