@@ -2,6 +2,8 @@ import { liveQuery } from 'dexie';
 
 import { db } from '~/core/database/indexeddb';
 
+import type { StreamedRecordingMultipart } from './recording-stream';
+
 export type DebateRecordingUploadStage = 'queued' | 'uploaded';
 
 export type DebateRecordingUpload = {
@@ -20,6 +22,12 @@ export type DebateRecordingUpload = {
   videoBitsPerSecond: number | null;
   stage: DebateRecordingUploadStage;
   filename: string | null;
+  /**
+   * The multipart upload the recording was streamed into during the debate, when there was one
+   * (GEO-2955). The queue then sends only the parts that did not make it out live. Absent on rows
+   * written before streaming existed, which upload as one PUT exactly as before.
+   */
+  multipart?: StreamedRecordingMultipart | null;
   attemptCount: number;
   nextAttemptAt: number;
   lastError: string | null;
@@ -39,6 +47,7 @@ export type EnqueueDebateRecordingUpload = {
   height?: number | null;
   framerate?: number | null;
   videoBitsPerSecond?: number | null;
+  multipart?: StreamedRecordingMultipart | null;
 };
 
 export async function enqueueDebateRecordingUpload(
@@ -67,6 +76,7 @@ export async function enqueueDebateRecordingUpload(
       videoBitsPerSecond: input.videoBitsPerSecond ?? null,
       stage: 'queued',
       filename: null,
+      multipart: input.multipart ?? null,
       attemptCount: 0,
       nextAttemptAt: now,
       lastError: null,
@@ -99,6 +109,31 @@ export async function markDebateRecordingUploaded(id: string, filename: string):
     lastError: null,
     updatedAt: Date.now(),
   });
+}
+
+/**
+ * Sends the recording back to the start of its upload: every part is sent again on the next
+ * attempt. For when the server says parts the client believed uploaded are not there.
+ */
+export async function requeueDebateRecordingParts(id: string): Promise<void> {
+  await db.transaction('rw', db.debateRecordingUploads, async () => {
+    const upload = await db.debateRecordingUploads.get(id);
+    if (!upload) return;
+    await db.debateRecordingUploads.update(id, {
+      stage: 'queued',
+      filename: null,
+      multipart: upload.multipart ? { ...upload.multipart, uploadedPartNumbers: [] } : null,
+      updatedAt: Date.now(),
+    });
+  });
+}
+
+/** Records the multipart upload's progress so a reload resumes rather than resends. */
+export async function setDebateRecordingMultipart(
+  id: string,
+  multipart: StreamedRecordingMultipart | null
+): Promise<void> {
+  await db.debateRecordingUploads.update(id, { multipart, updatedAt: Date.now() });
 }
 
 export async function scheduleDebateRecordingRetry(id: string, error: unknown, nextAttemptAt: number): Promise<void> {
