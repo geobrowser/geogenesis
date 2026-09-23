@@ -139,74 +139,79 @@ export function ProfileActivitySection({
     <div className={className}>
       <section
         ref={sectionRef}
+        aria-label="Activity"
         data-activity-section
         className={cx(
           // Not a card. A bordered panel holding bordered cards spends two gutters and two rules on
-          // saying "these belong together", which the heading already says. No box and no rule: the
+          // saying "these belong together", which the pill row already says. No box and no rule: the
           // content sits flush with the column — on a phone the gallery can reach the screen edge.
           'flex flex-col'
         )}
       >
         {/*
-         * The title, then Debates and Claims as pills beneath it, with the row's
-         * own controls to their right. A kind with nothing in it is left out, so a
-         * person with only debates sees one pill.
+         * The title is `sr-only`. The pills under it already name the two kinds, so on screen the
+         * heading only repeated the row beneath it — but dropping it outright would take the
+         * section out of the heading tree, and a reader navigating this page by heading would skip
+         * straight past it to the comments.
          */}
-        <header className="flex flex-col gap-3 pb-3">
-          <h3 className="text-mediumTitle text-text">Activity</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            {available.map(kind => {
-              const isSelected = kind.key === selected.key;
+        <h3 className="sr-only">Activity</h3>
 
-              return (
-                <button
-                  key={kind.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    if (isSelected) return;
+        {/*
+         * Debates and Claims as pills, with the row's own controls to their right. A kind with
+         * nothing in it is left out, so a person with only debates sees one pill.
+         */}
+        <header className="flex flex-wrap items-center gap-2 pb-3">
+          {available.map(kind => {
+            const isSelected = kind.key === selected.key;
 
-                    // Put the reserve in the document before React replaces
-                    // the tall view. Waiting for the next layout effect would
-                    // let the shorter DOM clamp `scrollY` while it is being
-                    // measured, before the reserve could help.
-                    prepareSwitch();
-                    setSelectedKey(kind.key);
-                  }}
-                  // The same pill as View all beside it — 28px, 16px type, the same padding — black
-                  // when selected (the Log in pill) and the secondary outline otherwise.
-                  className={
-                    isSelected
-                      ? buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })
-                      : buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })
-                  }
-                >
-                  {/* Up 1px: at the pill's 13px leading, Calibre's glyphs sit a pixel low in the box. */}
-                  <span className="relative -top-px">
-                    {kind.label}
-                    <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                      {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
-                    </span>
+            return (
+              <button
+                key={kind.key}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => {
+                  if (isSelected) return;
+
+                  // Put the reserve in the document before React replaces
+                  // the tall view. Waiting for the next layout effect would
+                  // let the shorter DOM clamp `scrollY` while it is being
+                  // measured, before the reserve could help.
+                  prepareSwitch();
+                  setSelectedKey(kind.key);
+                }}
+                // The same pill as View all beside it — 28px, 16px type, the same padding — black
+                // when selected (the Log in pill) and the secondary outline otherwise.
+                className={
+                  isSelected
+                    ? buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })
+                    : buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })
+                }
+              >
+                {/* Up 1px: at the pill's 13px leading, Calibre's glyphs sit a pixel low in the box. */}
+                <span className="relative -top-px">
+                  {kind.label}
+                  <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
+                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
                   </span>
-                </button>
-              );
-            })}
-
-            {/*
-             * The row's own controls, right of the tabs: step through the cards, then leave for the
-             * full tab. Both belong to the selected kind — see `navigation`.
-             */}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {selected.rows.length > 0 ? (
-                // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
-                // there: dark when there is somewhere to go, grey at the row's end.
-                <span className="mr-1 flex items-center gap-3">
-                  <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
-                  <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
                 </span>
-              ) : null}
-              <ActivitySeeAll kind={selected} />
-            </div>
+              </button>
+            );
+          })}
+
+          {/*
+           * The row's own controls, right of the tabs: step through the cards, then leave for the
+           * full tab. Both belong to the selected kind — see `navigation`.
+           */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {selected.rows.length > 0 ? (
+              // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
+              // there: dark when there is somewhere to go, grey at the row's end.
+              <span className="mr-1 flex items-center gap-3">
+                <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
+                <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
+              </span>
+            ) : null}
+            <ActivitySeeAll kind={selected} />
           </div>
         </header>
 
@@ -250,18 +255,20 @@ export function ProfileActivitySection({
 function ProfileActivitySkeleton({ className }: { className?: string }) {
   return (
     <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
-      <header className="flex flex-col gap-3 pb-3">
-        <h3 className="text-mediumTitle text-text">Activity</h3>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-7 w-24 rounded-full" />
-          <Skeleton className="h-7 w-20 rounded-full" />
-        </div>
+      {/* Drawn here too, so the heading is in the tree before the rows are, not only after. */}
+      <h3 className="sr-only">Activity</h3>
+      <header className="flex items-center gap-2 pb-3">
+        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-20 rounded-full" />
       </header>
-      <div className="py-4">
+      {/*
+       * `py-2`, the gallery scroller's own padding — and no footer under it. The real section has
+       * had neither a bottom rule nor a centered "see all" since that control moved up into the
+       * header beside the arrows; the skeleton kept drawing both, so it stood ~85px taller than
+       * what replaced it and everything below Activity jumped up when the rows landed.
+       */}
+      <div className="py-2">
         <Skeleton className="h-44 w-full rounded-lg" />
-      </div>
-      <div className="flex justify-center border-t border-divider py-4">
-        <Skeleton className="h-4 w-28 rounded" />
       </div>
     </section>
   );
@@ -534,7 +541,7 @@ function ActivityGallery({
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
-         * No inset at the start: the first card sits flush with the column, under the heading. On a
+         * No inset at the start: the first card sits flush with the column, under the pills. On a
          * phone the row bleeds to the screen edge, so a trailing spacer — not padding, which a
          * scroll container drops at its far end — keeps the last card off it.
          */}
