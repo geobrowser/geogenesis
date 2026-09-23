@@ -245,17 +245,30 @@ describe('ProfileActivitySection', () => {
       />
     );
 
-    expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
+    const loading = screen.getByRole('region', { name: 'Loading activity' });
+
+    expect(loading).toHaveAttribute('aria-busy', 'true');
     // No tabs to draw until a kind arrives.
     expect(screen.queryByRole('button', { name: /Debates|Claims/ })).not.toBeInTheDocument();
+    /*
+     * Only the chrome the loaded section actually has: two pills and the gallery. The skeleton used
+     * to add a ruled "see all" footer that moved into the header long ago, which made it ~85px
+     * taller than what replaced it — so everything below Activity jumped up once the rows landed.
+     */
+    expect(loading.querySelectorAll('.animate-pulse')).toHaveLength(3);
+    expect(loading.querySelector('.border-t')).toBeNull();
   });
 
-  it('leads with the kinds as pills, under no visible heading', () => {
+  it('keeps the heading for screen readers while hiding it on screen', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims' })]} />);
 
-    // The section keeps its name for assistive technology; only the visible title is gone.
+    /*
+     * The pills say "Debates" and "Claims" already, so the visible title was a third word for the
+     * same thing. It stays in the heading tree, though: without it a reader navigating by heading
+     * has nothing between the page title and the comments.
+     */
+    expect(screen.getByRole('heading', { name: 'Activity' })).toHaveClass('sr-only');
     expect(screen.getByRole('region', { name: 'Activity' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Activity' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
   });

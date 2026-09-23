@@ -149,10 +149,16 @@ export function ProfileActivitySection({
         )}
       >
         {/*
+         * The title is `sr-only`. The pills under it already name the two kinds, so on screen the
+         * heading only repeated the row beneath it — but dropping it outright would take the
+         * section out of the heading tree, and a reader navigating this page by heading would skip
+         * straight past it to the comments.
+         */}
+        <h3 className="sr-only">Activity</h3>
+
+        {/*
          * Debates and Claims as pills, with the row's own controls to their right. A kind with
-         * nothing in it is left out, so a person with only debates sees one pill. No heading above
-         * them: the pills name the two kinds, and the section is named for assistive technology by
-         * the `aria-label` above, so a visible "Activity" title only repeated the obvious.
+         * nothing in it is left out, so a person with only debates sees one pill.
          */}
         <header className="flex flex-wrap items-center gap-2 pb-3">
           {available.map(kind => {
@@ -249,15 +255,20 @@ export function ProfileActivitySection({
 function ProfileActivitySkeleton({ className }: { className?: string }) {
   return (
     <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
+      {/* Drawn here too, so the heading is in the tree before the rows are, not only after. */}
+      <h3 className="sr-only">Activity</h3>
       <header className="flex items-center gap-2 pb-3">
         <Skeleton className="h-7 w-24 rounded-full" />
         <Skeleton className="h-7 w-20 rounded-full" />
       </header>
-      <div className="py-4">
+      {/*
+       * `py-2`, the gallery scroller's own padding — and no footer under it. The real section has
+       * had neither a bottom rule nor a centered "see all" since that control moved up into the
+       * header beside the arrows; the skeleton kept drawing both, so it stood ~85px taller than
+       * what replaced it and everything below Activity jumped up when the rows landed.
+       */}
+      <div className="py-2">
         <Skeleton className="h-44 w-full rounded-lg" />
-      </div>
-      <div className="flex justify-center border-t border-divider py-4">
-        <Skeleton className="h-4 w-28 rounded" />
       </div>
     </section>
   );
@@ -530,7 +541,7 @@ function ActivityGallery({
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
-         * No inset at the start: the first card sits flush with the column, under the heading. On a
+         * No inset at the start: the first card sits flush with the column, under the pills. On a
          * phone the row bleeds to the screen edge, so a trailing spacer — not padding, which a
          * scroll container drops at its far end — keeps the last card off it.
          */}
