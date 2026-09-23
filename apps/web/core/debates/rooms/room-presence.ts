@@ -38,10 +38,11 @@ export type DebateRoomPresenceInput = {
 };
 
 /**
- * The room view sends dashed uuids while the session token's `user_id` is dashless, so the two
- * never match as written. Compared on one form rather than trusting either.
+ * geo-chat spells uuids both ways -- `serde_uuid` fields are dashless, plain ones dashed -- so two
+ * ids for the same thing need not match as written. Compared on one form rather than trusting
+ * either.
  */
-function sameUser(a: string, b: string) {
+export function sameId(a: string, b: string) {
   return a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
 }
 
@@ -54,14 +55,14 @@ export function debateRoomOpponent(room: DebateRoomView | null | undefined, curr
     return { opponentUserId: null, opponentPresent: false };
   }
 
-  const viewerIsListed = room.participants.some(userId => sameUser(userId, currentUserId));
+  const viewerIsListed = room.participants.some(userId => sameId(userId, currentUserId));
   const opponentUserId = viewerIsListed
-    ? (room.participants.find(userId => !sameUser(userId, currentUserId)) ?? null)
+    ? (room.participants.find(userId => !sameId(userId, currentUserId)) ?? null)
     : null;
 
   return {
     opponentUserId,
-    opponentPresent: opponentUserId !== null && room.occupants.some(userId => sameUser(userId, opponentUserId)),
+    opponentPresent: opponentUserId !== null && room.occupants.some(userId => sameId(userId, opponentUserId)),
   };
 }
 

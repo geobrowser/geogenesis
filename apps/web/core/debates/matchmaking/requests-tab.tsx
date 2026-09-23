@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -39,12 +39,9 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
-  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  const debugEnabled = useDebugDebatesPageEnabled();
-
-  // Split rather than branched inside, so a viewer who cannot schedule mounts none of the
-  // scheduling reads (GEO-2938, GEO-2940).
-  return peerAvailabilityEnabled || debugEnabled ? (
+  // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
+  // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
+  return usePeerAvailabilityEnabled() ? (
     <ScheduledRequestsTab />
   ) : (
     <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} />

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -7,17 +7,42 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import { NavUtils } from '~/core/utils/utils';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
   pending: false,
+  viewerId: 'user-me' as string | null,
+  people: [] as { user_id: string; profile_space_id: string; display_name: string | null; avatar_cid: string | null }[],
+  requests: [] as ScheduledDebateRequest[],
+  rooms: [] as UpcomingDebateRoom[],
 }));
+
+const ADA = {
+  user_id: 'user-them',
+  profile_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
+  display_name: 'Ada',
+  avatar_cid: null,
+};
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
   useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
+  useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
 }));
 
-const { ScheduledDebatesSection } = await import('./scheduled-debates-section');
+vi.mock('~/core/debates/rooms/hooks', () => ({
+  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms } }),
+}));
+
+vi.mock('./hooks', () => ({
+  useDebatePeople: () => ({ data: { people: mocks.people } }),
+}));
+
+vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
+  useCurrentGeoChatUserId: () => mocks.viewerId,
+}));
+
+const { ScheduledDebatesSection, useScheduledContent } = await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
@@ -29,7 +54,10 @@ const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDeba
   proposed_by_user_id: 'user-them',
   reschedule_count: 0,
   room_id: null,
-  participants: [],
+  participants: [
+    { user_id: 'user-me', accepted: true },
+    { user_id: 'user-them', accepted: null },
+  ],
   viewer_must_answer: true,
   ...overrides,
 });
@@ -44,17 +72,29 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
   ...overrides,
 });
 
-const setup = (content: { answerable?: ScheduledDebateRequest[]; upcoming?: UpcomingDebateRoom[] }) => ({
+const setup = (content: {
+  answerable?: ScheduledDebateRequest[];
+  upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+}) => ({
   user: userEvent.setup(),
   ...render(
     <ScheduledDebatesSection content={{ answerable: content.answerable ?? [], upcoming: content.upcoming ?? [] }} />
   ),
 });
 
+const upcomingRow = (overrides: Partial<UpcomingDebateRoom> = {}, opponentUserId: string | null = 'user-them') => ({
+  room: room(overrides),
+  opponentUserId,
+});
+
 afterEach(() => {
   cleanup();
   mocks.respond = vi.fn();
   mocks.pending = false;
+  mocks.viewerId = 'user-me';
+  mocks.people = [];
+  mocks.requests = [];
+  mocks.rooms = [];
 });
 
 describe('answering in the tab', () => {
@@ -87,7 +127,7 @@ describe('answering in the tab', () => {
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
 
-    expect(screen.getByText(/That clashes with a debate at/)).toBeInTheDocument();
+    expect(screen.getByText(/That clashes with a debate/)).toBeInTheDocument();
   });
 
   it('reports a rejected answer rather than looking inert', async () => {
@@ -103,16 +143,74 @@ describe('answering in the tab', () => {
 describe('joining from the tab', () => {
   // The tab carries what the popup carries, since the popup can be dismissed.
   it('offers the way in, and says who is already there', () => {
-    setup({ upcoming: [room({ others_present: true, due: true })] });
+    mocks.people = [ADA];
+    setup({ upcoming: [upcomingRow({ others_present: true, due: true })] });
 
-    expect(screen.getByText('Your opponent is waiting for you now')).toBeInTheDocument();
+    expect(screen.getByText('Ada is waiting for you now')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Join debate' })).toHaveAttribute('href', '/debate/room-1');
   });
 
   it('says when a shut room opens rather than offering a dead link', () => {
-    setup({ upcoming: [room({ joinable: false })] });
+    setup({ upcoming: [upcomingRow({ joinable: false })] });
 
     expect(screen.getByText(/^Opens at/)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Join debate' })).not.toBeInTheDocument();
+  });
+});
+
+
+describe('naming the other person', () => {
+  it('links a resolved opponent to their profile', () => {
+    mocks.people = [ADA];
+    setup({ answerable: [request()] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', NavUtils.toSpace(ADA.profile_space_id));
+  });
+
+  it('falls back to a bare label when the roster does not have them', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByText('Your opponent')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Your opponent' })).not.toBeInTheDocument();
+  });
+
+  it('never reads the viewer as their own opponent', () => {
+    mocks.people = [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }];
+    mocks.viewerId = 'user-me';
+    setup({ answerable: [request()] });
+
+    expect(screen.queryByText('Me')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+  });
+});
+
+
+describe('pairing a room with the request that booked it', () => {
+  // geo-chat sends the room's id dashless and the request's dashed, so a literal compare misses.
+  it('matches across the two uuid spellings', () => {
+    const dashed = '1f14c588-e233-41d7-81df-1287edd8d4f0';
+    mocks.requests = [request({ status: 'accepted', room_id: dashed, viewer_must_answer: false })];
+    mocks.rooms = [room({ room_id: dashed.replace(/-/g, '') })];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.upcoming).toHaveLength(1);
+    expect(result.current.upcoming[0].opponentUserId).toBe('user-them');
+  });
+
+  it('leaves the opponent unknown when no request owns the room', () => {
+    mocks.rooms = [room()];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.upcoming[0].opponentUserId).toBeNull();
+  });
+
+  it('keeps an accepted request out of the answerable list', () => {
+    mocks.requests = [request({ status: 'accepted', room_id: 'room-1' })];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.answerable).toHaveLength(0);
   });
 });
