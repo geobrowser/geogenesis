@@ -82,8 +82,9 @@ function controllerFixture(overrides: {
   playing?: boolean;
   playbackEnded?: boolean;
   subtitle?: string | null;
-  /** A freshly signed recording, as `refreshSlotUrl` produces. */
-  urls?: { slot1: string; slot2: string };
+  /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
+   * blanking pass that precedes a different pair leaves behind. */
+  urls?: { slot1: string | null; slot2: string | null };
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -448,19 +449,18 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
     const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
     const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    /** Hand the pair different URLs — or none, which is how a new recording arrives. */
+    const hand = (urls: { slot1: string | null; slot2: string | null }) => {
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2, urls });
+      rerender(<DebateFeedPlayer debate={debate} active />);
+    };
     return {
       slot1,
       slot2,
       container,
+      hand,
       /** What `refreshSlotUrl` does to this tile: the same recording, signed again. */
-      resign(url: string) {
-        mocks.controller = controllerFixture({
-          mutedByUser: true,
-          turnSlot: 2,
-          urls: { slot1: url, slot2: 'https://cdn.test/slot2.webm' },
-        });
-        rerender(<DebateFeedPlayer debate={debate} active />);
-      },
+      resign: (url: string) => hand({ slot1: url, slot2: 'https://cdn.test/slot2.webm' }),
     };
   }
 
@@ -505,9 +505,12 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     expect(slot2.preload).toBe('metadata');
   });
 
-  // Per source, not per element. A card re-ranked onto a different debate — or handed this
-  // recording's re-signed URL — starts from the light fetch that most recordings load from.
-  it('puts preload back when the tile is given a different recording', () => {
+  /**
+   * The re-signed URL keeps it. `onExhausted` re-signs the recording that has just failed every
+   * rebuild it was allowed under `metadata`, so handing the fresh URL that same mode would spend
+   * an attempt and a multi-megabyte load proving the point a second time.
+   */
+  it('keeps the raised preload across a re-signed URL', () => {
     const { slot1, resign, container } = renderPair();
 
     fireEvent.error(slot1);
@@ -516,7 +519,34 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
 
     resign('https://cdn.test/slot1-resigned.webm');
 
-    expect(Array.from(container.querySelectorAll('video'))[0].preload).toBe('metadata');
+    const [resigned] = Array.from(container.querySelectorAll('video'));
+    expect(resigned).toBe(slot1);
+    expect(resigned.preload).toBe('auto');
+  });
+
+  /**
+   * And a genuinely different recording gets the light fetch back without anything here putting it
+   * back, which is what makes the escalation per-source rather than per-tile.
+   *
+   * `useDebatePlayback` blanks both URLs before fetching a new pair, so the element the raised
+   * `preload` was written on is gone by the time the new recording has a URL, and React builds its
+   * replacement from the JSX default. Pinned because the blanking pass is load-bearing from over
+   * here and reads like a mere loading state from over there.
+   */
+  it('starts a different recording from a fresh element', () => {
+    const { slot1, hand, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    hand({ slot1: null, slot2: null });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    hand({ slot1: 'https://cdn.test/other1.webm', slot2: 'https://cdn.test/other2.webm' });
+    const [next] = Array.from(container.querySelectorAll('video'));
+    expect(next).not.toBe(slot1);
+    expect(next.preload).toBe('metadata');
   });
 
   it('repairs each tile independently', () => {

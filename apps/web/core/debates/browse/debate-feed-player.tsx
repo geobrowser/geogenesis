@@ -43,15 +43,6 @@ const MAX_MEDIA_RECOVERY_ATTEMPTS = 3;
  */
 const MEDIA_RECOVERY_BACKOFF_MS = 400;
 
-/**
- * What a tile asks the browser for before anything has gone wrong.
- *
- * Enough to paint a frame and know the shape of the recording, without pulling a multi-megabyte
- * file down for a card nobody has reached yet — the feed keeps several of these mounted at once.
- * A tile whose pipeline dies raises it for that source alone; see `reattachVideoSource`.
- */
-const TILE_PRELOAD = 'metadata';
-
 /** How every big round control in the player looks, wherever it is put. */
 const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
 const CENTERED_PLAYBACK_CONTROL_CLASS = `absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 ${PLAYBACK_CONTROL_CIRCLE_CLASS}`;
@@ -681,17 +672,21 @@ function DebaterVideo({
   // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
   // repair still pending belongs to the old one.
   //
-  // The `preload` a rebuild raised goes back with it. `reattachVideoSource` writes the DOM
-  // property directly, which React cannot see and therefore never reconciles: left alone, one
-  // recording that needed the heavier fetch would hand it to every recording the tile is given
-  // afterwards. Most of them load from metadata perfectly well and should keep doing so.
+  // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `reattachVideoSource`
+  // writes the DOM property directly, which React cannot see and never reconciles — but there is no
+  // case that needs one. A genuinely different recording never reaches a live element: the hook
+  // blanks both URLs before fetching the new pair (`setUrls({slot1: null, slot2: null})`), which
+  // unmounts the `<video>` and takes the raised `preload` with it, and the replacement is built from
+  // the JSX default. The only `src` change a live element sees is `onExhausted` re-signing *this*
+  // recording — the one that has just failed every rebuild it was allowed under `metadata`. Putting
+  // it back there would hand the fresh URL the same mode that killed the old one, and buy another
+  // wasted attempt and another blank half-second before the next rebuild raised it again.
   React.useEffect(() => {
     recoveryAttemptsRef.current = 0;
     escalatedRef.current = false;
     setExhausted(false);
-    if (videoRef.current) videoRef.current.preload = TILE_PRELOAD;
     return cancelRecovery;
-  }, [cancelRecovery, src, videoRef]);
+  }, [cancelRecovery, src]);
 
   const rebuild = React.useCallback(
     (attempt: number) => {
@@ -752,7 +747,11 @@ function DebaterVideo({
             ref={videoRef}
             className="h-full w-full object-cover"
             playsInline
-            preload={TILE_PRELOAD}
+            // Enough to paint a frame and know the shape of the recording, without pulling a
+            // multi-megabyte file down for a card nobody has reached yet — the feed keeps several
+            // of these mounted at once. A tile whose pipeline dies raises it for that source
+            // alone, and only for as long as the element lives; see `reattachVideoSource`.
+            preload="metadata"
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
