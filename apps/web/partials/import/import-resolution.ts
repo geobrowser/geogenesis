@@ -299,6 +299,10 @@ async function resolveNames(params: {
       roundBatches.push(uniqueNames.slice(start, start + BATCH_SIZE));
     }
 
+    const roundNum = Math.floor(i / (BATCH_SIZE * BATCH_CONCURRENCY)) + 1;
+    const namesInRound = roundBatches.reduce((n, b) => n + b.length, 0);
+    const tRound = performance.now();
+
     const batchResults = await Promise.allSettled(
       roundBatches.map(async batch => {
         try {
