@@ -7,11 +7,13 @@ import cx from 'classnames';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
+  type ClaimTally,
   type StackedCard,
   type TickerWindow,
   backlogWindows,
   claimHistory,
   claimMarkers,
+  claimTally,
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
@@ -49,6 +51,14 @@ type DebateTicker = {
    * contents for what is coming.
    */
   historyBySlot: Map<number, StackedCard[]>;
+  /**
+   * The running claim count for each debater, while a claim of theirs has just landed.
+   *
+   * Absent for most of a debate — see {@link claimTally}. Derived here rather than by the player
+   * so it is counted over the same backlog the corner opens into, which is the only way the two
+   * numbers can be guaranteed to agree.
+   */
+  tallyBySlot: Map<number, ClaimTally>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Which way the viewer answered each claim this session. */
@@ -261,9 +271,19 @@ export function useDebateClaimTicker(
     return history;
   }, [backlogBySlot, playheadMs]);
 
+  const tallyBySlot = React.useMemo(() => {
+    const tallies = new Map<number, ClaimTally>();
+    for (const [slot, slotWindows] of backlogBySlot) {
+      const tally = claimTally(slotWindows, playheadMs);
+      if (tally) tallies.set(slot, tally);
+    }
+    return tallies;
+  }, [backlogBySlot, playheadMs]);
+
   return {
     cardsBySlot,
     historyBySlot,
+    tallyBySlot,
     markers,
     answers,
     onAnswered,

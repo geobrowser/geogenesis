@@ -5,8 +5,9 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import type { ClaimMarker, ClaimTally } from '~/core/debates/claim-ticker';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import { type TurnCue, turnCueForSlot, turnCuesAt } from '~/core/debates/turn-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -16,6 +17,7 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateClaimTally, DebateTurnCueOverlay } from './debate-turn-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -86,6 +88,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -141,6 +144,22 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     timelineMs: timelineSeconds * 1000,
     enabled: (active || preload) && !reducedOverlays,
   });
+
+  /**
+   * The turn clock's overlays, replayed from the room (see `turn-cues.ts`).
+   *
+   * Gated on `playing` for the same reason `countdown` is: a cue frozen on a paused tile is a
+   * shout with no clock behind it, and the viewer has stopped to look at something. Gated on
+   * `reducedOverlays` with the claim layer, because a compact gallery tile is too small for a
+   * phrase across it — the same judgement that takes the claim cards off those cards.
+   *
+   * `playheadSeconds` rather than `turnState`: every cue here is a function of the playhead, so a
+   * scrub lands mid-cue at full strength rather than part-way through an animation.
+   */
+  const turnCues = React.useMemo(
+    () => (playing && !reducedOverlays ? turnCuesAt(turnSpans, playheadSeconds) : []),
+    [playheadSeconds, playing, reducedOverlays, turnSpans]
+  );
 
   const showReplay = ready && playbackEnded;
   const showControls = ready && (awaitingTap || showReplay);
@@ -355,6 +374,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
+        turnCue={turnCueForSlot(turnCues, 1)}
+        claimTally={reducedOverlays ? null : (ticker.tallyBySlot.get(1) ?? null)}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -409,6 +430,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
+        turnCue={turnCueForSlot(turnCues, 2)}
+        claimTally={reducedOverlays ? null : (ticker.tallyBySlot.get(2) ?? null)}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -538,6 +561,8 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
+  turnCue,
+  claimTally,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -557,6 +582,10 @@ function DebaterVideo({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
+  /** This tile's turn-clock overlay right now, if one is firing. */
+  turnCue?: TurnCue | null;
+  /** This debater's running claim count, while a claim of theirs has just landed. */
+  claimTally?: ClaimTally | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -726,7 +755,10 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      // `@container` so the cue type sizes against the tile rather than the viewport: this same
+      // component is a feed card, an explore card and a fullscreen player, and a breakpoint would
+      // get two of the three wrong.
+      className="@container relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
@@ -796,6 +828,9 @@ function DebaterVideo({
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+
+      <DebateTurnCueOverlay cue={turnCue ?? null} />
+      <DebateClaimTally tally={claimTally ?? null} />
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks

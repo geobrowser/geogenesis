@@ -19,6 +19,8 @@ import {
   sortTurnSegments,
   timelineSecondsFor,
   timelineSecondsForSegments,
+  turnSpansForDurations,
+  turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
 } from './playback-utils';
@@ -268,6 +270,22 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const turnSegments = React.useMemo(
     () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
     [mediaQuery.data?.turn_segments]
+  );
+  /**
+   * Every turn's place on the timeline, for the overlays that have to look past the current one.
+   *
+   * `turnStateAt` answers "who is speaking and how long have they got", which is what the audible
+   * panel and the ring need. A cue that fires *before* a turn — the up-next chip, the hand-off —
+   * has to know the turn after this one, so it needs the list rather than the answer. Same
+   * precedence as `turnStateAt`: the rendered segments where they exist, the format's allowance
+   * where they do not.
+   */
+  const turnSpans = React.useMemo(
+    () =>
+      turnSegments.length > 0
+        ? turnSpansFromSegments(turnSegments)
+        : turnSpansForDurations(debate.first_participant_slot, turnDurations),
+    [debate.first_participant_slot, turnDurations, turnSegments]
   );
   const turnStateAt = React.useCallback(
     (seconds: number): TurnState =>
@@ -1216,6 +1234,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,

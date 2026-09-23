@@ -3,6 +3,7 @@ import { act, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 const emptyTicker = () => ({
   cardsBySlot: new Map(),
   historyBySlot: new Map(),
+  tallyBySlot: new Map(),
   markers: [],
   answers: new Map(),
   onAnswered: vi.fn(),
@@ -84,6 +86,8 @@ function controllerFixture(overrides: {
   subtitle?: string | null;
   /** A freshly signed recording, as `refreshSlotUrl` produces. */
   urls?: { slot1: string; slot2: string };
+  /** Where the playhead sits, for the turn cues, which are a function of it. */
+  playheadSeconds?: number;
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -101,9 +105,12 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: 5,
+    playheadSeconds: overrides.playheadSeconds ?? 5,
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
+    // Two 30s turns, the speaking one first — enough for `turnCuesAt` to have a turn after this
+    // one to announce, which is what the up-next chip needs.
+    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000]),
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -609,5 +616,67 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     act(() => vi.advanceTimersByTime(2_000));
 
     expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+describe('the turn clock, replayed', () => {
+  /**
+   * Two 30s turns; slot 1 speaks first. `playheadSeconds` is the only thing a cue reads.
+   *
+   * Every assertion here is scoped to its own render's container, because this suite has no
+   * cleanup between tests — see the note on `renderStack`.
+   */
+  const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
+
+  const phrases = (container: HTMLElement) =>
+    [...container.querySelectorAll('[data-turn-cue]')].map(node => node.textContent);
+
+  it('rests through the middle of a turn, which is most of a debate', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it("replays the room's warning over the debater it belongs to", () => {
+    mocks.controller = at(26);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Wrap it up!');
+  });
+
+  it('points at the tile about to speak as the hand-off approaches', () => {
+    mocks.controller = at(22);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Up next in 8s');
+  });
+
+  it('stands down while the viewer has the debate paused', () => {
+    // A cue frozen on a paused tile is a shout with no clock behind it, and the viewer has
+    // stopped the debate to look at something.
+    mocks.controller = at(26, { playing: false });
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it('stays off a compact gallery tile, with the claim layer', () => {
+    mocks.controller = at(26);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it("counts a debater's claims as they land, and not on a compact tile", () => {
+    mocks.controller = at(12);
+    mocks.ticker = { ...emptyTicker(), tallyBySlot: new Map([[2, { count: 4, ageMs: 300 }]]) };
+
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-claim-tally="4"]')).not.toBeNull();
+
+    rerender(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(container.querySelector('[data-claim-tally]')).toBeNull();
   });
 });

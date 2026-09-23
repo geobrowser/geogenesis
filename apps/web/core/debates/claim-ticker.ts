@@ -279,3 +279,49 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
       }, [])
   );
 }
+
+/**
+ * How long the running tally stays up after a claim lands.
+ *
+ * The tally is a *cue*, not furniture. A permanent counter over the video is the same mistake as a
+ * permanent chip — see `ClaimBacklogChip` — so it arrives with the claim, says how many that makes,
+ * and goes. Slightly longer than the burst it accompanies, so the number is still there to read
+ * once the `+1` has flown.
+ */
+export const TALLY_LINGER_MS = 2_600;
+/** The `+1` itself: up and gone well before the tally it lands in. */
+export const TALLY_BURST_MS = 900;
+
+export type ClaimTally = {
+  /** Claims this debater has made by this point in the debate. */
+  count: number;
+  /** How long ago the newest one landed. The animation's clock, and the playhead's, not the DOM's. */
+  ageMs: number;
+};
+
+/**
+ * The running claim count for one debater, at this playhead.
+ *
+ * Counted over the *backlog* windows rather than the live ones, deliberately. Those are the claims
+ * the corner opens into and the number `ClaimBacklogChip` already prints, and a tally that said
+ * "7 claims" beside a list of nine would be the same disagreement `renderableClaims` exists to
+ * stop. The looser bar is also the honest one for this sentence: the tally only claims they have
+ * said this many things, which a whole-turn match answers perfectly well — it is a *card* that
+ * asserts a moment and needs {@link isAssertableMoment}.
+ *
+ * `null` for most of a debate, which is the resting state: nothing has just been said.
+ */
+export function claimTally(windows: TickerWindow[], playheadMs: number): ClaimTally | null {
+  let count = 0;
+  let newestStartMs: number | null = null;
+  for (const window of windows) {
+    if (playheadMs < window.startMs) continue;
+    count += 1;
+    // `windows` arrives sorted, so the last one past the playhead is the newest.
+    newestStartMs = window.startMs;
+  }
+  if (count === 0 || newestStartMs === null) return null;
+
+  const ageMs = playheadMs - newestStartMs;
+  return ageMs < TALLY_LINGER_MS ? { count, ageMs } : null;
+}

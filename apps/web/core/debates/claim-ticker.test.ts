@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CLAIM_LINGER_MS,
+  TALLY_BURST_MS,
+  TALLY_LINGER_MS,
   backlogWindows,
   cardOpacity,
   claimHistory,
   claimMarkers,
+  claimTally,
   tickerStack,
   tickerWindows,
 } from './claim-ticker';
@@ -413,5 +416,42 @@ describe('claimMarkers', () => {
 
   it('draws nothing before the timeline is known', () => {
     expect(claimMarkers([timed('a', confident(1_000, 2_000))], 0)).toEqual([]);
+  });
+});
+
+describe('claimTally', () => {
+  /** Three claims, ending ten seconds apart, all placed well enough for the backlog. */
+  const windows = backlogWindows([
+    timed('a', confident(0, 10_000)),
+    timed('b', confident(10_000, 20_000)),
+    timed('c', unsure(20_000, 30_000)),
+  ]);
+
+  it('rests through the silences, which is most of a debate', () => {
+    expect(claimTally(windows, 10_000 + TALLY_LINGER_MS)).toBeNull();
+  });
+
+  it('has nothing to say before the first claim', () => {
+    expect(claimTally(windows, 1_000)).toBeNull();
+  });
+
+  it('counts every claim said so far and dates the newest', () => {
+    expect(claimTally(windows, 20_500)).toEqual({ count: 2, ageMs: 500 });
+  });
+
+  it('counts the claims the backlog shows rather than only the assertable ones', () => {
+    // 'c' is matched too loosely to draw a card, and it is still something this debater said —
+    // so the tally and the list the corner opens into agree.
+    expect(claimTally(windows, 30_100)?.count).toBe(3);
+  });
+
+  it('keeps the number up longer than the burst that delivers it', () => {
+    expect(TALLY_BURST_MS).toBeLessThan(TALLY_LINGER_MS);
+    expect(claimTally(windows, 10_000 + TALLY_BURST_MS + 100)).not.toBeNull();
+  });
+
+  it('is a function of the playhead, so scrubbing back re-counts rather than accumulating', () => {
+    expect(claimTally(windows, 30_100)?.count).toBe(3);
+    expect(claimTally(windows, 10_100)?.count).toBe(1);
   });
 });

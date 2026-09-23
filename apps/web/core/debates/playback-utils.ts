@@ -454,3 +454,59 @@ export async function playBothWithMutedFallback(
 
   return 'blocked';
 }
+
+/**
+ * One turn's place on the rendered timeline.
+ *
+ * `turnStateForTime` and `turnStateFromSegments` answer "who is speaking now and how long have
+ * they got", which is everything the audible panel and the ring need. A cue that fires *before* a
+ * turn — "up next", the hand-off — has to know about the turn after this one, and a cue that says
+ * "Round 2" has to know which turn this is, so both need the list rather than the answer.
+ *
+ * `clockStartSeconds` is the same distinction `turnStateFromSegments` draws: a rendered turn can
+ * retain a few seconds of speech from before the debater's clock started, and the countdown the
+ * debaters actually saw ran from the clock, not from the cut.
+ */
+export type TurnSpan = {
+  index: number;
+  slot: ParticipantSlot;
+  startSeconds: number;
+  endSeconds: number;
+  clockStartSeconds: number;
+};
+
+/** The spans the render actually used. Preferred wherever `turn_segments` came back (GEO-2949). */
+export function turnSpansFromSegments(segments: DebateMediaTurnSegment[]): TurnSpan[] {
+  return sortTurnSegments(segments).map((segment, index) => {
+    const startSeconds = segment.output_start_ms / 1_000;
+    const endSeconds = segment.output_end_ms / 1_000;
+    return {
+      index,
+      slot: segment.participant_slot,
+      startSeconds,
+      endSeconds,
+      clockStartSeconds: Math.min(
+        Math.max((segment.countdown_start_ms ?? segment.output_start_ms) / 1_000, startSeconds),
+        endSeconds
+      ),
+    };
+  });
+}
+
+/** The same list off the format's allowance, for a debate whose segments never arrived. */
+export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: number[]): TurnSpan[] {
+  let startSeconds = 0;
+  return turnDurationsMs.map((durationMs, index) => {
+    const endSeconds = startSeconds + durationMs / 1_000;
+    const span: TurnSpan = {
+      index,
+      slot: turnSlot(firstSlot, index),
+      startSeconds,
+      endSeconds,
+      // The allowance has no separate clock: the turn is the countdown.
+      clockStartSeconds: startSeconds,
+    };
+    startSeconds = endSeconds;
+    return span;
+  });
+}
