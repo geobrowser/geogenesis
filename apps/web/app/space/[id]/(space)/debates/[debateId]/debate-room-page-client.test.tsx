@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
   endTurnMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
+  startLiveStream: vi.fn(),
+  liveStreamAppend: vi.fn(),
+  liveStreamFinish: vi.fn(),
+  liveStreamRelease: vi.fn(),
+  liveStreamAbort: vi.fn(),
   getRecording: vi.fn(),
   deleteRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
@@ -128,6 +133,26 @@ vi.mock('~/core/debates/hooks', () => ({
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
   useMarkDebateCapturing: () => ({ mutateAsync: mocks.capturingMutateAsync, isPending: false }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'account-a',
+    getPrivyIdentityToken: async () => 'identity-token',
+  }),
+}));
+
+vi.mock('~/core/debates/recording-stream', () => ({
+  putRecordingPart: vi.fn(),
+  startLiveRecordingStream: (options: { id: string }) => {
+    mocks.startLiveStream(options);
+    return {
+      id: options.id,
+      append: mocks.liveStreamAppend,
+      finish: mocks.liveStreamFinish,
+      release: mocks.liveStreamRelease,
+      abort: mocks.liveStreamAbort,
+    };
+  },
 }));
 
 vi.mock('~/core/debates/recording-upload-queue', () => ({
@@ -311,6 +336,11 @@ beforeEach(() => {
   mocks.endTurnMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
+  mocks.startLiveStream.mockReset();
+  mocks.liveStreamAppend.mockReset();
+  mocks.liveStreamFinish.mockReset().mockResolvedValue(null);
+  mocks.liveStreamRelease.mockReset().mockResolvedValue(undefined);
+  mocks.liveStreamAbort.mockReset().mockResolvedValue(undefined);
   mocks.getRecording.mockReset();
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockReset();
@@ -4703,6 +4733,80 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  describe('streaming the recording while it is made (GEO-2955)', () => {
+    const multipart = {
+      filename: 'recordings/debate-1/slot-1/user-a/1.local.webm',
+      uploadId: 'upload-1',
+      partSize: 5 * 1024 * 1024,
+      uploadedPartNumbers: [1, 2],
+    };
+
+    it('streams every timeslice and hands what went out live to the upload queue', async () => {
+      mocks.liveStreamFinish.mockResolvedValue(multipart);
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      expect(mocks.startLiveStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.stringMatching(/^user-a:debate-1:\d+$/),
+          metadata: expect.objectContaining({ userId: 'user-a', debateId: 'debate-1', mimeType: 'video/webm' }),
+        })
+      );
+
+      mocks.debate = completedDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      // The final timeslice reached the stream as well as the in-memory copy.
+      expect(mocks.liveStreamAppend).toHaveBeenCalledWith(expect.any(Blob), expect.any(Number));
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart }));
+      // Once the queue holds the recording, the chunks saved as it was made are released.
+      await waitFor(() => expect(mocks.liveStreamRelease).toHaveBeenCalledOnce());
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+    });
+
+    it('queues an ordinary recording when nothing was streamed', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = completedDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart: null }));
+    });
+
+    it('discards the streamed parts when the debate is cancelled', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.liveStreamAbort).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
+
+    it('keeps the saved chunks for recovery when the room unmounts mid-debate', async () => {
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      view.unmount();
+
+      // Neither discarded nor released: the coordinator decides, once the debate settles.
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
   });
 
   it('does not render a cancelled room while cleaning up an active debate', async () => {
