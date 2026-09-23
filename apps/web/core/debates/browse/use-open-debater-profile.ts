@@ -7,6 +7,18 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { getSpaceSubtopicRootEntityId } from '~/core/utils/space/spaces';
 
+import type { EntitySidePanelTarget } from '~/atoms';
+
+type PendingProfileOpen = {
+  profileSpaceId: string;
+  requestToken: symbol;
+  sidePanelTarget: EntitySidePanelTarget | null;
+};
+
+// Debates render this hook once per participant surface, while the side panel is shared. Coordinate
+// those instances so a slow profile query cannot replace a newer click from another instance.
+let latestProfileOpenRequest: symbol | null = null;
+
 /**
  * Opens a debater's personal space in the side panel.
  *
@@ -19,13 +31,13 @@ import { getSpaceSubtopicRootEntityId } from '~/core/utils/space/spaces';
  * decided twice is a rule that will eventually disagree with itself.
  */
 export function useOpenDebaterProfile(participant: Pick<DebateParticipant, 'profile_space_id'> | null | undefined) {
-  const { openSidePanel } = useEntitySidePanel();
+  const { openSidePanel, sidePanelTarget } = useEntitySidePanel();
   const profileSpaceId = participant?.profile_space_id;
   const { space } = useSpace(profileSpaceId);
   // Prefer the declared topic even when its nested entity failed to decode and `space.entity` fell
   // back to the page. Never fall back to the space id: that id is the system entity, not the person.
   const profileEntityId = space ? getSpaceSubtopicRootEntityId(space) : null;
-  const pendingSpaceIdRef = React.useRef<string | null>(null);
+  const pendingProfileOpenRef = React.useRef<PendingProfileOpen | null>(null);
 
   const openResolvedProfile = React.useCallback(() => {
     if (!profileSpaceId || !profileEntityId) return;
@@ -33,29 +45,40 @@ export function useOpenDebaterProfile(participant: Pick<DebateParticipant, 'prof
   }, [openSidePanel, profileEntityId, profileSpaceId]);
 
   React.useEffect(() => {
-    if (pendingSpaceIdRef.current !== profileSpaceId) {
-      pendingSpaceIdRef.current = null;
+    const pendingProfileOpen = pendingProfileOpenRef.current;
+    if (!pendingProfileOpen) return;
+
+    if (
+      pendingProfileOpen.profileSpaceId !== profileSpaceId ||
+      pendingProfileOpen.sidePanelTarget !== sidePanelTarget
+    ) {
+      pendingProfileOpenRef.current = null;
       return;
     }
     if (!profileEntityId) return;
 
-    pendingSpaceIdRef.current = null;
+    pendingProfileOpenRef.current = null;
+    if (pendingProfileOpen.requestToken !== latestProfileOpenRequest) return;
     openResolvedProfile();
-  }, [openResolvedProfile, profileEntityId, profileSpaceId]);
+  }, [openResolvedProfile, profileEntityId, profileSpaceId, sidePanelTarget]);
 
   return React.useCallback(
     (event: React.MouseEvent) => {
       // The video behind is one large play/pause button.
       event.stopPropagation();
       if (!profileSpaceId) return;
+
+      const requestToken = Symbol('debater-profile-open');
+      latestProfileOpenRequest = requestToken;
+      pendingProfileOpenRef.current = null;
       if (!profileEntityId) {
         // Remember an early click and finish it after the space query resolves. Opening the space
         // id immediately would be quicker, but it is the system entity rather than the profile.
-        pendingSpaceIdRef.current = profileSpaceId;
+        pendingProfileOpenRef.current = { profileSpaceId, requestToken, sidePanelTarget };
         return;
       }
       openResolvedProfile();
     },
-    [openResolvedProfile, profileEntityId, profileSpaceId]
+    [openResolvedProfile, profileEntityId, profileSpaceId, sidePanelTarget]
   );
 }

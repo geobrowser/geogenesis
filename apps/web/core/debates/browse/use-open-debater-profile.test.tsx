@@ -6,15 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   openSidePanel: vi.fn(),
-  space: null as null | { topicId: string | null; entity: { id: string } },
+  sidePanelTarget: null as null | { entityId: string },
+  spaces: new Map<string, { topicId: string | null; entity: { id: string } }>(),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
-  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel }),
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: mocks.sidePanelTarget }),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
-  useSpace: () => ({ space: mocks.space, isLoading: mocks.space === null }),
+  useSpace: (spaceId?: string) => {
+    const space = spaceId ? (mocks.spaces.get(spaceId) ?? null) : null;
+    return { space, isLoading: space === null };
+  },
 }));
 
 const { useOpenDebaterProfile } = await import('./use-open-debater-profile');
@@ -32,14 +36,15 @@ function click(result: { current: (event: React.MouseEvent) => void }) {
 
 beforeEach(() => {
   mocks.openSidePanel.mockReset();
-  mocks.space = null;
+  mocks.sidePanelTarget = null;
+  mocks.spaces.clear();
 });
 
 describe('useOpenDebaterProfile', () => {
   it('opens the topic entity and pins it to the debater personal space', () => {
     // A failed nested-topic decode can leave `entity` pointing at the page/system record. The
     // declared topic id is still authoritative and must win.
-    mocks.space = { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } };
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });
     const { result } = renderHook(() => useOpenDebaterProfile({ profile_space_id: PERSONAL_SPACE_ID }));
 
     expect(click(result)).toHaveBeenCalledOnce();
@@ -49,7 +54,7 @@ describe('useOpenDebaterProfile', () => {
   });
 
   it('uses the profile page entity for an older personal space without a declared topic', () => {
-    mocks.space = { topicId: null, entity: { id: PAGE_ENTITY_ID } };
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: null, entity: { id: PAGE_ENTITY_ID } });
     const { result } = renderHook(() => useOpenDebaterProfile({ profile_space_id: PERSONAL_SPACE_ID }));
 
     click(result);
@@ -65,7 +70,7 @@ describe('useOpenDebaterProfile', () => {
     expect(click(result)).toHaveBeenCalledOnce();
     expect(mocks.openSidePanel).not.toHaveBeenCalled();
 
-    mocks.space = { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } };
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });
     rerender();
 
     expect(mocks.openSidePanel).toHaveBeenCalledOnce();
@@ -82,8 +87,45 @@ describe('useOpenDebaterProfile', () => {
 
     click(result);
     rerender({ profileSpaceId: OTHER_PERSONAL_SPACE_ID });
-    mocks.space = { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } };
+    mocks.spaces.set(OTHER_PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });
     rerender({ profileSpaceId: OTHER_PERSONAL_SPACE_ID });
+
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('keeps an older unresolved hook instance from replacing a newer profile click', () => {
+    const OTHER_TOPIC_ENTITY_ID = '55555555555555555555555555555555';
+    const { result, rerender } = renderHook(() => ({
+      first: useOpenDebaterProfile({ profile_space_id: PERSONAL_SPACE_ID }),
+      second: useOpenDebaterProfile({ profile_space_id: OTHER_PERSONAL_SPACE_ID }),
+    }));
+
+    click({ current: result.current.first });
+    click({ current: result.current.second });
+
+    mocks.spaces.set(OTHER_PERSONAL_SPACE_ID, {
+      topicId: OTHER_TOPIC_ENTITY_ID,
+      entity: { id: OTHER_TOPIC_ENTITY_ID },
+    });
+    rerender();
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(OTHER_TOPIC_ENTITY_ID, OTHER_PERSONAL_SPACE_ID, false, {
+      forceRequestedSpace: true,
+    });
+
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: TOPIC_ENTITY_ID } });
+    rerender();
+
+    expect(mocks.openSidePanel).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a pending profile replace another side-panel navigation', () => {
+    const { result, rerender } = renderHook(() => useOpenDebaterProfile({ profile_space_id: PERSONAL_SPACE_ID }));
+
+    click(result);
+    mocks.sidePanelTarget = { entityId: 'another-entity' };
+    rerender();
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: TOPIC_ENTITY_ID } });
+    rerender();
 
     expect(mocks.openSidePanel).not.toHaveBeenCalled();
   });
