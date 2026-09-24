@@ -8,7 +8,6 @@ import { type PersonDebatesQueryData, personDebatesRowsQueryKey } from '~/core/d
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
-import { personDebatesQueryKey } from '~/core/io/subgraph/fetch-person-debates';
 import { ProfileDebateHiddenToast } from '~/core/profile/profile-debate-hidden-toast';
 import {
   type HiddenProfileRelation,
@@ -46,15 +45,6 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
       return next;
     });
   }, []);
-
-  const invalidateSoon = React.useCallback(() => {
-    for (const delay of [3_000, 7_000, 12_000]) {
-      window.setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: personDebatesQueryKey(personalSpaceId) });
-        void queryClient.invalidateQueries({ queryKey: ['profile-facts', personalSpaceId] });
-      }, delay);
-    }
-  }, [personalSpaceId, queryClient]);
 
   const setHidden = React.useCallback(
     async (item: ExploreFeedItem, hiddenRelations: readonly HiddenProfileRelation[], shouldHide: boolean) => {
@@ -104,13 +94,16 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
         if (shouldHide) {
           setToast(React.createElement(ProfileDebateHiddenToast, { personalSpaceId }));
         }
-        invalidateSoon();
+        // These optimistic rows are the authoritative result for this session.
+        // The graph index trails a successful publish, so immediately refetching
+        // can replace them with the pre-write result and make Show hidden vanish.
+        // Both queries become stale normally after a minute and reconcile then.
         return true;
       } finally {
         setPending(item.entityId, false);
       }
     },
-    [invalidateSoon, makeProposal, personalSpaceId, queryClient, setPending, setToast]
+    [makeProposal, personalSpaceId, queryClient, setPending, setToast]
   );
 
   return { setHidden, pendingIds };

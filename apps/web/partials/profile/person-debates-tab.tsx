@@ -90,8 +90,8 @@ export function PersonDebatesTab({
   React.useEffect(() => {
     // Preserve a deep link while its rows are still loading. Once the request
     // settles, fall back to the public list if there is nothing hidden.
-    if (!isLoading && hiddenRows.length === 0) setShowHidden(false);
-  }, [hiddenRows.length, isLoading]);
+    if (!showHiddenInitially && !isLoading && hiddenRows.length === 0) setShowHidden(false);
+  }, [hiddenRows.length, isLoading, showHiddenInitially]);
 
   const sourceRows = showHidden ? hiddenRows : rows;
 
@@ -142,23 +142,12 @@ export function PersonDebatesTab({
        * filter's doing, and the menu that caused it is the only way back —
        * unmounting the controls along with the rows is a dead end.
        *
-       * Hidden when there is nothing to control: ten of this account's eleven
-       * debates sit in one space, and a menu with a single row cannot act.
+       * Dimension menus stay hidden when there is nothing to filter: ten of
+       * this account's eleven debates sit in one space, and a menu with a
+       * single row cannot act. Show hidden stays available to the owner so the
+       * route to hidden debates never disappears with the debate itself.
        */}
-      {isOwner && hiddenRows.length > 0 ? (
-        <div className="flex justify-end">
-          <FilterSwitch
-            label={`Show hidden (${hiddenRows.length})`}
-            checked={showHidden}
-            onChange={next => {
-              spaces.clear();
-              setShowHidden(next);
-            }}
-          />
-        </div>
-      ) : null}
-
-      {facets.length > 1 || sourceRows.length > 1 ? (
+      {facets.length > 1 || sourceRows.length > 1 || isOwner ? (
         <RecordFilterRow
           sort={{
             // Falls back to New rather than stranding the reader on a sort that
@@ -181,6 +170,18 @@ export function PersonDebatesTab({
                   },
                 ]
               : []
+          }
+          end={
+            isOwner ? (
+              <FilterSwitch
+                label={hiddenRows.length > 0 ? `Show hidden (${hiddenRows.length})` : 'Show hidden'}
+                checked={showHidden}
+                onChange={next => {
+                  spaces.clear();
+                  setShowHidden(next);
+                }}
+              />
+            ) : null
           }
         />
       ) : null}
