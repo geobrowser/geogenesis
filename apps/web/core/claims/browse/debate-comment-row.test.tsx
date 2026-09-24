@@ -46,8 +46,10 @@ function comment(overrides: Partial<CommentWithReplies> = {}): CommentWithReplie
   };
 }
 
-function renderRow(overrides: Partial<CommentWithReplies> = {}) {
-  return render(<DebateCommentRow comment={comment(overrides)} debateId="debate-1" spaceId="space-1" />);
+function renderRow(overrides: Partial<CommentWithReplies> = {}, maxDepth = 2) {
+  return render(
+    <DebateCommentRow comment={comment(overrides)} debateId="debate-1" spaceId="space-1" maxDepth={maxDepth} />
+  );
 }
 
 describe('DebateCommentRow', () => {
@@ -101,9 +103,19 @@ describe('DebateCommentRow', () => {
     expect(screen.getByText('Publishing…')).toBeInTheDocument();
   });
 
-  it('offers the replies as a way into the debate’s own thread', () => {
-    renderRow({ replies: [comment({ id: 'reply-1' })] });
+  it('draws its replies while there is depth budget left', () => {
+    renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'a reply' })] });
 
+    expect(screen.getByText('a reply')).toBeInTheDocument();
+    // Drawn, so the count would be saying the same thing twice.
+    expect(screen.queryByRole('button', { name: '1 reply' })).not.toBeInTheDocument();
+  });
+
+  // Past the budget the thread has its own home, and a count plus a way in beats a fifth indent.
+  it('counts its replies instead of drawing them once the budget runs out', () => {
+    renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'a reply' })] }, 0);
+
+    expect(screen.queryByText('a reply')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '1 reply' })).toBeInTheDocument();
   });
 

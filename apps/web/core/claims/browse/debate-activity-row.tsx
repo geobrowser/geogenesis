@@ -20,16 +20,11 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { type CommentDensity, PAGE_DENSITY, threadArmCenterPx } from '~/partials/comments/comment-density';
+import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-import {
-  ThreadArm,
-  ThreadCollapseToggle,
-  ThreadElbow,
-  ThreadListSpine,
-  ThreadParentSpine,
-} from '~/partials/comments/thread-branch';
+import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
+import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { orderExtractedClaims } from './claim-activity-order';
@@ -59,6 +54,15 @@ const DEBATE_DENSITY: CommentDensity = {
   bodyInsetPx: KEYFRAME_WIDTH_PX + 12,
   headerMinHeightPx: KEYFRAME_HEIGHT_PX,
 };
+
+/**
+ * How deep the feed draws before it stops and counts instead.
+ *
+ * Four: a debate, the claims it produced, the comments on one of those, and the replies to those.
+ * Past that the page is showing a conversation that has its own home, and the row's count plus a
+ * way in reads better than a fifth indent.
+ */
+export const ACTIVITY_MAX_DEPTH = 4;
 
 /** How far the branch's connectors reach back to find this row's spine. */
 const BRANCH_REACH_PX = DEBATE_DENSITY.bodyInsetPx - DEBATE_DENSITY.avatarCenterPx;
@@ -334,31 +338,6 @@ function DebateBranch({
 
   const ordered = React.useMemo(() => orderExtractedClaims(claims.all, timings), [claims.all, timings]);
 
-  // Measured rather than computed: the spine has to stop at the last row's elbow, and these rows are
-  // variable height — a claim sentence wraps to one line or three.
-  const listRef = React.useRef<HTMLDivElement>(null);
-  const lastRowRef = React.useRef<HTMLDivElement>(null);
-  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
-
-  const measureSpine = React.useCallback(() => {
-    const list = listRef.current;
-    const lastRow = lastRowRef.current;
-    if (!list || !lastRow) {
-      setSpineHeightPx(null);
-      return;
-    }
-    setSpineHeightPx(lastRow.getBoundingClientRect().top - list.getBoundingClientRect().top);
-  }, []);
-
-  React.useLayoutEffect(() => {
-    measureSpine();
-    const list = listRef.current;
-    if (list == null || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measureSpine());
-    observer.observe(list);
-    return () => observer.disconnect();
-  });
-
   if (isLoading || !isReady) {
     // Held rather than painted unordered. `isReady` is false only while a timing source is still
     // arriving, and it reports ready on a failed transcript fetch — so this cannot hang forever on
@@ -375,29 +354,19 @@ function DebateBranch({
   // with nothing under it is ordinary — and a line saying so under every old debate is noise.
   if (rowCount === 0) return null;
 
-  const armCenterPx = threadArmCenterPx(PAGE_DENSITY);
-
   return (
-    <div className="comment-branch-list-root relative flex flex-col gap-4" ref={listRef}>
-      <ThreadListSpine
-        reachPx={BRANCH_REACH_PX}
-        heightPx={spineHeightPx}
-        lit={false}
-        collapsed={false}
-        onToggle={onCollapse}
-        label={branchLabel}
-      />
-
+    <ThreadBranch density={DEBATE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
       {claimsInOrder.map((claim, index) => {
         const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
-        const isLast = index === rowCount - 1;
         return (
-          <BranchRow key={claim.id} isLast={isLast} armCenterPx={armCenterPx} rowRef={isLast ? lastRowRef : undefined}>
+          <ThreadBranchRow key={claim.id} isLast={index === rowCount - 1}>
             <ExtractedClaimRow
               claim={claim}
               debateId={debateId}
               debateSpaceId={spaceId}
               commentCount={commentCounts.get(uuidToHex(claim.id)) ?? 0}
+              // Level two, so its comments are level three and their replies level four.
+              maxDepth={ACTIVITY_MAX_DEPTH - 2}
               // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
               // not that the claim is factual, and stance is what the graph defaults to as well.
               responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
@@ -416,49 +385,22 @@ function DebateBranch({
                   : null
               }
             />
-          </BranchRow>
+          </ThreadBranchRow>
         );
       })}
 
-      {debateComments.map((comment, index) => {
-        const isLast = claimsInOrder.length + index === rowCount - 1;
-        return (
-          <BranchRow
-            key={comment.id}
-            isLast={isLast}
-            armCenterPx={armCenterPx}
-            rowRef={isLast ? lastRowRef : undefined}
-          >
-            <DebateCommentRow comment={comment} debateId={debateId} spaceId={spaceId} />
-          </BranchRow>
-        );
-      })}
-    </div>
-  );
-}
-
-/** One row in a branch, with the connector that ties it back to the spine. */
-function BranchRow({
-  isLast,
-  armCenterPx,
-  rowRef,
-  children,
-}: {
-  isLast: boolean;
-  armCenterPx: number;
-  rowRef?: React.Ref<HTMLDivElement>;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="comment-branch-row relative" ref={rowRef}>
-      <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
-        {isLast ? (
-          <ThreadElbow reachPx={BRANCH_REACH_PX} armCenterPx={armCenterPx} lit={false} />
-        ) : (
-          <ThreadArm reachPx={BRANCH_REACH_PX} armCenterPx={armCenterPx} lit={false} />
-        )}
-      </div>
-      {children}
-    </div>
+      {debateComments.map((comment, index) => (
+        <ThreadBranchRow key={comment.id} isLast={claimsInOrder.length + index === rowCount - 1}>
+          <DebateCommentRow
+            comment={comment}
+            debateId={debateId}
+            spaceId={spaceId}
+            // The debate row is level one and these are level two, so their replies have two levels
+            // of the budget left.
+            maxDepth={ACTIVITY_MAX_DEPTH - 2}
+          />
+        </ThreadBranchRow>
+      ))}
+    </ThreadBranch>
   );
 }

@@ -45,6 +45,7 @@ import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { useClaimActivityCounts } from './claim-activity-count';
 import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
@@ -454,6 +455,11 @@ function ClaimOverviewTab({
 }) {
   // The claim's own vocabulary carries into the thread: a debater's side reads Agree/Disagree on
   // an opinion claim and Verify/Dispute on a factual one, the same as every commenter's badge.
+  // The same number the claim's card shows in Explore, from the same query — one definition of
+  // "how much has happened here", so the two surfaces cannot disagree.
+  const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
+  const activityTotal = activityCounts.get(ID.uuidToHex(entityId))?.total;
+
   const activity = useClaimActivityRows({
     claimId: entityId,
     spaceId,
@@ -461,6 +467,21 @@ function ClaimOverviewTab({
   });
 
   const kinds: ActivityKind[] = [
+    {
+      // Still here as well as in the thread below. The gallery is the way through to the Debates
+      // tab — the complete, filterable index — where the thread shows the few most recent in the
+      // order they happened. Two jobs, not two copies.
+      key: 'debates',
+      label: 'Debates',
+      rows: record.debateRows,
+      total: record.debatesTotal,
+      isLoading: record.debatesLoading,
+      isError: record.debatesError,
+      isCountUnavailable: record.debatesCountUnavailable,
+      href: hrefs.debates,
+      seeAllLabel: 'View all debates',
+      onSeeAll: onSelectSystemTab ? () => onSelectSystemTab('debates') : undefined,
+    },
     {
       key: 'claims',
       label: 'Claims',
@@ -514,6 +535,7 @@ function ClaimOverviewTab({
           targetEntityType="claim"
           title="Activity"
           activityRows={activity.rows}
+          totalOverride={activityTotal}
           // Best rather than most-recent: this list is the record of an argument, not a running
           // conversation, and the thing worth reading first is what the thread rates highest.
           defaultSortOrder="best"

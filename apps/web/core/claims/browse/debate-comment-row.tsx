@@ -12,6 +12,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 
 import { PAGE_DENSITY } from '~/partials/comments/comment-density';
+import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import type { CommentWithReplies } from '~/partials/comments/types';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -31,14 +32,22 @@ export function DebateCommentRow({
   comment,
   debateId,
   spaceId,
+  depth = 0,
+  maxDepth,
 }: {
   comment: CommentWithReplies;
   debateId: string;
   spaceId: string;
+  /** How far below the branch's first row this one sits. */
+  depth?: number;
+  /** Rows deeper than this are counted, not drawn — the reader opens the debate for the rest. */
+  maxDepth: number;
 }) {
   const { openComments } = useEntityCommentsPanel();
   const body = React.useMemo(() => renderMarkdownDocument(comment.markdownContent), [comment.markdownContent]);
-  const replyCount = comment.replies.length;
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const replyCount = replies.length;
+  const showsReplies = replies.length > 0 && depth < maxDepth;
 
   return (
     <div className="flex min-w-0 gap-3">
@@ -93,7 +102,7 @@ export function DebateCommentRow({
           >
             Reply
           </button>
-          {replyCount > 0 && (
+          {replyCount > 0 && !showsReplies && (
             <button
               type="button"
               data-entity-comments-opener
@@ -104,6 +113,29 @@ export function DebateCommentRow({
             </button>
           )}
         </div>
+
+        {/*
+          Replies come with the comment — they are already in the tree `useComments` built — so
+          drawing them costs nothing beyond the depth budget. Past that budget the count above takes
+          over and the debate's own panel is where the rest of the thread lives.
+        */}
+        {showsReplies && (
+          <div className="mt-3">
+            <ThreadBranch density={PAGE_DENSITY}>
+              {replies.map((reply, index) => (
+                <ThreadBranchRow key={reply.id} isLast={index === replies.length - 1} density={PAGE_DENSITY}>
+                  <DebateCommentRow
+                    comment={reply}
+                    debateId={debateId}
+                    spaceId={spaceId}
+                    depth={depth + 1}
+                    maxDepth={maxDepth}
+                  />
+                </ThreadBranchRow>
+              ))}
+            </ThreadBranch>
+          </div>
+        )}
       </div>
     </div>
   );

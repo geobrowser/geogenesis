@@ -237,6 +237,14 @@ interface CommentSectionProps {
   /** Heading noun. "Comments" unless the list holds more than comments. */
   title?: string;
   /**
+   * The number beside the heading, where the host knows something the rendered list does not.
+   *
+   * The claim page's Activity count includes what is nested under each debate — its extracted
+   * claims and every comment in that tree — which this component never sees. Omitted elsewhere, and
+   * the rendered rows speak for themselves.
+   */
+  totalOverride?: number;
+  /**
    * Where the sort starts. Threads default to most-recent; the claim page's activity feed opens on
    * Best, because there the list is a record of an argument rather than a running conversation.
    */
@@ -250,6 +258,7 @@ export function CommentSection({
   variant = 'page',
   activityRows = NO_ACTIVITY_ROWS,
   title = 'Comments',
+  totalOverride,
   defaultSortOrder = 'newest',
 }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
@@ -437,7 +446,7 @@ export function CommentSection({
           {!isPanel && (
             <>
               <div className="text-mediumTitle">
-                {title} ({totalCount + activityRows.length})
+                {title} ({totalOverride ?? totalCount + activityRows.length})
               </div>
               <Spacer height={16} />
             </>

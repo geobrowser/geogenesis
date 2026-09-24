@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
   /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
   activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
+  /** What the shared activity count answers for this claim; null means it has not answered. */
+  activityTotal: null as number | null,
   /** How many responses the claim has; zero means the hero draws no verdict column. */
   responseTotal: 11,
   /** Whether the response counts are still out, which is what the hero reserves its column for. */
@@ -121,6 +123,12 @@ vi.mock('./use-claim-activity-rows', () => ({
   useClaimActivityRows: () => ({ rows: mocks.activityRows, isLoading: false }),
 }));
 
+// The heading's number, which is the same one the claim's Explore card shows. Its own query is
+// covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
+vi.mock('./claim-activity-count', () => ({
+  useClaimActivityCounts: () => new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: { claims: [] } }),
 }));
@@ -212,8 +220,21 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
 }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: ({ title, activityRows }: { title?: string; activityRows?: Array<{ id: string }> }) => (
-    <div data-testid="comments" data-title={title} data-activity-rows={(activityRows ?? []).map(r => r.id).join(',')} />
+  CommentSection: ({
+    title,
+    activityRows,
+    totalOverride,
+  }: {
+    title?: string;
+    activityRows?: Array<{ id: string }>;
+    totalOverride?: number;
+  }) => (
+    <div
+      data-testid="comments"
+      data-title={title}
+      data-total={totalOverride == null ? '' : String(totalOverride)}
+      data-activity-rows={(activityRows ?? []).map(r => r.id).join(',')}
+    />
   ),
 }));
 
@@ -229,6 +250,7 @@ function claimEntity(description: string | null) {
 
 beforeEach(() => {
   mocks.activityRows = [];
+  mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
   mocks.hasCounts = true;
@@ -474,9 +496,11 @@ describe('ClaimPageView record', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     const kinds = mocks.activity?.kinds as Array<{ key: string; onSeeAll?: () => void }>;
+    kinds.find(kind => kind.key === 'debates')?.onSeeAll?.();
     kinds.find(kind => kind.key === 'claims')?.onSeeAll?.();
 
-    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'claims');
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
+    expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
   });
 
   it('hands the debates on this claim to the thread, and names it Activity', () => {
@@ -494,14 +518,28 @@ describe('ClaimPageView record', () => {
     expect(comments).toHaveAttribute('data-title', 'Activity');
   });
 
-  // GEO-3008: debates moved into the activity thread, where they are ordered among the comments.
-  // A gallery of them above that thread would have shown the same debates twice and left the
-  // reader working out whether they were the same ones.
-  it('leaves debates to the activity thread rather than giving them a gallery of their own', () => {
+  it('heads the thread with the same count the claim’s Explore card shows', () => {
+    mocks.activityTotal = 17;
+
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '17');
+  });
+
+  it('lets the thread count for itself until that number answers', () => {
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '');
+  });
+
+  // GEO-3008: debates are in the activity thread *and* keep their gallery. The gallery is the way
+  // through to the Debates tab, which is the complete filterable index; the thread shows the recent
+  // ones in the order they happened. Two jobs rather than two copies.
+  it('keeps the debates gallery alongside the thread', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     const kinds = mocks.activity?.kinds as Array<{ key: string }>;
-    expect(kinds.map(kind => kind.key)).toEqual(['claims']);
+    expect(kinds.map(kind => kind.key)).toEqual(['debates', 'claims']);
   });
 
   it('marks only failed record counts unavailable in Activity', () => {
@@ -514,6 +552,7 @@ describe('ClaimPageView record', () => {
 
     const kinds = mocks.activity?.kinds as Array<{ key: string; isCountUnavailable?: boolean }>;
     expect(kinds.find(kind => kind.key === 'claims')?.isCountUnavailable).toBe(true);
+    expect(kinds.find(kind => kind.key === 'debates')?.isCountUnavailable).toBe(false);
   });
 
   it('hands the full side-panel tab the claim record scope', () => {

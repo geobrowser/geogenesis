@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import type { DebateResponseKind } from '~/core/debates/api';
 import { isAssertableMoment } from '~/core/debates/claim-timing';
+import { useComments } from '~/core/hooks/use-comments';
 import { debateSeekSeconds, formatTimecode, withDebateTimecode } from '~/core/debates/debate-timecode';
 import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
@@ -14,10 +15,12 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
+import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import type { OrderedTranscriptClaim } from './claim-activity-order';
+import { DebateCommentRow } from './debate-comment-row';
 import { ResponsePositionTag } from './claim-comment-position';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
@@ -45,6 +48,7 @@ export function ExtractedClaimRow({
   speakerPosition,
   responseVocabulary,
   commentCount = 0,
+  maxDepth = 0,
   density = PAGE_DENSITY,
   className,
 }: {
@@ -80,6 +84,8 @@ export function ExtractedClaimRow({
    * comments — a number wrong in the one direction that tells the reader not to look.
    */
   commentCount?: number;
+  /** Rows deeper than this are counted, not drawn. Zero means this row is already at the floor. */
+  maxDepth?: number;
   /** The surrounding thread's metrics, so these rows sit on the same ramp as the comments. */
   density?: CommentDensity;
   className?: string;
@@ -170,7 +176,40 @@ export function ExtractedClaimRow({
             <EntityCommentsButton entityId={claim.id} spaceId={claimSpaceId} count={commentCount} />
           </div>
         ) : null}
+
+        {claimSpaceId && commentCount > 0 && maxDepth > 0 && (
+          <ClaimComments claimId={claim.id} spaceId={claimSpaceId} maxDepth={maxDepth} />
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The comments people have left on one extracted claim.
+ *
+ * Only mounted where the feed's own aggregate already said there are some, so a debate's ten silent
+ * claims cost ten fetches of nothing. That gate is why this can be eager at all: in the corpus today
+ * almost every extracted claim has no comments, and the few that do are worth a request.
+ */
+function ClaimComments({ claimId, spaceId, maxDepth }: { claimId: string; spaceId: string; maxDepth: number }) {
+  const { comments } = useComments({ entityId: claimId, spaceId });
+  if (comments.length === 0) return null;
+
+  return (
+    <div className="mt-3">
+      <ThreadBranch density={PAGE_DENSITY}>
+        {comments.map((comment, index) => (
+          <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
+            <DebateCommentRow
+              comment={comment}
+              debateId={claimId}
+              spaceId={spaceId}
+              maxDepth={maxDepth - 1}
+            />
+          </ThreadBranchRow>
+        ))}
+      </ThreadBranch>
     </div>
   );
 }

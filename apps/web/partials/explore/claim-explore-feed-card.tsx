@@ -158,7 +158,12 @@ export function ClaimExploreFeedCard({
   // action at all. Checking only the server seed would keep the button hidden after this card's
   // optional composer publishes the first comment; rendering a button that returns null would leave
   // PositionRow in its three-column layout with an empty final column.
-  const liveCommentCount = useCommentCount(item.entityId, item.commentCount);
+  // What the claim page's Activity heading says: its debates, the claims extracted from them, and
+  // every comment in that tree — not only the comments filed directly on the claim. The two read
+  // from one query so a reader who opens the card is not told a different number. Falls back to the
+  // comment count for a row built somewhere that does not fetch it.
+  const activityCount = item.activityCount ?? item.commentCount;
+  const liveCommentCount = useCommentCount(item.entityId, activityCount);
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -320,7 +325,7 @@ export function ClaimExploreFeedCard({
                   entityId={item.entityId}
                   spaceId={item.spaceId}
                   targetEntityType="claim"
-                  count={item.commentCount}
+                  count={activityCount}
                   className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
                 />
               ) : undefined
