@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   upcomingRooms: [] as UpcomingDebateRoom[],
   /** False is a first load still in flight, which is not the same as no rooms. */
   roomsSettled: true,
+  /** The flags that make rooms reachable at all; off, nothing is polled and nothing is waited on. */
+  roomsFeature: true,
   roomsError: null as Error | null,
   refetchRooms: vi.fn(() => Promise.resolve()),
 }));
@@ -136,6 +138,8 @@ vi.mock('./debate-return-navigation', () => ({
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
   useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
+  useDebugDebatesPageEnabled: () => mocks.roomsFeature,
+  usePeerAvailabilityEnabled: () => false,
 }));
 
 beforeEach(() => {
@@ -159,6 +163,7 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
   mocks.roomsSettled = true;
+  mocks.roomsFeature = true;
   mocks.roomsError = null;
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
@@ -673,6 +678,21 @@ describe('DebateCoordinator', () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.roomsSettled = false;
     mocks.roomsError = new GeoChatRequestError('Not found', null, 404);
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  // Nothing is asked for with the feature off, so there is nothing to wait on: the push has to
+  // behave exactly as it did before rooms existed.
+  it('routes without waiting when rooms are switched off entirely', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsFeature = false;
+    mocks.roomsSettled = false;
     const activity = activityWithRematch('browsing');
     mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
 
