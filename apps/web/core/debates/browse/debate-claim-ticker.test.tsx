@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -921,6 +921,19 @@ describe('ClaimScrubberMarkers', () => {
     } as unknown as typeof ResizeObserver;
   });
 
+  // Radix opens on a `setTimeout` of the delay it was given, so how long that wait is is the only
+  // thing separating this preview from the one it replaced. Under a real clock nothing here could
+  // tell them apart: `findBy*` polls for a second, which is long enough to swallow the 300ms
+  // default and call it instant.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Hover `target` and let exactly `ms` pass — no more, so a longer wait stays unsatisfied. */
+  const hoverFor = (target: HTMLElement, ms: number) => {
+    fireEvent.pointerMove(target, { pointerType: 'mouse' });
+    act(() => void vi.advanceTimersByTime(ms));
+  };
+
   const marker = (id: string, fraction: number): ClaimMarker => ({
     id,
     text: `Claim ${id}`,
@@ -950,28 +963,32 @@ describe('ClaimScrubberMarkers', () => {
   /**
    * The preview used to be a `title`, and a native tooltip waits a second or more before it
    * appears — long enough on a scrubber that viewers read the preview as missing rather than slow.
-   * The wait is the browser's and cannot be shortened, so the only fix is to stop using it. This
-   * holds the attribute gone: a `title` left behind would keep the slow preview alongside the
-   * fast one.
+   * That wait is the browser's and cannot be shortened, so the fix was to stop using `title` at
+   * all. Both halves of that are held here: the attribute gone, since one left behind would bring
+   * the slow preview back alongside the fast one, and the replacement opening on the hover itself.
+   *
+   * Zero elapsed milliseconds is the whole point. Radix schedules the open on a timer even at a
+   * delay of zero, so the hover alone leaves nothing on screen and draining the queue is what
+   * stands in for the browser's next tick. A tooltip that wanted 300ms would still be waiting.
    */
-  it('previews a claim without a native title, whose delay is not ours to shorten', async () => {
+  it('previews a claim on the hover itself, with no native title left to lag behind it', () => {
     render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
 
     const target = screen.getByLabelText('Jump to: Claim a');
     expect(target).not.toHaveAttribute('title');
 
-    fireEvent.pointerMove(target, { pointerType: 'mouse' });
+    hoverFor(target, 0);
 
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Claim a');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a');
   });
 
   // A hash stands for whatever ended in its segment, and the card only ever shows one of them.
   // The preview says how many are behind it so a click on a crowded hash is not a surprise.
-  it('says how many claims share a hash', async () => {
+  it('says how many claims share a hash', () => {
     render(<ClaimScrubberMarkers markers={[{ ...marker('a', 0.5), count: 3 }]} onSeek={vi.fn()} />);
 
-    fireEvent.pointerMove(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), { pointerType: 'mouse' });
+    hoverFor(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), 0);
 
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Claim a (+2 more)');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a (+2 more)');
   });
 });
