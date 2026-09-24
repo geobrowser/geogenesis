@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 import type { ReactElement, ReactNode } from 'react';
@@ -9,8 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
-import { RematchVoicePill } from './rematch-voice';
+import { PAIR_PILL } from './rematch-pair-header';
+import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
   joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
@@ -65,6 +67,19 @@ const mocks = vi.hoisted(() => ({
   /** The published microphone, once there is one. */
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
+  capture: vi.fn(),
+  openSidePanel: vi.fn(),
+  spaceLookups: [] as Array<string | undefined>,
+  /**
+   * What `useSpace` hands back for the opponent's personal space. Null before it resolves.
+   *
+   * `topicId` matters: `getSpaceSubtopicRootEntityId` prefers a topic that is not the page entity,
+   * and falls back to the page for the older personal spaces that never declared one.
+   */
+  opponentSpace: { topicId: null, entity: { id: 'them-home' } } as {
+    topicId: string | null;
+    entity: { id: string };
+  } | null,
 }));
 
 vi.mock('@livekit/components-react', () => ({
@@ -100,7 +115,10 @@ vi.mock('@livekit/components-react', () => ({
     microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
-  useRoomContext: () => ({ disconnect: mocks.disconnect }),
+  useRoomContext: () => ({
+    disconnect: mocks.disconnect,
+    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+  }),
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
     mocks.deviceSelectCalls.push({ kind, requestPermissions });
     return kind === 'audiooutput'
@@ -192,6 +210,21 @@ vi.mock('~/design-system/avatar', () => ({
   Avatar: () => <div data-testid="avatar" />,
 }));
 
+vi.mock('~/core/analytics', () => ({
+  capture: (...args: unknown[]) => mocks.capture(...args),
+}));
+
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: (spaceId?: string) => {
+    mocks.spaceLookups.push(spaceId);
+    return { space: mocks.opponentSpace, isLoading: false };
+  },
+}));
+
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ sidePanelTarget: null, openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn() }),
+}));
+
 function makeSession(status: DebateRematchSession['status']): DebateRematchSession {
   return {
     id: 'session-1',
@@ -243,9 +276,14 @@ async function flushOwnership() {
   });
 }
 
-/** The avatar box next to a name in the dock — the element that carries the speaking ring. */
+/**
+ * The avatar box in a participant card — the element that carries the speaking ring.
+ *
+ * The name sits in its own column beside the avatar now (name over caption, or name over mic
+ * chip), so the ring is the previous sibling of that column rather than of the name itself.
+ */
 function avatarFor(name: string) {
-  return screen.getByText(name).previousElementSibling;
+  return screen.getByText(name).closest('div')?.previousElementSibling;
 }
 
 function setVisibility(state: DocumentVisibilityState) {
@@ -359,6 +397,10 @@ beforeEach(() => {
   mocks.disconnect.mockReset().mockResolvedValue(undefined);
   mocks.microphoneTrack = undefined;
   mocks.useKrispNoiseFilter.mockClear();
+  mocks.capture.mockReset();
+  mocks.openSidePanel.mockReset();
+  mocks.spaceLookups = [];
+  mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };
   setVisibility('visible');
 });
 
@@ -366,30 +408,40 @@ afterEach(() => {
   cleanup();
 });
 
-describe('RematchVoicePill', () => {
-  it('renders nothing once the session leaves a voice-capable status', async () => {
+describe('RematchVoiceHeader', () => {
+  it('draws the pair without any voice once the session leaves a voice-capable status', async () => {
     for (const status of ['deciding', 'converted', 'ended', 'expired'] as const) {
-      const { container, unmount } = render(<RematchVoicePill session={makeSession(status)} currentUserId="me" />);
+      const { container, unmount } = render(<RematchVoiceHeader session={makeSession(status)} currentUserId="me" />);
       await flushOwnership();
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
-      expect(container.textContent).toBe('');
+      // The header is the page's header now, not the voice dock: two people are still in this
+      // rematch, and the cards are how the page says who. There is just nothing to mute.
+      expect(screen.getByText('You')).toBeInTheDocument();
+      expect(screen.getByText('Salina')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /microphone$/ })).toBeNull();
       unmount();
     }
     // The token endpoint is never even consulted for these.
     expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
   });
 
-  it('renders nothing when the backend has no voice support', async () => {
+  it('draws the pair without any voice when the backend has no voice support', async () => {
     for (const error of [
       new GeoChatRequestError('not found', null, 404),
       new GeoChatRequestError('LiveKit is not configured', 'livekit_not_configured', 503),
     ]) {
       mocks.joinError = error;
       mocks.joinData = null;
-      const { container, unmount } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+      const { container, unmount } = render(
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      );
       await flushOwnership();
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
-      expect(container.textContent).toBe('');
+      expect(screen.getByText('Salina')).toBeInTheDocument();
+      // Not even a message: there is no voice to be unavailable, and saying so would invent a
+      // problem on a picker that works exactly as it did before voice existed.
+      expect(screen.queryByText(/Voice is unavailable/)).toBeNull();
+      expect(screen.queryByRole('button', { name: /microphone$/ })).toBeNull();
       unmount();
     }
   });
@@ -397,20 +449,20 @@ describe('RematchVoicePill', () => {
   it('offers a retry when the token fetch fails for an unexpected reason', async () => {
     mocks.joinError = new GeoChatRequestError('boom', null, 500);
     mocks.joinData = null;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.getByText('Voice is unavailable')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
   it('connects the room and waits for the opponent when they have not joined yet', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
     // The design keeps both names on screen throughout; only the opponent's chip changes.
     expect(screen.getByText('You')).toBeInTheDocument();
     expect(screen.getByText('Salina')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Waiting for Salina to join' })).toBeInTheDocument();
+    expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
     // Auto-join, but muted: the room connects to listen, not to publish.
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
     // The ownership lock is namespaced away from real debate ids.
@@ -419,7 +471,7 @@ describe('RematchVoicePill', () => {
 
   it('keeps the microphone live when the pair arrives from a recorded debate', async () => {
     render(
-      <RematchVoicePill session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
+      <RematchVoiceHeader session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
     );
     await flushOwnership();
 
@@ -430,12 +482,12 @@ describe('RematchVoicePill', () => {
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
     const recordedDebateSession = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
-    const view = render(<RematchVoicePill session={recordedDebateSession} currentUserId="me" />);
+    const view = render(<RematchVoiceHeader session={recordedDebateSession} currentUserId="me" />);
     await flushOwnership();
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
 
     view.rerender(
-      <RematchVoicePill
+      <RematchVoiceHeader
         session={{ ...makeSession('browsing'), id: 'session-2', source_debate_id: null }}
         currentUserId="me"
       />
@@ -445,7 +497,7 @@ describe('RematchVoicePill', () => {
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
 
     view.rerender(
-      <RematchVoicePill
+      <RematchVoiceHeader
         session={{ ...makeSession('browsing'), id: 'session-3', source_debate_id: 'debate-2' }}
         currentUserId="me"
       />
@@ -458,12 +510,12 @@ describe('RematchVoicePill', () => {
   // "Other person is muted → red muted variant; not muted → green unmuted variant" (GEO-2511).
   it('shows the opponent as unmuted once their participant appears', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    const chip = screen.getByRole('img', { name: 'Salina is unmuted' });
+    const chip = screen.getByTitle('Salina is unmuted');
     expect(chip).toBeInTheDocument();
     expect(chip).toHaveClass('bg-successTertiary');
-    expect(screen.queryByRole('img', { name: /Waiting for/ })).toBeNull();
+    expect(screen.queryByTitle(/Waiting for/)).toBeNull();
   });
 
   it('shows the opponent as muted when they mute themselves', async () => {
@@ -472,29 +524,29 @@ describe('RematchVoicePill', () => {
     // A speaker update that arrives just before the mute leaves `isSpeaking` set until the next
     // one; the row must not contradict itself in that window.
     mocks.isSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    const chip = screen.getByRole('img', { name: 'Salina is muted' });
+    const chip = screen.getByTitle('Salina is muted');
     expect(chip).toBeInTheDocument();
     expect(chip).toHaveClass('bg-errorTertiary');
-    expect(avatarFor('Salina')).not.toHaveClass('ring-green');
+    expect(avatarFor('Salina')).not.toHaveClass('ring-successTertiary');
   });
 
   it('rings the speaking participant, whichever side is talking', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.localIsSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(avatarFor('You')).toHaveClass('ring-green');
-    expect(avatarFor('Salina')).not.toHaveClass('ring-green');
+    expect(avatarFor('You')).toHaveClass('ring-successTertiary');
+    expect(avatarFor('Salina')).not.toHaveClass('ring-successTertiary');
 
     cleanup();
     mocks.localIsSpeaking = false;
     mocks.isSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(avatarFor('Salina')).toHaveClass('ring-green');
-    expect(avatarFor('You')).not.toHaveClass('ring-green');
+    expect(avatarFor('Salina')).toHaveClass('ring-successTertiary');
+    expect(avatarFor('You')).not.toHaveClass('ring-successTertiary');
   });
 
   // Muting does not retract the active-speaker update that preceded it, so a stale one would
@@ -502,13 +554,13 @@ describe('RematchVoicePill', () => {
   it('drops the local ring the moment the microphone is off', async () => {
     mocks.localIsSpeaking = true;
     mocks.isMicrophoneEnabled = false;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(avatarFor('You')).not.toHaveClass('ring-green');
+    expect(avatarFor('You')).not.toHaveClass('ring-successTertiary');
   });
 
   it('mutes and unmutes the local microphone', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false);
@@ -516,14 +568,14 @@ describe('RematchVoicePill', () => {
     cleanup();
     mocks.isMicrophoneEnabled = false;
     mocks.setMicrophoneEnabled.mockReset().mockResolvedValue(undefined);
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
   });
 
   it('stays connected listen-only when the microphone fails', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
     act(() => onMediaDeviceFailure('PermissionDenied'));
@@ -540,7 +592,7 @@ describe('RematchVoicePill', () => {
   });
 
   it('explains which microphone problem it hit', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
 
@@ -552,7 +604,7 @@ describe('RematchVoicePill', () => {
   });
 
   it('recovers from a denied microphone without a page reload', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
     act(() => onMediaDeviceFailure('PermissionDenied'));
@@ -566,7 +618,7 @@ describe('RematchVoicePill', () => {
   // `room.connect()` rejecting is a console warning and nothing else — the connect effect never
   // re-runs — so without this the dock claims it is connecting for as long as the page is open.
   it('offers a retry when the room never manages to connect', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onError = mocks.livekitRoomProps[0]?.onError as (error: Error) => void;
 
@@ -582,7 +634,7 @@ describe('RematchVoicePill', () => {
   // `onError` also fires when publishing the local track fails, which happens *after* the room is
   // up. Tearing the call down over a microphone problem would take the opponent's audio with it.
   it('keeps a connected room when publishing the microphone fails', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const props = mocks.livekitRoomProps[0] as Record<string, (arg?: unknown) => void>;
 
@@ -596,7 +648,7 @@ describe('RematchVoicePill', () => {
   // Enumerating devices with `requestPermissions` prompts again whenever a label is blank, which is
   // exactly the state a denied microphone leaves them in — and the rejection empties the list.
   it('never asks for the microphone a second time to fill the device picker', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
 
@@ -609,7 +661,7 @@ describe('RematchVoicePill', () => {
   it('asks for a click when the browser blocks audio playback', async () => {
     mocks.canPlayAudio = false;
     mocks.remoteParticipants = [remoteOpponent()];
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     const enable = screen.getByRole('button', { name: /enable audio/i });
@@ -619,7 +671,7 @@ describe('RematchVoicePill', () => {
 
   it('does not ask for a click while audio plays normally', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.queryByRole('button', { name: /enable audio/i })).toBeNull();
   });
@@ -627,7 +679,7 @@ describe('RematchVoicePill', () => {
   // The picked devices have to switch the live call AND survive into the debate that follows, which
   // is the whole reason each choice is written back to the shared media session.
   it('switches the live microphone and carries the choice into the debate', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
@@ -638,7 +690,7 @@ describe('RematchVoicePill', () => {
   });
 
   it('switches the live speaker and carries the choice into the debate', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
@@ -651,7 +703,7 @@ describe('RematchVoicePill', () => {
   // Firefox and Safari enumerate no outputs at all, and an empty list reads as a broken picker.
   it('falls back to the system default speaker when the browser cannot route audio', async () => {
     mocks.speakerDevices = [];
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
@@ -660,7 +712,7 @@ describe('RematchVoicePill', () => {
 
   it('opens the audio settings in a bottom sheet on mobile', async () => {
     setMobileLayout(true);
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
@@ -675,7 +727,7 @@ describe('RematchVoicePill', () => {
   it('drops the cached token when retrying rather than reconnecting around it', async () => {
     mocks.joinError = new GeoChatRequestError('boom', null, 500);
     mocks.joinData = null;
-    const { client, rerender } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    const { client, rerender } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     const reset = vi.spyOn(client, 'resetQueries');
@@ -693,7 +745,7 @@ describe('RematchVoicePill', () => {
       room_name: 'geo-rematch-session-1',
       participant_slot: 1,
     };
-    rerender(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     expect(mocks.livekitRoomMounts).toEqual(['token-2']);
   });
 
@@ -702,7 +754,7 @@ describe('RematchVoicePill', () => {
   it('re-mints the token when taking the voice connection back from another tab', async () => {
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
-    const { client } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    const { client } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await waitFor(() => expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument());
 
     const reset = vi.spyOn(client, 'resetQueries');
@@ -716,7 +768,7 @@ describe('RematchVoicePill', () => {
   // yielding tab has to be off the air *before* it tells the other one to go ahead.
   it('disconnects before handing the voice connection to another tab', async () => {
     setVisibility('hidden');
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
 
@@ -735,7 +787,7 @@ describe('RematchVoicePill', () => {
   // The tab the user is actually looking at keeps the microphone; only a background one steps aside.
   it('refuses to yield the microphone while the user is looking at this tab', async () => {
     setVisibility('visible');
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     const onTakeoverRequested = mocks.coordinatorOptions[0]?.onTakeoverRequested;
@@ -753,7 +805,7 @@ describe('RematchVoicePill', () => {
   // opens a microphone nobody asked to open. This pins LiveKit's own capture only — the prime
   // still reaches `getUserMedia` once on the same visit, which the tests below cover.
   it('joins with the microphone muted', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
   });
@@ -761,7 +813,7 @@ describe('RematchVoicePill', () => {
   // Joining muted means nothing would reach `getUserMedia` until the unmute click, which puts a
   // permission dialog in front of someone who has just started talking.
   it('asks for the microphone up front and hands it straight back', async () => {
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: true }));
@@ -780,7 +832,7 @@ describe('RematchVoicePill', () => {
   // chosen microphone is free, and names the wrong device in the prompt.
   it('primes the microphone the pair carried over from the debate', async () => {
     mocks.selectedAudioInputId = 'chosen-mic';
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: 'chosen-mic' } }));
@@ -803,7 +855,7 @@ describe('RematchVoicePill', () => {
         })
     );
 
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     await waitFor(() => expect(mocks.permissionsQuery).toHaveBeenCalled());
 
@@ -826,7 +878,7 @@ describe('RematchVoicePill', () => {
   it('primes once a visit, however often the dock cycles back to wanting one', async () => {
     mocks.isMicrophoneEnabled = false;
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledTimes(1));
 
@@ -837,7 +889,7 @@ describe('RematchVoicePill', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
     });
     mocks.isMicrophoneEnabled = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
     });
@@ -855,7 +907,7 @@ describe('RematchVoicePill', () => {
       mocks.permissionsQuery.mockClear();
       mocks.getUserMedia.mockClear();
       mocks.micPermissionState = state;
-      const { unmount } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+      const { unmount } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
       await flushOwnership();
       await waitFor(() => expect(mocks.permissionsQuery).toHaveBeenCalledTimes(1));
       expect(mocks.getUserMedia).not.toHaveBeenCalled();
@@ -868,7 +920,7 @@ describe('RematchVoicePill', () => {
   // seizure joining muted removes — so it stays shut and the prompt waits for the unmute click.
   it('never primes blind on a browser that cannot report the permission', async () => {
     mocks.micPermissionState = 'unsupported';
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     await waitFor(() => expect(mocks.permissionsQuery).toHaveBeenCalled());
 
@@ -884,29 +936,29 @@ describe('RematchVoicePill', () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentMicPublication = { isMuted: true };
     mocks.isSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    expect(screen.getByRole('img', { name: 'Salina is muted' })).toBeInTheDocument();
-    expect(avatarFor('Salina')).not.toHaveClass('ring-green');
+    expect(screen.getByTitle('Salina is muted')).toBeInTheDocument();
+    expect(avatarFor('Salina')).not.toHaveClass('ring-successTertiary');
   });
 
   it('lights the opponent ring the moment they unmute and speak', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentMicPublication = { isMuted: false };
     mocks.isSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    expect(screen.getByRole('img', { name: 'Salina is unmuted' })).toBeInTheDocument();
-    expect(avatarFor('Salina')).toHaveClass('ring-green');
+    expect(screen.getByTitle('Salina is talking')).toBeInTheDocument();
+    expect(avatarFor('Salina')).toHaveClass('ring-successTertiary');
   });
 
   // A denied prime is the unmute button's problem, not the dock's: nothing should change on
   // screen until the user actually asks to speak.
   it('says nothing when the up-front prompt is denied', async () => {
     mocks.getUserMedia.mockRejectedValue(new Error('NotAllowedError'));
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalled());
 
@@ -916,17 +968,17 @@ describe('RematchVoicePill', () => {
 
   // Muted is the default nobody chose, so the first time the other person actually says something
   // is when it most needs pointing out — and when silence starts reading as being ignored.
-  it('says "You\'re muted" the first time the opponent speaks', async () => {
+  it('names the opponent the first time they speak while the viewer is muted', async () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
   });
 
   // The click that answers the nudge lands in the one window where `isMicrophoneEnabled` is still
@@ -937,12 +989,12 @@ describe('RematchVoicePill', () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
@@ -950,16 +1002,16 @@ describe('RematchVoicePill', () => {
 
     // Still muted as far as LiveKit is concerned — the dialog has not been answered.
     expect(mocks.isMicrophoneEnabled).toBe(false);
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
-    expect(screen.getByTestId('muted-nudge-announcement')).toHaveTextContent('');
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+    expect(screen.getByTestId('rematch-voice-announcement')).toHaveTextContent('');
   });
 
   it('leaves an unmuted user alone when the opponent speaks', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.isSpeaking = true;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
   });
 
   // A nudge that returns on every turn is just a mute button that shouts.
@@ -969,32 +1021,32 @@ describe('RematchVoicePill', () => {
       mocks.isMicrophoneEnabled = false;
       mocks.remoteParticipants = [remoteOpponent()];
       const session = makeSession('browsing');
-      const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+      const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
       await flushOwnership();
 
       mocks.isSpeaking = true;
-      rerender(<RematchVoicePill session={session} currentUserId="me" />);
-      expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
       // Long enough to actually read: still up most of the way to the deadline. Without this the
       // duration is bounded from above only, and a one-frame bubble would pass.
       await act(async () => {
         vi.advanceTimersByTime(3000);
       });
-      expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
       // It clears itself...
       await act(async () => {
-        vi.advanceTimersByTime(5000);
+        vi.advanceTimersByTime(12_000);
       });
-      expect(screen.queryByTestId('muted-nudge')).toBeNull();
+      expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
       // ...and stays gone when they take another turn.
       mocks.isSpeaking = false;
-      rerender(<RematchVoicePill session={session} currentUserId="me" />);
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
       mocks.isSpeaking = true;
-      rerender(<RematchVoicePill session={session} currentUserId="me" />);
-      expect(screen.queryByTestId('muted-nudge')).toBeNull();
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -1010,24 +1062,24 @@ describe('RematchVoicePill', () => {
       mocks.isMicrophoneEnabled = false;
       mocks.remoteParticipants = [remoteOpponent()];
       const session = makeSession('browsing');
-      const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+      const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
       await flushOwnership();
 
       mocks.isSpeaking = true;
-      rerender(<RematchVoicePill session={session} currentUserId="me" />);
-      expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
       // They pause a second in, long before the nudge is due to go.
       await act(async () => {
         vi.advanceTimersByTime(1000);
       });
       mocks.isSpeaking = false;
-      rerender(<RematchVoicePill session={session} currentUserId="me" />);
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
 
       await act(async () => {
-        vi.advanceTimersByTime(5000);
+        vi.advanceTimersByTime(12_000);
       });
-      expect(screen.queryByTestId('muted-nudge')).toBeNull();
+      expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -1037,26 +1089,38 @@ describe('RematchVoicePill', () => {
   // every "audio is blocked" detour, so a one-shot held inside them would fire again and again
   // across a single sitting.
   it('does not repeat the muted nudge after a reconnect', async () => {
-    mocks.isMicrophoneEnabled = false;
-    mocks.remoteParticipants = [remoteOpponent()];
-    const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
-    await flushOwnership();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.isMicrophoneEnabled = false;
+      mocks.remoteParticipants = [remoteOpponent()];
+      const session = makeSession('browsing');
+      const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+      await flushOwnership();
 
-    mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+      mocks.isSpeaking = true;
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
-    // Drop and come back, with the opponent talking again on the other side.
-    mocks.isSpeaking = false;
-    mocks.connectionState = 'reconnecting';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    mocks.connectionState = 'connected';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+      await act(async () => {
+        vi.advanceTimersByTime(12_000);
+      });
+      expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+      // Drop and come back, with the opponent talking again on the other side.
+      mocks.isSpeaking = false;
+      mocks.connectionState = 'reconnecting';
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      mocks.connectionState = 'connected';
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      mocks.isSpeaking = true;
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+      expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+      // Once a visit, whatever the connection did in between.
+      expect(mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_nudge')).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // A reconnect swaps the rows out for a message without the opponent ever leaving, so a last
@@ -1068,13 +1132,13 @@ describe('RematchVoicePill', () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.isSpeaking = true;
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
     // The blip takes the rows down mid-sentence.
     mocks.connectionState = 'reconnecting';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
 
     // Back up, muted, with nobody talking. On remount the local row's effect runs before the
@@ -1083,8 +1147,8 @@ describe('RematchVoicePill', () => {
     mocks.isSpeaking = false;
     mocks.isMicrophoneEnabled = false;
     mocks.connectionState = 'connected';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
   });
 
   // The whole gate, from the other side: every path that renders no dock must also ask for
@@ -1095,7 +1159,7 @@ describe('RematchVoicePill', () => {
     // nothing about the clause it is named for.
     mocks.joinIgnoresEnabled = true;
     for (const status of ['deciding', 'converted', 'ended', 'expired'] as const) {
-      const { unmount } = render(<RematchVoicePill session={makeSession(status)} currentUserId="me" />);
+      const { unmount } = render(<RematchVoiceHeader session={makeSession(status)} currentUserId="me" />);
       await flushOwnership();
       unmount();
     }
@@ -1109,7 +1173,7 @@ describe('RematchVoicePill', () => {
     mocks.joinIgnoresEnabled = true;
     const session = makeSession('browsing');
     const solo = { ...session, participants: [session.participants[0]] };
-    const { container } = render(<RematchVoicePill session={solo} currentUserId="me" />);
+    const { container } = render(<RematchVoiceHeader session={solo} currentUserId="me" />);
     await flushOwnership();
 
     expect(container.textContent).toBe('');
@@ -1121,7 +1185,7 @@ describe('RematchVoicePill', () => {
     mocks.joinIgnoresEnabled = true;
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument();
@@ -1132,7 +1196,7 @@ describe('RematchVoicePill', () => {
   it('does not prime the microphone when there is no dock to join', async () => {
     mocks.joinData = null;
     mocks.joinError = new GeoChatRequestError('not found', null, 404);
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     await act(async () => {
       await Promise.resolve();
@@ -1152,7 +1216,7 @@ describe('RematchVoicePill', () => {
       })
     );
 
-    const { unmount } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    const { unmount } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalled());
 
@@ -1171,7 +1235,7 @@ describe('RematchVoicePill', () => {
   it('survives a rejected unmute', async () => {
     mocks.isMicrophoneEnabled = false;
     mocks.setMicrophoneEnabled.mockRejectedValue(new Error('NotAllowedError'));
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
@@ -1189,15 +1253,15 @@ describe('RematchVoicePill', () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
     act(() => onMediaDeviceFailure('PermissionDenied'));
 
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
     expect(screen.getByText(/Microphone blocked/)).toBeInTheDocument();
   });
 
@@ -1210,20 +1274,20 @@ describe('RematchVoicePill', () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.isSpeaking = true;
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
     // They walk out mid-sentence.
     mocks.remoteParticipants = [];
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.getByRole('img', { name: 'Waiting for Salina to join' })).toBeInTheDocument();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
 
     // The user then mutes. Nobody is here, let alone talking, so nothing should be nudged.
     mocks.isMicrophoneEnabled = false;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
 
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
   });
 
   // A live region inserted with its text already in it is unreliably announced, so the region has
@@ -1233,50 +1297,60 @@ describe('RematchVoicePill', () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
     // Present before there is anything to say.
-    expect(screen.getByTestId('muted-nudge-announcement')).toHaveTextContent('');
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    expect(screen.getByTestId('rematch-voice-announcement')).toHaveTextContent('');
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
 
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
 
-    const region = screen.getByTestId('muted-nudge-announcement');
+    const region = screen.getByTestId('rematch-voice-announcement');
     expect(region).toHaveAttribute('role', 'status');
-    expect(region).toHaveTextContent(/You.re muted/);
-    // The visible bubble must not be read as well.
-    expect(screen.getByTestId('muted-nudge')).toHaveAttribute('aria-hidden');
+    expect(region).toHaveTextContent('Salina is talking. Unmute to reply.');
+    // The toast is not a second live region: it carries real buttons, and `aria-hidden` over a
+    // focusable control hides the only way to act on what was just announced.
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).not.toHaveAttribute('aria-hidden');
   });
 
-  // Red fill is a mute the user chose and can undo by clicking; a dead microphone is neither, and
-  // collapsing the two would send people clicking at a button that cannot help them.
+  // A mute the user can undo by clicking gets the filled call-to-action; a dead microphone is not
+  // that, and collapsing the two would send people clicking at a button that cannot help them.
   it('distinguishes a broken microphone from a chosen mute', async () => {
     mocks.isMicrophoneEnabled = false;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toHaveClass('bg-errorTertiary');
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toHaveClass('bg-text');
 
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
     act(() => onMediaDeviceFailure('PermissionDenied'));
 
     const failed = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
-    expect(failed).not.toHaveClass('bg-errorTertiary');
+    expect(failed).not.toHaveClass('bg-text');
     expect(failed).toHaveClass('opacity-60');
+    // And the card says why, next to the only way back.
+    expect(screen.getByText(/Microphone blocked/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
-  // The nudge exists to get the mute button pressed, so it must never be what eats the click.
-  it('keeps the muted nudge out of the way of the button it points at', async () => {
+  // The nudge exists to get the microphone opened, and it now carries its own way of doing that
+  // rather than pointing at a control elsewhere on the page.
+  it('unmutes from the nudge itself', async () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
 
-    expect(screen.getByTestId('muted-nudge')).toHaveClass('pointer-events-none');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute to reply' }));
+    });
+
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
   });
 
   // Unmuting is what the nudge was asking for; leaving it up afterwards is noise.
@@ -1284,24 +1358,455 @@ describe('RematchVoicePill', () => {
     mocks.isMicrophoneEnabled = false;
     mocks.remoteParticipants = [remoteOpponent()];
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
     mocks.isSpeaking = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.getByTestId('muted-nudge')).toBeInTheDocument();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
 
     mocks.isMicrophoneEnabled = true;
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
-    expect(screen.queryByTestId('muted-nudge')).toBeNull();
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
   });
 
-  // Muted is now the state users arrive in without choosing it, so it has to read as muted at a
-  // glance rather than as a slash on an otherwise unchanged icon.
-  it('marks the muted microphone in the same red as the opponent chip', async () => {
+  // Muted is the state users arrive in without choosing it, and the whole point of GEO-2992 is
+  // that the way out of it reads as a button. An icon on a tertiary wash read as a status light,
+  // which is why nobody pressed it: a verb on a filled pill does not.
+  it('labels the way out of a mute nobody chose', async () => {
     mocks.isMicrophoneEnabled = false;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toHaveClass('bg-errorTertiary', 'text-red-01');
+    const button = screen.getByRole('button', { name: 'Unmute microphone' });
+    expect(button).toHaveTextContent('Unmute');
+    expect(button).toHaveClass('bg-text', 'text-white');
+  });
+
+  // The button is the state as well as the action: a filled "Unmute" is a microphone that is off,
+  // an outlined "Mute" is one that is on. A caption saying the same thing beside it is the fact
+  // twice over, and reads as though the two could disagree.
+  it('lets the button carry the viewer mic state, with no caption repeating it', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    /** Text the viewer can actually see — the state also lives in an `sr-only` live region. */
+    function visibleText(text: string) {
+      const card = screen.getByTestId('rematch-you-card');
+      return within(card)
+        .queryAllByText(text)
+        .filter(element => !element.classList.contains('sr-only'));
+    }
+
+    const card = screen.getByTestId('rematch-you-card');
+    expect(within(card).getByRole('button', { name: 'Unmute microphone' })).toHaveTextContent('Unmute');
+    expect(visibleText('Muted')).toHaveLength(0);
+
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(within(card).getByRole('button', { name: 'Mute microphone' })).toHaveTextContent('Mute');
+    expect(visibleText('Unmuted')).toHaveLength(0);
+    expect(visibleText('Live')).toHaveLength(0);
+  });
+
+  // Dropping the visible caption cannot drop the announcement with it. The microphone mutes on its
+  // own — a reconnect, a takeover, a device failure — and a button's `aria-label` flipping is not
+  // reliably read unless it happens to be focused.
+  it('still announces the viewer mic state after the caption is gone', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const region = screen.getByTestId('rematch-you-state');
+    expect(region).toHaveAttribute('role', 'status');
+    expect(region).toHaveTextContent('Muted');
+
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    // The same region, with new text — a live region inserted with its content already in it is
+    // dropped often enough to be unreliable.
+    expect(screen.getByTestId('rematch-you-state')).toHaveTextContent('Unmuted');
+  });
+
+  // What the button cannot say still gets said. These are the states that arrive without the
+  // viewer doing anything, and the pill looks the same through all of them.
+  it('captions the viewer card only for what the button cannot express', async () => {
+    mocks.connectionState = 'reconnecting';
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(within(screen.getByTestId('rematch-you-card')).getByText('Reconnecting…')).toBeInTheDocument();
+
+    mocks.connectionState = 'connected';
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+    act(() => onMediaDeviceFailure('PermissionDenied'));
+    expect(screen.getByText(/Microphone blocked/)).toBeInTheDocument();
+  });
+
+  // GEO-2992: the opponent's card is a way into their space, and the only control in the header is
+  // the pill in the other card. Collapsing the two would make every glance at the mic state a
+  // navigation.
+  it('opens the opponent personal space from their card, and only from their card', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Salina’s personal space' }));
+    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-home', 'them-space', false, { forceRequestedSpace: true });
+
+    mocks.openSidePanel.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  // The space lookup is a request like any other, and a click can land before it does. The shared
+  // hook remembers that click and finishes it once the entity arrives — a hand-rolled copy of the
+  // rule instead left the card doing nothing at all for as long as the lookup took.
+  //
+  // What it must not do is open the space id: that id is the personal space's system entity, an
+  // ugly technical record rather than the person (#2549).
+  it('finishes an opponent card click that lands before their space resolves', async () => {
+    mocks.opponentSpace = null;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Salina’s personal space' }));
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+
+    mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-home', 'them-space', false, { forceRequestedSpace: true });
+  });
+
+  // The prompt the corner dock never had: nothing on that page said you were in a live room with
+  // another person, which is the fact that makes the mute default worth acting on.
+  it('offers the unmute notice while muted, once', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const notice = screen.getByTestId('rematch-unmute-notice');
+    // The first name, not the display handle: this is the page addressing the viewer about a
+    // person, and a handle mid-sentence reads like a username.
+    expect(notice).toHaveTextContent('You’re in a live room with Salina. Unmute to talk while you pick a claim.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+
+    // Still muted, still in the room — and it stays gone.
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+  });
+
+  it('drops the unmute notice once the user unmutes, and does not bring it back on a later mute', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+
+    // Muting on purpose is a choice, not the join default the notice exists to explain.
+    mocks.isMicrophoneEnabled = false;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+  });
+
+  // Nobody to talk to is not a live room, and the notice would be describing one that isn't there.
+  it('withholds the unmute notice until the opponent joins the room', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+
+    mocks.remoteParticipants = [remoteOpponent()];
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
+  // The opponent's card earns a "Talking" state of its own: on the dock this was a ring around an
+  // avatar, which says nothing to anyone reading the words.
+  it('says when the opponent is talking, not only that they are unmuted', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTitle('Salina is unmuted')).toHaveTextContent('Unmuted');
+
+    mocks.isSpeaking = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
+  });
+
+  /** The identity row's three tracks: avatar, the name-and-state column, the corner action. */
+  function cardTracks(card: HTMLElement) {
+    return Array.from((card.firstElementChild as HTMLElement).children) as HTMLElement[];
+  }
+
+  // The two cards sit side by side, so a difference in either one is a difference you read across
+  // the pair. The mute pill had drifted out to the card's left edge while the opponent's chip
+  // stayed indented under their name — invisible in either card alone, impossible to miss between
+  // them. Both are laid out by one component now, and this is what says so.
+  it('lays both cards out the same way, avatar then name over state then the corner action', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+
+    const you = screen.getByTestId('rematch-you-card');
+    const them = screen.getByTestId('rematch-opponent-card');
+
+    // Them, the badge, then you: the home side of a scoreboard, and where a reader's eye lands
+    // last. Order is not decoration here — the cards are identical, so position is the only thing
+    // saying which of them is you.
+    expect(them.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(them.parentElement!.children).map(child => child.textContent)).toEqual([
+      expect.stringContaining('Salina'),
+      'VS',
+      expect.stringContaining('You'),
+    ]);
+
+    const [youAvatar, youColumn, youAction] = cardTracks(you);
+    const [themAvatar, themColumn, themAction] = cardTracks(them);
+
+    expect(youAvatar.className).toBe(themAvatar.className);
+    expect(youColumn.className).toBe(themColumn.className);
+    expect(youAction.className).toBe(themAction.className);
+
+    // The state belongs to the name, not to the card: the pill is indented past the avatar exactly
+    // as far as the chip is.
+    expect(youColumn).toContainElement(within(you).getByText('You'));
+    expect(youColumn).toContainElement(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
+    expect(themColumn).toContainElement(within(them).getByText('Salina'));
+    expect(themColumn).toContainElement(screen.getByTitle('Salina is muted'));
+
+    // And the corners hold each person's own secondary action, so they line up across the badge.
+    expect(youAction).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
+    expect(themAction).toHaveTextContent('View profile');
+  });
+
+  // Your control and their chip sit at the same height in mirrored cards, so anything they do not
+  // share reads as an accident rather than a decision. They were two hand-written sets of paddings
+  // and type sizes that were close but not equal; this is what keeps them from drifting apart
+  // again.
+  it('gives the mute button and the opponent chip the same shape', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const button = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
+    const chip = screen.getByTitle('Salina is muted');
+    for (const shared of PAIR_PILL.split(' ')) {
+      expect(button).toHaveClass(shared);
+      expect(chip).toHaveClass(shared);
+    }
+
+    // The corners are the one difference, and it is the real one: the chip is a whole pill, the
+    // button is the left half of one with the settings chevron making up the right.
+    expect(button).toHaveClass('rounded-l-full');
+    expect(chip).toHaveClass('rounded-full');
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toHaveClass('size-6', 'rounded-r-full');
+  });
+
+  // Leaving belongs to you, so it sits in your card — opposite "View profile" on theirs — and the
+  // tab strip gets back the width it was sharing.
+  it('draws the leave action in the viewer card, beside the mic control rather than in its place', async () => {
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-you-card');
+    const leave = screen.getByRole('button', { name: 'Leave debate' });
+    const mic = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
+    expect(card).toContainElement(leave);
+    expect(card).toContainElement(mic);
+    // The pill has its own row under the name; sharing the identity row left it a half-card wide.
+    expect(leave.closest('div')).not.toBe(mic.closest('div'));
+  });
+
+  // The session is still leavable when there is nobody to draw a pair with.
+  it('keeps the leave action reachable without an opponent', async () => {
+    const session = makeSession('browsing');
+    const solo = { ...session, participants: [session.participants[0]] };
+    render(
+      <RematchVoiceHeader session={solo} currentUserId="me" leaveAction={<button type="button">Leave debate</button>} />
+    );
+    await flushOwnership();
+
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.queryByTestId('rematch-you-card')).toBeNull();
+  });
+
+  // The card opens a person, so it says so — "space" is the plumbing, not what the viewer wants.
+  it('offers the opponent card as a way into their profile', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent('View profile');
+  });
+
+  /** A locked pairing: the pair have agreed a claim and each holds a side. */
+  function lockedSession(): DebateRematchSession {
+    const session = makeSession('request_pending');
+    return {
+      ...session,
+      request: {
+        id: 'request-1',
+        status: 'pending',
+        claim: {
+          id: 'claim-1',
+          space_id: 'space-1',
+          claim_entity_id: 'claim-entity-1',
+          claim: 'A man should always pay for the first date',
+          description: null,
+        },
+        requester_user_id: 'me',
+        recipient_user_id: 'them',
+        requester_position: true,
+        recipient_position: false,
+        turn_format_id: 'format-1',
+        created_at: '2026-08-27T00:00:00Z',
+        expires_at: '2026-08-27T00:05:00Z',
+      },
+    };
+  }
+
+  // The card is a `<button>` with an explicit `aria-label`, and a control's label replaces its
+  // descendant text in the accessible name — so the mic chip is invisible to a screen reader from
+  // inside it. A `role="status"` nested in a button does not save it either: a button's descendants
+  // are presentational, so the role, and the implicit `aria-live` with it, is stripped. The dock
+  // this replaced had the chip in a plain row, where both worked.
+  it('announces the opponent mic state from outside their card button', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-opponent-card');
+    const status = screen.getByTestId('rematch-opponent-status');
+    expect(status).toHaveAttribute('role', 'status');
+    expect(status).toHaveTextContent('Salina is muted');
+    expect(card).not.toContainElement(status);
+
+    // And the card points at it, so focusing the control says who is muted rather than only what
+    // pressing it does. The label itself stays put — a control that renames itself every time the
+    // other person mutes is harder to use than one that is quiet.
+    expect(card).toHaveAttribute('aria-describedby', status.id);
+    expect(card).toHaveAttribute('aria-label', 'Open Salina’s personal space');
+
+    mocks.opponentMicPublication = { isMuted: false };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is unmuted');
+    expect(screen.getByTestId('rematch-opponent-card')).toHaveAttribute('aria-label', 'Open Salina’s personal space');
+  });
+
+  // Same label, same problem: once the pair lock a claim the opponent's side is a chip inside that
+  // button, and the accessible name hides it too.
+  it('carries the opponent locked position in the card description', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+    await flushOwnership();
+
+    // Visible on the card, and reachable from the control that hides it.
+    expect(within(screen.getByTestId('rematch-opponent-card')).getByText('Disagree')).toBeInTheDocument();
+    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is muted. Salina disagrees');
+  });
+
+  // A hover variant outranks a plain utility on specificity whichever order they are written in,
+  // so an unconditional `hover:border-grey-03` erased the talking outline exactly while the viewer
+  // was pointing at the card — the one moment they are most likely to be looking at it.
+  it('keeps the talking outline on the opponent card under the pointer', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: false };
+    mocks.isSpeaking = true;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-opponent-card');
+    expect(card).toHaveClass('border-green', 'hover:border-green');
+    expect(card).not.toHaveClass('hover:border-grey-03');
+
+    // And the ordinary card still lifts to grey under the pointer.
+    mocks.isSpeaking = false;
+    mocks.opponentMicPublication = { isMuted: true };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-opponent-card')).toHaveClass('border-grey-02', 'hover:border-grey-03');
+  });
+
+  // GEO-2992 instrumentation: the share of participants who ever unmute, and how long it takes
+  // them, read against the corner dock this replaced.
+  it('records joining and the first unmute', async () => {
+    mocks.isMicrophoneEnabled = false;
+    const { rerender } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(mocks.capture).toHaveBeenCalledWith('debate_rematch_voice_joined', {
+      session_id: 'session-1',
+      surface: 'pair_header',
+      joined_muted: true,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+    // Nothing yet: the click is a request, and a denied or busy device never opens.
+    expect(mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_unmuted')).toHaveLength(0);
+
+    mocks.isMicrophoneEnabled = true;
+    rerender(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+
+    const unmuted = mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_unmuted');
+    expect(unmuted).toHaveLength(1);
+    expect(unmuted[0][1]).toMatchObject({ session_id: 'session-1', surface: 'pair_header' });
+    expect(typeof unmuted[0][1].seconds_to_first_unmute).toBe('number');
+  });
+
+  // A pair carried over from a recorded debate arrive with the microphone already open, so their
+  // first mute-then-unmute is not somebody discovering the control. Counting it would put the
+  // measurement's denominator and numerator in different populations.
+  it('does not count an unmute from a pair who arrived unmuted', async () => {
+    const carriedOver = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    const { rerender } = render(<RematchVoiceHeader session={carriedOver} currentUserId="me" />);
+    await flushOwnership();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    });
+    mocks.isMicrophoneEnabled = false;
+    rerender(<RematchVoiceHeader session={carriedOver} currentUserId="me" />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+    });
+
+    expect(mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_unmuted')).toHaveLength(0);
   });
 
   // `audio` is not a join-time flag: LiveKit replays `setMicrophoneEnabled(!!audio)` on every
@@ -1310,7 +1815,7 @@ describe('RematchVoicePill', () => {
   // mock room cannot replay that, so what is asserted here is the input it would replay.
   it('records mic intent on the room, not just on the local track', async () => {
     mocks.isMicrophoneEnabled = false;
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
 
@@ -1325,7 +1830,7 @@ describe('RematchVoicePill', () => {
   it('clears the microphone failure when the user retries', async () => {
     mocks.isMicrophoneEnabled = false;
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
     // A muted join never opens the microphone, so the failure this recovers from belongs to
@@ -1340,11 +1845,11 @@ describe('RematchVoicePill', () => {
 
     // Retry is only reachable once the room has connected and then dropped.
     mocks.connectionState = 'disconnected';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     mocks.connectionState = 'connected';
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
     expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeEnabled();
     // Retry drops the failure latch but keeps the choice to speak.
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
@@ -1359,9 +1864,9 @@ describe('RematchVoicePill', () => {
     mocks.microphoneTrack = { track };
     mocks.isMicrophoneEnabled = false;
     const session = makeSession('browsing');
-    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
-    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
 
     expect(mocks.useKrispNoiseFilter).not.toHaveBeenCalled();
     expect(track.setProcessor).not.toHaveBeenCalled();
@@ -1373,7 +1878,7 @@ describe('RematchVoicePill', () => {
   it('yields to the tab that owns the voice connection', async () => {
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
-    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await waitFor(() => expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument());
     expect(screen.queryByTestId('livekit-room')).toBeNull();
     // The token was never requested by this tab.
@@ -1383,5 +1888,83 @@ describe('RematchVoicePill', () => {
     mocks.requestTakeover.mockResolvedValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
     await waitFor(() => expect(screen.getByTestId('livekit-room')).toBeInTheDocument());
+  });
+});
+
+describe('the mic inside a debate room', () => {
+  const presence = (opponentPresent: boolean) => ({
+    state: opponentPresent ? ('present' as const) : ('waiting' as const),
+    opponentUserId: 'them',
+    opponentPresent,
+  });
+
+  const lastAudio = () => mocks.livekitRoomProps.at(-1)?.audio;
+
+  // GEO-2941 state 3, and the only behaviour the ticket changes. Off a room there is no join event
+  // to key on, so the dock stays muted per GEO-2838.
+  it('stays muted while the viewer is on their own', async () => {
+    render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+  });
+
+  it('opens the mic once the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(lastAudio()).toBe(true));
+    // The prop alone is not enough: LiveKit replays it only from `SignalConnected`, so on a room
+    // that is already connected the device has to be driven directly.
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+  });
+
+  // A mute chosen while waiting is a choice, and the opponent walking in must not undo it.
+  it('leaves a deliberate mute alone when the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await flushOwnership();
+    // A deliberate mute, made while waiting, through the dock's own control.
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false));
+    mocks.setMicrophoneEnabled.mockClear();
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  // Outside a room the context is absent, and the dock's own default governs.
+  it('stays muted with no room around it', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
   });
 });

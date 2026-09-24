@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { scheduledAwaitingCountAtom } from '../rooms/scheduled-awaiting';
 import { DebatesHubButton } from './debates-hub-button';
 import { debatesHubAtom } from '~/atoms';
 
@@ -26,9 +27,11 @@ vi.mock('./hooks', () => ({
   useDebateRequests: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
-function renderButton() {
+function renderButton(scheduledAwaiting = 0) {
+  const store = createStore();
+  store.set(scheduledAwaitingCountAtom, scheduledAwaiting);
   return render(
-    <Provider store={createStore()}>
+    <Provider store={store}>
       <DebatesHubButton />
     </Provider>
   );
@@ -77,6 +80,20 @@ describe('DebatesHubButton', () => {
 
     expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
     expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  // Scheduled requests have no gateway event yet, so the count is what tells someone one arrived.
+  it('counts scheduled requests waiting on an answer alongside instant ones', () => {
+    mocks.incomingRequestCount = 1;
+    renderButton(2);
+
+    expect(screen.getByRole('button', { name: 'Debate, 3 pending requests' })).toBeInTheDocument();
+  });
+
+  it('badges a scheduled request on its own', () => {
+    renderButton(1);
+
+    expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();
   });
 
   it('keeps announcing the pending request count while signed in', () => {

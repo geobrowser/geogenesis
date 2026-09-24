@@ -4275,6 +4275,9 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
   });
 
+  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
+  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
+  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
   it('does not finalize a connected early-complete rematch before the thank-you deadline', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
@@ -4303,6 +4306,9 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
+  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
+  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
   it('does not redirect an idle early-complete rematch before the thank-you deadline', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
@@ -4323,6 +4329,82 @@ describe('DebateRoomPageClient', () => {
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 550));
     });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('redirects an idle room as soon as both debaters have pressed Let\'s go', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Fifteen seconds left, so the session went live on two presses. No tick is advanced here:
+    // the redirect has to come from the session, not from the clock running out.
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('enters the rematch browser as soon as the second Let\'s go lands, mid-countdown', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    // The other side presses it too, with fifteen seconds still on the clock.
+    mocks.debate = { ...mocks.debate, status: 'complete', completed_at: '2026-07-02T00:00:26.000Z' };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+  });
+
+  it('finishes the early rematch exit from Retry save when the first persist failed', async () => {
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Could not save the local recording.'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      // The debate query still lags the rematch session, which is the snapshot that used to send
+      // this retry down the save-only branch and strand the room for good.
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The early exit ran and its save failed, so nothing has navigated yet.
+    const retry = await screen.findByRole('button', { name: 'Retry save' });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
@@ -4516,7 +4598,10 @@ describe('DebateRoomPageClient', () => {
       ...completedDebate(),
       status: 'thanking',
       turn_started_at: '2026-07-02T00:00:20.000Z',
-      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      // Four seconds left, inside `rematchAutoConsentLeadSeconds`. A live session with more than
+      // that on the clock leaves for the picker by itself, so this is the only window in which a
+      // viewer is still on the thank-you screen with one to leave.
+      turn_ends_at: '2026-07-02T00:00:24.000Z',
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };

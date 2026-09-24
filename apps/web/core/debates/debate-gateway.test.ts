@@ -619,6 +619,38 @@ describe('DebateGatewayClient', () => {
     );
   });
 
+  // GEO-3028. Tab visibility travels beside presence, with no grace, so switching tabs takes
+  // someone off other people's lists at once. Until it is reported it is left off the heartbeat
+  // entirely, which geo-chat reads as "unknown", never as "hidden".
+  it('reports tab visibility beside presence, at once, and only once it is known', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      true
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true } })
+    );
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    client.setTabVisible(false);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true, debate_visible: false } })
+    );
+
+    // Behind an unacknowledged heartbeat it coalesces like presence does, keeping the final state.
+    client.setTabVisible(true);
+    client.setTabVisible(false);
+    client.setTabVisible(true);
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true, debate_visible: true } })
+    );
+  });
+
   it('resets missed acknowledgements and keeps the live socket connected', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),

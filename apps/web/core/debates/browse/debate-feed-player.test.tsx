@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -82,8 +82,9 @@ function controllerFixture(overrides: {
   playing?: boolean;
   playbackEnded?: boolean;
   subtitle?: string | null;
-  /** A freshly signed recording, as `refreshSlotUrl` produces. */
-  urls?: { slot1: string; slot2: string };
+  /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
+   * blanking pass that precedes a different pair leaves behind. */
+  urls?: { slot1: string | null; slot2: string | null };
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -169,6 +170,41 @@ describe('player layout', () => {
     );
     expect(tiles).toHaveLength(2);
     expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
+  });
+
+  /**
+   * GEO-3022. The chip was dropped from the tile alongside the "Winner?" pill in #2439, which left
+   * the two videos saying who was speaking but not which side they were arguing — the one thing a
+   * viewer dropping into the middle of a debate cannot infer.
+   */
+  it("shows each debater's position beside their name", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByText } = within(container);
+
+    // Beside the name and not inside its link: the position is a fact about the debater, not a
+    // second way to open their profile.
+    for (const [name, position] of [
+      ['space-1', 'For'],
+      ['space-2', 'Against'],
+    ]) {
+      const chip = getByText(position);
+      const nameNode = getByText(name);
+      expect(chip.closest('button')).toBeNull();
+      expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
+    }
+  });
+
+  it('draws no chip for a debater whose position has no label', () => {
+    mocks.controller = {
+      ...controllerFixture({ mutedByUser: true, turnSlot: 1 }),
+      slot1Participant: { ...participant(1), position_label: '' },
+    };
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('For')).toBeNull();
+    expect(queryByText('Against')).not.toBeNull();
   });
 });
 
@@ -448,19 +484,18 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
     const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
     const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    /** Hand the pair different URLs — or none, which is how a new recording arrives. */
+    const hand = (urls: { slot1: string | null; slot2: string | null }) => {
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2, urls });
+      rerender(<DebateFeedPlayer debate={debate} active />);
+    };
     return {
       slot1,
       slot2,
       container,
+      hand,
       /** What `refreshSlotUrl` does to this tile: the same recording, signed again. */
-      resign(url: string) {
-        mocks.controller = controllerFixture({
-          mutedByUser: true,
-          turnSlot: 2,
-          urls: { slot1: url, slot2: 'https://cdn.test/slot2.webm' },
-        });
-        rerender(<DebateFeedPlayer debate={debate} active />);
-      },
+      resign: (url: string) => hand({ slot1: url, slot2: 'https://cdn.test/slot2.webm' }),
     };
   }
 
@@ -482,6 +517,102 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     expect(slot1.getAttribute('src')).toBe(src);
     expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
     expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * The rebuild's other half, and the half that makes it work at all.
+   *
+   * `preload="metadata"` is what kills these recordings: MediaRecorder WebM carries no duration
+   * and no cues, so the demuxer seeks to find the length, and metadata mode has already stopped
+   * fetching by then. A rebuild that keeps it therefore fails identically every time — which is a
+   * whole budget spent, a URL re-signed for nothing, and a tile that ends up saying the recording
+   * did not load while the same recording plays fine on a page that autoplays it.
+   */
+  it('raises preload past the mode that killed the pipeline', () => {
+    const { slot1, slot2 } = renderPair();
+    expect(slot1.preload).toBe('metadata');
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(slot1.preload).toBe('auto');
+    // The tile that is fine keeps the cheap fetch. Several of these are mounted at once.
+    expect(slot2.preload).toBe('metadata');
+  });
+
+  /**
+   * And raised with the re-fetch, not somewhere later.
+   *
+   * What the recording actually needs is the raise landing before the new fetch has got far enough
+   * to fail again, and Chrome is looser about that than the spec's wording suggests: measured
+   * against the 89MB slot-1 recording, raising it *after* both `load()` calls still recovers, and
+   * so does deferring it by a task. Deferring it by 500ms does not — `error.code === 2` comes
+   * straight back, exactly as when nothing raises it at all.
+   *
+   * That is a window, not a rule, and a window is not something to leave a fix sitting inside. So
+   * what is pinned here is the position with margin — in the same breath as the re-fetch — by
+   * watching the property at the instant each `load()` runs. It is deliberately stricter than the
+   * browser demands: nothing wants the raise anywhere else, and the failure it guards against
+   * (the raise drifting into an effect or a timer, where `exhausted` once put it) leaves every
+   * end-state assertion green.
+   */
+  it('raises preload in the same breath as the rebuild re-fetches', () => {
+    const { slot1 } = renderPair();
+    const preloadAtLoad: string[] = [];
+    vi.mocked(HTMLMediaElement.prototype.load).mockImplementation(function (this: HTMLMediaElement) {
+      preloadAtLoad.push(this.preload);
+    });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    // Both of them: `reattachVideoSource` detaches and re-loads before it re-attaches and re-loads.
+    expect(preloadAtLoad.length).toBeGreaterThan(0);
+    expect(preloadAtLoad).toEqual(preloadAtLoad.map(() => 'auto'));
+  });
+
+  /**
+   * The re-signed URL keeps it. `onExhausted` re-signs the recording that has just failed every
+   * rebuild it was allowed under `metadata`, so handing the fresh URL that same mode would spend
+   * an attempt and a multi-megabyte load proving the point a second time.
+   */
+  it('keeps the raised preload across a re-signed URL', () => {
+    const { slot1, resign, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    resign('https://cdn.test/slot1-resigned.webm');
+
+    const [resigned] = Array.from(container.querySelectorAll('video'));
+    expect(resigned).toBe(slot1);
+    expect(resigned.preload).toBe('auto');
+  });
+
+  /**
+   * And a genuinely different recording gets the light fetch back without anything here putting it
+   * back, which is what makes the escalation per-source rather than per-tile.
+   *
+   * `useDebatePlayback` blanks both URLs before fetching a new pair, so the element the raised
+   * `preload` was written on is gone by the time the new recording has a URL, and React builds its
+   * replacement from the JSX default. Pinned because the blanking pass is load-bearing from over
+   * here and reads like a mere loading state from over there.
+   */
+  it('starts a different recording from a fresh element', () => {
+    const { slot1, hand, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    hand({ slot1: null, slot2: null });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    hand({ slot1: 'https://cdn.test/other1.webm', slot2: 'https://cdn.test/other2.webm' });
+    const [next] = Array.from(container.querySelectorAll('video'));
+    expect(next).not.toBe(slot1);
+    expect(next.preload).toBe('metadata');
   });
 
   it('repairs each tile independently', () => {

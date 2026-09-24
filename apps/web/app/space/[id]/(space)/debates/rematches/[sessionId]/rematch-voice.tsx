@@ -1,6 +1,5 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -13,28 +12,40 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
+import * as Popover from '@radix-ui/react-popover';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
 import { ConnectionState, MediaDeviceFailure, type Room, Track } from 'livekit-client';
+import type { RemoteParticipant } from 'livekit-client';
 
+import { capture } from '~/core/analytics';
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-settings';
+import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
-import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
-import type { RemoteParticipant } from 'livekit-client';
+import {
+  PAIR_PILL,
+  type PairHeaderParticipant,
+  type PairHeaderPositions,
+  type PairHeaderToast,
+  type PairHeaderVoice,
+  type PairMicState,
+  RematchPairHeader,
+} from './rematch-pair-header';
 
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
@@ -43,13 +54,16 @@ function microphoneEnabledByDefault(session: DebateRematchSession) {
   return session.source_debate_id !== null;
 }
 
-/** How long "You're muted" stays up before it stops being information and starts being noise. */
-const MUTED_NUDGE_MS = 4000;
+/**
+ * How long a nudge stays up before it stops being information and starts being noise.
+ *
+ * Longer than the dock's 4s bubble was. That bubble said one word and asked for nothing; these
+ * toasts carry a button the viewer has to read, reach and press, and four seconds is not enough
+ * time to do that from the middle of a sentence.
+ */
+const NUDGE_MS = 10_000;
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
-
-/** What the opponent's chip is saying: not here yet, here and muted, or here and live. */
-type OpponentMicState = 'waiting' | 'muted' | 'live';
 
 function voiceCapable(status: DebateRematchSession['status']) {
   return status === 'browsing' || status === 'request_pending';
@@ -76,10 +90,10 @@ async function microphonePermissionState(): Promise<PermissionState | 'unsupport
  * `enumerateDevices` withholds until the origin has been granted the microphone once.
  *
  * The stream is stopped as soon as it arrives, and stopped even if this unmounts first: holding it
- * would keep the device seized and the browser's recording indicator lit next to a dock that says
+ * would keep the device seized and the browser's recording indicator lit next to a header that says
  * muted, which is the whole thing this flow is trying not to do.
  *
- * A denial needs nothing here. The dock is listen-only either way, and the unmute button reports
+ * A denial needs nothing here. The header is listen-only either way, and the unmute button reports
  * it through LiveKit's `onMediaDeviceFailure` like any other microphone failure.
  */
 function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
@@ -126,7 +140,7 @@ function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
 }
 
 /**
- * "You're muted", once.
+ * "{Name} is talking", once.
  *
  * A profile-challenge pair lands here muted by a default they did not choose, so the first time the
  * other person actually says something is both when that default is most likely to surprise them
@@ -135,7 +149,7 @@ function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
  * that the user is talking would mean holding a second live stream open for the whole session.
  *
  * Once per visit, and only while muted — a nudge that returns on every turn is just a mute button
- * that shouts. `spentRef` is owned by the dock's outermost component rather than declared here on
+ * that shouts. `spentRef` is owned by the header's outermost component rather than declared here on
  * purpose: this hook's component is unmounted and rebuilt by every reconnect and every "audio is
  * blocked" detour, so a local ref would quietly reset the one-shot several times a session.
  */
@@ -151,11 +165,11 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
   // The dismissal clock is deliberately its own effect, keyed only on `visible`. Sharing the
   // effect above would put `opponentAudible` in its dependencies, and the opponent stops talking
   // within a second or two: the cleanup would clear the pending timeout, the one-shot gate would
-  // early-return instead of re-arming it, and the bubble would sit there for the rest of the
+  // early-return instead of re-arming it, and the toast would sit there for the rest of the
   // session.
   React.useEffect(() => {
     if (!visible) return;
-    const timer = setTimeout(() => setVisible(false), MUTED_NUDGE_MS);
+    const timer = setTimeout(() => setVisible(false), NUDGE_MS);
     return () => clearTimeout(timer);
   }, [visible]);
 
@@ -166,7 +180,7 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
 
   // For the mute button, which cannot wait for `muted` to catch up: unmuting leaves
   // `isMicrophoneEnabled` false for as long as the permission dialog is open, so the effect above
-  // would keep the bubble on screen for seconds after the click that answered it. Spending the ref
+  // would keep the toast on screen for seconds after the click that answered it. Spending the ref
   // alone is not enough — that stops the next nudge, not the one already rendered.
   const dismiss = React.useCallback(() => {
     spentRef.current = true;
@@ -177,30 +191,55 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
 }
 
 /**
- * The floating voice channel for the rematch picker: the pair lands here from "debate again" or a
- * profile challenge, and this keeps them talking while they browse claims. Audio-only; mute is a
- * local track toggle and the opponent's state comes straight from LiveKit participant events.
- *
- * Degrades to nothing when the backend has no LiveKit config (503), predates the endpoint (404),
- * or the session has left a voice-capable status. A denied microphone keeps the room in
- * listen-only mode rather than tearing it down.
+ * Everything the header needs that does not come from the room: who the two people are, how to
+ * reach the opponent's space, and which claim (if any) the pair have locked.
  */
-type RematchVoicePillProps = {
-  session: DebateRematchSession;
-  currentUserId: string;
+type PairContext = {
+  local: PairHeaderParticipant | null;
+  opponent: PairHeaderParticipant;
+  opponentName: string;
+  onOpenOpponentSpace: (event: React.MouseEvent) => void;
+  lockedClaim: { claim: string; spaceName?: string | null } | null;
+  positions: PairHeaderPositions | null;
+  leaveAction?: React.ReactNode;
 };
 
-export function RematchVoicePill(props: RematchVoicePillProps) {
+function toHeaderParticipant(participant: DebateRematchParticipant | null): PairHeaderParticipant | null {
+  if (!participant) return null;
+  return {
+    displayName: participant.display_name,
+    profileSpaceId: participant.profile_space_id,
+    avatarCid: participant.avatar_cid,
+  };
+}
+
+/**
+ * The live voice channel for the rematch picker, drawn as the page's pair header (GEO-2992).
+ *
+ * The pair lands here from "debate again" or a profile challenge, and this keeps them talking while
+ * they browse claims. Audio-only; mute is a local track toggle and the opponent's state comes
+ * straight from LiveKit participant events.
+ *
+ * Degrades to the cards alone when the backend has no LiveKit config (503), predates the endpoint
+ * (404), or the session has left a voice-capable status — the two people are still in a rematch
+ * together, and the header is how the page says so. A denied microphone keeps the room in
+ * listen-only mode rather than tearing it down.
+ */
+type RematchVoiceHeaderProps = {
+  session: DebateRematchSession;
+  currentUserId: string;
+  /** The page's Leave button. It lives in your card's corner now, not at the end of the tab row. */
+  leaveAction?: React.ReactNode;
+};
+
+export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   // Next preserves a dynamic route's client component when only `sessionId` changes. Scope all
   // connection and microphone intent state to the session so a profile challenge cannot inherit
   // an open microphone from a recorded debate (or leave that recorded-debate rematch muted).
-  return <SessionRematchVoicePill key={props.session.id} {...props} />;
+  return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoicePill({
-  session,
-  currentUserId,
-}: RematchVoicePillProps) {
+function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: RematchVoiceHeaderProps) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
@@ -277,9 +316,37 @@ function SessionRematchVoicePill({
   // preserves their mute state, without re-running the handler.)
   const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
 
-  // Owned here, where nothing below the page itself can remount it, so "You're muted" is shown
+  // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
+  // is not undone the moment the opponent walks in.
+  const micSettledRef = React.useRef(false);
+  const handleMicIntentChange = React.useCallback((enabled: boolean) => {
+    micSettledRef.current = true;
+    setMicIntent(enabled);
+  }, []);
+
+  // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
+  // there is no join event to key on and the dock stays muted, per GEO-2838.
+  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
+  React.useEffect(() => {
+    if (!roomOpponentPresent || micSettledRef.current) return;
+    micSettledRef.current = true;
+    setMicIntent(true);
+    // `<LiveKitRoom audio>` is replayed only from its `SignalConnected` handler, so raising the
+    // intent alone does nothing to a room that is already connected — and would then publish the
+    // mic at the next reconnect instead. Drive the device here, as the mute button does.
+    void roomRef.current?.localParticipant?.setMicrophoneEnabled(true)?.catch(() => undefined);
+  }, [roomOpponentPresent]);
+
+  // Owned here, where nothing below the page itself can remount them, so each one-shot is spent
   // once per visit rather than once per connection.
   const nudgeSpentRef = React.useRef(false);
+  // The unmute notice is state rather than a ref because taking it down has to re-render. Its
+  // "once a session" half is the ref the state is seeded from, so a reconnect cannot bring it back.
+  const [noticeDismissed, setNoticeDismissed] = React.useState(false);
+
+  // GEO-2992 instrumentation: how many people ever unmute here, and how long it takes them. Both
+  // carry `surface`, so the pair header can be read against the corner dock it replaced.
+  const analytics = useVoiceAnalytics(session.id, micIntent);
 
   // Recovery from a dead connection: mint a fresh token and remount the room. Handing a mounted
   // `<LiveKitRoom>` a new token would tear it down mid-flight, so the epoch key remounts instead.
@@ -287,9 +354,9 @@ function SessionRematchVoicePill({
   // `resetQueries`, not `invalidateQueries`: rematch tokens live five minutes, and an invalidated
   // query keeps serving its old data while the refetch is in flight. The epoch bump is synchronous,
   // so the room would remount around the token that just failed — by now almost certainly the
-  // expired one. Resetting clears `join.data`, and the dock renders nothing until the new token
-  // lands. A retry is also the user's second run at a denied microphone, so the failure latch has
-  // to come off with it or the mute button stays disabled until a page reload.
+  // expired one. Resetting clears `join.data`, and the header renders its cards with no controls
+  // until the new token lands. A retry is also the user's second run at a denied microphone, so the
+  // failure latch has to come off with it or the mute button stays disabled until a page reload.
   const [connectionEpoch, setConnectionEpoch] = React.useState(0);
   const [connectFailed, setConnectFailed] = React.useState(false);
   const connectedRef = React.useRef(false);
@@ -304,7 +371,7 @@ function SessionRematchVoicePill({
   }, [accountKey, queryClient, session.id]);
 
   // A rejected `room.connect()` is otherwise a console warning and nothing else: the connect effect
-  // never re-runs on its own, so the dock would sit on "Connecting voice…" forever while the
+  // never re-runs on its own, so the header would sit on "Connecting voice…" forever while the
   // Retry affordance stays out of reach behind a connection that never happened. `onError` also
   // fires when publishing the local track fails after signal connect — that one is not fatal, the
   // room is up and `onMediaDeviceFailure` already reports it, hence the connected guard.
@@ -342,52 +409,92 @@ function SessionRematchVoicePill({
     () => ({
       // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
       reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current
-        ? { deviceId: initialAudioInputIdRef.current }
-        : undefined,
+      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
     }),
     []
   );
 
-  // Every condition the dock itself renders on, because a permission prompt on a page with no
-  // voice UI to explain it is worse than the one this hook exists to move. The token covers a
-  // backend with LiveKit unconfigured (503) or the endpoint undeployed (404); `opponent` covers a
-  // session that somehow arrives without one, which the early return below also refuses to draw.
-  // The same device `audioCaptureDefaults` will publish, so the prompt names the microphone the
-  // user will actually speak through and the prime cannot fail on a busy system default.
-  // `!micIntent` because the prime exists only to move the prompt off the unmute click. Once the
-  // user has asked for the microphone, `<LiveKitRoom audio>` is opening it for real and a second
-  // request alongside the one already on screen is pure redundancy.
+  // Every condition the controls themselves render on, because a permission prompt with no voice UI
+  // to explain it is worse than the one this hook exists to move. The token covers a backend with
+  // LiveKit unconfigured (503) or the endpoint undeployed (404); `opponent` covers a session that
+  // somehow arrives without one, which the early return below also refuses to draw. The same device
+  // `audioCaptureDefaults` will publish, so the prompt names the microphone the user will actually
+  // speak through and the prime cannot fail on a busy system default. `!micIntent` because the
+  // prime exists only to move the prompt off the unmute click. Once the user has asked for the
+  // microphone, `<LiveKitRoom audio>` is opening it for real and a second request alongside the one
+  // already on screen is pure redundancy.
   usePrimedMicrophonePermission(
     !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
     initialAudioInputIdRef.current || undefined
   );
 
-  if (!voiceActive || !opponent) return null;
+  const opponentName = opponent ? opponent.display_name || opponent.profile_space_id : '';
+
+  // The opponent card opens their personal space rather than navigating to it: this picker is a
+  // fixed layer over the app, and leaving it would drop the pair out of the session they are in.
+  //
+  // The shared hook, not a local copy of its rule. A personal space's own id resolves to an ugly
+  // technical record rather than to the person, so it is the space's topic entity that opens — and
+  // a click that lands before that lookup does is remembered and finished afterwards, which the
+  // local copy got wrong by leaving the card inert until it landed.
+  const openOpponentProfile = useOpenDebaterProfile(opponent);
+
+  // Once the pair lock a claim the header stops being only about voice: it is who is arguing what,
+  // which side each of them took, and the claim itself above both cards.
+  const request = session.status === 'request_pending' ? session.request : null;
+  const lockedClaim = request ? { claim: request.claim.claim } : null;
+  const positions: PairHeaderPositions | null = request
+    ? request.requester_user_id === currentUserId
+      ? { localAgrees: request.requester_position, opponentAgrees: request.recipient_position }
+      : { localAgrees: request.recipient_position, opponentAgrees: request.requester_position }
+    : null;
+
+  // No pair to draw, but the viewer is still in a session they must be able to leave — and Leave
+  // lives in the header now. The row is the header's, minus everything that needs two people.
+  if (!opponent) return leaveAction ? <div className="flex justify-end">{leaveAction}</div> : null;
+
+  const pair: PairContext = {
+    local: toHeaderParticipant(local),
+    opponent: toHeaderParticipant(opponent) as PairHeaderParticipant,
+    opponentName,
+    onOpenOpponentSpace: openOpponentProfile,
+    lockedClaim,
+    positions,
+    leaveAction,
+  };
+
+  const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;
+
+  if (!voiceActive) return headerWith({ kind: 'absent' });
 
   if (ownership === 'elsewhere') {
-    return <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />;
+    return headerWith({
+      kind: 'message',
+      message: 'Voice is active in another tab',
+      actionLabel: 'Use voice here',
+      onAction: takeOver,
+    });
   }
 
-  if (ownership === 'pending' || join.isLoading) return null;
+  if (ownership === 'pending' || join.isLoading) return headerWith({ kind: 'message', message: 'Connecting voice…' });
 
   if (join.error) {
     // No backend support: LiveKit unconfigured (503) or the endpoint not deployed yet (404). The
     // picker works exactly as before voice existed. A blocked state (400/403) likewise has no
     // user-facing remedy here.
     if (join.error instanceof GeoChatRequestError && [400, 403, 404].includes(join.error.status)) {
-      return null;
+      return headerWith({ kind: 'absent' });
     }
     if (join.error instanceof GeoChatRequestError && join.error.code === 'livekit_not_configured') {
-      return null;
+      return headerWith({ kind: 'absent' });
     }
-    return <VoiceDockMessage message="Voice is unavailable" actionLabel="Retry" onAction={retry} />;
+    return headerWith({ kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry });
   }
 
-  if (!join.data) return null;
+  if (!join.data) return headerWith({ kind: 'message', message: 'Connecting voice…' });
 
   if (connectFailed) {
-    return <VoiceDockMessage message="Voice is unavailable" actionLabel="Retry" onAction={retry} />;
+    return headerWith({ kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry });
   }
 
   return (
@@ -404,14 +511,17 @@ function SessionRematchVoicePill({
       onMediaDeviceFailure={handleMediaDeviceFailure}
       className="contents"
     >
-      <VoiceDockBody
-        local={local}
-        opponent={opponent}
+      <VoiceHeaderBody
+        pair={pair}
+        opponentUserId={opponent.user_id}
         micFailure={micFailure}
-        onMicIntentChange={setMicIntent}
+        onMicIntentChange={handleMicIntentChange}
         onRetry={retry}
         roomRef={roomRef}
         nudgeSpentRef={nudgeSpentRef}
+        noticeDismissed={noticeDismissed}
+        onDismissNotice={() => setNoticeDismissed(true)}
+        analytics={analytics}
       />
       <RoomAudioRenderer />
     </LiveKitRoom>
@@ -419,78 +529,84 @@ function SessionRematchVoicePill({
 }
 
 /**
- * The dock chrome. Desktop is a card pinned to the bottom-right corner; mobile is a bar across the
- * bottom of the viewport. Both sit above the picker overlay (z-[150]) and below the entity side
- * panel (z-200), so an opened claim covers the dock while the audio keeps playing underneath it.
+ * GEO-2992 instrumentation.
+ *
+ * Three numbers, all of them about whether people find the unmute control now that it is inside the
+ * content column: the share who ever unmute, how long it takes them, and how often the room has to
+ * tell them it cannot hear them. `surface` is on every event so the header's numbers can be read
+ * against the corner dock's.
+ *
+ * `joined` fires once per visit rather than once per connection — a reconnect is not a second
+ * participant, and counting it as one deflates every rate computed off it.
  */
-function VoiceDockShell({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobileCallLayout();
+function useVoiceAnalytics(sessionId: string, micIntent: boolean) {
+  const joinedAtRef = React.useRef<number | null>(null);
+  const joinedRef = React.useRef(false);
+  const unmutedRef = React.useRef(false);
+  // A pair arriving from a recorded debate is unmuted before they get here, so their first "unmute"
+  // is not a discovery of anything. Frozen at mount, because `micIntent` is what it measures.
+  const joinedMutedRef = React.useRef(!micIntent);
 
-  if (isMobile) {
-    return (
-      <div className="fixed inset-x-0 bottom-0 z-[160] border-t border-grey-02 bg-white px-5 pt-[9px] pb-[max(9px,env(safe-area-inset-bottom))]">
-        {children}
-      </div>
-    );
-  }
+  const recordJoined = React.useCallback(() => {
+    if (joinedRef.current) return;
+    joinedRef.current = true;
+    joinedAtRef.current = Date.now();
+    capture('debate_rematch_voice_joined', {
+      session_id: sessionId,
+      surface: 'pair_header',
+      joined_muted: joinedMutedRef.current,
+    });
+  }, [sessionId]);
 
-  return (
-    <div className="fixed right-5 bottom-5 z-[160] w-[200px] rounded-[20px] border border-grey-02 bg-white p-3 shadow-[0px_8px_12.5px_rgba(0,0,0,0.09)]">
-      {children}
-    </div>
+  const recordUnmuted = React.useCallback(() => {
+    if (unmutedRef.current || !joinedMutedRef.current) return;
+    unmutedRef.current = true;
+    const joinedAt = joinedAtRef.current;
+    capture('debate_rematch_voice_unmuted', {
+      session_id: sessionId,
+      surface: 'pair_header',
+      seconds_to_first_unmute: joinedAt === null ? null : Math.round((Date.now() - joinedAt) / 1000),
+    });
+  }, [sessionId]);
+
+  const recordNudge = React.useCallback(
+    (kind: 'opponent_talking' | 'talking_while_muted') => {
+      capture('debate_rematch_voice_nudge', { session_id: sessionId, surface: 'pair_header', kind });
+    },
+    [sessionId]
+  );
+
+  return React.useMemo(
+    () => ({ recordJoined, recordUnmuted, recordNudge }),
+    [recordJoined, recordUnmuted, recordNudge]
   );
 }
 
-/** Everything the dock says when it has no two-participant state to show yet. */
-function VoiceDockMessage({
-  message,
-  actionLabel,
-  onAction,
-}: {
-  message: string;
-  actionLabel?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <VoiceDockShell>
-      <div className="flex min-h-7 items-center justify-between gap-2">
-        {/* Every one of these appears without the user doing anything — the call drops, the browser
-            refuses playback — so it has to announce itself rather than wait to be found. */}
-        <span role="status" className="min-w-0 truncate text-metadata text-grey-04">
-          {message}
-        </span>
-        {actionLabel && onAction && (
-          <button
-            type="button"
-            onClick={onAction}
-            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-          >
-            {actionLabel}
-          </button>
-        )}
-      </div>
-    </VoiceDockShell>
-  );
-}
+type VoiceAnalytics = ReturnType<typeof useVoiceAnalytics>;
 
-function VoiceDockBody({
-  local,
-  opponent,
+function VoiceHeaderBody({
+  pair,
+  opponentUserId,
   micFailure,
   onMicIntentChange,
   onRetry,
   roomRef,
   nudgeSpentRef,
+  noticeDismissed,
+  onDismissNotice,
+  analytics,
 }: {
-  local: DebateRematchParticipant | null;
-  opponent: DebateRematchParticipant;
+  pair: PairContext;
+  opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
   onMicIntentChange: (enabled: boolean) => void;
   onRetry: () => void;
   roomRef: React.MutableRefObject<Room | null>;
   nudgeSpentRef: React.MutableRefObject<boolean>;
+  noticeDismissed: boolean;
+  onDismissNotice: () => void;
+  analytics: VoiceAnalytics;
 }) {
-  const isMobile = useIsMobileCallLayout();
   const room = useRoomContext();
   React.useEffect(() => {
     roomRef.current = room;
@@ -501,11 +617,11 @@ function VoiceDockBody({
 
   // No noise filter here, deliberately. Krisp substitutes its own output for the *published* track,
   // so anything that leaves it attached and not producing audio is a microphone that reads unmuted
-  // and carries nothing: the room stays connected, the pills stay lit, and the other side hears
+  // and carries nothing: the room stays connected, the cards stay lit, and the other side hears
   // silence with nothing to click. The raw track depends on no audio context, worklet or processor
-  // swap, so this dock is on air whenever the room is. It auto-joins and exists to keep two people
-  // talking while they browse claims, and filtering is worth less here than audio that is either
-  // working or visibly broken.
+  // swap, so this room is on air whenever the connection is. It auto-joins and exists to keep two
+  // people talking while they browse claims, and filtering is worth less here than audio that is
+  // either working or visibly broken.
   //
   // The debate room keeps Krisp: its pre-join screen means the audio context is already running
   // before a filter attaches, and its recording is worth the filtering.
@@ -513,7 +629,7 @@ function VoiceDockBody({
   // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
   // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy
   // (presence and mute state keep updating). The debate room never hits this because its pre-join
-  // screen supplies the gesture. `startAudio()` has to run from a real user event, so the dock
+  // screen supplies the gesture. `startAudio()` has to run from a real user event, so the header
   // asks for one.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
 
@@ -522,86 +638,223 @@ function VoiceDockBody({
   // gives up; only the second deserves a Retry.
   const [everConnected, setEverConnected] = React.useState(false);
   React.useEffect(() => {
-    if (connectionState === ConnectionState.Connected) setEverConnected(true);
-  }, [connectionState]);
+    if (connectionState === ConnectionState.Connected) {
+      setEverConnected(true);
+      analytics.recordJoined();
+    }
+  }, [analytics, connectionState]);
 
   const remoteParticipants = useRemoteParticipants();
-  const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponent.user_id) ?? null;
-  const opponentName = opponent.display_name || opponent.profile_space_id;
+  const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponentUserId) ?? null;
 
-  // Lifted out of the opponent's row so the local mute button can answer to it. `useIsSpeaking`
-  // needs a participant to subscribe to, which is why the reporting lives in the connected row
+  // Lifted out of the opponent's card so the local mute button can answer to it. `useIsSpeaking`
+  // needs a participant to subscribe to, which is why the reporting lives in the connected card
   // and the reset for a departed opponent lives here.
   const [opponentAudible, setOpponentAudible] = React.useState(false);
   React.useEffect(() => {
     if (!opponentParticipant) setOpponentAudible(false);
   }, [opponentParticipant]);
 
-  if (connectionState === ConnectionState.Disconnected && everConnected) {
-    return <VoiceDockMessage message="Voice disconnected" actionLabel="Retry" onAction={onRetry} />;
-  }
+  const [opponentMuted, setOpponentMuted] = React.useState(true);
 
-  if (connectionState !== ConnectionState.Connected) {
-    const reconnecting =
-      connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
-    return <VoiceDockMessage message={reconnecting ? 'Reconnecting…' : 'Connecting voice…'} />;
-  }
+  // Everything below used to live in a `ConnectedPairHeader` this rendered instead of a message.
+  // Swapping one component for another at the same position is a remount, and this subtree is the
+  // wrong place for one: it would close an open Audio settings popover, drop focus from the Leave
+  // button that now sits in the card, and re-insert the `role="status"` regions with their text
+  // already in them — the one thing those regions are shaped to avoid. So the hooks run
+  // unconditionally and the connection state picks the `voice` rather than the component.
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const micFailed = Boolean(micFailure);
+  const muted = !isMicrophoneEnabled || micFailed;
+  // Muting publishes nothing, but it does not retract the active-speaker update that came just
+  // before it, so the ring has to answer to the mute state as well or it can stay lit on a
+  // microphone the room has stopped hearing.
+  const localSpeaking = useIsSpeaking(localParticipant) && isMicrophoneEnabled && !micFailed;
 
-  // Blocked playback outranks everything else the dock could say: the room is fine, the opponent
-  // may well be talking, and the viewer simply cannot hear it until they click.
-  if (!canPlayAudio) {
-    return <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />;
-  }
+  // On the microphone actually opening, not on the click that asked for it. A denial or a busy
+  // device rejects, and counting the attempt would inflate the very rate this measures — and spend
+  // the one-shot, so the retry that does succeed would never be counted.
+  React.useEffect(() => {
+    if (isMicrophoneEnabled && !micFailed) analytics.recordUnmuted();
+  }, [analytics, isMicrophoneEnabled, micFailed]);
 
-  const localRow = (
-    <LocalRow
-      local={local}
-      room={room}
-      micFailure={micFailure}
-      onMicIntentChange={onMicIntentChange}
-      opponentAudible={opponentAudible}
-      nudgeSpentRef={nudgeSpentRef}
-    />
+  const setMicrophone = React.useCallback(
+    (next: boolean) => {
+      // Record the intent before publishing it, so a reconnect restores this choice rather than the
+      // join-time default.
+      onMicIntentChange(next);
+      // Unmuting is the first thing to open the microphone, so this is where a denial lands.
+      // LiveKit reports it through `onMediaDeviceFailure`; catching only keeps the rejection from
+      // surfacing as an unhandled promise.
+      void localParticipant.setMicrophoneEnabled(next).catch(() => undefined);
+    },
+    [localParticipant, onMicIntentChange]
   );
-  const opponentRow = (
-    <OpponentRow
-      participant={opponentParticipant}
-      opponent={opponent}
-      name={opponentName}
-      onAudibleChange={setOpponentAudible}
-    />
-  );
-  // The mute button can only go dim and grow a tooltip, which says nothing to a keyboard or screen
-  // reader user — a disabled control is out of the tab order. The reason goes in the dock itself,
-  // along with the only way back: retrying remounts the room and asks for the microphone again.
-  const micNote = micFailure ? <MicFailureNote failure={micFailure} onRetry={onRetry} /> : null;
 
-  if (isMobile) {
-    return (
-      <VoiceDockShell>
-        <div className="flex items-center gap-3">
-          <div className="flex h-7 min-w-0 flex-1 items-center justify-between gap-2">{localRow}</div>
-          <span aria-hidden className="h-7 w-px shrink-0 rounded-xs bg-grey-02" />
-          <div className="flex h-7 min-w-0 flex-1 items-center justify-between gap-2">{opponentRow}</div>
-        </div>
-        {micNote}
-      </VoiceDockShell>
-    );
-  }
+  // A dead microphone has its own note in the card, which says more than a nudge could.
+  const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
+    muted && !micFailed,
+    opponentAudible,
+    nudgeSpentRef
+  );
+
+  React.useEffect(() => {
+    if (nudgeVisible) analytics.recordNudge('opponent_talking');
+  }, [analytics, nudgeVisible]);
+
+  const unmute = React.useCallback(() => {
+    dismissNudge();
+    onDismissNotice();
+    setMicrophone(true);
+  }, [dismissNudge, onDismissNotice, setMicrophone]);
+
+  const toggle = React.useCallback(() => {
+    // Whichever way this click goes, the user has just found the control — so the notice and the
+    // nudge that exist to point at it have nothing left to say. Dismissing here also covers two
+    // states they would otherwise misread: muting on purpose looks exactly like the join default,
+    // and unmuting leaves `isMicrophoneEnabled` false for as long as the permission dialog is open,
+    // both of which would leave them up in front of someone already dealing with the microphone.
+    dismissNudge();
+    onDismissNotice();
+    setMicrophone(!isMicrophoneEnabled);
+  }, [dismissNudge, isMicrophoneEnabled, onDismissNotice, setMicrophone]);
+
+  /**
+   * What the room is doing, when that outranks what the microphone is doing.
+   *
+   * Blocked playback comes last but outranks the rest of the connected state: the room is fine, the
+   * opponent may well be talking, and the viewer simply cannot hear it until they click.
+   */
+  const connectionMessage = ((): Extract<PairHeaderVoice, { kind: 'message' }> | null => {
+    if (connectionState === ConnectionState.Disconnected && everConnected) {
+      return { kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry };
+    }
+    if (connectionState !== ConnectionState.Connected) {
+      const reconnecting =
+        connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+      return { kind: 'message', message: reconnecting ? 'Reconnecting…' : 'Connecting voice…' };
+    }
+    if (!canPlayAudio) {
+      return {
+        kind: 'message',
+        message: 'Audio is blocked',
+        actionLabel: 'Enable audio',
+        onAction: () => void startAudio(),
+      };
+    }
+    return null;
+  })();
+
+  const opponentState: PairMicState = !opponentParticipant
+    ? 'waiting'
+    : opponentMuted
+      ? 'muted'
+      : opponentAudible
+        ? 'talking'
+        : 'live';
+
+  const voice: PairHeaderVoice = connectionMessage ?? {
+    kind: 'live',
+    muted,
+    localSpeaking,
+    micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
+    onRetryMic: onRetry,
+    controls: <LocalAudioControls room={room} muted={muted} micFailure={micFailure} onToggle={toggle} />,
+    opponentState,
+    // See `TALKING_WHILE_MUTED`: the states are built, the detector is a product call.
+    talkingWhileMuted: TALKING_WHILE_MUTED,
+  };
+
+  // Only while muted, only with somebody to talk to, only once the room is actually up, and only
+  // until the viewer has answered it once.
+  const notice =
+    !connectionMessage && muted && !micFailed && !noticeDismissed && opponentParticipant
+      ? { onUnmute: unmute, onDismiss: onDismissNotice }
+      : null;
+
+  const toast: PairHeaderToast | null =
+    !connectionMessage && nudgeVisible ? { kind: 'opponent-talking', onUnmute: unmute, onDismiss: dismissNudge } : null;
 
   return (
-    <VoiceDockShell>
-      <div className="flex flex-col gap-2">
-        <div className="flex h-7 items-center justify-between gap-2">{localRow}</div>
-        <span aria-hidden className="h-px w-full bg-divider" />
-        <div className="flex h-7 items-center justify-between gap-2">{opponentRow}</div>
-        {micNote}
-      </div>
-    </VoiceDockShell>
+    <>
+      {/* Dropped while the room is not up, not only when the opponent leaves. Its cleanup is what
+          clears "they are talking", and without that a value left over from before a blip is still
+          true on the render where the viewer comes back muted — which fires the nudge at a silent
+          room. The header itself stays mounted through all of it; only this subscription does not. */}
+      {opponentParticipant && !connectionMessage ? (
+        <OpponentPresence
+          participant={opponentParticipant}
+          onAudibleChange={setOpponentAudible}
+          onMutedChange={setOpponentMuted}
+        />
+      ) : null}
+      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} />
+    </>
   );
 }
 
-function micFailureMessage(failure: MediaDeviceFailure): string {
+/**
+ * Subscribes to the opponent's speaking and mute state and reports it upward. Renders nothing:
+ * `useIsSpeaking`/`useIsMuted` need a participant, and there is nothing to subscribe to until the
+ * opponent actually joins the room.
+ */
+function OpponentPresence({
+  participant,
+  onAudibleChange,
+  onMutedChange,
+}: {
+  participant: RemoteParticipant;
+  onAudibleChange: (audible: boolean) => void;
+  onMutedChange: (muted: boolean) => void;
+}) {
+  const speaking = useIsSpeaking(participant);
+  // Left to `useIsMuted` alone, deliberately. Reading `getTrackPublication` alongside it looks
+  // like it would fix the one frame where a peer who joined muted reads as unmuted, but that read
+  // is not reactive on its own and pins the chip to muted for the rest of the session — taking
+  // the speaking ring with it, since `audible` is gated on the same value.
+  const muted = useIsMuted({ participant, source: Track.Source.Microphone });
+  // Muted outranks speaking: the server clears `isSpeaking` only on its next speaker update, so a
+  // "Talking" chip that ignored the mute state would sit lit beside one that has already gone red.
+  const audible = speaking && !muted;
+
+  // The cleanup matters: the header swaps these states out for a message while reconnecting,
+  // without the opponent ever leaving. Without it the last "they are talking" survives the blip,
+  // and the remounted button fires its nudge at an opponent who is sitting in silence.
+  React.useEffect(() => {
+    onAudibleChange(audible);
+    return () => onAudibleChange(false);
+  }, [audible, onAudibleChange]);
+
+  // Reset on unmount for the same reason `onAudibleChange` does: the last value outlives the
+  // participant otherwise, and somebody who leaves unmuted and rejoins muted reads as live for a
+  // frame. Muted is the safe default — it is how everyone joins.
+  React.useEffect(() => {
+    onMutedChange(muted);
+    return () => onMutedChange(true);
+  }, [muted, onMutedChange]);
+
+  return null;
+}
+
+/**
+ * Why "talking while muted" is not detected here.
+ *
+ * The toast the design asks for needs voice-activity detection on the viewer's own microphone while
+ * they are muted, and there is no track to run it on. `setMicrophoneEnabled(false)` sets
+ * `mediaStreamTrack.enabled = false`, and a disabled track produces silence by specification — so
+ * LiveKit's own analyser reads zero for exactly as long as the state being detected lasts. The
+ * primed permission stream cannot stand in either: it is stopped the moment it arrives, on purpose.
+ *
+ * Detecting it therefore means holding a second `getUserMedia` stream open for the whole session —
+ * keeping the device seized and the browser's recording indicator lit next to a card that reads
+ * "Muted". That is the exact thing joining muted exists to avoid, so it is a product call rather
+ * than an implementation detail, and it is not made here. The states it drives are built and
+ * reachable (`talkingWhileMuted` on the header, and the toast beneath it); wiring a detector is one
+ * boolean.
+ */
+const TALKING_WHILE_MUTED: boolean = false;
+
+export function micFailureMessage(failure: MediaDeviceFailure): string {
   switch (failure) {
     case MediaDeviceFailure.PermissionDenied:
       return 'Microphone blocked. Allow it in your browser, then try again.';
@@ -614,252 +867,35 @@ function micFailureMessage(failure: MediaDeviceFailure): string {
   }
 }
 
-/** Why the mute button is dim, and the way out of listen-only. */
-function MicFailureNote({ failure, onRetry }: { failure: MediaDeviceFailure; onRetry: () => void }) {
-  return (
-    <p role="status" className="text-footnote text-grey-04">
-      <span className="text-red-01">{micFailureMessage(failure)}</span>{' '}
-      <button type="button" onClick={onRetry} className="text-footnoteMedium text-text underline">
-        Try again
-      </button>
-    </p>
-  );
-}
-
-function ParticipantIdentity({
-  name,
-  avatarUrl,
-  avatarValue,
-  speaking = false,
-  dimmed = false,
-}: {
-  name: string;
-  avatarUrl?: string | null;
-  avatarValue?: string;
-  speaking?: boolean;
-  dimmed?: boolean;
-}) {
-  return (
-    <span className={cx('flex min-w-0 flex-1 items-center gap-2', dimmed && 'opacity-60')}>
-      {/* The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the
-          generated fallback, while a real avatar renders `h-full w-full` and takes whatever box it
-          is given. Without one it stretches to the image's intrinsic dimensions. */}
-      <span
-        className={cx(
-          'inline-flex size-4 shrink-0 overflow-hidden rounded-full',
-          speaking && 'ring-1 ring-green ring-offset-1 ring-offset-white'
-        )}
-      >
-        <Avatar avatarUrl={avatarUrl ?? null} value={avatarValue ?? name} size={16} alt="" />
-      </span>
-      <span title={name} className="min-w-0 truncate text-metadata text-text">
-        {name}
-      </span>
-    </span>
-  );
-}
-
 /**
- * The user's own row. Same green ring as the opponent gets: without it the speaking cue reads as a
- * fact about the other person rather than about who currently has the floor, and there is nothing
- * to check when you suspect the room cannot hear you.
- */
-function LocalRow({
-  local,
-  room,
-  micFailure,
-  onMicIntentChange,
-  opponentAudible,
-  nudgeSpentRef,
-}: {
-  local: DebateRematchParticipant | null;
-  room: Room;
-  micFailure: MediaDeviceFailure | null;
-  onMicIntentChange: (enabled: boolean) => void;
-  opponentAudible: boolean;
-  nudgeSpentRef: React.MutableRefObject<boolean>;
-}) {
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  // Muting publishes nothing, but it does not retract the active-speaker update that came just
-  // before it, so the ring has to answer to the mute state as well or it can stay lit on a
-  // microphone the room has stopped hearing.
-  const speaking = useIsSpeaking(localParticipant) && isMicrophoneEnabled && !micFailure;
-
-  return (
-    <>
-      <ParticipantIdentity
-        name="You"
-        avatarUrl={local?.avatar_cid}
-        avatarValue={local?.profile_space_id}
-        speaking={speaking}
-      />
-      <LocalAudioControls
-        room={room}
-        micFailure={micFailure}
-        onMicIntentChange={onMicIntentChange}
-        opponentAudible={opponentAudible}
-        nudgeSpentRef={nudgeSpentRef}
-      />
-    </>
-  );
-}
-
-function OpponentRow({
-  participant,
-  opponent,
-  name,
-  onAudibleChange,
-}: {
-  participant: RemoteParticipant | null;
-  opponent: DebateRematchParticipant;
-  name: string;
-  onAudibleChange: (audible: boolean) => void;
-}) {
-  if (!participant) {
-    return (
-      <>
-        <ParticipantIdentity name={name} avatarUrl={opponent.avatar_cid} avatarValue={opponent.profile_space_id} dimmed />
-        <OpponentMicChip state="waiting" name={name} />
-      </>
-    );
-  }
-  return (
-    <ConnectedOpponentRow
-      participant={participant}
-      opponent={opponent}
-      name={name}
-      onAudibleChange={onAudibleChange}
-    />
-  );
-}
-
-/**
- * Split out because `useIsSpeaking`/`useIsMuted` need a participant — there is nothing to subscribe
- * to until the opponent actually joins the room.
- */
-function ConnectedOpponentRow({
-  participant,
-  opponent,
-  name,
-  onAudibleChange,
-}: {
-  participant: RemoteParticipant;
-  opponent: DebateRematchParticipant;
-  name: string;
-  onAudibleChange: (audible: boolean) => void;
-}) {
-  const speaking = useIsSpeaking(participant);
-  // Left to `useIsMuted` alone, deliberately. Reading `getTrackPublication` alongside it looks
-  // like it would fix the one frame where a peer who joined muted reads as unmuted, but that read
-  // is not reactive on its own and pins the chip to muted for the rest of the session — taking
-  // the speaking ring with it, since `audible` is gated on the same value.
-  const muted = useIsMuted({ participant, source: Track.Source.Microphone });
-  // Muted outranks speaking for the same reason it does on the local row: the server clears
-  // `isSpeaking` only on its next speaker update, so a ring that ignored the mute state would sit
-  // lit beside a chip that has already gone red.
-  const audible = speaking && !muted;
-
-  // The local mute button needs to know when the other person is actually making sound, and this
-  // is the only place subscribed to it.
-  //
-  // The cleanup matters: the dock swaps these rows out for a message while reconnecting, without
-  // the opponent ever leaving. Without it the last "they are talking" survives the blip, and the
-  // remounted mute button fires its nudge at an opponent who is sitting in silence.
-  React.useEffect(() => {
-    onAudibleChange(audible);
-    return () => onAudibleChange(false);
-  }, [audible, onAudibleChange]);
-
-  return (
-    <>
-      <ParticipantIdentity
-        name={name}
-        avatarUrl={opponent.avatar_cid}
-        avatarValue={opponent.profile_space_id}
-        speaking={audible}
-      />
-      <OpponentMicChip state={muted ? 'muted' : 'live'} name={name} />
-    </>
-  );
-}
-
-/** Red when the other person is muted, green when they are live, neutral before they arrive. */
-function OpponentMicChip({ state, name }: { state: OpponentMicState; name: string }) {
-  const label =
-    state === 'waiting' ? `Waiting for ${name} to join` : state === 'muted' ? `${name} is muted` : `${name} is unmuted`;
-
-  return (
-    <>
-      <span
-        role="img"
-        aria-label={label}
-        title={label}
-        className={cx(
-          'grid h-7 shrink-0 place-items-center rounded-full px-2 [&>svg]:size-3',
-          state === 'waiting' && 'bg-grey-01 text-grey-04',
-          state === 'muted' && 'bg-errorTertiary text-red-01',
-          state === 'live' && 'bg-successTertiary text-green'
-        )}
-      >
-        <MicrophoneIcon muted={state !== 'live'} />
-      </span>
-      {/* The chip's own label carries the state, but nothing announces it changing: the opponent
-          arrives and mutes on their own schedule, with no action here to hang an update on. A live
-          region whose text changes is the only reliable way to hear about it. */}
-      <span role="status" className="sr-only">
-        {label}
-      </span>
-    </>
-  );
-}
-
-/**
- * The bubble over the unmute button. `pointer-events-none` on purpose: it sits directly above the
- * one control it is asking the user to press, and must never be the thing that swallows the click.
- */
-function MutedNudge() {
-  return (
-    <span
-      aria-hidden
-      data-testid="muted-nudge"
-      // `mb-4` rather than `mb-2`: the desktop card's padding is only 12px, so a tighter offset
-      // parks the bubble on top of its rounded top-right corner.
-      className="pointer-events-none absolute right-0 bottom-full mb-4 w-max rounded bg-text px-2 py-1 text-center text-breadcrumb whitespace-nowrap text-white shadow-lg"
-    >
-      You&rsquo;re muted
-    </span>
-  );
-}
-
-/**
- * The user's own control: mute toggle and audio settings, joined into one pill by a hairline.
+ * The user's own control: a labelled mute toggle and the audio settings, joined into one pill by a
+ * hairline.
+ *
+ * Labelled, which the dock's version was not. An icon-only microphone in a row of participant state
+ * reads as a status light — which is precisely how people were reading it, and why nobody pressed
+ * it. "Unmute" is a verb, and a verb on a filled pill is a button.
  */
 function LocalAudioControls({
   room,
+  muted,
   micFailure,
-  onMicIntentChange,
-  opponentAudible,
-  nudgeSpentRef,
+  onToggle,
 }: {
   room: Room;
+  muted: boolean;
   micFailure: MediaDeviceFailure | null;
-  onMicIntentChange: (enabled: boolean) => void;
-  opponentAudible: boolean;
-  nudgeSpentRef: React.MutableRefObject<boolean>;
+  onToggle: () => void;
 }) {
   const isMobile = useIsMobileCallLayout();
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const settings = useVoiceAudioSettings(room, micFailure);
 
-  const muted = !isMicrophoneEnabled || Boolean(micFailure);
-  // A dead microphone has its own note under the dock, which says more than this could.
-  const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
-    muted && !micFailure,
-    opponentAudible,
-    nudgeSpentRef
-  );
+  // Muted is the state the user lands in without choosing it, so it carries the primary treatment:
+  // a filled pill saying what pressing it does. Live is the state they chose, so its Mute is
+  // secondary — visible, but not asking for anything.
+  const primary = muted && !micFailure;
+
   const settingsTrigger = (
     <button
       ref={triggerRef}
@@ -868,7 +904,14 @@ function LocalAudioControls({
       title="Audio settings"
       aria-expanded={open}
       onClick={isMobile ? () => setOpen(current => !current) : undefined}
-      className="grid h-full shrink-0 place-items-center px-2 text-grey-04 transition-colors hover:text-text"
+      className={cx(
+        // Square on the pill's own height, so the joined control is one shape rather than a pill
+        // with a tab on the end.
+        'grid size-6 shrink-0 place-items-center rounded-r-full transition-colors',
+        primary
+          ? 'border-l border-grey-05 bg-text text-white hover:opacity-80'
+          : 'border border-l-0 border-grey-02 bg-white text-grey-04 hover:text-text'
+      )}
     >
       <span className={cx('grid place-items-center transition-transform', open && 'rotate-180')}>
         <ChevronDownSmall />
@@ -877,69 +920,36 @@ function LocalAudioControls({
   );
 
   return (
-    <span className="relative flex h-7 shrink-0 items-center rounded-full border border-grey-02 bg-white">
-      {/* The spoken half of the nudge is a region that is always mounted and only changes text.
-          A live region inserted with its content already in it is dropped by VoiceOver often
-          enough to be unreliable, and this is the only announcement a screen-reader user gets
-          that the default muted them. The bubble itself is `aria-hidden` so it is not read twice. */}
-      <span role="status" data-testid="muted-nudge-announcement" className="sr-only">
-        {nudgeVisible ? 'You’re muted' : ''}
-      </span>
-      {nudgeVisible && <MutedNudge />}
+    <span className="flex h-6 shrink-0 items-center">
       <button
         type="button"
-        // Both derived from `muted`, like the glyph and the disabled state. Deriving the label
-        // from `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone"
-        // while showing a slashed icon on a button that cannot be pressed.
+        // Both derived from `muted`, like the glyph and the disabled state. Deriving the label from
+        // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
+        // showing a slashed icon on a button that cannot be pressed.
         aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
         title={micFailure ? micFailureMessage(micFailure) : muted ? 'Unmute microphone' : 'Mute microphone'}
-        onClick={() => {
-          const next = !isMicrophoneEnabled;
-          // Whichever way this click goes, the user has just found the control — so the nudge
-          // that exists to point at it has nothing left to say. Dismissing here also covers two
-          // states it would otherwise misread: muting on purpose looks exactly like the join
-          // default, and unmuting leaves `isMicrophoneEnabled` false for as long as the
-          // permission dialog is open, both of which would leave the bubble up in front of
-          // someone who is already dealing with the microphone.
-          dismissNudge();
-          // Record the intent before publishing it, so a reconnect restores this choice rather
-          // than the join-time default.
-          onMicIntentChange(next);
-          // Unmuting is the first thing to open the microphone, so this is where a denial lands.
-          // LiveKit reports it through `onMediaDeviceFailure`; catching only keeps the rejection
-          // from surfacing as an unhandled promise.
-          void localParticipant.setMicrophoneEnabled(next).catch(() => undefined);
-        }}
+        onClick={onToggle}
         disabled={Boolean(micFailure)}
-        // Muted is now the state the user lands in without choosing it, so it cannot be a slash
-        // through an otherwise unchanged icon. Red on the same tertiary wash the opponent's chip
-        // uses says it in one glance.
-        //
-        // A dead microphone keeps a separate look — red, but unfilled and dimmed. Filling it the
-        // same way would make a mute the user chose indistinguishable from one the browser
-        // imposed, and only one of those is fixed by clicking the button.
         className={cx(
-          'grid h-full shrink-0 place-items-center rounded-l-full px-2 transition [&>svg]:size-3',
+          // The opponent's mic chip, to the pixel — see `PAIR_PILL`. The two sit at the same
+          // height in mirrored cards, so any difference between them reads as an accident.
+          PAIR_PILL,
+          'rounded-l-full transition',
           micFailure
-            ? 'text-red-01 opacity-60'
-            : muted
-              ? 'bg-errorTertiary text-red-01 hover:opacity-80'
-              : 'text-text hover:text-grey-04',
+            ? 'border border-r-0 border-grey-02 bg-white text-red-01 opacity-60'
+            : primary
+              ? 'bg-text text-white hover:opacity-80'
+              : 'border border-r-0 border-grey-02 bg-white text-text hover:text-grey-04',
           'disabled:cursor-default'
         )}
       >
         <MicrophoneIcon muted={muted} />
+        {muted ? 'Unmute' : 'Mute'}
       </button>
-      <span aria-hidden className="h-[13px] w-px shrink-0 rounded-xs bg-grey-02" />
       {isMobile ? (
         <>
           {settingsTrigger}
-          <MobileSettingsSheet
-            title="Audio settings"
-            open={open}
-            onOpenChange={setOpen}
-            returnFocusRef={triggerRef}
-          >
+          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
             <AudioSettings {...settings} framed />
           </MobileSettingsSheet>
         </>
@@ -965,7 +975,7 @@ function DesktopSettingsPopover({
   triggerRef: React.RefObject<HTMLButtonElement | null>;
   children: React.ReactNode;
 }) {
-  // Radix's default portal wrapper is globally capped at z-60, below this dock's z-[160].
+  // Radix's default portal wrapper is globally capped at z-60, below this picker's z-[150].
   const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   return (
@@ -976,7 +986,7 @@ function DesktopSettingsPopover({
           <Popover.Content
             role="dialog"
             aria-label="Audio settings"
-            side="top"
+            side="bottom"
             align="end"
             sideOffset={12}
             collisionPadding={16}
@@ -998,16 +1008,16 @@ function DesktopSettingsPopover({
  * Feeds the settings panel, and carries what the user picks into the debate that follows.
  *
  * The device lists and the live switching come from LiveKit rather than the app-wide media session,
- * which enumerates nothing without an open preview — one this dock deliberately never starts. Real
- * device labels need microphone permission: usually already granted, since the pair arrives from a
- * debate, and otherwise granted by the up-front prime. What can still leave the list on its
- * "Microphone 1" fallbacks is timing, not the mute default — this enumerates once at mount and
- * then only on `devicechange`, and the room reaches Connected well before a user answers the
- * prompt. Asking again here is worse than the fallback labels: see the note on
- * `requestPermissions` below. Each choice is written back to
- * that session, which is what the debate room's pre-join screen reads, so whatever the pair settled
- * on while browsing claims is still selected when they walk into the debate. Writing the microphone
- * back cannot grab it a second time: `ensurePreview` bails unless a preview session is open.
+ * which enumerates nothing without an open preview — one this header deliberately never starts.
+ * Real device labels need microphone permission: usually already granted, since the pair arrives
+ * from a debate, and otherwise granted by the up-front prime. What can still leave the list on its
+ * "Microphone 1" fallbacks is timing, not the mute default — this enumerates once at mount and then
+ * only on `devicechange`, and the room reaches Connected well before a user answers the prompt.
+ * Asking again here is worse than the fallback labels: see the note on `requestPermissions` below.
+ * Each choice is written back to that session, which is what the debate room's pre-join screen
+ * reads, so whatever the pair settled on while browsing claims is still selected when they walk
+ * into the debate. Writing the microphone back cannot grab it a second time: `ensurePreview` bails
+ * unless a preview session is open.
  */
 function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null) {
   const { changeAudioInput, changeAudioOutput, audioOutputError } = useDebateMediaSession();

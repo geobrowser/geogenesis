@@ -101,10 +101,12 @@ describe('buildSpaceTabs', () => {
       'Facts',
       'Sources',
       'Debug debates',
+      'Debug rooms',
       'Governance',
       'Activity',
     ]);
     expect(tabs.find(tab => tab.label === 'Debug debates')?.href).toBe(`/space/${spaceId}/debug-debates`);
+    expect(tabs.find(tab => tab.label === 'Debug rooms')?.href).toBe(`/space/${spaceId}/debug-debate-rooms`);
   });
 
   it('shows Debug debates in personal spaces without Governance', () => {
@@ -120,6 +122,7 @@ describe('buildSpaceTabs', () => {
     expect(tabs.map(tab => tab.label)).toEqual([
       'Overview',
       'Debug debates',
+      'Debug rooms',
       'Debates',
       'Positions',
       'Proposals',
