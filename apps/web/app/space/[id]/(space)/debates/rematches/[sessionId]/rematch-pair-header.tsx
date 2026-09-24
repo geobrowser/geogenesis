@@ -220,7 +220,6 @@ function PairCardBody({
   nameTitle,
   state,
   action,
-  footer,
 }: {
   avatar: React.ReactNode;
   name: string;
@@ -229,8 +228,6 @@ function PairCardBody({
   state?: React.ReactNode;
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
-  /** Below the whole row, spanning the card — the locked position chip. */
-  footer?: React.ReactNode;
 }) {
   return (
     <>
@@ -244,7 +241,6 @@ function PairCardBody({
         </div>
         {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
       </div>
-      {footer}
     </>
   );
 }

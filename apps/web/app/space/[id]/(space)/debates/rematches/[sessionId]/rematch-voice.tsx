@@ -245,9 +245,25 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
 }
 
 function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
-  // Sticky on the way out. The room keeps its connection and its controls until the page unmounts,
-  // which is what stops the card resizing between the click and the redirect.
-  const voiceActive = voiceCapable(session.status) || exiting;
+  const voiceCapableNow = voiceCapable(session.status);
+  /**
+   * Whether voice has been live at all this visit.
+   *
+   * `exiting` alone is not enough to hold the room open, because it is also true from the first
+   * render of a rematch that was already over when the link was opened — and "keep what is there"
+   * would become "start a room, take the tab lock and publish a microphone" into a session the
+   * viewer is not in, on a page that is busy redirecting. A debate-sourced rematch joins unmuted,
+   * so that is a live microphone rather than a wasted request.
+   */
+  const [voiceWasActive, setVoiceWasActive] = React.useState(false);
+  React.useEffect(() => {
+    if (voiceCapableNow) setVoiceWasActive(true);
+  }, [voiceCapableNow]);
+
+  // Sticky on the way out, but only over a room that was already up: the connection and its
+  // controls last until the page unmounts, which is what stops the card resizing between the click
+  // and the redirect.
+  const voiceActive = voiceCapableNow || (exiting && voiceWasActive);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
 
@@ -760,12 +776,21 @@ function VoiceHeaderBody({
     talkingWhileMuted: TALKING_WHILE_MUTED,
   };
 
+  /**
+   * The room is gone, rather than merely away.
+   *
+   * A blip does not make the viewer un-muted or the other person un-paired, and unmuting through it
+   * records an intent the reconnect restores — so the notice rides a reconnect out rather than
+   * taking everything under it with it. A room that has given up is different: its Unmute is a
+   * button that cannot work, and pressing it would still spend the notice's one dismissal on a
+   * click that did nothing. Not while `exiting`, where nothing changes shape at all.
+   */
+  const roomGone = !exiting && connectionState === ConnectionState.Disconnected && everConnected;
+
   // Only while muted, only once there has been somebody to talk to, and only until the viewer has
-  // answered it once. Deliberately not gated on the connection: a dropped room does not make the
-  // viewer un-muted or the other person un-paired, and hiding the notice for the length of a blip
-  // is a layout shift charged for nothing.
+  // answered it once.
   const notice =
-    muted && !micFailed && !noticeDismissed && opponentEverJoined
+    muted && !micFailed && !noticeDismissed && opponentEverJoined && !roomGone
       ? { onUnmute: unmute, onDismiss: onDismissNotice }
       : null;
 
