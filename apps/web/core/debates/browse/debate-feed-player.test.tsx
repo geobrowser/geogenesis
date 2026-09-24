@@ -187,22 +187,26 @@ describe('player layout', () => {
    * the two videos saying who was speaking but not which side they were arguing — the one thing a
    * viewer dropping into the middle of a debate cannot infer.
    */
-  it("shows each debater's position beside their name", () => {
+  it("puts each debater's position immediately after their name", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.affiliations = new Map([
+      [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Another affiliation whose width must not place the position chip'],
+    ]);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
     const { getByText } = within(container);
 
-    // Beside the name and not inside its link: the position is a fact about the debater, not a
-    // second way to open their profile.
-    for (const [name, position] of [
-      [SPACE_1_DASHED, 'For'],
-      [SPACE_2, 'Against'],
+    for (const [name, position, affiliation] of [
+      [SPACE_1_DASHED, 'For', 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Against', 'Another affiliation whose width must not place the position chip'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
-      expect(chip.closest('button')).toBeNull();
-      expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
-      expect(chip.parentElement?.className).toContain('items-start');
+      const nameRow = nameNode.parentElement;
+
+      expect(chip.parentElement).toBe(nameRow);
+      expect(nameNode.nextElementSibling).toBe(chip);
+      expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
     }
   });
 

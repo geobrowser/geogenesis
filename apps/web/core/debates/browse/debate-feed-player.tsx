@@ -936,11 +936,10 @@ function DebaterVideo({
       {/* Debater identity — who is speaking and which side they are arguing — opening their
           personal space in the side panel. On the left, opposite the claim corner.
 
-          The position chip is beside the name rather than inside the profile button: the button is
-          capped at 55% so the name cannot run the width of the tile, and a chip inside that cap
-          would be taken out of the name's share at exactly the widths where the name is already
-          truncating. Outside it, the name keeps its 55% and the chip takes its own width from the
-          remaining 45% — and the chip is not a link, which is the honest thing for it anyway.
+          The position chip shares the name's row, before the affiliation gets its own row. Keeping
+          those as separate flex rows means a long affiliation can use the available identity width
+          without pushing the chip away from the name. The chip cannot shrink, so at narrow widths
+          the name truncates first and the short stance remains readable.
 
           The row is `pointer-events-none` with the button opting back in, because it now spans the
           band rather than hugging the name: everything it covers and does not use belongs to the
@@ -964,13 +963,19 @@ function DebaterVideo({
         <button
           type="button"
           onClick={openProfile}
-          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
+          className="pointer-events-auto flex min-w-0 max-w-[55%] items-start gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+              {/* Guarded on the text rather than only on the participant: `position_label` is
+                  typed non-null but arrives from geo-chat, and an empty one would draw a bare pill
+                  that says nothing. The room tile guards it the same way. */}
+              {participant?.position_label && <DebatePositionChip label={participant.position_label} />}
+            </span>
             {affiliation && (
               <span title={affiliation} className="truncate text-[0.75rem] leading-4 text-white/80">
                 {affiliation}
@@ -978,10 +983,6 @@ function DebaterVideo({
             )}
           </span>
         </button>
-        {/* Guarded on the text rather than only on the participant: `position_label` is typed
-            non-null but arrives from geo-chat, and an empty one would draw a bare pill that says
-            nothing. The room tile guards it the same way. */}
-        {participant?.position_label && <DebatePositionChip label={participant.position_label} />}
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
