@@ -25,6 +25,13 @@ import { graphql } from '~/core/io/graphql-client';
  * (see `useCommentCount`) — so a host with no count to give passes zero, and the button reads "0"
  * on an entity with comments until the reader opens the panel and finds them. That is a number
  * being wrong in the one direction that tells the reader not to look.
+ *
+ * `getEntityCommentCount` (GEO-3030) is the single-entity sibling of this, and the two are not
+ * duplicates: that one answers for one entity over `entitiesConnection` and is what a page with a
+ * single count wants; this one answers for a whole screen of rows in one round trip, which is the
+ * only reason the activity feed can put a count on every debate it draws. They count the same
+ * thing from opposite ends — Comment entities replying to the target, versus `Reply to` relations
+ * arriving at it — so if one ever changes what it counts, change both.
  */
 const ENTITY_COMMENT_COUNTS_SOURCE = /* GraphQL */ `
   query EntityCommentCounts($ids: [UUID!], $replyToTypeId: UUID!) {
