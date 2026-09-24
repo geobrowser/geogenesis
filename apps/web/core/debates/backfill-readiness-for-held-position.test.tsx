@@ -58,6 +58,23 @@ describe('useBackfillReadinessForHeldPosition', () => {
     expect(mocks.notify.mock.calls[0]?.slice(0, 4)).toEqual(['space-1', 'claim-1', 'stance', true]);
   });
 
+  /**
+   * The kind sent back is ours, not the row's.
+   *
+   * geo-chat still labels a claim minted before the vocabularies merged `"veracity"`, and this hook
+   * forwards a kind to geo-chat — so reading the row would record the retired kind against a
+   * response that was published as a stance.
+   *
+   * The case above cannot catch that: its fixture is already `'stance'`, so reading the row and
+   * ignoring it produce the same call. This one differs only in the row's word.
+   */
+  it('sends stance even when the row still says veracity', () => {
+    render(<Harness debateClaim={claim({ response_kind: 'veracity' })} />);
+
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify.mock.calls[0]?.slice(0, 4)).toEqual(['space-1', 'claim-1', 'stance', true]);
+  });
+
   it('sends once per claim however often the row refetches', () => {
     const view = render(<Harness debateClaim={claim()} />);
     view.rerender(<Harness debateClaim={claim()} />);

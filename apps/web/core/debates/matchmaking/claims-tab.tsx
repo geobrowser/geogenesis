@@ -1201,7 +1201,6 @@ function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPosit
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
       // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
       position_label: responsePositionLabel(position),
       total_count: choice?.participant_count ?? 0,

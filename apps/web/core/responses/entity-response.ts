@@ -85,13 +85,13 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  * The one kind a claim is answered with.
  *
  * The authority on this, so that no surface has to read it off geo-chat's row. That field can
- * still say `"veracity"` for a claim minted before the vocabularies merged, and it arrives typed as
- * the narrowed {@link DebateResponseKind} it no longer matches — so TypeScript cannot stop it being
- * used as a key. Fed to `getResponseActionMethod` it selects no SDK method and the *write* throws
- * on click; fed to `responseKindToVoteKind` it yields `undefined` and the read asks for no vote
- * kind at all. Neither failure is visible until it happens to a real claim.
+ * still say `"veracity"` for a claim minted before the vocabularies merged, and those fields are
+ * typed `WireResponseKind` to say so — which is what stops one being used as a kind: it will not
+ * fit where a `ResponseKind` is wanted. Were it to get through, `getResponseActionMethod` would
+ * select no SDK method and the *write* would throw on click, and `responseKindToVoteKind` would
+ * yield `undefined` so the read asked for no vote kind at all.
  *
- * So claim surfaces take the kind from here and never from the row.
+ * The types keep that from compiling; this is what surfaces use instead of the row.
  */
 export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
 
@@ -100,11 +100,11 @@ export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
  *
  * Claim surfaces must not do `ENTITY_RESPONSE_COPY[kind]` with a kind that came off the wire.
  * geo-chat still labels a claim minted before the vocabularies merged `"veracity"`, and there is no
- * key by that name any more — the lookup returns `undefined` and the surface throws on the first
- * field it reads, which is a blank ticker rather than a wrong word. TypeScript cannot catch it,
- * because the wire value is typed as the narrowed {@link DebateResponseKind} it no longer matches.
+ * key by that name any more — the lookup would return `undefined` and the surface would throw on
+ * the first field it read, which is a blank ticker rather than a wrong word.
  *
- * So the claim surfaces read this instead, and the untrusted value is never a key.
+ * `WireResponseKind` is what keeps that from compiling. This exists so there is something to reach
+ * for instead: the copy, without a lookup, so no key is involved at all.
  */
 export const CLAIM_RESPONSE_COPY = ENTITY_RESPONSE_COPY[CLAIM_RESPONSE_KIND];
 
