@@ -11,7 +11,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
-import { PAGE_DENSITY } from '~/partials/comments/comment-density';
+import { PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import type { CommentWithReplies } from '~/partials/comments/types';
@@ -121,9 +121,9 @@ export function DebateCommentRow({
         */}
         {showsReplies && (
           <div className="mt-3">
-            <ThreadBranch density={PAGE_DENSITY}>
+            <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
               {replies.map((reply, index) => (
-                <ThreadBranchRow key={reply.id} isLast={index === replies.length - 1} density={PAGE_DENSITY}>
+                <ThreadBranchRow key={reply.id} isLast={index === replies.length - 1}>
                   <DebateCommentRow
                     comment={reply}
                     debateId={debateId}

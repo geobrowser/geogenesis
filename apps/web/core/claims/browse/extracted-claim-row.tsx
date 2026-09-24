@@ -14,7 +14,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
+import { type CommentDensity, PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -198,7 +198,7 @@ function ClaimComments({ claimId, spaceId, maxDepth }: { claimId: string; spaceI
 
   return (
     <div className="mt-3">
-      <ThreadBranch density={PAGE_DENSITY}>
+      <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
         {comments.map((comment, index) => (
           <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
             <DebateCommentRow

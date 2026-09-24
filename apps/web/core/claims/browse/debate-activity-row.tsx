@@ -355,7 +355,7 @@ function DebateBranch({
   if (rowCount === 0) return null;
 
   return (
-    <ThreadBranch density={DEBATE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
+    <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
       {claimsInOrder.map((claim, index) => {
         const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
         return (

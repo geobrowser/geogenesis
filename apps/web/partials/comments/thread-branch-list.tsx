@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { type CommentDensity, threadArmCenterPx, threadSpineOffsetPx } from './comment-density';
+import { type CommentDensity, threadArmCenterPx } from './comment-density';
 import { ThreadArm, ThreadElbow, ThreadListSpine } from './thread-branch';
 
 /**
@@ -25,27 +25,30 @@ type BranchGeometry = {
 const ThreadBranchContext = React.createContext<BranchGeometry | null>(null);
 
 export function ThreadBranch({
-  density,
+  rowDensity,
   reachPx,
-  armCenterPx,
   onCollapse,
   label,
   children,
 }: {
   /**
-   * The *parent* row's density, which is what the connectors reach back across. Defaults are taken
-   * from it; a parent whose left column is not an avatar — a debate's keyframe — passes its own.
+   * The density of the rows *in* this branch — never the parent's.
+   *
+   * A connector has two ends and they can belong to rows of different sizes: a claim hanging off a
+   * debate reaches back across a 44px keyframe column but lands on a 32px avatar. Taking one
+   * density for both is what put every arm in the debate branch 18px below the avatar it was
+   * pointing at — half the keyframe's height instead of half the row's. The horizontal end is
+   * {@link reachPx}, which the parent supplies; the vertical end is this.
    */
-  density: CommentDensity;
-  reachPx?: number;
-  armCenterPx?: number;
+  rowDensity: CommentDensity;
+  /** How far left of this branch's edge the parent's spine sits — the parent's geometry, not ours. */
+  reachPx: number;
   /** Omitted where the branch has no collapse of its own; the spine is then inert. */
   onCollapse?: () => void;
   label?: { expand: string; collapse: string };
   children: React.ReactNode;
 }) {
-  const reach = reachPx ?? threadSpineOffsetPx(density);
-  const arm = armCenterPx ?? threadArmCenterPx(density);
+  const arm = threadArmCenterPx(rowDensity);
 
   // Measured rather than computed: the spine stops at the last row's elbow, and these rows are
   // variable height — a claim sentence wraps to one line or three, a comment to more.
@@ -73,8 +76,8 @@ export function ThreadBranch({
   });
 
   const geometry = React.useMemo<BranchGeometry>(
-    () => ({ reachPx: reach, armCenterPx: arm, registerLastRow: lastRowRef }),
-    [arm, reach]
+    () => ({ reachPx, armCenterPx: arm, registerLastRow: lastRowRef }),
+    [arm, reachPx]
   );
 
   return (
@@ -82,7 +85,7 @@ export function ThreadBranch({
       <div className="comment-branch-list-root relative flex flex-col gap-4" ref={listRef}>
         {onCollapse && label && (
           <ThreadListSpine
-            reachPx={reach}
+            reachPx={reachPx}
             heightPx={spineHeightPx}
             lit={false}
             collapsed={false}
@@ -97,22 +100,14 @@ export function ThreadBranch({
 }
 
 /** One row in a branch, with the connector tying it back to the spine. */
-export function ThreadBranchRow({
-  isLast,
-  density,
-  children,
-}: {
-  isLast: boolean;
-  /** Only used when this row is rendered outside a {@link ThreadBranch}, which should not happen. */
-  density?: CommentDensity;
-  children: React.ReactNode;
-}) {
+export function ThreadBranchRow({ isLast, children }: { isLast: boolean; children: React.ReactNode }) {
   const branch = React.useContext(ThreadBranchContext);
-  const reachPx = branch?.reachPx ?? (density ? threadSpineOffsetPx(density) : 28);
-  const armCenterPx = branch?.armCenterPx ?? (density ? threadArmCenterPx(density) : 16);
+  // Outside a branch there is nothing to connect to, so draw nothing rather than a line to nowhere.
+  if (!branch) return <>{children}</>;
+  const { reachPx, armCenterPx } = branch;
 
   return (
-    <div className="comment-branch-row relative" ref={isLast ? branch?.registerLastRow : undefined}>
+    <div className="comment-branch-row relative" ref={isLast ? branch.registerLastRow : undefined}>
       <div className="comment-branch-row-connectors pointer-events-none absolute inset-0 z-[1]">
         {isLast ? (
           <ThreadElbow reachPx={reachPx} armCenterPx={armCenterPx} lit={false} />
