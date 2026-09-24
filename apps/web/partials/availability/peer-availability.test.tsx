@@ -433,6 +433,28 @@ describe('times that have already gone', () => {
     expect(chip).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // An open modal does not re-render as time passes, so a time that was ahead when picked can be
+  // gone by the click.
+  it('refuses a picked time that has gone by the time Send is pressed', async () => {
+    // The real clock rather than a pinned `now`: only `Date` is faked, so `userEvent` still runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    try {
+      const book = booking();
+      const user = userEvent.setup();
+      render(<PeerAvailabilityView schedule={schedule({ slots: [slot(16)] })} peerName="Ada" booking={book} />);
+      await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+
+      vi.setSystemTime(new Date('2026-09-21T16:05:00Z'));
+      await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+      expect(book.onRequest).not.toHaveBeenCalled();
+      expect(screen.getByText(/already passed/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('will not send a past time typed into the free-time field', async () => {
     const book = booking();
     const { user } = setupBooking(book, { peerHasSchedule: false, slots: [] });

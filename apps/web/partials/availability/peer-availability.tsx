@@ -104,6 +104,7 @@ export function PeerAvailabilityView({
   // The week starts at today's midnight, so its early columns are already gone. geo-chat refuses a
   // past start outright, so a booking caller must not be able to pick one.
   const notBefore = (now ?? new Date()).getTime();
+  const clock = React.useCallback(() => (now ? now.getTime() : Date.now()), [now]);
   const name = peerName || shortId(schedule.userId);
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
@@ -141,6 +142,7 @@ export function PeerAvailabilityView({
             booking && (
               <RequestAnyway
                 booking={booking}
+                clock={clock}
                 peerName={name}
                 peerTimezone={schedule.peerTimezone}
                 notBefore={notBefore}
@@ -171,6 +173,7 @@ export function PeerAvailabilityView({
           {booking && (
             <BookingFooter
               booking={booking}
+              clock={clock}
               startsAt={selectedStart}
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
               peerName={name}
@@ -186,12 +189,14 @@ export function PeerAvailabilityView({
 /** Only rendered for a caller that can act on the pick, so there is never a dead CTA here. */
 function BookingFooter({
   booking,
+  clock,
   startsAt,
   viewerIsFree,
   peerName,
   peerTimezone,
 }: {
   booking: PeerAvailabilityBooking;
+  clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
   peerName: string;
@@ -220,7 +225,7 @@ function BookingFooter({
             </Text>
           )}
         </div>
-        <SendRequest booking={booking} startsAt={startsAt} />
+        <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
       </div>
 
       {/* A slot outside your own week is a one-off, and saying so is what keeps it from reading as
@@ -240,16 +245,43 @@ function BookingFooter({
   );
 }
 
-function SendRequest({ booking, startsAt }: { booking: PeerAvailabilityBooking; startsAt: string | null }) {
+function SendRequest({
+  booking,
+  clock,
+  startsAt,
+}: {
+  booking: PeerAvailabilityBooking;
+  clock: () => number;
+  startsAt: string | null;
+}) {
+  const [passed, setPassed] = React.useState(false);
+
   return (
-    <button
-      type="button"
-      disabled={!startsAt || booking.pending}
-      onClick={() => startsAt && booking.onRequest(startsAt)}
-      className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
-    >
-      {booking.pending ? 'Sending…' : 'Send request'}
-    </button>
+    <div className="flex shrink-0 flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={!startsAt || booking.pending}
+        onClick={() => {
+          if (!startsAt) return;
+          // Checked at the click rather than trusted from render: an open modal does not re-render
+          // as a picked time goes by, and geo-chat refuses a past start.
+          if (new Date(startsAt).getTime() <= clock()) {
+            setPassed(true);
+            return;
+          }
+          setPassed(false);
+          booking.onRequest(startsAt);
+        }}
+        className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
+      >
+        {booking.pending ? 'Sending…' : 'Send request'}
+      </button>
+      {passed && (
+        <Text as="p" variant="footnote" color="red-01">
+          That time has already passed. Pick another.
+        </Text>
+      )}
+    </div>
   );
 }
 
@@ -259,11 +291,13 @@ function SendRequest({ booking, startsAt }: { booking: PeerAvailabilityBooking; 
  */
 function RequestAnyway({
   booking,
+  clock,
   peerName,
   peerTimezone,
   notBefore,
 }: {
   booking: PeerAvailabilityBooking;
+  clock: () => number;
   peerName: string;
   peerTimezone?: string | null;
   notBefore: number;
@@ -295,7 +329,7 @@ function RequestAnyway({
           onChange={event => setLocal(event.target.value)}
           className="rounded border border-grey-02 px-2 py-1 text-footnote"
         />
-        <SendRequest booking={booking} startsAt={startsAt} />
+        <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
       </div>
       {startsAt && peerTimezone && (
         <Text as="span" variant="footnote" color="grey-04">
