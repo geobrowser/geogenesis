@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
-import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
+import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
@@ -921,14 +921,10 @@ function DebaterVideo({
           </span>
           <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
         </button>
-        {/* Guarded on the text, not just on the participant: the label is whatever the response
-            kind called the side ("Agree", "True", "For"), and an empty one would draw a bare pill
-            that says nothing. */}
-        {participant?.position_label && (
-          <DebateTileChip className={cx('min-w-0 shrink truncate text-text', tileChipSurface)}>
-            {participant.position_label}
-          </DebateTileChip>
-        )}
+        {/* Guarded on the text rather than only on the participant: `position_label` is typed
+            non-null but arrives from geo-chat, and an empty one would draw a bare pill that says
+            nothing. The room tile guards it the same way. */}
+        {participant?.position_label && <DebatePositionChip label={participant.position_label} />}
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
