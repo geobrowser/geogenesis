@@ -73,9 +73,16 @@ export function DebateTileChip({
  * bounded, and half of "Disagree" is worse than a shortened name beside it. `max-w-full` is what
  * caps it in a column narrower than the word — it truncates there rather than overflowing.
  */
-export function DebatePositionChip({ label, className }: { label: string; className?: string }) {
+export function DebatePositionChip({
+  label,
+  className,
+  ...spanProps
+}: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
   return (
-    <DebateTileChip className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
+    <DebateTileChip
+      {...spanProps}
+      className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}
+    >
       {label}
     </DebateTileChip>
   );

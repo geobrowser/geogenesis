@@ -207,7 +207,19 @@ describe('player layout', () => {
       expect(chip.parentElement).toBe(nameRow);
       expect(nameNode.nextElementSibling).toBe(chip);
       expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
+      expect(nameNode.closest('button')?.className).toContain('items-center');
     }
+
+  });
+
+  it('keeps the position chip in the video playback surface', () => {
+    const controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.controller = controller;
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    fireEvent.click(within(container).getByText('For'));
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
   });
 
   it('draws no chip for a debater whose position has no label', () => {

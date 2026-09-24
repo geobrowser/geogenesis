@@ -767,6 +767,16 @@ function DebaterVideo({
   };
 
   const openProfile = useOpenDebaterProfile(participant);
+  const onIdentityClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // The position sits inside the name row for layout, but it remains part of the video's
+    // play/pause surface rather than becoming a second link to the participant's profile.
+    if (event.target instanceof Element && event.target.closest('[data-debate-position-chip]')) {
+      event.stopPropagation();
+      onToggle();
+      return;
+    }
+    openProfile(event);
+  };
 
   return (
     <div
@@ -962,8 +972,8 @@ function DebaterVideo({
       >
         <button
           type="button"
-          onClick={openProfile}
-          className="pointer-events-auto flex min-w-0 max-w-[55%] items-start gap-2 text-left"
+          onClick={onIdentityClick}
+          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
@@ -974,7 +984,9 @@ function DebaterVideo({
               {/* Guarded on the text rather than only on the participant: `position_label` is
                   typed non-null but arrives from geo-chat, and an empty one would draw a bare pill
                   that says nothing. The room tile guards it the same way. */}
-              {participant?.position_label && <DebatePositionChip label={participant.position_label} />}
+              {participant?.position_label && (
+                <DebatePositionChip data-debate-position-chip label={participant.position_label} />
+              )}
             </span>
             {affiliation && (
               <span title={affiliation} className="truncate text-[0.75rem] leading-4 text-white/80">
