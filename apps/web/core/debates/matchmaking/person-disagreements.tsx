@@ -70,7 +70,7 @@ export function PersonMatches({
               className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
             >
               {matches.map((match, index) => {
-                const name = claimNamesById.get(normId(match.claimId));
+                const name = claimName(match.claimId, claimNamesById, claimNamesLoading);
                 const space = spaceLabel(labelsById, match.spaceId);
                 return (
                   <li
@@ -86,9 +86,7 @@ export function PersonMatches({
                         <PersonSpaceIcon spaceId={match.spaceId} labelsById={labelsById} size={12} />
                         <span className="truncate">{space?.name?.trim() || 'Space'}</span>
                       </span>
-                      <span className="block text-metadataMedium text-text">
-                        {name?.trim() || (claimNamesLoading ? 'Loading claim…' : 'Untitled claim')}
-                      </span>
+                      <span className="block text-metadataMedium text-text">{name}</span>
                       <span className="mt-2 flex items-center gap-1.5">
                         <PositionBadge actor="You" responseKind={match.responseKind} position={match.viewerPosition} />
                         <span className="shrink-0 text-footnote text-grey-03" aria-hidden>
@@ -110,6 +108,23 @@ export function PersonMatches({
       ) : null}
     </Popover.Root>
   );
+}
+
+/**
+ * Names a claim without confusing missing metadata with an entity whose name is genuinely empty.
+ *
+ * `Map#get` alone cannot distinguish those cases because both return a nullish value. Presence in
+ * the map means the entity loaded successfully, so only that case earns the "Untitled" fallback;
+ * a settled lookup with no entity covers both a failed batch and a successfully missing entity.
+ */
+function claimName(
+  claimId: string,
+  claimNamesById: ReadonlyMap<string, string | null>,
+  claimNamesLoading: boolean
+): string {
+  const normalizedId = normId(claimId);
+  if (claimNamesById.has(normalizedId)) return claimNamesById.get(normalizedId)?.trim() || 'Untitled claim';
+  return claimNamesLoading ? 'Loading claim…' : 'Claim unavailable';
 }
 
 function PositionBadge({

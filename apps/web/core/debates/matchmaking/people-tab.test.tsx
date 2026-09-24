@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   positionsPlaceholderData: false,
   claimEntities: [] as ClaimPickerEntity[],
   claimEntitiesLoading: false,
+  claimEntitiesError: null as Error | null,
   createChallenge: vi.fn(),
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
@@ -173,7 +174,7 @@ vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: () => ({
     entities: mocks.claimEntities,
     isLoading: mocks.claimEntitiesLoading,
-    error: null,
+    error: mocks.claimEntitiesError,
   }),
 }));
 
@@ -290,6 +291,7 @@ beforeEach(() => {
   mocks.positionsPlaceholderData = false;
   mocks.claimEntities = [];
   mocks.claimEntitiesLoading = false;
+  mocks.claimEntitiesError = null;
   mocks.createChallenge.mockReset();
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
@@ -505,6 +507,30 @@ describe('PeopleTab', () => {
     expect(within(secondMatch).getByText('Dispute')).toBeInTheDocument();
     expect(within(secondMatch).getByText('Arturas:')).toBeInTheDocument();
     expect(within(secondMatch).getByText('Verify')).toBeInTheDocument();
+  });
+
+  it('distinguishes an untitled claim from unavailable claim metadata', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    const matchingClaim = (claimId: string) => [
+      { profileSpaceId: viewer, claimId, spaceId, responseKind: 'stance' as const, position: true },
+      { profileSpaceId: arturas, claimId, spaceId, responseKind: 'stance' as const, position: false },
+    ];
+    mocks.positionsByClaim = new Map([
+      ['claim-untitled', matchingClaim('claim-untitled')],
+      ['claim-unavailable', matchingClaim('claim-unavailable')],
+    ]);
+    mocks.claimEntities = [{ ...claimEntity('claim-untitled', ''), name: null }];
+    mocks.claimEntitiesError = new Error('Claim metadata unavailable');
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
+
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText('Untitled claim')).toBeInTheDocument();
+    expect(within(list).getByText('Claim unavailable')).toBeInTheDocument();
   });
 
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in
