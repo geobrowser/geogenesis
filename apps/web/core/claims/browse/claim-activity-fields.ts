@@ -25,15 +25,40 @@ import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '
  *    Debate → Transcripts → Blocks → Claims traversal used to *read* them. Measured against testnet
  *    on 2026-09-24: identical totals (177 across 30 debates), 0.52s versus 3.48s.
  *
- * Adding these to the shared explore card selection costs +0.02s and +1 KB over a 20-card page,
- * because for anything that is not a claim the relation lookups come back empty immediately — which
- * is why there is no claim-only selection to maintain.
+ * Adding these to the shared explore card selection is cheap for anything that is not a claim — the
+ * relation lookups come back empty immediately — which is why there is no claim-only selection to
+ * maintain. Measured on the 20 busiest claims in the corpus, which is the worst case rather than a
+ * typical page: 0.57s and 28 KB, every total matching what the same fields read one claim at a time.
+ *
+ * ## Why every nested list carries an explicit `first`
+ *
+ * A nested `backlinksList` inside a *list* query (`entities(filter: { id: { in: … } })`, which is
+ * both how this is batched and how the explore feed selects its cards) is silently truncated to ten
+ * rows. The singular `entity(id:)` form is not. So the same fields read one number on a claim page
+ * and a smaller one on a card — measured on testnet 2026-09-24: a debate with 22 extracted claims
+ * returned `totalCount: 22` next to a ten-item list, and a claim whose feed draws 52 rows counted 33.
+ * Nothing errors; the list just stops. An explicit `first` lifts it.
+ *
+ * The extracted-claim total is therefore taken from an aggregate rather than from the list's length,
+ * so it stays exact whatever `first` is. The list survives only to reach the comment counts hanging
+ * off those claims, which no aggregate on the debate can see two hops away.
  */
+
+/**
+ * Bounds for the nested lists.
+ *
+ * Generous against the corpus rather than tight: the most debates on one claim is five and the most
+ * claims from one debate is 22. These exist to defeat the implicit ten, not to ration.
+ */
+const DEBATES_PER_CLAIM = 50;
+const EXTRACTED_PER_DEBATE = 200;
+
 export const CLAIM_ACTIVITY_COUNT_FIELDS = /* GraphQL */ `
   activityComments: backlinks(filter: { typeId: { is: "${COMMENT_REPLY_TO_ID}" } }) {
     totalCount
   }
   activityDebates: backlinksList(
+    first: ${DEBATES_PER_CLAIM}
     filter: {
       typeId: { is: "${DEBATE_CLAIMS_PROPERTY_ID}" }
       fromEntity: { typeIds: { overlaps: ["${DEBATE_TYPE_ID}"] } }
@@ -44,14 +69,24 @@ export const CLAIM_ACTIVITY_COUNT_FIELDS = /* GraphQL */ `
       comments: backlinks(filter: { typeId: { is: "${COMMENT_REPLY_TO_ID}" } }) {
         totalCount
       }
-      extracted: backlinksList(
+      extractedCount: backlinks(
         filter: {
           typeId: { is: "${SOURCES_PROPERTY_ID}" }
           fromEntity: { typeIds: { overlaps: ["${CLAIM_TYPE_ID}"] } }
         }
       ) {
+        totalCount
+      }
+      extracted: backlinksList(
+        first: ${EXTRACTED_PER_DEBATE}
+        filter: {
+          typeId: { is: "${SOURCES_PROPERTY_ID}" }
+          fromEntity: { typeIds: { overlaps: ["${CLAIM_TYPE_ID}"] } }
+        }
+      ) {
+        # No id: nothing downstream keys off an extracted claim, and leaving it out of a list this
+        # long is 19 KB off a 20-card page.
         fromEntity {
-          id
           comments: backlinks(filter: { typeId: { is: "${COMMENT_REPLY_TO_ID}" } }) {
             totalCount
           }
@@ -87,26 +122,35 @@ function commentsOf(entity: { comments?: { totalCount?: number | null } | null }
 export function countActivityForNode(node: unknown): ClaimActivityCount {
   const raw = (node ?? {}) as Record<string, any>;
   const claimComments = (raw.comments ?? raw.activityComments)?.totalCount ?? 0;
-  const debates = ((raw.debates ?? raw.activityDebates ?? []) as Array<any>).flatMap(row =>
-    row?.fromEntity ? [row.fromEntity] : []
-  );
+
+  // Deduped by debate id, because a debate can carry more than one `Claims` relation to the same
+  // claim and each is a separate backlink row. Observed on testnet: one debate linked a claim twice,
+  // which counted its 22 extracted claims twice while the feed — which reads debates as entities —
+  // drew it once.
+  const debates = new Map<string, any>();
+  for (const row of (raw.debates ?? raw.activityDebates ?? []) as Array<any>) {
+    const debate = row?.fromEntity;
+    if (debate?.id) debates.set(debate.id, debate);
+  }
 
   let extractedClaims = 0;
   let debateComments = 0;
-  for (const debate of debates) {
+  for (const debate of debates.values()) {
     debateComments += commentsOf(debate);
-    for (const row of (debate.extracted ?? []) as Array<any>) {
-      if (!row?.fromEntity) continue;
-      extractedClaims += 1;
+    const listed = ((debate.extracted ?? []) as Array<any>).filter(row => row?.fromEntity);
+    // The aggregate rather than the list's length: a truncated list still reports its true total,
+    // and this number is the one the claim card prints.
+    extractedClaims += debate.extractedCount?.totalCount ?? listed.length;
+    for (const row of listed) {
       debateComments += commentsOf(row.fromEntity);
     }
   }
 
   return {
     comments: claimComments,
-    debates: debates.length,
+    debates: debates.size,
     extractedClaims,
     debateComments,
-    total: claimComments + debates.length + extractedClaims + debateComments,
+    total: claimComments + debates.size + extractedClaims + debateComments,
   };
 }

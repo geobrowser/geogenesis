@@ -8,13 +8,10 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { COMMENT_REPLY_TO_ID } from '~/core/comment-ids';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
-import { type ClaimActivityCount, countActivityForNode } from './claim-activity-fields';
+import { CLAIM_ACTIVITY_COUNT_FIELDS, type ClaimActivityCount, countActivityForNode } from './claim-activity-fields';
 
 export { CLAIM_ACTIVITY_COUNT_FIELDS, countActivityForNode } from './claim-activity-fields';
 export type { ClaimActivityCount } from './claim-activity-fields';
@@ -28,41 +25,16 @@ export type { ClaimActivityCount } from './claim-activity-fields';
  *
  * Batched because the cost is per request rather than per claim, and a feed asking once per row is
  * what makes a number on a row expensive: 20 active claims answer together in 0.69s and 17 KB.
+ *
+ * The selection is the shared one rather than a second copy of it. It used to be written out again
+ * here with the ontology ids as variables, which is how the two drifted: the nested-list cap was
+ * fixed in one place and the card kept reading the truncated shape. One string, one set of limits.
  */
 const CLAIM_ACTIVITY_COUNTS_SOURCE = /* GraphQL */ `
-  query ClaimActivityCounts(
-    $ids: [UUID!]
-    $claimsPropertyId: UUID!
-    $sourcesPropertyId: UUID!
-    $replyToTypeId: UUID!
-    $debateTypeId: UUID!
-    $claimTypeId: UUID!
-  ) {
+  query ClaimActivityCounts($ids: [UUID!]) {
     entities(filter: { id: { in: $ids } }) {
       id
-      comments: backlinks(filter: { typeId: { is: $replyToTypeId } }) {
-        totalCount
-      }
-      debates: backlinksList(
-        filter: { typeId: { is: $claimsPropertyId }, fromEntity: { typeIds: { overlaps: [$debateTypeId] } } }
-      ) {
-        fromEntity {
-          id
-          comments: backlinks(filter: { typeId: { is: $replyToTypeId } }) {
-            totalCount
-          }
-          extracted: backlinksList(
-            filter: { typeId: { is: $sourcesPropertyId }, fromEntity: { typeIds: { overlaps: [$claimTypeId] } } }
-          ) {
-            fromEntity {
-              id
-              comments: backlinks(filter: { typeId: { is: $replyToTypeId } }) {
-                totalCount
-              }
-            }
-          }
-        }
-      }
+      ${CLAIM_ACTIVITY_COUNT_FIELDS}
     }
   }
 `;
@@ -105,14 +77,7 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
         graphql({
           query: claimActivityCountsDocument,
           decoder: decodeClaimActivityCounts,
-          variables: {
-            ids,
-            claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-            sourcesPropertyId: SOURCES_PROPERTY_ID,
-            replyToTypeId: COMMENT_REPLY_TO_ID,
-            debateTypeId: DEBATE_TYPE_ID,
-            claimTypeId: CLAIM_TYPE_ID,
-          },
+          variables: { ids },
           signal,
         })
       ),
