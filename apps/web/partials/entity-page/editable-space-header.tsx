@@ -72,6 +72,7 @@ export function EditableSpaceHeading({
   nameAccessoryComponent,
   actionsComponent,
   keepSpaceActions = false,
+  fallbackName,
 }: {
   spaceId: string;
   entityId: string;
@@ -82,6 +83,16 @@ export function EditableSpaceHeading({
   actionsComponent?: React.ReactNode;
   /** Keeps the history and overflow controls on routes below the space's own page. */
   keepSpaceActions?: boolean;
+  /**
+   * Shown in browse mode when the scoped store has no name yet — the same prop
+   * `EditableHeading` takes, for the same reason and with the same rule.
+   *
+   * `useName` reads the sync store, which hydrates over the network once the
+   * page is mounted, so the heading rendered as a zero-width space for the
+   * length of that request and every space looked like it had failed to load
+   * its own title.
+   */
+  fallbackName?: string | null;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
@@ -149,7 +160,11 @@ export function EditableSpaceHeading({
           Only engages when it has to, so nothing changes on a wide screen. */}
       <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <EntityPageTitle
-          value={name ?? ''}
+          // Browse falls back to the server's name; edit must not. A fallback in
+          // the textarea reads as a stored name that isn't there, and one
+          // keystroke would commit it — see `EditableHeading`, which draws the
+          // same line for the same reason.
+          value={isEditing ? (name ?? '') : (name ?? fallbackName ?? '')}
           isEditing={isEditing}
           onChange={onNameChange}
           accessory={nameAccessoryComponent}

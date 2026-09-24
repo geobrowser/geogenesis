@@ -85,6 +85,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('employment')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
           <ProfileRecordSection
             kind="education"
@@ -92,7 +93,12 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('education')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
+          {/* No reserve for Skills, unlike the two sections above. It is derived
+              from them and hidden when empty even for the owner, so a
+              placeholder here would as often as not be held for a section that
+              never arrives. */}
           <ProfileSkillsSection skills={skills} spaceId={spaceId} />
 
           <EditRecordDialog
