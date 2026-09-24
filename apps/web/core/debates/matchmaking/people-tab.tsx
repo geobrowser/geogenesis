@@ -42,7 +42,7 @@ import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
-import { useOutboundDebateChallenge } from './use-outbound-debate-challenge';
+import { PENDING_OUTBOUND_REQUEST_REASON, useOutboundDebateChallenge } from './use-outbound-debate-challenge';
 import { usePersonRecords } from './use-person-records';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
@@ -298,15 +298,14 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     : activeDebate(activity)
       ? "You're already in a debate."
       : activity?.outbound_request || requests?.outbound
-        ? 'You already have an open request — withdraw it to challenge someone else.'
+        ? PENDING_OUTBOUND_REQUEST_REASON
         : null;
 
   // Kept separate from `blockedReason`: the card replaces the sentence but not the reason every
   // button below is disabled.
   const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge) || createChallenge.isPending;
   const disabledReason =
-    blockedReason ??
-    (createChallenge.isPending ? 'Sending your debate request…' : 'You have a debate request awaiting a reply.');
+    blockedReason ?? (createChallenge.isPending ? 'Sending your debate request…' : PENDING_OUTBOUND_REQUEST_REASON);
 
   return (
     <div className="flex flex-col">

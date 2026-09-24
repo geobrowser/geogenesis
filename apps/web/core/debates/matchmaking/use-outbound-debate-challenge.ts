@@ -5,6 +5,8 @@ import * as React from 'react';
 import type { DebateActivity, DebateChallenge } from '../api';
 import { useUnexpiredRequests } from './use-request-countdown';
 
+export const PENDING_OUTBOUND_REQUEST_REASON = 'You can only have one pending outbound request at a time.';
+
 /**
  * The live person-to-person request sent by the viewer.
  *

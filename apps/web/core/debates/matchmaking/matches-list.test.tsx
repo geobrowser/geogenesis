@@ -403,13 +403,20 @@ describe('MatchesList', () => {
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
 
-  it('shows a sent person request in Lobby and blocks claim requests', () => {
+  it('shows a sent person request in Lobby and explains why claim requests are blocked', async () => {
     mocks.outboundChallenge = challenge();
     render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+
+    await userEvent.hover(request.parentElement!);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'You can only have one pending outbound request at a time.'
+    );
   });
 
   // GEO-2684. The outbound card was already pinned; the filters joined it rather than becoming a

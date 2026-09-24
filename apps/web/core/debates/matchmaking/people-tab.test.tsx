@@ -722,6 +722,7 @@ describe('PeopleTab', () => {
 
     for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
       expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
     }
   });
 
@@ -847,9 +848,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(
-      screen.getByText('You already have an open request — withdraw it to challenge someone else.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('You can only have one pending outbound request at a time.')).toBeInTheDocument();
   });
 
   // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy
