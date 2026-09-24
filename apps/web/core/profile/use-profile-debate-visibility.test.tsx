@@ -18,10 +18,15 @@ const DEBATE = '33333333333333333333333333333333';
 const DEBATE_SPACE = '44444444444444444444444444444444';
 const DEBATE_WITHOUT_CARD = '55555555555555555555555555555555';
 
-const mocks = vi.hoisted(() => ({ makeProposal: vi.fn(), setToast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ makeProposal: vi.fn(), setToast: vi.fn(), useToast: vi.fn() }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
-vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
+vi.mock('~/core/hooks/use-toast', () => ({
+  useToast: (options?: unknown) => {
+    mocks.useToast(options);
+    return [null, mocks.setToast];
+  },
+}));
 
 const item = {
   entityId: DEBATE,
@@ -67,9 +72,20 @@ beforeEach(() => {
   mocks.makeProposal.mockReset();
   mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => void }) => onSuccess());
   mocks.setToast.mockReset();
+  mocks.useToast.mockReset();
 });
 
 describe('useProfileDebateVisibility cache coordination', () => {
+  it('routes the hidden-debate confirmation through the top toast placement', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderHook(() => useProfileDebateVisibility(PERSONAL_SPACE), {
+      wrapper: wrapper(client),
+    });
+
+    expect(mocks.useToast).toHaveBeenCalledWith({ placement: 'top' });
+  });
+
   it('does not let pre-write refetches replace a successful hide', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const personKey = personDebatesRowsQueryKey(PERSONAL_SPACE);

@@ -24,7 +24,7 @@ import { normId } from '~/core/utils/norm-id';
 export function useProfileDebateVisibility(personalSpaceId: string) {
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
-  const [, setToast] = useToast();
+  const [, setToast] = useToast({ placement: 'top' });
   const [pendingIds, setPendingIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const pendingRef = React.useRef<Set<string>>(new Set());
 
