@@ -506,6 +506,37 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   });
 
   /**
+   * And raised with the re-fetch, not somewhere later.
+   *
+   * What the recording actually needs is the raise landing before the new fetch has got far enough
+   * to fail again, and Chrome is looser about that than the spec's wording suggests: measured
+   * against the 89MB slot-1 recording, raising it *after* both `load()` calls still recovers, and
+   * so does deferring it by a task. Deferring it by 500ms does not — `error.code === 2` comes
+   * straight back, exactly as when nothing raises it at all.
+   *
+   * That is a window, not a rule, and a window is not something to leave a fix sitting inside. So
+   * what is pinned here is the position with margin — in the same breath as the re-fetch — by
+   * watching the property at the instant each `load()` runs. It is deliberately stricter than the
+   * browser demands: nothing wants the raise anywhere else, and the failure it guards against
+   * (the raise drifting into an effect or a timer, where `exhausted` once put it) leaves every
+   * end-state assertion green.
+   */
+  it('raises preload in the same breath as the rebuild re-fetches', () => {
+    const { slot1 } = renderPair();
+    const preloadAtLoad: string[] = [];
+    vi.mocked(HTMLMediaElement.prototype.load).mockImplementation(function (this: HTMLMediaElement) {
+      preloadAtLoad.push(this.preload);
+    });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    // Both of them: `reattachVideoSource` detaches and re-loads before it re-attaches and re-loads.
+    expect(preloadAtLoad.length).toBeGreaterThan(0);
+    expect(preloadAtLoad).toEqual(preloadAtLoad.map(() => 'auto'));
+  });
+
+  /**
    * The re-signed URL keeps it. `onExhausted` re-signs the recording that has just failed every
    * rebuild it was allowed under `metadata`, so handing the fresh URL that same mode would spend
    * an attempt and a multi-megabyte load proving the point a second time.

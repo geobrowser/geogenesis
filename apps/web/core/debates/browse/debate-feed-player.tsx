@@ -632,9 +632,9 @@ function DebaterVideo({
    *
    * The repair is to detach and re-fetch the source with `preload` raised to `auto`. The recording
    * is fine and the URL is fine; what was wrong was how the element was asking for it, and the
-   * same URL loads to `HAVE_ENOUGH_DATA` on the first rebuild once it asks differently — see
-   * `reattachVideoSource`, which carries the measurement. `onRecovered` then brings the tile back
-   * to wherever its partner has got to.
+   * same URL loads to `HAVE_ENOUGH_DATA` on the first rebuild once it asks differently — the
+   * measurement is on the raise itself, in `rebuild` below. `onRecovered` then brings the tile
+   * back to wherever its partner has got to.
    *
    * Bounded and spaced, because the one thing worse than a blank tile is a tile refetching a
    * multi-megabyte recording in a loop.
@@ -672,8 +672,8 @@ function DebaterVideo({
   // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
   // repair still pending belongs to the old one.
   //
-  // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `reattachVideoSource`
-  // writes the DOM property directly, which React cannot see and never reconciles — but there is no
+  // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `rebuild` writes
+  // that DOM property directly, which React cannot see and never reconciles — but there is no
   // case that needs one. A genuinely different recording never reaches a live element: the hook
   // blanks both URLs before fetching the new pair (`setUrls({slot1: null, slot2: null})`), which
   // unmounts the `<video>` and takes the raised `preload` with it, and the replacement is built from
@@ -707,9 +707,13 @@ function DebaterVideo({
          * failed three times and the re-signed URL failed too, which is the tile that sat there
          * saying so. At `auto` the same element loads to `HAVE_ENOUGH_DATA` on the first attempt.
          *
-         * First, not after: `reattachVideoSource` starts resource selection, and the mode is read
-         * as that begins. And here rather than inside it, because this is a fact about these
-         * recordings, not about re-attaching a video source.
+         * Here rather than inside `reattachVideoSource`, because this is a fact about these
+         * recordings, not about re-attaching a video source — and here rather than anywhere later,
+         * because the raise has to reach the element before the new fetch gets far. Chrome allows
+         * more room than that implies (raising it after both `load()` calls still recovers, and so
+         * does a task's delay), but only so much: at 500ms the same recording comes straight back
+         * with `error.code === 2`, exactly as if nothing had been raised. This is the position
+         * that does not depend on knowing where the edge is.
          */
         current.preload = 'auto';
         reattachVideoSource(current, src);
