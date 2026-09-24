@@ -23,6 +23,7 @@ import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  filterByTags?: string[];
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
@@ -107,6 +108,7 @@ function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByT
 export function useSearch({
   filterByTypes,
   filterBySpace,
+  filterByTags,
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
@@ -132,6 +134,7 @@ export function useSearch({
   const maybeEntityId = debouncedQuery.trim();
   const cappedQuery = capSearchQuery(debouncedQuery);
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
+  const filterTagKey = React.useMemo(() => (filterByTags ? [...filterByTags].sort() : undefined), [filterByTags]);
 
   const searchBlocked =
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
@@ -145,6 +148,7 @@ export function useSearch({
     cappedQuery,
     filterTypeKey,
     filterBySpace,
+    filterTagKey,
     Boolean(waitForFilterTypes),
     Boolean(restrictToFilterTypes),
     additionalSpaceIds,
@@ -204,6 +208,7 @@ export function useSearch({
           signal,
           additionalSpaceIds,
           includeNonCanonical,
+          tagIds: filterByTags?.length ? filterByTags : undefined,
         });
 
         const rows = !filterByTypes?.length

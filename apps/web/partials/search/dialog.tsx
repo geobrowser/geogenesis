@@ -29,6 +29,8 @@ import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Toggle } from '~/design-system/toggle';
 
+import { AdvancedSearchFilters, type SearchFilterTag } from './advanced-search-filters';
+
 type Props = {
   open: boolean;
   onDone: () => void;
@@ -62,6 +64,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
+
+  const [filterTypeIds, setFilterTypeIds] = useState<string[]>([]);
+  const [filterSpaceId, setFilterSpaceId] = useState<string | null>(null);
+  const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
   // Explicit `true` (not just omitted) when off — useSearch uses this to tell
   // "user asked for unrestricted search" apart from "caller has no opinion",
   // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
@@ -69,8 +75,21 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     enabled: open,
     includeNonCanonical: canonicalOnly ? false : true,
     analyticsSurface: 'global',
+    filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
+    filterBySpace: filterSpaceId ?? undefined,
+    filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
+
+  const toggleFilterType = useCallback((id: string) => {
+    setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
+  }, []);
+  const addFilterTag = useCallback((tag: SearchFilterTag) => {
+    setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
+  }, []);
+  const removeFilterTag = useCallback((id: string) => {
+    setFilterTags(prev => prev.filter(tag => tag.id !== id));
+  }, []);
 
   const toggleCanonicalOnly = useCallback(() => {
     setCanonicalOnly(prev => {
@@ -96,6 +115,9 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     autocomplete.onQueryChange('');
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
+    setFilterTypeIds([]);
+    setFilterSpaceId(null);
+    setFilterTags([]);
     onDone();
   }, [autocomplete, onDone]);
 
@@ -226,7 +248,16 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   </button>
                   <ResizableContainer>
                     {isShowingAdvanced && (
-                      <div className="border-b border-grey-02 px-4 py-2">
+                      <div className="flex flex-col gap-3 border-b border-grey-02 px-4 py-3">
+                        <AdvancedSearchFilters
+                          typeIds={filterTypeIds}
+                          onToggleType={toggleFilterType}
+                          spaceId={filterSpaceId}
+                          onSelectSpace={setFilterSpaceId}
+                          tags={filterTags}
+                          onAddTag={addFilterTag}
+                          onRemoveTag={removeFilterTag}
+                        />
                         <button
                           type="button"
                           onClick={toggleCanonicalOnly}
