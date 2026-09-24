@@ -90,6 +90,7 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { outboundRequestCreationMutationKey } from './request-gate';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 import { withQueryData } from './with-query-data';
 
@@ -1292,6 +1293,7 @@ export function useCreateDebateChallenge() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
+    mutationKey: outboundRequestCreationMutationKey(accountKey),
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {

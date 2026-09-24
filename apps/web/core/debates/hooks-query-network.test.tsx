@@ -283,6 +283,14 @@ describe('debate query network ownership', () => {
     });
   });
 
+  it('registers person challenge creation in the account outbound-request gate', () => {
+    const { result } = renderHook(() => useCreateDebateChallenge());
+
+    expect(result.current).toMatchObject({
+      mutationKey: ['debates', 'account', 'user-a', 'create-outbound-request'],
+    });
+  });
+
   it('keeps a newly created outbound challenge cached instead of refetching stale activity over it', () => {
     vi.useFakeTimers();
     vi.advanceTimersByTime(12_345);

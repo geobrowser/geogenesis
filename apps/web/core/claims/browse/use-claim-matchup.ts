@@ -2,10 +2,9 @@
 
 import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { useDebateActivity } from '~/core/debates/hooks';
+import { useSharedOutboundRequestState } from '~/core/debates/matchmaking/debate-challenge-state-provider';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
-import { useOutboundDebateChallenge } from '~/core/debates/matchmaking/use-outbound-debate-challenge';
 import { PENDING_OUTBOUND_REQUEST_REASON } from '~/core/debates/request-gate';
-import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { ID } from '~/core/id';
 
 /**
@@ -32,8 +31,8 @@ export function useClaimMatchup({
   const matchesQuery = useMatchmakingMatches(enabled);
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
-  const currentUserId = useCurrentGeoChatUserId();
-  const { outboundChallenge, outboundChallengeDirectionUnknown } = useOutboundDebateChallenge(activity, currentUserId);
+  const { outboundChallenge, outboundChallengeDirectionUnknown, outboundRequestCreationPending } =
+    useSharedOutboundRequestState();
   const createRequest = useCreateDebateRequest();
 
   // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
@@ -51,7 +50,7 @@ export function useClaimMatchup({
   const unavailable = activity?.available_to_debate === false;
   const blockedReason = unavailable
     ? 'Switch yourself to available to send a request.'
-    : outbound || outboundChallenge || outboundChallengeDirectionUnknown
+    : outbound || outboundChallenge || outboundChallengeDirectionUnknown || outboundRequestCreationPending
       ? PENDING_OUTBOUND_REQUEST_REASON
       : undefined;
 

@@ -102,6 +102,14 @@ vi.mock('./hooks', () => ({
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+vi.mock('./debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => ({
+    outboundChallenge: mocks.outboundChallenge,
+    outboundChallengeDirectionUnknown: false,
+    outboundRequestCreationPending: false,
+  }),
+}));
+
 // The publish path itself is covered by the entity-response tests; here it only needs to record
 // what the card asked for.
 vi.mock('~/core/hooks/use-entity-vote', () => ({

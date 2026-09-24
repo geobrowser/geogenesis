@@ -33,6 +33,7 @@ import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { useSharedOutboundRequestState } from './debate-challenge-state-provider';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
@@ -43,7 +44,6 @@ import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
-import { useOutboundDebateChallenge } from './use-outbound-debate-challenge';
 import { usePersonRecords } from './use-person-records';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
@@ -83,6 +83,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // One mutation for the whole list. A mutation per row only disables the row that was clicked,
   // leaving every other person requestable while the same outbound request is still in flight.
   const createChallenge = useCreateDebateChallenge();
+  const {
+    outboundChallenge,
+    outboundChallengeDirectionUnknown: challengeDirectionUnknown,
+    outboundRequestCreationPending,
+  } = useSharedOutboundRequestState();
   // One elevated portal for every row's menu. A portal per person would append a matching number
   // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const popoverPortal = useElevatedPopoverPortal();
@@ -288,9 +293,6 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // `activity.challenge` is whichever challenge involves the viewer, in either direction. The
   // shared resolver keeps every matchmaking surface on the same outbound gate and applies expiry
   // even while the activity payload still reports the challenge as pending.
-  const { outboundChallenge, outboundChallengeDirectionUnknown: challengeDirectionUnknown } =
-    useOutboundDebateChallenge(activity, currentUserId);
-
   // Every Debate button greys out at once when the viewer already has something open, so say why
   // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
   // sentence would only repeat it.
@@ -298,7 +300,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     ? 'You have a debate request awaiting a reply.'
     : activeDebate(activity)
       ? "You're already in a debate."
-      : activity?.outbound_request || requests?.outbound
+      : activity?.outbound_request || requests?.outbound || outboundRequestCreationPending
         ? PENDING_OUTBOUND_REQUEST_REASON
         : null;
 

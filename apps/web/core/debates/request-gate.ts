@@ -65,6 +65,9 @@ export const REQUEST_PENDING_LABEL = 'Publishing your position…';
 export const REQUEST_PENDING_DELAYED_LABEL = 'Still confirming your position…';
 /** One account may have only one unanswered request, regardless of whether it targets a claim or person. */
 export const PENDING_OUTBOUND_REQUEST_REASON = 'You can only have one pending outbound request at a time.';
+/** Both create APIs share one account-scoped key so every request control sees either one in flight. */
+export const outboundRequestCreationMutationKey = (accountKey: string | null) =>
+  ['debates', 'account', accountKey, 'create-outbound-request'] as const;
 
 export function debateRequestGate({
   chatPosition,

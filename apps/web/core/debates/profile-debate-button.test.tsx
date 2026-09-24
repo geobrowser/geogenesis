@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   disabledRequestsOutboundRequest: null as { id: string } | null,
   outboundChallenge: null as { id: string } | null,
   outboundChallengeDirectionUnknown: false,
+  outboundRequestCreationPending: false,
 }));
 
 vi.mock('./hooks', () => ({
@@ -32,15 +33,12 @@ vi.mock('./matchmaking/hooks', () => ({
   }),
 }));
 
-vi.mock('./matchmaking/use-outbound-debate-challenge', () => ({
-  useOutboundDebateChallenge: () => ({
+vi.mock('./matchmaking/debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => ({
     outboundChallenge: mocks.outboundChallenge,
     outboundChallengeDirectionUnknown: mocks.outboundChallengeDirectionUnknown,
+    outboundRequestCreationPending: mocks.outboundRequestCreationPending,
   }),
-}));
-
-vi.mock('./use-current-geo-chat-user-id', () => ({
-  useCurrentGeoChatUserId: () => 'viewer-user',
 }));
 
 const { ProfileDebateButton } = await import('./profile-debate-button');
@@ -53,6 +51,7 @@ beforeEach(() => {
   mocks.disabledRequestsOutboundRequest = null;
   mocks.outboundChallenge = null;
   mocks.outboundChallengeDirectionUnknown = false;
+  mocks.outboundRequestCreationPending = false;
   mocks.createChallenge.mockReset();
 });
 
@@ -88,6 +87,15 @@ describe('ProfileDebateButton', () => {
     render(<ProfileDebateButton spaceId="profile-them" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
+  });
+
+  it('blocks while a request is being created by another control', () => {
+    mocks.outboundRequestCreationPending = true;
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeDisabled();
+    expect(screen.getByTitle('You can only have one pending outbound request at a time.')).toContainElement(button);
   });
 
   it('blocks another person request while an outbound person challenge is pending', () => {

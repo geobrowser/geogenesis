@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   createChallenge: vi.fn(),
   createPending: false,
   createRecipientProfileSpaceId: null as string | null,
+  outboundRequestCreationPending: false,
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
   cancelPending: false,
@@ -169,6 +170,23 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
+}));
+
+vi.mock('./debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => {
+    const challenge =
+      mocks.outboundChallenge ?? (mocks.challenge?.requester.user_id === mocks.currentUserId ? mocks.challenge : null);
+    const expiresAt = challenge ? new Date(challenge.expires_at).getTime() : Number.NaN;
+    const isUnexpired = !Number.isFinite(expiresAt) || expiresAt > Date.now();
+
+    return {
+      outboundChallenge: challenge && isUnexpired ? challenge : null,
+      outboundChallengeDirectionUnknown: Boolean(
+        mocks.challenge && isUnexpired && !mocks.outboundChallenge && !mocks.currentUserId
+      ),
+      outboundRequestCreationPending: mocks.outboundRequestCreationPending,
+    };
+  },
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -314,6 +332,7 @@ beforeEach(() => {
   mocks.createChallenge.mockReset();
   mocks.createPending = false;
   mocks.createRecipientProfileSpaceId = null;
+  mocks.outboundRequestCreationPending = false;
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
   mocks.cancelPending = false;
@@ -752,6 +771,16 @@ describe('PeopleTab', () => {
     expect(screen.getByRole('button', { name: 'Requesting…' })).toBeDisabled();
     for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
       expect(button).toBeDisabled();
+    }
+  });
+
+  it('disables every person request while another control creates an outbound request', () => {
+    mocks.outboundRequestCreationPending = true;
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
     }
   });
 

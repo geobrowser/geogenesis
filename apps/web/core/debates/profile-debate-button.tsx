@@ -5,11 +5,10 @@ import * as React from 'react';
 import { Text } from '~/design-system/text';
 
 import { useCreateDebateChallenge, useDebateActivity, useDebateProfile } from './hooks';
+import { useSharedOutboundRequestState } from './matchmaking/debate-challenge-state-provider';
 import { useDebateRequests } from './matchmaking/hooks';
-import { useOutboundDebateChallenge } from './matchmaking/use-outbound-debate-challenge';
 import { RequestBlockedReasonTooltip } from './request-blocked-reason-tooltip';
 import { PENDING_OUTBOUND_REQUEST_REASON } from './request-gate';
-import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 
 /**
  * Challenges the owner of a personal space to a debate with no claim attached.
@@ -23,15 +22,19 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
   // enabled rather than cache-only: `debate.requests_changed` invalidates this key when a request
   // ends, and a disabled observer would keep gating on its stale outbound row indefinitely.
   const { data: requests } = useDebateRequests(profileQuery.data?.can_challenge === true);
-  const currentUserId = useCurrentGeoChatUserId();
-  const { outboundChallenge, outboundChallengeDirectionUnknown } = useOutboundDebateChallenge(activity, currentUserId);
+  const { outboundChallenge, outboundChallengeDirectionUnknown, outboundRequestCreationPending } =
+    useSharedOutboundRequestState();
   const createChallenge = useCreateDebateChallenge();
 
   if (!profileQuery.data?.can_challenge) return null;
 
   const error = createChallenge.error instanceof Error ? createChallenge.error.message : null;
   const blockedReason =
-    requests?.outbound || activity?.outbound_request || outboundChallenge || outboundChallengeDirectionUnknown
+    requests?.outbound ||
+    activity?.outbound_request ||
+    outboundChallenge ||
+    outboundChallengeDirectionUnknown ||
+    outboundRequestCreationPending
       ? PENDING_OUTBOUND_REQUEST_REASON
       : null;
 
