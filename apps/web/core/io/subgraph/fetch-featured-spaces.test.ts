@@ -265,52 +265,76 @@ describe('fetchFeaturedSpaces', () => {
     consoleError.mockRestore();
   });
 
+  /**
+   * Counts *runs*, not calls.
+   *
+   * A retry re-runs the effect `graphql` returned; it does not call `graphql` again. So a mock
+   * handing back a ready-made `Effect.fail` cannot see a retry at all — which is how the first
+   * version of this test managed to fail against working code. `Effect.suspend` defers the decision
+   * to each run, the way the real client defers a `fetch`.
+   */
+  function frontierRuns(outcome: (run: number) => Effect.Effect<unknown, { _tag: string }>) {
+    let runs = 0;
+    graphqlMock.mockImplementation((arg: unknown) => {
+      if (query(arg).includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
+      return Effect.suspend(() => {
+        runs += 1;
+        return outcome(runs);
+      });
+    });
+    return () => runs;
+  }
+
+  const AI_UNDER_ROOT = {
+    entities: [
+      {
+        id: 't0',
+        name: 'Root',
+        spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
+        featuredTags: featuredTags(false),
+        subtopics: [{ toEntity: { id: 't1' } }],
+      },
+      {
+        id: 't1',
+        name: 'AI',
+        spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
+        featuredTags: featuredTags(),
+        subtopics: [],
+      },
+    ],
+  };
+
   // The frontier query is the heaviest thing on the Explore path and the first the API sheds under
   // load, so the common failure is a blip rather than an outage. One re-attempt clears it.
   it('re-attempts a shed round before giving up on it', async () => {
-    let frontierCalls = 0;
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
-      frontierCalls += 1;
-      if (frontierCalls === 1) return Effect.fail({ _tag: 'GraphqlRuntimeError' });
-      return Effect.succeed({
-        entities: [
-          {
-            id: 't0',
-            name: 'Root',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 't1' } }],
-          },
-          {
-            id: 't1',
-            name: 'AI',
-            spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-            featuredTags: featuredTags(),
-            subtopics: [],
-          },
-        ],
-      });
-    });
+    const runs = frontierRuns(run =>
+      run === 1 ? Effect.fail({ _tag: 'GraphqlRuntimeError' }) : Effect.succeed(AI_UNDER_ROOT)
+    );
 
+    // Three: the shed round, its re-attempt, and the round for the subtopic that round turned up —
+    // so the walk carried on past the blip rather than stopping at it.
     expect((await fetchFeaturedSpaces()).map(f => f.spaceId)).toEqual([AI_SPACE]);
-    expect(frontierCalls).toBeGreaterThan(1);
+    expect(runs()).toBe(3);
   });
 
   // An aborted caller has nothing to retry: it went away. Re-attempting it would spend the
   // traversal budget on a request nobody is waiting for.
   it('does not re-attempt a cancelled round', async () => {
-    let frontierCalls = 0;
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
-      frontierCalls += 1;
-      return Effect.fail({ _tag: 'AbortError' });
-    });
+    const runs = frontierRuns(() => Effect.fail({ _tag: 'AbortError' }));
 
     await expect(fetchFeaturedSpaces()).rejects.toBeDefined();
-    expect(frontierCalls).toBe(1);
+    expect(runs()).toBe(1);
+  });
+
+  // And a round that keeps failing is not retried forever: the traversal is already five sequential
+  // round trips inside a request.
+  it('gives up after the one re-attempt', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const runs = frontierRuns(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+
+    await expect(fetchFeaturedSpaces()).rejects.toThrow();
+    expect(runs()).toBe(2);
+    consoleError.mockRestore();
   });
 });
 
@@ -382,14 +406,29 @@ describe('fetchFeaturedSpacesShared', () => {
     expect(b).toEqual(c);
   });
 
+  /**
+   * Runs `body` with the TTL expired. The clock has to still be advanced *while the call happens* —
+   * restoring it first puts `Date.now()` back before the cached list's timestamp, so the entry looks
+   * fresh again and the call under test never reaches the traversal it is about.
+   */
+  async function withStaleCache(body: () => Promise<void>): Promise<void> {
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      await body();
+    } finally {
+      vi.useRealTimers();
+    }
+  }
+
   it('walks again once the list has gone stale', async () => {
     AI_ONLY();
 
     await fetchFeaturedSpacesShared();
     const callsAfterFirst = graphqlMock.mock.calls.length;
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(5 * 60 * 1000);
-    await fetchFeaturedSpacesShared();
+    await withStaleCache(async () => {
+      await fetchFeaturedSpacesShared();
+    });
 
     expect(graphqlMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
@@ -416,12 +455,11 @@ describe('fetchFeaturedSpacesShared', () => {
     AI_ONLY();
     await fetchFeaturedSpacesShared();
 
-    vi.useFakeTimers();
-    vi.advanceTimersByTime(5 * 60 * 1000);
-    vi.useRealTimers();
-    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+    await withStaleCache(async () => {
+      graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+      await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
+    });
 
-    await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
     consoleError.mockRestore();
   });
 
@@ -432,6 +470,29 @@ describe('fetchFeaturedSpacesShared', () => {
     graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
 
     await expect(fetchFeaturedSpacesShared()).rejects.toBeDefined();
+    consoleError.mockRestore();
+  });
+
+  /**
+   * One reader navigating away must not take the fallback down for everyone else. An abort is the
+   * one rejection that reaches the cache with a good list already in hand, so it is the one case
+   * where "forget the failed traversal" and "forget what we know" come apart.
+   */
+  it('keeps the last full walk when a caller cancels', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    AI_ONLY();
+    await fetchFeaturedSpacesShared();
+
+    await withStaleCache(async () => {
+      graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'AbortError' }));
+      await expect(fetchFeaturedSpacesShared()).rejects.toBeDefined();
+    });
+
+    await withStaleCache(async () => {
+      graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+      await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
+    });
+
     consoleError.mockRestore();
   });
 });

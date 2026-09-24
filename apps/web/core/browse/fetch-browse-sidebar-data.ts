@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
-import { AbortError } from '~/core/io/subgraph/errors';
+import { isAbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import {
@@ -182,7 +182,7 @@ function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<ResolvedF
     error => {
       // Cancellation must keep propagating so query consumers do not replace a
       // cancelled request with a successful-but-empty sidebar response.
-      if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
+      if (isAbortError(error)) throw error;
       console.error('Unable to load Featured spaces for the Browse sidebar', error);
       return { featured: [], error: true };
     }

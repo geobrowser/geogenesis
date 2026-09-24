@@ -3,6 +3,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { NextResponse } from 'next/server';
 
 import { parseExploreSort } from '~/core/explore/explore-feed-params';
+import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
@@ -43,6 +44,6 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('topic feed', error);
-    return NextResponse.json({ items: [], nextCursor: null }, { status: 500 });
+    return feedUnavailableResponse();
   }
 }

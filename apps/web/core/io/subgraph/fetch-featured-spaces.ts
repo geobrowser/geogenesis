@@ -4,7 +4,7 @@ import { FEATURED_TAG_ID, ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID
 import { Environment } from '~/core/environment';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
-import { AbortError } from './errors';
+import { isAbortError } from './errors';
 import { graphql } from './graphql';
 import {
   AVATAR_PROPERTY_ID,
@@ -133,23 +133,23 @@ function resolveTopicName(name: string | null | undefined): string {
 }
 
 /**
- * Attempts per traversal round before the whole traversal is failed, and the pause between them.
+ * One extra attempt per traversal round.
  *
  * The frontier query asks 200 topics at once for their claiming spaces, images and subtopics, which
- * makes it the heaviest thing on the Explore path and the first to be shed when the API is under
- * load — it comes back as a GraphQL *error*, not a transport failure, and `graphql` only retries
- * Railway DNS blips. One re-attempt clears the transient ones. Kept to a single retry on purpose:
- * the traversal is already five sequential round trips, and this runs inside a request.
+ * makes it the heaviest thing on the Explore path and the first the API sheds under load. It is shed
+ * as a GraphQL *error* rather than a transport failure, and `graphql`'s own retry covers only
+ * Railway DNS blips, so nothing above it re-attempts. Same shape as that one, and kept to a single
+ * retry: the traversal is already five sequential round trips inside a request, and the feed route
+ * retries the whole thing once a failure is visible to it.
+ *
+ * Retried here rather than by widening `graphql`'s policy, which every subgraph fetcher in the app
+ * shares — this is one known-heavy query, not a claim about all of them.
  */
-const ROUND_ATTEMPTS = 2;
-const ROUND_RETRY_DELAY_MS = 250;
-
-function isAbort(error: unknown): boolean {
-  return (
-    error instanceof AbortError ||
-    (typeof error === 'object' && error !== null && (error as { _tag?: string })._tag === 'AbortError')
-  );
-}
+const ROUND_RETRY = {
+  times: 1,
+  // A cancelled caller has nothing to retry: it went away.
+  while: (error: { _tag: string }) => !isAbortError(error),
+} as const;
 
 /**
  * One round of the traversal, or a rejection.
@@ -162,28 +162,16 @@ function isAbort(error: unknown): boolean {
  * match these filters yet".
  */
 async function runQuery<T>(query: string): Promise<T> {
-  let lastError: unknown;
+  const resultOrError = await Effect.runPromise(
+    Effect.either(Effect.retry(graphql<T>({ query, endpoint: Environment.getConfig().api }), ROUND_RETRY))
+  );
 
-  for (let attempt = 0; attempt < ROUND_ATTEMPTS; attempt++) {
-    const resultOrError = await Effect.runPromise(
-      Effect.either(graphql<T>({ query, endpoint: Environment.getConfig().api }))
-    );
+  if (Either.isRight(resultOrError)) return resultOrError.right;
 
-    if (Either.isRight(resultOrError)) return resultOrError.right;
-
-    const error = resultOrError.left;
-    // A cancelled caller is not a failing API: there is nothing to retry and the rejection must
-    // keep propagating so the shared traversal does not cache an abort as an answer.
-    if (isAbort(error)) throw error;
-    lastError = error;
-
-    if (attempt < ROUND_ATTEMPTS - 1) {
-      await new Promise(resolve => setTimeout(resolve, ROUND_RETRY_DELAY_MS));
-    }
-  }
-
-  const tag = (lastError as { _tag?: string } | undefined)?._tag ?? 'UnknownError';
-  console.error(`${tag}: Unable to fetch featured spaces`);
+  const error = resultOrError.left;
+  // The rejection must keep propagating so the shared traversal does not cache an abort as an answer.
+  if (isAbortError(error)) throw error;
+  console.error(`${error._tag}: Unable to fetch featured spaces`);
   throw new Error('Failed to load featured spaces');
 }
 
@@ -213,13 +201,29 @@ let resolvedAt: number | null = null;
  * minute old copy of it is right in every way that matters to a reader, and serving it beats
  * serving nothing when a refresh fails. Nothing here is stale in the sense that matters: what
  * changed is our ability to re-read it, not the answer.
+ *
+ * A list served this way starts the TTL again, so a persistent outage is re-checked every five
+ * minutes rather than on every request. That is the point: the alternative is each request walking
+ * a tree that is currently failing, which is the pile-up the sharing above exists to prevent.
  */
 let lastResolved: FeaturedSpace[] | null = null;
 
-/** Exported for tests; no caller should need to reach for this. */
-export function clearFeaturedSpacesCache(): void {
+/**
+ * Drops the shared promise so the next caller starts a traversal, leaving `lastResolved` alone.
+ *
+ * The distinction matters for the one rejection that reaches here with a good list already in
+ * hand: a cancelled caller. Clearing everything would let one reader navigating away take the
+ * fallback down for everyone else — the same hazard the re-throw in `runQuery` exists to avoid,
+ * one level up.
+ */
+function dropSharedTraversal(): void {
   shared = null;
   resolvedAt = null;
+}
+
+/** Exported for tests; no caller should need to reach for this. */
+export function clearFeaturedSpacesCache(): void {
+  dropSharedTraversal();
   lastResolved = null;
 }
 
@@ -253,7 +257,7 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
       return featured;
     },
     error => {
-      if (isAbort(error) || lastResolved === null) throw error;
+      if (isAbortError(error) || lastResolved === null) throw error;
       console.error('Featured spaces traversal failed; serving the last list walked in full', error);
       return lastResolved;
     }
@@ -267,7 +271,7 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
       if (shared === started) resolvedAt = Date.now();
     },
     () => {
-      if (shared === started) clearFeaturedSpacesCache();
+      if (shared === started) dropSharedTraversal();
     }
   );
   return started;

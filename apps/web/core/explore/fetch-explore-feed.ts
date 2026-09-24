@@ -54,8 +54,6 @@ export type { ExploreFeedItem };
  * mean opposite things to a reader, so they are kept apart here rather than downstream.
  */
 export class ExploreSpaceScopeUnresolvedError extends Error {
-  readonly _tag = 'ExploreSpaceScopeUnresolvedError';
-
   constructor() {
     super('Explore feed: the visible space scope could not be resolved');
     this.name = 'ExploreSpaceScopeUnresolvedError';
