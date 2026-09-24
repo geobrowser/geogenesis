@@ -12,7 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
-import { type DebateSharePrompt } from './api';
+import { type DebateRematchSession, type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
@@ -27,6 +27,7 @@ import {
   useDebateSharePrompts,
   useGeoChatAuth,
   useHandleDebateSharePrompt,
+  useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
 import { useDebateRequests } from './matchmaking/hooks';
@@ -163,6 +164,16 @@ export function DebateCoordinator() {
   // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
   // do is more current than activity is.
   const atRematchPage = pathname.includes('/debates/rematches/');
+  const rematch = activity?.rematch;
+  // Navigation keeps the session alive. Offer a way back or out once the source room no longer
+  // owns recording finalization, without forcing every open tab back into the picker.
+  const recoverableRematch =
+    rematch?.source_debate_id &&
+    (rematch.status === 'browsing' || rematch.status === 'request_pending') &&
+    !atRematchPage &&
+    !pathname.includes(`/debates/${rematch.source_debate_id}`)
+      ? rematch
+      : null;
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -310,6 +321,7 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
+      {recoverableRematch && <RematchRecoveryBar key={recoverableRematch.id} session={recoverableRematch} />}
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
@@ -349,6 +361,43 @@ export function DebateCoordinator() {
         />
       )}
     </>
+  );
+}
+
+function RematchRecoveryBar({ session }: { session: DebateRematchSession }) {
+  const router = useRouter();
+  const leave = useLeaveDebateRematch(session.id);
+  const [resuming, startResuming] = React.useTransition();
+  const busy = leave.isPending || resuming;
+
+  return (
+    <section
+      aria-label="Your debate session"
+      className="fixed bottom-4 left-1/2 z-1100 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-lg border border-grey-02 bg-white p-3 shadow-card"
+    >
+      <Text as="p" variant="metadata">
+        Your debate session is still open.
+      </Text>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          disabled={busy}
+          onClick={() => {
+            rememberDebateReturnDestination();
+            startResuming(() => router.push(debateRematchPath(session)));
+          }}
+        >
+          {resuming ? 'Resuming…' : 'Resume debate'}
+        </Button>
+        <Button variant="secondary" disabled={busy} onClick={() => leave.mutate()}>
+          {leave.isPending ? 'Leaving…' : 'Leave debate'}
+        </Button>
+      </div>
+      {leave.error && (
+        <p role="alert" className="mt-2 text-sm text-red-01">
+          {leave.error instanceof Error ? leave.error.message : 'Could not leave the debate. Try again.'}
+        </p>
+      )}
+    </section>
   );
 }
 
