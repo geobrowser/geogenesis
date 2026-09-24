@@ -1,4 +1,4 @@
-export type DebateAnalyticsSurface = 'hub' | 'rematch';
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates';
 export type DebateActionAnalyticsSurface = DebateAnalyticsSurface | 'request-popup';
 
 const ACTION_SURFACE_ANALYTICS = {
@@ -10,6 +10,10 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Debate rematch',
     actionIntent: 'debate_rematch_action',
   },
+  'profile-debates': {
+    labelPrefix: 'Profile debates',
+    actionIntent: 'profile_debates_action',
+  },
   'request-popup': {
     labelPrefix: 'Debate request popup',
     actionIntent: 'debate_request_popup_action',
@@ -19,6 +23,7 @@ const ACTION_SURFACE_ANALYTICS = {
 const FILTER_INTENTS = {
   hub: 'filter_debates_hub',
   rematch: 'filter_debate_rematch',
+  'profile-debates': 'filter_profile_debates',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
 
 /** Stable metadata for actions shared across debate surfaces. */
@@ -35,7 +40,7 @@ export function debateActionAnalyticsAttributes(
   } as const;
 }
 
-/** Analytics metadata for controls shared by the debate hub and the standalone rematch page. */
+/** Analytics metadata for controls shared by the debate hub, rematch page, and profile debate list. */
 export function debateSurfaceAnalyticsAttributes(
   surface: DebateAnalyticsSurface,
   action: string,

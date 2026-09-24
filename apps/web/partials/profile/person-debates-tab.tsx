@@ -186,6 +186,7 @@ export function PersonDebatesTab({
           end={
             isOwner ? (
               <FilterSwitch
+                analyticsSurface="profile-debates"
                 label={hiddenRows.length > 0 ? `Show hidden (${hiddenRows.length})` : 'Show hidden'}
                 checked={showingHidden}
                 onChange={next => {

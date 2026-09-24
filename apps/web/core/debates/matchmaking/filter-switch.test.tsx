@@ -28,4 +28,12 @@ describe('FilterSwitch analytics', () => {
     expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Matches only');
     expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
   });
+
+  it('attributes profile debate filters to the profile rather than the hub', () => {
+    render(<FilterSwitch analyticsSurface="profile-debates" label="Show hidden" checked={false} onChange={vi.fn()} />);
+
+    const toggle = screen.getByRole('switch', { name: 'Show hidden' });
+    expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Profile debates Show hidden');
+    expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_profile_debates');
+  });
 });
