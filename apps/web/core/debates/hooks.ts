@@ -1294,8 +1294,12 @@ export function useCreateDebateChallenge() {
       }));
       // The create response is the newest authoritative copy of this challenge. Refetching activity
       // immediately can still return the pre-create row and erase it from the cache, which removes
-      // the outbound card and re-enables every request button until geo-chat catches up. The gateway
-      // and the activity poll still reconcile later changes; keep this response in place meanwhile.
+      // the outbound card and re-enables every request button until geo-chat catches up. Keep this
+      // response through that window, then force one reconciliation at the boundary; the gateway
+      // and normal activity poll own subsequent changes.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      }, OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS);
     },
     onError: (error, request) => {
       if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;

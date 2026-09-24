@@ -110,6 +110,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -236,7 +237,8 @@ describe('debate query network ownership', () => {
   });
 
   it('keeps a newly created outbound challenge cached instead of refetching stale activity over it', () => {
-    vi.spyOn(performance, 'now').mockReturnValue(12_345);
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(12_345);
     const { result } = renderHook(() => useCreateDebateChallenge());
     const mutation = result.current as unknown as {
       onSuccess(challenge: { id: string }): void;
@@ -280,6 +282,26 @@ describe('debate query network ownership', () => {
       outbound_challenge_cached_at_monotonic_ms: 12_345,
     });
     expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+  });
+
+  it('reconciles activity when the outbound propagation grace expires', async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useCreateDebateChallenge());
+    const mutation = result.current as unknown as {
+      onSuccess(challenge: { id: string }): void;
+    };
+
+    mutation.onSuccess({ id: 'challenge-1' });
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['debates', 'account', 'user-a', 'activity'],
     });
   });
