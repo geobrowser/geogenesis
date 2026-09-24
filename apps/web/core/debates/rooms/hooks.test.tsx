@@ -192,4 +192,34 @@ describe('useRoomPresence', () => {
     await vi.waitFor(() => expect(spy.mock.calls.filter(call => call[1].joined).length).toBe(2));
     spy.mockRestore();
   });
+
+  // Occupancy is the latest event per connection, so a join retried after the leave would record
+  // someone who has gone as present until the room closes.
+  it('does not retry a failed join once the viewer has left', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    vi.useFakeTimers();
+    const spy = vi
+      .spyOn(api, 'setDebateRoomPresence')
+      .mockImplementation((_room, body) =>
+        body.joined ? Promise.reject(new Error('offline')) : Promise.resolve({} as never)
+      );
+    try {
+      const { unmount } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(spy.mock.calls.filter(call => call[1].joined)).toHaveLength(1);
+
+      // Leaves while that failed join waits to retry.
+      unmount();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      const kinds = spy.mock.calls.map(call => call[1].joined);
+      expect(kinds).toContain(false);
+      expect(kinds.slice(kinds.indexOf(false))).not.toContain(true);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
 });

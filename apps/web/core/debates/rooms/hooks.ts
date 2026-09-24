@@ -80,6 +80,8 @@ async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = 
     } catch (error) {
       if (attempt >= PRESENCE_RETRIES || shouldStop()) throw error;
       await new Promise(resolve => setTimeout(resolve, PRESENCE_RETRY_MS * (attempt + 1)));
+      // Again after the wait: a leave sent during it must not be followed by this join.
+      if (shouldStop()) throw error;
     }
   }
 }
