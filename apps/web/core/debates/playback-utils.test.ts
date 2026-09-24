@@ -11,6 +11,8 @@ import {
   sortTurnSegments,
   timelineSecondsFor,
   timelineSecondsForSegments,
+  turnSpansForDurations,
+  turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
 } from './playback-utils';
@@ -711,5 +713,52 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     const b = fakeVideo({ muted: false, blockUnmuted: false });
     expect(await playBothWithMutedFallback(a, b)).toBe('playing');
     expect(a.muted).toBe(false);
+  });
+});
+
+describe('turn spans', () => {
+  it('walks the allowance into alternating turns', () => {
+    expect(turnSpansForDurations(2, [30_000, 45_000])).toEqual([
+      { index: 0, slot: 2, startSeconds: 0, endSeconds: 30, clockStartSeconds: 0 },
+      { index: 1, slot: 1, startSeconds: 30, endSeconds: 75, clockStartSeconds: 30 },
+    ]);
+  });
+
+  it('prefers the clock the debaters watched over the cut, where the render kept a lead-in', () => {
+    const spans = turnSpansFromSegments([
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 35_000,
+        duration_ms: 35_000,
+        countdown_start_ms: 5_000,
+      },
+    ]);
+    expect(spans[0]).toEqual({
+      index: 0,
+      slot: 1,
+      startSeconds: 0,
+      endSeconds: 35,
+      clockStartSeconds: 5,
+    });
+  });
+
+  it('sorts defensively, the way every other segment reader here does', () => {
+    const late = {
+      turn_index: 1,
+      participant_slot: 2 as const,
+      output_start_ms: 30_000,
+      output_end_ms: 60_000,
+      duration_ms: 30_000,
+    };
+    const early = {
+      turn_index: 0,
+      participant_slot: 1 as const,
+      output_start_ms: 0,
+      output_end_ms: 30_000,
+      duration_ms: 30_000,
+    };
+    expect(turnSpansFromSegments([late, early]).map(span => span.slot)).toEqual([1, 2]);
   });
 });

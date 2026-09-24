@@ -12,6 +12,24 @@ export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
 };
 
+/**
+ * The same outline, scaled for type that is small rather than enormous.
+ *
+ * `recordingOverlayTextShadow` is built for the 7.5rem count-in, where a 2px offset is a hairline
+ * — about 1.7% of the glyph. On a 14px `+1` that same 2px is 14% of the glyph, which is thicker
+ * than the strokes it is supposed to be outlining: the four copies meet in the middle, fill the
+ * counter of the zero and the notch of the plus, and the number reads as a smudge.
+ *
+ * So it is 1px, and eight directions instead of four. At 2px the diagonals alone cover the gaps
+ * between them; at 1px they do not, and a four-corner outline leaves the top, bottom and sides of
+ * each stroke bare — which is the other way this reads as broken. Eight 1px copies make a solid
+ * 1px halo. The soft shadow underneath is what separates it from a light frame.
+ */
+export const smallOverlayTextShadow = {
+  textShadow:
+    '-1px -1px 0 #000, 0 -1px 0 #000, 1px -1px 0 #000, 1px 0 0 #000, 1px 1px 0 #000, 0 1px 0 #000, -1px 1px 0 #000, -1px 0 0 #000, 0 1px 4px rgba(0,0,0,0.9)',
+};
+
 // Label/phrase overlays in Figma are dark text with a white outline (the inverse of the big
 // numbers and "GO!", which stay white-on-black via recordingOverlayTextShadow).
 export const recordingLabelTextShadow = {

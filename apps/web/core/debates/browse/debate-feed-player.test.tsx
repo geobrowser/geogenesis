@@ -1,8 +1,9 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -11,12 +12,17 @@ const mocks = vi.hoisted(() => ({
   ticker: null as unknown,
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+  /** The running counts the stack was handed, for the chip that draws them. */
+  stackTallies: [] as unknown[],
+  /** What `useDebateAgreement` reports, which has a suite of its own. */
+  agreement: new Map<number, unknown>(),
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
 const emptyTicker = () => ({
   cardsBySlot: new Map(),
   historyBySlot: new Map(),
+  tallyBySlot: new Map(),
   markers: [],
   answers: new Map(),
   onAnswered: vi.fn(),
@@ -43,13 +49,32 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 // The player carries a claim ticker now, which reaches for the transcript, the sync engine and a
 // query client. These tests are about the audio gate; the ticker has its own suite.
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  // The claim's own response control, which carries a page's worth of providers with it. What the
+  // player owns is which entity it is pointed at and when it is offered.
+  EntityVoteButtons: ({ entityId }: { entityId: string }) => <button type="button">Respond to {entityId}</button>,
+}));
+
+vi.mock('./use-debate-agreement', () => ({
+  useDebateAgreement: () => mocks.agreement,
+}));
+
 vi.mock('./debate-claim-ticker', () => ({
   useDebateClaimTicker: () => mocks.ticker,
   // Stands in for the stack so the *player's* half is what is under test: whether it opens the
   // corner, and whether it lets go when the stack is gone. Clicking it reports focus arriving,
   // which is all the player ever learns from the real one.
-  DebateClaimTickerStack: ({ open, onFocusChange }: { open?: boolean; onFocusChange?: (f: boolean) => void }) => {
+  DebateClaimTickerStack: ({
+    open,
+    tally,
+    onFocusChange,
+  }: {
+    open?: boolean;
+    tally?: unknown;
+    onFocusChange?: (f: boolean) => void;
+  }) => {
     mocks.stackOpens.push(open === true);
+    if (tally) mocks.stackTallies.push(tally);
     return (
       <button type="button" data-testid="claim-stack" onClick={() => onFocusChange?.(true)}>
         stack
@@ -57,6 +82,14 @@ vi.mock('./debate-claim-ticker', () => ({
     );
   },
   ClaimScrubberMarkers: () => null,
+  // Stands in for the chip the tile now draws beside its round and timer: the player owns the
+  // count and both latches, so what is under test here is what it hands over.
+  ClaimBacklogChip: ({ count, tally }: { count: number; tally: unknown }) => (
+    <button type="button" aria-label={`Show the ${count} claims said so far`}>
+      {count} claims
+      {tally ? <span data-claim-burst>+1</span> : null}
+    </button>
+  ),
 }));
 
 const participant = (slot: 1 | 2): DebateParticipant =>
@@ -67,7 +100,10 @@ const participant = (slot: 1 | 2): DebateParticipant =>
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
-const debate = { id: 'debate-1', claim: { space_id: 'space-1' } } as unknown as Debate;
+const debate = {
+  id: 'debate-1',
+  claim: { space_id: 'space-1', claim_entity_id: 'claim-entity-1' },
+} as unknown as Debate;
 
 /**
  * A controller in the one state that matters here: playing, with a turn in progress, both
@@ -84,6 +120,8 @@ function controllerFixture(overrides: {
   subtitle?: string | null;
   /** A freshly signed recording, as `refreshSlotUrl` produces. */
   urls?: { slot1: string; slot2: string };
+  /** Where the playhead sits, for the turn cues, which are a function of it. */
+  playheadSeconds?: number;
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -101,9 +139,12 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: 5,
+    playheadSeconds: overrides.playheadSeconds ?? 5,
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
+    // Two 30s turns, the speaking one first — enough for `turnCuesAt` to have a turn after this
+    // one to announce, which is what the up-next chip needs.
+    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000]),
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -150,6 +191,8 @@ beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
   mocks.stackOpens = [];
+  mocks.stackTallies = [];
+  mocks.agreement = new Map();
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -329,7 +372,7 @@ describe('a refused autoplay', () => {
         autoplayBlocked: true,
         playing: false,
       });
-      return render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
+      return render(<DebateFeedPlayer debate={debate} active />);
     })();
 
     expect(container.querySelector('[aria-label="Resume debate"]')).not.toBeNull();
@@ -337,7 +380,7 @@ describe('a refused autoplay', () => {
 
   it('shows nothing extra while playback is running normally', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const { container } = render(<DebateFeedPlayer debate={{ id: 'debate-1' } as unknown as Debate} active />);
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     expect(container.querySelector('[aria-label="Resume debate"]')).toBeNull();
   });
@@ -609,5 +652,199 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     act(() => vi.advanceTimersByTime(2_000));
 
     expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+describe('the turn clock, replayed', () => {
+  /**
+   * Two 30s turns; slot 1 speaks first. `playheadSeconds` is the only thing a cue reads.
+   *
+   * Every assertion here is scoped to its own render's container, because this suite has no
+   * cleanup between tests — see the note on `renderStack`.
+   */
+  const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
+
+  const phrases = (container: HTMLElement) =>
+    [...container.querySelectorAll('[data-turn-cue]')].map(node => node.textContent);
+
+  it('rests through the middle of a turn, which is most of a debate', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it("replays the room's warning over the debater it belongs to", () => {
+    mocks.controller = at(26);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Wrap it up!');
+  });
+
+  it('announces the hand-off on the tile about to speak', () => {
+    mocks.controller = at(20.5);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Up next in 10s');
+  });
+
+  it('names the round it has just opened', () => {
+    mocks.controller = at(1);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toContain('Round 1 · Opening');
+  });
+
+  it('stands down while the viewer has the debate paused', () => {
+    // A cue frozen on a paused tile is a shout with no clock behind it, and the viewer has
+    // stopped the debate to look at something.
+    mocks.controller = at(26, { playing: false });
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it('stays off a compact gallery tile, with the claim layer', () => {
+    mocks.controller = at(26);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(phrases(container)).toEqual([]);
+  });
+
+  it("puts the debater's count with the clock, not with their claims", () => {
+    mocks.controller = at(12);
+    mocks.ticker = {
+      ...emptyTicker(),
+      historyBySlot: new Map([[2, [{ window: {} }, { window: {} }, { window: {} }, { window: {} }]]]),
+      tallyBySlot: new Map([[2, { count: 4, ageMs: 300, run: 1 }]]),
+    };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const chip = screen.getByRole('button', { name: /claims said so far/ });
+    // Beside the round and the turn timer — the tile's instruments — rather than in the corner
+    // the claims themselves occupy.
+    expect(chip.closest('[data-claim-corner]')).toBeNull();
+    expect(chip.textContent).toContain('4 claims');
+    expect(container.querySelector('[data-claim-burst]')).not.toBeNull();
+  });
+
+  it("ends the video on both debaters' figures rather than a stop", () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = {
+      ...emptyTicker(),
+      historyBySlot: new Map([
+        [1, [{ window: {} }, { window: {} }, { window: {} }]],
+        [2, [{ window: {} }]],
+      ]),
+    };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const cards = [...container.querySelectorAll('[data-scorecard]')];
+    expect(cards.map(card => card.textContent)).toEqual([expect.stringContaining('3'), expect.stringContaining('1')]);
+  });
+
+  it('names each debater once at the end, not twice', () => {
+    // The scorecard lifts the tile's own name row into the middle of the tile — same avatar, same
+    // label, same link — so the row itself stands down rather than sitting dimmed under the scrim.
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const named = [...container.querySelectorAll('button')].filter(
+      button => button.textContent?.includes('space-1') && !button.hasAttribute('hidden')
+    );
+    expect(named).toHaveLength(1);
+    expect(named[0].closest('[data-scorecard]')).not.toBeNull();
+  });
+
+  it('drops the last subtitle once the debate is over', () => {
+    // A caption for speech that is playing. Held up after the last frame it is a fragment of a
+    // sentence nobody is saying, printed across the end card by a layer that outranks it.
+    const subtitle = 'a half-finished sentence';
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true, subtitle });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it('says how the room received each debater, once enough people have answered', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };
+    mocks.agreement = new Map([
+      [1, { percent: 68, meetsFloor: true, positiveWord: 'agreed' }],
+      // Below the floor: the number exists and is still not a reading.
+      [2, { percent: 33, meetsFloor: false, positiveWord: 'agreed' }],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).toContain('68% agreed');
+    expect(container.textContent).not.toContain('33%');
+  });
+
+  it('asks the viewer where the debate left them, on the claim it was about', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const prompt = container.querySelector('[data-claim-prompt]');
+    expect(prompt?.textContent).toContain('Where do you stand?');
+    // The debate's own claim, so the answer lands where the pills below the player publish it.
+    expect(prompt?.textContent).toContain('claim-entity-1');
+  });
+
+  it('does not ask until the debate is over', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-claim-prompt]')).toBeNull();
+  });
+
+  it('leaves the scrubber reachable under the question', () => {
+    // Seeking back through the debate has to stay possible from the card that asks it.
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect([...(container.querySelector('[data-claim-prompt]') as HTMLElement).classList]).toContain('bottom-5');
+  });
+
+  it('keeps the scorecard off a compact gallery tile', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = { ...emptyTicker(), historyBySlot: new Map([[1, [{ window: {} }]]]) };
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(container.querySelector('[data-scorecard]')).toBeNull();
+  });
+
+  it('parks the round beside the timer once the card has handed over', () => {
+    mocks.controller = at(6);
+    mocks.ticker = emptyTicker();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    // Only the speaking tile has a timer, so only it carries the label.
+    const badges = [...container.querySelectorAll('[data-round-badge]')];
+    expect(badges).toHaveLength(1);
+    expect(badges[0].getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it("ramps the ring from white through amber to the room's own red", () => {
+    const ringAt = (seconds: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1 }),
+        turnState: { slot: 1, seconds, progress: 0.5 },
+      };
+      mocks.ticker = emptyTicker();
+      const { container, unmount } = render(<DebateFeedPlayer debate={debate} active />);
+      const colour = container.querySelector('[data-countdown-ring]')?.getAttribute('data-countdown-ring');
+      unmount();
+      return colour;
+    };
+
+    expect(ringAt(45)).toBe('#ffffff');
+    expect(ringAt(20)).toBe('#FFA134');
+    // The same value `RecordingCountdownRing` uses in the room.
+    expect(ringAt(4)).toBe('#FF4A26');
   });
 });

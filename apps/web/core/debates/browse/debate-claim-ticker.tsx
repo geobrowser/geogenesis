@@ -7,17 +7,23 @@ import cx from 'classnames';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
+  type ClaimTally,
+  RUN_LENGTH,
   type StackedCard,
+  TALLY_BURST_MS,
   type TickerWindow,
   backlogWindows,
   claimHistory,
   claimMarkers,
+  claimTally,
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
 import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
+import { smallOverlayTextShadow } from '~/core/debates/debate-video-tile';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
+import { cueOpacity } from '~/core/debates/turn-cues';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { uuidToHex } from '~/core/id/normalize';
@@ -26,8 +32,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
+import { Warning } from '~/design-system/icons/warning';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -49,6 +55,14 @@ type DebateTicker = {
    * contents for what is coming.
    */
   historyBySlot: Map<number, StackedCard[]>;
+  /**
+   * The running claim count for each debater, while a claim of theirs has just landed.
+   *
+   * Absent for most of a debate — see {@link claimTally}. Derived here rather than by the player
+   * so it is counted over the same backlog the corner opens into, which is the only way the two
+   * numbers can be guaranteed to agree.
+   */
+  tallyBySlot: Map<number, ClaimTally>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Which way the viewer answered each claim this session. */
@@ -261,9 +275,19 @@ export function useDebateClaimTicker(
     return history;
   }, [backlogBySlot, playheadMs]);
 
+  const tallyBySlot = React.useMemo(() => {
+    const tallies = new Map<number, ClaimTally>();
+    for (const [slot, slotWindows] of backlogBySlot) {
+      const tally = claimTally(slotWindows, playheadMs);
+      if (tally) tallies.set(slot, tally);
+    }
+    return tallies;
+  }, [backlogBySlot, playheadMs]);
+
   return {
     cardsBySlot,
     historyBySlot,
+    tallyBySlot,
     markers,
     answers,
     onAnswered,
@@ -457,8 +481,6 @@ export function DebateClaimTickerStack({
   cards,
   history,
   open = false,
-  pinned = false,
-  onTogglePinned,
   onFocusChange,
   participantByClaimId,
   rowsByClaimId,
@@ -470,10 +492,6 @@ export function DebateClaimTickerStack({
   history?: StackedCard[];
   /** Show the backlog rather than the live cards. */
   open?: boolean;
-  /** Open because the chip was pressed rather than because the pointer is over the tile. */
-  pinned?: boolean;
-  /** Pressing the chip. Without it the corner has no chip and is hover-only. */
-  onTogglePinned?: () => void;
   /** Keyboard focus entering or leaving the stack, which opens it the way the pointer does. */
   onFocusChange?: (focused: boolean) => void;
   participantByClaimId?: Map<string, DebateParticipant>;
@@ -484,7 +502,6 @@ export function DebateClaimTickerStack({
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   const shown = open ? (history ?? cards) : cards;
-  const backlog = history ?? cards;
 
   /**
    * Whether the list is sitting at its newest claim, and so should follow the next one down.
@@ -607,8 +624,7 @@ export function DebateClaimTickerStack({
    *
    * Still drawn while the backlog is *open*, because there it is the way back out.
    */
-  const showChip = backlog.length > 0 && onTogglePinned !== undefined && (open || cards.length === 0);
-  if (shown.length === 0 && !showChip) return null;
+  if (shown.length === 0) return null;
 
   return (
     <div
@@ -685,30 +701,57 @@ export function DebateClaimTickerStack({
           />
         ))}
       </div>
-
-      {/* `expanded` only where the chip is what is holding it open. A pointer closes the list by
-          leaving the tile, so a chip offering to Hide it would be describing something it cannot
-          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
-      {showChip && onTogglePinned && (
-        <ClaimBacklogChip count={backlog.length} expanded={open && pinned} onClick={onTogglePinned} />
-      )}
     </div>
   );
 }
 
 /**
- * The way into the backlog where there is no pointer to open it with.
+ * How many claims this debater has made, and the way into them.
  *
- * Shown on a device that cannot hover. Everywhere else the corner opens by pointing at the tile,
- * and a permanent pill duplicating that would be furniture over the video — the Figma frame has no
- * chip in it, and the resting player is quieter without one. It stays in the DOM there all the
- * same, because a keyboard has no pointer either; how that is done, and why not with `sr-only`, is
- * on the `className` below rather than restated here.
+ * It lived in the claim corner, under the cards and then over them, and neither worked: closed it
+ * was a label with nothing to label, and open it was a heading on a list that does not need one.
+ * It reads better as an instrument — beside the round and the turn timer, with the other things
+ * that say where the debate has got to — and that also frees the corner to be nothing but claims.
+ *
+ * It used to be invisible on a pointer device, on the reasoning that a permanent pill duplicating
+ * a hover target is furniture over the video. Two things changed that. It is the only thing on the
+ * tile that says the backlog exists, so a viewer who never happens to point at a debater's half
+ * never learns it is there; and a count that climbs through a debate is worth watching in its own
+ * right, which a hover target that is usually absent cannot be.
+ *
+ * Still the control as well as the readout. A pointer opens the backlog by pointing at the tile,
+ * but a touch screen has no hover and the video behind is one large play/pause button — so
+ * pressing this is the only way in there, and a keyboard reaching it opens the list for the same
+ * reason.
  *
  * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
- * same set of claims. Two different icons for one idea would be the harder thing to learn.
+ * same set of claims. Two different icons for one idea would be the harder thing to learn — which
+ * is what this was until recently: that button draws `Warning`, the circled exclamation, and the
+ * chip drew `InfoSmall`, a circled question mark, while claiming in its own comment to match it.
  */
-function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expanded: boolean; onClick: () => void }) {
+export function ClaimBacklogChip({
+  count,
+  tally,
+  expanded,
+  onClick,
+  onFocusChange,
+}: {
+  count: number;
+  /** Set while a claim of theirs has just landed, which is what the `+1` and the run read. */
+  tally: ClaimTally | null;
+  expanded: boolean;
+  onClick: () => void;
+  /** Keyboard focus arriving here opens the backlog, the way it does inside the stack. */
+  onFocusChange?: (focused: boolean) => void;
+}) {
+  const onARun = tally !== null && tally.run >= RUN_LENGTH;
+  const burstOpacity = tally ? cueOpacity(tally.ageMs, TALLY_BURST_MS) : 0;
+  // Leaves to the left rather than upward. Up is the natural direction for a `+1` and there is no
+  // room for it here: the chip sits 12px from the top of the tile, under the turn timer, so a
+  // glyph climbing out of it would be cut off by the tile's own edge. To its left is empty frame
+  // in every state. It starts *outside* the pill either way, so the two are never legible at once.
+  const burstDriftPx = -16 * Math.min(1, (tally?.ageMs ?? 0) / TALLY_BURST_MS);
+
   return (
     <button
       type="button"
@@ -719,6 +762,13 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         event.stopPropagation();
         onClick();
       }}
+      // A pointer that has *clicked* here has already said what it wants; only a keyboard arriving
+      // should open the list on focus alone. Same test the stack applies to its own cards.
+      onFocus={event => {
+        if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+        onFocusChange?.(true);
+      }}
+      onBlur={() => onFocusChange?.(false)}
       /**
        * 20px tall, which is the debater's avatar across the band from it — the two read as one row
        * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
@@ -739,10 +789,36 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
        * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
        * chip would have stripped its own shape. Checked, not assumed.
        */
-      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      /**
+       * 20px tall, which is the debater's avatar across the band from it — the two read as one row
+       * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
+       * `::after` that reaches past the box without taking any layout.
+       *
+       * `relative` so the `+1` can be positioned against it, and so the chip keeps its place in the
+       * column rather than being taken out of flow the way the hidden version was.
+       */
+      className="pointer-events-auto relative flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50"
     >
-      <InfoSmall color="white" />
-      <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
+      <Warning color="white" />
+      <span className={cx('tabular-nums transition-colors', onARun && 'font-medium text-green')}>
+        {expanded ? 'Hide' : onARun ? `${tally.run} in a row` : `${count} ${count === 1 ? 'claim' : 'claims'}`}
+      </span>
+
+      {/* Outside the pill, climbing away from it. White in a black outline, which is the treatment
+          every other number over this video wears — at the weight that outline wants at this size,
+          rather than the count-in's; see {@link smallOverlayTextShadow}. */}
+      <span
+        aria-hidden
+        data-claim-burst
+        className="pointer-events-none absolute top-0 right-full mr-1 text-[1rem] leading-none font-bold text-white tabular-nums"
+        style={{
+          opacity: burstOpacity,
+          transform: `translateX(${burstDriftPx}px)`,
+          ...smallOverlayTextShadow,
+        }}
+      >
+        +1
+      </span>
     </button>
   );
 }
