@@ -16,7 +16,7 @@ export function ProfileDebateVisibilityButton({
   pending: boolean;
   onClick: () => void;
 }) {
-  const label = hidden ? 'Restore debate to profile' : 'Hide debate from profile';
+  const label = hidden ? 'Unhide from profile' : 'Hide from profile';
 
   return (
     <SquareButton
