@@ -316,10 +316,9 @@ describe('analytics', () => {
 
     searchSubmitted({
       queryText: '  reach Jane@example.com using 4242 4242 4242 4242  ',
-      queryType: 'global_entities',
-      resultCount: 0,
+      resultCount: 12,
       latencyMs: 370,
-      source: 'global_search',
+      surface: 'global',
     });
 
     expect(capture).toHaveBeenCalledWith('search_submitted', {
@@ -328,8 +327,8 @@ describe('analytics', () => {
       query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
       query_type: 'global_entities',
       query_text: 'reach ***** using *****',
-      result_count: 0,
-      no_results: true,
+      result_count: 12,
+      no_results: false,
       latency_bucket: '250_500ms',
     });
   });
@@ -341,14 +340,35 @@ describe('analytics', () => {
     expect(searchQueryId('Graph Search')).not.toBe(searchQueryId('Another Search'));
   });
 
+  it('marks a completed zero-result search without emitting for an empty query', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: 'missing entity',
+      resultCount: 0,
+      latencyMs: 100,
+      surface: 'entity',
+    });
+    searchSubmitted({ queryText: '   ', resultCount: 0, latencyMs: 100, surface: 'entity' });
+
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(
+      'search_submitted',
+      expect.objectContaining({ result_count: 0, no_results: true })
+    );
+  });
+
   it('assigns stable latency buckets at their boundaries', async () => {
     const { searchLatencyBucket } = await import('./analytics');
 
-    expect(searchLatencyBucket(249)).toBe('under_250ms');
+    expect(searchLatencyBucket(249)).toBe('0_250ms');
     expect(searchLatencyBucket(250)).toBe('250_500ms');
     expect(searchLatencyBucket(500)).toBe('500_1000ms');
-    expect(searchLatencyBucket(1000)).toBe('1_2s');
-    expect(searchLatencyBucket(2000)).toBe('2s_plus');
+    expect(searchLatencyBucket(1000)).toBe('1000_2000ms');
+    expect(searchLatencyBucket(2000)).toBe('2000ms_plus');
   });
 
   it('keeps product actions best-effort when the analytics runtime throws', async () => {

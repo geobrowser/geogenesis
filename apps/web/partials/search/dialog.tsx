@@ -68,7 +68,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const autocomplete = useSearch({
     enabled: open,
     includeNonCanonical: canonicalOnly ? false : true,
-    analyticsQueryType: 'global_entities',
+    analyticsSurface: 'global',
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
 

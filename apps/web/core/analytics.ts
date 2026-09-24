@@ -5,15 +5,20 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
-export type SearchQueryType = 'entities' | 'global_entities' | 'space_entities';
+export type SearchAnalyticsSurface = 'entity' | 'global' | 'space';
 
 type SearchSubmittedProperties = {
   queryText: string;
-  queryType: SearchQueryType;
   resultCount: number;
   latencyMs: number;
-  source: 'entity_search' | 'global_search' | 'space_search';
+  surface: SearchAnalyticsSurface;
 };
+
+const SEARCH_ANALYTICS_PROPERTIES = {
+  entity: { query_type: 'entities', source: 'entity_search' },
+  global: { query_type: 'global_entities', source: 'global_search' },
+  space: { query_type: 'space_entities', source: 'space_search' },
+} as const satisfies Record<SearchAnalyticsSurface, AnalyticsProperties>;
 
 type AnalyticsIdentity = string | number | AnalyticsProperties;
 
@@ -198,14 +203,13 @@ export function capture(eventName: string, properties: AnalyticsProperties = {})
  * Podcasts app and the shared analytics runtime. The runtime adds route context (including
  * `space_id`, `page_entity_type`, and `page_entity_id`) when it sends the event.
  */
-export function searchSubmitted({ queryText, queryType, resultCount, latencyMs, source }: SearchSubmittedProperties) {
+export function searchSubmitted({ queryText, resultCount, latencyMs, surface }: SearchSubmittedProperties) {
   const normalizedQuery = queryText.trim();
   if (!normalizedQuery) return;
 
   capture('search_submitted', {
-    source,
+    ...SEARCH_ANALYTICS_PROPERTIES[surface],
     query_id: searchQueryId(normalizedQuery),
-    query_type: queryType,
     query_text: maskSearchText(normalizedQuery),
     result_count: resultCount,
     no_results: resultCount === 0,
@@ -226,11 +230,11 @@ export function searchQueryId(queryText: string) {
 }
 
 export function searchLatencyBucket(latencyMs: number) {
-  if (latencyMs < 250) return 'under_250ms';
+  if (latencyMs < 250) return '0_250ms';
   if (latencyMs < 500) return '250_500ms';
   if (latencyMs < 1000) return '500_1000ms';
-  if (latencyMs < 2000) return '1_2s';
-  return '2s_plus';
+  if (latencyMs < 2000) return '1000_2000ms';
+  return '2000ms_plus';
 }
 
 function maskSearchText(value: string) {

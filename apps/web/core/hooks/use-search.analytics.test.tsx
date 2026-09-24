@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -38,20 +38,17 @@ describe('useSearch analytics', () => {
   it('records a completed global search, including a real zero-result outcome', async () => {
     mocks.findFuzzyPage.mockResolvedValue({ results: [], rawCount: 0, serverCount: 0, total: 0 });
 
-    const { result } = renderHook(
-      () => useSearch({ initialQuery: 'knowledge graph', analyticsQueryType: 'global_entities' }),
-      { wrapper }
-    );
+    const { result } = renderHook(() => useSearch({ initialQuery: 'knowledge graph', analyticsSurface: 'global' }), {
+      wrapper,
+    });
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(mocks.searchSubmitted).toHaveBeenCalledOnce();
+    await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledOnce());
+    expect(result.current.isLoading).toBe(false);
     expect(mocks.searchSubmitted).toHaveBeenCalledWith({
       queryText: 'knowledge graph',
-      queryType: 'global_entities',
       resultCount: 0,
       latencyMs: expect.any(Number),
-      source: 'global_search',
+      surface: 'global',
     });
   });
 
@@ -64,5 +61,20 @@ describe('useSearch analytics', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(mocks.searchSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('does not count a background refetch as another user search', async () => {
+    mocks.findFuzzyPage.mockResolvedValue({ results: [], rawCount: 0, serverCount: 0, total: 3 });
+
+    renderHook(() => useSearch({ initialQuery: 'knowledge graph' }), { wrapper });
+
+    await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledOnce());
+
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['search'] });
+    });
+
+    await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledTimes(2));
+    expect(mocks.searchSubmitted).toHaveBeenCalledOnce();
   });
 });
