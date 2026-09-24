@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Tooltip } from '~/design-system/tooltip';
+import { RequestBlockedReasonTooltip } from './request-blocked-reason-tooltip';
 
 /**
  * The offer to debate a claim, as one control (GEO-2825).
@@ -115,23 +115,11 @@ export function RequestDebateControl({
   return (
     <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>
       {blockedReason ? (
-        <Tooltip
-          label={blockedReason}
-          position="bottom"
+        <RequestBlockedReasonTooltip
+          reason={blockedReason}
           align={variant === 'block' ? 'center' : 'end'}
-          openOnPress
-          // A disabled button does not reliably emit the pointer events Radix needs. The wrapper
-          // owns hover/touch and is focusable for keyboard readers, while leaving the button's
-          // disabled semantics intact.
-          trigger={
-            <span
-              tabIndex={0}
-              title={blockedReason}
-              className={cx('inline-flex cursor-default', variant === 'block' && 'w-full')}
-            >
-              {button}
-            </span>
-          }
+          fullWidth={variant === 'block'}
+          trigger={button}
         />
       ) : (
         button
