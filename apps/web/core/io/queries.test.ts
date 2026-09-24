@@ -8,6 +8,7 @@ import {
   getEntityBacklinks,
   groupRestResults,
   hasDefaultSearchExcludedType,
+  indexVoteRowsByObject,
   shouldIncludeRestSearchResult,
 } from './queries';
 import { MAX_SEARCH_QUERY_LENGTH } from './search-query';
@@ -428,5 +429,46 @@ describe('getEntityBacklinks', () => {
     await Effect.runPromise(getEntityBacklinks('12a21058-4706-4d9c-b8c8-813732ef63b2'));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * GEO-2993. Verify is gone, so a factual claim's responder answers it again with Agree — and their
+ * old kind-2 row stays on chain, because nothing can clear it any more. That person now holds two
+ * vote rows on one claim, which is the state these lookups have to describe correctly.
+ */
+describe('indexVoteRowsByObject', () => {
+  const CLAIM = '4c81561d1f9541319cdddd20ab831ba2';
+
+  /** Newest first, as `VOTED_AT_DESC` returns them: today's Agree, then August's Verify. */
+  const bothKinds = [
+    { objectId: CLAIM, voteKind: 1, votedAt: '2026-09-24T00:00:00.000Z' },
+    { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+  ];
+
+  it('describes an entity by its newest vote row, not its oldest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Kind 1. `Object.fromEntries` gave the last row the key and reported 2, which is the vote the
+    // person no longer holds a way to cast.
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('keeps both lookups on the same row', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Read from different rows these disagree, and the timestamp is the list's sort key — so the
+    // entity would sort by one vote and be filtered by another.
+    const kindRow = bothKinds.find(row => row.voteKind === voteKindByObjectId[CLAIM]);
+    expect(kindRow?.votedAt).toBe(votedAtByObjectId[CLAIM]);
+  });
+
+  it('leaves an entity with one row alone', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 0, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(0);
   });
 });

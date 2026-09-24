@@ -54,7 +54,7 @@ const VOTE_ORDER_SOURCE = /* GraphQL */ `
       first: $first
       after: $after
       orderBy: VOTED_AT_DESC
-      filter: { userId: { is: $userId }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
+      filter: { userId: { is: $userId }, voteKind: { is: 1 } }
     ) {
       pageInfo {
         hasNextPage

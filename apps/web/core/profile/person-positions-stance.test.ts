@@ -1,6 +1,7 @@
+import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { decodeVoteOrder } from './person-position-order';
+import { decodeVoteOrder, personVoteOrderDocument } from './person-position-order';
 import { applyFilter, heldPositionsCount } from './use-person-positions';
 
 /**
@@ -360,5 +361,26 @@ describe('heldPositionsCount', () => {
   it('falls back to the server count when the vote read failed', () => {
     // Overstated, and better than a headline number that never arrives.
     expect(heldPositionsCount({ total: null, isError: true }, 211)).toBe(211);
+  });
+});
+
+/**
+ * GEO-2993. The decode ignores kind-2 rows, but ignoring them after they arrive is not enough.
+ *
+ * Every row that comes back takes a slot in the vote order and a slot in the page budget, whether
+ * or not it becomes an answer. A claim answered Agree last month and Verified yesterday would sort
+ * by yesterday's retired vote, and enough retired rows push real stance rows past `ORDER_MAX_PAGES`
+ * and out of the list entirely. Asked for correctly, neither can happen.
+ */
+describe('the positions query', () => {
+  const source = print(personVoteOrderDocument);
+
+  it('asks only for stance votes', () => {
+    // `print` normalises the document, so this is the filter as printed rather than as written.
+    expect(source).toContain('voteKind: {is: 1}');
+  });
+
+  it('does not ask for the retired veracity kind', () => {
+    expect(source).not.toContain('voteKind: {is: 2}');
   });
 });

@@ -1554,6 +1554,40 @@ export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
 
+/**
+ * The current vote row per entity, as two lookups.
+ *
+ * **The first row wins, not the last.** One entity can carry more than one row: a claim answered
+ * Verify before the vocabularies merged and Agree after it holds a vote of each kind, and both come
+ * back from a query that filters on direction rather than kind. Rows arrive `VOTED_AT_DESC`, so the
+ * first one is the current answer.
+ *
+ * This was `Object.fromEntries`, which gives a repeated key its *last* value — the oldest row. On
+ * the claim above that reported kind 2, and `useVoteTabEntities` drops any claim whose recorded
+ * kind is not the one it resolves to now, so the claim vanished from the Agreed tab while the
+ * person still held a live stance on it. That is the path every factual-claim responder takes once
+ * Verify is gone, so it is the common case rather than an edge.
+ *
+ * Both maps are built here together so a single entity's kind and timestamp always describe the
+ * same row; read from different rows they can disagree, and the timestamp is the list's sort key.
+ */
+export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+} {
+  const voteKindByObjectId: Record<string, number> = {};
+  const votedAtByObjectId: Record<string, string> = {};
+
+  for (const node of nodes) {
+    const id = uuidToHex(node.objectId);
+    if (id in voteKindByObjectId) continue;
+    voteKindByObjectId[id] = node.voteKind;
+    votedAtByObjectId[id] = node.votedAt;
+  }
+
+  return { voteKindByObjectId, votedAtByObjectId };
+}
+
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
   voteKindByObjectId: Record<string, number>;
@@ -1586,8 +1620,7 @@ export function getUserEntityVoteObjectIdsPage(
 
     const nodes = rows.filter(node => Boolean(node.objectId));
     const objectIds = nodes.map(node => node.objectId);
-    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
-    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(nodes);
 
     return {
       objectIds,
