@@ -39,8 +39,8 @@ export function customBrowseView({
   const byType = viewFromTypes(entity);
 
   if (byType === 'claim') return 'claim';
-  if (isEditing) return 'generic';
   if (byType === 'topic') return 'topic';
+  if (isEditing) return 'generic';
 
   /*
    * A profile is the *space's* view of a person, not the type's.

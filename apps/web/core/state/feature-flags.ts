@@ -34,6 +34,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'peerAvailability',
+    label: "View someone's availability",
+    description:
+      'Show "See times" on People rows, opening another debater\'s week (GEO-2938). Viewing only: there is no way to request a time yet.',
+    enabledByDefault: false,
+  },
+  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
@@ -146,6 +153,10 @@ export function useDebugDebatesPageEnabled() {
 
 export function usePlaybackDiagnosticsEnabled() {
   return useFeatureFlag('playbackDiagnostics');
+}
+
+export function usePeerAvailabilityEnabled() {
+  return useFeatureFlag('peerAvailability');
 }
 
 /**

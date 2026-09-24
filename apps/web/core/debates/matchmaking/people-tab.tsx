@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
@@ -15,6 +16,8 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
+
+import { PeerAvailabilityModal } from '~/partials/availability/peer-availability-modal';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
@@ -69,6 +72,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // One elevated portal for every row's space list. A portal per person would append a matching
   // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const spacesPopoverPortal = useElevatedPopoverPortal();
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
+  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  const [viewingTimes, setViewingTimes] = React.useState<{ userId: string; name: string } | null>(null);
+  // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
+  const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
@@ -333,12 +342,29 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
+                  onSeeTimes={
+                    peerAvailabilityEnabled
+                      ? (peer, opener) => {
+                          seeTimesOpenerRef.current = opener;
+                          setViewingTimes(peer);
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </ul>
           </>
         </HubQueryState>
       </div>
+
+      {/* Closing returns to the hub, which is where it was opened from. */}
+      <PeerAvailabilityModal
+        open={viewingTimes !== null}
+        userId={viewingTimes?.userId ?? ''}
+        peerName={viewingTimes?.name}
+        onClose={() => setViewingTimes(null)}
+        openerRef={seeTimesOpenerRef}
+      />
     </div>
   );
 }
@@ -352,6 +378,7 @@ function PersonRow({
   disabled,
   disabledReason,
   onRequireSignIn,
+  onSeeTimes,
 }: {
   person: DebatePerson;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
@@ -370,6 +397,8 @@ function PersonRow({
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
   onRequireSignIn?: () => void;
+  /** Absent while the feature flag is off, which is what hides "See times". */
+  onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -431,23 +460,46 @@ function PersonRow({
           </div>
         ) : null}
       </div>
-      <HubPillButton
-        onClick={() =>
-          onRequireSignIn
-            ? onRequireSignIn()
-            : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
-        }
-        // `in_debate` holds signed out too: it means this person is in an active debate right now,
-        // which is true of them rather than of any viewer, so signing in would not make them
-        // available. `can_challenge` and the viewer's own pending request are the viewer-relative
-        // ones, and those are what the press bypasses on its way to the sign-in.
-        disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
-        pending={createChallenge.isPending}
-        pendingLabel="Requesting…"
-        title={disabled ? disabledReason : undefined}
-      >
-        {person.in_debate ? 'In a debate' : 'Request debate'}
-      </HubPillButton>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Quiet, and deliberately never disabled alongside the pill: someone already in a debate,
+            or a viewer whose own request is pending, is exactly who wants to know when this person
+            is next free. Gating it on the same reasons would hide it at the moment it earns its
+            place. Signed out it opens Privy like the pill does, because the endpoint behind it is
+            viewer-scoped and would only 401. */}
+        {onSeeTimes && (
+          <button
+            type="button"
+            // Every row carries this control, so the visible label alone leaves a screen reader or
+            // voice control with a list of identical targets.
+            aria-label={`See times for ${speakerLabel(person)}`}
+            onClick={event =>
+              onRequireSignIn
+                ? onRequireSignIn()
+                : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)
+            }
+            className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
+          >
+            See times
+          </button>
+        )}
+        <HubPillButton
+          onClick={() =>
+            onRequireSignIn
+              ? onRequireSignIn()
+              : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+          }
+          // `in_debate` holds signed out too: it means this person is in an active debate right now,
+          // which is true of them rather than of any viewer, so signing in would not make them
+          // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+          // ones, and those are what the press bypasses on its way to the sign-in.
+          disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
+          pending={createChallenge.isPending}
+          pendingLabel="Requesting…"
+          title={disabled ? disabledReason : undefined}
+        >
+          {person.in_debate ? 'In a debate' : 'Request debate'}
+        </HubPillButton>
+      </div>
     </li>
   );
 }

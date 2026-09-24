@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
+import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 
@@ -131,5 +132,15 @@ describe('the type-filtered Best sort (GEO-2885)', () => {
     const printed = print(exploreBestByTypeConnectionDocument);
     expect(printed).toContain('maxPerType: $maxPerType');
     expect(variableNames(exploreBestByTypeConnectionDocument)).toContain('maxPerType');
+  });
+});
+
+describe('the complete contextual feed index', () => {
+  it('reads only the fields needed to order the feed and count its types', () => {
+    expect(rootField(exploreCompleteIndexDocument).name.value).toBe('entitiesConnection');
+    expect(nodeFieldNames(exploreCompleteIndexDocument)).toEqual(['createdAt', 'id', 'rankingScore', 'typeIds']);
+    expect(argNames(rootField(exploreCompleteIndexDocument))).toEqual(
+      ['after', 'filter', 'first', 'orderBy', 'spaceIds', 'typeIds'].sort()
+    );
   });
 });

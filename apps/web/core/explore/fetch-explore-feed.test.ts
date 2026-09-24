@@ -23,10 +23,20 @@ const windows = vi.hoisted(() => ({
    * stopped being forwarded.
    */
   variables: [] as Record<string, unknown>[],
+  operations: [] as string[],
+  responder: null as null | ((operation: string, variables: Record<string, unknown>) => unknown),
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ variables }: { variables: Record<string, unknown> }) => {
+  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+    const operation =
+      query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
+    windows.operations.push(operation);
+    if (windows.responder) {
+      windows.calls += 1;
+      windows.variables.push(variables);
+      return Effect.succeed(windows.responder(operation, variables));
+    }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
@@ -39,7 +49,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { fetchExploreFeed } = await import('./fetch-explore-feed');
+const { fetchCompleteExplorePopulationIndex, fetchExploreFeed } = await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -96,6 +106,8 @@ beforeEach(() => {
   windows.queue = [];
   windows.calls = 0;
   windows.variables = [];
+  windows.operations = [];
+  windows.responder = null;
 });
 
 /**
@@ -132,6 +144,20 @@ describe('the debate-tag clause reaching the query', () => {
 
     // The activity feed shares this fetcher and must keep seeing untagged claims.
     expect(sentFilter()?.or).toBeUndefined();
+  });
+});
+
+describe('a contextual entity scope', () => {
+  const sorts = ['best', 'new', 'top'] as const;
+  const entityFilter = { id: { is: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } };
+
+  it.each(sorts)('is composed into the %s query', async sort => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort, entityFilter });
+
+    const filter = windows.variables[0]?.filter as { and?: unknown[] } | undefined;
+    expect(filter?.and).toContainEqual(entityFilter);
   });
 });
 
@@ -271,5 +297,117 @@ describe('a type selection filters server-side (GEO-2885)', () => {
     // Easy to lose when swapping the document: the gate is an argument, not part of the
     // connection, so nothing would fail loudly if it stopped being sent.
     expect((sent().filter as { or?: unknown } | undefined)?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+});
+
+describe('a complete contextual population', () => {
+  it('shares one compact population when equivalent space filters arrive in a different order', async () => {
+    const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? {
+            nodes: [{ id: 'cache-order', typeIds: [CLAIM_TYPE_ID], rankingScore: '1', createdAt: '1' }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          }
+        : windowOf([], { hasNextPage: false, endCursor: null });
+    const args = {
+      spaceIds: [SPACE, secondSpace],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      requireName: true,
+      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { is: 'cache-order' } } }],
+    };
+
+    await fetchCompleteExplorePopulationIndex(args);
+    await fetchCompleteExplorePopulationIndex({ ...args, spaceIds: [secondSpace, SPACE] });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+  });
+
+  it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'unscored', rankingScore: null },
+          { id: 'ranked', rankingScore: '42.5' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('unscored', CLAIM_TYPE_ID), entity('ranked', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const scopeFilter = { id: { in: ['ranked', 'unscored'] } };
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
+    expect(windows.calls).toBe(2);
+    expect((windows.variables[0]?.filter as { and?: unknown[] }).and).toContainEqual(scopeFilter);
+    expect(windows.variables[1]?.filter).toEqual(
+      expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
+    );
+  });
+
+  it('uses the same compact population for New and orders it by creation time', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'older-high-rank', rankingScore: '100', createdAt: '1700000000' },
+          { id: 'newer-low-rank', rankingScore: '1', createdAt: '1800000000' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('older-high-rank', CLAIM_TYPE_ID), entity('newer-low-rank', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      sort: 'new',
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [
+        { typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: ['older-high-rank', 'newer-low-rank'] } } },
+      ],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
+    expect(windows.calls).toBe(2);
+  });
+
+  it('reuses the ordered compact population when infinite scroll advances', async () => {
+    const rows = Array.from({ length: 31 }, (_, index) => ({
+      id: `entity-${index.toString().padStart(2, '0')}`,
+      rankingScore: String(31 - index),
+      createdAt: String(1_800_000_000 - index),
+    }));
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? { nodes: rows, pageInfo: { hasNextPage: false, endCursor: null } }
+        : windowOf(
+            rows.map(row => entity(row.id, CLAIM_TYPE_ID)),
+            { hasNextPage: false, endCursor: null }
+          );
+
+    const args = {
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: rows.map(row => row.id) } } }],
+    };
+    const first = await fetchExploreFeed(args);
+    expect(first.nextCursor).not.toBeNull();
+
+    await fetchExploreFeed({ ...args, cursor: first.nextCursor });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+    expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
   });
 });
