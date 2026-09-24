@@ -177,6 +177,122 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
   return [{ specifier, local: '' }];
 }
 
+/** One binding taken from another module: a named export, a default, or a whole namespace. */
+type Reference = {
+  specifier: string;
+  exported?: string;
+  local: string;
+  /** `import * as X` / `export * as X`: an object whose every property is a client reference. */
+  namespace?: boolean;
+  /** `export * from`: the target's named bindings, each classified on its own. */
+  starReexport?: boolean;
+  reexported?: boolean;
+};
+
+/**
+ * Every module a file pulls in at runtime, with the bindings it takes from each.
+ *
+ * Type-only imports and exports are skipped, whole-statement and per-element alike. That exclusion
+ * is load-bearing rather than tidy: the only route into `core/blocks/data/filters.ts` is a type
+ * import from `core/chat/edit-types.ts`, and following it walks on into the sync store and reports
+ * three modules TypeScript erases before anything runs.
+ *
+ * At module scope so the fixtures below can reach it. Inside the suite it was only ever exercised
+ * against this tree, where every bare import resolves to CSS or a package — so deleting that edge
+ * left the corpus green and reopened the gap it was added to close, which is the same hole the
+ * `callReferences` fixtures were written for.
+ */
+function staticReferences(sourceFile: ts.SourceFile): Reference[] {
+  const found: Reference[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const specifier = statement.moduleSpecifier.text;
+      const clause = statement.importClause;
+
+      // A bare `import './x'` takes no bindings but still loads the module.
+      if (!clause) {
+        found.push({ specifier, local: '' });
+        continue;
+      }
+      if (clause.isTypeOnly) continue;
+
+      // `import {} from './x'` has a clause with nothing in it and still loads the module. Review
+      // also asked for the all-type-specifier form; that is declined in the reply, because this
+      // repo does not set `verbatimModuleSyntax` and TypeScript elides it.
+      if (
+        !clause.name &&
+        clause.namedBindings &&
+        ts.isNamedImports(clause.namedBindings) &&
+        clause.namedBindings.elements.length === 0
+      ) {
+        found.push({ specifier, local: '' });
+        continue;
+      }
+
+      if (clause.name) found.push({ specifier, exported: 'default', local: clause.name.text });
+
+      if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        found.push({ specifier, local: `* as ${clause.namedBindings.name.text}`, namespace: true });
+      } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          if (element.isTypeOnly) continue;
+          found.push({
+            specifier,
+            exported: (element.propertyName ?? element.name).text,
+            local: element.name.text,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      if (statement.isTypeOnly) continue;
+      const specifier = statement.moduleSpecifier.text;
+
+      if (!statement.exportClause) {
+        // Not a namespace value: this hands on the target's named bindings one by one, so a
+        // barrel star-re-exporting nothing but components is not an offence. `export * as Ns` is
+        // a namespace object and stays one, below.
+        found.push({ specifier, local: 're-exports *', starReexport: true, reexported: true });
+      } else if (ts.isNamespaceExport(statement.exportClause)) {
+        found.push({
+          specifier,
+          local: `re-exports * as ${statement.exportClause.name.text}`,
+          namespace: true,
+          reexported: true,
+        });
+      } else {
+        // An empty list still evaluates the target, the same way `import {}` does. This is that
+        // check's other half, and it should have gone in with it.
+        if (statement.exportClause.elements.length === 0) {
+          found.push({ specifier, local: '' });
+          continue;
+        }
+
+        for (const element of statement.exportClause.elements) {
+          if (element.isTypeOnly) continue;
+          found.push({
+            specifier,
+            exported: (element.propertyName ?? element.name).text,
+            local: element.name.text,
+            reexported: true,
+          });
+        }
+      }
+    }
+  }
+
+  found.push(...callReferences(sourceFile));
+
+  return found;
+}
+
 /**
  * What the tree holds today, each one read before being listed rather than swept up by the walk.
  *
@@ -349,11 +465,17 @@ function isComponentWrapper(expression: ts.Expression, react: ReactBindings): bo
  * `PersonalProfileBioStarterMerge` of being values. A guard that accuses real components is one
  * somebody deletes.
  *
- * So the evidence runs the other way: a function whose every `return` hands back an object, array,
- * string or number is a value — which is `function BuildOptions() { return {}; }`, the case review
- * named — and anything else is left as a component. A concise arrow body counts as a return, or
- * `() => ({})` slips through the same door the block form was just closed on, and a literal is
- * recognised through parentheses, `as`, `satisfies` and `!`.
+ * So the evidence runs the other way: a function whose every `return` hands back something React
+ * cannot render is a value — `function BuildOptions() { return {}; }`, the case review named — and
+ * anything else is left as a component. What counts as unrenderable is `returnsAValue`'s to say and
+ * is not restated here; an earlier version of this comment listed arrays, strings and numbers among
+ * them, which is the opposite of what the classifier does and of what its fixtures assert. React
+ * renders all three, so a function returning one is a component. Two lists that had to be kept
+ * level is the mistake this file has already made four times.
+ *
+ * A concise arrow body counts as a return, or `() => ({})` slips through the same door the block
+ * form was just closed on, and a literal is recognised through parentheses, `as`, `satisfies`
+ * and `!`.
  *
  * Deciding from the returns alone also drops the separate JSX scan this used to run, which could
  * override a definite literal return — a function handing back `{ label: <span /> }` returns an
@@ -496,6 +618,23 @@ function exportKindsOf(
   resolveOrigin: (specifier: string) => Map<string, ExportKind> | null
 ): Map<string, ExportKind> {
   const kinds = new Map<string, ExportKind>();
+  /**
+   * Records something TypeScript erases, without losing a runtime export of the same name.
+   *
+   * Types and values are separate declaration spaces, so one name can legally have both — which is
+   * the Effect idiom this tree uses 17 times: `export const SortOrder = {…}` followed by
+   * `export type SortOrder = …`. An unconditional `set` made the answer depend on which came last,
+   * and the schema modules here are written both ways round. The erased half overwriting the value
+   * is the direction that matters: `erased` is the one kind `verdictFor` waves through, so a client
+   * value written this way crossed the boundary with nothing reported.
+   *
+   * Only ever safe in this direction. A name with a runtime declaration has a runtime export, so a
+   * type of the same name never makes it erased — while the reverse order is already right, because
+   * the runtime kind is the true one whenever both exist.
+   */
+  const recordErased = (name: string) => {
+    if (!kinds.has(name)) kinds.set(name, 'erased');
+  };
   const react = reactBindingsOf(sourceFile);
   /** Local declarations, so an export by identifier has something to resolve against. */
   const locals = new Map<string, ts.Node>();
@@ -575,7 +714,7 @@ function exportKindsOf(
     if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
       // `export default interface Foo {}` is looked up as `default`, the way the function and class
       // branches already key theirs.
-      if (isExported(statement)) kinds.set(isDefault(statement) ? 'default' : statement.name.text, 'erased');
+      if (isExported(statement)) recordErased(isDefault(statement) ? 'default' : statement.name.text);
       continue;
     }
 
@@ -591,7 +730,9 @@ function exportKindsOf(
         : [(statement as ts.DeclarationStatement).name];
 
       for (const name of declared) {
-        if (name && ts.isIdentifier(name)) kinds.set(name.text, 'erased');
+        // `export function X() {}` and `export declare namespace X {…}` merge, and that order is
+        // legal — checked with the compiler, not assumed.
+        if (name && ts.isIdentifier(name)) recordErased(name.text);
       }
       continue;
     }
@@ -681,6 +822,11 @@ function exportKindsOf(
 
       for (const element of statement.exportClause.elements) {
         if (statement.isTypeOnly || element.isTypeOnly) {
+          // A plain `set`, not `recordErased`: an explicit clause outranks an `export *`, and
+          // `export * from './x'` beside `export type { Foo } from './x'` is legal, so this has to
+          // be able to overwrite what the star recorded. It cannot collide with a declaration in
+          // this module the way the two branches above can — `export const Foo` next to
+          // `export type { Foo }` is a duplicate export and does not compile.
           kinds.set(element.name.text, 'erased');
           continue;
         }
@@ -764,119 +910,14 @@ describe('server components take only components from client modules', () => {
     return null;
   }
 
-  /** One binding taken from another module: a named export, a default, or a whole namespace. */
-  type Reference = {
-    specifier: string;
-    exported?: string;
-    local: string;
-    /** `import * as X` / `export * as X`: an object whose every property is a client reference. */
-    namespace?: boolean;
-    /** `export * from`: the target's named bindings, each classified on its own. */
-    starReexport?: boolean;
-    reexported?: boolean;
-  };
-
   const referencesByFile = new Map<string, Reference[]>();
 
-  /**
-   * Every module a file pulls in at runtime, with the bindings it takes from each.
-   *
-   * Type-only imports and exports are skipped, whole-statement and per-element alike. That
-   * exclusion is load-bearing rather than tidy: the only route into `core/blocks/data/filters.ts`
-   * is a type import from `core/chat/edit-types.ts`, and following it walks on into the sync store
-   * and reports three modules TypeScript erases before anything runs.
-   */
+  /** `staticReferences`, memoised per file. */
   function references(file: string): Reference[] {
     const cached = referencesByFile.get(file);
     if (cached) return cached;
 
-    const sourceFile = astByFile.get(file)!;
-    const found: Reference[] = [];
-
-    for (const statement of sourceFile.statements) {
-      if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-        const specifier = statement.moduleSpecifier.text;
-        const clause = statement.importClause;
-
-        // A bare `import './x'` takes no bindings but still loads the module.
-        if (!clause) {
-          found.push({ specifier, local: '' });
-          continue;
-        }
-        if (clause.isTypeOnly) continue;
-
-        // `import {} from './x'` has a clause with nothing in it and still loads the module. Review
-        // also asked for the all-type-specifier form; that is declined in the reply, because this
-        // repo does not set `verbatimModuleSyntax` and TypeScript elides it.
-        if (
-          !clause.name &&
-          clause.namedBindings &&
-          ts.isNamedImports(clause.namedBindings) &&
-          clause.namedBindings.elements.length === 0
-        ) {
-          found.push({ specifier, local: '' });
-          continue;
-        }
-
-        if (clause.name) found.push({ specifier, exported: 'default', local: clause.name.text });
-
-        if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
-          found.push({ specifier, local: `* as ${clause.namedBindings.name.text}`, namespace: true });
-        } else if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-          for (const element of clause.namedBindings.elements) {
-            if (element.isTypeOnly) continue;
-            found.push({
-              specifier,
-              exported: (element.propertyName ?? element.name).text,
-              local: element.name.text,
-            });
-          }
-        }
-        continue;
-      }
-
-      if (
-        ts.isExportDeclaration(statement) &&
-        statement.moduleSpecifier &&
-        ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
-        if (statement.isTypeOnly) continue;
-        const specifier = statement.moduleSpecifier.text;
-
-        if (!statement.exportClause) {
-          // Not a namespace value: this hands on the target's named bindings one by one, so a
-          // barrel star-re-exporting nothing but components is not an offence. `export * as Ns` is
-          // a namespace object and stays one, below.
-          found.push({ specifier, local: 're-exports *', starReexport: true, reexported: true });
-        } else if (ts.isNamespaceExport(statement.exportClause)) {
-          found.push({
-            specifier,
-            local: `re-exports * as ${statement.exportClause.name.text}`,
-            namespace: true,
-            reexported: true,
-          });
-        } else {
-          // An empty list still evaluates the target, the same way `import {}` does. This is that
-          // check's other half, and it should have gone in with it.
-          if (statement.exportClause.elements.length === 0) {
-            found.push({ specifier, local: '' });
-            continue;
-          }
-
-          for (const element of statement.exportClause.elements) {
-            if (element.isTypeOnly) continue;
-            found.push({
-              specifier,
-              exported: (element.propertyName ?? element.name).text,
-              local: element.name.text,
-              reexported: true,
-            });
-          }
-        }
-      }
-    }
-
-    found.push(...callReferences(sourceFile));
+    const found = staticReferences(astByFile.get(file)!);
 
     referencesByFile.set(file, found);
     return found;
@@ -1131,6 +1172,63 @@ describe('SERVER_ENTRY', () => {
       expect(SERVER_ENTRY.test(file)).toBe(false);
     }
   );
+});
+
+describe('staticReferences', () => {
+  const refs = (source: string) => staticReferences(parse('fixture.tsx', source));
+
+  it.each([
+    ['a bare import', "import './x';"],
+    ['an import with an empty list', "import {} from './x';"],
+    ['a re-export with an empty list', "export {} from './x';"],
+  ])('records %s as an edge that takes no binding', (_label, source) => {
+    // Dormant in this tree — every bare import here resolves to CSS or a package — so deleting any
+    // of these three leaves the corpus assertions green. That is what these fixtures are for.
+    expect(refs(source)).toEqual([{ specifier: './x', local: '' }]);
+  });
+
+  it.each([
+    ['a type-only import', "import type { A } from './x';"],
+    ['a type-only specifier', "import { type A } from './x';"],
+    ['a type-only re-export', "export type { A } from './x';"],
+    ['a type-only re-export specifier', "export { type A } from './x';"],
+  ])('does not follow %s', (_label, source) => {
+    // Load-bearing: following type edges walks to three modules TypeScript erases before anything
+    // runs, and reports offences against code the server never executes.
+    expect(refs(source)).toEqual([]);
+  });
+
+  it('reads a default and a namespace from one statement', () => {
+    // `import Default, * as Namespace` matched neither of the two patterns an earlier version had.
+    expect(refs("import Panel, * as Everything from './x';")).toEqual([
+      { specifier: './x', exported: 'default', local: 'Panel' },
+      { specifier: './x', local: '* as Everything', namespace: true },
+    ]);
+  });
+
+  it('keeps both names an aliased re-export has', () => {
+    expect(refs("export { Inner as Outer } from './x';")).toEqual([
+      { specifier: './x', exported: 'Inner', local: 'Outer', reexported: true },
+    ]);
+  });
+
+  it('tells a star re-export from a namespace one', () => {
+    // `export *` hands on named bindings one by one, so a barrel of components is not an offence.
+    // `export * as Ns` is a namespace object, and every property read off one is a client reference.
+    expect(refs("export * from './x';")).toEqual([
+      { specifier: './x', local: 're-exports *', starReexport: true, reexported: true },
+    ]);
+    expect(refs("export * as Ns from './x';")).toEqual([
+      { specifier: './x', local: 're-exports * as Ns', namespace: true, reexported: true },
+    ]);
+  });
+
+  it('reads call edges alongside the declared ones', () => {
+    expect(refs("import './a';\nvoid import('./b');")).toEqual([
+      { specifier: './a', local: '' },
+      { specifier: './b', local: '' },
+    ]);
+  });
 });
 
 describe('isClientModule', () => {
@@ -1451,6 +1549,39 @@ describe('exportKindsOf', () => {
     // What a cycle guard hands back, and what an unresolvable specifier does. Reported, not waved
     // through: `unknown` is an offence, so the failure is visible.
     expect(kindOf("export { Subject } from './somewhere-unreadable';")).toBe('unknown');
+  });
+
+  it('does not let a merged type erase the value it shares a name with', () => {
+    // `export const X = {…}; export type X = …` is legal — separate declaration spaces — and is the
+    // Effect idiom this tree uses 17 times, in both orders. The erased half was written last and
+    // overwrote the value, and `erased` is the one kind that crosses the boundary unreported.
+    expect(kindOf('export const Subject = { a: 1 };\nexport type Subject = typeof Subject;')).toBe('value');
+    expect(kindOf('export function Subject() { return {}; }\nexport interface Subject { x: number }')).toBe('value');
+    expect(kindOf('export class Subject extends Error {}\nexport interface Subject { x: number }')).toBe('value');
+    // A declared namespace merges onto a function the same way.
+    expect(
+      kindOf('export function Subject() { return {}; }\nexport declare namespace Subject { const a: number; }')
+    ).toBe('value');
+  });
+
+  it('still erases a type that shares its name with nothing', () => {
+    // The guard is one-directional: it must not turn a type-only export into a runtime one.
+    expect(kindOf('export type Subject = { a: 1 };')).toBe('erased');
+    expect(kindOf('export declare const Subject: object;')).toBe('erased');
+    // The reverse order was always right, and stays right.
+    expect(kindOf('export type Subject = { a: 1 };\nexport const Subject = { a: 1 } as const;')).toBe('value');
+  });
+
+  it('lets an explicit type-only re-export outrank a star', () => {
+    // Not `recordErased`: `export * from './x'` beside `export type { Foo } from './x'` is legal,
+    // and the explicit clause is the one TypeScript honours.
+    const origin = new Map<string, ExportKind>([['Foo', 'component']]);
+    const kinds = exportKindsOf(
+      parse('barrel.tsx', "export * from './x';\nexport type { Foo } from './x';"),
+      () => origin
+    );
+
+    expect(kinds.get('Foo')).toBe('erased');
   });
 
   it("does not attribute a nested scope's return to the component containing it", () => {
