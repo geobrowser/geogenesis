@@ -280,7 +280,6 @@ function TagFilter({
 }) {
   const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({ includeNonCanonical: true });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
-  const resultsRef = React.useRef<HTMLUListElement | null>(null);
 
   const choose = (tag: SearchFilterTag) => {
     onAddTag(tag);
@@ -316,7 +315,6 @@ function TagFilter({
 
       {query.trim().length > 0 ? (
         <ul
-          ref={resultsRef}
           onWheel={event => trapWheelToElement(event.currentTarget, event)}
           className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain rounded border border-grey-02"
         >
