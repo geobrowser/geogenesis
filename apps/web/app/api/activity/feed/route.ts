@@ -5,6 +5,7 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { parseExploreTime } from '~/core/explore/explore-feed-params';
+import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
@@ -70,6 +71,6 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (e) {
     console.error('activity feed', e);
-    return NextResponse.json({ items: [], nextCursor: null });
+    return feedUnavailableResponse();
   }
 }
