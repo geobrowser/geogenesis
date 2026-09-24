@@ -8,6 +8,8 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import type { RoundCue } from '~/core/debates/round-cues';
+import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -17,6 +19,7 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -87,6 +90,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -142,6 +146,23 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     timelineMs: timelineSeconds * 1000,
     enabled: (active || preload) && !reducedOverlays,
   });
+
+  /**
+   * Which round is playing, as a card at the top of the turn and a label beside the timer after.
+   *
+   * Gated on `playing` for the same reason the countdown badge is: a card frozen on a paused tile
+   * is an announcement with no turn behind it, and the viewer has stopped to look at something
+   * else. Gated on `reducedOverlays` with the claim layer, because a compact gallery tile is too
+   * small for a phrase across it.
+   */
+  const roundCard = React.useMemo(
+    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnSpans]
+  );
+  const roundBadge = React.useMemo(
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnSpans]
+  );
 
   const showReplay = ready && playbackEnded;
   const showControls = ready && (awaitingTap || showReplay);
@@ -356,6 +377,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
+        roundCard={turnState?.slot === 1 ? roundCard : null}
+        roundBadge={turnState?.slot === 1 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -410,6 +433,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
+        roundCard={turnState?.slot === 2 ? roundCard : null}
+        roundBadge={turnState?.slot === 2 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -539,6 +564,8 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
+  roundCard,
+  roundBadge,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -558,6 +585,10 @@ function DebaterVideo({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
+  /** The round announced across this tile as its turn opens. Only the speaker's tile has one. */
+  roundCard?: RoundCue | null;
+  /** The same round, parked beside this tile's timer for the rest of the turn. */
+  roundBadge?: RoundCue | null;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -760,7 +791,10 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      // `@container` so the round card sizes against the tile rather than the viewport: this same
+      // component is a feed card, an explore card and a fullscreen player, and a breakpoint would
+      // get two of the three wrong.
+      className="@container relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
@@ -834,6 +868,9 @@ function DebaterVideo({
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
+
+      <DebateRoundCard cue={roundCard ?? null} />
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -951,7 +988,7 @@ function DebaterVideo({
         <button
           type="button"
           onClick={openProfile}
-          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />

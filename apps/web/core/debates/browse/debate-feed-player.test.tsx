@@ -3,6 +3,7 @@ import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -85,6 +86,8 @@ function controllerFixture(overrides: {
   /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
    * blanking pass that precedes a different pair leaves behind. */
   urls?: { slot1: string | null; slot2: string | null };
+  /** Where the playhead sits, which is all a round cue reads. */
+  playheadSeconds?: number;
 }) {
   return {
     slot1VideoRef: { current: null },
@@ -102,9 +105,11 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: 5,
+    playheadSeconds: overrides.playheadSeconds ?? 5,
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
+    // Two 30s turns, the speaking one first, so there is a round to name.
+    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000]),
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -740,5 +745,57 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     act(() => vi.advanceTimersByTime(2_000));
 
     expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+describe('the round it is playing', () => {
+  const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
+
+  it('announces the round as the turn opens', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 1 · Opening');
+  });
+
+  it('parks it beside the timer for the rest of the turn', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    // Only the speaking tile has a timer, so only it carries the label.
+    const badges = [...container.querySelectorAll('[data-round-badge]')];
+    expect(badges).toHaveLength(1);
+    expect(badges[0].getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('names the round the playhead is actually in', () => {
+    mocks.controller = at(30.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 1 · Opening');
+  });
+
+  it('stands down while the viewer has the debate paused', () => {
+    // A card frozen on a paused tile is an announcement with no turn behind it.
+    mocks.controller = at(0.5, { playing: false });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
+  });
+
+  it('stays off a compact gallery tile, where there is no room for a phrase', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
   });
 });
