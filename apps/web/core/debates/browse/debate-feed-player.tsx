@@ -631,9 +631,11 @@ function DebaterVideo({
    * machinery cannot help — every correction in `useDebatePlayback` is about *where* the two
    * elements are, and this one is nowhere.
    *
-   * The repair is to detach and re-fetch the source, which is enough on its own: the recording is
-   * fine, and the same URL loads to `HAVE_ENOUGH_DATA` on the second attempt. `onRecovered` then
-   * brings it back to wherever its partner has got to.
+   * The repair is to detach and re-fetch the source with `preload` raised to `auto`. The recording
+   * is fine and the URL is fine; what was wrong was how the element was asking for it, and the
+   * same URL loads to `HAVE_ENOUGH_DATA` on the first rebuild once it asks differently — the
+   * measurement is on the raise itself, in `rebuild` below. `onRecovered` then brings the tile
+   * back to wherever its partner has got to.
    *
    * Bounded and spaced, because the one thing worse than a blank tile is a tile refetching a
    * multi-megabyte recording in a loop.
@@ -670,6 +672,16 @@ function DebaterVideo({
 
   // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
   // repair still pending belongs to the old one.
+  //
+  // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `rebuild` writes
+  // that DOM property directly, which React cannot see and never reconciles — but there is no
+  // case that needs one. A genuinely different recording never reaches a live element: the hook
+  // blanks both URLs before fetching the new pair (`setUrls({slot1: null, slot2: null})`), which
+  // unmounts the `<video>` and takes the raised `preload` with it, and the replacement is built from
+  // the JSX default. The only `src` change a live element sees is `onExhausted` re-signing *this*
+  // recording — the one that has just failed every rebuild it was allowed under `metadata` (see `rebuild`).
+  // Putting it back there would hand the fresh URL the same mode that killed the old one, and buy another
+  // wasted attempt and another blank half-second before the next rebuild raised it again.
   React.useEffect(() => {
     recoveryAttemptsRef.current = 0;
     escalatedRef.current = false;
@@ -684,6 +696,27 @@ function DebaterVideo({
         const current = videoRef.current;
         // The tile may have been handed a different recording, or unmounted, while we waited.
         if (!current || !src || current.getAttribute('src') !== src) return;
+        /*
+         * Raised before the re-attach, because this is what the rebuild is actually for.
+         *
+         * `preload="metadata"` is what kills these recordings: MediaRecorder WebM ships without a
+         * duration and without cues, so the demuxer has to seek to work out how long the file is,
+         * and in metadata mode the browser has already stopped fetching by the time it asks —
+         * `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed`, on a URL that is perfectly
+         * good. A rebuild that leaves it alone therefore reproduces the failure exactly, every
+         * time: measured against the 89MB slot-1 recording of debate `01a0ca25`, three rebuilds
+         * failed three times and the re-signed URL failed too, which is the tile that sat there
+         * saying so. At `auto` the same element loads to `HAVE_ENOUGH_DATA` on the first attempt.
+         *
+         * Here rather than inside `reattachVideoSource`, because this is a fact about these
+         * recordings, not about re-attaching a video source — and here rather than anywhere later,
+         * because the raise has to reach the element before the new fetch gets far. Chrome allows
+         * more room than that implies (raising it after both `load()` calls still recovers, and so
+         * does a task's delay), but only so much: at 500ms the same recording comes straight back
+         * with `error.code === 2`, exactly as if nothing had been raised. This is the position
+         * that does not depend on knowing where the edge is.
+         */
+        current.preload = 'auto';
         reattachVideoSource(current, src);
         onRecovered?.();
       }, MEDIA_RECOVERY_BACKOFF_MS * attempt);
@@ -736,6 +769,10 @@ function DebaterVideo({
             ref={videoRef}
             className="h-full w-full object-cover"
             playsInline
+            // Enough to paint a frame and know the shape of the recording, without pulling a
+            // multi-megabyte file down for a card nobody has reached yet — the feed keeps several
+            // of these mounted at once. Some recordings cannot be read this way at all; those are
+            // the ones `rebuild` raises, for that element alone and only for as long as it lives.
             preload="metadata"
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
