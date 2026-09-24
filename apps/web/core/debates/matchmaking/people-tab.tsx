@@ -290,20 +290,20 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
   );
   const pendingChallenge = liveChallenges[0] ?? null;
-  // `activity.challenge` is whichever challenge involves the viewer, in either direction. The card
-  // is about a request you sent, so it only stands in for the message when you are the one waiting
-  // on a reply — being challenged blocks the buttons just the same, but the sentence is what
-  // explains that.
+  // `activity.challenge` is whichever challenge involves the viewer, in either direction. Only a
+  // request the viewer sent blocks another outbound request; an inbound request stays actionable in
+  // Requests without taking away the viewer's ability to ask somebody else (GEO-3027).
   const outboundChallenge =
     pendingChallenge && currentUserId && pendingChallenge.requester.user_id === currentUserId ? pendingChallenge : null;
+  // Until the viewer id resolves, the direction is genuinely unknown. Keep the conservative gate
+  // for that short window so an outbound request cannot be duplicated before it can be identified.
+  const challengeDirectionUnknown = Boolean(pendingChallenge && !currentUserId);
 
   // Every Debate button greys out at once when the viewer already has something open, so say why
   // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
   // sentence would only repeat it.
-  const blockedReason = pendingChallenge
-    ? outboundChallenge
-      ? null
-      : 'You have a debate request awaiting a reply.'
+  const blockedReason = challengeDirectionUnknown
+    ? 'You have a debate request awaiting a reply.'
     : activeDebate(activity)
       ? "You're already in a debate."
       : activity?.outbound_request || requests?.outbound

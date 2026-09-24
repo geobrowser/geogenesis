@@ -707,14 +707,22 @@ describe('PeopleTab', () => {
     }
   });
 
-  // `activity.challenge` is whichever challenge involves the viewer. Being challenged is not a
-  // request you sent, so it keeps the sentence rather than claiming you're waiting on a reply.
-  it('keeps the sentence when the challenge is one you received', () => {
+  // GEO-3027. An inbound request remains available in Requests, but it is outside the viewer's
+  // control and must not take away their ability to send one of their own.
+  it('allows a new request while an inbound challenge is pending', () => {
     mocks.challenge = challenge('recipient');
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(screen.getByText(awaitingText)).toBeInTheDocument();
+    expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
+
+    const button = screen.getAllByRole('button', { name: 'Request debate' })[0];
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+
+    expect(mocks.createChallenge).toHaveBeenCalledWith({
+      recipient_profile_space_id: PROFILE_SPACE_IDS['user-them'],
+    });
   });
 
   // Without an id there is no way to tell the two directions apart, and showing a "you sent this"
