@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpace } from '~/core/hooks/use-space';
@@ -278,8 +279,18 @@ function TagFilter({
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
 }) {
-  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({ includeNonCanonical: true });
+  const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({ includeNonCanonical: true });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
+  const resultsRef = React.useRef<HTMLUListElement | null>(null);
+
+  const handleScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsRef,
+    distanceFromBottom: 80,
+  });
 
   const choose = (tag: SearchFilterTag) => {
     onAddTag(tag);
@@ -315,6 +326,8 @@ function TagFilter({
 
       {query.trim().length > 0 ? (
         <ul
+          ref={resultsRef}
+          onScroll={handleScroll}
           onWheel={event => trapWheelToElement(event.currentTarget, event)}
           className="m-0 flex max-h-40 list-none flex-col overflow-y-auto overscroll-contain rounded border border-grey-02"
         >
@@ -323,33 +336,38 @@ function TagFilter({
           ) : isEmpty ? (
             <li className="px-3 py-2 text-footnoteMedium text-grey-04">No matches</li>
           ) : (
-            results.map(result => {
-              const alreadySelected = selectedIds.has(result.id);
-              return (
-                <li key={result.id} className="border-b border-divider last:border-none">
-                  <button
-                    type="button"
-                    disabled={alreadySelected}
-                    onClick={() => choose({ id: result.id, name: result.name })}
-                    className={cx(
-                      'flex w-full flex-col items-start gap-1 px-3 py-2 text-left transition-colors',
-                      alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'hover:bg-grey-01'
-                    )}
-                  >
-                    <span className="max-w-full truncate text-footnoteMedium text-text">
-                      {result.name ?? result.id}
-                    </span>
-                    {result.types.length > 0 ? (
-                      <span className="flex flex-wrap items-center gap-1">
-                        {result.types.slice(0, 3).map(type => (
-                          <Tag key={type.id}>{type.name}</Tag>
-                        ))}
+            <>
+              {results.map(result => {
+                const alreadySelected = selectedIds.has(result.id);
+                return (
+                  <li key={result.id} className="border-b border-divider last:border-none">
+                    <button
+                      type="button"
+                      disabled={alreadySelected}
+                      onClick={() => choose({ id: result.id, name: result.name })}
+                      className={cx(
+                        'flex w-full flex-col items-start gap-1 px-3 py-2 text-left transition-colors',
+                        alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'hover:bg-grey-01'
+                      )}
+                    >
+                      <span className="max-w-full truncate text-footnoteMedium text-text">
+                        {result.name ?? result.id}
                       </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })
+                      {result.types.length > 0 ? (
+                        <span className="flex flex-wrap items-center gap-1">
+                          {result.types.slice(0, 3).map(type => (
+                            <Tag key={type.id}>{type.name}</Tag>
+                          ))}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+              {isFetchingNextPage ? (
+                <li className="px-3 py-2 text-footnoteMedium text-grey-04">Loading more…</li>
+              ) : null}
+            </>
           )}
         </ul>
       ) : null}

@@ -171,7 +171,8 @@ export function useSearch({
       try {
         const isValidEntityId = validateEntityId(maybeEntityId);
 
-        if (isValidEntityId) {
+        // Skip the direct-id shortcut when a tag filter is set
+        if (isValidEntityId && !filterByTags?.length) {
           if (pageParam > 0) return emptySearchPage(pageParam);
 
           const merged = await mergeSearchResult({
