@@ -85,6 +85,7 @@ import {
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
+import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
@@ -186,6 +187,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
+  const leaveRequestedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -1946,10 +1948,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       router.push(NavUtils.toExplore());
       return;
     }
+    leaveRequestedRef.current = true;
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
+      onError: () => {
+        leaveRequestedRef.current = false;
+      },
     });
   };
+
+  useLeaveRematchOnExit({
+    sessionId,
+    session,
+    leave: () => leaveSession.mutate(),
+    exiting: () => exitStartedRef.current || leaveRequestedRef.current,
+  });
 
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
