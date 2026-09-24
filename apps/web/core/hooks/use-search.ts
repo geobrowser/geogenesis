@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
+import { type SearchQueryType, searchSubmitted } from '~/core/analytics';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -56,6 +57,8 @@ interface SearchOptions {
    * asked for unrestricted results.
    */
   alsoSearchSpaceIds?: string[];
+  /** Stable analytics classification for the surface. Inferred for shared entity pickers. */
+  analyticsQueryType?: SearchQueryType;
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -104,6 +107,7 @@ export function useSearch({
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
   includeNonCanonical,
   alsoSearchSpaceIds,
+  analyticsQueryType,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -149,9 +153,33 @@ export function useSearch({
       additionalSpaceIds,
       pageSize,
       includeNonCanonical,
+      analyticsQueryType,
     ],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
+      const shouldTrackSearch = pageParam === 0 && cappedQuery.trim() !== '';
+      const searchStartedAt = shouldTrackSearch ? searchClock() : null;
+      const completeInitialSearch = (page: SearchPage) => {
+        if (searchStartedAt !== null) {
+          const queryType = analyticsQueryType ?? (filterBySpace ? 'space_entities' : 'entities');
+
+          searchSubmitted({
+            queryText: cappedQuery,
+            queryType,
+            resultCount: page.total,
+            latencyMs: searchClock() - searchStartedAt,
+            source:
+              queryType === 'global_entities'
+                ? 'global_search'
+                : queryType === 'space_entities'
+                  ? 'space_search'
+                  : 'entity_search',
+          });
+        }
+
+        return page;
+      };
+
       try {
         const isValidEntityId = validateEntityId(maybeEntityId);
 
@@ -162,11 +190,11 @@ export function useSearch({
             id: maybeEntityId,
             store,
           });
-          if (!merged) return emptySearchPage(pageParam);
+          if (!merged) return completeInitialSearch(emptySearchPage(pageParam));
           if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
-            return emptySearchPage(pageParam);
+            return completeInitialSearch(emptySearchPage(pageParam));
           }
-          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1 };
+          return completeInitialSearch({ rows: [merged], offset: pageParam, serverCount: 1, total: 1 });
         }
 
         const page = await E.findFuzzyPage({
@@ -198,7 +226,7 @@ export function useSearch({
           ? page.results
           : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-        return { rows, offset: pageParam, serverCount: page.serverCount, total: page.total };
+        return completeInitialSearch({ rows, offset: pageParam, serverCount: page.serverCount, total: page.total });
       } catch (error) {
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
@@ -284,6 +312,10 @@ export function useSearch({
     query,
     onQueryChange: setQuery,
   };
+}
+
+function searchClock() {
+  return typeof performance === 'undefined' ? Date.now() : performance.now();
 }
 
 function isArrayEmpty<T>(array: T[]): boolean {

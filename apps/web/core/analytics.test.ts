@@ -308,6 +308,49 @@ describe('analytics', () => {
     });
   });
 
+  it('tracks completed searches with result, latency, and privacy-safe query fields', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: '  reach Jane@example.com using 4242 4242 4242 4242  ',
+      queryType: 'global_entities',
+      resultCount: 0,
+      latencyMs: 370,
+      source: 'global_search',
+    });
+
+    expect(capture).toHaveBeenCalledWith('search_submitted', {
+      app: 'genesis',
+      source: 'global_search',
+      query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
+      query_type: 'global_entities',
+      query_text: 'reach ***** using *****',
+      result_count: 0,
+      no_results: true,
+      latency_bucket: '250_500ms',
+    });
+  });
+
+  it('uses stable search query ids without storing unmasked sensitive text', async () => {
+    const { searchQueryId } = await import('./analytics');
+
+    expect(searchQueryId('Graph Search')).toBe(searchQueryId('  graph search  '));
+    expect(searchQueryId('Graph Search')).not.toBe(searchQueryId('Another Search'));
+  });
+
+  it('assigns stable latency buckets at their boundaries', async () => {
+    const { searchLatencyBucket } = await import('./analytics');
+
+    expect(searchLatencyBucket(249)).toBe('under_250ms');
+    expect(searchLatencyBucket(250)).toBe('250_500ms');
+    expect(searchLatencyBucket(500)).toBe('500_1000ms');
+    expect(searchLatencyBucket(1000)).toBe('1_2s');
+    expect(searchLatencyBucket(2000)).toBe('2s_plus');
+  });
+
   it('keeps product actions best-effort when the analytics runtime throws', async () => {
     window.lytics = {
       capture: vi.fn(() => {

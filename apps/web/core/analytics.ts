@@ -5,6 +5,16 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
+export type SearchQueryType = 'entities' | 'global_entities' | 'space_entities';
+
+type SearchSubmittedProperties = {
+  queryText: string;
+  queryType: SearchQueryType;
+  resultCount: number;
+  latencyMs: number;
+  source: 'entity_search' | 'global_search' | 'space_search';
+};
+
 type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
@@ -181,6 +191,56 @@ export function capture(eventName: string, properties: AnalyticsProperties = {})
       ...properties,
     },
   });
+}
+
+/**
+ * Records a completed search using the same deterministic query id and redaction rules as the
+ * Podcasts app and the shared analytics runtime. The runtime adds route context (including
+ * `space_id`, `page_entity_type`, and `page_entity_id`) when it sends the event.
+ */
+export function searchSubmitted({ queryText, queryType, resultCount, latencyMs, source }: SearchSubmittedProperties) {
+  const normalizedQuery = queryText.trim();
+  if (!normalizedQuery) return;
+
+  capture('search_submitted', {
+    source,
+    query_id: searchQueryId(normalizedQuery),
+    query_type: queryType,
+    query_text: maskSearchText(normalizedQuery),
+    result_count: resultCount,
+    no_results: resultCount === 0,
+    latency_bucket: searchLatencyBucket(latencyMs),
+  });
+}
+
+export function searchQueryId(queryText: string) {
+  const normalized = queryText.trim().toLowerCase();
+  let hash = 2166136261;
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash ^= normalized.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `${appName}_search_${(hash >>> 0).toString(36)}`;
+}
+
+export function searchLatencyBucket(latencyMs: number) {
+  if (latencyMs < 250) return 'under_250ms';
+  if (latencyMs < 500) return '250_500ms';
+  if (latencyMs < 1000) return '500_1000ms';
+  if (latencyMs < 2000) return '1_2s';
+  return '2s_plus';
+}
+
+function maskSearchText(value: string) {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '*****')
+    .replace(/\b(?:\d[\s-]*?){13,19}\b/g, '*****')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '*****')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
 }
 
 export function analyticsContextRevision(): number | null {
