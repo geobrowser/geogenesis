@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { personProfileOpened } from '~/core/analytics';
 import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -134,7 +135,15 @@ export function ClaimProvenance({
                       nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from
                       breaking across lines. */}
                   {speaker.profile?.profileLink ? (
-                    <Link href={speaker.profile.profileLink} className="whitespace-nowrap text-text hover:underline">
+                    <Link
+                      href={speaker.profile.profileLink}
+                      onClick={() =>
+                        personProfileOpened(speaker.profile!.spaceId, speaker.profile!.id, {
+                          interaction_surface: 'claim_provenance',
+                        })
+                      }
+                      className="whitespace-nowrap text-text hover:underline"
+                    >
                       {speaker.profile.name}
                     </Link>
                   ) : (

@@ -2129,6 +2129,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
+              analyticsSurface="rematch"
               spaceIds={spaceIds}
               onSpaceToggle={onSpaceToggle}
               onSpacesClear={onSpacesClear}
@@ -2164,6 +2165,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               trailing={
                 tab === 'opponent' ? (
                   <MatchesOnlySwitch
+                    analyticsSurface="rematch"
                     // The effective value, not the stored one — see `useNarrowedDefault`.
                     checked={matchesNarrowed}
                     onChange={next => {
@@ -2176,13 +2178,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 // change a single row under it. Never on "My positions" either, which is the list
                 // it would empty.
                 tab === 'explore' && source !== 'mine' ? (
-                  <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+                  <HideMyPositionsSwitch
+                    analyticsSurface="rematch"
+                    checked={hideMyPositions}
+                    onChange={setHideMyPositions}
+                  />
                 ) : null
               }
               leading={
                 tab === 'explore' ? (
                   <HubFilterMenu
                     label={CLAIMS_SOURCE_LABELS[source]}
+                    analytics={{ name: 'Claims source', surface: 'rematch' }}
                     options={sourceOptions}
                     value={source}
                     onChange={setChosenSource}
@@ -2219,6 +2226,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )}
 
         <HubQueryState
+          analyticsSurface="rematch"
           // Only what the visible tab actually draws from, and only while it has nothing to show.
           // Holding every tab on the slowest query meant the session's own claims — which arrive in
           // one round trip — sat behind a graph-wide scan they don't come from.
@@ -2332,7 +2340,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // `HubQueryState` draws its action instead of the rows. Stopping short with rows on screen
           // is the ordinary case, and without this the list quietly stopped paging.
           <div className="flex justify-center pt-1">
-            <HubPillButton onClick={keepLooking}>Keep looking</HubPillButton>
+            <HubPillButton analyticsSurface="rematch" onClick={keepLooking}>
+              Keep looking
+            </HubPillButton>
           </div>
         ) : null}
       </main>

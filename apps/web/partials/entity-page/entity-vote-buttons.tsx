@@ -10,7 +10,7 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useStore } from 'jotai';
 
-import { trackPrivyAuth } from '~/core/analytics';
+import { personProfileOpened, trackPrivyAuth } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -498,6 +498,7 @@ export function RespondersPopoverContent({
   responseKind: ResponseKind;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const interactionSurface = responseKind === 'curation' ? 'entity_vote_list' : 'claim_vote_list';
   const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
 
   // These two ask for themselves, batch or no batch.
@@ -560,27 +561,49 @@ export function RespondersPopoverContent({
           heads its sections "Agreements" and "Disagreements" makes the reader translate on arrival
           — and "Verifications"/"Disputes" reads stranger still beside a button marked Verify. */}
       {positiveResponders.length > 0 && (
-        <ResponderSection label={copy.positiveAction} responders={positiveResponders} />
+        <ResponderSection
+          label={copy.positiveAction}
+          responders={positiveResponders}
+          interactionSurface={interactionSurface}
+        />
       )}
       {negativeResponders.length > 0 && (
-        <ResponderSection label={copy.negativeAction} responders={negativeResponders} />
+        <ResponderSection
+          label={copy.negativeAction}
+          responders={negativeResponders}
+          interactionSurface={interactionSurface}
+        />
       )}
     </div>
   );
 }
 
-function ResponderSection({ label, responders }: { label: string; responders: ResponderWithProfile[] }) {
+function ResponderSection({
+  label,
+  responders,
+  interactionSurface,
+}: {
+  label: string;
+  responders: ResponderWithProfile[];
+  interactionSurface: 'claim_vote_list' | 'entity_vote_list';
+}) {
   return (
     <div>
       <div className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">{label}</div>
       {responders.map(v => (
-        <VoterRow key={v.userId} profile={v.profile} />
+        <VoterRow key={v.userId} profile={v.profile} interactionSurface={interactionSurface} />
       ))}
     </div>
   );
 }
 
-function VoterRow({ profile }: { profile: Profile }) {
+function VoterRow({
+  profile,
+  interactionSurface,
+}: {
+  profile: Profile;
+  interactionSurface: 'claim_vote_list' | 'entity_vote_list';
+}) {
   const content = (
     <div className="flex items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01">
       <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
@@ -591,7 +614,16 @@ function VoterRow({ profile }: { profile: Profile }) {
   );
 
   if (profile.profileLink) {
-    return <Link href={profile.profileLink}>{content}</Link>;
+    return (
+      <Link
+        href={profile.profileLink}
+        onClick={() =>
+          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
+        }
+      >
+        {content}
+      </Link>
+    );
   }
 
   return content;

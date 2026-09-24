@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { personProfileOpened } from '~/core/analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -332,6 +333,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
             Topic props are omitted because people carry no topics to facet on, the same way the
             requests bar omits them. */}
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={effectiveSpaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -343,6 +345,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
           failureReason={peopleQuery.failureReason}
@@ -552,14 +555,20 @@ function PersonRow({
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
-            A plain anchor, with no click handler at all: the hub survives the navigation on its
-            own now (GEO-2788), so there is nothing to intercept — which is also what keeps
-            cmd-click, middle click and "copy link address" working here (GEO-2701).
+            A plain anchor whose click handler only observes analytics: the hub survives the
+            navigation on its own now (GEO-2788), so the handler does not intercept it — which is
+            also what keeps cmd-click, middle click and "copy link address" working here (GEO-2701).
 
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
         {profileHref ? (
-          <Link href={profileHref} className="min-w-0">
+          <Link
+            href={profileHref}
+            onClick={() =>
+              personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debates_hub_people' })
+            }
+            className="min-w-0"
+          >
             <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
               {speakerLabel(person)}
             </Text>

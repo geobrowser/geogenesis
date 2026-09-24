@@ -8,6 +8,7 @@ import * as React from 'react';
 import equal from 'fast-deep-equal';
 import { useSetAtom } from 'jotai';
 
+import { profileUpdated } from '~/core/analytics';
 import { useEntity } from '~/core/database/entities';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -535,31 +536,42 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
     rollback(staged.rows, staged.owner.spaceId);
   }, [entityId, rollback, spaceId]);
 
-  const settleSuccess = React.useCallback(() => {
-    const staged = stagedRef.current;
-    if (!staged) return;
-    stagedRef.current = null;
-    setStatus('published');
+  const settleSuccess = React.useCallback(
+    (recordPublishedEdit = true) => {
+      const staged = stagedRef.current;
+      if (!staged) return;
+      stagedRef.current = null;
+      setStatus('published');
 
-    // Write the result into the profile cache rather than invalidating it. Every
-    // registered surface reads `profile.avatarUrl` — `navbar-actions.tsx:78` falls
-    // back to `avatarAtom` only while a personal space is still being created — and
-    // refetching would ask the indexer for a write it has not caught up with yet,
-    // putting the old photo straight back. The natural refetch replaces this once
-    // the indexer agrees.
-    queryClient.setQueryData(profileQueryKey, (previous: Profile | null | undefined) =>
-      previous
-        ? {
-            ...previous,
-            name: staged.draft.name || previous.name,
-            ...(staged.nextAvatarUrl !== null ? { avatarUrl: staged.nextAvatarUrl || null } : {}),
-          }
-        : previous
-    );
+      if (recordPublishedEdit) {
+        try {
+          profileUpdated(staged.owner.entityId, staged.owner.spaceId);
+        } catch {
+          /* Analytics must never turn a successful profile update into a failed save. */
+        }
+      }
 
-    // Still set for the onboarding path, which reads the atom while the space is pending.
-    if (staged.nextAvatarUrl !== null) setStoredAvatar(staged.nextAvatarUrl);
-  }, [profileQueryKey, queryClient, setStoredAvatar]);
+      // Write the result into the profile cache rather than invalidating it. Every
+      // registered surface reads `profile.avatarUrl` — `navbar-actions.tsx:78` falls
+      // back to `avatarAtom` only while a personal space is still being created — and
+      // refetching would ask the indexer for a write it has not caught up with yet,
+      // putting the old photo straight back. The natural refetch replaces this once
+      // the indexer agrees.
+      queryClient.setQueryData(profileQueryKey, (previous: Profile | null | undefined) =>
+        previous
+          ? {
+              ...previous,
+              name: staged.draft.name || previous.name,
+              ...(staged.nextAvatarUrl !== null ? { avatarUrl: staged.nextAvatarUrl || null } : {}),
+            }
+          : previous
+      );
+
+      // Still set for the onboarding path, which reads the atom while the space is pending.
+      if (staged.nextAvatarUrl !== null) setStoredAvatar(staged.nextAvatarUrl);
+    },
+    [profileQueryKey, queryClient, setStoredAvatar]
+  );
 
   // Completion comes from `onSuccess` alone. An earlier version read the global
   // review state to settle three seconds sooner — `makeProposal` holds its success
@@ -746,7 +758,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // publish" error for what is really a no-op, so settle them as done instead.
       if (staged.values.length === 0 && staged.relations.length === 0) {
         clearStagingStatus();
-        settleSuccess();
+        settleSuccess(false);
         return;
       }
 

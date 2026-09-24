@@ -13,8 +13,16 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('./entity-comments-panel', () => ({
-  EntityCommentsPanel: ({ entityId, onClose }: { entityId: string; onClose: () => void }) => (
-    <aside data-entity-comments-panel>
+  EntityCommentsPanel: ({
+    entityId,
+    targetEntityType,
+    onClose,
+  }: {
+    entityId: string;
+    targetEntityType?: string;
+    onClose: () => void;
+  }) => (
+    <aside data-entity-comments-panel data-target-entity-type={targetEntityType}>
       <span>Comments for {entityId}</span>
       <button onClick={onClose}>Close</button>
     </aside>
@@ -28,7 +36,7 @@ afterEach(() => {
 
 function renderHost() {
   const store = createStore();
-  store.set(entityCommentsPanelAtom, { entityId: 'entity-1', spaceId: 'space-1' });
+  store.set(entityCommentsPanelAtom, { entityId: 'entity-1', spaceId: 'space-1', targetEntityType: 'claim' });
   const view = render(
     <Provider store={store}>
       <div data-testid="page">Page behind the panel</div>
@@ -39,6 +47,15 @@ function renderHost() {
 }
 
 describe('EntityCommentsPanelHost', () => {
+  it('retains the target type for comment analytics inside the global panel', () => {
+    renderHost();
+
+    expect(screen.getByText('Comments for entity-1').closest('aside')).toHaveAttribute(
+      'data-target-entity-type',
+      'claim'
+    );
+  });
+
   it('closes when the reader clicks the page behind it', () => {
     const { store } = renderHost();
     expect(screen.getByText('Comments for entity-1')).toBeInTheDocument();

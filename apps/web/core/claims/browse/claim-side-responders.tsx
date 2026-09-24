@@ -152,7 +152,12 @@ function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; la
           <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />
         ) : (
           sortedProfiles.map(profile => (
-            <MemberRow key={profile.id} user={profile} className="rounded-lg transition-colors hover:bg-grey-01" />
+            <MemberRow
+              key={profile.id}
+              user={profile}
+              analyticsSurface="claim_response_list"
+              className="rounded-lg transition-colors hover:bg-grey-01"
+            />
           ))
         )}
       </div>

@@ -150,7 +150,14 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
         <Text as="h2" variant="cardEntityTitle" color="text">
           Claims · {claims.totalCount}
         </Text>
-        <button type="button" aria-label="Close" onClick={onClose} className="text-grey-04 hover:text-text">
+        <button
+          type="button"
+          data-geo-analytics-label="Close debate claims panel"
+          data-geo-analytics-intent="debate_side_panel_action"
+          aria-label="Close"
+          onClick={onClose}
+          className="text-grey-04 hover:text-text"
+        >
           <Close />
         </button>
       </header>

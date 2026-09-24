@@ -6,12 +6,16 @@ import { usePublishComment } from './use-publish-comment';
 
 const mocks = vi.hoisted(() => ({
   commentCreated: vi.fn(),
+  commentEdited: vi.fn(),
   createComment: vi.fn(),
   editComment: vi.fn(),
   enqueuePendingAction: vi.fn(),
 }));
 
-vi.mock('~/core/analytics', () => ({ commentCreated: mocks.commentCreated }));
+vi.mock('~/core/analytics', () => ({
+  commentCreated: mocks.commentCreated,
+  commentEdited: mocks.commentEdited,
+}));
 
 vi.mock('./use-create-comment', () => ({
   useCreateComment: () => ({
@@ -29,6 +33,7 @@ vi.mock('~/core/state/pending-actions', () => ({
 describe('usePublishComment', () => {
   beforeEach(() => {
     mocks.commentCreated.mockReset();
+    mocks.commentEdited.mockReset();
     mocks.createComment.mockReset();
     mocks.editComment.mockReset();
     mocks.enqueuePendingAction.mockReset();
@@ -36,7 +41,12 @@ describe('usePublishComment', () => {
 
   it('returns a completed publish without adding a pending action', async () => {
     mocks.createComment.mockResolvedValue({ id: 'comment-1', published: true });
-    const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
+    const { result } = renderHook(() =>
+      usePublishComment('claim-1', 'space-1', {
+        targetEntityType: 'claim',
+        interactionSurface: 'claim_page',
+      })
+    );
 
     await act(() => result.current.publishComment({ text: 'A reason' }));
 
@@ -50,6 +60,8 @@ describe('usePublishComment', () => {
     expect(mocks.commentCreated).toHaveBeenCalledWith('comment-1', 'claim-1', {
       space_id: 'space-1',
       parent_comment_id: undefined,
+      target_entity_type: 'claim',
+      interaction_surface: 'claim_page',
     });
   });
 
@@ -104,5 +116,31 @@ describe('usePublishComment', () => {
       'claim-1',
       expect.objectContaining({ parent_comment_id: 'comment-1' })
     );
+  });
+
+  it('records a comment edit only after it publishes successfully', async () => {
+    mocks.editComment.mockResolvedValue(true);
+    const { result } = renderHook(() =>
+      usePublishComment('claim-1', 'space-1', {
+        targetEntityType: 'claim',
+        interactionSurface: 'claim_page',
+      })
+    );
+
+    await act(() =>
+      result.current.editComment({ commentId: 'comment-1', commentSpaceId: 'author-space', newText: 'Revised' })
+    );
+
+    expect(mocks.commentEdited).toHaveBeenCalledWith('comment-1', 'claim-1', {
+      space_id: 'space-1',
+      target_entity_type: 'claim',
+      interaction_surface: 'claim_page',
+    });
+
+    mocks.editComment.mockResolvedValue(false);
+    await act(() =>
+      result.current.editComment({ commentId: 'comment-1', commentSpaceId: 'author-space', newText: 'Rejected' })
+    );
+    expect(mocks.commentEdited).toHaveBeenCalledTimes(1);
   });
 });
