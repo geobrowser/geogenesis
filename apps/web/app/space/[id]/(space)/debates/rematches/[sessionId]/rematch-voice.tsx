@@ -39,7 +39,6 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 import {
   PAIR_PILL,
   type PairHeaderParticipant,
-  type PairHeaderPositions,
   type PairHeaderToast,
   type PairHeaderVoice,
   type PairMicState,
@@ -198,8 +197,6 @@ type PairContext = {
   opponent: PairHeaderParticipant;
   opponentName: string;
   onOpenOpponentSpace: (event: React.MouseEvent) => void;
-  lockedClaim: { claim: string; spaceName?: string | null } | null;
-  positions: PairHeaderPositions | null;
   leaveAction?: React.ReactNode;
 };
 
@@ -229,6 +226,15 @@ type RematchVoiceHeaderProps = {
   currentUserId: string;
   /** The page's Leave button. It lives in your card's corner now, not at the end of the tab row. */
   leaveAction?: React.ReactNode;
+  /**
+   * The viewer is on their way out, and the page is about to unmount.
+   *
+   * Leaving ends the session server-side, and an ended session is not voice-capable — so without
+   * this the controls tear themselves down a second or so before the redirect lands, and the card
+   * collapses in front of someone who has already left. Nothing about this header is worth
+   * re-laying-out on the way to somewhere else.
+   */
+  exiting?: boolean;
 };
 
 export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
@@ -238,8 +244,10 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: RematchVoiceHeaderProps) {
-  const voiceActive = voiceCapable(session.status);
+function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
+  // Sticky on the way out. The room keeps its connection and its controls until the page unmounts,
+  // which is what stops the card resizing between the click and the redirect.
+  const voiceActive = voiceCapable(session.status) || exiting;
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
 
@@ -417,16 +425,6 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
   // local copy got wrong by leaving the card inert until it landed.
   const openOpponentProfile = useOpenDebaterProfile(opponent);
 
-  // Once the pair lock a claim the header stops being only about voice: it is who is arguing what,
-  // which side each of them took, and the claim itself above both cards.
-  const request = session.status === 'request_pending' ? session.request : null;
-  const lockedClaim = request ? { claim: request.claim.claim } : null;
-  const positions: PairHeaderPositions | null = request
-    ? request.requester_user_id === currentUserId
-      ? { localAgrees: request.requester_position, opponentAgrees: request.recipient_position }
-      : { localAgrees: request.recipient_position, opponentAgrees: request.requester_position }
-    : null;
-
   // No pair to draw, but the viewer is still in a session they must be able to leave — and Leave
   // lives in the header now. The row is the header's, minus everything that needs two people.
   if (!opponent) return leaveAction ? <div className="flex justify-end">{leaveAction}</div> : null;
@@ -436,8 +434,6 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
     opponent: toHeaderParticipant(opponent) as PairHeaderParticipant,
     opponentName,
     onOpenOpponentSpace: openOpponentProfile,
-    lockedClaim,
-    positions,
     leaveAction,
   };
 
@@ -491,6 +487,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
     >
       <VoiceHeaderBody
         pair={pair}
+        exiting={exiting}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
         onMicIntentChange={setMicIntent}
@@ -564,6 +561,7 @@ type VoiceAnalytics = ReturnType<typeof useVoiceAnalytics>;
 
 function VoiceHeaderBody({
   pair,
+  exiting,
   opponentUserId,
   micFailure,
   onMicIntentChange,
@@ -575,6 +573,7 @@ function VoiceHeaderBody({
   analytics,
 }: {
   pair: PairContext;
+  exiting: boolean;
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
   onMicIntentChange: (enabled: boolean) => void;
@@ -704,6 +703,10 @@ function VoiceHeaderBody({
    * opponent may well be talking, and the viewer simply cannot hear it until they click.
    */
   const connectionMessage = ((): Extract<PairHeaderVoice, { kind: 'message' }> | null => {
+    // Not while leaving. Ending the session can drop the room within the second it takes the
+    // redirect to land, and swapping the controls for "Voice disconnected · Retry" on the way out
+    // is both a layout shift and an offer of something the viewer cannot want.
+    if (exiting) return null;
     if (connectionState === ConnectionState.Disconnected && everConnected) {
       return { kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry };
     }

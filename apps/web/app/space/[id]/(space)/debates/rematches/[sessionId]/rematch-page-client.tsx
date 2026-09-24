@@ -101,6 +101,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
+import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
 import { rematchHideMyPositionsAtom, rematchMatchesOnlyAtom } from '~/atoms';
 
@@ -1944,6 +1945,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
+  // The other side of the same pending request: the viewer asked, and is waiting to hear back.
+  const outboundRequest = pendingRequest?.requester_user_id === currentUserId ? pendingRequest : null;
   const incomingRequestParticipants =
     incomingRequest && session
       ? session.participants.map(participant => {
@@ -2006,7 +2009,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               with no header. */}
           <div className="mb-4">
             {session && currentUserId ? (
-              <RematchVoiceHeader session={session} currentUserId={currentUserId} leaveAction={leaveButton} />
+              <RematchVoiceHeader
+                session={session}
+                currentUserId={currentUserId}
+                leaveAction={leaveButton}
+                // `isSuccess` as well as `isPending`: the session is ended the moment the mutation
+                // answers, and the redirect lands a beat later. That gap is the whole window in
+                // which the controls used to vanish.
+                exiting={leaveSession.isPending || leaveSession.isSuccess}
+              />
             ) : (
               <div className="flex justify-end">{leaveButton}</div>
             )}
@@ -2155,6 +2166,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             {rematchCancellationMessage(session.request.cancellation_reason)}
           </Text>
         )}
+
+        {/* Above the list rather than in the header. Growing the sticky block a claim and two
+            position chips moved everything under it down at the moment the viewer was watching for
+            an answer; a card that arrives in the content says the same thing without pushing the
+            page around. Same shape as the one the debates panel draws for a request you sent. */}
+        {outboundRequest && currentUserId ? (
+          <div className="mb-4">
+            <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
+          </div>
+        ) : null}
 
         <HubQueryState
           // Only what the visible tab actually draws from, and only while it has nothing to show.

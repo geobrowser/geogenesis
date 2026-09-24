@@ -1722,17 +1722,71 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTestId('rematch-opponent-card')).toHaveAttribute('aria-label', 'Open Salina’s personal space');
   });
 
-  // Same label, same problem: once the pair lock a claim the opponent's side is a chip inside that
-  // button, and the accessible name hides it too.
-  it('carries the opponent locked position in the card description', async () => {
+  // The header used to grow a claim heading and two position chips the moment a request went out,
+  // pushing everything under it down at exactly the moment the viewer was watching for an answer.
+  // That belongs in a card in the content — see `RematchRequestCard` — not in the sticky block.
+  it('holds its shape when the pair lock a claim', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentMicPublication = { isMuted: true };
-    render(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+    const browsing = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={browsing} currentUserId="me" />);
+    await flushOwnership();
+    const before = screen.getByTestId('rematch-you-card').className;
+
+    rerender(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+
+    expect(screen.queryByText('A man should always pay for the first date')).toBeNull();
+    expect(screen.queryByText('Agree')).toBeNull();
+    expect(screen.queryByText('Disagree')).toBeNull();
+    expect(screen.getByTestId('rematch-you-card').className).toBe(before);
+    // The control the header exists for is untouched by the lock.
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+  });
+
+  // Leaving ends the session, and an ended session is not voice-capable — so the controls used to
+  // tear themselves down in the second before the redirect landed, collapsing the card in front of
+  // someone who had already left.
+  it('keeps the controls while the viewer is on their way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const browsing = makeSession('browsing');
+    const { rerender } = render(
+      <RematchVoiceHeader
+        session={browsing}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+
+    // What leaving does: the session comes back ended, and the page says it is on its way out.
+    rerender(
+      <RematchVoiceHeader
+        session={makeSession('ended')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+        exiting
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+  });
+
+  // A dropped room on the way out is the same layout shift wearing a different hat, and "Retry" is
+  // an offer of something the viewer has just declined.
+  it('does not swap in a connection message while leaving', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
-    // Visible on the card, and reachable from the control that hides it.
-    expect(within(screen.getByTestId('rematch-opponent-card')).getByText('Disagree')).toBeInTheDocument();
-    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is muted. Salina disagrees');
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByText('Voice disconnected')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
   });
 
   // A hover variant outranks a plain utility on specificity whichever order they are written in,

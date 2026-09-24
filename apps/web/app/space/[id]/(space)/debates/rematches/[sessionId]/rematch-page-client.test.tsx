@@ -1120,6 +1120,46 @@ describe('DebateRematchPageClient', () => {
     expect(within(claimCard!).getByRole('button', { name: /^Dispute/ })).toBeEnabled();
   });
 
+  // The header used to grow the claim and two position chips the moment a request went out, moving
+  // everything under it at the exact moment the viewer was watching for an answer. The same facts
+  // arrive as a card in the content instead — the shape the debates panel uses for a request you
+  // sent.
+  it('draws a card for the request the viewer sent, leaving the header alone', async () => {
+    mocks.session = session({
+      status: 'request_pending',
+      request: {
+        id: 'request-1',
+        status: 'pending',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-local',
+        recipient_user_id: 'user-remote',
+        requester_position: true,
+        requester_position_label: 'Agree',
+        recipient_position: false,
+        recipient_position_label: 'Disagree',
+        response_kind: 'stance',
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const card = await screen.findByTestId('rematch-outbound-request');
+    expect(within(card).getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(within(card).getByText('Awaiting response')).toBeInTheDocument();
+    // Both sides and what each of them holds — the chips that used to sit in the header.
+    expect(within(card).getByText('You')).toBeInTheDocument();
+    expect(within(card).getByText('Agree')).toBeInTheDocument();
+    expect(within(card).getByText('Disagree')).toBeInTheDocument();
+
+    // It is in the content, under the pinned block, not inside it.
+    expect(card.closest('.sticky')).toBeNull();
+    // And the viewer is the requester, so no dialog asking them to answer their own request.
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('shows authoritative stance labels in the incoming request dialog and preserves rematch actions', async () => {
     mocks.session = session({
       status: 'request_pending',
