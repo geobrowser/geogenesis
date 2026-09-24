@@ -15,6 +15,7 @@ import {
   type HiddenProfileRelation,
   buildHideDebateRelation,
   buildUnhideDebateRelations,
+  debateVisibilityCounts,
 } from '~/core/profile/profile-debate-visibility';
 import type { ProfileFacts } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
@@ -74,16 +75,61 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
 
         if (!ok) return false;
 
-        queryClient.setQueryData<PersonDebatesQueryData>(personDebatesRowsQueryKey(personalSpaceId), current => {
+        const personQueryKey = personDebatesRowsQueryKey(personalSpaceId);
+        const factsQueryPrefix = profileFactsQueryPrefix(personalSpaceId);
+        const pendingFacts = queryClient
+          .getQueryCache()
+          .findAll({ queryKey: factsQueryPrefix })
+          .flatMap(query =>
+            query.state.data === undefined && query.promise
+              ? [{ queryKey: query.queryKey, promise: query.promise as Promise<ProfileFacts> }]
+              : []
+          );
+
+        // A focus refetch may have started before the publish and still hold the
+        // pre-write graph result. Cancel only caches that already have data: an
+        // initial facts request has no prior value to preserve, so it is allowed
+        // to finish and receives the same patch below when it resolves.
+        await Promise.all([
+          queryClient.cancelQueries({ queryKey: personQueryKey, exact: true }),
+          queryClient.cancelQueries({
+            queryKey: factsQueryPrefix,
+            predicate: query => query.state.data !== undefined,
+          }),
+        ]);
+
+        const nextPersonDebates = queryClient.setQueryData<PersonDebatesQueryData>(personQueryKey, current => {
           if (!current) return current;
           const next = new Map(current.hiddenRelationsByDebateId);
           if (created) next.set(debateId, [created.hidden]);
           else next.delete(debateId);
           return { ...current, hiddenRelationsByDebateId: next };
         });
-        queryClient.setQueriesData<ProfileFacts>({ queryKey: profileFactsQueryPrefix(personalSpaceId) }, current =>
-          current ? { ...current, debates: Math.max(0, current.debates + (shouldHide ? -1 : 1)) } : current
+
+        // Every hide control is rendered from this query, so it has data here.
+        // Use its complete row set for an absolute count rather than applying a
+        // delta twice if a pending facts promise settles during this update.
+        const visibleDebates = nextPersonDebates
+          ? debateVisibilityCounts(
+              nextPersonDebates.allRows.map(row => row.entityId),
+              [...nextPersonDebates.hiddenRelationsByDebateId.keys()]
+            ).visible
+          : null;
+        const patchFacts = (current: ProfileFacts): ProfileFacts => ({
+          ...current,
+          debates: visibleDebates ?? Math.max(0, current.debates + (shouldHide ? -1 : 1)),
+        });
+
+        queryClient.setQueriesData<ProfileFacts>({ queryKey: factsQueryPrefix }, current =>
+          current ? patchFacts(current) : current
         );
+        for (const pending of pendingFacts) {
+          void pending.promise
+            .then(result => {
+              queryClient.setQueryData<ProfileFacts>(pending.queryKey, current => patchFacts(current ?? result));
+            })
+            .catch(() => undefined);
+        }
         if (shouldHide) {
           setToast(React.createElement(ProfileDebateHiddenToast, { personalSpaceId }));
         }
