@@ -202,6 +202,7 @@ describe('player layout', () => {
       const nameNode = getByText(name);
       expect(chip.closest('button')).toBeNull();
       expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
+      expect(chip.parentElement?.className).toContain('items-start');
     }
   });
 
@@ -250,6 +251,20 @@ describe('overlay variants', () => {
     const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('hides participant affiliations in a compact debate card', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.affiliations = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('Head of Product at Geo')).toBeNull();
+    expect(queryByText('PhD student, Economics at Stanford')).toBeNull();
   });
 
   it('shows subtitles only for an active, playing, muted compact debate', () => {

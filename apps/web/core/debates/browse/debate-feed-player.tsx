@@ -101,8 +101,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
-  const affiliations = useParticipantAffiliations(debate.participants, active || preload);
+  const showAffiliations = !reducedOverlays;
+  const affiliations = useParticipantAffiliations(debate.participants, showAffiliations && (active || preload));
   const affiliationFor = (participant: DebateParticipant | null) => {
+    if (!showAffiliations) return null;
     const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
     return spaceId ? (affiliations.get(spaceId) ?? null) : null;
   };
@@ -950,7 +952,7 @@ function DebaterVideo({
           they were reading something that debater had said. */}
       <div
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
