@@ -157,15 +157,28 @@ function usePrimedMicrophonePermission(enabled: boolean, deviceId?: string) {
  * that shouts. `spentRef` is owned by the header's outermost component rather than declared here on
  * purpose: this hook's component is unmounted and rebuilt by every reconnect and every "audio is
  * blocked" detour, so a local ref would quietly reset the one-shot several times a session.
+ *
+ * `frozen` stops the clock in both directions, and leaving is the event it is for. Every input this
+ * hook reads moves at once when the room drops: an unmuted viewer's microphone reads as muted, and
+ * "they are talking" is still true on that render, so the one-shot fires and the bubble arrives on
+ * the way out — while one already up can reach its ten seconds in the same window and go. Both are
+ * the header changing size under someone who has already left. Whatever is on screen when the exit
+ * begins stays there until the page does; `dismiss` is exempt, because a viewer who presses the
+ * control has asked for the change.
  */
-function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React.MutableRefObject<boolean>) {
+function useMutedNudge(
+  muted: boolean,
+  opponentAudible: boolean,
+  spentRef: React.MutableRefObject<boolean>,
+  frozen: boolean
+) {
   const [visible, setVisible] = React.useState(false);
 
   React.useEffect(() => {
-    if (spentRef.current || !muted || !opponentAudible) return;
+    if (frozen || spentRef.current || !muted || !opponentAudible) return;
     spentRef.current = true;
     setVisible(true);
-  }, [muted, opponentAudible, spentRef]);
+  }, [frozen, muted, opponentAudible, spentRef]);
 
   // The dismissal clock is deliberately its own effect, keyed only on `visible`. Sharing the
   // effect above would put `opponentAudible` in its dependencies, and the opponent stops talking
@@ -173,15 +186,17 @@ function useMutedNudge(muted: boolean, opponentAudible: boolean, spentRef: React
   // early-return instead of re-arming it, and the toast would sit there for the rest of the
   // session.
   React.useEffect(() => {
-    if (!visible) return;
+    // Freezing mid-count cancels the pending timeout through this effect's own cleanup, which is
+    // what stops a bubble nine seconds old from going out from under the exit.
+    if (!visible || frozen) return;
     const timer = setTimeout(() => setVisible(false), NUDGE_MS);
     return () => clearTimeout(timer);
-  }, [visible]);
+  }, [frozen, visible]);
 
   // Unmuting is what the nudge was asking for; leaving it up afterwards is just noise.
   React.useEffect(() => {
-    if (!muted) setVisible(false);
-  }, [muted]);
+    if (!muted && !frozen) setVisible(false);
+  }, [frozen, muted]);
 
   // For the mute button, which cannot wait for `muted` to catch up: unmuting leaves
   // `isMicrophoneEnabled` false for as long as the permission dialog is open, so the effect above
@@ -763,7 +778,8 @@ function VoiceHeaderBody({
   const { visible: nudgeVisible, dismiss: dismissNudge } = useMutedNudge(
     muted && !micFailed,
     opponentAudible,
-    nudgeSpentRef
+    nudgeSpentRef,
+    exiting
   );
 
   React.useEffect(() => {

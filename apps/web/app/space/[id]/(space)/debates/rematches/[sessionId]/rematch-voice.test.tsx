@@ -1846,6 +1846,56 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
   });
 
+  // The nudge is the other thing in this header that can arrive on its own, and leaving is exactly
+  // the event that arms it: an unmuted viewer's microphone reads as muted the moment the room
+  // drops, and "they are talking" is still true on that render, so the one-shot fires — growing
+  // the header at the one moment `exiting` exists to hold it still.
+  it('does not raise the talking nudge on the way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: false };
+    mocks.isSpeaking = true;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    // Unmuted while they talk, so the nudge is unspent and there is a live "they are audible".
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+
+    // Leaving: the room drops, which takes the microphone and the remote participants with it.
+    mocks.isMicrophoneEnabled = false;
+    mocks.connectionState = 'disconnected';
+    mocks.remoteParticipants = [];
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+  });
+
+  // And the other direction: one already on screen must not time out mid-exit either. Ten seconds
+  // is long enough that a click can land nine into it, and the bubble going away on its own is the
+  // same shift upward that raising it is downward.
+  it('does not let the talking nudge time out while leaving', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.isMicrophoneEnabled = false;
+      mocks.remoteParticipants = [remoteOpponent()];
+      const session = makeSession('browsing');
+      const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+      await flushOwnership();
+
+      mocks.isSpeaking = true;
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+
+      rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+      await act(async () => {
+        vi.advanceTimersByTime(12_000);
+      });
+
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Letting that room go must not take the header's shape with it. The connection is held open for
   // a room that was up; the shape is held whatever was drawn — here the one line the room itself
   // draws while it connects, which is what was on screen a moment before the click.
