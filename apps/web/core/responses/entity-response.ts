@@ -96,6 +96,16 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
 export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
 
 /**
+ * The vote kind a Verify or a Dispute was published as, which nothing can write any more.
+ *
+ * Kept as a name because the rows are still there — 178 of them — and code has to say what it means
+ * to do about that. Two answers, and they are opposite on purpose: a *tally* or a *current side*
+ * ignores them, because a claim asks one question now and a retired row is not an answer to it; a
+ * question about what somebody has **ever** done counts them, because they did do it.
+ */
+export const RETIRED_VERACITY_VOTE_KIND = 2;
+
+/**
  * The copy for a claim's two sides, reached without indexing anything.
  *
  * Claim surfaces must not do `ENTITY_RESPONSE_COPY[kind]` with a kind that came off the wire.

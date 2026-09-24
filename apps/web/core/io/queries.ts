@@ -41,6 +41,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
+  RETIRED_VERACITY_VOTE_KIND,
   type ResponseKind,
   type ResponseObjectType,
   decodeActiveResponseDirection,
@@ -1568,6 +1569,11 @@ type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string }
  * person still held a live stance on it. That is the path every factual-claim responder takes once
  * Verify is gone, so it is the common case rather than an edge.
  *
+ * **Retired rows are skipped, not merely out-ordered.** Taking the newest row is not enough on its
+ * own: the two kinds are independent, so the Verify can be the *newer* of the pair — answer a claim
+ * Agree, have it flagged factual, answer it again Verify. Nothing resolves to kind 2 any more, so
+ * such a row can never match and can only shadow the live stance underneath it.
+ *
  * Both maps are built here together so a single entity's kind and timestamp always describe the
  * same row; read from different rows they can disagree, and the timestamp is the list's sort key.
  */
@@ -1579,6 +1585,7 @@ export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
   const votedAtByObjectId: Record<string, string> = {};
 
   for (const node of nodes) {
+    if (node.voteKind === RETIRED_VERACITY_VOTE_KIND) continue;
     const id = uuidToHex(node.objectId);
     if (id in voteKindByObjectId) continue;
     voteKindByObjectId[id] = node.voteKind;

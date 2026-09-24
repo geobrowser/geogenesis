@@ -464,6 +464,35 @@ describe('indexVoteRowsByObject', () => {
     expect(kindRow?.votedAt).toBe(votedAtByObjectId[CLAIM]);
   });
 
+  /**
+   * The reverse ordering, which taking the newest row does not survive on its own.
+   *
+   * The two kinds are independent, so the Verify can be the *newer* of the pair: answer a claim
+   * Agree while it is an ordinary claim, have it flagged factual, answer it again with Verify. The
+   * kind-1 stance is still live, but the kind-2 row is newer — so "newest wins" reports 2, and
+   * `useVoteTabEntities` drops the claim from the Agreed tab exactly as it did before that fix.
+   *
+   * Nothing resolves to kind 2 any more, so a retired row can never be an entity's current answer
+   * and is skipped rather than merely out-ordered.
+   */
+  it('ignores a retired row even when it is the newest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-08-06T00:00:00.000Z');
+  });
+
+  it('reports nothing for an entity whose only row is retired', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(CLAIM in voteKindByObjectId).toBe(false);
+  });
+
   it('leaves an entity with one row alone', () => {
     const { voteKindByObjectId } = indexVoteRowsByObject([
       { objectId: CLAIM, voteKind: 0, votedAt: '2026-09-01T00:00:00.000Z' },
