@@ -72,6 +72,9 @@ import {
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
+import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import { ROOM_REQUEST_WAITING } from '~/core/debates/rooms/room-copy';
+import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -93,6 +96,7 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -150,8 +154,21 @@ function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId
   return ids;
 }
 
+/** Each rejoin already retries its request; these space out whole attempts when all of those fail. */
+const ROOM_REJOIN_ATTEMPTS = 3;
+const ROOM_REJOIN_RETRY_MS = 15_000;
+
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  // The room owns this session rather than the other way round, so two of the page's exits change
+  // shape inside one: see the terminal-status effect and `leave` below.
+  const inDebateRoom = useInDebateRoom();
+  const roomPresence = useDebateRoomContext()?.presence ?? null;
+  const roomRejoin = useDebateRoomContext()?.rejoin;
+  const rejoinedForRef = React.useRef<string | null>(null);
+  const rejoinFailuresRef = React.useRef({ sessionId: '', count: 0 });
+  // Bumped to run the effect again after a failed rejoin, since the ended session itself will not change.
+  const [rejoinRetry, setRejoinRetry] = React.useState(0);
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
@@ -1881,19 +1898,56 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
+  // A room's session carries geo-chat's `debates` sentinel rather than a space and the debate route
+  // 404s on it; the claim carries the real one. Keyed by session, which this component is reused
+  // across rather than remounted for.
+  const requestSpaceRef = React.useRef<{ sessionId: string; spaceId: string } | null>(null);
+  const requestSpaceId = session?.request?.claim.space_id ?? null;
+  if (session && requestSpaceId) requestSpaceRef.current = { sessionId: session.id, spaceId: requestSpaceId };
+
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
       // The requester walks into the room the same way the accepter does, and without the intent
       // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
+      const remembered = requestSpaceRef.current?.sessionId === session.id ? requestSpaceRef.current.spaceId : null;
+      const spaceId = validateSpaceId(session.source_space_id) ? session.source_space_id : remembered;
+      if (!spaceId) return;
       markEnteringDebate(session.converted_debate_id);
-      router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
+      router.replace(`/space/${spaceId}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      returnFromSession(session);
+      // Never out of a room: geo-chat expires a `browsing` session once either party has been
+      // offline 90 seconds, which is what waiting for someone looks like.
+      if (!inDebateRoom) returnFromSession(session);
+      // geo-chat replaces a finished room session on the next join, which someone who never left
+      // would not otherwise send. Once per session, so a refusal cannot loop.
+      else if (roomRejoin && rejoinedForRef.current !== session.id) {
+        const sessionId = session.id;
+        rejoinedForRef.current = sessionId;
+        void roomRejoin().then(joined => {
+          if (joined) return;
+          const failures = rejoinFailuresRef.current;
+          const count = failures.sessionId === sessionId ? failures.count + 1 : 1;
+          rejoinFailuresRef.current = { sessionId, count };
+          if (count >= ROOM_REJOIN_ATTEMPTS) return;
+          setTimeout(() => {
+            if (rejoinedForRef.current !== sessionId) return;
+            rejoinedForRef.current = null;
+            setRejoinRetry(tick => tick + 1);
+          }, ROOM_REJOIN_RETRY_MS);
+        });
+      }
     }
-  }, [returnFromSession, router, session]);
+  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
 
   const leave = () => {
+    // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
+    // room that is the wrong verb: leaving is per person and the room stays open to come back to,
+    // so this walks out and lets `useRoomPresence` report the departure on unmount.
+    if (inDebateRoom) {
+      router.push(NavUtils.toExplore());
+      return;
+    }
     leaveRequestedRef.current = true;
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
@@ -1990,6 +2044,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
         <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
+          {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
+              "Waiting for …", and the pill has its own fallback. */}
+          {roomPresence && (
+            <DebateRoomPresenceIndicator
+              presence={roomPresence}
+              opponentName={remoteParticipant?.display_name || undefined}
+            />
+          )}
           <h1 className="sr-only">Rematch {remoteName}</h1>
           {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
               where the unmute control lives now — the 200px dock it replaced was pinned to the
@@ -2390,6 +2452,9 @@ function RematchClaimCard({
   /** The last request error for this claim. */
   requestError?: string | null;
 }) {
+  const inRoom = useInDebateRoom();
+  // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
+  const roomOpponentPresent = useRoomOpponentPresent();
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
@@ -2476,9 +2541,17 @@ function RematchClaimCard({
     chatPosition,
     localPosition,
     opponentReady: opposing,
+    // `true` off this route, where there is no join event to wait on. Inside a room (GEO-2941) the
+    // request waits for the opponent to arrive.
+    opponentPresent: roomOpponentPresent,
     indexingDelayed: responseIndexing.status === 'delayed',
   });
-  const canRequest = requestGate.canRequest;
+  // Ended or expired while the viewer is still in the room: someone went offline long enough for
+  // geo-chat to end it, and it refuses requests until the room hands out a new one.
+  const roomSessionEnded = inRoom && (session?.status === 'ended' || session?.status === 'expired');
+  const canRequest = requestGate.canRequest && !roomSessionEnded;
+  // In a room the button is what state 3 turns on, so it stays on screen, disabled, until then.
+  const awaitingOpponent = requestGate.awaitingOpponent;
   const awaitingResponse = requestGate.pending;
   const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
@@ -2533,7 +2606,7 @@ function RematchClaimCard({
       // Only when there is something to offer, the same way the side panel renders its control only
       // once a match exists. Rendering it unconditionally put a dead disabled button on every card.
       endSlot={
-        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
+        awaitingResponse || canRequest || awaitingOpponent || requesting || claim.recently_rejected ? (
           <RequestDebateControl
             onRequest={onRequest}
             disabled={!canRequest || busy || claim.recently_rejected}
@@ -2544,6 +2617,10 @@ function RematchClaimCard({
               claim.recently_rejected ? (
                 <Text as="span" variant="footnote" color="grey-04">
                   Recently rejected
+                </Text>
+              ) : awaitingOpponent ? (
+                <Text as="span" variant="footnote" color="grey-04">
+                  {ROOM_REQUEST_WAITING}
                 </Text>
               ) : null
             }

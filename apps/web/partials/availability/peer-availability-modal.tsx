@@ -11,10 +11,12 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
-import { PeerAvailability } from './peer-availability';
+import { PeerAvailability, type PeerAvailabilityBooking } from './peer-availability';
 
 type Props = {
   open: boolean;
+  /** Absent leaves the week read-only, which is what it is for everyone without the booking flag. */
+  booking?: PeerAvailabilityBooking;
   /** The person whose week is being looked at. Nothing else about them is needed. */
   userId: string;
   peerName?: string | null;
@@ -38,7 +40,7 @@ type Props = {
  * than seven day columns — the same reason `availability-modal` does, and it carries that modal's
  * mobile fixes with it.
  */
-export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerRef }: Props) {
+export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerRef, booking }: Props) {
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
@@ -88,7 +90,9 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerR
 
             {/* Mounted only while open, so a closed dialog issues no request. It is also what keeps
                 an empty `userId` away from the hook while nobody is selected. */}
-            {open && <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" />}
+            {open && (
+              <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" booking={booking} />
+            )}
           </div>
         </Content>
       </Portal>

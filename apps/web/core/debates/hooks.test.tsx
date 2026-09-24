@@ -17,7 +17,7 @@ import {
 } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
-import { useDebateGatewayScope} from './debate-gateway';
+import { useDebateGatewayScope } from './debate-gateway';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
