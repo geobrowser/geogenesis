@@ -404,17 +404,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const source: ClaimsSource = viewingPositions ? 'mine' : chosenRecommendedIsGone ? 'all' : (chosenSource ?? 'all');
 
   /**
-   * "My positions": the viewer's own side of the lookup the opponent's tab reads.
+   * "Positions": the viewer's own side of the lookup the opponent's tab reads.
    *
-   * `positions` already covers both debaters, so the ids are free — what this costs is the claim
-   * entities behind them and geo-chat's rows for those, and it spends that only once the source is
-   * on screen. The picker lands on the opponent's positions, and a returning pair should not wait
-   * behind a lookup for a list nobody has asked for. Same shape as `taggedEnabled` below.
+   * `positions` already covers both debaters, so the ids are free. The entities behind them and
+   * geo-chat's rows for those used to wait until the tab was opened — a lookup for a list nobody
+   * had asked for. The tab carries a count now, and a count has to be of the rows the tab will
+   * actually list: `participantClaimRows` drops claims this session has already ruled out and
+   * claims in spaces that cannot carry a published debate, so a number taken from `positions`
+   * alone would sit above the list it describes. That is the same confident-and-wrong badge
+   * GEO-2656 took out of the opponent's tab, so the lookup runs with the opponent's instead.
    */
-  const viewerSourced = viewingPositions;
   const viewerClaimIds = React.useMemo(
-    () => (viewerSourced ? claimIdsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null) : []),
-    [localParticipant, positions.byClaim, viewerSourced]
+    () => claimIdsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null),
+    [localParticipant, positions.byClaim]
   );
   const viewerEntitiesQuery = useClaimEntitiesByIds(viewerClaimIds);
   // Both graph-sourced options, one pipeline (GEO-2771).
@@ -1280,6 +1282,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentClaims, opponentPositionOf]
   );
 
+  /** The viewer's own, counted off the same list the tab draws — see `opponentPositionCount`. */
+  const viewerPositionCount = React.useMemo(
+    () => viewerClaims.filter(claim => viewerPositionOf(claim) !== null).length,
+    [viewerClaims, viewerPositionOf]
+  );
+
   /**
    * GEO-2656. The badge drew `0` from the very first paint, because the count is derived from a
    * list that is empty until three dependent round trips land — positions, then the claim
@@ -1307,6 +1315,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const opponentCountPending =
     opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
+
+  // The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
+  // wrong for as long as the chain behind it is still running.
+  const viewerCountPending =
+    viewerClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's
@@ -2115,6 +2128,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     the hub gives for it being a tab rather than an option inside one. */}
                 <TabButton active={tab === 'positions'} onClick={() => setTab('positions')}>
                   Positions
+                  <span
+                    className={cx(
+                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
+                      tab === 'positions' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+                    )}
+                  >
+                    {viewerCountPending ? (
+                      <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting your positions" />
+                    ) : (
+                      viewerPositionCount
+                    )}
+                  </span>
                 </TabButton>
               </div>
               {/* Outside the scroll container so the rule spans the visible row rather than the

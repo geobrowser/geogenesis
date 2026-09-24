@@ -1677,18 +1677,31 @@ describe('DebateRematchPageClient', () => {
      * entities behind them and geo-chat's rows for those are not, and the picker lands somewhere
      * else. A returning pair should not wait behind a lookup for a list nobody has asked for.
      */
-    it('asks for nothing until the source is on screen', async () => {
+    // It used to wait for the tab to be opened. The tab carries a count now, and the count is of
+    // the rows the tab will list — which `participantClaimRows` filters — so the lookup behind them
+    // has to have run before the viewer gets there. A number that waits is a number that reads `0`
+    // for a viewer with a backlog, which is what GEO-2656 took out of the other tab.
+    it('looks the viewer’s own claims up with the opponent’s, so the tab can count them', async () => {
       viewerOnlyClaim();
+      // A position on the claim this session excludes — the one the pair just debated. It is one of
+      // the viewer's answered ids and never one of the tab's rows, which is exactly the difference
+      // between counting ids and counting the list.
+      mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SOURCE, SPACE_1, true)];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showExplore();
-
-      expect(mocks.entityIdLookups.flat()).not.toContain(VIEWER_ONLY);
-      expect(mocks.rematchClaimIds.flat()).not.toContain(VIEWER_ONLY);
-
-      await showMyPositions();
 
       await waitFor(() => expect(mocks.entityIdLookups.flat()).toContain(VIEWER_ONLY));
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
+
+      // And the number is on the tab before it is opened, and is of the rows the tab then lists —
+      // not of the ids behind them, which `participantClaimRows` filters on the way to becoming
+      // rows.
+      const badge = (
+        screen.getByRole('button', { name: /^Positions/ }).textContent?.replace('Positions', '') ?? ''
+      ).trim();
+      expect(badge).toMatch(/^\d+$/);
+
+      await showMyPositions();
+      expect(screen.getAllByRole('article')).toHaveLength(Number(badge));
     });
 
     // The same window the opponent's tab waits out, on the other side of it: the ids here are the
@@ -3399,13 +3412,13 @@ describe('DebateRematchPageClient', () => {
   it('gives the viewer’s own positions a tab rather than a source', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const positions = screen.getByRole('button', { name: 'Positions' });
+    const positions = screen.getByRole('button', { name: /^Positions/ });
     expect(positions).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.click(positions);
     await settleTabSwap();
 
-    expect(screen.getByRole('button', { name: 'Positions' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Positions/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'false');
     // And it is no longer reachable as a source, from Explore or anywhere else.
     expect(screen.queryByRole('button', { name: 'My positions' })).toBeNull();
@@ -4067,7 +4080,7 @@ async function showAllClaims() {
 
 /** The viewer's own backlog, a tab of its own since it left Explore's menu. */
 async function showMyPositions() {
-  fireEvent.click(screen.getByRole('button', { name: 'Positions' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Positions/ }));
   await settleTabSwap();
 }
 
