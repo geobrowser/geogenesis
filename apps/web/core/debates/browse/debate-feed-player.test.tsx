@@ -6,11 +6,20 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
+const SPACE_1 = '11111111111111111111111111111111';
+const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
+const SPACE_2 = '22222222222222222222222222222222';
+
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
+  affiliations: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+}));
+
+vi.mock('~/core/debates/participant-affiliations', () => ({
+  useParticipantAffiliations: () => mocks.affiliations,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -62,7 +71,7 @@ vi.mock('./debate-claim-ticker', () => ({
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
-    profile_space_id: `space-${slot}`,
+    profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
     position_label: slot === 1 ? 'For' : 'Against',
   }) as unknown as DebateParticipant;
 
@@ -150,6 +159,7 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
+  mocks.affiliations = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -185,13 +195,14 @@ describe('player layout', () => {
     // Beside the name and not inside its link: the position is a fact about the debater, not a
     // second way to open their profile.
     for (const [name, position] of [
-      ['space-1', 'For'],
-      ['space-2', 'Against'],
+      [SPACE_1_DASHED, 'For'],
+      [SPACE_2, 'Against'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
       expect(chip.closest('button')).toBeNull();
       expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
+      expect(chip.parentElement?.className).toContain('items-start');
     }
   });
 
@@ -206,6 +217,27 @@ describe('player layout', () => {
     expect(queryByText('For')).toBeNull();
     expect(queryByText('Against')).not.toBeNull();
   });
+
+  it('shows each participant affiliation below their name and exposes the full line on hover', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.affiliations = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(getByText('Head of Product at Geo').className).toContain('truncate');
+    expect(getByTitle('PhD student, Economics at Stanford')).not.toBeNull();
+  });
+
+  it('leaves no affiliation row when a participant has none', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelector('[title*=" at "]')).toBeNull();
+  });
 });
 
 describe('overlay variants', () => {
@@ -219,6 +251,20 @@ describe('overlay variants', () => {
     const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('hides participant affiliations in a compact debate card', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.affiliations = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('Head of Product at Geo')).toBeNull();
+    expect(queryByText('PhD student, Economics at Stanford')).toBeNull();
   });
 
   it('shows subtitles only for an active, playing, muted compact debate', () => {
