@@ -28,6 +28,7 @@ import type { Entity } from '~/core/types';
 import { Avatar } from '~/design-system/avatar';
 import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
+import { Tooltip } from '~/design-system/tooltip';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -997,32 +998,47 @@ export function ClaimScrubberMarkers({
   return (
     <div className={cx('pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2', className)}>
       {markers.map((marker, index) => {
+        // Several claims can finish in one segment and share a hash. Saying so beats announcing one
+        // of them and silently standing for the others. `marker.text` is the one the card will show
+        // — not the first of the group — so both the label and the preview name what a click
+        // surfaces.
+        const preview = marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text;
+
         return (
-          <button
+          <Tooltip
             key={marker.id}
-            type="button"
-            title={marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text}
-            // Several claims can finish in one segment and share a hash. Saying so beats announcing
-            // one of them and silently standing for the others. `marker.text` is the one the card
-            // will show — not the first of the group — so the label names what the click surfaces.
-            aria-label={
-              marker.count > 1 ? `Jump to ${marker.count} claims, showing: ${marker.text}` : `Jump to: ${marker.text}`
+            position="top"
+            // A `title` did this before, and the browser's own wait — a second or more, and not
+            // ours to shorten — was long enough that the preview read as broken. A hash is 12px
+            // wide at most: nobody rests a pointer on one by accident, so there is nothing for a
+            // delay to protect against and the preview opens on arrival.
+            delayDuration={0}
+            label={preview}
+            trigger={
+              <button
+                type="button"
+                aria-label={
+                  marker.count > 1
+                    ? `Jump to ${marker.count} claims, showing: ${marker.text}`
+                    : `Jump to: ${marker.text}`
+                }
+                onClick={event => {
+                  event.stopPropagation();
+                  onSeek(marker.seekMs);
+                }}
+                style={{ left: `${marker.fraction * 100}%`, width: markerHitWidth(markers, index) }}
+                // The button is the target and draws nothing; `before:` draws the 2px hash at its
+                // centre, so the hash stays 2px however wide the target around it grows.
+                className={cx(
+                  'pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent',
+                  MARKER_HIT_HEIGHT,
+                  'before:absolute before:top-1/2 before:left-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white/80 before:transition-[height,background-color] before:content-[""]',
+                  'hover:before:h-3.5 hover:before:bg-white',
+                  // A control in the tab order has to show where focus is; there was nothing before.
+                  'focus-visible:outline-none focus-visible:before:h-3.5 focus-visible:before:bg-white'
+                )}
+              />
             }
-            onClick={event => {
-              event.stopPropagation();
-              onSeek(marker.seekMs);
-            }}
-            style={{ left: `${marker.fraction * 100}%`, width: markerHitWidth(markers, index) }}
-            // The button is the target and draws nothing; `before:` draws the 2px hash at its
-            // centre, so the hash stays 2px however wide the target around it grows.
-            className={cx(
-              'pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent',
-              MARKER_HIT_HEIGHT,
-              'before:absolute before:top-1/2 before:left-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white/80 before:transition-[height,background-color] before:content-[""]',
-              'hover:before:h-3.5 hover:before:bg-white',
-              // A control in the tab order has to show where focus is; there was nothing before.
-              'focus-visible:outline-none focus-visible:before:h-3.5 focus-visible:before:bg-white'
-            )}
           />
         );
       })}

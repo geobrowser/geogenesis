@@ -911,6 +911,16 @@ describe('markerHitWidth', () => {
 });
 
 describe('ClaimScrubberMarkers', () => {
+  // The hover preview is a Radix tooltip, and Radix measures its arrow with a ResizeObserver that
+  // jsdom does not implement. Nothing here asserts on size, so an inert one is enough.
+  beforeEach(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  });
+
   const marker = (id: string, fraction: number): ClaimMarker => ({
     id,
     text: `Claim ${id}`,
@@ -935,5 +945,33 @@ describe('ClaimScrubberMarkers', () => {
     const { container } = render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
 
     expect(container.querySelector('button')?.children).toHaveLength(0);
+  });
+
+  /**
+   * The preview used to be a `title`, and a native tooltip waits a second or more before it
+   * appears — long enough on a scrubber that viewers read the preview as missing rather than slow.
+   * The wait is the browser's and cannot be shortened, so the only fix is to stop using it. This
+   * holds the attribute gone: a `title` left behind would keep the slow preview alongside the
+   * fast one.
+   */
+  it('previews a claim without a native title, whose delay is not ours to shorten', async () => {
+    render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
+
+    const target = screen.getByLabelText('Jump to: Claim a');
+    expect(target).not.toHaveAttribute('title');
+
+    fireEvent.pointerMove(target, { pointerType: 'mouse' });
+
+    expect(await screen.findAllByText('Claim a')).not.toHaveLength(0);
+  });
+
+  // A hash stands for whatever ended in its segment, and the card only ever shows one of them.
+  // The preview says how many are behind it so a click on a crowded hash is not a surprise.
+  it('says how many claims share a hash', async () => {
+    render(<ClaimScrubberMarkers markers={[{ ...marker('a', 0.5), count: 3 }]} onSeek={vi.fn()} />);
+
+    fireEvent.pointerMove(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), { pointerType: 'mouse' });
+
+    expect(await screen.findAllByText('Claim a (+2 more)')).not.toHaveLength(0);
   });
 });
