@@ -8,6 +8,8 @@ export type DebateRoomContextValue = {
   roomId: string;
   /** `null` while the viewer's identity or the room payload is still resolving. */
   presence: DebateRoomPresence | null;
+  /** Asks the room for a fresh session when the one it handed out has ended. */
+  rejoin?: () => void;
 };
 
 /**
@@ -19,13 +21,15 @@ const DebateRoomContext = React.createContext<DebateRoomContextValue | null>(nul
 export function DebateRoomProvider({
   roomId,
   presence,
+  rejoin,
   children,
 }: {
   roomId: string;
   presence: DebateRoomPresence | null;
+  rejoin?: () => void;
   children: React.ReactNode;
 }) {
-  const value = React.useMemo(() => ({ roomId, presence }), [roomId, presence]);
+  const value = React.useMemo(() => ({ roomId, presence, rejoin }), [roomId, presence, rejoin]);
   return <DebateRoomContext.Provider value={value}>{children}</DebateRoomContext.Provider>;
 }
 

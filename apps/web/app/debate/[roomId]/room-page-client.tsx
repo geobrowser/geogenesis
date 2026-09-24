@@ -50,7 +50,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }, [denial, router]);
 
   const admitted = room?.access.status === 'admitted';
-  useRoomPresence(roomId, admitted);
+  const { rejoin } = useRoomPresence(roomId, admitted);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
 
@@ -90,7 +90,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   if (!room.rematch_session_id) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
 
   return (
-    <DebateRoomProvider roomId={roomId} presence={presence}>
+    <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
     </DebateRoomProvider>
   );

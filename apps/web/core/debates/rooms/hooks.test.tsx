@@ -162,7 +162,7 @@ describe('useRoomPresence', () => {
         : Promise.resolve({} as never)
     );
 
-    render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+    const { unmount } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
     await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
 
     // The join never settles, which is the tab closing mid-request.
@@ -171,6 +171,25 @@ describe('useRoomPresence', () => {
     await vi.waitFor(() => expect(spy.mock.calls.some(call => call[1].joined === false)).toBe(true));
     const leave = spy.mock.calls.find(call => call[1].joined === false);
     expect(leave?.[4]).toBe(true);
+    // The presence queue is module state: a join left hanging would stall every later test's sends.
+    join.settle?.();
+    unmount();
+    spy.mockRestore();
+  });
+
+  // A repeat join is how a room with a finished session gets a new one; the room page sends it.
+  it('sends another join when asked to rejoin', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    const spy = vi.spyOn(api, 'setDebateRoomPresence').mockResolvedValue({} as never);
+
+    const { result } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+    await vi.waitFor(() => expect(spy.mock.calls.filter(call => call[1].joined).length).toBe(1));
+
+    result.current.rejoin();
+
+    await vi.waitFor(() => expect(spy.mock.calls.filter(call => call[1].joined).length).toBe(2));
     spy.mockRestore();
   });
 });

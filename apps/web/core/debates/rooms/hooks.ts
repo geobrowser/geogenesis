@@ -99,6 +99,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
   // refresh from re-running the join/leave pair.
   const tokenRef = React.useRef(getPrivyIdentityToken);
   tokenRef.current = getPrivyIdentityToken;
+  const announceRef = React.useRef<(() => void) | null>(null);
 
   React.useEffect(() => {
     if (!admitted) return;
@@ -130,6 +131,7 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
         .catch(() => undefined);
 
     void announce();
+    announceRef.current = () => void announce();
 
     // `pagehide` has no later, so the request is made rather than queued: a leave waiting behind
     // an in-flight join is never sent at all once the document freezes, and the server has no
@@ -153,13 +155,18 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     window.addEventListener('pageshow', restore);
     return () => {
       cancelled = true;
+      announceRef.current = null;
       window.removeEventListener('pagehide', departOnce);
       window.removeEventListener('pageshow', restore);
       void withRetry(() => send(false, true)).catch(() => undefined);
     };
   }, [accountKey, admitted, connectionId, queryClient, roomId]);
 
-  return { connectionId };
+  // A join is also how a room gets a fresh session: geo-chat replaces an expired or ended one on the
+  // next join, which an occupant who never left would otherwise not send.
+  const rejoin = React.useCallback(() => announceRef.current?.(), []);
+
+  return { connectionId, rejoin };
 }
 
 /**

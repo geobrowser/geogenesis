@@ -159,6 +159,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
   const roomPresence = useDebateRoomContext()?.presence ?? null;
+  const roomRejoin = useDebateRoomContext()?.rejoin;
+  const rejoinedForRef = React.useRef<string | null>(null);
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
@@ -1908,8 +1910,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
       if (!inDebateRoom) returnFromSession(session);
+      // geo-chat replaces a finished room session on the next join, which someone who never left
+      // would not otherwise send. Once per session, so a refusal cannot loop.
+      else if (roomRejoin && rejoinedForRef.current !== session.id) {
+        rejoinedForRef.current = session.id;
+        roomRejoin();
+      }
     }
-  }, [inDebateRoom, returnFromSession, router, session]);
+  }, [inDebateRoom, returnFromSession, roomRejoin, router, session]);
 
   const leave = () => {
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
@@ -2412,6 +2420,7 @@ function RematchClaimCard({
   /** The last request error for this claim. */
   requestError?: string | null;
 }) {
+  const inRoom = useInDebateRoom();
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
@@ -2505,7 +2514,10 @@ function RematchClaimCard({
     opponentPresent: roomOpponentPresent,
     indexingDelayed: responseIndexing.status === 'delayed',
   });
-  const canRequest = requestGate.canRequest;
+  // Ended or expired while the viewer is still in the room: someone went offline long enough for
+  // geo-chat to end it, and it refuses requests until the room hands out a new one.
+  const roomSessionEnded = inRoom && (session?.status === 'ended' || session?.status === 'expired');
+  const canRequest = requestGate.canRequest && !roomSessionEnded;
   // In a room the button is what state 3 turns on, so it stays on screen, disabled, until then.
   const awaitingOpponent = requestGate.awaitingOpponent;
   const awaitingResponse = requestGate.pending;

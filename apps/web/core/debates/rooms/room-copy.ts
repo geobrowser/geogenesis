@@ -60,16 +60,6 @@ export const ROOM_NOT_YET_OPEN = {
   opensAt: (opensAt: string) => `You can join from ${opensAt}.`,
 } as const;
 
-/**
- * A room whose session has gone. geo-chat expires one after 90s of either party being offline and
- * never mints a replacement, so voice and Request debate stop working.
- */
-export const ROOM_SESSION_ENDED = {
-  title: 'This room has closed',
-  body: 'You can’t start a debate here any more. Find someone else whenever you’re ready.',
-  action: 'Find a debate',
-} as const;
-
 /** Under a disabled Request debate in a room, while the opponent has not arrived. */
 export const ROOM_REQUEST_WAITING = 'Waiting for your opponent to arrive';
 

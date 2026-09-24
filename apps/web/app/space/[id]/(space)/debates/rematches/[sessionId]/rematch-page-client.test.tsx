@@ -5257,6 +5257,53 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
+  const presentWith = (rejoin: () => void, children: React.ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'present', opponentUserId: 'user-remote', opponentPresent: true }}
+      rejoin={rejoin}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  // geo-chat ends a room's session when someone goes offline long enough, and replaces it on the
+  // next join. Someone still in the room never sends one, so the page asks, once.
+  it('asks the room for a fresh session when its own has ended, once', async () => {
+    const rejoin = vi.fn();
+    mocks.session = session({ status: 'expired' });
+
+    const view = render(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+    await waitFor(() => expect(rejoin).toHaveBeenCalledTimes(1));
+
+    mocks.session = session({ status: 'expired' });
+    view.rerender(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+    expect(rejoin).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Request debate off while the room session has ended', async () => {
+    mocks.session = session({ status: 'expired' });
+
+    render(presentWith(vi.fn(), <DebateRematchPageClient sessionId="rematch-1" />));
+    await showAllClaims();
+
+    // Hidden or disabled are both fine; offered is not.
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+    const offered = screen
+      .queryAllByRole('button', { name: 'Request debate' })
+      .filter(button => !(button as HTMLButtonElement).disabled);
+    expect(offered).toHaveLength(0);
+  });
+
+  it('offers Request debate on a live room session with the opponent here', async () => {
+    mocks.session = session({ status: 'browsing' });
+
+    render(presentWith(vi.fn(), <DebateRematchPageClient sessionId="rematch-1" />));
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
+  });
+
   it('names the opponent in the presence pill', async () => {
     mocks.session = session();
 
