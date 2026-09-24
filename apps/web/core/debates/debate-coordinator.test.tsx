@@ -40,6 +40,10 @@ const mocks = vi.hoisted(() => ({
   resolvedUserId: null as string | null,
   refetch: vi.fn(),
   abortMutateAsync: vi.fn(),
+  leaveRematchMutate: vi.fn(),
+  leaveRematchPending: false,
+  leaveRematchError: null as Error | null,
+  leaveRematchSessionId: '',
   clearDebateActivity: vi.fn(),
   rememberDebateReturnDestination: vi.fn(),
 }));
@@ -70,6 +74,10 @@ vi.mock('./hooks', () => ({
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+  useLeaveDebateRematch: (id: string) => {
+    mocks.leaveRematchSessionId = id;
+    return { mutate: mocks.leaveRematchMutate, isPending: mocks.leaveRematchPending, error: mocks.leaveRematchError };
+  },
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -152,6 +160,10 @@ beforeEach(() => {
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
+  mocks.leaveRematchMutate.mockReset();
+  mocks.leaveRematchPending = false;
+  mocks.leaveRematchError = null;
+  mocks.leaveRematchSessionId = '';
   mocks.abortMutateAsync.mockReset();
   mocks.abortMutateAsync.mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
@@ -404,6 +416,72 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+  });
+
+  it('offers resume and leave after navigating away from debate-again claims', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = activityWithRematch('browsing');
+    const view = render(<DebateCoordinator />);
+    expect(screen.queryByRole('button', { name: 'Resume debate' })).not.toBeInTheDocument();
+
+    mocks.pathname = '/space/space-1/people';
+    view.rerender(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume debate' }));
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+    expect(mocks.rememberDebateReturnDestination).toHaveBeenCalledOnce();
+    expect(mocks.leaveRematchMutate).not.toHaveBeenCalled();
+  });
+
+  it('lets a stranded participant end the server session without navigating', async () => {
+    mocks.activity = activityWithRematch('browsing');
+    const view = render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(mocks.leaveRematchSessionId).toBe('rematch-1');
+    expect(mocks.leaveRematchMutate).toHaveBeenCalledOnce();
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.activity = { ...mocks.activity, rematch: null };
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('button', { name: 'Leave debate' })).not.toBeInTheDocument();
+  });
+
+  it('keeps recovery available after a failed leave and disables actions while leaving', () => {
+    mocks.activity = activityWithRematch('browsing');
+    mocks.leaveRematchPending = true;
+    const view = render(<DebateCoordinator />);
+    expect(screen.getByRole('button', { name: 'Leaving…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Resume debate' })).toBeDisabled();
+    mocks.leaveRematchPending = false;
+    mocks.leaveRematchError = new Error('Could not leave. Try again.');
+    view.rerender(<DebateCoordinator />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not leave. Try again.');
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeEnabled();
+  });
+
+  it.each(['deciding', 'ended', 'expired', 'converted'] as const)(
+    'does not offer claim-picker recovery for a %s session',
+    status => {
+      mocks.activity = activityWithRematch('browsing');
+      mocks.activity.rematch!.status = status;
+      render(<DebateCoordinator />);
+      expect(screen.queryByRole('button', { name: 'Resume debate' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Leave debate' })).not.toBeInTheDocument();
+    }
+  );
+
+  it('offers recovery while a rematch request is pending', () => {
+    mocks.activity = activityWithRematch('browsing');
+    mocks.activity.rematch!.status = 'request_pending';
+    render(<DebateCoordinator />);
+    expect(screen.getByRole('button', { name: 'Resume debate' })).toBeInTheDocument();
+  });
+
+  it('does not put recovery over the source debate while it finalizes recording', () => {
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    mocks.activity = activityWithRematch('browsing');
+    render(<DebateCoordinator />);
+    expect(screen.queryByRole('button', { name: 'Resume debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Leave debate' })).not.toBeInTheDocument();
   });
 
   it('waits for the debate room to finalize its recording before routing to a rematch', async () => {
