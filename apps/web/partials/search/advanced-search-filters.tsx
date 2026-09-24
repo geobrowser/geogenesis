@@ -218,6 +218,12 @@ function SpaceFilter({
 
   const selectedSpace = spaces.find(space => space.id === spaceId) ?? null;
 
+  React.useEffect(() => {
+    if (spaceId !== null && !spaces.some(space => space.id === spaceId)) {
+      onSelectSpace(null);
+    }
+  }, [spaceId, spaces, onSelectSpace]);
+
   if (spaces.length === 0) return null;
 
   return (
