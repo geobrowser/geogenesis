@@ -1650,6 +1650,75 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent('View profile');
   });
 
+  /** A locked pairing: the pair have agreed a claim and each holds a side. */
+  function lockedSession(): DebateRematchSession {
+    const session = makeSession('request_pending');
+    return {
+      ...session,
+      request: {
+        id: 'request-1',
+        status: 'pending',
+        claim: {
+          id: 'claim-1',
+          space_id: 'space-1',
+          claim_entity_id: 'claim-entity-1',
+          claim: 'A man should always pay for the first date',
+          description: null,
+        },
+        requester_user_id: 'me',
+        recipient_user_id: 'them',
+        requester_position: true,
+        recipient_position: false,
+        turn_format_id: 'format-1',
+        created_at: '2026-08-27T00:00:00Z',
+        expires_at: '2026-08-27T00:05:00Z',
+      },
+    };
+  }
+
+  // The card is a `<button>` with an explicit `aria-label`, and a control's label replaces its
+  // descendant text in the accessible name — so the mic chip is invisible to a screen reader from
+  // inside it. A `role="status"` nested in a button does not save it either: a button's descendants
+  // are presentational, so the role, and the implicit `aria-live` with it, is stripped. The dock
+  // this replaced had the chip in a plain row, where both worked.
+  it('announces the opponent mic state from outside their card button', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-opponent-card');
+    const status = screen.getByTestId('rematch-opponent-status');
+    expect(status).toHaveAttribute('role', 'status');
+    expect(status).toHaveTextContent('Salina is muted');
+    expect(card).not.toContainElement(status);
+
+    // And the card points at it, so focusing the control says who is muted rather than only what
+    // pressing it does. The label itself stays put — a control that renames itself every time the
+    // other person mutes is harder to use than one that is quiet.
+    expect(card).toHaveAttribute('aria-describedby', status.id);
+    expect(card).toHaveAttribute('aria-label', 'Open Salina’s personal space');
+
+    mocks.opponentMicPublication = { isMuted: false };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is unmuted');
+    expect(screen.getByTestId('rematch-opponent-card')).toHaveAttribute('aria-label', 'Open Salina’s personal space');
+  });
+
+  // Same label, same problem: once the pair lock a claim the opponent's side is a chip inside that
+  // button, and the accessible name hides it too.
+  it('carries the opponent locked position in the card description', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: true };
+    render(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+    await flushOwnership();
+
+    // Visible on the card, and reachable from the control that hides it.
+    expect(within(screen.getByTestId('rematch-opponent-card')).getByText('Disagree')).toBeInTheDocument();
+    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is muted. Salina disagrees');
+  });
+
   // A hover variant outranks a plain utility on specificity whichever order they are written in,
   // so an unconditional `hover:border-grey-03` erased the talking outline exactly while the viewer
   // was pointing at the card — the one moment they are most likely to be looking at it.

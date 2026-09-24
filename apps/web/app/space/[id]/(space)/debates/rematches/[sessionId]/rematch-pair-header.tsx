@@ -117,6 +117,27 @@ export function RematchPairHeader({
   onOpenOpponentSpace,
   leaveAction,
 }: RematchPairHeaderProps) {
+  /**
+   * Everything about the opponent that their card cannot say for itself.
+   *
+   * The card is a button with an `aria-label`, and an explicit label replaces the descendant text
+   * in a control's accessible name — so the mic chip and the locked position chip are both invisible
+   * to a screen reader inside it, and a `role="status"` nested in a button has its role stripped by
+   * children-presentational. This sits outside the button and does both jobs: it announces the
+   * changes, and the button points at it with `aria-describedby` so focusing the card says who is
+   * muted rather than only what pressing it does.
+   *
+   * The label itself stays fixed. Folding the state into it would rename the control every time the
+   * other person mutes, and a control whose name moves is harder to use than one that is quiet.
+   */
+  const opponentStatusId = React.useId();
+  const opponentStatus = [
+    voice.kind === 'live' ? opponentMicLabel(voice.opponentState, opponentName) : null,
+    positions ? `${opponentName} ${positions.opponentAgrees ? 'agrees' : 'disagrees'}` : null,
+  ]
+    .filter(Boolean)
+    .join('. ');
+
   return (
     <div className="flex flex-col gap-3">
       {lockedClaim ? <LockedClaim claim={lockedClaim.claim} spaceName={lockedClaim.spaceName} /> : null}
@@ -133,6 +154,7 @@ export function RematchPairHeader({
           showMicState={voice.kind === 'live'}
           agrees={positions?.opponentAgrees}
           onOpen={onOpenOpponentSpace}
+          describedBy={opponentStatusId}
         />
         <VsBadge />
         <YouCard
@@ -149,6 +171,10 @@ export function RematchPairHeader({
           to be unreliable, and for a muted user this is the only announcement that the other
           person is talking. The toast itself is not a live region — it carries real buttons, and
           `aria-hidden` over a focusable control is worse than saying it twice. */}
+      <span id={opponentStatusId} role="status" data-testid="rematch-opponent-status" className="sr-only">
+        {opponentStatus}
+      </span>
+
       <span role="status" data-testid="rematch-voice-announcement" className="sr-only">
         {toast ? toastAnnouncement(toast, opponentName) : ''}
       </span>
@@ -380,6 +406,7 @@ function OpponentCard({
   showMicState,
   agrees,
   onOpen,
+  describedBy,
 }: {
   opponent: PairHeaderParticipant;
   name: string;
@@ -387,6 +414,8 @@ function OpponentCard({
   showMicState: boolean;
   agrees?: boolean;
   onOpen: (event: React.MouseEvent) => void;
+  /** The header's live region, which also serves as this button's description. */
+  describedBy: string;
 }) {
   const talking = showMicState && state === 'talking';
 
@@ -427,6 +456,7 @@ function OpponentCard({
       data-testid="rematch-opponent-card"
       onClick={onOpen}
       aria-label={`Open ${name}’s personal space`}
+      aria-describedby={describedBy}
       className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5 text-left transition-colors')}
     >
       {body}
@@ -463,41 +493,40 @@ function ParticipantAvatar({
  * Neutral before they arrive, red while muted, green once they are live — with a word next to the
  * icon, so it reads as a report on the other person rather than as a switch.
  */
+/** The opponent's mic state as a sentence — the chip's tooltip and the live region say the same thing. */
+function opponentMicLabel(state: PairMicState, name: string) {
+  return state === 'waiting'
+    ? `Waiting for ${name} to join`
+    : state === 'muted'
+      ? `${name} is muted`
+      : state === 'talking'
+        ? `${name} is talking`
+        : `${name} is unmuted`;
+}
+
 function OpponentMicChip({ state, name }: { state: PairMicState; name: string }) {
-  const label =
-    state === 'waiting'
-      ? `Waiting for ${name} to join`
-      : state === 'muted'
-        ? `${name} is muted`
-        : state === 'talking'
-          ? `${name} is talking`
-          : `${name} is unmuted`;
+  const label = opponentMicLabel(state, name);
 
   const text =
     state === 'waiting' ? 'Waiting' : state === 'muted' ? 'Muted' : state === 'talking' ? 'Talking' : 'Unmuted';
 
+  // No live region in here. This chip renders inside the card's `<button>`, and a button's
+  // descendants are presentational: the `role="status"` is stripped, taking its implicit
+  // `aria-live` with it. The announcement lives in `RematchPairHeader`, outside the button.
   return (
-    <>
-      <span
-        title={label}
-        className={cx(
-          PAIR_PILL,
-          'rounded-full',
-          state === 'waiting' && 'bg-grey-01 text-grey-04',
-          state === 'muted' && 'bg-errorTertiary text-red-01',
-          (state === 'live' || state === 'talking') && 'bg-successTertiary text-green'
-        )}
-      >
-        {state === 'talking' ? <TalkingBars /> : <MicrophoneIcon muted={state !== 'live'} />}
-        {text}
-      </span>
-      {/* The chip's own text carries the state, but nothing announces it changing: the opponent
-          arrives, mutes and unmutes on their own schedule, with no action here to hang an update
-          on. A live region whose text changes is the only reliable way to hear about it. */}
-      <span role="status" className="sr-only">
-        {label}
-      </span>
-    </>
+    <span
+      title={label}
+      className={cx(
+        PAIR_PILL,
+        'rounded-full',
+        state === 'waiting' && 'bg-grey-01 text-grey-04',
+        state === 'muted' && 'bg-errorTertiary text-red-01',
+        (state === 'live' || state === 'talking') && 'bg-successTertiary text-green'
+      )}
+    >
+      {state === 'talking' ? <TalkingBars /> : <MicrophoneIcon muted={state !== 'live'} />}
+      {text}
+    </span>
   );
 }
 
