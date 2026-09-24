@@ -733,12 +733,15 @@ function VoiceHeaderBody({
    * opponent may well be talking, and the viewer simply cannot hear it until they click.
    */
   const connectionMessage = ((): Extract<PairHeaderVoice, { kind: 'message' }> | null => {
-    // Not while leaving. Ending the session can drop the room within the second it takes the
-    // redirect to land, and swapping the controls for "Voice disconnected · Retry" on the way out
-    // is both a layout shift and an offer of something the viewer cannot want.
-    if (exiting) return null;
+    // Ending the session can drop a connected room within the second it takes the redirect to
+    // land, and swapping its controls for "Voice disconnected · Retry" on the way out is both a
+    // layout shift and an offer of something the viewer has just declined. Only that branch: a room
+    // that is still connecting, or reconnecting, has to keep saying so — leaving would otherwise
+    // put live mute controls over a room that has no connection at all.
     if (connectionState === ConnectionState.Disconnected && everConnected) {
-      return { kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry };
+      return exiting
+        ? null
+        : { kind: 'message', message: 'Voice disconnected', actionLabel: 'Retry', onAction: onRetry };
     }
     if (connectionState !== ConnectionState.Connected) {
       const reconnecting =
@@ -789,10 +792,25 @@ function VoiceHeaderBody({
 
   // Only while muted, only once there has been somebody to talk to, and only until the viewer has
   // answered it once.
+  const noticeApplies = muted && !micFailed && !noticeDismissed && opponentEverJoined && !roomGone;
+
+  /**
+   * Keeping it through the exit is not the same as raising it there.
+   *
+   * A pair who arrived from a recorded debate join unmuted and never see this. Leaving drops the
+   * room, which takes `isMicrophoneEnabled` with it — so without this the notice appears for the
+   * first time on the way out, growing the header at the one moment this whole flag exists to hold
+   * it still.
+   */
+  const [noticeWasShown, setNoticeWasShown] = React.useState(false);
+  React.useEffect(() => {
+    // `!exiting` matters as much as the condition itself: without it the latch is set by the very
+    // render it exists to suppress, and the notice arrives anyway one render later.
+    if (noticeApplies && !exiting) setNoticeWasShown(true);
+  }, [exiting, noticeApplies]);
+
   const notice =
-    muted && !micFailed && !noticeDismissed && opponentEverJoined && !roomGone
-      ? { onUnmute: unmute, onDismiss: onDismissNotice }
-      : null;
+    noticeApplies && (!exiting || noticeWasShown) ? { onUnmute: unmute, onDismiss: onDismissNotice } : null;
 
   const toast: PairHeaderToast | null =
     !connectionMessage && nudgeVisible ? { kind: 'opponent-talking', onUnmute: unmute, onDismiss: dismissNudge } : null;

@@ -1144,7 +1144,7 @@ describe('DebateRematchPageClient', () => {
         response_kind: 'stance',
         turn_format_id: 'standard',
         created_at: '2026-07-10T10:00:00.000Z',
-        expires_at: '2026-07-10T10:02:00.000Z',
+        expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
       },
     });
 
@@ -1167,6 +1167,37 @@ describe('DebateRematchPageClient', () => {
     expect(card.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // And the viewer is the requester, so no dialog asking them to answer their own request.
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  // The hub never draws an expired request — `useUnexpiredRequests` filters them out before its card
+  // sees one. This card is drawn from the session, which says `request_pending` until geo-chat's
+  // next answer, so the lapse is reachable here and "Awaiting response" through it would be waiting
+  // on something that is over.
+  it('says so when the request the viewer sent has lapsed', async () => {
+    mocks.session = session({
+      status: 'request_pending',
+      request: {
+        id: 'request-1',
+        status: 'pending',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-local',
+        recipient_user_id: 'user-remote',
+        requester_position: true,
+        requester_position_label: 'Agree',
+        recipient_position: false,
+        recipient_position_label: 'Disagree',
+        response_kind: 'stance',
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: new Date(Date.now() - 60_000).toISOString(),
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const card = await screen.findByTestId('rematch-outbound-request');
+    expect(within(card).getByText('This request has expired.')).toBeInTheDocument();
+    expect(within(card).queryByText('Awaiting response')).toBeNull();
   });
 
   it('shows authoritative stance labels in the incoming request dialog and preserves rematch actions', async () => {

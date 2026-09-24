@@ -1319,7 +1319,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
   // wrong for as long as the chain behind it is still running.
   const viewerCountPending =
-    viewerClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling);
+    viewerClaims.length === 0 &&
+    // `publishabilityPending` as well, which the opponent's does not need as badly: a debater's own
+    // responses often live in their personal space, and `canPublishDebateIn` fails open until the
+    // space types land — so the number would settle high and then drop as they resolve.
+    (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling || publishabilityPending);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import type { DebateRematchParticipant, DebateRematchRequest } from '~/core/debates/api';
@@ -64,9 +65,14 @@ export function RematchRequestCard({
         <SpaceChip spaceId={request.claim.space_id} />
         {/* The clock is the only thing on this card that changes, and it is the reason to look at
             it twice: a request lapses on its own whether or not anyone is watching. */}
-        <span className="flex shrink-0 items-center gap-1 text-footnote text-text">
+        <span
+          className={cx(
+            'flex shrink-0 items-center gap-1 text-footnote',
+            countdown.expired ? 'text-red-01' : 'text-text'
+          )}
+        >
           <Time />
-          {countdown.label}
+          {countdown.expired ? 'Expired' : countdown.label}
         </span>
       </div>
 
@@ -76,7 +82,13 @@ export function RematchRequestCard({
 
       <RequestParties viewer={viewer} opponent={opponent} />
 
-      <span className="flex items-center justify-center text-footnote text-grey-04">Awaiting response</span>
+      {/* The hub never draws an expired request — `useUnexpiredRequests` filters them out before its
+          card sees one. Here the card is drawn from the session, which says `request_pending` until
+          geo-chat's next answer, so the lapse is reachable and saying "Awaiting response" through it
+          would be waiting on something that is over. */}
+      <span className="flex items-center justify-center text-footnote text-grey-04">
+        {countdown.expired ? 'This request has expired.' : 'Awaiting response'}
+      </span>
     </motion.article>
   );
 }

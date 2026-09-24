@@ -1833,6 +1833,47 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
   });
 
+  // Keeping the notice through an exit is not the same as raising one there. A pair from a recorded
+  // debate join unmuted and never see it; leaving drops the room, which takes `isMicrophoneEnabled`
+  // with it — so it used to appear for the first time on the way out, growing the header at the one
+  // moment `exiting` exists to hold it still.
+  it('does not raise the unmute notice on the way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const carriedOver = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    const { rerender } = render(<RematchVoiceHeader session={carriedOver} currentUserId="me" />);
+    await flushOwnership();
+    // Unmuted, so it has never been raised.
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+
+    // Leaving: the session ends and the room goes with it.
+    mocks.isMicrophoneEnabled = false;
+    mocks.connectionState = 'disconnected';
+    rerender(
+      <RematchVoiceHeader
+        session={{ ...makeSession('ended'), source_debate_id: 'debate-1' }}
+        currentUserId="me"
+        exiting
+      />
+    );
+
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+  });
+
+  // Suppressing the dead-room message on the way out must not suppress the rest of the ladder: a
+  // room that never connected would otherwise be drawn with live mute controls over nothing.
+  it('keeps saying a room is reconnecting even while leaving', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeNull();
+  });
+
   // Leaving ends the session, and an ended session is not voice-capable — so the controls used to
   // tear themselves down in the second before the redirect landed, collapsing the card in front of
   // someone who had already left.
