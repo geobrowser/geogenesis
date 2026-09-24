@@ -8,6 +8,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { useParticipantAffiliations } from '~/core/debates/participant-affiliations';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
@@ -101,8 +102,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     endScrub,
   } = controller;
   const affiliations = useParticipantAffiliations(debate.participants, active || preload);
-  const affiliationFor = (participant: DebateParticipant | null) =>
-    participant ? (affiliations.get(participant.profile_space_id) ?? null) : null;
+  const affiliationFor = (participant: DebateParticipant | null) => {
+    const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
+    return spaceId ? (affiliations.get(spaceId) ?? null) : null;
+  };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();

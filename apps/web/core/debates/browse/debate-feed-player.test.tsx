@@ -6,6 +6,10 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
+const SPACE_1 = '11111111111111111111111111111111';
+const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
+const SPACE_2 = '22222222222222222222222222222222';
+
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
@@ -67,7 +71,7 @@ vi.mock('./debate-claim-ticker', () => ({
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
-    profile_space_id: `space-${slot}`,
+    profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
     position_label: slot === 1 ? 'For' : 'Against',
   }) as unknown as DebateParticipant;
 
@@ -191,8 +195,8 @@ describe('player layout', () => {
     // Beside the name and not inside its link: the position is a fact about the debater, not a
     // second way to open their profile.
     for (const [name, position] of [
-      ['space-1', 'For'],
-      ['space-2', 'Against'],
+      [SPACE_1_DASHED, 'For'],
+      [SPACE_2, 'Against'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
@@ -216,8 +220,8 @@ describe('player layout', () => {
   it('shows each participant affiliation below their name and exposes the full line on hover', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     mocks.affiliations = new Map([
-      ['space-1', 'Head of Product at Geo'],
-      ['space-2', 'PhD student, Economics at Stanford'],
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
     ]);
 
     const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);

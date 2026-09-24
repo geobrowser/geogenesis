@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import type { DebateParticipant } from '~/core/debates/api';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import {
   type ProfileHistory,
   fetchProfileHistory,
@@ -28,7 +29,15 @@ export function useParticipantAffiliations(
   enabled = true
 ): Map<string, string> {
   const spaceIds = React.useMemo(
-    () => [...new Set(participants.flatMap(participant => participant?.profile_space_id || []))],
+    () => [
+      ...new Set(
+        participants.flatMap(participant => {
+          const spaceId = participant?.profile_space_id;
+          const normalized = spaceId ? validateSpaceId(spaceId) : null;
+          return normalized ? [normalized] : [];
+        })
+      ),
+    ],
     [participants]
   );
   const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, enabled && spaceIds.length > 0);
