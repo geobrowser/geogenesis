@@ -1,4 +1,10 @@
-import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry, NamedRef } from './normalize-history';
+import type {
+  EducationCard,
+  EducationEntry,
+  EmploymentCard,
+  EmploymentEntry,
+  NamedRef,
+} from './normalize-history';
 import { isOngoing } from './normalize-history';
 
 /**
@@ -31,6 +37,22 @@ function affiliationLine(subject: string | null, organization: string | null): s
   return subject ?? organization;
 }
 
+type CurrentHistoryRow =
+  | { kind: 'employment'; card: EmploymentCard; entry: EmploymentEntry }
+  | { kind: 'education'; card: EducationCard; entry: EducationEntry };
+
+/** The shared current-role selection and profile ordering behind every summary of this history. */
+function currentHistoryRows(employment: EmploymentCard[], education: EducationCard[]): CurrentHistoryRow[] {
+  return [
+    ...employment.flatMap(card =>
+      card.entries.filter(isCurrent).map(entry => ({ kind: 'employment' as const, card, entry }))
+    ),
+    ...education.flatMap(card =>
+      card.entries.filter(isCurrent).map(entry => ({ kind: 'education' as const, card, entry }))
+    ),
+  ];
+}
+
 /**
  * The first current affiliation in the same order the profile presents its headline.
  *
@@ -39,25 +61,15 @@ function affiliationLine(subject: string | null, organization: string | null): s
  * affiliation, and must not hide the next complete one.
  */
 export function currentAffiliation(employment: EmploymentCard[], education: EducationCard[]): string | null {
-  for (const card of employment) {
-    for (const entry of card.entries) {
-      if (!isCurrent(entry)) continue;
-
-      const line = affiliationLine(nonEmptyName(entry.subject.name), nonEmptyName(card.organization.name));
-      if (line) return line;
-    }
-  }
-
-  for (const card of education) {
-    for (const entry of card.entries) {
-      if (!isCurrent(entry)) continue;
-
-      const subject = [nonEmptyName(entry.subject.name), ...entry.fields.map(field => nonEmptyName(field.name))]
-        .filter((part): part is string => part !== null)
-        .join(', ');
-      const line = affiliationLine(subject || null, nonEmptyName(card.organization.name));
-      if (line) return line;
-    }
+  for (const row of currentHistoryRows(employment, education)) {
+    const subject =
+      row.kind === 'education'
+        ? [nonEmptyName(row.entry.subject.name), ...row.entry.fields.map(field => nonEmptyName(field.name))]
+            .filter((part): part is string => part !== null)
+            .join(', ')
+        : nonEmptyName(row.entry.subject.name);
+    const line = affiliationLine(subject || null, nonEmptyName(row.card.organization.name));
+    if (line) return line;
   }
 
   return null;
@@ -86,23 +98,14 @@ export type CurrentRole = {
  * headline, which is most accounts.
  */
 export function currentRoles(employment: EmploymentCard[], education: EducationCard[]): CurrentRole[] {
-  const from = (cards: HistoryCard<HistoryEntry>[], kind: CurrentRole['kind']): CurrentRole[] =>
-    cards.flatMap(card =>
-      card.entries
-        .filter(entry => isCurrent(entry))
-        .map(entry => ({
-          kind,
-          subject: entry.subject.name ?? 'Untitled',
-          subjectId: entry.subject.id,
-          organization: card.organization.name ?? 'Untitled',
-          organizationId: card.organization.id,
-          avatarUrl: card.avatarUrl ?? null,
-        }))
-    );
-
-  // Cards arrive newest first and their rows are sorted within them, so the
-  // concatenation is already in the order the headline wants.
-  return [...from(employment, 'employment'), ...from(education, 'education')];
+  return currentHistoryRows(employment, education).map(({ kind, card, entry }) => ({
+    kind,
+    subject: entry.subject.name ?? 'Untitled',
+    subjectId: entry.subject.id,
+    organization: card.organization.name ?? 'Untitled',
+    organizationId: card.organization.id,
+    avatarUrl: card.avatarUrl ?? null,
+  }));
 }
 
 /**

@@ -100,11 +100,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
-  const affiliationParticipants = React.useMemo(
-    () => [slot1Participant, slot2Participant],
-    [slot1Participant, slot2Participant]
-  );
-  const affiliations = useParticipantAffiliations(affiliationParticipants, active || preload);
+  const affiliations = useParticipantAffiliations(debate.participants, active || preload);
+  const affiliationFor = (participant: DebateParticipant | null) =>
+    participant ? (affiliations.get(participant.profile_space_id) ?? null) : null;
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();
@@ -358,9 +356,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     >
       <DebaterVideo
         participant={slot1Participant}
-        affiliation={
-          slot1Participant ? (affiliations.get(slot1Participant.profile_space_id) ?? null) : null
-        }
+        affiliation={affiliationFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -415,9 +411,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
       <DebaterVideo
         participant={slot2Participant}
-        affiliation={
-          slot2Participant ? (affiliations.get(slot2Participant.profile_space_id) ?? null) : null
-        }
+        affiliation={affiliationFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}

@@ -1,13 +1,17 @@
 'use client';
 
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
-import { useQueries } from '@tanstack/react-query';
+import { type UseQueryResult, useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import type { DebateParticipant } from '~/core/debates/api';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
-import { fetchProfileHistory, profileHistoryQueryKey } from '~/core/io/subgraph/fetch-profile-history';
+import {
+  type ProfileHistory,
+  fetchProfileHistory,
+  profileHistoryQueryKey,
+} from '~/core/io/subgraph/fetch-profile-history';
 import { currentAffiliation } from '~/core/profile/profile-summary';
 
 type ParticipantLike = Pick<DebateParticipant, 'profile_space_id'>;
@@ -29,7 +33,27 @@ export function useParticipantAffiliations(
   );
   const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, enabled && spaceIds.length > 0);
 
-  const histories = useQueries({
+  // Stable by contract: react-query re-runs `combine` whenever its identity changes, and a fresh
+  // Map is not structurally shared for us. This follows `useProfilesBySpaceIds`, whose result feeds
+  // the query fan-out here.
+  const combine = React.useCallback(
+    (histories: UseQueryResult<ProfileHistory>[]) => {
+      const bySpaceId = new Map<string, string>();
+
+      histories.forEach((history, index) => {
+        const spaceId = spaceIds[index];
+        if (!spaceId || !history.data) return;
+
+        const line = currentAffiliation(history.data.employment, history.data.education);
+        if (line) bySpaceId.set(spaceId, line);
+      });
+
+      return bySpaceId;
+    },
+    [spaceIds]
+  );
+
+  return useQueries({
     queries: spaceIds.map(spaceId => {
       const profile = profilesBySpaceId.get(spaceId);
       const personEntityId = profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
@@ -41,19 +65,6 @@ export function useParticipantAffiliations(
         staleTime: 60_000,
       };
     }),
+    combine,
   });
-
-  return React.useMemo(() => {
-    const bySpaceId = new Map<string, string>();
-
-    histories.forEach((history, index) => {
-      const spaceId = spaceIds[index];
-      if (!spaceId || !history.data) return;
-
-      const line = currentAffiliation(history.data.employment, history.data.education);
-      if (line) bySpaceId.set(spaceId, line);
-    });
-
-    return bySpaceId;
-  }, [histories, spaceIds]);
 }
