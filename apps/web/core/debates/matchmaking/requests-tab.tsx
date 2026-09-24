@@ -6,6 +6,7 @@ import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
+import type { DebateChallenge, DebateRequest } from '../api';
 import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
@@ -113,6 +114,15 @@ function RequestsTabBody({
     scheduled.requestsError !== null ||
     scheduled.roomsError !== null;
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
+  const challengeSections =
+    outgoingChallenge || incomingChallenge ? (
+      <RequestSections
+        sent={null}
+        outgoingChallenge={outgoingChallenge}
+        received={[]}
+        incomingChallenge={incomingChallenge}
+      />
+    ) : null;
 
   return (
     <div className="flex flex-col">
@@ -161,32 +171,54 @@ function RequestsTabBody({
                 }
               : undefined
           }
+          fallbackContent={challengeSections}
         >
-          <div className="flex flex-col gap-4">
-            {sent || outgoingChallenge ? (
-              <RequestSection label="Sent">
-                <div className="flex flex-col gap-2">
-                  {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
-                  <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-
-            {incomingChallenge || received.length > 0 ? (
-              <RequestSection label="Received">
-                <div className="flex flex-col gap-2">
-                  {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
-                  <HubCardList>
-                    {received.map(request => (
-                      <IncomingRequestCard key={request.id} request={request} />
-                    ))}
-                  </HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-          </div>
+          <RequestSections
+            sent={sent}
+            outgoingChallenge={outgoingChallenge}
+            received={received}
+            incomingChallenge={incomingChallenge}
+          />
         </HubQueryState>
       </div>
+    </div>
+  );
+}
+
+function RequestSections({
+  sent,
+  outgoingChallenge,
+  received,
+  incomingChallenge,
+}: {
+  sent: DebateRequest | null;
+  outgoingChallenge: DebateChallenge | null;
+  received: DebateRequest[];
+  incomingChallenge: DebateChallenge | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {sent || outgoingChallenge ? (
+        <RequestSection label="Sent">
+          <div className="flex flex-col gap-2">
+            {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+            <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+          </div>
+        </RequestSection>
+      ) : null}
+
+      {incomingChallenge || received.length > 0 ? (
+        <RequestSection label="Received">
+          <div className="flex flex-col gap-2">
+            {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+            <HubCardList>
+              {received.map(request => (
+                <IncomingRequestCard key={request.id} request={request} />
+              ))}
+            </HubCardList>
+          </div>
+        </RequestSection>
+      ) : null}
     </div>
   );
 }

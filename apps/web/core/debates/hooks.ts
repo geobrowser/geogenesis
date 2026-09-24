@@ -482,6 +482,19 @@ const ACTIVITY_CACHE_FALLBACK = {
   challenge: null,
 } satisfies DebateActivity;
 
+/** Overlay client-only activity state onto a wire result or mutation rollback. */
+function preserveClientActivityState(
+  activity: DebateActivity | undefined,
+  current: DebateActivity | undefined
+): DebateActivity | undefined {
+  if (!activity || !current) return activity;
+  return {
+    ...activity,
+    outbound_challenge: current.outbound_challenge,
+    outbound_challenge_cached_at_monotonic_ms: current.outbound_challenge_cached_at_monotonic_ms,
+  };
+}
+
 /**
  * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
  * incoming-request popup.
@@ -748,10 +761,12 @@ export function useUpdateDebateAvailability() {
       return { previous };
     },
     onError: (_error, _availableToDebate, context) => {
-      queryClient.setQueryData(activityKey, context?.previous);
+      queryClient.setQueryData<DebateActivity>(activityKey, current =>
+        preserveClientActivityState(context?.previous, current)
+      );
     },
     onSuccess: activity => {
-      queryClient.setQueryData(activityKey, activity);
+      queryClient.setQueryData<DebateActivity>(activityKey, current => preserveClientActivityState(activity, current));
     },
     onSettled: () => {
       void invalidateDebatesOutsideRematchClaims(queryClient);

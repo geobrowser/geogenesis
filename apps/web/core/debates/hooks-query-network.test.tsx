@@ -16,6 +16,7 @@ import {
   useDebateTranscript,
   useRematchLiveKitJoin,
   useSpaceDebates,
+  useUpdateDebateAvailability,
 } from './hooks';
 
 type QueryOptions = { queryKey: readonly unknown[] };
@@ -219,6 +220,52 @@ describe('debate query network ownership', () => {
     mocks.attention = true;
     rerender();
     expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a retained outbound challenge when availability success replaces wire activity', () => {
+    const { result } = renderHook(() => useUpdateDebateAvailability());
+    const mutation = result.current as unknown as {
+      onSuccess(activity: Record<string, unknown>): void;
+    };
+    const outbound = { id: 'challenge-outbound' };
+    const wireActivity = { online: true, available_to_debate: false, challenge: null };
+    const current = {
+      ...wireActivity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    };
+
+    mutation.onSuccess(wireActivity);
+
+    const write = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as
+      Record<string, unknown> | ((cached: Record<string, unknown>) => Record<string, unknown>);
+    const next = typeof write === 'function' ? write(current) : write;
+    expect(next).toEqual(current);
+  });
+
+  it('preserves a challenge created while a failed availability update was in flight', () => {
+    const { result } = renderHook(() => useUpdateDebateAvailability());
+    const mutation = result.current as unknown as {
+      onError(error: Error, availableToDebate: boolean, context: { previous: Record<string, unknown> }): void;
+    };
+    const previous = { online: true, available_to_debate: true, challenge: null };
+    const current = {
+      ...previous,
+      available_to_debate: false,
+      outbound_challenge: { id: 'challenge-outbound' },
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    };
+
+    mutation.onError(new Error('nope'), false, { previous });
+
+    const write = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as
+      Record<string, unknown> | ((cached: Record<string, unknown>) => Record<string, unknown>);
+    const next = typeof write === 'function' ? write(current) : write;
+    expect(next).toEqual({
+      ...previous,
+      outbound_challenge: current.outbound_challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    });
   });
 
   it('invalidates the challenged profile after an availability rejection', () => {

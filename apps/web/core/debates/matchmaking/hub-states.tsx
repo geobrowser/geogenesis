@@ -99,6 +99,8 @@ type HubQueryStateProps = {
    * watches a skeleton for all of it.
    */
   failureReason?: unknown;
+  /** Query-independent content to keep above loading/error states; normal content supplies its own copy. */
+  fallbackContent?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -114,6 +116,7 @@ export function HubQueryState({
   onRetry,
   signInAction,
   failureReason,
+  fallbackContent,
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
@@ -144,68 +147,78 @@ export function HubQueryState({
             ? 'empty'
             : 'content';
 
+  const stateContent =
+    state === 'sign-in' ? (
+      <HubMessage
+        action={
+          <HubPillButton analyticsSurface={analyticsSurface} onClick={signInAction!.onClick}>
+            {signInAction!.label}
+          </HubPillButton>
+        }
+      >
+        {signInAction!.message}
+      </HubMessage>
+    ) : state === 'warming-up' ? (
+      // Deliberately not "Something went wrong", which is wrong about something going right, and
+      // not the sign-in prompt, which is wrong at somebody who just did.
+      //
+      // The button appears only once the retries are spent. While they are still running,
+      // `refetch()` joins the in-flight retry rather than starting a request, so the button would
+      // have been a control that visibly does nothing — worse than no control, because a reader
+      // who presses it and sees no change concludes the page is broken rather than busy. Until
+      // then the message is the whole state, and the reads are getting on with it.
+      <HubMessage
+        action={
+          retriesSpent && onRetry ? (
+            <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+              Try again
+            </HubPillButton>
+          ) : null
+        }
+      >
+        Setting up your account. Check back in a minute.
+      </HubMessage>
+    ) : state === 'error' ? (
+      <HubMessage
+        action={
+          // A "not deployed yet" 404 won't resolve by retrying, so only offer it for real errors.
+          isMatchmakingUnavailable(error) || !onRetry ? null : (
+            <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+              Try again
+            </HubPillButton>
+          )
+        }
+      >
+        {isMatchmakingUnavailable(error) ? "Matchmaking isn't available yet." : 'Something went wrong.'}
+      </HubMessage>
+    ) : state === 'loading' ? (
+      <HubSkeleton />
+    ) : state === 'empty' ? (
+      <HubMessage
+        note={emptyNote}
+        action={
+          emptyAction ? (
+            <HubPillButton analyticsSurface={analyticsSurface} onClick={emptyAction.onClick}>
+              {emptyAction.label}
+            </HubPillButton>
+          ) : null
+        }
+      >
+        {emptyMessage}
+      </HubMessage>
+    ) : (
+      children
+    );
+
   return (
     <HubSwap activeKey={state}>
-      {state === 'sign-in' ? (
-        <HubMessage
-          action={
-            <HubPillButton analyticsSurface={analyticsSurface} onClick={signInAction!.onClick}>
-              {signInAction!.label}
-            </HubPillButton>
-          }
-        >
-          {signInAction!.message}
-        </HubMessage>
-      ) : state === 'warming-up' ? (
-        // Deliberately not "Something went wrong", which is wrong about something going right, and
-        // not the sign-in prompt, which is wrong at somebody who just did.
-        //
-        // The button appears only once the retries are spent. While they are still running,
-        // `refetch()` joins the in-flight retry rather than starting a request, so the button would
-        // have been a control that visibly does nothing — worse than no control, because a reader
-        // who presses it and sees no change concludes the page is broken rather than busy. Until
-        // then the message is the whole state, and the reads are getting on with it.
-        <HubMessage
-          action={
-            retriesSpent && onRetry ? (
-              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
-                Try again
-              </HubPillButton>
-            ) : null
-          }
-        >
-          Setting up your account. Check back in a minute.
-        </HubMessage>
-      ) : state === 'error' ? (
-        <HubMessage
-          action={
-            // A "not deployed yet" 404 won't resolve by retrying, so only offer it for real errors.
-            isMatchmakingUnavailable(error) || !onRetry ? null : (
-              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
-                Try again
-              </HubPillButton>
-            )
-          }
-        >
-          {isMatchmakingUnavailable(error) ? "Matchmaking isn't available yet." : 'Something went wrong.'}
-        </HubMessage>
-      ) : state === 'loading' ? (
-        <HubSkeleton />
-      ) : state === 'empty' ? (
-        <HubMessage
-          note={emptyNote}
-          action={
-            emptyAction ? (
-              <HubPillButton analyticsSurface={analyticsSurface} onClick={emptyAction.onClick}>
-                {emptyAction.label}
-              </HubPillButton>
-            ) : null
-          }
-        >
-          {emptyMessage}
-        </HubMessage>
+      {state !== 'content' && fallbackContent ? (
+        <div className="flex flex-col gap-4">
+          {fallbackContent}
+          {stateContent}
+        </div>
       ) : (
-        children
+        stateContent
       )}
     </HubSwap>
   );

@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   outbound: null as DebateRequest | null,
   challenge: null as DebateChallenge | null,
   outboundChallenge: null as DebateChallenge | null,
+  requestsLoading: false,
+  requestsError: null as Error | null,
+  requestsFailureReason: null as Error | null,
   accept: vi.fn(),
   dismiss: vi.fn(),
   withdraw: vi.fn(),
@@ -39,8 +42,9 @@ vi.mock('../hooks', async importOriginal => ({
 vi.mock('./hooks', () => ({
   useDebateRequests: () => ({
     data: { incoming: mocks.incoming, outbound: mocks.outbound },
-    isLoading: false,
-    error: null,
+    isLoading: mocks.requestsLoading,
+    error: mocks.requestsError,
+    failureReason: mocks.requestsFailureReason,
     refetch: vi.fn(),
   }),
   useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, error: null }),
@@ -131,6 +135,9 @@ beforeEach(() => {
   mocks.outbound = null;
   mocks.challenge = null;
   mocks.outboundChallenge = null;
+  mocks.requestsLoading = false;
+  mocks.requestsError = null;
+  mocks.requestsFailureReason = null;
   mocks.currentUserId = 'user-me';
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
@@ -315,6 +322,29 @@ describe('RequestsTab', () => {
     expect(sent.compareDocumentPosition(received) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('keeps an outbound person request cancellable while claim requests load', () => {
+    mocks.incoming = [];
+    mocks.outboundChallenge = challenge('requester');
+    mocks.requestsLoading = true;
+
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+  });
+
+  it('keeps an inbound person request actionable when claim requests fail', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('recipient');
+    mocks.requestsError = new Error('nope');
+
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
   });
 
   it('hides claimless inbound and retained outbound requests behind a space filter', () => {
