@@ -962,7 +962,7 @@ describe('ClaimScrubberMarkers', () => {
 
     fireEvent.pointerMove(target, { pointerType: 'mouse' });
 
-    expect(await screen.findAllByText('Claim a')).not.toHaveLength(0);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Claim a');
   });
 
   // A hash stands for whatever ended in its segment, and the card only ever shows one of them.
@@ -972,6 +972,6 @@ describe('ClaimScrubberMarkers', () => {
 
     fireEvent.pointerMove(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), { pointerType: 'mouse' });
 
-    expect(await screen.findAllByText('Claim a (+2 more)')).not.toHaveLength(0);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Claim a (+2 more)');
   });
 });

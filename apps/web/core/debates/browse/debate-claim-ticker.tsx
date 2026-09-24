@@ -1000,9 +1000,11 @@ export function ClaimScrubberMarkers({
       {markers.map((marker, index) => {
         // Several claims can finish in one segment and share a hash. Saying so beats announcing one
         // of them and silently standing for the others. `marker.text` is the one the card will show
-        // — not the first of the group — so both the label and the preview name what a click
-        // surfaces.
-        const preview = marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text;
+        // — not the first of the group — so both strings name what a click surfaces.
+        const alsoHere = marker.count - 1;
+        const preview = alsoHere > 0 ? `${marker.text} (+${alsoHere} more)` : marker.text;
+        const label =
+          alsoHere > 0 ? `Jump to ${marker.count} claims, showing: ${marker.text}` : `Jump to: ${marker.text}`;
 
         return (
           <Tooltip
@@ -1017,11 +1019,7 @@ export function ClaimScrubberMarkers({
             trigger={
               <button
                 type="button"
-                aria-label={
-                  marker.count > 1
-                    ? `Jump to ${marker.count} claims, showing: ${marker.text}`
-                    : `Jump to: ${marker.text}`
-                }
+                aria-label={label}
                 onClick={event => {
                   event.stopPropagation();
                   onSeek(marker.seekMs);
