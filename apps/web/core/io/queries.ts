@@ -20,9 +20,13 @@ import {
 import { groupTranscriptClaims } from '~/core/debates/transcript-claims';
 import { getConfig } from '~/core/environment/environment';
 import {
-  EntitiesBatchForCommentsDocument,
-  type EntitiesBatchForCommentsQuery,
+  CommentEntitiesConnectionDocument,
+  type CommentEntitiesConnectionQuery,
+  EntitiesBatchForDebateVotesDocument,
+  type EntitiesBatchForDebateVotesQuery,
   EntitiesOrderBy,
+  EntityCommentCountDocument,
+  type EntityCommentCountQuery,
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
@@ -48,7 +52,6 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
-import { commentEntitiesConnectionDocument, entityCommentCountDocument } from './comment-entities-connection-document';
 import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -603,10 +606,10 @@ export function checkEntityExists(entityId: string, signal?: AbortController['si
   });
 }
 
-export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
+function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({
-    query: EntitiesBatchForCommentsDocument,
-    decoder: (data: EntitiesBatchForCommentsQuery) =>
+    query: EntitiesBatchForDebateVotesDocument,
+    decoder: (data: EntitiesBatchForDebateVotesQuery) =>
       data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } } },
     signal,
@@ -639,35 +642,40 @@ function collectBacklinkSourceIds<E>(
   });
 }
 
+function commentConnectionVariables(targetEntityId: string) {
+  return {
+    targetEntityId,
+    replyToTypeId: COMMENT_REPLY_TO_ID,
+    commentTypeId: COMMENT_TYPE_ID,
+  };
+}
+
 /** Counts Comment entities connected to the target by a "Reply to" relation. */
 export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
   return graphql({
-    query: entityCommentCountDocument,
-    decoder: data => data.entitiesConnection?.totalCount ?? 0,
-    variables: {
-      targetEntityId: entityId,
-      replyToTypeId: COMMENT_REPLY_TO_ID,
-      commentTypeId: COMMENT_TYPE_ID,
-    },
+    query: EntityCommentCountDocument,
+    decoder: (data: EntityCommentCountQuery) => data.entitiesConnection?.totalCount ?? 0,
+    variables: commentConnectionVariables(entityId),
     signal,
   });
 }
 
 /**
- * Loads Comment entities whose "Reply to" relation targets the parent entity. Nested replies are
+ * Loads Comment entities whose "Reply to" relation targets the requested entity. Nested replies are
  * included because each reply also relates to every ancestor. The connection nodes contain the
  * complete entity, avoiding a separate ids-then-hydrate request.
  */
-export function getCommentEntitiesViaReplyRelations(parentEntityId: string, signal?: AbortController['signal']) {
+export function getCommentEntitiesViaReplyRelations(targetEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
     const entities: Entity[] = [];
     const seenIds = new Set<string>();
+    const seenCursors = new Set<string>();
     let after: string | undefined;
 
     while (true) {
       const page = yield* graphql({
-        query: commentEntitiesConnectionDocument,
-        decoder: data => ({
+        query: CommentEntitiesConnectionDocument,
+        decoder: (data: CommentEntitiesConnectionQuery) => ({
           entities:
             data.entitiesConnection?.nodes
               .map(node => EntityDecoder.decode(node))
@@ -676,9 +684,7 @@ export function getCommentEntitiesViaReplyRelations(parentEntityId: string, sign
           endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
         }),
         variables: {
-          targetEntityId: parentEntityId,
-          replyToTypeId: COMMENT_REPLY_TO_ID,
-          commentTypeId: COMMENT_TYPE_ID,
+          ...commentConnectionVariables(targetEntityId),
           first: COMMENT_ENTITIES_PAGE_SIZE,
           after,
         },
@@ -691,7 +697,15 @@ export function getCommentEntitiesViaReplyRelations(parentEntityId: string, sign
         entities.push(entity);
       }
 
-      if (!page.hasNextPage || !page.endCursor || page.endCursor === after) return entities;
+      if (!page.hasNextPage) return entities;
+      if (!page.endCursor) {
+        return yield* Effect.fail(new Error('Comment connection has a next page but no end cursor'));
+      }
+      if (seenCursors.has(page.endCursor)) {
+        return yield* Effect.fail(new Error('Comment connection repeated its end cursor'));
+      }
+
+      seenCursors.add(page.endCursor);
       after = page.endCursor;
     }
   });
@@ -720,7 +734,7 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
     );
 
     if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForComments(ids, signal);
+    return yield* getBatchEntitiesForDebateVotes(ids, signal);
   });
 }
 

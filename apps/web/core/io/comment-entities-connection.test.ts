@@ -42,7 +42,6 @@ describe('getCommentEntitiesViaReplyRelations', () => {
       return Effect.succeed(
         decoder({
           entitiesConnection: {
-            totalCount: 2,
             pageInfo: firstPage
               ? { hasNextPage: true, endCursor: 'cursor-1' }
               : { hasNextPage: false, endCursor: 'cursor-2' },
@@ -72,5 +71,40 @@ describe('getCommentEntitiesViaReplyRelations', () => {
     expect(source).toContain('orderBy: [CREATED_AT_DESC, ID_ASC]');
     expect(source).toContain('relations: {some: {typeId: {is: $replyToTypeId}, toEntityId: {is: $targetEntityId}}}');
     expect(source).not.toContain('backlinksList');
+  });
+
+  it('fails instead of returning a silently truncated list when the next-page cursor is missing', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({
+          entitiesConnection: {
+            pageInfo: { hasNextPage: true, endCursor: null },
+            nodes: [commentNode(COMMENT_ONE_ID)],
+          },
+        })
+      )
+    );
+
+    await expect(Effect.runPromise(getCommentEntitiesViaReplyRelations('target-entity'))).rejects.toThrow(
+      'next page but no end cursor'
+    );
+  });
+
+  it('fails instead of looping when the connection repeats a cursor', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({
+          entitiesConnection: {
+            pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+            nodes: [],
+          },
+        })
+      )
+    );
+
+    await expect(Effect.runPromise(getCommentEntitiesViaReplyRelations('target-entity'))).rejects.toThrow(
+      'repeated its end cursor'
+    );
+    expect(graphqlMock).toHaveBeenCalledTimes(2);
   });
 });
