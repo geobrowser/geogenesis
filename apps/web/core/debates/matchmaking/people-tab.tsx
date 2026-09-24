@@ -124,6 +124,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     () => [...new Set([...disagreements.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [disagreements]
   );
+  const disagreementSpaceIds = React.useMemo(
+    () => [...new Set([...disagreements.values()].flatMap(items => items.map(item => item.spaceId)))],
+    [disagreements]
+  );
   const { entities: disagreementClaims, isLoading: disagreementClaimsLoading } =
     useClaimEntitiesByIds(disagreementClaimIds);
   const disagreementClaimNamesById = React.useMemo(
@@ -261,8 +265,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // counted out of the facets, and it still has to be nameable in the trigger.
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds])],
-      [effectiveSpaceIds, facetSpaces]
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...disagreementSpaceIds])],
+      [disagreementSpaceIds, effectiveSpaceIds, facetSpaces]
     )
   );
 
@@ -520,6 +524,7 @@ function PersonRow({
         disagreements={disagreements}
         claimNamesById={claimNamesById}
         claimNamesLoading={claimNamesLoading}
+        labelsById={labelsById}
         popoverPortal={popoverPortal}
       />
     ) : null;

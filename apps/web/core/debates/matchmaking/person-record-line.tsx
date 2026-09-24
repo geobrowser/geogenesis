@@ -63,7 +63,7 @@ export function PersonRecordLine({
   return (
     <>
       {hasStats || disagreement ? (
-        <ul className="m-0 flex list-none flex-nowrap items-center gap-x-2 p-0 whitespace-nowrap">
+        <ul className="m-0 flex list-none flex-nowrap items-center gap-x-1.5 p-0 whitespace-nowrap">
           {debatesArgued !== null && (
             <Stat
               icon={<Megaphone size={ICON_SIZE} />}

@@ -84,7 +84,7 @@ export function PersonSpaceIcons({
             <AvatarGroup>
               {shown.map(spaceId => (
                 <AvatarGroup.Item key={spaceId} size={12}>
-                  <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={12} />
+                  <PersonSpaceIcon spaceId={spaceId} labelsById={labelsById} size={12} />
                 </AvatarGroup.Item>
               ))}
               <AvatarGroup.Overflow count={overflow} size={12} data-testid="person-space-overflow" />
@@ -129,11 +129,11 @@ export function PersonSpaceIcons({
                         className="flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01"
                         data-testid="person-space-option"
                       >
-                        <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={20} />
+                        <PersonSpaceIcon spaceId={spaceId} labelsById={labelsById} size={20} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-metadataMedium text-text">{name}</span>
                           {hasCounts || matchCount !== null ? (
-                            <span className="flex items-center gap-2 text-footnote whitespace-nowrap text-grey-04 tabular-nums">
+                            <span className="flex items-center gap-1.5 text-footnote whitespace-nowrap text-grey-04 tabular-nums">
                               {hasCounts ? (
                                 <>
                                   <SpaceStat
@@ -186,7 +186,7 @@ function formatCount(count: number, singular: string, plural = `${singular}s`): 
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function SpaceIcon({
+export function PersonSpaceIcon({
   spaceId,
   labelsById,
   size,

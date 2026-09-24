@@ -72,7 +72,7 @@ describe('PersonRecordLine', () => {
     const stats = container.querySelector('ul')!;
     const text = stats.textContent ?? '';
 
-    expect(stats).toHaveClass('flex-nowrap', 'whitespace-nowrap');
+    expect(stats).toHaveClass('flex-nowrap', 'whitespace-nowrap', 'gap-x-1.5');
     expect(stats).not.toHaveClass('flex-wrap');
     expect(text.indexOf('11')).toBeLessThan(text.indexOf('119'));
     expect(text.indexOf('119')).toBeLessThan(text.indexOf('·'));

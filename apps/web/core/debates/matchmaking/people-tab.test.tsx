@@ -6,6 +6,7 @@ import type React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
@@ -321,6 +322,7 @@ function expectSpaceMetrics(option: HTMLElement, expected: { debates: string; cl
   const matches = within(option).getByText(expected.matches);
 
   expect(option.querySelectorAll('svg')).toHaveLength(2);
+  expect(matches.parentElement).toHaveClass('gap-1.5');
   expect(debate.compareDocumentPosition(claims) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(claims.compareDocumentPosition(matches) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 }
@@ -461,20 +463,28 @@ describe('PeopleTab', () => {
       ],
     ]);
     mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?'), claimEntity('claim-2', 'Is this true?')];
+    mocks.spaceLabels = new Map([[normId(spaceId), { name: 'US Politics', image: null }]]);
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
 
     const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
-    expect(within(list).getByText('Should we build this?')).toBeInTheDocument();
-    expect(within(list).getByText('You agree · They disagree')).toBeInTheDocument();
-    expect(within(list).getByText('Is this true?')).toBeInTheDocument();
-    expect(within(list).getByText('You dispute · They verify')).toBeInTheDocument();
-    expect(within(list).getByText('Should we build this?').closest('a')).toHaveAttribute(
-      'href',
-      NavUtils.toEntity(spaceId, 'claim-1')
-    );
+    expect(list.closest('[role="dialog"]')).toHaveTextContent('2 matches with Arturas');
+    const firstMatch = within(list).getByText('Should we build this?').closest('a')!;
+    expect(firstMatch).toHaveAttribute('href', NavUtils.toEntity(spaceId, 'claim-1'));
+    expect(within(firstMatch).getByText('US Politics')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('You:')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Agree')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Arturas:')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Disagree')).toBeInTheDocument();
+    expect(firstMatch.querySelectorAll('svg')).toHaveLength(2);
+
+    const secondMatch = within(list).getByText('Is this true?').closest('a')!;
+    expect(within(secondMatch).getByText('You:')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Dispute')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Arturas:')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Verify')).toBeInTheDocument();
   });
 
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in

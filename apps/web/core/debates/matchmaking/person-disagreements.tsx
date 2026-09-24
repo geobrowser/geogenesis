@@ -4,25 +4,30 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import type { ClaimDisagreement } from './disagreement-counts';
+import { PersonSpaceIcon } from './person-space-icons';
 
 export function PersonDisagreements({
   personName,
   disagreements,
   claimNamesById,
   claimNamesLoading,
+  labelsById,
   popoverPortal,
 }: {
   personName: string;
   disagreements: ClaimDisagreement[];
   claimNamesById: ReadonlyMap<string, string | null>;
   claimNamesLoading: boolean;
+  labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
@@ -54,26 +59,51 @@ export function PersonDisagreements({
               event.preventDefault();
               firstClaimRef.current?.focus();
             }}
-            className="z-100 w-[300px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+            className="z-100 w-[320px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
-            <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Matches with {personName}</p>
+            <p className="border-b border-grey-02 bg-grey-01 px-3 py-2 text-footnoteMedium text-grey-04">
+              <span className="text-text tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'} with{' '}
+              <span className="text-text">{personName}</span>
+            </p>
             <ul
               aria-label={`Matching claims with ${personName}`}
               className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
             >
               {disagreements.map((disagreement, index) => {
                 const name = claimNamesById.get(normId(disagreement.claimId));
+                const space = spaceLabel(labelsById, disagreement.spaceId);
                 return (
-                  <li key={`${normId(disagreement.claimId)}:${normId(disagreement.spaceId)}`}>
+                  <li
+                    key={`${normId(disagreement.claimId)}:${normId(disagreement.spaceId)}`}
+                    className="border-t border-grey-02 first:border-t-0"
+                  >
                     <Link
                       ref={index === 0 ? firstClaimRef : undefined}
                       href={NavUtils.toEntity(disagreement.spaceId, disagreement.claimId)}
-                      className="block px-3 py-2 transition-colors duration-75 hover:bg-grey-01 focus-visible:bg-grey-01 focus-visible:outline-none"
+                      className="block px-3 py-2.5 transition-colors duration-75 hover:bg-grey-01 focus-visible:bg-grey-01 focus-visible:outline-none"
                     >
+                      <span className="mb-1 flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
+                        <PersonSpaceIcon spaceId={disagreement.spaceId} labelsById={labelsById} size={12} />
+                        <span className="truncate">{space?.name?.trim() || 'Space'}</span>
+                      </span>
                       <span className="block text-metadataMedium text-text">
                         {name?.trim() || (claimNamesLoading ? 'Loading claim…' : 'Untitled claim')}
                       </span>
-                      <span className="mt-0.5 block text-footnote text-grey-04">{opposingSides(disagreement)}</span>
+                      <span className="mt-2 flex items-center gap-1.5">
+                        <PositionBadge
+                          actor="You"
+                          responseKind={disagreement.responseKind}
+                          position={disagreement.viewerPosition}
+                        />
+                        <span className="shrink-0 text-footnote text-grey-03" aria-hidden>
+                          vs
+                        </span>
+                        <PositionBadge
+                          actor={personName}
+                          responseKind={disagreement.responseKind}
+                          position={disagreement.personPosition}
+                        />
+                      </span>
                     </Link>
                   </li>
                 );
@@ -86,9 +116,26 @@ export function PersonDisagreements({
   );
 }
 
-function opposingSides(disagreement: ClaimDisagreement): string {
-  if (disagreement.responseKind === 'veracity') {
-    return disagreement.viewerPosition ? 'You verify · They dispute' : 'You dispute · They verify';
-  }
-  return disagreement.viewerPosition ? 'You agree · They disagree' : 'You disagree · They agree';
+function PositionBadge({
+  actor,
+  responseKind,
+  position,
+}: {
+  actor: string;
+  responseKind: ClaimDisagreement['responseKind'];
+  position: boolean;
+}) {
+  const action = responseKind === 'veracity' ? (position ? 'Verify' : 'Dispute') : position ? 'Agree' : 'Disagree';
+
+  return (
+    <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-transparent bg-divider px-2 py-1 text-footnote">
+      <span className="shrink-0 text-text" aria-hidden>
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected />
+      </span>
+      <span className="flex min-w-0 items-center gap-1">
+        <span className="min-w-0 truncate text-grey-04">{actor}:</span>
+        <span className="shrink-0 font-medium text-text">{action}</span>
+      </span>
+    </span>
+  );
 }
