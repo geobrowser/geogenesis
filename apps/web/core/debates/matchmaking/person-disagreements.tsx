@@ -34,10 +34,10 @@ export function PersonDisagreements({
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label={`View ${count} ${count === 1 ? 'claim' : 'claims'} you disagree on with ${personName}`}
+          aria-label={`View ${count} matching ${count === 1 ? 'claim' : 'claims'} with ${personName}`}
           className="inline-flex items-center gap-1 whitespace-nowrap text-purple transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         >
-          <span className="tabular-nums">{count}</span> {count === 1 ? 'disagreement' : 'disagreements'}
+          <span className="tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'}
           <ChevronDownSmall />
         </button>
       </Popover.Trigger>
@@ -49,16 +49,16 @@ export function PersonDisagreements({
             sideOffset={8}
             collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
             hideWhenDetached
-            aria-label={`Claims you disagree on with ${personName}`}
+            aria-label={`Matching claims with ${personName}`}
             onOpenAutoFocus={event => {
               event.preventDefault();
               firstClaimRef.current?.focus();
             }}
             className="z-100 w-[300px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
-            <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Disagreements with {personName}</p>
+            <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Matches with {personName}</p>
             <ul
-              aria-label={`Disputed claims with ${personName}`}
+              aria-label={`Matching claims with ${personName}`}
               className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
             >
               {disagreements.map((disagreement, index) => {

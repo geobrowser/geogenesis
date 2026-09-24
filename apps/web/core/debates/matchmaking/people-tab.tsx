@@ -32,7 +32,11 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-deb
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
-import { type ClaimDisagreement, disagreementsByProfile } from './disagreement-counts';
+import {
+  type ClaimDisagreement,
+  disagreementCountsByProfileAndSpace,
+  disagreementsByProfile,
+} from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -55,6 +59,7 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  */
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_DISAGREEMENTS: ClaimDisagreement[] = [];
+const EMPTY_MATCH_COUNTS = new Map<string, number>();
 
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
@@ -101,11 +106,20 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         : [],
     [allPeople, authenticated, personalSpaceId]
   );
-  const { byClaim: positionsByClaim } = useParticipantPositions(positionParticipants, personalSpaceId);
+  const {
+    byClaim: positionsByClaim,
+    isLoading: positionsLoading,
+    error: positionsError,
+  } = useParticipantPositions(positionParticipants, personalSpaceId);
   const disagreements = React.useMemo(
     () => disagreementsByProfile(positionsByClaim, authenticated ? personalSpaceId : null),
     [authenticated, personalSpaceId, positionsByClaim]
   );
+  const matchesByProfileAndSpace = React.useMemo(
+    () => disagreementCountsByProfileAndSpace(positionsByClaim, authenticated ? personalSpaceId : null),
+    [authenticated, personalSpaceId, positionsByClaim]
+  );
+  const matchesKnown = authenticated && personalSpaceId !== null && !positionsLoading && positionsError === null;
   const disagreementClaimIds = React.useMemo(
     () => [...new Set([...disagreements.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [disagreements]
@@ -393,6 +407,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                         ? EMPTY_DISAGREEMENTS
                         : (disagreements.get(normId(person.profile_space_id)) ?? EMPTY_DISAGREEMENTS)
                     }
+                    matchesBySpace={
+                      matchesKnown && !isViewer
+                        ? (matchesByProfileAndSpace.get(normId(person.profile_space_id)) ?? EMPTY_MATCH_COUNTS)
+                        : undefined
+                    }
                     claimNamesById={disagreementClaimNamesById}
                     claimNamesLoading={disagreementClaimsLoading}
                     record={records.get(person.profile_space_id) ?? null}
@@ -443,6 +462,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 function PersonRow({
   person,
   disagreements,
+  matchesBySpace,
   claimNamesById,
   claimNamesLoading,
   record,
@@ -457,6 +477,8 @@ function PersonRow({
   person: DebatePerson;
   /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
   disagreements: ClaimDisagreement[];
+  /** Viewer-relative matching claims per space; absent until that comparison is known. */
+  matchesBySpace?: ReadonlyMap<string, number>;
   claimNamesById: ReadonlyMap<string, string | null>;
   claimNamesLoading: boolean;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
@@ -487,6 +509,7 @@ function PersonRow({
         labelsById={labelsById}
         claimsBySpace={record?.claimsBySpace}
         debatesBySpace={record?.debatesBySpace}
+        matchesBySpace={matchesBySpace}
         popoverPortal={popoverPortal}
       />
     ) : null;
@@ -539,7 +562,7 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* One compact row: debates, positions, then the viewer-relative disagreement count. The
+        {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
         {record || activeSpaces || disagreement ? (
           <div className="flex min-w-0 flex-col gap-0.5">

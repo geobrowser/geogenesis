@@ -315,6 +315,16 @@ async function closeActiveSpacesPopover(trigger: HTMLElement) {
   await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
+function expectSpaceMetrics(option: HTMLElement, expected: { debates: string; claims: string; matches: string }) {
+  const debate = within(option).getByText(expected.debates);
+  const claims = within(option).getByText(expected.claims);
+  const matches = within(option).getByText(expected.matches);
+
+  expect(option.querySelectorAll('svg')).toHaveLength(2);
+  expect(debate.compareDocumentPosition(claims) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(claims.compareDocumentPosition(matches) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+}
+
 // Radix's menu measures its content; jsdom has no observer to measure with.
 class ResizeObserverStub {
   observe() {}
@@ -354,10 +364,8 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByRole('button', { name: 'View 2 claims you disagree on with Arturas' })).toHaveTextContent(
-      '2 disagreements'
-    );
-    expect(screen.queryByRole('button', { name: /View 0 claims/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).toHaveTextContent('2 matches');
+    expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
   });
 
   it('uses singular copy for one disputed claim', () => {
@@ -376,9 +384,7 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByRole('button', { name: 'View 1 claim you disagree on with Arturas' })).toHaveTextContent(
-      '1 disagreement'
-    );
+    expect(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' })).toHaveTextContent('1 match');
   });
 
   it('does not show a disagreement count on the viewer own row', () => {
@@ -398,10 +404,10 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.queryByText(/disagreement/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/matches?/)).not.toBeInTheDocument();
   });
 
-  it('sorts the people with the most disagreements first and preserves roster order for ties', () => {
+  it('sorts the people with the most matches first and preserves roster order for ties', () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
     const vytautas = PROFILE_SPACE_IDS['user-other'];
@@ -434,7 +440,7 @@ describe('PeopleTab', () => {
     expect(vytautasRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('opens the disputed claims from the disagreement count', async () => {
+  it('opens the opposing claims from the matches count', async () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
     const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
@@ -458,9 +464,9 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'View 2 claims you disagree on with Arturas' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
 
-    const list = await screen.findByRole('list', { name: 'Disputed claims with Arturas' });
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
     expect(within(list).getByText('Should we build this?')).toBeInTheDocument();
     expect(within(list).getByText('You agree · They disagree')).toBeInTheDocument();
     expect(within(list).getByText('Is this true?')).toBeInTheDocument();
@@ -1239,6 +1245,16 @@ describe('PeopleTab filters', () => {
       [unranked, { name: 'Unranked', image: null }],
       [inactive, { name: 'Inactive', image: null }],
     ]);
+    const viewer = mocks.personalSpaceId!;
+    const matchingClaim = (claimId: string, spaceId: string) => [
+      { profileSpaceId: viewer, claimId, spaceId, responseKind: 'stance' as const, position: true },
+      { profileSpaceId: PROFILE_THEM, claimId, spaceId, responseKind: 'stance' as const, position: false },
+    ];
+    mocks.positionsByClaim = new Map([
+      ['claim-ai-1', matchingClaim('claim-ai-1', ai)],
+      ['claim-ai-2', matchingClaim('claim-ai-2', ai)],
+      ['claim-unranked-1', matchingClaim('claim-unranked-1', unranked)],
+    ]);
     mocks.records = new Map([
       [
         PROFILE_THEM,
@@ -1273,10 +1289,10 @@ describe('PeopleTab filters', () => {
     expect(options.map(option => option.getAttribute('href'))).toEqual(
       [ai, unranked, root, crypto].map(NavUtils.toSpace)
     );
-    expect(within(options[0]).getByText('12 claims · 3 debates')).toBeInTheDocument();
-    expect(within(options[1]).getByText('0 claims · 1 debate')).toBeInTheDocument();
-    expect(within(options[2]).getByText('2 claims · 0 debates')).toBeInTheDocument();
-    expect(within(options[3]).getByText('1 claim · 0 debates')).toBeInTheDocument();
+    expectSpaceMetrics(options[0], { debates: '3 debates', claims: '12 claims', matches: '2 matches' });
+    expectSpaceMetrics(options[1], { debates: '1 debate', claims: '0 claims', matches: '1 match' });
+    expectSpaceMetrics(options[2], { debates: '0 debates', claims: '2 claims', matches: '0 matches' });
+    expectSpaceMetrics(options[3], { debates: '0 debates', claims: '1 claim', matches: '0 matches' });
     expect(within(list).queryByText('Inactive')).not.toBeInTheDocument();
 
     await closeActiveSpacesPopover(trigger);

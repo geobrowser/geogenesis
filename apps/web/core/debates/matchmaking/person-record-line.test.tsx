@@ -67,22 +67,24 @@ describe('PersonRecordLine', () => {
     expect(screen.queryByText('33%')).not.toBeInTheDocument();
   });
 
-  it('orders debates, positions, a dot and disagreements on one row', () => {
-    const { container } = line({}, <button type="button">13 disagreements</button>);
+  it('orders debates, positions, a dot and matches on one non-wrapping row', () => {
+    const { container } = line({}, <button type="button">13 matches</button>);
     const stats = container.querySelector('ul')!;
     const text = stats.textContent ?? '';
 
+    expect(stats).toHaveClass('flex-nowrap', 'whitespace-nowrap');
+    expect(stats).not.toHaveClass('flex-wrap');
     expect(text.indexOf('11')).toBeLessThan(text.indexOf('119'));
     expect(text.indexOf('119')).toBeLessThan(text.indexOf('·'));
-    expect(text.indexOf('·')).toBeLessThan(text.indexOf('13 disagreements'));
+    expect(text.indexOf('·')).toBeLessThan(text.indexOf('13 matches'));
   });
 
-  it('can show disagreements without a record or separator', () => {
+  it('can show matches without a record or separator', () => {
     const { container } = render(
-      <PersonRecordLine record={null} disagreement={<button type="button">1 disagreement</button>} />
+      <PersonRecordLine record={null} disagreement={<button type="button">1 match</button>} />
     );
 
-    expect(screen.getByRole('button', { name: '1 disagreement' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1 match' })).toBeInTheDocument();
     expect(container).not.toHaveTextContent('·');
   });
 

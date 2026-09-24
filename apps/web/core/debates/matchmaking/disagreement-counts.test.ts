@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { ParticipantPosition } from '../participant-positions';
 import { groupParticipantPositions } from '../participant-positions';
-import { disagreementCountsByProfile, disagreementsByProfile } from './disagreement-counts';
+import {
+  disagreementCountsByProfile,
+  disagreementCountsByProfileAndSpace,
+  disagreementsByProfile,
+} from './disagreement-counts';
 
 const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c500';
 const OTHER = '019fedae-72b6-7ab2-927a-df044d57c501';
@@ -85,6 +89,35 @@ describe('disagreementCountsByProfile', () => {
               personPosition: true,
             },
           ],
+        ],
+      ])
+    );
+  });
+
+  it('counts distinct matching claims within each space', () => {
+    const firstSpace = '019fedae-72b6-7ab2-927a-df044d57c600';
+    const secondSpace = '019fedae-72b6-7ab2-927a-df044d57c601';
+    const positions = groupParticipantPositions([
+      position(VIEWER, 'claim-1', true, firstSpace),
+      position(OTHER, 'claim-1', false, firstSpace),
+      // Another opposing axis on the same claim and space still counts once.
+      position(VIEWER, 'claim-1', true, firstSpace, 'veracity'),
+      position(OTHER, 'claim-1', false, firstSpace, 'veracity'),
+      // The same claim can be a match in another space too.
+      position(VIEWER, 'claim-1', true, secondSpace),
+      position(OTHER, 'claim-1', false, secondSpace),
+      position(VIEWER, 'claim-2', false, firstSpace),
+      position(OTHER, 'claim-2', true, firstSpace),
+    ]);
+
+    expect(disagreementCountsByProfileAndSpace(positions, VIEWER)).toEqual(
+      new Map([
+        [
+          OTHER.replaceAll('-', ''),
+          new Map([
+            [firstSpace.replaceAll('-', ''), 2],
+            [secondSpace.replaceAll('-', ''), 1],
+          ]),
         ],
       ])
     );

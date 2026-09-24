@@ -29,17 +29,68 @@ export function disagreementCountsByProfile(
   );
 }
 
+/** Distinct opposing claims per person and space, for the Active in breakdown. */
+export function disagreementCountsByProfileAndSpace(
+  positionsByClaim: ParticipantPositionsByClaim,
+  viewerProfileSpaceId: string | null
+): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
+  if (!viewerProfileSpaceId) return counts;
+
+  const seenByProfileAndSpace = new Map<string, Set<string>>();
+  for (const [profileId, rows] of opposingPositionsByProfile(positionsByClaim, viewerProfileSpaceId)) {
+    for (const row of rows) {
+      const spaceId = normId(row.spaceId);
+      const seenKey = `${profileId}|${spaceId}`;
+      const seenClaims = seenByProfileAndSpace.get(seenKey) ?? new Set<string>();
+      const claimId = normId(row.claimId);
+      if (seenClaims.has(claimId)) continue;
+      seenClaims.add(claimId);
+      seenByProfileAndSpace.set(seenKey, seenClaims);
+
+      const bySpace = counts.get(profileId) ?? new Map<string, number>();
+      bySpace.set(spaceId, (bySpace.get(spaceId) ?? 0) + 1);
+      counts.set(profileId, bySpace);
+    }
+  }
+
+  return counts;
+}
+
 /** The claim details behind each count, in the graph's most-recent-response-first order. */
 export function disagreementsByProfile(
   positionsByClaim: ParticipantPositionsByClaim,
   viewerProfileSpaceId: string | null
 ): Map<string, ClaimDisagreement[]> {
   const disagreements = new Map<string, ClaimDisagreement[]>();
-  if (!viewerProfileSpaceId) return disagreements;
-
-  const viewerId = normId(viewerProfileSpaceId);
   const seenClaimsByProfile = new Map<string, Set<string>>();
 
+  for (const [profileId, rows] of opposingPositionsByProfile(positionsByClaim, viewerProfileSpaceId)) {
+    for (const row of rows) {
+      const claimId = normId(row.claimId);
+      const seenClaims = seenClaimsByProfile.get(profileId) ?? new Set<string>();
+      if (seenClaims.has(claimId)) continue;
+      seenClaims.add(claimId);
+      seenClaimsByProfile.set(profileId, seenClaims);
+
+      const existing = disagreements.get(profileId) ?? [];
+      existing.push(row);
+      disagreements.set(profileId, existing);
+    }
+  }
+
+  return disagreements;
+}
+
+/** Every comparable opposing response, before a caller applies its claim/space de-duplication. */
+function opposingPositionsByProfile(
+  positionsByClaim: ParticipantPositionsByClaim,
+  viewerProfileSpaceId: string | null
+): Map<string, ClaimDisagreement[]> {
+  const oppositions = new Map<string, ClaimDisagreement[]>();
+  if (!viewerProfileSpaceId) return oppositions;
+
+  const viewerId = normId(viewerProfileSpaceId);
   for (const rows of positionsByClaim.values()) {
     const viewerPositions = new Map<string, boolean>();
     for (const row of rows) {
@@ -55,15 +106,7 @@ export function disagreementsByProfile(
       const viewerPosition = viewerPositions.get(positionContext(row.spaceId, row.responseKind));
       if (viewerPosition === undefined || viewerPosition === row.position) continue;
 
-      // The same claim can oppose on both stance and veracity, or in more than one space. The
-      // count is claims, not response rows, and the dropdown should mirror that one-to-one.
-      const claimId = normId(row.claimId);
-      const seenClaims = seenClaimsByProfile.get(profileId) ?? new Set<string>();
-      if (seenClaims.has(claimId)) continue;
-      seenClaims.add(claimId);
-      seenClaimsByProfile.set(profileId, seenClaims);
-
-      const existing = disagreements.get(profileId) ?? [];
+      const existing = oppositions.get(profileId) ?? [];
       existing.push({
         claimId: row.claimId,
         spaceId: row.spaceId,
@@ -71,11 +114,11 @@ export function disagreementsByProfile(
         viewerPosition,
         personPosition: row.position,
       });
-      disagreements.set(profileId, existing);
+      oppositions.set(profileId, existing);
     }
   }
 
-  return disagreements;
+  return oppositions;
 }
 
 function positionContext(spaceId: string, responseKind: string): string {
