@@ -110,16 +110,38 @@ export function ProfileActivitySection({
   // A failed kind is available: it has something to say, even if the something
   // is that it could not be read.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  /**
+   * The reader's own pick, and only that. Null until they make one.
+   *
+   * Nothing is stored for the default, because storing it is what broke it
+   * (GEO-3021): the two kinds load separately, so a profile whose claims landed
+   * first committed to Claims while the debates were still in flight and then sat
+   * there — the debates arriving changed nothing, because the stored key already
+   * named an available kind. Leaving the default underived means it is re-read
+   * from the kinds on every render, so the moment debates have something to show,
+   * they are what is shown.
+   */
+  const [pickedKey, setPickedKey] = React.useState<string | null>(null);
 
+  /*
+   * A pick whose kind has gone away is adopted onto whatever replaced it, rather
+   * than dropped.
+   *
+   * Dropping it would hand the reader back to the default — and the default would
+   * pull them to Debates the moment their emptied Claims returned, which is a
+   * jump under somebody who has not touched the toggle since. Falling back is
+   * already a choice made on their behalf; this makes it the one that sticks.
+   */
   React.useEffect(() => {
-    if (available[0] && !available.some(kind => kind.key === selectedKey)) setSelectedKey(available[0].key);
-  }, [available, selectedKey]);
+    if (pickedKey === null || available.some(kind => kind.key === pickedKey)) return;
 
-  // Whichever the reader picked, or the first with anything in it. Held as a key
-  // rather than an index so a kind arriving late — the two load separately —
-  // cannot shift the selection out from under them.
-  const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
+    setPickedKey(available[0]?.key ?? null);
+  }, [available, pickedKey]);
+
+  // Whichever the reader picked, or else the first kind with anything in it —
+  // Debates, on every surface that renders this. Held as a key rather than an
+  // index so a kind arriving late cannot shift their pick out from under them.
+  const selected = available.find(kind => kind.key === pickedKey) ?? available[0];
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
@@ -177,7 +199,7 @@ export function ProfileActivitySection({
                   // let the shorter DOM clamp `scrollY` while it is being
                   // measured, before the reserve could help.
                   prepareSwitch();
-                  setSelectedKey(kind.key);
+                  setPickedKey(kind.key);
                 }}
                 // The same pill as View all beside it — 28px, 16px type, the same padding — black
                 // when selected (the Log in pill) and the secondary outline otherwise.

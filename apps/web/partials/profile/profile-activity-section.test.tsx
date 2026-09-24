@@ -314,13 +314,36 @@ describe('ProfileActivitySection', () => {
     expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
   });
 
-  it('keeps the first available kind selected when an earlier kind finishes later', () => {
+  /*
+   * GEO-3021. The two kinds are separate requests, so which one lands first is a
+   * race — and a default committed to the winner is a default decided by the
+   * network. Debates are the lead kind on every surface that renders this, so
+   * they win the default as soon as they have anything to show, however late.
+   */
+  it('moves to debates when they arrive after claims', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
     const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
 
+    // Claims alone until the debates land: better the record that has arrived
+    // than a skeleton over one that may turn out to be empty.
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
 
     rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves a reader who picked claims there while the debates keep loading in', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // The debates page settling — more rows, ranks landing — re-renders the card.
+    // The default must not run again over a pick that is still valid.
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
 
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
