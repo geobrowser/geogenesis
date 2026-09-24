@@ -165,21 +165,26 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId, is
  * is what tells a reader which section is arriving, and drawing it as a
  * placeholder would make the one certain thing on screen look uncertain.
  *
- * The block measures like `OrganizationBlock`'s employment row — a 50px logo
- * beside three lines — inside the same `py-4` the real list item carries.
+ * The block measures like `OrganizationBlock` — a 50px logo beside three lines,
+ * which is the shape of both kinds — inside the same `py-4` the real list item
+ * carries. The logo box takes `OrganizationImage`'s own dimensions, so the row
+ * cannot settle a pixel off the reserve.
+ *
+ * Named and marked busy as `ProfileActivitySkeleton` is, which is also what
+ * tells the two apart: the real section draws the same heading.
  */
 function RecordSectionSkeleton({ title }: { title: string }) {
   return (
-    <section className="flex flex-col" aria-busy="true">
+    <section aria-label={`Loading ${title.toLowerCase()}`} aria-busy="true" className="flex flex-col">
       <header className="flex items-center justify-between gap-2 pb-2">
         <h3 className="text-mediumTitle text-text">{title}</h3>
       </header>
       <div className="flex min-w-0 gap-5 py-4">
-        <Skeleton className="size-[50px] shrink-0 rounded-lg" />
+        <Skeleton className="h-[50px] w-[50px] shrink-0 rounded" />
         <div className="min-w-0 flex-1 space-y-1.5">
-          <Skeleton className="h-5 w-2/5 rounded" />
-          <Skeleton className="h-5 w-1/3 rounded" />
-          <Skeleton className="h-4 w-1/2 rounded" />
+          <Skeleton className="h-5 w-2/5" />
+          <Skeleton className="h-5 w-1/3" />
+          <Skeleton className="h-4 w-1/2" />
         </div>
       </div>
     </section>

@@ -36,7 +36,6 @@ import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
-import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -62,23 +61,19 @@ export default async function Layout(props0: LayoutProps) {
   }
 
   /**
-   * A personal space with a profile of its own (GEO-2859).
+   * Read before the page data rather than after it.
    *
-   * Both halves matter. `PERSONAL` alone includes the personal spaces with no
-   * person entity behind them, which have nothing to render a profile from; a
-   * person entity alone would include a Person written into a DAO space.
-   *
-   * Shared with `page.tsx` rather than spelled out twice: this decides the
-   * header and the chrome, that one decides the body, and a page with one and
-   * not the other is worse than neither.
-   *
-   * Asked before the page data rather than after it. `cachedFetchSpace` is the
-   * first thing `getSpaceFrontPage` does and its result is request-cached, so
-   * this costs no extra request — and it buys the one fact the profile's own
-   * reads need before they can start, which is whether to make them at all.
+   * `cachedFetchSpace` is the first thing `getSpaceFrontPage` does and the
+   * result is request-cached, so asking here costs no extra request — and it
+   * buys the two facts the profile's own reads need before they can start:
+   * whether this space is a profile at all, and who it is about.
    */
   const space = await cachedFetchSpace(spaceId);
-  const isProfile = Spaces.isPersonProfileSpace(space);
+  /*
+   * The person, as `page.tsx` also resolves it — and the same id `props.id`
+   * settles on below, since `getSpaceFrontPage` returns `entity.id`. So the
+   * handover is keyed on exactly what the hooks ask for.
+   */
   const personEntityId = space?.entity?.id ?? '';
 
   /**
@@ -90,11 +85,36 @@ export default async function Layout(props0: LayoutProps) {
    * depends on nothing the other two produce — only on the space, which is
    * already in hand above.
    */
-  const [props, { hasSidebar, isExternalTopic }, profile] = await Promise.all([
+  const [props, { hasSidebar, isExternalTopic }, prefetched] = await Promise.all([
     getSpaceFrontPage(spaceId),
     resolveSpaceSidebar(spaceId),
-    isProfile && personEntityId !== '' ? prefetchProfileQueries(spaceId, personEntityId) : undefined,
+    Spaces.isPersonProfileSpace(space) && personEntityId !== ''
+      ? prefetchProfileQueries(spaceId, personEntityId)
+      : undefined,
   ]);
+
+  /**
+   * A personal space with a profile of its own (GEO-2859).
+   *
+   * Both halves matter. `PERSONAL` alone includes the personal spaces with no
+   * person entity behind them, which have nothing to render a profile from; a
+   * person entity alone would include a Person written into a DAO space.
+   *
+   * Shared with `page.tsx` rather than spelled out twice: this decides the
+   * header and the chrome, that one decides the body, and a page with one and
+   * not the other is worse than neither.
+   */
+  const isProfile = Spaces.isPersonProfileSpace(props.space);
+
+  /*
+   * `props.space` is the same space the wave above asked about everywhere but
+   * the test-env synthetic-home branch, where `getSpaceFrontPage` fills in an
+   * entity the indexer left without an id — and so can turn a space that did
+   * not look like a profile into one. That case pays the serial read it always
+   * paid rather than losing its tab counts; every real space takes the fast
+   * path and this is a no-op.
+   */
+  const profile = prefetched ?? (isProfile ? await prefetchProfileQueries(spaceId, props.id) : undefined);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
 
@@ -102,23 +122,12 @@ export default async function Layout(props0: LayoutProps) {
    * How much this person's record holds, so the tabs holding nothing are not
    * drawn (GEO-2859).
    *
-   * Read here rather than in `SpaceTabs` because the tab bar is server-rendered
-   * with the header: fetched in the client, the tabs would appear and then one
-   * of them would vanish, which is worse than the empty tab it removes.
-   *
-   * `undefined` on failure, and `buildSpaceTabs` reads that as "show
-   * everything". A count that could not be read must not be mistaken for a
-   * record that is empty — hiding a tab holding hundreds of rows is the one
-   * outcome worse than showing one holding none.
+   * Read on the server rather than in `SpaceTabs` because the tab bar is
+   * rendered with the header: fetched in the client, the tabs would appear and
+   * then one of them would vanish, which is worse than the empty tab it
+   * removes. See `prefetchProfileQueries` for what `undefined` means here.
    */
-  const personRecordCounts: PersonRecordCounts | undefined = profile?.facts
-    ? {
-        debates: profile.facts.debates,
-        totalDebates: profile.facts.totalDebates,
-        positions: profile.facts.positions,
-        proposals: profile.facts.proposals,
-      }
-    : undefined;
+  const personRecordCounts = profile?.recordCounts;
 
   /**
    * The rail lives here rather than on the Overview page (GEO-2859).
@@ -180,11 +189,8 @@ export default async function Layout(props0: LayoutProps) {
                   spaceId={spaceId}
                   entityId={props.id}
                   keepSpaceActions={isProfile}
-                  // The name the server already read. The title renders from the
-                  // sync store, which fetches the entity after the page is on
-                  // screen, so every space painted a nameless heading for the
-                  // length of that request.
-                  initialName={props.space?.entity?.name ?? null}
+                  // The name the server already read, until the store has one.
+                  fallbackName={props.space?.entity?.name ?? null}
                   nameAccessoryComponent={
                     // Beside the name on every personal space, profile or not. It
                     // is a statement about who this is rather than an action on

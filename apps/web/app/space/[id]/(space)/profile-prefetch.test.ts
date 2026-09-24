@@ -61,9 +61,9 @@ describe('prefetchProfileQueries', () => {
     mocks.facts.mockResolvedValue({ ...NO_FACTS, debates: 10, positions: 243, proposals: 812 });
     mocks.history.mockResolvedValue(HISTORY);
 
-    const { facts } = await prefetchProfileQueries(SPACE, PERSON);
+    const { recordCounts } = await prefetchProfileQueries(SPACE, PERSON);
 
-    expect(facts).toMatchObject({ debates: 10, positions: 243, proposals: 812 });
+    expect(recordCounts).toEqual({ debates: 10, totalDebates: 0, positions: 243, proposals: 812 });
   });
 
   it('carries no facts and no handover when the read fails', async () => {
@@ -74,9 +74,9 @@ describe('prefetchProfileQueries', () => {
     mocks.facts.mockRejectedValue(new Error('nope'));
     mocks.history.mockResolvedValue(HISTORY);
 
-    const { facts, dehydratedState } = await prefetchProfileQueries(SPACE, PERSON);
+    const { recordCounts, dehydratedState } = await prefetchProfileQueries(SPACE, PERSON);
 
-    expect(facts).toBeNull();
+    expect(recordCounts).toBeUndefined();
     expect(hashes(dehydratedState)).toEqual([JSON.stringify(profileHistoryQueryKey(PERSON, SPACE))]);
   });
 
@@ -92,9 +92,9 @@ describe('prefetchProfileQueries', () => {
     mocks.facts.mockResolvedValue({ ...NO_FACTS, debates: 4 });
     mocks.history.mockRejectedValue(new Error('nope'));
 
-    const { facts, dehydratedState } = await prefetchProfileQueries(SPACE, PERSON);
+    const { recordCounts, dehydratedState } = await prefetchProfileQueries(SPACE, PERSON);
 
-    expect(facts).toMatchObject({ debates: 4 });
+    expect(recordCounts).toMatchObject({ debates: 4 });
     expect(hashes(dehydratedState)).toEqual([JSON.stringify(profileFactsQueryKey(SPACE, PERSON))]);
   });
 });

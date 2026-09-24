@@ -143,14 +143,17 @@ describe('ProfileRecordSection', () => {
       <ProfileRecordSection kind="employment" cards={[]} isOwner={false} onEdit={() => {}} spaceId={SPACE} isLoading />
     );
 
+    expect(screen.getByRole('region', { name: 'Loading experience' })).toBeInTheDocument();
+    // The heading is real in the reserve, so a reader knows which section is on
+    // its way rather than watching an unlabelled grey box.
     expect(screen.getByRole('heading', { name: 'Experience' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /appears on your profile/ })).not.toBeInTheDocument();
   });
 
   it('does not invite the owner to add a role that may already be there', () => {
     render(<ProfileRecordSection kind="employment" cards={[]} isOwner onEdit={() => {}} spaceId={SPACE} isLoading />);
 
     expect(screen.queryByText('Nothing here yet.')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Loading experience' })).toBeInTheDocument();
   });
 
   it('draws the real section as soon as it has cards, loading or not', () => {
@@ -168,6 +171,7 @@ describe('ProfileRecordSection', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Head of Product' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /^Loading/ })).not.toBeInTheDocument();
   });
 });
 

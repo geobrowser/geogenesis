@@ -142,32 +142,34 @@ describe('EditableSpaceHeading create link', () => {
 });
 
 /**
- * The name before the sync store has the entity (profile load).
+ * The name before the sync store has the entity.
  *
  * `useName` reads the store, which fetches over the network once the page is
  * mounted — so every space rendered its heading as a zero-width space for the
  * length of that request and looked like it had failed to load its own title.
  */
-describe('EditableSpaceHeading initial name', () => {
+describe('EditableSpaceHeading fallback name', () => {
   it('shows the name the server read until the store has one', () => {
     mocks.name = null;
-    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Preston Mantel" />);
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" fallbackName="Preston Mantel" />);
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Preston Mantel');
   });
 
   it('prefers the store, which is the one that can have been edited', () => {
-    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Stale" />);
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" fallbackName="Stale" />);
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Physics');
   });
 
-  it('does not bring the name back when the owner clears it', () => {
-    // Clearing the field writes an empty string rather than removing the row, so
-    // `''` is an answer from the store and not an absence of one.
-    mocks.name = '';
-    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Preston Mantel" />);
+  it('keeps the fallback out of the editor, where a keystroke would commit it', () => {
+    // The rule `EditableHeading` already draws: a name in the textarea that is
+    // not in the store reads as a stored one, and typing a character next to it
+    // saves the whole thing.
+    mocks.name = null;
+    mocks.isEditing = true;
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" fallbackName="Preston Mantel" />);
 
-    expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('Preston Mantel');
+    expect(screen.getByRole('textbox')).toHaveValue('');
   });
 });

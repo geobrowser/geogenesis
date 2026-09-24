@@ -416,30 +416,24 @@ function AboutSection({
 }) {
   const joined = formatJoined(facts.joinedAt);
 
-  // The person's description, read here rather than under their name. It is still edited in the
-  // header, which is where its edit field is; the header shows it only while editing
-  // (`hideWhenReading`).
-  const storedDescription = useValue({
-    selector: v =>
-      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
-  })?.value;
-
   /*
-   * Deleted rows included only to tell "the store has not hydrated this entity
-   * yet" from "the owner just cleared their bio". Without that distinction the
-   * server's copy comes back the moment a deletion is staged, and the card
-   * resurrects prose the user has removed.
+   * The person's description, read here rather than under their name. It is still edited in the
+   * header, which is where its edit field is; the header shows it only while editing
+   * (`hideWhenReading`).
+   *
+   * Tombstones included, so the one question this asks is whether the store has an opinion at
+   * all — clearing a bio replaces the row with an `isDeleted` one rather than removing it
+   * (`use-edit-profile`), and a lookup that hid those could not tell "not hydrated yet" from
+   * "just cleared". Read as a live value it brought `serverDescription` back the moment a
+   * deletion was staged.
    */
-  const deletedDescription = useValue({
+  const stored = useValue({
     includeDeleted: true,
     selector: v =>
-      v.entity.id === personEntityId &&
-      v.spaceId === spaceId &&
-      v.property.id === SystemIds.DESCRIPTION_PROPERTY &&
-      Boolean(v.isDeleted),
+      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
-  const description = storedDescription ?? (deletedDescription ? undefined : (serverDescription ?? undefined));
+  const description = stored ? (stored.isDeleted ? undefined : stored.value) : (serverDescription ?? undefined);
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (

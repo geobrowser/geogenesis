@@ -5,19 +5,22 @@ import { fetchProfileFacts, profileFactsQueryKey } from '~/core/io/subgraph/fetc
 import { fetchProfileHistory, profileHistoryQueryKey } from '~/core/io/subgraph/fetch-profile-history';
 import type { ProfileFacts } from '~/core/profile/profile-facts';
 
-/**
- * How long a hydrated read counts as fresh on the client.
- *
- * The same minute both hooks already set for themselves. Stated here because a
- * hydrated query carries the `dataUpdatedAt` this render gave it, and the value
- * only decides whether the client immediately asks again — which is the whole
- * point of handing it over.
- */
-const PROFILE_STALE_TIME = 60_000;
+import type { PersonRecordCounts } from '~/partials/space-page/space-tabs';
 
 export type ProfilePrefetch = {
-  /** The counts, for the tab bar. `null` when the read failed. */
-  facts: ProfileFacts | null;
+  /**
+   * The four counts behind the profile's tabs, so the ones holding nothing are
+   * not drawn (GEO-2859).
+   *
+   * `undefined` when the read failed, and `buildSpaceTabs` reads that as "show
+   * everything". A count that could not be read must not be mistaken for a
+   * record that is empty — hiding a tab holding hundreds of rows is the one
+   * outcome worse than showing one holding none.
+   *
+   * Narrowed here rather than handing the whole `ProfileFacts` back, because the
+   * tab bar is the only caller that cannot get them from the cache below.
+   */
+  recordCounts: PersonRecordCounts | undefined;
   /** What the client's `QueryClient` picks up on mount. */
   dehydratedState: DehydratedState;
 };
@@ -37,6 +40,14 @@ export type ProfilePrefetch = {
  * and Education sections are complete in the first client paint, and the page
  * makes two fewer requests.
  *
+ * Handed over through React Query rather than as `initial*` props, which is how
+ * this route seeds `RouteEditorProvider` and `SpaceTabs`. Those have one
+ * consumer each, directly below them. These two have several, in subtrees the
+ * layout cannot reach: the facts are read by the rail, by the About route, by
+ * the record tabs' side panel and by the Activity card, and the history by the
+ * headline in the layout *and* the sections in the page. Threading a prop to
+ * each is the same cache by hand, with a fetch per branch that missed one.
+ *
  * Failures are swallowed on purpose. `dehydrate` carries successful queries
  * only, so a read that fails here simply isn't in the handover and the hook
  * makes its own request exactly as it does today — including the error states
@@ -44,7 +55,17 @@ export type ProfilePrefetch = {
  * not be counted.
  */
 export async function prefetchProfileQueries(spaceId: string, personEntityId: string): Promise<ProfilePrefetch> {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: PROFILE_STALE_TIME, retry: false } } });
+  /*
+   * Per request, never shared: this client exists only to be dehydrated, and a
+   * module-level one would hand one reader's profile to the next.
+   *
+   * `retry: false` for the same reason `core/query-client.tsx` cuts React
+   * Query's default to one — `core/io/graphql-client.ts` already retries
+   * transport failures on its own jittered schedule, and stacking a second
+   * budget on top of it here would hold the page's HTML rather than a hook's
+   * loading state. A read that fails simply isn't in the handover.
+   */
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
   const factsKey = profileFactsQueryKey(spaceId, personEntityId);
 
@@ -60,8 +81,15 @@ export async function prefetchProfileQueries(spaceId: string, personEntityId: st
         }),
   ]);
 
+  const facts = queryClient.getQueryData<ProfileFacts>(factsKey);
+
   return {
-    facts: queryClient.getQueryData<ProfileFacts>(factsKey) ?? null,
+    recordCounts: facts && {
+      debates: facts.debates,
+      totalDebates: facts.totalDebates,
+      positions: facts.positions,
+      proposals: facts.proposals,
+    },
     dehydratedState: dehydrate(queryClient),
   };
 }
