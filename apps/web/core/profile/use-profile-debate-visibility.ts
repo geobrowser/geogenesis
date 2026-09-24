@@ -107,11 +107,13 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
         });
 
         // Every hide control is rendered from this query, so it has data here.
-        // Use its complete row set for an absolute count rather than applying a
-        // delta twice if a pending facts promise settles during this update.
+        // sideByDebateId is built from the complete relation result before card
+        // materialization drops records it cannot render. Use those keys for an
+        // absolute count rather than applying a delta twice if a pending facts
+        // promise settles during this update.
         const visibleDebates = nextPersonDebates
           ? debateVisibilityCounts(
-              nextPersonDebates.allRows.map(row => row.entityId),
+              [...nextPersonDebates.sideByDebateId.keys()],
               [...nextPersonDebates.hiddenRelationsByDebateId.keys()]
             ).visible
           : null;

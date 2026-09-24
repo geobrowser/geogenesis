@@ -16,6 +16,7 @@ const PERSONAL_SPACE = '11111111111111111111111111111111';
 const PERSON = '22222222222222222222222222222222';
 const DEBATE = '33333333333333333333333333333333';
 const DEBATE_SPACE = '44444444444444444444444444444444';
+const DEBATE_WITHOUT_CARD = '55555555555555555555555555555555';
 
 const mocks = vi.hoisted(() => ({ makeProposal: vi.fn(), setToast: vi.fn() }));
 
@@ -28,18 +29,18 @@ const item = {
   title: 'A debate',
 } as ExploreFeedItem;
 
-function personDebates(): PersonDebatesQueryData {
+function personDebates(debateIds: readonly string[] = [DEBATE]): PersonDebatesQueryData {
   return {
     allRows: [item],
-    sideByDebateId: new Map(),
+    sideByDebateId: new Map(debateIds.map(id => [id, 'supported' as const])),
     hiddenRelationsByDebateId: new Map(),
   };
 }
 
-function profileFacts(): ProfileFacts {
+function profileFacts(debates = 1): ProfileFacts {
   return {
-    debates: 1,
-    totalDebates: 1,
+    debates,
+    totalDebates: debates,
     positions: 0,
     proposals: 0,
     spaces: [],
@@ -123,5 +124,23 @@ describe('useProfileDebateVisibility cache coordination', () => {
     await factsFetch;
 
     await waitFor(() => expect(client.getQueryData<ProfileFacts>(factsKey)?.debates).toBe(0));
+  });
+
+  it('keeps debates that could not be materialized as feed cards in the optimistic count', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const personKey = personDebatesRowsQueryKey(PERSONAL_SPACE);
+    const factsKey = profileFactsQueryKey(PERSONAL_SPACE, PERSON);
+    client.setQueryData(personKey, personDebates([DEBATE, DEBATE_WITHOUT_CARD]));
+    client.setQueryData(factsKey, profileFacts(2));
+
+    const { result } = renderHook(() => useProfileDebateVisibility(PERSONAL_SPACE), {
+      wrapper: wrapper(client),
+    });
+
+    await act(async () => {
+      expect(await result.current.setHidden(item, [], true)).toBe(true);
+    });
+
+    expect(client.getQueryData<ProfileFacts>(factsKey)?.debates).toBe(1);
   });
 });
