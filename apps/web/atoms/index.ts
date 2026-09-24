@@ -10,6 +10,8 @@ export type EntitySidePanelTarget = {
   spaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
+  forceRequestedSpace?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);

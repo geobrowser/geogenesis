@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
+  peerAvailability: true,
+  usePeerSchedule: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -65,6 +67,9 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // Reached only once a row's "See times" opens the modal. A `vi.fn` rather than a bare arrow, so
+  // a case can assert which peer the row asked about.
+  usePeerSchedule: (peerUserId: string | null) => mocks.usePeerSchedule(peerUserId),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
@@ -111,6 +116,13 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/hooks/use-space-labels')>();
   return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
 });
+
+// GEO-2938 is behind a flag that is off by default. These cases are about the row, so the flag is
+// on unless a case turns it off.
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+}));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
@@ -191,6 +203,23 @@ const card = () => screen.queryByRole('article');
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.peerAvailability = true;
+  mocks.usePeerSchedule.mockReset();
+  // Enough of a schedule that the view renders its heading, so a case can see the peer's name.
+  mocks.usePeerSchedule.mockReturnValue({
+    enabled: true,
+    isPending: false,
+    isError: false,
+    schedule: {
+      userId: 'user-them',
+      viewerTimezone: 'UTC',
+      peerTimezone: 'UTC',
+      viewerHasSchedule: true,
+      peerHasSchedule: true,
+      theirWeekKnown: true,
+      slots: [],
+    },
+  });
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.peopleDataAvailable = true;
   mocks.peopleLoading = false;
@@ -567,6 +596,97 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+  });
+});
+
+// GEO-2938. The row is the first way into someone else's availability; until this, the view was
+// only reachable from its debug route.
+describe('See times', () => {
+  it('opens that person availability, named and by user id', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    const dialog = within(screen.getByRole('dialog'));
+    // The id the row asked about, and the name it handed down, rather than the static title.
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+    expect(dialog.getByRole('heading', { name: /Arturas/ })).toBeInTheDocument();
+  });
+
+  it('mounts nothing until it is asked for', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // Being unable to debate someone now is when their next free slot matters most.
+  it('stays live while the pill is blocked', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  // The list is everyone online *now*, so the viewed person can drop off it at any moment. The
+  // dialog is mounted at tab level precisely so their row unmounting cannot take it away.
+  it('stays open when the person goes offline and leaves the list', async () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
+    const store = createStore();
+    const { rerender } = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    mocks.people = [person('user-other', 'Vytautas')];
+    // Re-wrapped, because RTL's rerender takes the bare element and dropping the Provider would
+    // remount the tab and lose the state this case is about.
+    rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(screen.queryByRole('button', { name: 'See times for Arturas' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  it('gives focus back to the row it was opened from', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const opener = screen.getByRole('button', { name: 'See times for Arturas' });
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('is absent while the flag is off, which is the default', () => {
+    mocks.peerAvailability = false;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('button', { name: /See times/ })).not.toBeInTheDocument();
+    // The row is otherwise untouched.
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {
+    mocks.authenticated = false;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    expect(mocks.promptSignIn).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

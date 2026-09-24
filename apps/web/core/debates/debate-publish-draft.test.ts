@@ -20,7 +20,9 @@ import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
+  DEBATE_VIDEOS_PROPERTY_ID,
   IMAGE_TYPE_ID,
   IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
@@ -74,10 +76,10 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
 }
 
 describe('buildDebatePublishDraft', () => {
-  it('derives a deterministic dashless entity id and a "A vs. B on claim" name', () => {
+  it('derives a deterministic dashless entity id and a "claim | A vs. B" name', () => {
     const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
     expect(draft.debateEntityId).toBe('11112222333344445555666677778888');
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
   });
 
   it('names participants in slot order regardless of input order', () => {
@@ -90,7 +92,29 @@ describe('buildDebatePublishDraft', () => {
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
+  });
+
+  // The Video, keyframe, share card and Transcript hang their names off the debate's, and every one
+  // of them is a `Name` value someone reads in the graph. They went unasserted while the suffix was
+  // a bare space, which is how "… vs. Preston video" survived — the qualifier ran straight onto a
+  // person's name. Pinned here so the separator cannot silently go missing from one of the four.
+  it('qualifies each derived entity name with the same separator', () => {
+    const draft = buildDebatePublishDraft(baseInput({ ogImageUrl: 'ipfs://QmShareCard' }), {
+      createEntityId: idFactory(),
+      createPosition: () => 'a0',
+    });
+
+    const namesOf = (entityIds: string[]) =>
+      entityIds.map(id => draft.values.find(v => v.entity.id === id && v.property.id === NAME_PROPERTY_ID)?.value);
+
+    const debate = 'The US should have attacked Iran | Arturas vs. Preston';
+    const named = (propertyId: string) => draft.relations.filter(r => r.type.id === propertyId).map(r => r.toEntity.id);
+
+    expect(namesOf(named(OG_IMAGE_PROPERTY_ID))).toEqual([`${debate} | share card`]);
+    expect(namesOf(named(DEBATE_VIDEOS_PROPERTY_ID))).toEqual([`${debate} | video`]);
+    expect(namesOf(named(KEY_FRAME_IMAGE_PROPERTY_ID))).toEqual([`${debate} | keyframe`]);
+    expect(namesOf(named(DEBATE_TRANSCRIPTS_PROPERTY_ID))).toEqual([`${debate} | transcript`]);
   });
 
   // Preston: "Can we also add a participants relation to both participants. This will be useful for

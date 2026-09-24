@@ -4,23 +4,10 @@ import { NextResponse } from 'next/server';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { type ExploreTime, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
+import { parseExploreTime } from '~/core/explore/explore-feed-params';
+import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
-
-const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
-
-/**
- * No `time` parameter means no time filter, which is what `'all'` is — `timeThresholdSec` maps it
- * to null and nothing reaches the query. Feeds whose sort carries no range (Best, New) send
- * nothing rather than a window the viewer can neither see nor change; defaulting to a week here
- * would reinstate exactly the filter they omitted. An unrecognised value takes the same route: a
- * range nobody can name is not one to guess at.
- */
-function parseTime(raw: string | null): ExploreTime {
-  if (raw && (TIMES as string[]).includes(raw)) return raw as ExploreTime;
-  return 'all';
-}
 
 /**
  * Activity feed for a single space. Reuses the explore fetcher but drops the type
@@ -29,7 +16,7 @@ function parseTime(raw: string | null): ExploreTime {
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const time = parseTime(searchParams.get('time'));
+  const time = parseExploreTime(searchParams.get('time'));
   // `spaceIds` since the feed's filter became a multi-select; `spaceId` still accepted because this
   // route is pinned to exactly one space and that is the older, simpler thing to send.
   const spaceId = searchParams.get('spaceIds')?.split(',')[0] || searchParams.get('spaceId');

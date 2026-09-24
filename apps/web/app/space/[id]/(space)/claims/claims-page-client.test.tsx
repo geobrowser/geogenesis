@@ -1,131 +1,89 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-
-import type { ReactNode } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { Entity, Relation } from '~/core/types';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import type { Relation } from '~/core/types';
 
 import { ClaimsPageClient } from './claims-page-client';
 
-// The rows render the shared claim card now, whose response controls reach this module. Its
-// top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
-// jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
-vi.mock('~/core/state/pending-personal-space', () => ({
-  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
-  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
-  isPendingPersonalSpaceId: () => false,
-  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
-}));
-
 const mocks = vi.hoisted(() => ({
-  replace: vi.fn(),
   nameSet: vi.fn(),
   relationSet: vi.fn(),
   setActiveSpace: vi.fn(),
   bumpReviewVersion: vi.fn(),
   setIsReviewOpen: vi.fn(),
-  responseBatchCalls: [] as unknown[],
-  refetchResponseBatch: vi.fn(),
+  fetchNextPage: vi.fn(),
+  hookCalls: [] as { spaceId: string; kind: string; sort: string; filters: any }[],
+  searchCalls: [] as string[],
+  topics: [] as { id: string; name: string | null; count: number }[],
+  searchClaimIds: null as string[] | null,
+  retrySearch: vi.fn(),
+  retryRows: vi.fn(),
+  facetCalls: [] as { enabled: boolean; isSearchPending: boolean; sawSearchError: boolean }[],
+  search: { isPending: false, error: null as Error | null },
+  facet: { settled: true, error: null as Error | null },
+  rows: [] as { entityId: string; spaceId: string }[],
+  listState: { isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false },
 }));
 
-let claims: Entity[] = [];
-let claimsLoading = false;
-let lastQueryEntitiesOptions: unknown = null;
-let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
-let responseBatchReady = true;
-let responseBatchError = false;
-
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
-}));
-
-vi.mock('~/core/state/feature-flags', () => ({}));
-
-vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponseIndexingState: () => 'idle',
-  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
-  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
-}));
-
-vi.mock('~/core/debates/hooks', () => ({
-  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
-  // below this needs one here.
-  debateQueryKeys: {
-    matchmakingClaimsRoot: (accountKey: string | null) =>
-      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
-    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
-    rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
-  },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
-  useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
-}));
-
-vi.mock('~/core/responses/use-claim-response-summaries', () => ({
-  ClaimResponseBatchBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
-  useClaimResponseSummaryBatch: (options: unknown) => {
-    mocks.responseBatchCalls.push(options);
+/**
+ * The ranked query is covered in `space-activity-rows.test.ts` and the card where it lives. What
+ * this page decides is which list it asks for and how it draws the result, so the hook is faked and
+ * its arguments recorded.
+ */
+vi.mock('~/core/space/use-space-debate-activity', () => ({
+  useSpaceActivityRowsInfinite: (spaceId: string, kind: string, sort: string, filters: unknown) => {
+    mocks.hookCalls.push({ spaceId, kind, sort, filters });
     return {
-      isSuccess: responseBatchReady,
-      isError: responseBatchError,
-      refetch: mocks.refetchResponseBatch,
+      rows: mocks.rows,
+      isLoading: mocks.listState.isLoading,
+      isError: mocks.listState.isError,
+      isPending: false,
+      hasNextPage: mocks.listState.hasNextPage,
+      isFetchingNextPage: mocks.listState.isFetchingNextPage,
+      fetchNextPage: mocks.fetchNextPage,
+      retry: mocks.retryRows,
+    };
+  },
+  useSpaceClaimTopicFacet: (
+    _spaceId: string,
+    filters: { isSearchPending?: boolean; searchError?: unknown },
+    enabled: boolean
+  ) => {
+    mocks.facetCalls.push({
+      enabled,
+      isSearchPending: Boolean(filters.isSearchPending),
+      sawSearchError: filters.searchError != null,
+    });
+    return {
+      topics: mocks.topics,
+      isLoading: false,
+      settled: mocks.facet.settled,
+      error: mocks.facet.error,
+    };
+  },
+  useSpaceClaimSearch: (search: string) => {
+    mocks.searchCalls.push(search);
+    return {
+      claimIds: mocks.searchClaimIds,
+      isPending: mocks.search.isPending,
+      error: mocks.search.error,
+      retry: mocks.retrySearch,
     };
   },
 }));
 
-// The row derives its position summaries from this; the hook reaches the personal-space lookup and
-// through it Wagmi, which this suite has no provider for. The page's own batching is what these
-// tests are about, and that is stubbed separately below.
-vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
-  useClaimResponseSummary: () => ({
-    positive: 0,
-    negative: 0,
-    total: 0,
-    percent: null,
-    meetsFloor: false,
-    isControversial: false,
-    // Follows the batch, as the real hook does: under a boundary the individual reads stand down,
-    // so the batch's own readiness is what says whether there is anything to draw yet. Stubbing
-    // this `false` unconditionally is what let the card look answerable with the batch still out.
-    isLoading: !responseBatchReady,
-    // Same swap the real hook makes under a batch: the viewer's own side is primed by the batch
-    // too, so the batch's readiness is the only thing either flag waits on.
-    isViewerResponseLoading: !responseBatchReady,
-    // The batch is what answers under a boundary, so it is what makes the counts an answer.
-    hasCounts: responseBatchReady,
-    viewerDirection: null,
-    viewerSpaceId: null,
-  }),
-}));
-
-// Mirrors the real card's contract rather than inventing one. An earlier version rendered a
-// "response skeleton" whenever the batch was unready — a thing `MatchmakingClaimCard` has never
-// drawn, so the assertions that looked for it were reading the mock back to itself. What the card
-// really does with an unready batch is refuse to answer: `answersReady` is false, because the
-// viewer's own side is unknown until the batch lands and pressing the side they already hold would
-// republish it rather than clear it.
-vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  MatchmakingClaimCard: ({
-    claim,
-    readiness,
-    answersReady = true,
-  }: {
-    claim: { claim: string };
-    readiness: { response_kind: string };
-    answersReady?: boolean;
-  }) => (
+vi.mock('~/partials/explore/explore-feed-card', () => ({
+  ExploreFeedCard: ({ item, hideSpaceLink, hideJoinButton }: Record<string, any>) => (
     <div
-      data-testid="entity-response-buttons"
-      data-response-kind={readiness.response_kind}
-      data-answers-ready={String(answersReady)}
-    >
-      {claim.claim}
-    </div>
+      data-testid="claim-card"
+      data-entity-id={item.entityId}
+      data-hide-space-link={String(Boolean(hideSpaceLink))}
+      data-hide-join={String(Boolean(hideJoinButton))}
+    />
   ),
 }));
 
@@ -135,14 +93,6 @@ vi.mock('~/core/state/diff-store', () => ({
     bumpReviewVersion: mocks.bumpReviewVersion,
     setIsReviewOpen: mocks.setIsReviewOpen,
   }),
-}));
-
-vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: (options: unknown) => {
-    lastQueryEntitiesOptions = options;
-    const deferUntilFetched = (options as { deferUntilFetched?: boolean }).deferUntilFetched;
-    return { entities: claimsLoading && deferUntilFetched ? [] : claims, isLoading: claimsLoading };
-  },
 }));
 
 vi.mock('~/core/sync/use-mutate', () => ({
@@ -160,62 +110,421 @@ vi.mock('~/design-system/select-entity-compact', () => ({
   ),
 }));
 
+/**
+ * The topic menu's dropdown measures itself to decide where to open. `setupTests.ts` stubs this
+ * globally but is not the file vitest loads — see `vite.config.js`, which points at
+ * `vitest.setup.ts` — so the menu's own tests stub it per file and so does this one.
+ */
+window.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+
+const asked = () => mocks.hookCalls.at(-1)!;
+
+/**
+ * The client component as the route mounts it — keyed on the space, so a navigation between two of
+ * them remounts. Written out here because the key lives in the server component, which a render
+ * test cannot mount.
+ */
+const ClaimsPage = ({ spaceId }: { spaceId: string }) => <ClaimsPageClient key={spaceId} spaceId={spaceId} />;
+
 beforeEach(() => {
-  claims = [];
-  claimsLoading = false;
-  lastQueryEntitiesOptions = null;
-  debateClaimsResponse = { claims: [] };
-  responseBatchReady = true;
-  responseBatchError = false;
+  mocks.hookCalls.length = 0;
+  mocks.searchCalls.length = 0;
+  mocks.facetCalls.length = 0;
+  // Deliberately not in count order — the facet answers in the graph's, which is no order a reader
+  // can see, and putting the menu right is this surface's job.
+  mocks.topics = [
+    { id: 't1', name: 'Governance', count: 12 },
+    { id: 't2', name: 'Safety', count: 5 },
+    { id: 't3', name: 'Industry', count: 31 },
+  ];
+  mocks.searchClaimIds = null;
+  mocks.search = { isPending: false, error: null };
+  mocks.facet = { settled: true, error: null };
+  mocks.rows = [
+    { entityId: 'c1', spaceId: 'space-1' },
+    { entityId: 'c2', spaceId: 'space-1' },
+  ];
+  mocks.listState = { isLoading: false, isError: false, hasNextPage: false, isFetchingNextPage: false };
   vi.clearAllMocks();
-  mocks.responseBatchCalls.length = 0;
 });
 
 afterEach(() => cleanup());
 
 describe('ClaimsPageClient', () => {
-  it('queries Claim entities and renders the empty state', () => {
-    renderClaims();
+  it('renders the space’s ranked claims under its heading', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
-    expect(screen.getByText('No claims yet')).toBeInTheDocument();
-    expect(lastQueryEntitiesOptions).toMatchObject({
-      where: {
-        spaces: [{ equals: 'space-1' }],
-        types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      },
-      deferUntilFetched: true,
-      includeUnpublishedLocal: true,
-    });
-    expect(lastQueryEntitiesOptions).not.toHaveProperty('placeholderData');
+    expect(screen.getAllByTestId('claim-card').map(card => card.dataset.entityId)).toEqual(['c1', 'c2']);
   });
 
-  it('shows loading instead of locally cached claims before the authoritative query resolves', () => {
-    claims = [publishedClaim()];
-    claimsLoading = true;
+  // The ranked list for this space's claims, and nothing else — the hook scopes the query.
+  it('asks for this space’s claims', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
 
-    renderClaims();
-
-    expect(screen.getByText('Loading claims...')).toBeInTheDocument();
-    expect(screen.queryByText('Public transit should be free')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(asked()).toMatchObject({ spaceId: 'space-1', kind: 'claims' });
   });
 
-  it('does not retain the previous space claims while the next space loads', () => {
-    claims = [publishedClaim()];
-    const view = renderClaims();
-    expect(screen.getByText('Public transit should be free')).toBeInTheDocument();
-
-    claimsLoading = true;
+  it('follows the space it is given', () => {
+    const view = render(<ClaimsPageClient spaceId="space-1" />);
     view.rerender(<ClaimsPageClient spaceId="space-2" />);
 
-    expect(screen.getByText('Loading claims...')).toBeInTheDocument();
-    expect(screen.queryByText('Public transit should be free')).not.toBeInTheDocument();
+    expect(asked()).toMatchObject({ spaceId: 'space-2', kind: 'claims' });
   });
 
+  /**
+   * A topic id means nothing outside the space whose facet offered it, so carrying one into
+   * another space narrows that space's list by a clause nothing in it can satisfy. The sort and
+   * the search box are the reader's, but they are the reader's *about this space*.
+   *
+   * The route remounts this component per space (see `page.tsx`) rather than resetting each piece
+   * here, so this test asserts the behaviour a remount gives — and fails if the key is dropped and
+   * React reuses the element instead.
+   */
+  it('starts a different space with that space’s own filters', () => {
+    const view = render(<ClaimsPage spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+    fireEvent.click(screen.getByText('New'));
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'tariffs' } });
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(topicRow('Industry'));
+
+    expect(asked()).toMatchObject({ sort: 'new' });
+    expect(asked().filters.topicIds).toEqual(['t3']);
+
+    // Re-rendered rather than remounted by hand: React reuses an element of the same type across a
+    // route-param change, which is the situation the key exists for. Unmounting first would make
+    // this pass with or without it.
+    view.rerender(<ClaimsPage spaceId="space-2" />);
+
+    expect(asked()).toMatchObject({ spaceId: 'space-2', sort: 'best' });
+    expect(asked().filters.topicIds).toEqual([]);
+    expect(screen.getByLabelText('Search claims')).toHaveValue('');
+  });
+
+  // Every row is this space by construction, so a space chip and a Join button would say the same
+  // thing on all of them.
+  it('hides the per-card space chip and join button', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    const card = screen.getAllByTestId('claim-card')[0];
+    expect(card).toHaveAttribute('data-hide-space-link', 'true');
+    expect(card).toHaveAttribute('data-hide-join', 'true');
+  });
+
+  it('draws a skeleton rather than an empty list while the first page is out', () => {
+    mocks.rows = [];
+    mocks.listState = { ...mocks.listState, isLoading: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.queryByText('No claims here yet.')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
+  });
+
+  // An empty list and a failed one look identical and mean opposite things.
+  it('says so when the list could not be read', () => {
+    mocks.rows = [];
+    mocks.listState = { ...mocks.listState, isError: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('Could not load claims.')).toBeInTheDocument();
+    expect(screen.queryByText('No claims here yet.')).not.toBeInTheDocument();
+  });
+
+  it('reports a genuinely empty space', () => {
+    mocks.rows = [];
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('No claims here yet.')).toBeInTheDocument();
+  });
+
+  // Best is the order the Overview card ranks its six by, so "See all claims" continues that list
+  // rather than opening a different one.
+  it('opens on Best', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(asked()).toMatchObject({ sort: 'best' });
+    expect(screen.getByLabelText('Sort: Best')).toBeInTheDocument();
+  });
+
+  it('re-asks in the picked order', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+    fireEvent.click(screen.getByText('New'));
+
+    expect(asked()).toMatchObject({ sort: 'new' });
+  });
+
+  it('offers Explore’s three sorts', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByLabelText('Sort: Best'));
+
+    // `Best` twice — once in the trigger, once as the ticked option — and the other two once each.
+    expect(screen.getAllByText('Best')).toHaveLength(2);
+    expect(screen.getByText('New')).toBeInTheDocument();
+    expect(screen.getByText('Top')).toBeInTheDocument();
+  });
+
+  /** A row inside the open topic menu, which the trigger's own label can otherwise shadow. */
+  const topicRow = (name: string) =>
+    screen
+      .getAllByRole('button')
+      .filter(button => button.closest('[data-radix-popper-content-wrapper]') !== null)
+      .find(button => button.textContent?.startsWith(name))!;
+
+  const topicRows = () =>
+    screen
+      .getAllByRole('button')
+      .map(button => button.textContent?.trim() ?? '')
+      .filter(text => /^(Governance|Safety|Industry)\d+$/.test(text));
+
+  it('lists topics by highest count first', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(topicRows()).toEqual(['Industry31', 'Governance12', 'Safety5']);
+  });
+
+  /**
+   * Every count changes when the filter does, so ordering a ticked row by its new count would move
+   * the row just clicked before the next click lands. Picked rows hold the top, in pick order.
+   */
+  it('pins a picked topic to the top rather than re-sorting it', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Safety/ }));
+
+    expect(topicRows()[0]).toBe('Safety5');
+  });
+
+  it('narrows by a picked topic', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+
+    expect(asked().filters).toMatchObject({ topicIds: ['t1'] });
+  });
+
+  // AND, not OR: a claim has to carry every picked topic.
+  it('accumulates picked topics rather than replacing them', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Safety/ }));
+
+    expect(asked().filters).toMatchObject({ topicIds: ['t1', 't2'] });
+  });
+
+  /**
+   * The facet answers in dashed uuids where the rows carry dashless ones, so an id-equality toggle
+   * would add a second spelling of a topic already picked rather than removing it. `toggleId`
+   * compares canonically; this pins that it is what runs.
+   */
+  it('unticks a topic whose id comes back in the other spelling', () => {
+    mocks.topics = [{ id: '41e851610e13a19441c4d980f2f2ce6b', name: 'Governance', count: 12 }];
+    const view = render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(topicRow('Governance'));
+    expect(asked().filters.topicIds).toHaveLength(1);
+
+    // The same topic, dashed — which is how a facet grouping hands it back. Re-rendered so the menu
+    // actually redraws with the other spelling; without that the row still carries the first one
+    // and the toggle is never asked the question. Once one is picked the trigger carries its name
+    // too, so the row has to be found inside the open menu.
+    mocks.topics = [{ id: '41e85161-0e13-a194-41c4-d980f2f2ce6b', name: 'Governance', count: 12 }];
+    view.rerender(<ClaimsPageClient spaceId="space-1" />);
+    fireEvent.click(topicRow('Governance'));
+
+    expect(asked().filters.topicIds).toEqual([]);
+  });
+
+  it('clears the topic selection', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
+
+    expect(asked().filters).toMatchObject({ topicIds: [] });
+  });
+
+  it('sends what the viewer typed to the search resolver', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'tariffs' } });
+
+    expect(mocks.searchCalls.at(-1)).toBe('tariffs');
+  });
+
+  /**
+   * Search reaches the list as ids, not text (GEO-2898) — resolved against the tagged corpus where
+   * it can be stemmed and ranked. `null` narrows nothing; `[]` means nothing matched.
+   */
+  it('narrows the list by the ids a search matched', () => {
+    mocks.searchClaimIds = ['c9'];
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(asked().filters).toMatchObject({ searchClaimIds: ['c9'] });
+  });
+
+  // An empty list under a filter and an empty space mean different things and need different words.
+  it('distinguishes a filtered-empty list from an empty space', () => {
+    mocks.rows = [];
+    const view = render(<ClaimsPageClient spaceId="space-1" />);
+    expect(screen.getByText('No claims here yet.')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches' } });
+    expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
+    view.unmount();
+  });
+
+  /**
+   * `useTaggedClaimSearch` holds `settled` false on a failure, so a page reading only that dims
+   * forever with nothing in flight. The list cannot be narrowed to what was typed either, and
+   * listing the space unfiltered would answer a question nobody asked.
+   */
+  it('shows a retryable error instead of a list when the search fails', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('Could not search claims.')).toBeInTheDocument();
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.retrySearch).toHaveBeenCalled();
+  });
+
+  // A failure is not "still coming"; dimming behind an error reads as loading.
+  it('does not dim the list behind a search error', () => {
+    mocks.search = { isPending: true, error: new Error('search down') };
+    const { container } = render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(container.querySelector('.opacity-60')).toBeNull();
+  });
+
+  /**
+   * The facet's `settled` is false on a failure as well as during a load, so driving skeletons off
+   * it alone draws them forever. The topics are still named, so a failure drops the counts rather
+   * than the menu.
+   */
+  it('stops the topic menu waiting on counts that failed', () => {
+    mocks.facet = { settled: false, error: new Error('counts down') };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      render(<ClaimsPageClient spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+      // The menu waits out its skeleton delay before drawing them, so a synchronous assertion
+      // passes whether or not the counts are reported pending. Past the delay it does not.
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+      expect(topicRow('Industry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * The sentinel stops observing on an error — it has to, or a failing page is asked for forever —
+   * so a next-page failure with rows already on screen left the feed silently stuck: no message,
+   * no spinner, no way back.
+   */
+  it('offers a retry when a later page fails with rows on screen', () => {
+    mocks.listState = { ...mocks.listState, isError: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    // The rows already read stay; what is added is the reason it stopped.
+    expect(screen.getAllByTestId('claim-card')).toHaveLength(2);
+    expect(screen.getByText('Could not load more claims.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.retryRows).toHaveBeenCalled();
+  });
+
+  // The first-page failure keeps its own wording; the two are different states.
+  it('keeps the first-page error distinct from the later-page one', () => {
+    mocks.rows = [];
+    mocks.listState = { ...mocks.listState, isError: true };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('Could not load claims.')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load more claims.')).not.toBeInTheDocument();
+  });
+
+  /**
+   * The facet's filter carries the search ids, so counting it while they accumulate re-keys and
+   * re-fires it on every page. The hook is what holds it off (see `useSpaceClaimTopicFacet`); what
+   * the page owes it is the flag, which it cannot work out for itself.
+   */
+  it('tells the topic facet when the search ids are still arriving', () => {
+    mocks.search = { isPending: true, error: null };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ isSearchPending: true });
+    expect(asked().filters).toMatchObject({ isSearchPending: true });
+  });
+
+  it('clears the flag once they are in', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ isSearchPending: false });
+  });
+
+  /**
+   * The facet counts against the ids a search produced, so a search that produced none leaves its
+   * inner query disabled — and a disabled query reports pending rather than failed. The page has
+   * to hand the failure over, or the menu announces counts that are never coming, beside a search
+   * error it has already drawn.
+   */
+  it('tells the topic facet the search failed', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    render(<ClaimsPageClient spaceId="space-1" />);
+
+    expect(mocks.facetCalls.at(-1)).toMatchObject({ sawSearchError: true });
+    expect(asked().filters.searchError).toBeInstanceOf(Error);
+  });
+
+  // The menu keeps its options — the control staying put beats it vanishing beside an error about
+  // something else — but stops claiming its numbers are on the way.
+  it('stops the count skeletons when the search fails', () => {
+    mocks.search = { isPending: false, error: new Error('search down') };
+    mocks.facet = { settled: false, error: new Error('search down') };
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    try {
+      render(<ClaimsPageClient spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+      act(() => {
+        vi.advanceTimersByTime(500);
+      });
+
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+      expect(topicRow('Industry')).toBeDefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The staging form is unrelated to how the list is ordered, and it is the only place in the app
+  // that opens a claim proposal from a space. Turning the list into a feed must not take it away.
   it('stages a claim with Claim and Topics relations only', () => {
-    renderClaims();
+    render(<ClaimsPageClient spaceId="space-1" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
     fireEvent.change(screen.getByLabelText('Claim'), {
@@ -231,175 +540,12 @@ describe('ClaimsPageClient', () => {
     expect(mocks.setIsReviewOpen).toHaveBeenCalledWith(true);
   });
 
-  it('batches the active response kind for all visible claims and defers their individual requests', () => {
-    claims = Array.from({ length: 50 }, (_, index) => publishedClaim(`claim-${index}`, `Claim ${index}`));
-    debateClaimsResponse = {
-      claims: claims.map((claim, index) =>
-        debateClaim({
-          claim_entity_id: claim.id,
-          response_kind: index % 2 === 0 ? 'stance' : 'veracity',
-        })
-      ),
-    };
-    responseBatchReady = false;
+  it('keeps the list mounted while the form is open', () => {
+    render(<ClaimsPageClient spaceId="space-1" />);
 
-    renderClaims();
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
 
-    expect(mocks.responseBatchCalls).toHaveLength(1);
-    expect(mocks.responseBatchCalls[0]).toMatchObject({
-      spaceId: 'space-1',
-      enabled: true,
-      targets: expect.arrayContaining([
-        { entityId: 'claim-0', responseKind: 'stance' },
-        { entityId: 'claim-1', responseKind: 'veracity' },
-      ]),
-    });
-    expect((mocks.responseBatchCalls[0] as { targets: unknown[] }).targets).toHaveLength(50);
-
-    // Answerable even with the batch still out, because every claim here has a geo-chat row and a
-    // row carries the viewer's own side. The batch supplies the counts; it is not the only thing
-    // that can say which side the viewer holds.
-    const cards = screen.getAllByTestId('entity-response-buttons');
-    expect(cards).toHaveLength(50);
-    expect(cards.every(card => card.getAttribute('data-answers-ready') === 'true')).toBe(true);
-  });
-
-  it('will not let anyone answer a rowless claim while the batch is still out', () => {
-    // Without a row, the viewer's side comes from the batch alone. Drawn from an unready batch it
-    // reads as "no response", so a viewer who already answered sees their own side unselected — and
-    // pressing it republishes the response they hold instead of clearing it.
-    claims = [publishedClaim()];
-    debateClaimsResponse = { claims: [] };
-    responseBatchReady = false;
-
-    renderClaims();
-    expect(screen.getByTestId('entity-response-buttons').getAttribute('data-answers-ready')).toBe('false');
-
-    cleanup();
-    responseBatchReady = true;
-    renderClaims();
-    expect(screen.getByTestId('entity-response-buttons').getAttribute('data-answers-ready')).toBe('true');
-  });
-
-  it('keeps every published claim responsive when geo-chat has not hydrated its readiness snapshot yet', () => {
-    claims = [
-      publishedClaim('claim-1', 'Existing debate claim'),
-      {
-        ...publishedClaim('claim-2', 'New factual claim'),
-        values: [
-          {
-            spaceId: 'space-1',
-            property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
-            value: '1',
-          },
-        ],
-      } as Entity,
-    ];
-    debateClaimsResponse = { claims: [debateClaim()] };
-
-    renderClaims();
-
-    expect(mocks.responseBatchCalls.at(-1)).toMatchObject({
-      targets: [
-        { entityId: 'claim-1', responseKind: 'stance' },
-        { entityId: 'claim-2', responseKind: 'veracity' },
-      ],
-    });
-    expect(screen.getAllByTestId('entity-response-buttons')).toHaveLength(2);
-    expect(screen.getAllByTestId('entity-response-buttons')[1]).toHaveAttribute('data-response-kind', 'veracity');
-  });
-
-  it('retries only the page response batch after its retries are exhausted', () => {
-    claims = [publishedClaim()];
-    debateClaimsResponse = { claims: [debateClaim()] };
-    responseBatchReady = false;
-    responseBatchError = true;
-
-    renderClaims();
-
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(mocks.refetchResponseBatch).toHaveBeenCalledOnce();
-  });
-
-  it('tells the viewer to publish before an unpublished claim offers a debate', () => {
-    const published = publishedClaim();
-    claims = [published];
-    debateClaimsResponse = {
-      claims: [debateClaim()],
-    };
-    const { rerender } = renderClaims();
-
-    claims = [
-      {
-        ...published,
-        relations: [
-          {
-            type: { id: 'local-change', name: 'Local change' },
-            isLocal: true,
-            hasBeenPublished: false,
-          } as Relation,
-        ],
-      },
-    ];
-    rerender(<ClaimsPageClient spaceId="space-1" />);
-
-    expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    // A draft has no on-chain identity to respond to, so it gets the notice instead of the card.
-    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
-
-    claims = [published];
-    debateClaimsResponse = {
-      claims: [debateClaim({ active_debate: { id: 'debate-1', status: 'in_progress' } })],
-    };
-    rerender(<ClaimsPageClient spaceId="space-1" />);
-
-    // "Debate in progress" is gone. The card's end slot turns the same `active_debate` into a
-    // "Watch live" link, so the page no longer prints a sentence describing it — one fact, one
-    // rendering, and the rendering you can press.
-    expect(screen.queryByText('Debate in progress')).not.toBeInTheDocument();
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
+    expect(screen.getAllByTestId('claim-card')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Add claim' })).not.toBeInTheDocument();
   });
 });
-
-function renderClaims() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<ClaimsPageClient spaceId="space-1" />, {
-    wrapper: ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    ),
-  });
-}
-
-function publishedClaim(id = 'claim-1', name = 'Public transit should be free'): Entity {
-  return {
-    id,
-    name,
-    description: null,
-    spaces: ['space-1'],
-    types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
-    values: [],
-    relations: [],
-  };
-}
-
-function debateClaim(overrides: Record<string, unknown> = {}) {
-  return {
-    id: 'debate-claim-1',
-    space_id: 'space-1',
-    claim_entity_id: 'claim-1',
-    claim: 'Public transit should be free',
-    description: null,
-    response_kind: 'stance',
-    viewer_response: { position: true, position_label: 'Agree' },
-    viewer_debate_ready: false,
-    readiness_disabled_reason: null,
-    readiness_changed_at: null,
-    online_choices: [],
-    active_match: null,
-    active_debate: null,
-    created_at: '2026-08-06T00:00:00.000Z',
-    updated_at: '2026-08-06T00:00:00.000Z',
-    ...overrides,
-  };
-}

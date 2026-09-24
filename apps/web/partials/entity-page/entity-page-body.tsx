@@ -10,7 +10,11 @@ import {
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { TopicPageView } from '~/core/topics/browse/topic-page-view';
+import {
+  TOPIC_PAGE_CONTENT_INSET_CLASS,
+  TOPIC_PAGE_CONTENT_MAX_WIDTH,
+  TopicPageView,
+} from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -235,10 +239,33 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   }
 
   if (customView === 'topic') {
+    const showTopicMedia = props.variant === 'sidePanel' || props.showCover !== false;
+
     return (
       <>
+        {showTopicMedia ? (
+          props.variant === 'route' && props.coverSlot ? (
+            props.coverSlot
+          ) : (
+            <EntityPageCover
+              avatarUrl={props.avatarUrl}
+              coverUrl={props.coverUrl}
+              compact={props.variant === 'sidePanel'}
+              contentMaxWidth={TOPIC_PAGE_CONTENT_MAX_WIDTH}
+              contentInsetClassName={TOPIC_PAGE_CONTENT_INSET_CLASS}
+              withAvatar
+            />
+          )
+        ) : null}
         {routeEditInitializer}
-        <TopicPageView entityId={entityId} spaceId={spaceId} />
+        <TopicPageView
+          entityId={entityId}
+          spaceId={spaceId}
+          initialTabRelations={initialTabRelations}
+          tabEntities={tabEntities}
+          isEditing={isEditing}
+          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+        />
       </>
     );
   }

@@ -409,6 +409,17 @@ export type DebateMatchmakingPresence = {
   in_debate: boolean;
   /** Server-authoritative. Requests target the candidate who has been online longest. */
   online_since: string | null;
+  /**
+   * When this person last did something only a human does — pointer, keyboard or scroll.
+   *
+   * The strict half of presence. `online` above answers "is a tab open", which never goes stale
+   * while the tab lives, so a pool ranked on it alone fills with abandoned tabs. `null` means the
+   * client has never reported, which is not the same as idle: the server ranks it between the two.
+   *
+   * Optional, mirroring the server's `#[serde(default)]`: a payload minted before this shipped,
+   * or held in a cache, simply omits it.
+   */
+  last_input_at?: string | null;
 };
 
 export type DebatePerson = DebateParticipantSummary &
@@ -826,6 +837,84 @@ export async function replaceDebateSchedule(
   return geoChatRequest<DebateScheduleResponse>('/me/debate-schedule', {
     method: 'PUT',
     body: schedule,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** One window of availability, as absolute UTC instants — the only form two zones can compare. */
+export type ScheduleOverlapSlot = {
+  start: string;
+  end: string;
+};
+
+/** One of *their* slots, flagged with whether the viewer is free for it too (geo-chat#134). */
+export type AnnotatedSlot = ScheduleOverlapSlot & {
+  viewer_free: boolean;
+};
+
+/** What `/matchmaking/schedule-overlaps` answers. */
+export type ScheduleOverlapResponse = {
+  /** The other person's user id, echoed back. */
+  with: string;
+  /**
+   * Unused. Hard-coded true whenever *they* have a schedule, so it does not mean what its name or
+   * its server-side doc say. Read `viewer_has_schedule` and `with_timezone` instead.
+   */
+  both_have_schedules: boolean;
+  /** IANA zones. `with_timezone` is empty exactly when they have no saved schedule. */
+  viewer_timezone: string;
+  with_timezone: string;
+  /** The intersection, for surfaces wanting a few suggested times rather than a grid. */
+  slots: ScheduleOverlapSlot[];
+  /**
+   * Their whole week, populated whenever they have a schedule. Optional because deployments
+   * before geo-chat#134 omit it, and an absent field is not an empty week.
+   */
+  their_slots?: AnnotatedSlot[];
+  /** Absent on the same older deployments, where `both_have_schedules` still meant the conjunction. */
+  viewer_has_schedule?: boolean;
+  /** `limit` cut `slots` short. It never caps `their_slots`. */
+  truncated: boolean;
+};
+
+/**
+ * When the viewer and one other person are both free (GEO-2938).
+ *
+ * `days` counts forward from the server's clock, so the far edge of the range is its call rather
+ * than ours — the adapter buckets by date and drops anything landing outside the drawn week.
+ */
+export async function getScheduleOverlaps(
+  withUserId: string,
+  { days, limit }: { days?: number; limit?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ with: withUserId });
+  if (days !== undefined) params.set('days', String(days));
+  if (limit !== undefined) params.set('limit', String(limit));
+
+  return geoChatRequest<ScheduleOverlapResponse>(`/matchmaking/schedule-overlaps?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Reports that a human did something. The strict half of presence.
+ *
+ * Deliberately not folded into the presence heartbeat: that fires on a timer and proves only that
+ * a tab exists, and conflating the two is what let the matchmaking pool fill with open tabs.
+ * Fire-and-forget — a dropped report costs a slightly stale ranking and nothing else, so it must
+ * never surface an error or block anything.
+ */
+export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<void>('/me/debate-interaction', {
+    method: 'POST',
     auth: true,
     getPrivyIdentityToken,
     accountKey,

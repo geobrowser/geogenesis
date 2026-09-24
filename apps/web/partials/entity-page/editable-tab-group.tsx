@@ -36,12 +36,13 @@ import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import {
   ActiveTabIndicator,
+  Badge,
   type TabGroupTab,
   tabGroupTabLinkStyles,
   useActiveTabIndicator,
 } from '~/design-system/tab-group';
 
-export type SystemTab = Pick<TabGroupTab, 'label' | 'href' | 'sidePanelKey' | 'onlyWhenNarrow'>;
+export type SystemTab = Pick<TabGroupTab, 'label' | 'href' | 'badge' | 'sidePanelKey' | 'onlyWhenNarrow'>;
 
 export type EditableTab = {
   relation: Relation;
@@ -263,9 +264,9 @@ export function EditableTabGroup({
   const sortableIdsKey = editableTabs.map(t => t.relation.id).join(',');
   const sortableIds = React.useMemo(() => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')), [sortableIdsKey]);
   const indicatorLayoutKey = [
-    ...systemTabsBefore.map(tab => `${tab.href}:${tab.label}`),
+    ...systemTabsBefore.map(tab => `${tab.href}:${tab.label}:${String(tab.badge ?? '')}`),
     ...editableTabs.map(tab => `${tab.relation.id}:${tab.name}`),
-    ...systemTabsAfter.map(tab => `${tab.href}:${tab.label}`),
+    ...systemTabsAfter.map(tab => `${tab.href}:${tab.label}:${String(tab.badge ?? '')}`),
   ].join('|');
   const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
 
@@ -292,6 +293,7 @@ export function EditableTabGroup({
                 key={tab.href}
                 href={tab.href}
                 label={tab.label}
+                badge={tab.badge}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
                 active={isEntityTabActive({
                   href: tab.href,
@@ -337,6 +339,7 @@ export function EditableTabGroup({
                 key={tab.href}
                 href={tab.href}
                 label={tab.label}
+                badge={tab.badge}
                 onlyWhenNarrow={tab.onlyWhenNarrow}
                 active={isEntityTabActive({
                   href: tab.href,
@@ -389,6 +392,7 @@ export function EditableTabGroup({
 function StaticTab({
   href,
   label,
+  badge,
   active,
   onSelect,
   onlyWhenNarrow,
@@ -396,6 +400,7 @@ function StaticTab({
 }: {
   href: string;
   label: string;
+  badge?: React.ReactNode;
   active: boolean;
   onSelect?: () => void;
   onlyWhenNarrow?: boolean;
@@ -414,6 +419,7 @@ function StaticTab({
         onClick={onSelect}
       >
         {label}
+        {badge && <Badge>{badge}</Badge>}
       </button>
     );
   }
@@ -421,6 +427,7 @@ function StaticTab({
   return wrap(
     <Link ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active })} href={href} prefetch>
       {label}
+      {badge && <Badge>{badge}</Badge>}
     </Link>
   );
 }
