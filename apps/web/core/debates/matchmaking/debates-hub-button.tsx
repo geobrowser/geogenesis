@@ -44,6 +44,8 @@ export function DebatesHubButton() {
     <button
       type="button"
       data-debates-hub-opener
+      data-geo-analytics-label="Navbar debate hub toggle"
+      data-geo-analytics-intent="toggle_debates_hub"
       // The pending count is the whole point of the button, and an aria-label would otherwise
       // override the visible number. It says "Debate" to match the label below: a control should
       // answer to the word it shows, so the two move together.

@@ -31,5 +31,18 @@ describe('HubPillButton', () => {
     expect(button).toHaveTextContent('Requesting…');
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub Request debate');
+  });
+
+  it('lets non-hub consumers override the default analytics attribution', () => {
+    render(
+      <HubPillButton analyticsIntent="debate_rematch_action" analyticsLabel="Rematch more claims">
+        Keep looking
+      </HubPillButton>
+    );
+
+    const button = screen.getByRole('button');
+    expect(button).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Rematch more claims');
   });
 });

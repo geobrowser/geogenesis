@@ -256,7 +256,9 @@ function TopicTabPanel({
   topicSpaceIds: string[] | undefined;
 }) {
   if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
-  if (activeTab === 'comments') return <CommentSection entityId={entityId} spaceId={spaceId} variant="tab" />;
+  if (activeTab === 'comments') {
+    return <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="topic" variant="tab" />;
+  }
 
   return <TopicFeed topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />;
 }

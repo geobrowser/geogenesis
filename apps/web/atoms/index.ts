@@ -84,7 +84,12 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
+export const entityCommentsPanelAtom = atom<{
+  entityId: string;
+  spaceId: string;
+  /** Logical graph type retained so comments created from the global panel are attributed correctly. */
+  targetEntityType?: string;
+} | null>(null);
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 

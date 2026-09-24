@@ -23,7 +23,11 @@ import { Spacer } from '~/design-system/spacer';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { type CustomBrowseView, customBrowseView, needsSpaceForView } from '~/partials/entity-page/custom-browse-view';
+import {
+  commentTargetEntityType,
+  customBrowseView,
+  needsSpaceForView,
+} from '~/partials/entity-page/custom-browse-view';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
@@ -97,12 +101,14 @@ function EditorFooter({
   entityId,
   spaceId,
   variant,
+  targetEntityType,
   belowBodySlot,
   hideProperties = false,
 }: {
   entityId: string;
   spaceId: string;
   variant: EntityPageBodyProps['variant'];
+  targetEntityType: string;
   belowBodySlot?: React.ReactNode;
   hideProperties?: boolean;
 }) {
@@ -125,7 +131,7 @@ function EditorFooter({
       ) : null}
       <Spacer height={40} />
       <EntityBacklinks entityId={entityId} />
-      <CommentSection entityId={entityId} spaceId={spaceId} />
+      <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType={targetEntityType} />
     </>
   );
 }
@@ -142,7 +148,7 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean): CustomBrowseView {
+function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean) {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
   /*
@@ -159,20 +165,24 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
    */
   const { space, isLoading: isLoadingSpace } = useSpace(needsSpaceForView({ entity, isEditing }) ? spaceId : undefined);
 
-  return customBrowseView({
-    entityId,
+  return {
+    customView: customBrowseView({
+      entityId,
+      entity,
+      isLoadingEntity: isLoading,
+      space,
+      isLoadingSpace,
+      isEditing,
+    }),
     entity,
-    isLoadingEntity: isLoading,
-    space,
-    isLoadingSpace,
-    isEditing,
-  });
+  };
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
   const isEditing = useUserIsEditing(spaceId);
-  const customView = useCustomBrowseView(entityId, spaceId, isEditing);
+  const { customView, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
+  const targetEntityType = commentTargetEntityType(entity);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -403,6 +413,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                       entityId={entityId}
                       spaceId={spaceId}
                       variant="sidePanel"
+                      targetEntityType={targetEntityType}
                       belowBodySlot={belowBodySlot}
                       hideProperties={hideProperties}
                     />
@@ -454,6 +465,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 entityId={entityId}
                 spaceId={spaceId}
                 variant="route"
+                targetEntityType={targetEntityType}
                 belowBodySlot={belowBodySlot}
                 hideProperties={hideProperties}
               />

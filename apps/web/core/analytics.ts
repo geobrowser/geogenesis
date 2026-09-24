@@ -1,5 +1,8 @@
 'use client';
 
+import { ID } from '~/core/id';
+import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
+
 export type AnalyticsProperties = Record<string, unknown>;
 
 type AnalyticsIdentity = string | number | AnalyticsProperties;
@@ -270,6 +273,31 @@ export function personalSpaceViewed(personalSpaceId: string, properties: Analyti
   });
 }
 
+export function graphRelationshipFollowed(entityId: string, properties: AnalyticsProperties = {}) {
+  capture('graph_relationship_followed', {
+    source: 'graph',
+    entity_id: entityId,
+    ...properties,
+  });
+}
+
+export function personProfileOpened(
+  profileSpaceId: string,
+  personEntityId?: string | null,
+  properties: AnalyticsProperties = {}
+) {
+  if (isPendingPersonalSpaceId(profileSpaceId)) return;
+
+  const resolvedPersonEntityId = personEntityId && !ID.equals(personEntityId, profileSpaceId) ? personEntityId : null;
+
+  graphRelationshipFollowed(resolvedPersonEntityId ?? profileSpaceId, {
+    source: 'person_profile',
+    graph_entity_type: resolvedPersonEntityId ? 'person' : 'personal_space',
+    profile_space_id: profileSpaceId,
+    ...properties,
+  });
+}
+
 export function reviewChangesOpened(properties: AnalyticsProperties = {}) {
   capture('review_changes_opened', {
     source: 'review_changes',
@@ -284,12 +312,41 @@ export function publishedEdit(properties: AnalyticsProperties = {}) {
   });
 }
 
+export function profileUpdated(profileEntityId: string, spaceId: string, properties: AnalyticsProperties = {}) {
+  publishedEdit({
+    source: 'profile_editor',
+    content_id: profileEntityId,
+    content_type: 'profile',
+    space_id: spaceId,
+    ...properties,
+  });
+}
+
 export function commentCreated(commentId: string, targetEntityId: string, properties: AnalyticsProperties = {}) {
   capture('comment_created', {
     source: 'commenting',
     comment_id: commentId,
     target_type: 'entity',
     target_id: targetEntityId,
+    ...properties,
+  });
+}
+
+export function commentEdited(commentId: string, targetEntityId: string, properties: AnalyticsProperties = {}) {
+  capture('content_edited', {
+    source: 'commenting',
+    content_id: commentId,
+    content_type: 'comment',
+    target_type: 'entity',
+    target_id: targetEntityId,
+    ...properties,
+  });
+}
+
+export function signupCompleted(formType: string, properties: AnalyticsProperties = {}) {
+  capture('signup_completed', {
+    source: 'signup_form',
+    form_type: formType,
     ...properties,
   });
 }
@@ -441,6 +498,17 @@ function flushPendingCalls() {
 }
 
 function invokeRuntime(call: PendingCall) {
+  try {
+    return invokeRuntimeUnsafe(call);
+  } catch (error) {
+    // Analytics is observational. A collector/runtime failure must not break the product action
+    // that emitted the event, and retrying the same broken call would also stall the pending queue.
+    console.error('Analytics runtime call failed:', error);
+    return true;
+  }
+}
+
+function invokeRuntimeUnsafe(call: PendingCall) {
   const analytics = analyticsRuntime();
 
   if (!analytics) {

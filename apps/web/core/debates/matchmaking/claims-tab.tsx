@@ -40,6 +40,7 @@ import { claimRowKey } from './claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
+import type { DebateAnalyticsSurface } from './hub-analytics';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
@@ -987,6 +988,7 @@ export function ClaimsTab({
         />
 
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -1006,7 +1008,7 @@ export function ClaimsTab({
             isLobby ? (
               trailing
             ) : filter === 'mine' || !authenticated ? null : (
-              <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
             )
           }
         />
@@ -1014,6 +1016,7 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={
@@ -1216,6 +1219,7 @@ function taggedPositionSummaries(
 }
 
 type SpaceTopicFiltersProps = {
+  analyticsSurface: DebateAnalyticsSurface;
   spaceIds: string[];
   onSpaceToggle: (spaceId: string) => void;
   onSpacesClear: () => void;
@@ -1249,6 +1253,7 @@ type SpaceTopicFiltersProps = {
  * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
 export function SpaceTopicFilters({
+  analyticsSurface,
   spaceIds,
   onSpaceToggle,
   onSpacesClear,
@@ -1311,6 +1316,7 @@ export function SpaceTopicFilters({
         // their adaptive placement.
         align="start"
         label={spaceMenuLabel}
+        analytics={{ name: 'Space', surface: analyticsSurface }}
         labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
         values={spaceIds}
@@ -1328,6 +1334,7 @@ export function SpaceTopicFilters({
         <HubMultiFilterMenu
           align="start"
           label={topicMenuLabel}
+          analytics={{ name: 'Topic', surface: analyticsSurface }}
           options={topicOptions}
           values={topicIds}
           onToggle={onTopicToggle}

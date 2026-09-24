@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
   getProfiles: vi.fn(),
+  personProfileOpened: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -40,6 +41,7 @@ vi.mock('@geogenesis/auth', () => ({
 
 vi.mock('~/core/analytics', () => ({
   downvoted: vi.fn(),
+  personProfileOpened: mocks.personProfileOpened,
   trackPrivyAuth: vi.fn(),
   upvoted: vi.fn(),
   voteCast: vi.fn(),
@@ -93,6 +95,14 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   },
 }));
 
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 beforeEach(() => {
   mocks.getCounts.mockReset();
   mocks.getCounts.mockReturnValue({ positive: 2, negative: 1 });
@@ -109,6 +119,7 @@ beforeEach(() => {
   mocks.responderAvatarProps.length = 0;
   mocks.getProfiles.mockReset();
   mocks.getProfiles.mockReturnValue([]);
+  mocks.personProfileOpened.mockReset();
 });
 
 afterEach(cleanup);
@@ -287,10 +298,15 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient) =>
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind="stance" />
+        <RespondersPopoverContent
+          entityId="claim-1"
+          spaceId="space-1"
+          objectType={0}
+          responseKind={responseKind}
+        />
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -342,5 +358,34 @@ describe('RespondersPopoverContent under a batch', () => {
 
     await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
     expect(view.container.querySelector('.overflow-y-auto')?.className).toContain('overscroll-contain');
+  });
+
+  it.each([
+    ['stance', 'claim_vote_list'],
+    ['curation', 'entity_vote_list'],
+  ] as const)('attributes %s responder navigation to the right surface', async (responseKind, interactionSurface) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, responseKind), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([
+      {
+        id: 'person-9',
+        spaceId: 'profile-9',
+        address: '0x1234567890abcdef',
+        avatarUrl: null,
+        coverUrl: null,
+        name: 'Dovile',
+        profileLink: '/space/profile-9',
+      },
+    ]);
+
+    const view = renderPopover(queryClient, responseKind);
+    const profileLink = await view.findByRole('link', { name: 'Dovile' });
+    fireEvent.click(profileLink);
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith('profile-9', 'person-9', {
+      interaction_surface: interactionSurface,
+    });
   });
 });

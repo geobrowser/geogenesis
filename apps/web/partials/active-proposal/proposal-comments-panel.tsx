@@ -112,7 +112,7 @@ export function ProposalCommentsPanel() {
             would fight the rounded card for width and draw a second border down the middle. The
             shell here is the bounties panel's, which is what this screen already uses. */}
       <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
-        <CommentSection entityId={ctx.proposalId} spaceId={ctx.spaceId} variant="panel" />
+        <CommentSection entityId={ctx.proposalId} spaceId={ctx.spaceId} targetEntityType="proposal" variant="panel" />
       </div>
     </ProposalSidePanelShell>
   );

@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import { signupCompleted } from '~/core/analytics';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
@@ -189,6 +190,14 @@ function EmailCapturePopup() {
         });
         const body = (await response.json()) as { result?: NewsletterSubscribeResult };
         if (body.result === 'subscribed') {
+          try {
+            signupCompleted('newsletter', {
+              signup_surface: 'explore_email_capture',
+              newsletter_source: 'explore',
+            });
+          } catch {
+            /* Analytics must never turn a successful subscription into a failed one. */
+          }
           setStatus('done');
           setSubscribedEmail(email.trim());
           // Recorded, not closed. Having joined is the strongest reason not to ask again next
@@ -373,7 +382,13 @@ function EmailCapturePopup() {
           // different wording in every browser, unstyleable, and gone the moment they look away.
           // `inputMode` and `autoComplete` keep the phone keyboard and the autofill that
           // `type="email"` was there for.
-          <form data-geo-analytics-label="Explore newsletter signup" onSubmit={submit} noValidate>
+          <form
+            data-geo-analytics-label="Explore newsletter signup"
+            data-geo-analytics-type="newsletter"
+            data-geo-analytics-intent="signup"
+            onSubmit={submit}
+            noValidate
+          >
             <p className={HEADING_CLASS}>Geo network launching soon!</p>
             <p className={SUBTEXT_CLASS}>Get updates on features, points, and path to mainnet.</p>
 

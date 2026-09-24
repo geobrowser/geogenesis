@@ -154,4 +154,25 @@ describe('usePrivySignIn', () => {
 
     expect(onComplete).not.toHaveBeenCalled();
   });
+
+  it('notifies the initiating surface when the modal is dismissed or fails', () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() =>
+      usePrivySignIn(undefined, { onError } as Parameters<typeof usePrivySignIn>[1] & { onError: () => void })
+    );
+
+    act(() => result.current());
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it('ignores an error from a login attempt this hook did not start', () => {
+    const onError = vi.fn();
+    renderHook(() => usePrivySignIn(undefined, { onError }));
+
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+
+    expect(onError).not.toHaveBeenCalled();
+  });
 });

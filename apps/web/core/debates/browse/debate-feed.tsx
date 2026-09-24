@@ -381,7 +381,13 @@ export function DebatesBrowseFeed({
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
-      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+      <EntityCommentsPanel
+        key={activeDebate.id}
+        entityId={activeDebate.id}
+        spaceId={spaceId}
+        targetEntityType="debate"
+        onClose={closePanel}
+      />
     ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
@@ -591,6 +597,8 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          data-geo-analytics-label="Debate feed join debate"
+          data-geo-analytics-intent="open_debates_hub"
           // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
           // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
           // that followed reopened it, which read as a flicker.

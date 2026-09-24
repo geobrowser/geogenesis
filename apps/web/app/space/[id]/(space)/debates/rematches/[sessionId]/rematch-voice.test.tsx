@@ -68,6 +68,7 @@ const mocks = vi.hoisted(() => ({
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
   capture: vi.fn(),
+  personProfileOpened: vi.fn(),
   openSidePanel: vi.fn(),
   spaceLookups: [] as Array<string | undefined>,
   /**
@@ -212,6 +213,7 @@ vi.mock('~/design-system/avatar', () => ({
 
 vi.mock('~/core/analytics', () => ({
   capture: (...args: unknown[]) => mocks.capture(...args),
+  personProfileOpened: (...args: unknown[]) => mocks.personProfileOpened(...args),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -398,6 +400,7 @@ beforeEach(() => {
   mocks.microphoneTrack = undefined;
   mocks.useKrispNoiseFilter.mockClear();
   mocks.capture.mockReset();
+  mocks.personProfileOpened.mockReset();
   mocks.openSidePanel.mockReset();
   mocks.spaceLookups = [];
   mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };

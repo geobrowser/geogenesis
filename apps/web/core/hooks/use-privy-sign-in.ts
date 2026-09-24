@@ -21,6 +21,8 @@ type UsePrivySignInOptions = {
    * URL.
    */
   analytics?: AnalyticsProperties;
+  /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
+  onError?: () => void;
 };
 
 /**
@@ -75,8 +77,10 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     // or a login started somewhere else on the page — which is the same unbidden replay the
     // arming exists to prevent, just later.
     onError: () => {
+      if (!requestedRef.current) return;
       requestedRef.current = false;
       requestedAnalyticsRef.current = undefined;
+      optionsRef.current?.onError?.();
     },
   });
 
