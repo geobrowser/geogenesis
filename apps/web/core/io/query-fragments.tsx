@@ -399,28 +399,6 @@ export const entityExistsQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
-  query EntityCommentReplyBacklinksPage(
-    $id: UUID!
-    $replyToTypeId: UUID!
-    $commentTypeId: UUID!
-    $first: Int!
-    $offset: Int!
-  ) {
-    entity(id: $id) {
-      backlinksList(
-        first: $first
-        offset: $offset
-        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
-      ) {
-        fromEntity {
-          id
-        }
-      }
-    }
-  }
-`);
-
 export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
   query EntitiesBatchForComments($filter: EntityFilter) {
     entities(filter: $filter) {

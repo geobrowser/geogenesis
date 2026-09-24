@@ -23,8 +23,6 @@ import {
   EntitiesBatchForCommentsDocument,
   type EntitiesBatchForCommentsQuery,
   EntitiesOrderBy,
-  EntityCommentReplyBacklinksPageDocument,
-  type EntityCommentReplyBacklinksPageQuery,
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
@@ -50,6 +48,7 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { commentEntitiesConnectionDocument, entityCommentCountDocument } from './comment-entities-connection-document';
 import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -588,6 +587,7 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
 }
 
 const BACKLINKS_PAGE_SIZE = 1000;
+const COMMENT_ENTITIES_PAGE_SIZE = 1000;
 
 /**
  * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
@@ -639,41 +639,61 @@ function collectBacklinkSourceIds<E>(
   });
 }
 
-function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
-  return collectBacklinkSourceIds(offset =>
-    graphql({
-      query: EntityCommentReplyBacklinksPageDocument,
-      decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-      variables: {
-        id: parentEntityId,
-        replyToTypeId: COMMENT_REPLY_TO_ID,
-        commentTypeId: COMMENT_TYPE_ID,
-        first: BACKLINKS_PAGE_SIZE,
-        offset,
-      },
-      signal,
-    })
-  );
-}
-
-/** Counts distinct Comment entities connected to the target by incoming "Reply to" relations. */
+/** Counts Comment entities connected to the target by a "Reply to" relation. */
 export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
-  return Effect.map(getCommentEntityIdsViaParentEntityReplyBacklinks(entityId, signal), ids => ids.length);
+  return graphql({
+    query: entityCommentCountDocument,
+    decoder: data => data.entitiesConnection?.totalCount ?? 0,
+    variables: {
+      targetEntityId: entityId,
+      replyToTypeId: COMMENT_REPLY_TO_ID,
+      commentTypeId: COMMENT_TYPE_ID,
+    },
+    signal,
+  });
 }
 
 /**
- * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
- * Nested replies are included when they also backlink to the parent (same index pattern).
+ * Loads Comment entities whose "Reply to" relation targets the parent entity. Nested replies are
+ * included because each reply also relates to every ancestor. The connection nodes contain the
+ * complete entity, avoiding a separate ids-then-hydrate request.
  */
-export function getCommentEntitiesViaParentEntityReplyBacklinks(
-  parentEntityId: string,
-  signal?: AbortController['signal']
-) {
+export function getCommentEntitiesViaReplyRelations(parentEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId, signal);
+    const entities: Entity[] = [];
+    const seenIds = new Set<string>();
+    let after: string | undefined;
 
-    if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForComments(ids, signal);
+    while (true) {
+      const page = yield* graphql({
+        query: commentEntitiesConnectionDocument,
+        decoder: data => ({
+          entities:
+            data.entitiesConnection?.nodes
+              .map(node => EntityDecoder.decode(node))
+              .filter((entity): entity is Entity => entity !== null) ?? [],
+          hasNextPage: data.entitiesConnection?.pageInfo.hasNextPage ?? false,
+          endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
+        }),
+        variables: {
+          targetEntityId: parentEntityId,
+          replyToTypeId: COMMENT_REPLY_TO_ID,
+          commentTypeId: COMMENT_TYPE_ID,
+          first: COMMENT_ENTITIES_PAGE_SIZE,
+          after,
+        },
+        signal,
+      });
+
+      for (const entity of page.entities) {
+        if (seenIds.has(entity.id)) continue;
+        seenIds.add(entity.id);
+        entities.push(entity);
+      }
+
+      if (!page.hasNextPage || !page.endCursor || page.endCursor === after) return entities;
+      after = page.endCursor;
+    }
   });
 }
 
