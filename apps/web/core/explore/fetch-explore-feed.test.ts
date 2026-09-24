@@ -49,7 +49,8 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { fetchCompleteExplorePopulationIndex, fetchExploreFeed } = await import('./fetch-explore-feed');
+const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
+  await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -409,5 +410,57 @@ describe('a complete contextual population', () => {
 
     expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
     expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
+  });
+});
+
+/**
+ * The signed-out reader's whole visible scope is the Featured list, so these two cases — which
+ * produce byte-identical empty pages today — are the difference between "nothing matched" and
+ * "Explore is broken".
+ */
+describe('a visible space scope with nothing in it', () => {
+  it('serves an empty page when the scope resolved and simply holds no space', async () => {
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null } as never,
+    });
+
+    expect(result).toEqual({ items: [], nextCursor: null });
+  });
+
+  it('fails instead when the scope is empty because the Featured traversal failed', async () => {
+    await expect(
+      fetchExploreFeed({
+        ...feedArgs,
+        browse: {
+          featured: [],
+          editorOf: [],
+          memberOf: [],
+          documentationImage: null,
+          personalSpaceId: null,
+          featuredError: true,
+        } as never,
+      })
+    ).rejects.toThrow(ExploreSpaceScopeUnresolvedError);
+  });
+
+  // A reader who *is* signed in still has their own spaces, which is why this bug only ever showed
+  // itself logged out — and why a failed Featured list must not take their feed down with it.
+  it('still serves the feed when Featured failed but the reader has spaces of their own', async () => {
+    windows.queue = [windowOf([entity('a', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      browse: {
+        featured: [],
+        editorOf: [{ id: SPACE, name: 'Space', image: null }],
+        memberOf: [],
+        documentationImage: null,
+        personalSpaceId: null,
+        featuredError: true,
+      } as never,
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['a']);
   });
 });
