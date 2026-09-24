@@ -153,7 +153,19 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const debateEntityId = ID.uuidToHex(input.debateId);
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
   const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
-  const debateName = `${bySlot.map(nameFor).join(' vs. ')} on ${claimText}`;
+  // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
+  // truncating surfaces — feed cards, side-panel headers, edit titles — where the first
+  // words are the ones that survive, and what a debate is about identifies it far better
+  // than who argued it. `join` rather than a two-name template: the shape is a pair today,
+  // but nothing in the publisher caps participants at two.
+  const debateName = `${claimText} | ${bySlot.map(nameFor).join(' vs. ')}`;
+  /**
+   * The Video, its keyframe, the share card and the Transcript are named after the debate they
+   * belong to, qualified by what they are. One closure so the separator is declared once: it is
+   * the same `|` the debate name is built from, and four inline templates would have to agree
+   * about that by hand.
+   */
+  const derivedName = (qualifier: string) => `${debateName} | ${qualifier}`;
 
   const values: Value[] = [];
   const relations: Relation[] = [];
@@ -238,7 +250,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
     const ogImageId = createEntityId();
-    const ogImageName = `${debateName} share card`;
+    const ogImageName = derivedName('share card');
     const ogImageRef = { id: ogImageId, name: ogImageName };
     setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
     setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
@@ -259,7 +271,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
     const videoId = createEntityId();
-    const videoName = `${debateName} video`;
+    const videoName = derivedName('video');
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
     // Both carry the same URL: `Video URL` is what the debates ontology spec names, `Web URL` is
@@ -281,7 +293,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
     if (input.keyframeUrl) {
       const keyframeId = createEntityId();
-      const keyframeName = `${debateName} keyframe`;
+      const keyframeName = derivedName('keyframe');
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
       setText(keyframeId, keyframeName, WEB_URL_PROPERTY_ID, input.keyframeUrl);
@@ -304,7 +316,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const turns = input.transcriptTurns.filter(turn => turn.text.trim().length > 0);
   if (turns.length > 0) {
     const transcriptId = createEntityId();
-    const transcriptName = `${debateName} transcript`;
+    const transcriptName = derivedName('transcript');
     const transcriptRef = { id: transcriptId, name: transcriptName };
     setText(transcriptId, transcriptName, NAME_PROPERTY_ID, transcriptName);
     relate({
