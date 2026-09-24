@@ -7,6 +7,7 @@ import * as React from 'react';
 import {
   type DebateRoomView,
   type UpcomingDebateRoom,
+  getDebate,
   getDebateRematch,
   getDebateRoom,
   listUpcomingDebateRooms,
@@ -254,16 +255,30 @@ export function useFinishedRoomIds(rooms: UpcomingDebateRoom[], enabled = true):
   return React.useMemo(() => new Set(finished ? finished.split(',') : []), [finished]);
 }
 
-/** A room session's status, on the same cache entry as `useDebateRematch`. `null` until known. */
-export function useRoomSessionStatus(sessionId: string | null) {
+/** A room's session, on the same cache entry as `useDebateRematch`. */
+export function useRoomSession(sessionId: string | null) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
-  const query = useQuery({
+  return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematch(accountKey, sessionId ?? ''),
     queryFn: ({ signal }) => getDebateRematch(sessionId ?? '', getPrivyIdentityToken, accountKey, signal),
     enabled: authenticated && Boolean(sessionId),
+    // The room page waits on this before choosing what to render; a blip must not strand it.
+    retry: 2,
   });
+}
 
-  return query.data?.status ?? null;
+/** A debate's status, on the same cache entry as `useDebate`. */
+export function useDebateStatus(debateId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.debate(debateId ?? ''),
+    queryFn: ({ signal }) => getDebate(debateId ?? '', getPrivyIdentityToken, accountKey, signal),
+    enabled: authenticated && Boolean(debateId),
+    retry: 2,
+    select: debate => debate.status,
+  });
 }

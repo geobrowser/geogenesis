@@ -258,3 +258,20 @@ describe('useFinishedRoomIds', () => {
     spy.mockRestore();
   });
 });
+
+describe('useDebateStatus', () => {
+  it("reads a debate's status, and asks nothing without an id", async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useDebateStatus } = await import('./hooks');
+    const api = await import('../api');
+    const spy = vi.spyOn(api, 'getDebate').mockResolvedValue({ status: 'complete' } as never);
+
+    const idle = render(() => useDebateStatus(null), { wrapper: withQueryClient });
+    expect(idle.result.current.isLoading).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+
+    const { result } = render(() => useDebateStatus('debate-1'), { wrapper: withQueryClient });
+    await vi.waitFor(() => expect(result.current.data).toBe('complete'));
+    spy.mockRestore();
+  });
+});
