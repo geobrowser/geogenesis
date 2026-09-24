@@ -53,7 +53,16 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (e) {
     console.error('explore feed', e);
-    /** Degraded response so the Explore UI still mounts when GraphQL is down; client shows empty feed. */
-    return NextResponse.json({ items: [], nextCursor: null });
+    /**
+     * A failure is reported as one. This used to answer 200 with an empty page so the UI still
+     * mounted, but an empty page is the same bytes as a feed with nothing in it, and the client
+     * prints "No entities match these filters yet" for it — an outage told the reader their own
+     * filters were too narrow, and the client, seeing a success, never retried.
+     *
+     * A status the client can see is the better degradation: `useInfiniteQuery` retries twice with
+     * backoff, which clears the common case here — a cold instance whose Featured-spaces traversal
+     * was shed under load — and only then shows "Could not load the feed."
+     */
+    return NextResponse.json({ items: [], nextCursor: null, error: 'feed_unavailable' }, { status: 503 });
   }
 }

@@ -4,6 +4,7 @@ import { FEATURED_TAG_ID, ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID
 import { Environment } from '~/core/environment';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
+import { AbortError } from './errors';
 import { graphql } from './graphql';
 import {
   AVATAR_PROPERTY_ID,
@@ -131,19 +132,59 @@ function resolveTopicName(name: string | null | undefined): string {
   return name;
 }
 
-async function runQuery<T>(query: string): Promise<T | null> {
-  const resultOrError = await Effect.runPromise(
-    Effect.either(graphql<T>({ query, endpoint: Environment.getConfig().api }))
-  );
+/**
+ * Attempts per traversal round before the whole traversal is failed, and the pause between them.
+ *
+ * The frontier query asks 200 topics at once for their claiming spaces, images and subtopics, which
+ * makes it the heaviest thing on the Explore path and the first to be shed when the API is under
+ * load — it comes back as a GraphQL *error*, not a transport failure, and `graphql` only retries
+ * Railway DNS blips. One re-attempt clears the transient ones. Kept to a single retry on purpose:
+ * the traversal is already five sequential round trips, and this runs inside a request.
+ */
+const ROUND_ATTEMPTS = 2;
+const ROUND_RETRY_DELAY_MS = 250;
 
-  if (Either.isLeft(resultOrError)) {
+function isAbort(error: unknown): boolean {
+  return (
+    error instanceof AbortError ||
+    (typeof error === 'object' && error !== null && (error as { _tag?: string })._tag === 'AbortError')
+  );
+}
+
+/**
+ * One round of the traversal, or a rejection.
+ *
+ * Never resolves to "no data" on failure. A round that returned `null` used to read downstream as a
+ * frontier with nothing in it, which ends the loop and returns whatever had been collected so far —
+ * so a single shed query produced a short, or empty, Featured list that every caller then treated
+ * as the complete answer. For a signed-out reader the Featured list *is* the whole visible space
+ * scope of Explore, so that empty list emptied the feed and the surface reported it as "No entities
+ * match these filters yet".
+ */
+async function runQuery<T>(query: string): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < ROUND_ATTEMPTS; attempt++) {
+    const resultOrError = await Effect.runPromise(
+      Effect.either(graphql<T>({ query, endpoint: Environment.getConfig().api }))
+    );
+
+    if (Either.isRight(resultOrError)) return resultOrError.right;
+
     const error = resultOrError.left;
-    if (error._tag === 'AbortError') throw error;
-    console.error(`${error._tag}: Unable to fetch featured spaces`);
-    return null;
+    // A cancelled caller is not a failing API: there is nothing to retry and the rejection must
+    // keep propagating so the shared traversal does not cache an abort as an answer.
+    if (isAbort(error)) throw error;
+    lastError = error;
+
+    if (attempt < ROUND_ATTEMPTS - 1) {
+      await new Promise(resolve => setTimeout(resolve, ROUND_RETRY_DELAY_MS));
+    }
   }
 
-  return resultOrError.right;
+  const tag = (lastError as { _tag?: string } | undefined)?._tag ?? 'UnknownError';
+  console.error(`${tag}: Unable to fetch featured spaces`);
+  throw new Error('Failed to load featured spaces');
 }
 
 /**
@@ -165,10 +206,21 @@ let shared: Promise<FeaturedSpace[]> | null = null;
 // pile-up this function exists to stop.
 let resolvedAt: number | null = null;
 
+/**
+ * The most recent list a traversal actually walked to completion, kept past its TTL.
+ *
+ * The Featured set is curated — an editor tags a topic Featured in the Root space — so a five
+ * minute old copy of it is right in every way that matters to a reader, and serving it beats
+ * serving nothing when a refresh fails. Nothing here is stale in the sense that matters: what
+ * changed is our ability to re-read it, not the answer.
+ */
+let lastResolved: FeaturedSpace[] | null = null;
+
 /** Exported for tests; no caller should need to reach for this. */
 export function clearFeaturedSpacesCache(): void {
   shared = null;
   resolvedAt = null;
+  lastResolved = null;
 }
 
 /**
@@ -190,7 +242,22 @@ export function clearFeaturedSpacesCache(): void {
 export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
   if (shared && (resolvedAt === null || Date.now() - resolvedAt < FEATURED_SPACES_TTL_MS)) return shared;
 
-  const started = fetchFeaturedSpaces();
+  const traversal = fetchFeaturedSpaces();
+  // A failed refresh falls back to the last complete walk rather than to nothing. Only a *complete*
+  // one is ever stored, so this can serve a list that is a few minutes old but never a partial one.
+  // An abort still propagates: the caller went away, and swallowing it here would let one
+  // cancelled request install an answer for everyone else.
+  const started = traversal.then(
+    featured => {
+      lastResolved = featured;
+      return featured;
+    },
+    error => {
+      if (isAbort(error) || lastResolved === null) throw error;
+      console.error('Featured spaces traversal failed; serving the last list walked in full', error);
+      return lastResolved;
+    }
+  );
   shared = started;
   resolvedAt = null;
   // Only start the clock once the answer exists. Timing from the *call* would let a slow
@@ -218,8 +285,6 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
  */
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
   const root = await runQuery<RootResult>(ROOT_QUERY);
-  // `runQuery` returns null only on a failed request (aborts already rethrew).
-  if (root === null) throw new Error('Failed to load featured spaces');
   const rootTopicId = root.space?.topicId;
   if (!rootTopicId) return [];
 
@@ -235,8 +300,10 @@ export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
     const batch = frontier.slice(0, BATCH_SIZE);
     const overflow = frontier.slice(BATCH_SIZE);
 
+    // Rejects rather than returning an empty round, so a shed query cannot end the walk early and
+    // pass a truncated list off as the complete one. See `runQuery`.
     const result = await runQuery<FrontierResult>(frontierQuery(batch));
-    const topics = result?.entities ?? [];
+    const topics = result.entities ?? [];
 
     const nextFrontier: string[] = [];
 

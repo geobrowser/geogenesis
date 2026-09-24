@@ -48,6 +48,20 @@ export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 // defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
 export type { ExploreFeedItem };
 
+/**
+ * Thrown when the set of spaces a feed may search could not be resolved at all, as opposed to
+ * resolving to a set that nothing in it matched. The two are the same empty page on the wire and
+ * mean opposite things to a reader, so they are kept apart here rather than downstream.
+ */
+export class ExploreSpaceScopeUnresolvedError extends Error {
+  readonly _tag = 'ExploreSpaceScopeUnresolvedError';
+
+  constructor() {
+    super('Explore feed: the visible space scope could not be resolved');
+    this.name = 'ExploreSpaceScopeUnresolvedError';
+  }
+}
+
 export type ExploreFeedResult = {
   items: ExploreFeedItem[];
   nextCursor: string | null;
@@ -665,6 +679,14 @@ export async function fetchExploreFeed(args: {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
   if (baseIds.length === 0) {
+    // A signed-out reader's entire visible scope is the Featured list, so when that traversal
+    // fails there is no space left to search and every feed comes back empty — which the surface
+    // renders as "No entities match these filters yet", a sentence about the reader's filters that
+    // is not true of anything the reader did. Fail instead, so the caller can retry and the reader
+    // is told the feed did not load.
+    if (args.browse.featuredError) {
+      throw new ExploreSpaceScopeUnresolvedError();
+    }
     return { items: [], nextCursor: null };
   }
 

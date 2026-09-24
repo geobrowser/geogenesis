@@ -246,6 +246,72 @@ describe('fetchFeaturedSpaces', () => {
     await expect(fetchFeaturedSpaces()).rejects.toThrow();
     consoleError.mockRestore();
   });
+
+  /**
+   * The failure behind the empty signed-out Explore feed. A shed frontier query used to
+   * come back as "no topics", which ends the walk — so the traversal returned a short or empty list
+   * and every caller took it for the finished one. Downstream that list *is* the reader's visible
+   * space scope, so the feed emptied and the surface blamed the reader's filters for it.
+   */
+  it('throws when a frontier round fails rather than passing off a truncated walk', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
+      return Effect.fail({ _tag: 'GraphqlRuntimeError' });
+    });
+
+    await expect(fetchFeaturedSpaces()).rejects.toThrow();
+    consoleError.mockRestore();
+  });
+
+  // The frontier query is the heaviest thing on the Explore path and the first the API sheds under
+  // load, so the common failure is a blip rather than an outage. One re-attempt clears it.
+  it('re-attempts a shed round before giving up on it', async () => {
+    let frontierCalls = 0;
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
+      frontierCalls += 1;
+      if (frontierCalls === 1) return Effect.fail({ _tag: 'GraphqlRuntimeError' });
+      return Effect.succeed({
+        entities: [
+          {
+            id: 't0',
+            name: 'Root',
+            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
+            featuredTags: featuredTags(false),
+            subtopics: [{ toEntity: { id: 't1' } }],
+          },
+          {
+            id: 't1',
+            name: 'AI',
+            spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
+            featuredTags: featuredTags(),
+            subtopics: [],
+          },
+        ],
+      });
+    });
+
+    expect((await fetchFeaturedSpaces()).map(f => f.spaceId)).toEqual([AI_SPACE]);
+    expect(frontierCalls).toBeGreaterThan(1);
+  });
+
+  // An aborted caller has nothing to retry: it went away. Re-attempting it would spend the
+  // traversal budget on a request nobody is waiting for.
+  it('does not re-attempt a cancelled round', async () => {
+    let frontierCalls = 0;
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
+      frontierCalls += 1;
+      return Effect.fail({ _tag: 'AbortError' });
+    });
+
+    await expect(fetchFeaturedSpaces()).rejects.toBeDefined();
+    expect(frontierCalls).toBe(1);
+  });
 });
 
 /**
@@ -338,5 +404,34 @@ describe('fetchFeaturedSpacesShared', () => {
 
     AI_ONLY();
     await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
+  });
+
+  /**
+   * Losing the ability to re-read a curated list is not the same as the list having emptied, and
+   * for a signed-out reader it is the difference between Explore and a blank page. A few minutes
+   * old is the right answer here; nothing is not.
+   */
+  it('serves the last list it walked in full when a refresh fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    AI_ONLY();
+    await fetchFeaturedSpacesShared();
+
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(5 * 60 * 1000);
+    vi.useRealTimers();
+    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+
+    await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
+    consoleError.mockRestore();
+  });
+
+  // Only a complete walk is ever kept, so the fallback above can serve an old list but never a
+  // partial one — and with nothing kept yet, a failure is still a failure.
+  it('rejects when a refresh fails and nothing has ever been walked in full', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
+
+    await expect(fetchFeaturedSpacesShared()).rejects.toBeDefined();
+    consoleError.mockRestore();
   });
 });
