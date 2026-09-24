@@ -120,8 +120,16 @@ export function ProfileActivitySection({
    * Settled, not merely non-empty, because the rows can arrive before their order
    * does. `usePersonDebates` hands the profile its debates a round trip before
    * `useEntityScores` says how to rank them, and the caller folds that second wait
-   * into `isLoading` precisely so nobody is shown a row that is about to reshuffle
-   * under them. Waiting for it here is what honours that.
+   * into `isLoading` precisely so a row about to reshuffle is not put up as though
+   * it were final. Preferring a settled kind here honours that.
+   *
+   * A preference, not a guarantee. Where nothing available has settled — one kind,
+   * rows in, ranks still out — the fallback puts it up unsettled, because the
+   * alternative is holding the card blank behind the slower request, which is the
+   * one thing the skeleton gate below is written not to do. That case paints once
+   * and reshuffles, exactly as it did before this change. Closing it means moving
+   * when the card first paints, which is the gate's decision to make and not this
+   * line's.
    */
   const lead = available.find(kind => !kind.isLoading) ?? available[0];
 

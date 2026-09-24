@@ -438,7 +438,19 @@ function ClaimTabPanel({
 
   return (
     <>
-      <ProfileActivitySection kinds={kinds} />
+      {/*
+       * Keyed, because the route does not remount this page between claims.
+       *
+       * `default-entity-page` renders `EntityPageBody` unkeyed, so following a related claim reuses
+       * this component — and the card's selection would come with it, landing a claim that has
+       * debates on the Claims left over from one that had none. That is GEO-3021 again, reached by
+       * walking rather than by loading. The other two surfaces already escape it this way from the
+       * outside: `PersonProfileView` is keyed on the entity, `EntitySidePanelBody` on the entity and
+       * space. Keyed here rather than by giving the card an `entityId` prop, because the card takes
+       * a list of kinds and knows nothing about whose they are — which is what lets a space and a
+       * person share it.
+       */}
+      <ProfileActivitySection key={entityId} kinds={kinds} />
       {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}
       <ClaimCommentPositionProvider
         entityId={entityId}
