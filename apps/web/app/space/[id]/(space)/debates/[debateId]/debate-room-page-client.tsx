@@ -361,12 +361,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
   const rematchConsentInFlightRef = React.useRef<Promise<boolean> | null>(null);
   const rematchConsentPublishedRef = React.useRef(false);
-  /**
-   * The viewer pressed Let's go, as opposed to the boundary consent this page gives on their
-   * behalf. Only the deliberate one is a request to leave the thank-you screen early; see the
-   * effect that acts on it below.
-   */
-  const explicitRematchConsentRef = React.useRef(false);
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
@@ -683,6 +677,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       (debate.status === 'cancelled' && debate.cancellation_reason !== 'connection_timeout'))
   );
   const shouldReturnFromTerminalDebate = shouldExitTerminalDebate && roomState === 'idle';
+  /** Where a session both debaters have accepted sends them; null while the decision is open. */
+  const liveRematchDestination = rematchDestination(rematchQuery.data);
+  /**
+   * Both debaters pressed Let's go, so the thank-you period has nothing left to ask (GEO-3025).
+   *
+   * Read off the clock rather than off this tab's own click, because the decision belongs to both
+   * sides and only one of them is visible from here. A destination exists only once the server has
+   * both consents, and the consent this page gives on the viewer's behalf is never given earlier
+   * than `rematchAutoConsentLeadSeconds` — so a session that goes live with more than that left is
+   * necessarily two people who reached for the button.
+   *
+   * Inside the lead window the room still sits out the rest of the countdown. Either consent there
+   * may be the automatic one, `consented_at` does not say which, and leaving on it would both cut
+   * the last seconds off every debate and walk out on a debater who never asked to go anywhere.
+   */
+  const bothPressedDebateAgain =
+    countdown.effectiveStatus === 'thanking' &&
+    countdown.remainingSeconds > rematchAutoConsentLeadSeconds &&
+    liveRematchDestination !== null;
+
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
   // runs with a live connection, and an idle room has nothing left to save. Mobile reaches this
@@ -692,7 +706,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate?.status === 'complete' &&
     debate.rematch_session_id &&
     roomState === 'idle'
-      ? rematchDestination(rematchQuery.data)
+      ? liveRematchDestination
       : null;
   const hasRecordingPersistenceError = Boolean(
     debate &&
@@ -1946,7 +1960,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const retryLiveDebateFinalization = React.useCallback(() => {
-    if (debate?.status === 'thanking') {
+    // A retry inside the thank-you period is only a save, because the countdown still owns the
+    // exit. Once both debaters have accepted it owns the exit too: the early finalize is what
+    // failed, and taking the save-only branch here would consume nothing and leave them stranded.
+    if (debate?.status === 'thanking' && !bothPressedDebateAgain) {
       setRoomError(null);
       setRoomState('saving');
       recordingPersistenceStartedRef.current = debate.id;
@@ -1963,8 +1980,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     finalizedDebateRef.current = null;
-    void finishLiveDebate();
-  }, [debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
+    void finishLiveDebate({ allowDuringThankYou: bothPressedDebateAgain });
+  }, [bothPressedDebateAgain, debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
 
   const requestRematch = React.useCallback(async () => {
     if (rematchConsentRequested) return;
@@ -1991,7 +2008,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // A failed Leave can leave the thank-you screen interactive. A later explicit Let's go is a
     // new choice and may replace that opt-out; automatic consent never clears it.
     rematchLeaveRequestedRef.current = false;
-    explicitRematchConsentRef.current = true;
     void requestRematch();
   }, [requestRematch]);
 
@@ -2023,22 +2039,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     requestRematch,
   ]);
 
-  /**
-   * A destination exists only once the server has both consents, so by the time this fires the
-   * question the thank-you period asks has already been answered.
-   *
-   * Sitting out the rest of the countdown is still right for the automatic consent both sides give
-   * at `rematchAutoConsentLeadSeconds`: nobody asked to go anywhere, and the room is meant to stay
-   * up until the clock runs out. A viewer who pressed Let's go did ask, and when the other side
-   * presses it too there is nothing left for either of them to wait on — so leave on the second
-   * consent rather than on the clock (GEO-3025).
-   */
+  // Leave on the second Let's go rather than on the clock; see `bothPressedDebateAgain`.
   React.useEffect(() => {
     if (countdown.effectiveStatus !== 'thanking') return;
-    if (countdown.remainingSeconds > 0 && !explicitRematchConsentRef.current) return;
-    if (!rematchDestination(rematchQuery.data)) return;
+    if (countdown.remainingSeconds > 0 && !bothPressedDebateAgain) return;
+    if (!liveRematchDestination) return;
     void finishLiveDebate({ allowDuringThankYou: true });
-  }, [countdown.effectiveStatus, countdown.remainingSeconds, finishLiveDebate, rematchQuery.data]);
+  }, [
+    bothPressedDebateAgain,
+    countdown.effectiveStatus,
+    countdown.remainingSeconds,
+    finishLiveDebate,
+    liveRematchDestination,
+  ]);
 
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
@@ -2275,10 +2288,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   React.useEffect(() => {
     if (!idleRematchDestination) return;
     // Same rule as the connected room above: hold the thank-you screen for its full countdown
-    // unless this viewer deliberately asked for another debate.
-    if (locallyThanking && !explicitRematchConsentRef.current) return;
+    // unless both debaters have already pressed Let's go.
+    if (locallyThanking && !bothPressedDebateAgain) return;
     router.replace(idleRematchDestination);
-  }, [idleRematchDestination, locallyThanking, router]);
+  }, [bothPressedDebateAgain, idleRematchDestination, locallyThanking, router]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
