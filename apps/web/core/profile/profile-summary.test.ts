@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EducationCard, EmploymentCard } from './normalize-history';
-import { collectSkills, currentRoles } from './profile-summary';
+import { collectSkills, currentAffiliation, currentRoles } from './profile-summary';
 
 const NOTHING = { relations: [], values: [] };
 
@@ -146,6 +146,43 @@ describe('currentRoles', () => {
 
   it('says nothing for an account with no current anything', () => {
     expect(currentRoles([], [])).toEqual([]);
+  });
+});
+
+describe('currentAffiliation', () => {
+  it('uses the first current affiliation in profile order', () => {
+    expect(
+      currentAffiliation(
+        [
+          employmentCard('Geo', [{ name: 'Head of Product' }]),
+          employmentCard('EE Solutions', [{ name: 'Product manager' }]),
+        ],
+        [educationCard('Stanford', { name: 'PhD student', fields: ['Economics'], status: 'studying' })]
+      )
+    ).toBe('Head of Product at Geo');
+  });
+
+  it('falls back to a current degree and includes its field of study', () => {
+    expect(
+      currentAffiliation(
+        [employmentCard('Geo', [{ name: 'Former role', status: 'former' }])],
+        [educationCard('Stanford', { name: 'PhD student', fields: ['Economics'], status: 'studying' })]
+      )
+    ).toBe('PhD student, Economics at Stanford');
+  });
+
+  it('shows either half by itself without a dangling at', () => {
+    const roleOnly = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    roleOnly.organization.name = null;
+    expect(currentAffiliation([roleOnly], [])).toBe('Head of Product');
+
+    const organizationOnly = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    organizationOnly.entries[0]!.subject.name = null;
+    expect(currentAffiliation([organizationOnly], [])).toBe('Geo');
+  });
+
+  it('shows nothing when there is no current affiliation', () => {
+    expect(currentAffiliation([employmentCard('Geo', [{ name: 'Engineer', status: 'former' }])], [])).toBeNull();
   });
 });
 

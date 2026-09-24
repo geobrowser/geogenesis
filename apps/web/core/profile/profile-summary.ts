@@ -23,6 +23,46 @@ function isCurrent(entry: { startDate: string | null; endDate: string | null; st
   return entry.startDate !== null || entry.status === 'current' || entry.status === 'studying';
 }
 
+const nonEmptyName = (name: string | null | undefined) => name?.trim() || null;
+
+/** Join whichever halves of an affiliation are present, without leaving a dangling "at". */
+function affiliationLine(subject: string | null, organization: string | null): string | null {
+  if (subject && organization) return `${subject} at ${organization}`;
+  return subject ?? organization;
+}
+
+/**
+ * The first current affiliation in the same order the profile presents its headline.
+ *
+ * Experience comes before education on the profile, and cards and rows are already newest first.
+ * Rows with no printable title or organisation are skipped: an empty graph record is not an
+ * affiliation, and must not hide the next complete one.
+ */
+export function currentAffiliation(employment: EmploymentCard[], education: EducationCard[]): string | null {
+  for (const card of employment) {
+    for (const entry of card.entries) {
+      if (!isCurrent(entry)) continue;
+
+      const line = affiliationLine(nonEmptyName(entry.subject.name), nonEmptyName(card.organization.name));
+      if (line) return line;
+    }
+  }
+
+  for (const card of education) {
+    for (const entry of card.entries) {
+      if (!isCurrent(entry)) continue;
+
+      const subject = [nonEmptyName(entry.subject.name), ...entry.fields.map(field => nonEmptyName(field.name))]
+        .filter((part): part is string => part !== null)
+        .join(', ');
+      const line = affiliationLine(subject || null, nonEmptyName(card.organization.name));
+      if (line) return line;
+    }
+  }
+
+  return null;
+}
+
 /** One thing a person is doing now, for the headline under their name. */
 export type CurrentRole = {
   /** Distinguishes a job from a degree; they read differently and link differently. */

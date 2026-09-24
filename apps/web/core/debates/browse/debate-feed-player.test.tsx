@@ -9,8 +9,13 @@ import { DebateFeedPlayer } from './debate-feed-player';
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
+  affiliations: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+}));
+
+vi.mock('~/core/debates/participant-affiliations', () => ({
+  useParticipantAffiliations: () => mocks.affiliations,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -150,6 +155,7 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
+  mocks.affiliations = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -205,6 +211,27 @@ describe('player layout', () => {
 
     expect(queryByText('For')).toBeNull();
     expect(queryByText('Against')).not.toBeNull();
+  });
+
+  it('shows each participant affiliation below their name and exposes the full line on hover', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.affiliations = new Map([
+      ['space-1', 'Head of Product at Geo'],
+      ['space-2', 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(getByText('Head of Product at Geo').className).toContain('truncate');
+    expect(getByTitle('PhD student, Economics at Stanford')).not.toBeNull();
+  });
+
+  it('leaves no affiliation row when a participant has none', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelector('[title*=" at "]')).toBeNull();
   });
 });
 
