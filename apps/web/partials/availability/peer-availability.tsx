@@ -254,7 +254,9 @@ function SendRequest({
   clock: () => number;
   startsAt: string | null;
 }) {
-  const [passed, setPassed] = React.useState(false);
+  // Keyed by the start it was raised for, so picking another time clears it.
+  const [passedFor, setPassedFor] = React.useState<string | null>(null);
+  const passed = passedFor !== null && passedFor === startsAt;
 
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -266,10 +268,10 @@ function SendRequest({
           // Checked at the click rather than trusted from render: an open modal does not re-render
           // as a picked time goes by, and geo-chat refuses a past start.
           if (new Date(startsAt).getTime() <= clock()) {
-            setPassed(true);
+            setPassedFor(startsAt);
             return;
           }
-          setPassed(false);
+          setPassedFor(null);
           booking.onRequest(startsAt);
         }}
         className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"

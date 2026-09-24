@@ -455,6 +455,27 @@ describe('times that have already gone', () => {
     }
   });
 
+  it('drops that notice once another time is picked', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    try {
+      const user = userEvent.setup();
+      render(
+        <PeerAvailabilityView schedule={schedule({ slots: [slot(16), slot(18)] })} peerName="Ada" booking={booking()} />
+      );
+      await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+      vi.setSystemTime(new Date('2026-09-21T16:05:00Z'));
+      await user.click(screen.getByRole('button', { name: 'Send request' }));
+      expect(screen.getByText(/already passed/)).toBeInTheDocument();
+
+      await user.click(within(day('2026-09-21')).getByRole('button', { name: /6pm/ }));
+
+      expect(screen.queryByText(/already passed/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('will not send a past time typed into the free-time field', async () => {
     const book = booking();
     const { user } = setupBooking(book, { peerHasSchedule: false, slots: [] });
