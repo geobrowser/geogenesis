@@ -57,11 +57,7 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
-import {
-  type LocalAudioGateInput,
-  MIC_OVERRUN_AFTER_TURN_MS,
-  shouldEnableLocalAudio,
-} from '~/core/debates/local-audio-gate';
+import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -86,6 +82,7 @@ import {
   useSetPublishOptOutRequest,
   useSetThankingDebate,
 } from '~/core/debates/thanking-debate-store';
+import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
@@ -629,10 +626,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // rescue and the mic closes at once as before.
     if (pendingTurnYieldRef.current) return;
     setLocalTurnEndedAt(Date.now());
-    const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_AFTER_TURN_MS);
+    const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_MAX_MS);
     return () => window.clearTimeout(timer);
   }, [countdown.activeSlot, countdown.effectiveStatus, localSlot]);
 
+  // Reads the microphone's own signal, so it still answers after the published track is gated --
+  // which is the entire question the overrun has to settle.
+  const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
   const localAudioGate: LocalAudioGateInput = {
     effectiveStatus: debate ? countdown.effectiveStatus : null,
@@ -640,6 +640,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted: audioMuted || pendingTurnYield !== null,
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
+    stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
