@@ -493,6 +493,42 @@ describe('indexVoteRowsByObject', () => {
     expect(CLAIM in voteKindByObjectId).toBe(false);
   });
 
+  /**
+   * The ids have to drop the retired row too, not just the lookups.
+   *
+   * `useUserVotedEntityIds` binds an id to the first page it appears on and reads its kind from the
+   * lookups merged across every page. An id reported here without a kind is claimed by this page,
+   * skipped as a duplicate on the page that *can* describe it, and hydrated where nothing can
+   * classify it — and `useVoteTabEntities` banks a page against its ids, which do not change when
+   * the kind later arrives, so the claim stays missing from the tab.
+   */
+  it('reports no id it cannot describe', () => {
+    const OTHER = 'a1b2c3d4e5f6478899aabbccddeeff00';
+
+    const { objectIds, voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: OTHER, voteKind: 1, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(objectIds.every(id => id in voteKindByObjectId)).toBe(true);
+    expect(objectIds).toEqual([OTHER]);
+  });
+
+  /**
+   * The straddle itself: the pair split across a page boundary, which is the only arrangement the
+   * skip in the lookups did not already cover. The retired row ends one page and the live stance
+   * begins the next, so the live page has to be the one that owns the id.
+   */
+  it('gives the id to the page holding the live stance, not the retired row', () => {
+    const retiredPage = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+    ]);
+    const stancePage = indexVoteRowsByObject([{ objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' }]);
+
+    expect(retiredPage.objectIds).toEqual([]);
+    expect(stancePage.objectIds).toEqual([CLAIM]);
+  });
+
   it('leaves an entity with one row alone', () => {
     const { voteKindByObjectId } = indexVoteRowsByObject([
       { objectId: CLAIM, voteKind: 0, votedAt: '2026-09-01T00:00:00.000Z' },

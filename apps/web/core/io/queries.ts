@@ -1556,7 +1556,7 @@ export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
 
 /**
- * The current vote row per entity, as two lookups.
+ * The rows a page can describe: its entity ids, and the current vote row of each.
  *
  * **The first row wins, not the last.** One entity can carry more than one row: a claim answered
  * Verify before the vocabularies merged and Agree after it holds a vote of each kind, and both come
@@ -1574,13 +1574,24 @@ type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string }
  * Agree, have it flagged factual, answer it again Verify. Nothing resolves to kind 2 any more, so
  * such a row can never match and can only shadow the live stance underneath it.
  *
- * Both maps are built here together so a single entity's kind and timestamp always describe the
+ * **The ids come from the same pass**, so the page never reports one it cannot describe. Skipping a
+ * retired row in the lookups alone was not enough: `useUserVotedEntityIds` binds an id to the first
+ * page it appears on and reads its kind from the merged lookups, so a claim whose retired row ended
+ * one page and whose live stance began the next was claimed by the earlier page — which had no kind
+ * for it — and skipped as a duplicate by the later one, which did. `useVoteTabEntities` banks a page
+ * against its ids, and those did not change when the kind arrived, so the claim was never
+ * re-hydrated and stayed missing from the tab for the rest of the session. `decodeVoteOrder` keeps
+ * the same shape for the same reason: its `entityIds` are the ids a response survived for.
+ *
+ * All three are built here together so a single entity's kind and timestamp always describe the
  * same row; read from different rows they can disagree, and the timestamp is the list's sort key.
  */
 export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
+  objectIds: string[];
   voteKindByObjectId: Record<string, number>;
   votedAtByObjectId: Record<string, string>;
 } {
+  const objectIds: string[] = [];
   const voteKindByObjectId: Record<string, number> = {};
   const votedAtByObjectId: Record<string, string> = {};
 
@@ -1590,9 +1601,10 @@ export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
     if (id in voteKindByObjectId) continue;
     voteKindByObjectId[id] = node.voteKind;
     votedAtByObjectId[id] = node.votedAt;
+    objectIds.push(node.objectId);
   }
 
-  return { voteKindByObjectId, votedAtByObjectId };
+  return { objectIds, voteKindByObjectId, votedAtByObjectId };
 }
 
 export type UserEntityVoteObjectIdsPage = {
@@ -1626,8 +1638,7 @@ export function getUserEntityVoteObjectIdsPage(
     });
 
     const nodes = rows.filter(node => Boolean(node.objectId));
-    const objectIds = nodes.map(node => node.objectId);
-    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(nodes);
+    const { objectIds, voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(nodes);
 
     return {
       objectIds,
