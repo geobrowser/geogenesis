@@ -24,7 +24,7 @@ export function ProfileDebateVisibilityButton({
       disabled={pending}
       aria-label={pending ? `${label} (saving)` : label}
       title={label}
-      className="border-none bg-transparent text-grey-04 shadow-none hover:bg-bg"
+      className="ml-auto border-none bg-transparent text-grey-04 shadow-none hover:bg-bg"
       onClick={event => {
         event.preventDefault();
         event.stopPropagation();

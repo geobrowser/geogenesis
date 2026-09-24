@@ -2,10 +2,11 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
-import { HIDDEN_FROM_PROFILE_PROPERTY, type HiddenProfileRelation } from '~/core/profile/profile-debate-visibility';
+import type { HiddenProfileRelation } from '~/core/profile/profile-debate-visibility';
 import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
+import { hiddenProfileRelationRowsConnection } from './hidden-profile-relations-query';
 
 /** One debate a person argued, and which side they took. */
 export type PersonDebate = {
@@ -62,16 +63,7 @@ function personDebatesQuery(spaceId: string, first: number) {
   return `query {
     supported: ${side(DEBATE_SUPPORTED_BY_PROPERTY)}
     opposed: ${side(DEBATE_OPPOSED_BY_PROPERTY)}
-    hidden: relationsConnection(
-      filter: {
-        typeId: { is: "${HIDDEN_FROM_PROFILE_PROPERTY}" }
-        fromEntityId: { is: ${sp} }
-        spaceId: { is: ${sp} }
-      }
-      first: 1000
-    ) {
-      nodes { id spaceId toEntityId }
-    }
+    hidden: ${hiddenProfileRelationRowsConnection(spaceId)}
   }`;
 }
 

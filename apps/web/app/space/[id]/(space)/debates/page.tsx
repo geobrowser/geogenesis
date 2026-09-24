@@ -2,7 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { requestsHiddenProfileDebates } from '~/core/profile/profile-debate-visibility';
+import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 
 import { PersonDebatesTab } from '~/partials/profile/person-debates-tab';
@@ -38,7 +38,10 @@ export default async function DebatesPage(props: Props) {
     // half back above the header.
     return (
       <div className="pb-16">
-        <PersonDebatesTab spaceId={params.id} showHiddenInitially={requestsHiddenProfileDebates(searchParams.hidden)} />
+        <PersonDebatesTab
+          spaceId={params.id}
+          showHiddenInitially={firstSearchParamValue(searchParams.hidden) === 'true'}
+        />
       </div>
     );
   }

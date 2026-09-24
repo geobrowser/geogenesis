@@ -5,7 +5,6 @@ import {
   buildHideDebateRelation,
   buildUnhideDebateRelations,
   hiddenProfileDebatesPath,
-  requestsHiddenProfileDebates,
   visibleDebateCount,
 } from './profile-debate-visibility';
 
@@ -59,8 +58,5 @@ describe('profile debate visibility', () => {
 
   it('links directly to the hidden list on the profile debates tab', () => {
     expect(hiddenProfileDebatesPath(PERSONAL_SPACE)).toBe(`/space/${PERSONAL_SPACE}/debates?hidden=true`);
-    expect(requestsHiddenProfileDebates('true')).toBe(true);
-    expect(requestsHiddenProfileDebates(['false', 'true'])).toBe(true);
-    expect(requestsHiddenProfileDebates(undefined)).toBe(false);
   });
 });

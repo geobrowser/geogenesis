@@ -6,8 +6,10 @@ import * as React from 'react';
 
 import { type PersonDebatesQueryData, personDebatesRowsQueryKey } from '~/core/debates/use-person-debates';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
+import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
+import { profileFactsQueryPrefix } from '~/core/io/subgraph/fetch-profile-facts';
 import { ProfileDebateHiddenToast } from '~/core/profile/profile-debate-hidden-toast';
 import {
   type HiddenProfileRelation,
@@ -16,15 +18,6 @@ import {
 } from '~/core/profile/profile-debate-visibility';
 import type { ProfileFacts } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
-
-function publishOnce(
-  makeProposal: ReturnType<typeof usePublish>['makeProposal'],
-  args: Omit<Parameters<typeof makeProposal>[0], 'onSuccess' | 'onError'>
-): Promise<boolean> {
-  return new Promise(resolve => {
-    void makeProposal({ ...args, onSuccess: () => resolve(true), onError: () => resolve(false) });
-  });
-}
 
 /** Direct personal-space writes backing the profile card's hide/restore control. */
 export function useProfileDebateVisibility(personalSpaceId: string) {
@@ -88,7 +81,7 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
           else next.delete(debateId);
           return { ...current, hiddenRelationsByDebateId: next };
         });
-        queryClient.setQueriesData<ProfileFacts>({ queryKey: ['profile-facts', personalSpaceId] }, current =>
+        queryClient.setQueriesData<ProfileFacts>({ queryKey: profileFactsQueryPrefix(personalSpaceId) }, current =>
           current ? { ...current, debates: Math.max(0, current.debates + (shouldHide ? -1 : 1)) } : current
         );
         if (shouldHide) {

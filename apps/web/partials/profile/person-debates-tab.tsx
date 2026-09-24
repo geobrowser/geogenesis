@@ -81,19 +81,29 @@ export function PersonDebatesTab({
   const [sort, setSort] = React.useState<DebateSort>(DEFAULT_DEBATE_SORT);
   const spaces = useRecordSelection();
 
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
   const { rows, hiddenRows, hiddenRelationsByDebateId, isLoading, isError } = usePersonDebates(spaceId, true);
   const visibility = useProfileDebateVisibility(spaceId);
   const [showHidden, setShowHidden] = React.useState(showHiddenInitially);
+  const hasShownHiddenRows = React.useRef(hiddenRows.length > 0);
 
   React.useEffect(() => {
-    // Preserve a deep link while its rows are still loading. Once the request
-    // settles, fall back to the public list if there is nothing hidden.
-    if (!showHiddenInitially && !isLoading && hiddenRows.length === 0) setShowHidden(false);
+    if (hiddenRows.length > 0) {
+      hasShownHiddenRows.current = true;
+      return;
+    }
+
+    // Preserve a deep link while the index catches up to a newly hidden row.
+    // Once this view has actually shown rows, restoring the last one returns
+    // the owner to the public list instead of stranding them on an empty view.
+    if (!isLoading && (!showHiddenInitially || hasShownHiddenRows.current)) setShowHidden(false);
   }, [hiddenRows.length, isLoading, showHiddenInitially]);
 
-  const sourceRows = showHidden ? hiddenRows : rows;
+  // Hidden relations are graph-readable, but the profile UI is an owner tool.
+  // A visitor appending `?hidden=true` must still get the public debate list.
+  const showingHidden = isOwner && showHidden;
+  const sourceRows = showingHidden ? hiddenRows : rows;
 
   const facets = React.useMemo(() => spaceFacetsFromRows(sourceRows), [sourceRows]);
 
@@ -175,7 +185,7 @@ export function PersonDebatesTab({
             isOwner ? (
               <FilterSwitch
                 label={hiddenRows.length > 0 ? `Show hidden (${hiddenRows.length})` : 'Show hidden'}
-                checked={showHidden}
+                checked={showingHidden}
                 onChange={next => {
                   spaces.clear();
                   setShowHidden(next);
@@ -197,14 +207,16 @@ export function PersonDebatesTab({
          * made it worth the extra beat. The lookup is one request for at most
          * eleven ids and only runs once the rows it needs have arrived.
          */
-        isLoading={isLoading || (isRanked(effectiveSort) && isLoadingRanks)}
+        isLoading={
+          isLoading || (showHiddenInitially && isLoadingPersonalSpace) || (isRanked(effectiveSort) && isLoadingRanks)
+        }
         isError={isError}
         loadingLabel="Loading debates…"
         // Said here rather than by the browse feed, which offers "Start one from
         // the Claims tab" — right for a space with no debates in it, wrong for a
         // person who has never been in one.
         emptyLabel={
-          isFiltered ? 'No debates match these filters.' : showHidden ? 'No hidden debates.' : 'No debates yet.'
+          isFiltered ? 'No debates match these filters.' : showingHidden ? 'No hidden debates.' : 'No debates yet.'
         }
         errorLabel="Couldn’t load debates."
         noun="debates"
@@ -215,9 +227,9 @@ export function PersonDebatesTab({
                 const hidden = hiddenRelationsByDebateId.get(id) ?? [];
                 return (
                   <ProfileDebateVisibilityButton
-                    hidden={showHidden}
+                    hidden={showingHidden}
                     pending={visibility.pendingIds.has(id)}
-                    onClick={() => void visibility.setHidden(item, hidden, !showHidden)}
+                    onClick={() => void visibility.setHidden(item, hidden, !showingHidden)}
                   />
                 );
               }

@@ -2,10 +2,11 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
-import { HIDDEN_FROM_PROFILE_PROPERTY, visibleDebateCount } from '~/core/profile/profile-debate-visibility';
+import { visibleDebateCount } from '~/core/profile/profile-debate-visibility';
 import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
 
 import { graphql } from './graphql';
+import { hiddenProfileRelationTargetsConnection } from './hidden-profile-relations-query';
 
 /** A space, named the way `SpaceDto` names one: topic first, then page. */
 type NamedSpace = {
@@ -111,14 +112,7 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
-    hidden: relationsConnection(
-      filter: {
-        typeId: { is: "${HIDDEN_FROM_PROFILE_PROPERTY}" }
-        fromEntityId: { is: ${sp} }
-        spaceId: { is: ${sp} }
-      }
-      first: 1000
-    ) { nodes { toEntityId } }
+    hidden: ${hiddenProfileRelationTargetsConnection(spaceId)}
     verifiedBy: subspacesConnection(
       filter: { childSpaceId: { is: ${sp} }, type: { is: VERIFIED } }, first: 60
     ) {
@@ -129,7 +123,11 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
 }
 
 export function profileFactsQueryKey(spaceId: string, personEntityId: string | null) {
-  return ['profile-facts', spaceId, personEntityId] as const;
+  return [...profileFactsQueryPrefix(spaceId), personEntityId] as const;
+}
+
+export function profileFactsQueryPrefix(spaceId: string) {
+  return ['profile-facts', spaceId] as const;
 }
 
 export async function fetchProfileFacts(spaceId: string, personEntityId: string | null): Promise<ProfileFacts> {
