@@ -69,8 +69,16 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   openSidePanel: vi.fn(),
   spaceLookups: [] as Array<string | undefined>,
-  /** What `useSpace` hands back for the opponent's personal space. Null before it resolves. */
-  opponentSpace: { entity: { id: 'them-home' } } as { entity: { id: string } } | null,
+  /**
+   * What `useSpace` hands back for the opponent's personal space. Null before it resolves.
+   *
+   * `topicId` matters: `getSpaceSubtopicRootEntityId` prefers a topic that is not the page entity,
+   * and falls back to the page for the older personal spaces that never declared one.
+   */
+  opponentSpace: { topicId: null, entity: { id: 'them-home' } } as {
+    topicId: string | null;
+    entity: { id: string };
+  } | null,
 }));
 
 vi.mock('@livekit/components-react', () => ({
@@ -388,7 +396,7 @@ beforeEach(() => {
   mocks.capture.mockReset();
   mocks.openSidePanel.mockReset();
   mocks.spaceLookups = [];
-  mocks.opponentSpace = { entity: { id: 'them-home' } };
+  mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };
   setVisibility('visible');
 });
 
@@ -1442,23 +1450,31 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Salina’s personal space' }));
-    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-home', 'them-space', false);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-home', 'them-space', false, { forceRequestedSpace: true });
 
     mocks.openSidePanel.mockClear();
     fireEvent.click(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
     expect(mocks.openSidePanel).not.toHaveBeenCalled();
   });
 
-  // The space lookup is a request like any other, and `useOpenDebaterProfile` falls back to the
-  // space id while it is out rather than leaving the card inert. A hand-rolled copy of that rule
-  // dropped the fallback, which made the card do nothing for as long as the lookup took.
-  it('opens the opponent card before their space entity has resolved', async () => {
+  // The space lookup is a request like any other, and a click can land before it does. The shared
+  // hook remembers that click and finishes it once the entity arrives — a hand-rolled copy of the
+  // rule instead left the card doing nothing at all for as long as the lookup took.
+  //
+  // What it must not do is open the space id: that id is the personal space's system entity, an
+  // ugly technical record rather than the person (#2549).
+  it('finishes an opponent card click that lands before their space resolves', async () => {
     mocks.opponentSpace = null;
-    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
     await flushOwnership();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Salina’s personal space' }));
-    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-space', 'them-space', false);
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+
+    mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith('them-home', 'them-space', false, { forceRequestedSpace: true });
   });
 
   // The prompt the corner dock never had: nothing on that page said you were in a live room with

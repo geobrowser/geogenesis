@@ -412,9 +412,9 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction }: Rema
   // fixed layer over the app, and leaving it would drop the pair out of the session they are in.
   //
   // The shared hook, not a local copy of its rule. A personal space's own id resolves to an ugly
-  // technical record rather than to the person, so the space's page entity is what has to open —
-  // and it falls back to the space id while that lookup is still out, which the local copy got
-  // wrong by leaving the card inert until it landed.
+  // technical record rather than to the person, so it is the space's topic entity that opens — and
+  // a click that lands before that lookup does is remembered and finished afterwards, which the
+  // local copy got wrong by leaving the card inert until it landed.
   const openOpponentProfile = useOpenDebaterProfile(opponent);
 
   // Once the pair lock a claim the header stops being only about voice: it is who is arguing what,
