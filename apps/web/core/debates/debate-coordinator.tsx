@@ -4,7 +4,8 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebugDebatesPageEnabled, useFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { validateSpaceId } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
@@ -12,7 +13,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
-import { type DebateSharePrompt } from './api';
+import { type DebateSharePrompt, GeoChatRequestError } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
@@ -33,6 +34,10 @@ import {
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
+import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { isDebateRoomPath } from './rooms/room-routes';
+import { ScheduledRequestsWatcher } from './rooms/scheduled-requests-watcher';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -163,7 +168,10 @@ export function DebateCoordinator() {
   //
   // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
   // do is more current than activity is.
-  const atRematchPage = pathname.includes('/debates/rematches/');
+  //
+  // A room (GEO-2941) is the same surface under a different route, and open for as long as the pair
+  // are in it, so nothing app-wide may sit over it either.
+  const atDebateFlowPage = pathname.includes('/debates/rematches/') || isDebateRoomPath(pathname);
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -217,6 +225,63 @@ export function DebateCoordinator() {
   );
   useDebateRequestAlert(pendingIncomingIds);
 
+  // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
+  // cannot offer a room that would refuse the join.
+  const atRoom = isDebateRoomPath(pathname);
+  // Behind the flags that can produce a room at all, so a signed-in viewer who has never touched
+  // debates does not poll for rooms every 30s.
+  const debugDebatesEnabled = useDebugDebatesPageEnabled();
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  const roomsFeatureEnabled = debugDebatesEnabled || peerAvailabilityEnabled;
+  const upcomingRoomsQuery = useUpcomingDebateRooms(roomsFeatureEnabled && !atRoom);
+  const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
+  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, roomsFeatureEnabled && !atRoom);
+  // A room whose debate already happened is never offered again.
+  const joinableRooms = React.useMemo(
+    () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
+    [finishedRoomIds, upcomingRooms]
+  );
+  // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
+  // from a challenge's on every device. A joinable room with none yet may be about to hand one out.
+  const roomSessionIds = React.useMemo(
+    () => new Set(upcomingRooms.flatMap(room => (room.rematch_session_id ? [room.rematch_session_id] : []))),
+    [upcomingRooms]
+  );
+  const hasRoomAwaitingSession = joinableRooms.some(room => room.rematch_session_id === null);
+  // `undefined` is a geo-chat that predates the field, where no room's session can be identified.
+  // Until it deploys, an open room suppresses the push as it did before: a redirect into a room's
+  // session is what the ticket bans, and a delayed challenge push is the lesser cost.
+  const roomSessionsReported = upcomingRooms.every(room => room.rematch_session_id !== undefined);
+  // Only loaded rooms prove a session is not room-owned: every guard below reads vacuously safe on
+  // `[]`, so routing on an unloaded list pushes a room's own session into the ordinary picker.
+  // A 404 is the exception -- no rooms endpoint means no room can own one.
+  // With the feature off nothing is asked for, so there is nothing to wait on and routing behaves
+  // as it did before rooms existed.
+  const roomsQueryError = upcomingRoomsQuery.error;
+  const roomsKnown =
+    !roomsFeatureEnabled ||
+    upcomingRoomsQuery.isSuccess ||
+    (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+  const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
+  // One refetch per session before routing on it, and a tick so the effect re-runs even when the
+  // refetch changes nothing.
+  const checkedSessionRef = React.useRef<string | null>(null);
+  const [roomsChecked, setRoomsChecked] = React.useState(0);
+  // `activeFlow` for the same reason every other prompt here carries it: a debate that overruns
+  // into the next slot must not get a Join button floating over a recording, one click from
+  // leaving it. That is prompt 2's job, and prompt 2 is gated on recording state (GEO-2946).
+  const promptedRoom =
+    atRoom || activeFlow ? null : (joinableRooms.find(room => !snoozedRoomIds.includes(room.room_id)) ?? null);
+
+  React.useEffect(() => {
+    const liveIds = new Set(joinableRooms.map(room => room.room_id));
+    setSnoozedRoomIds(current => {
+      const next = current.filter(id => liveIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [joinableRooms]);
+
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
   // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
   // tab's screen, which is walking into the room and does not need telling.
@@ -239,7 +304,7 @@ export function DebateCoordinator() {
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
   const promptedDebate =
-    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
+    debate && debate.status === 'ready' && describable && !atDebate && !atDebateFlowPage ? debate : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -295,7 +360,23 @@ export function DebateCoordinator() {
     // stay put, and because attention is a subscription this re-runs when one is focused, so
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
+    // Never out of, or on behalf of, a room (GEO-2941). Keyed on the session itself, so a
+    // challenge's rematch still routes normally while a room is open.
+    if (atRoom || roomSessionIds.has(rematch.id)) return;
+    if (!roomsKnown) return;
+    if (!roomSessionsReported && joinableRooms.length > 0) return;
+    // A joinable room with no session yet may have just minted this one on a join this tab has
+    // not heard about. Ask the server once before moving anyone.
+    if (hasRoomAwaitingSession && checkedSessionRef.current !== rematch.id) {
+      checkedSessionRef.current = rematch.id;
+      void refetchUpcomingRooms().finally(() => setRoomsChecked(tick => tick + 1));
+      return;
+    }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
+      // A room's session carries geo-chat's `debates` sentinel rather than a space, and the
+      // rematch route 404s on it. It also proves the session is a room's when no room list can.
+      // A challenge's session carries its challenge's real space and still routes.
+      if (!validateSpaceId(rematch.source_space_id)) return;
       const path = debateRematchPath(rematch);
       if (pathname !== path) {
         rememberDebateReturnDestination();
@@ -304,13 +385,28 @@ export function DebateCoordinator() {
     }
     // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
     // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
-  }, [activity, hasAttention, pathname, router]);
+  }, [
+    activity,
+    atRoom,
+    hasAttention,
+    hasRoomAwaitingSession,
+    joinableRooms,
+    pathname,
+    roomsKnown,
+    roomsFeatureEnabled,
+    roomSessionsReported,
+    refetchUpcomingRooms,
+    roomSessionIds,
+    roomsChecked,
+    router,
+  ]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
 
   return (
     <>
+      <ScheduledRequestsWatcher />
       {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
@@ -323,10 +419,17 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
+      {promptedRoom && (
+        <DebateRoomJoinPrompt
+          key={promptedRoom.room_id}
+          room={promptedRoom}
+          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+        />
+      )}
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
+      {debate && !atDebate && !atDebateFlowPage && !promptedDebate && !activity?.rematch && (
         <DebateRejoinBar debate={debate} />
       )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the

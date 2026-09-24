@@ -19,7 +19,10 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-me' as string | null,
 }));
 
-vi.mock('../hooks', () => ({
+// Partial: the tab now pulls in the scheduling hooks, which read the shared query options and key
+// factory off this module.
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),

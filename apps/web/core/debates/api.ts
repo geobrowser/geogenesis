@@ -759,6 +759,8 @@ type RequestOptions = {
   getPrivyIdentityToken?: GetPrivyIdentityToken;
   accountKey?: string | null;
   signal?: AbortSignal;
+  /** Let the request outlive the document. For anything sent from `pagehide`. */
+  keepalive?: boolean;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -1448,6 +1450,228 @@ export async function rejectDebateChallenge(
 }
 
 /* -------------------------------------------------------------------------------------------------
+ * Debate rooms (GEO-2941, backend GEO-2946 — geo-chat #125/#126)
+ *
+ * A place two named people meet during a window. The window governs entering, never leaving:
+ * nothing here may evict an occupant, and `scheduled_end_at` is display only.
+ * -----------------------------------------------------------------------------------------------*/
+
+/** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled';
+
+/**
+ * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
+ * refusal still describes itself — a stranger is `not_a_participant`, a stale link is `closed`.
+ */
+export type DebateRoomAccess =
+  | { status: 'admitted' }
+  | { status: 'not_yet_open'; opens_at: string }
+  | { status: 'closed'; reason: DebateRoomClosedReason }
+  | { status: 'not_a_participant' };
+
+/**
+ * Why the viewer is on their own. Server-computed, including the no-show deadline — the client
+ * never derives one, so the grace periods stay a backend product decision.
+ */
+export type DebateRoomWaiting =
+  | { reason: 'not_yet_due' }
+  | { reason: 'opponent_late' }
+  | { reason: 'opponent_in_another_debate' }
+  | { reason: 'no_show' };
+
+export type DebateRoomView = {
+  room_id: string;
+  access: DebateRoomAccess;
+  starts_at: string;
+  opens_at: string;
+  /** Display only. Never read to close a room or refuse a join. */
+  scheduled_end_at: string | null;
+  /** The access list, as user ids. Empty for a viewer who is not admitted. */
+  participants: string[];
+  /** Everyone currently inside, per connection rather than per user. Empty unless admitted. */
+  occupants: string[];
+  /** `null` once both sides are present, and for a viewer not in the room themselves. */
+  waiting: DebateRoomWaiting | null;
+  /**
+   * The debate-again session the room opens with: claim browsing, the request that starts the
+   * debate, and voice all hang off it.
+   *
+   * `null` until someone arrives, since it is created on first join, and withheld from a viewer who
+   * is not admitted — the id is a capability, and `rematch_livekit_token` trades one for a token.
+   */
+  rematch_session_id: string | null;
+};
+
+/** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */
+export type UpcomingDebateRoom = {
+  room_id: string;
+  starts_at: string;
+  opens_at: string;
+  /** The door is open now. */
+  joinable: boolean;
+  /** The scheduled start has passed — "starting now" rather than "at 9:00". */
+  due: boolean;
+  /** Whether anyone else is already inside, so the prompt can say they are waiting. */
+  others_present: boolean;
+  /**
+   * The session the room handed out, so the coordinator can tell it from a challenge's. `null`
+   * before anyone joins, `undefined` on a geo-chat that predates the field.
+   */
+  rematch_session_id?: string | null;
+};
+
+export type UpcomingDebateRoomsResponse = {
+  rooms: UpcomingDebateRoom[];
+};
+
+export async function getDebateRoom(
+  roomId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateRoomView>(`/debate-rooms/${roomId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * One endpoint for both halves of presence, keyed by connection rather than by user: a person with
+ * the room open in two tabs who closes one has not left, and a leave keyed only by user would tell
+ * their opponent they had.
+ */
+export async function setDebateRoomPresence(
+  roomId: string,
+  body: { connection_id: string; joined: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  /**
+   * For a leave sent while the tab is going away. Occupancy is an event log with no staleness
+   * window, so a cancelled leave leaves the opponent looking at "is here" indefinitely.
+   */
+  keepalive = false
+) {
+  return geoChatRequest<DebateRoomView>(`/debate-rooms/${roomId}/presence`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    keepalive,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Scheduled debates (GEO-2934). One person proposes, the other answers, and the second answer
+ * books the room. The proposer counts as having accepted.
+ * -----------------------------------------------------------------------------------------------*/
+
+export type ScheduledDebateStatus =
+  | 'pending'
+  | 'accepted'
+  | 'declined'
+  | 'expired'
+  | 'cancelled'
+  /** Auto-declined because this person accepted something overlapping. Nobody turned them down. */
+  | 'superseded';
+
+/** `accepted: null` means they have not answered. */
+export type ScheduledDebateParticipant = {
+  user_id: string;
+  accepted: boolean | null;
+};
+
+export type ScheduledDebateRequest = {
+  request_id: string;
+  status: ScheduledDebateStatus;
+  scheduled_start_at: string;
+  scheduled_end_at: string;
+  /** `null` for an admin-arranged match, where neither debater invited the other. */
+  invited_by_user_id: string | null;
+  created_by_admin: boolean;
+  proposed_by_user_id: string | null;
+  reschedule_count: number;
+  /** Set once everyone accepted. The room outlives the request. */
+  room_id: string | null;
+  participants: ScheduledDebateParticipant[];
+  /** Whether the viewer is the one holding this up. */
+  viewer_must_answer: boolean;
+};
+
+export type ScheduledDebateRequestsResponse = {
+  requests: ScheduledDebateRequest[];
+};
+
+/** Accepting can fail without being an error: the slot went while you were deciding. */
+export type ScheduledDebateResponseResult =
+  | ({ outcome: 'recorded' } & ScheduledDebateRequest)
+  | {
+      outcome: 'conflict';
+      conflicting_request_id: string;
+      conflicting_start_at: string;
+      conflicting_end_at: string;
+    };
+
+export async function listScheduledDebates(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<ScheduledDebateRequestsResponse>('/me/scheduled-debates', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function createScheduledDebate(
+  body: { opponent_user_id: string; scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>('/me/scheduled-debates', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The second answer books the room, and the `recorded` outcome carries its id. */
+export async function respondToScheduledDebate(
+  requestId: string,
+  accepted: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateResponseResult>(`/scheduled-debates/${requestId}/response`, {
+    method: 'POST',
+    body: { accepted },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function listUpcomingDebateRooms(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
  * Matchmaking hub (GEO-2514)
  * -----------------------------------------------------------------------------------------------*/
 
@@ -1823,6 +2047,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
+    keepalive: options.keepalive,
   });
 
   if (!response.ok) {

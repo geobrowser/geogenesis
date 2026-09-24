@@ -118,6 +118,13 @@ export function buildSpaceTabs({
     priority: 3,
   };
 
+  /** Answering a scheduled debate, which has no other surface yet (GEO-2940). */
+  const DEBUG_ROOMS_TAB: BuiltSpaceTab = {
+    label: 'Debug rooms',
+    href: `/space/${spaceId}/debug-debate-rooms`,
+    priority: 3,
+  };
+
   const SOME_SPACES_TABS: BuiltSpaceTab[] = [
     {
       label: 'Governance',
@@ -172,7 +179,7 @@ export function buildSpaceTabs({
       // is the only path to the rail's facts below 1024px, where the rail drops
       // itself. Shadowing one does not replace it; it makes it unreachable.
       const reservedLabels = new Set([
-        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
+        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label, DEBUG_ROOMS_TAB.label] : []),
         ...(isPerson ? PERSON_TAB_LABELS : []),
       ]);
       const visibleDynamicTabs =
@@ -192,7 +199,7 @@ export function buildSpaceTabs({
     }
   }
 
-  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
+  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB, DEBUG_ROOMS_TAB);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !isPerson) {
     tabs.push(...SOME_SPACES_TABS);
@@ -279,7 +286,10 @@ export function SpaceTabs({
   const systemTabsAfter: SystemTab[] = [];
 
   if (isDebugDebatesPageEnabled) {
-    systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
+    systemTabsAfter.push(
+      { label: 'Debug debates', href: `/space/${spaceId}/debug-debates` },
+      { label: 'Debug rooms', href: `/space/${spaceId}/debug-debate-rooms` }
+    );
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
