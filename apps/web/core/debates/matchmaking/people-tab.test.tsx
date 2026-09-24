@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
+import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
 import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
@@ -28,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-me' as string | null,
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
   positionsByClaim: new Map() as ParticipantPositionsByClaim,
+  claimEntities: [] as ClaimPickerEntity[],
+  claimEntitiesLoading: false,
   createChallenge: vi.fn(),
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
@@ -158,6 +161,14 @@ vi.mock('../participant-positions', () => ({
   }),
 }));
 
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: () => ({
+    entities: mocks.claimEntities,
+    isLoading: mocks.claimEntitiesLoading,
+    error: null,
+  }),
+}));
+
 // `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
 // paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
@@ -185,6 +196,10 @@ function person(userId: string, name: string): DebatePerson {
     online_since: '2026-08-05T11:00:00.000Z',
     can_challenge: true,
   } as DebatePerson;
+}
+
+function claimEntity(id: string, name: string): ClaimPickerEntity {
+  return { id, name, description: null, spaces: [], values: [], relations: [] };
 }
 
 function record(over: Partial<PersonRecord> = {}): PersonRecord {
@@ -263,6 +278,8 @@ beforeEach(() => {
   mocks.currentUserId = 'user-me';
   mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
   mocks.positionsByClaim = new Map();
+  mocks.claimEntities = [];
+  mocks.claimEntitiesLoading = false;
   mocks.createChallenge.mockReset();
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
@@ -337,8 +354,10 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByText('Disagree on 2 claims')).toBeInTheDocument();
-    expect(screen.queryByText('Disagree on 0 claims')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View 2 claims you disagree on with Arturas' })).toHaveTextContent(
+      '2 disagreements'
+    );
+    expect(screen.queryByRole('button', { name: /View 0 claims/ })).not.toBeInTheDocument();
   });
 
   it('uses singular copy for one disputed claim', () => {
@@ -357,7 +376,9 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByText('Disagree on 1 claim')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View 1 claim you disagree on with Arturas' })).toHaveTextContent(
+      '1 disagreement'
+    );
   });
 
   it('does not show a disagreement count on the viewer own row', () => {
@@ -377,7 +398,77 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.queryByText(/Disagree on/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/disagreement/)).not.toBeInTheDocument();
+  });
+
+  it('sorts the people with the most disagreements first and preserves roster order for ties', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const vytautas = PROFILE_SPACE_IDS['user-other'];
+    const context = {
+      spaceId: '019fedae-72b6-7ab2-927a-df044d57c600',
+      responseKind: 'stance' as const,
+    };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: true, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-2', position: false, ...context },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const arturasRow = screen.getByText('Arturas').closest('li')!;
+    const vytautasRow = screen.getByText('Vytautas').closest('li')!;
+    expect(vytautasRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('opens the disputed claims from the disagreement count', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: false },
+          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: true },
+        ],
+      ],
+    ]);
+    mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?'), claimEntity('claim-2', 'Is this true?')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 2 claims you disagree on with Arturas' }));
+
+    const list = await screen.findByRole('list', { name: 'Disputed claims with Arturas' });
+    expect(within(list).getByText('Should we build this?')).toBeInTheDocument();
+    expect(within(list).getByText('You agree · They disagree')).toBeInTheDocument();
+    expect(within(list).getByText('Is this true?')).toBeInTheDocument();
+    expect(within(list).getByText('You dispute · They verify')).toBeInTheDocument();
+    expect(within(list).getByText('Should we build this?').closest('a')).toHaveAttribute(
+      'href',
+      NavUtils.toEntity(spaceId, 'claim-1')
+    );
   });
 
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in
@@ -659,7 +750,7 @@ describe('PeopleTab', () => {
     expect(mocks.createChallenge).not.toHaveBeenCalled();
   });
 
-  // Every field in the record is public graph data — positions, debates, wins and join date need no
+  // Every displayed field in the record is public graph data — positions, debates and join date need no
   // viewer identity — so a signed-out visitor gets the full context before being asked to sign in.
   // Only the button is gated.
   it('shows the record signed out, gating only the button', () => {
@@ -678,7 +769,9 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('119 positions')).toBeInTheDocument();
-    expect(screen.getByText('Won 8 of 11 debates')).toBeInTheDocument();
+    expect(screen.getByText('11 debates')).toBeInTheDocument();
+    expect(screen.queryByText(/^Won /)).not.toBeInTheDocument();
+    expect(screen.queryByText('73%')).not.toBeInTheDocument();
     expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });

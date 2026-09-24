@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ParticipantPosition } from '../participant-positions';
 import { groupParticipantPositions } from '../participant-positions';
-import { disagreementCountsByProfile } from './disagreement-counts';
+import { disagreementCountsByProfile, disagreementsByProfile } from './disagreement-counts';
 
 const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c500';
 const OTHER = '019fedae-72b6-7ab2-927a-df044d57c501';
@@ -63,5 +63,30 @@ describe('disagreementCountsByProfile', () => {
     const positions = groupParticipantPositions([position(VIEWER, 'claim-1', true), position(OTHER, 'claim-1', false)]);
 
     expect(disagreementCountsByProfile(positions, null)).toEqual(new Map());
+  });
+
+  it('keeps the claim context needed to open each disagreement', () => {
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    const positions = groupParticipantPositions([
+      position(VIEWER, 'claim-1', false, spaceId, 'veracity'),
+      position(OTHER, 'claim-1', true, spaceId, 'veracity'),
+    ]);
+
+    expect(disagreementsByProfile(positions, VIEWER)).toEqual(
+      new Map([
+        [
+          OTHER.replaceAll('-', ''),
+          [
+            {
+              claimId: 'claim-1',
+              spaceId,
+              responseKind: 'veracity',
+              viewerPosition: false,
+              personPosition: true,
+            },
+          ],
+        ],
+      ])
+    );
   });
 });
