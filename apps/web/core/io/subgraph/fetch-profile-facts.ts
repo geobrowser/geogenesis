@@ -2,7 +2,7 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
-import { visibleDebateCount } from '~/core/profile/profile-debate-visibility';
+import { debateVisibilityCounts } from '~/core/profile/profile-debate-visibility';
 import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
 
 import { graphql } from './graphql';
@@ -182,6 +182,13 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     isPerson: node.parentSpace?.type === 'PERSONAL',
   }));
 
+  const debateCounts = debateVisibilityCounts(
+    [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])].flatMap(node =>
+      node.fromEntity?.id ? [node.fromEntity.id] : []
+    ),
+    (data.hidden?.nodes ?? []).map(node => node.toEntityId)
+  );
+
   return {
     proposals: data.proposals?.totalCount ?? 0,
     // Claims, not vote rows. `votedBy` counts entities, so the stance and
@@ -191,13 +198,10 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     positions: data.positions?.totalCount ?? 0,
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes
-    // as separate debates, which is how 10 becomes 13.
-    debates: visibleDebateCount(
-      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])].flatMap(node =>
-        node.fromEntity?.id ? [node.fromEntity.id] : []
-      ),
-      (data.hidden?.nodes ?? []).map(node => node.toEntityId)
-    ),
+    // as separate debates, which is how 10 becomes 13. The public count excludes
+    // hidden targets; the total keeps the owner's route to restoring them.
+    debates: debateCounts.visible,
+    totalDebates: debateCounts.total,
     spaces: orderSpaces([...byId.values()]),
     verifiedBy,
     joinedAt: data.person?.createdAt ? Number(data.person.createdAt) : null,

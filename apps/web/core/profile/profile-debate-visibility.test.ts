@@ -4,8 +4,9 @@ import {
   HIDDEN_FROM_PROFILE_PROPERTY,
   buildHideDebateRelation,
   buildUnhideDebateRelations,
+  debateVisibilityCounts,
   hiddenProfileDebatesPath,
-  visibleDebateCount,
+  profileDebateNavigationCount,
 } from './profile-debate-visibility';
 
 const PERSONAL_SPACE = '11111111111111111111111111111111';
@@ -47,13 +48,18 @@ describe('profile debate visibility', () => {
     expect(relations.every(relation => relation.isDeleted && relation.spaceId === PERSONAL_SPACE)).toBe(true);
   });
 
-  it('removes hidden targets from the distinct public debate count', () => {
+  it('keeps public and total counts from the same distinct debate set', () => {
     expect(
-      visibleDebateCount(
+      debateVisibilityCounts(
         [DEBATE, DEBATE.toUpperCase(), '44444444-4444-4444-4444-444444444444'],
         ['22222222-2222-2222-2222-222222222222']
       )
-    ).toBe(1);
+    ).toEqual({ visible: 1, total: 2 });
+  });
+
+  it('uses total debates only for owner navigation', () => {
+    expect(profileDebateNavigationCount(0, 1, true)).toBe(1);
+    expect(profileDebateNavigationCount(0, 1, false)).toBe(0);
   });
 
   it('links directly to the hidden list on the profile debates tab', () => {

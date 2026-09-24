@@ -97,6 +97,18 @@ describe('PersonDebatesTab hidden view', () => {
     expect(screen.getByRole('switch', { name: 'Show hidden (1)' })).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('follows same-route hidden query changes in both directions', async () => {
+    mocks.debates.hiddenRows = [{ entityId: 'hidden-debate', spaceId: OTHER_SPACE }];
+    const { rerender } = render(<PersonDebatesTab spaceId={PROFILE_SPACE} showHiddenInitially={false} />);
+    expect(screen.getByTestId('feed')).toHaveTextContent('visible-debate');
+
+    rerender(<PersonDebatesTab spaceId={PROFILE_SPACE} showHiddenInitially />);
+    await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('hidden-debate'));
+
+    rerender(<PersonDebatesTab spaceId={PROFILE_SPACE} showHiddenInitially={false} />);
+    await waitFor(() => expect(screen.getByTestId('feed')).toHaveTextContent('visible-debate'));
+  });
+
   it('does not expose hidden debates when a visitor appends the owner deep link', () => {
     mocks.personalSpaceId = OTHER_SPACE;
     mocks.debates.hiddenRows = [{ entityId: 'hidden-debate', spaceId: OTHER_SPACE }];

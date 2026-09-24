@@ -12,12 +12,16 @@ const mocks = vi.hoisted(() => ({
   facts: { debates: 10, positions: 59, proposals: 0 } as Record<string, number>,
   isLoadingFacts: false,
   isFactsError: false,
+  personalSpaceId: 'space-1' as string | null,
   /** What the vote table says, which is what decides Positions. */
   heldPositions: 59 as number | null,
 }));
 
 vi.mock('~/core/hooks/use-profile-facts', () => ({
   useProfileFacts: () => ({ facts: mocks.facts, isLoading: mocks.isLoadingFacts, isError: mocks.isFactsError }),
+}));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
 }));
 vi.mock('~/core/profile/use-person-positions', () => ({
   usePersonResponses: () => ({ total: mocks.heldPositions, isError: false }),
@@ -53,6 +57,7 @@ beforeEach(() => {
   mocks.facts = { debates: 10, positions: 59, proposals: 0 };
   mocks.isLoadingFacts = false;
   mocks.isFactsError = false;
+  mocks.personalSpaceId = 'space-1';
   mocks.heldPositions = 59;
 });
 
@@ -127,6 +132,23 @@ describe('ProfileRecordTabs', () => {
 
   it('keeps About whatever the counts say, because it is the rail', () => {
     mocks.facts = { debates: 0, positions: 0, proposals: 0 };
+    mocks.heldPositions = 0;
+    renderTabs();
+
+    expect(tabNames()).toEqual(['Overview', 'About']);
+  });
+
+  it('keeps Debates available to the owner when every debate is hidden', () => {
+    mocks.facts = { debates: 0, totalDebates: 1, positions: 0, proposals: 0 };
+    mocks.heldPositions = 0;
+    renderTabs();
+
+    expect(tabNames()).toEqual(['Overview', 'Debates', 'About']);
+  });
+
+  it('keeps an all-hidden Debates tab out of the public profile', () => {
+    mocks.personalSpaceId = 'another-space';
+    mocks.facts = { debates: 0, totalDebates: 1, positions: 0, proposals: 0 };
     mocks.heldPositions = 0;
     renderTabs();
 

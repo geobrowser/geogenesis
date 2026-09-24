@@ -88,6 +88,8 @@ export function PersonDebatesTab({
   const [showHidden, setShowHidden] = React.useState(showHiddenInitially);
   const hasShownHiddenRows = React.useRef(hiddenRows.length > 0);
 
+  React.useEffect(() => setShowHidden(showHiddenInitially), [showHiddenInitially]);
+
   React.useEffect(() => {
     if (hiddenRows.length > 0) {
       hasShownHiddenRows.current = true;

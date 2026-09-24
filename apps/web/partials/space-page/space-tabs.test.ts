@@ -139,7 +139,7 @@ describe('buildSpaceTabs', () => {
    * a third of the navigation spent on "No proposals yet".
    */
   describe('a person whose record is partly empty', () => {
-    const personTabs = (personRecordCounts?: { debates: number; positions: number; proposals: number }) =>
+    const personTabs = (counts?: { debates: number; positions: number; proposals: number }) =>
       buildSpaceTabs({
         spaceId,
         overviewHref,
@@ -147,7 +147,7 @@ describe('buildSpaceTabs', () => {
         typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
         isProfile: true,
         isDebugDebatesPageEnabled: false,
-        personRecordCounts,
+        personRecordCounts: counts ? { ...counts, totalDebates: counts.debates } : undefined,
       })
         .map(tab => tab.label)
         .filter(label => ['Debates', 'Positions', 'Proposals'].includes(label));
@@ -162,6 +162,36 @@ describe('buildSpaceTabs', () => {
 
     it('keeps a tab holding exactly one', () => {
       expect(personTabs({ debates: 1, positions: 0, proposals: 0 })).toEqual(['Debates']);
+    });
+
+    it('keeps the owner route to debates when every debate is hidden', () => {
+      const tabs = buildSpaceTabs({
+        spaceId,
+        overviewHref,
+        dynamicTabs: [],
+        typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+        isProfile: true,
+        isDebugDebatesPageEnabled: false,
+        isOwner: true,
+        personRecordCounts: { debates: 0, totalDebates: 1, positions: 0, proposals: 0 },
+      });
+
+      expect(tabs.map(tab => tab.label)).toContain('Debates');
+    });
+
+    it('does not expose an empty public Debates route to a visitor', () => {
+      const tabs = buildSpaceTabs({
+        spaceId,
+        overviewHref,
+        dynamicTabs: [],
+        typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+        isProfile: true,
+        isDebugDebatesPageEnabled: false,
+        isOwner: false,
+        personRecordCounts: { debates: 0, totalDebates: 1, positions: 0, proposals: 0 },
+      });
+
+      expect(tabs.map(tab => tab.label)).not.toContain('Debates');
     });
 
     /*

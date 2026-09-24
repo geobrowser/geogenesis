@@ -68,8 +68,24 @@ export function buildUnhideDebateRelations(args: {
   }));
 }
 
-/** Distinct participated debates minus this profile's hidden targets. */
-export function visibleDebateCount(participatedIds: readonly string[], hiddenTargetIds: readonly string[]): number {
+/** Public and total counts from the same distinct participated-debate set. */
+export function debateVisibilityCounts(
+  participatedIds: readonly string[],
+  hiddenTargetIds: readonly string[]
+): { visible: number; total: number } {
+  const participated = new Set(participatedIds.map(normId));
   const hidden = new Set(hiddenTargetIds.map(normId));
-  return new Set(participatedIds.map(normId).filter(id => !hidden.has(id))).size;
+  return {
+    visible: [...participated].filter(id => !hidden.has(id)).length,
+    total: participated.size,
+  };
+}
+
+/** Visitors navigate by the public count; owners retain access to hidden rows. */
+export function profileDebateNavigationCount(
+  visibleDebates: number | undefined,
+  totalDebates: number | undefined,
+  isOwner: boolean
+): number | undefined {
+  return isOwner ? (totalDebates ?? visibleDebates) : visibleDebates;
 }
