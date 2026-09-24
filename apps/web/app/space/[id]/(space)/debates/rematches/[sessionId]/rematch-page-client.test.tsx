@@ -5257,7 +5257,7 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
-  const presentWith = (rejoin: () => void, children: React.ReactElement) => (
+  const presentWith = (rejoin: () => Promise<boolean>, children: React.ReactElement) => (
     <DebateRoomProvider
       roomId="room-1"
       presence={{ state: 'present', opponentUserId: 'user-remote', opponentPresent: true }}
@@ -5270,7 +5270,7 @@ describe('inside a debate room', () => {
   // geo-chat ends a room's session when someone goes offline long enough, and replaces it on the
   // next join. Someone still in the room never sends one, so the page asks, once.
   it('asks the room for a fresh session when its own has ended, once', async () => {
-    const rejoin = vi.fn();
+    const rejoin = vi.fn().mockResolvedValue(true);
     mocks.session = session({ status: 'expired' });
 
     const view = render(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
@@ -5281,10 +5281,43 @@ describe('inside a debate room', () => {
     expect(rejoin).toHaveBeenCalledTimes(1);
   });
 
+  // Each rejoin already retries its request. When all of those fail, the session is still ended and
+  // will not change, so nothing would ever ask again without this.
+  it('tries a failed rejoin again, a bounded number of times', async () => {
+    vi.useFakeTimers();
+    try {
+      const rejoin = vi.fn().mockResolvedValue(false);
+      mocks.session = session({ status: 'expired' });
+
+      render(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps Request debate off while the room session has ended', async () => {
     mocks.session = session({ status: 'expired' });
 
-    render(presentWith(vi.fn(), <DebateRematchPageClient sessionId="rematch-1" />));
+    render(presentWith(vi.fn().mockResolvedValue(true), <DebateRematchPageClient sessionId="rematch-1" />));
     await showAllClaims();
 
     // Hidden or disabled are both fine; offered is not.
@@ -5298,7 +5331,7 @@ describe('inside a debate room', () => {
   it('offers Request debate on a live room session with the opponent here', async () => {
     mocks.session = session({ status: 'browsing' });
 
-    render(presentWith(vi.fn(), <DebateRematchPageClient sessionId="rematch-1" />));
+    render(presentWith(vi.fn().mockResolvedValue(true), <DebateRematchPageClient sessionId="rematch-1" />));
     await showAllClaims();
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());

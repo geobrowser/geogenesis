@@ -187,7 +187,7 @@ describe('useRoomPresence', () => {
     const { result } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
     await vi.waitFor(() => expect(spy.mock.calls.filter(call => call[1].joined).length).toBe(1));
 
-    result.current.rejoin();
+    await expect(result.current.rejoin()).resolves.toBe(true);
 
     await vi.waitFor(() => expect(spy.mock.calls.filter(call => call[1].joined).length).toBe(2));
     spy.mockRestore();

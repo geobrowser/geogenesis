@@ -153,6 +153,10 @@ function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId
   return ids;
 }
 
+/** Each rejoin already retries its request; these space out whole attempts when all of those fail. */
+const ROOM_REJOIN_ATTEMPTS = 3;
+const ROOM_REJOIN_RETRY_MS = 15_000;
+
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   // The room owns this session rather than the other way round, so two of the page's exits change
@@ -161,6 +165,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const roomPresence = useDebateRoomContext()?.presence ?? null;
   const roomRejoin = useDebateRoomContext()?.rejoin;
   const rejoinedForRef = React.useRef<string | null>(null);
+  const rejoinFailuresRef = React.useRef({ sessionId: '', count: 0 });
+  // Bumped to run the effect again after a failed rejoin, since the ended session itself will not change.
+  const [rejoinRetry, setRejoinRetry] = React.useState(0);
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
@@ -1913,11 +1920,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // geo-chat replaces a finished room session on the next join, which someone who never left
       // would not otherwise send. Once per session, so a refusal cannot loop.
       else if (roomRejoin && rejoinedForRef.current !== session.id) {
-        rejoinedForRef.current = session.id;
-        roomRejoin();
+        const sessionId = session.id;
+        rejoinedForRef.current = sessionId;
+        void roomRejoin().then(joined => {
+          if (joined) return;
+          const failures = rejoinFailuresRef.current;
+          const count = failures.sessionId === sessionId ? failures.count + 1 : 1;
+          rejoinFailuresRef.current = { sessionId, count };
+          if (count >= ROOM_REJOIN_ATTEMPTS) return;
+          setTimeout(() => {
+            if (rejoinedForRef.current !== sessionId) return;
+            rejoinedForRef.current = null;
+            setRejoinRetry(tick => tick + 1);
+          }, ROOM_REJOIN_RETRY_MS);
+        });
       }
     }
-  }, [inDebateRoom, returnFromSession, roomRejoin, router, session]);
+  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
 
   const leave = () => {
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
