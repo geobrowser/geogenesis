@@ -483,8 +483,8 @@ describe('PeopleTab', () => {
       [
         'claim-2',
         [
-          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: false },
-          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: true },
+          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'stance', position: false },
+          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'stance', position: true },
         ],
       ],
     ]);
@@ -506,11 +506,14 @@ describe('PeopleTab', () => {
     expect(within(firstMatch).getByText('Disagree')).toBeInTheDocument();
     expect(firstMatch.querySelectorAll('svg')).toHaveLength(2);
 
+    // The second claim used to be a veracity match and read Dispute/Verify here. Every claim asks
+    // the same question now, so the sides are named the same way on both rows — the two matches
+    // still differ by side, which is what the row is for.
     const secondMatch = within(list).getByText('Is this true?').closest('a')!;
     expect(within(secondMatch).getByText('You:')).toBeInTheDocument();
-    expect(within(secondMatch).getByText('Dispute')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Disagree')).toBeInTheDocument();
     expect(within(secondMatch).getByText('Arturas:')).toBeInTheDocument();
-    expect(within(secondMatch).getByText('Verify')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Agree')).toBeInTheDocument();
   });
 
   it('distinguishes an untitled claim from unavailable claim metadata', async () => {

@@ -62,8 +62,9 @@ export function DebateTileChip({
 
 /**
  * Which side of the claim a debater is arguing, as it reads over their video: the tile chip in the
- * shared fill, carrying whatever the claim's response kind calls that side — "Agree"/"Disagree" on
- * a stance claim, "Verify"/"Dispute" on a factual one.
+ * shared fill, carrying "Agree" or "Disagree". Every claim asks the same question, so those are the
+ * only two words it renders — pass a label from {@link responsePositionLabel} rather than geo-chat's
+ * `position_label`, which still says "Verify" on a claim it calls factual.
  *
  * One component rather than the recipe twice, because the room and the feed player state the same
  * fact about the same person in the same corner of the same picture; the only difference is where
@@ -94,14 +95,11 @@ export function DebatePositionChip({
  * One participant's tile, shared by the intro screen and the recording modal so the two have the
  * same geometry. Everything past the video is optional: the intro passes a label and an overlay,
  * the debate adds turn countdowns and phase overlays.
- */
-/**
- * The side this tile's participant took, named.
  *
- * Derived rather than passed. Every caller had a `position_label` from geo-chat to hand down
- * beside the position itself — and that label reads "Verify" or "Dispute" on a claim geo-chat
- * still calls factual, which is a word this app no longer has a way to publish. The side is the
- * same boolean either way, so the name is ours to say.
+ * **The side is named here, not passed.** Every caller had a `position_label` from geo-chat to
+ * hand down beside the position itself — and that label reads "Verify" or "Dispute" on a claim
+ * geo-chat still calls factual, which is a word this app no longer has a way to publish. The side
+ * is the same boolean either way, so the name is ours to say.
  */
 export function DebateVideoTile({
   participantPosition,
