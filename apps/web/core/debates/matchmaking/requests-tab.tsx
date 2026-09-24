@@ -18,6 +18,7 @@ import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
+import { useDebateChallengeState } from './use-outbound-debate-challenge';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
@@ -95,40 +96,15 @@ function RequestsTabBody({
     return orderFacetOptions(countBy(spaces.map(id => ({ id, name: null }))), spaceIds);
   }, [incoming, outbound, spaceIds, status]);
 
-  // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
-  // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
-  const reportedOutboundChallenge =
-    activity?.outbound_challenge?.status === 'pending' ? activity.outbound_challenge : null;
-  const liveOutboundChallenges = useUnexpiredRequests(
-    React.useMemo(
-      () =>
-        reportedOutboundChallenge && reportedOutboundChallenge.id !== reportedChallenge?.id
-          ? [reportedOutboundChallenge]
-          : [],
-      [reportedChallenge?.id, reportedOutboundChallenge]
-    )
-  );
-  const retainedOutboundChallenge = liveOutboundChallenges[0] ?? null;
   const currentUserId = useCurrentGeoChatUserId();
+  const { challenge, challengeRole, outboundChallenge } = useDebateChallengeState(activity, currentUserId);
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
   // where it reads as something the viewer sent and offers them "Cancel request" for it.
-  const challengeRole =
-    !challenge || spaceIds.length > 0 || !currentUserId
-      ? null
-      : challenge.recipient.user_id === currentUserId
-        ? 'recipient'
-        : 'requester';
-  const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
-  const outgoingChallenge =
-    status === 'received'
-      ? null
-      : (retainedOutboundChallenge ?? (challengeRole === 'requester' ? challenge : null));
+  const challengeHiddenBySpace = spaceIds.length > 0;
+  const incomingChallenge =
+    !challengeHiddenBySpace && challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
+  const outgoingChallenge = challengeHiddenBySpace || status === 'received' ? null : outboundChallenge;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
   const hasScheduled =

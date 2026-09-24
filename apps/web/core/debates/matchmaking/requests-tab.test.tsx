@@ -58,7 +58,14 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
     keyInput: null,
     isLoading: false,
   }),
-  useCachedBrowseSidebarData: () => null,
+  useCachedBrowseSidebarData: () => ({
+    featured: [
+      { id: '019fedae-72b6-7ab2-927a-df044d57c566', name: 'Crypto', image: null },
+      { id: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419', name: 'Science', image: null },
+    ],
+    editorOf: [],
+    memberOf: [],
+  }),
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -308,6 +315,20 @@ describe('RequestsTab', () => {
     expect(sent.compareDocumentPosition(received) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('hides claimless inbound and retained outbound requests behind a space filter', () => {
+    mocks.challenge = challenge('recipient');
+    mocks.outboundChallenge = { ...challenge('requester'), id: 'challenge-outbound' };
+    render(<RequestsTab />);
+
+    openFilter('Any space');
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+    expect(screen.getByText('Bitcoin will never go above $250K')).toBeInTheDocument();
   });
 
   it('narrows to one side with the status filter', () => {

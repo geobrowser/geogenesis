@@ -3,10 +3,8 @@
 import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { useDebateActivity } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
-import {
-  PENDING_OUTBOUND_REQUEST_REASON,
-  useOutboundDebateChallenge,
-} from '~/core/debates/matchmaking/use-outbound-debate-challenge';
+import { useOutboundDebateChallenge } from '~/core/debates/matchmaking/use-outbound-debate-challenge';
+import { PENDING_OUTBOUND_REQUEST_REASON } from '~/core/debates/request-gate';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { ID } from '~/core/id';
 

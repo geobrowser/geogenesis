@@ -469,6 +469,8 @@ const REMATCH_POLL_MS = 5_000;
 const ACTIVITY_POLL_MS = 30_000;
 /** And while the gateway is paused, when this is the only thing still asking. */
 const ACTIVITY_DEGRADED_POLL_MS = 10_000;
+/** Let an immediate push-triggered refetch observe the create response before treating null as final. */
+const OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS = 10_000;
 
 /**
  * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
@@ -528,7 +530,18 @@ export function useDebateActivity(enabled = true) {
       const retainedOutbound = queryClient.getQueryData<DebateActivity>(activityKey)?.outbound_challenge;
       const outboundIsLive =
         retainedOutbound?.status === 'pending' && Date.parse(retainedOutbound.expires_at) > Date.now();
-      return outboundIsLive && !activity.debate && !activity.rematch
+      // The create response can beat the activity read triggered by the gateway event. Keep its
+      // outbound row through that brief propagation window, then treat a null/non-pending server
+      // challenge as authoritative so a rejected request cannot block every button until expiry.
+      // A live server challenge also keeps the overlay: it may be an inbound row that displaced the
+      // simultaneous outbound row from the wire shape's single `challenge` field.
+      const serverChallengeIsLive =
+        activity.challenge?.status === 'pending' && Date.parse(activity.challenge.expires_at) > Date.now();
+      const retainedOutboundCreatedAt = retainedOutbound ? Date.parse(retainedOutbound.created_at) : Number.NaN;
+      const outboundIsPropagating =
+        Number.isFinite(retainedOutboundCreatedAt) &&
+        Date.now() - retainedOutboundCreatedAt < OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS;
+      return outboundIsLive && (serverChallengeIsLive || outboundIsPropagating) && !activity.debate && !activity.rematch
         ? { ...activity, outbound_challenge: retainedOutbound }
         : activity;
     },
@@ -558,8 +571,13 @@ export function useDebateActivity(enabled = true) {
   // the usual case, so this costs nothing until there is something to draw. See
   // `participant-avatars`.
   const activityPeople = React.useMemo(() => {
-    const { challenge, outbound_challenge: outboundChallenge, outbound_request: outbound, debate, rematch } =
-      query.data ?? {};
+    const {
+      challenge,
+      outbound_challenge: outboundChallenge,
+      outbound_request: outbound,
+      debate,
+      rematch,
+    } = query.data ?? {};
 
     return [
       ...(challenge ? [challenge.requester, challenge.recipient] : []),
@@ -582,7 +600,13 @@ export function useDebateActivity(enabled = true) {
 
   const data = React.useMemo(() => {
     if (!query.data) return query.data;
-    const { challenge, outbound_challenge: outboundChallenge, outbound_request: outbound, debate, rematch } = query.data;
+    const {
+      challenge,
+      outbound_challenge: outboundChallenge,
+      outbound_request: outbound,
+      debate,
+      rematch,
+    } = query.data;
     if (!challenge && !outboundChallenge && !outbound && !debate && !rematch) return query.data;
 
     // `match` is deliberately left alone: nothing has populated it since GEO-2514 and nothing here
@@ -1287,8 +1311,7 @@ export function useRejectDebateChallenge() {
           ? {
               ...current,
               challenge: current.challenge?.id === challengeId ? null : current.challenge,
-              outbound_challenge:
-                current.outbound_challenge?.id === challengeId ? null : current.outbound_challenge,
+              outbound_challenge: current.outbound_challenge?.id === challengeId ? null : current.outbound_challenge,
             }
           : current
       );

@@ -63,6 +63,8 @@ export type DebateRequestGate = {
 export const REQUEST_PENDING_LABEL = 'Publishing your position…';
 /** The publish landed and the confirmation is late; pointing at the transaction would mislead. */
 export const REQUEST_PENDING_DELAYED_LABEL = 'Still confirming your position…';
+/** One account may have only one unanswered request, regardless of whether it targets a claim or person. */
+export const PENDING_OUTBOUND_REQUEST_REASON = 'You can only have one pending outbound request at a time.';
 
 export function debateRequestGate({
   chatPosition,

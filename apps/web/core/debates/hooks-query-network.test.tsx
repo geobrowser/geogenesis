@@ -29,13 +29,20 @@ const mocks = vi.hoisted(() => ({
   queryCache: { subscribe: vi.fn(() => vi.fn()) },
   queryClient: {
     getQueryCache: vi.fn(() => mocks.queryCache),
+    getQueryData: vi.fn(),
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
   },
+  getDebateActivity: vi.fn(),
   queryRefetch: vi.fn(),
   useMutation: vi.fn((options: unknown) => options),
   useQuery: vi.fn((options: unknown) => ({ options, refetch: mocks.queryRefetch })),
   useScope: vi.fn(),
+}));
+
+vi.mock('./api', async importOriginal => ({
+  ...(await importOriginal<typeof import('./api')>()),
+  getDebateActivity: mocks.getDebateActivity,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -91,6 +98,7 @@ beforeEach(() => {
   mocks.present = true;
   mocks.gatewayPaused = false;
   mocks.queryClient.invalidateQueries.mockClear();
+  mocks.queryClient.getQueryData.mockReset();
   mocks.queryClient.getQueryCache.mockClear();
   mocks.queryCache.subscribe.mockClear();
   mocks.queryClient.setQueryData.mockClear();
@@ -98,6 +106,7 @@ beforeEach(() => {
   mocks.useMutation.mockClear();
   mocks.useQuery.mockClear();
   mocks.useScope.mockClear();
+  mocks.getDebateActivity.mockReset();
 });
 
 describe('debate query network ownership', () => {
@@ -235,7 +244,9 @@ describe('debate query network ownership', () => {
       ['debates', 'account', 'user-a', 'activity'],
       expect.any(Function)
     );
-    const update = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as (current: Record<string, unknown>) => unknown;
+    const update = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as (
+      current: Record<string, unknown>
+    ) => unknown;
     expect(update({ online: true, challenge: null })).toEqual({
       online: true,
       challenge,
@@ -244,6 +255,65 @@ describe('debate query network ownership', () => {
     expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: ['debates', 'account', 'user-a', 'activity'],
     });
+  });
+
+  it('retains an outbound challenge while activity reports a simultaneous inbound challenge', async () => {
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const inbound = { id: 'challenge-inbound', status: 'pending', expires_at: '2099-01-01T00:00:00.000Z' };
+    const activity = { challenge: inbound, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({ ...activity, outbound_challenge: outbound });
+  });
+
+  it('drops a retained outbound challenge once activity reports no live challenge', async () => {
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual(activity);
+  });
+
+  it('briefly retains a newly created outbound challenge while activity propagation catches up', async () => {
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({ ...activity, outbound_challenge: outbound });
   });
 
   // The rematch voice token is the one query whose cache policy is load-bearing rather than a

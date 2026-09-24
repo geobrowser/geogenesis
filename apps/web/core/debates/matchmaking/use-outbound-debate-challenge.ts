@@ -5,7 +5,49 @@ import * as React from 'react';
 import type { DebateActivity, DebateChallenge } from '../api';
 import { useUnexpiredRequests } from './use-request-countdown';
 
-export const PENDING_OUTBOUND_REQUEST_REASON = 'You can only have one pending outbound request at a time.';
+export type DebateChallengeRole = 'requester' | 'recipient';
+
+/**
+ * Every live person-request state the matchmaking surfaces need, resolved once.
+ *
+ * Keeping the server-reported challenge and the client-retained outbound challenge separate is
+ * load-bearing: both can exist at once, and the former may be inbound while the latter is outbound.
+ */
+export function useDebateChallengeState(
+  activity: DebateActivity | null | undefined,
+  currentUserId: string | null
+): {
+  challenge: DebateChallenge | null;
+  challengeRole: DebateChallengeRole | null;
+  outboundChallenge: DebateChallenge | null;
+  outboundChallengeDirectionUnknown: boolean;
+} {
+  const reported = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const retained = activity?.outbound_challenge?.status === 'pending' ? activity.outbound_challenge : null;
+  const pendingChallenges = React.useMemo(() => {
+    if (!reported) return retained ? [retained] : [];
+    return retained && retained.id !== reported.id ? [reported, retained] : [reported];
+  }, [reported, retained]);
+  const liveChallenges = useUnexpiredRequests(pendingChallenges);
+  const challenge = reported ? (liveChallenges.find(candidate => candidate.id === reported.id) ?? null) : null;
+  const retainedOutbound = retained ? (liveChallenges.find(candidate => candidate.id === retained.id) ?? null) : null;
+  const challengeRole =
+    !challenge || !currentUserId
+      ? null
+      : challenge.requester.user_id === currentUserId
+        ? 'requester'
+        : challenge.recipient.user_id === currentUserId
+          ? 'recipient'
+          : null;
+  const outboundChallenge = retainedOutbound ?? (challengeRole === 'requester' ? challenge : null);
+
+  return {
+    challenge,
+    challengeRole,
+    outboundChallenge,
+    outboundChallengeDirectionUnknown: Boolean(challenge && !retainedOutbound && !currentUserId),
+  };
+}
 
 /**
  * The live person-to-person request sent by the viewer.
@@ -22,18 +64,10 @@ export function useOutboundDebateChallenge(
   outboundChallenge: DebateChallenge | null;
   outboundChallengeDirectionUnknown: boolean;
 } {
-  const retained = activity?.outbound_challenge?.status === 'pending' ? activity.outbound_challenge : null;
-  const reported = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const candidate =
-    retained ?? (reported && (!currentUserId || reported.requester.user_id === currentUserId) ? reported : null);
-  const liveCandidates = useUnexpiredRequests(React.useMemo(() => (candidate ? [candidate] : []), [candidate]));
-  const liveCandidate = liveCandidates[0] ?? null;
-  const retainedIsLive = Boolean(liveCandidate && retained?.id === liveCandidate.id);
-  const directionUnknown = Boolean(liveCandidate && !retainedIsLive && !currentUserId);
+  const { outboundChallenge, outboundChallengeDirectionUnknown } = useDebateChallengeState(activity, currentUserId);
 
   return {
-    outboundChallenge:
-      liveCandidate && (retainedIsLive || liveCandidate.requester.user_id === currentUserId) ? liveCandidate : null,
-    outboundChallengeDirectionUnknown: directionUnknown,
+    outboundChallenge,
+    outboundChallengeDirectionUnknown,
   };
 }
