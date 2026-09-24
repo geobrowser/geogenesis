@@ -242,6 +242,11 @@ export type DebateActivity = {
   outbound_request?: DebateRequest | null;
   /** Number of unexpired incoming debate requests. Drives the navbar badge. */
   incoming_request_count?: number;
+  /**
+   * Scheduled requests waiting on the viewer's answer. Separate from `incoming_request_count`,
+   * which decides whether the instant list is fetched at all.
+   */
+  scheduled_awaiting_answer_count?: number;
 };
 
 export type DebateChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired';

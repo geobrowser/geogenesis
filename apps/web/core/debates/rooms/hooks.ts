@@ -19,13 +19,14 @@ import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { debateRoomOpponent, debateRoomPresence } from './room-presence';
 
 /**
- * geo-chat publishes no room event, so this poll is the mechanism rather than a backstop. Tighter
- * than the rematch's 5s because the indicator is what two people watch for each other on.
+ * Arrivals and departures now come as `debate.requests_changed`, but that event is new, so this
+ * stays tight until it has proven itself. Tighter than the rematch's 5s because the indicator is
+ * what two people watch for each other on.
  */
 const ROOM_POLL_MS = 3_000;
 
-/** The join prompt is ambient rather than urgent, and the window it watches is minutes wide. */
-const UPCOMING_ROOMS_POLL_MS = 30_000;
+/** A backstop: `debate.requests_changed` covers booked rooms and arrivals in them. */
+const UPCOMING_ROOMS_POLL_MS = 60_000;
 
 /** Both halves of presence are worth re-sending: an unrecorded arrival or departure misleads the opponent. */
 const PRESENCE_RETRIES = 3;
