@@ -248,6 +248,45 @@ beforeEach(() => {
 });
 
 describe('ClaimPageView record', () => {
+  /*
+   * GEO-3021, reached by walking rather than by loading. The route renders
+   * `EntityPageBody` unkeyed, so following a related claim reuses this page — and
+   * the activity card keeps the reader's Debates/Claims selection in its own
+   * state, so without a key a claim that has debates would land on the Claims left
+   * over from one that had none.
+   *
+   * Asserted on the node rather than through the mock: a remount builds a new DOM
+   * element and a re-render keeps the old one, so element identity is the question
+   * itself rather than a proxy for it.
+   */
+  it('remounts the activity card when the page is pointed at another claim', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    // Re-rendered on the same claim: still the reader's own card, untouched.
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.getByTestId('activity')).toBe(first);
+
+    view.rerender(<ClaimPageView entityId="claim-2" spaceId="space-1" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
+  /*
+   * And the space, because a claim is not one record. It can live in several —
+   * `SpaceRedirect` only moves a reader on where the entity is absent from the
+   * space they asked for — and every row the card is given here is read through
+   * `spaceId`, so the same claim in two spaces is two different records.
+   */
+  it('remounts the activity card when the same claim is read in another space', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-2" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
   it('offers product tabs before authored claim tabs', () => {
     mocks.record.claimsTotal = 1;
 
