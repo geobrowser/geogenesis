@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
+import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
