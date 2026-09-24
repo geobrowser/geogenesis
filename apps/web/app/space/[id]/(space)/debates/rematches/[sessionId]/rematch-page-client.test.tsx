@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
-import { type ReactElement, StrictMode } from 'react';
+import { type ReactElement, type ReactNode, StrictMode } from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,15 +16,7 @@ import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const {
-  SPACE_1,
-  SPACE_2,
-  CLAIM_SHARED,
-  CLAIM_MORE,
-  CLAIM_SOURCE,
-  CLAIM_FRESH,
-  NAME_PROPERTY,
-} = vi.hoisted(() => ({
+const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, NAME_PROPERTY } = vi.hoisted(() => ({
   SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
   SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
   // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
@@ -204,10 +196,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
 }));
 
-// The voice channel has its own colocated suite (rematch-voice.test.tsx); rendering it here would
-// drag the LiveKit stack into every page test.
+// The pair header has its own colocated suite (rematch-voice.test.tsx); rendering it here would
+// drag the LiveKit stack into every page test. Stubbed as a marker rather than as nothing, so the
+// tests below can still say where in the page it lands.
 vi.mock('./rematch-voice', () => ({
-  RematchVoicePill: () => null,
+  // Renders its `leaveAction`, which really does live in the header now — stubbing it away would
+  // take the Leave button off the page for every test below.
+  RematchVoiceHeader: ({ leaveAction }: { leaveAction?: ReactNode }) => (
+    <div data-testid="rematch-pair-header">{leaveAction}</div>
+  ),
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {
@@ -1255,7 +1252,7 @@ describe('DebateRematchPageClient', () => {
   it('opens on the opponent’s positions, with Explore a click away', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    const tab = screen.getByRole('button', { name: /^Lobby/ });
     expect(tab).toHaveAttribute('aria-pressed', 'true');
     // Only the shared claim carries a side from Salina, and the badge counts it.
     expect(within(tab).getByText('1')).toBeInTheDocument();
@@ -1274,7 +1271,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toBeInTheDocument();
   });
 
   // GEO-2683. Recommended, Featured and the whole corpus are three answers to one question --
@@ -1523,7 +1520,7 @@ describe('DebateRematchPageClient', () => {
       // the viewer will land on, which is the whole point of warming it rather than some other one.
       await waitFor(() => expect(mocks.featuredEnabledWith).toContain(true));
       expect(mocks.taggedClaimsAskedFor).toContain('55c95b2626f8482cb9739ea99dfde438');
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
       // Fetched, not shown: the warm-up fills the cache, it does not put Explore's rows on this
       // tab. Nobody has answered this claim, so the opponent's positions are not where it lists.
       expect(screen.queryByText('A newly published claim')).toBeNull();
@@ -1553,7 +1550,7 @@ describe('DebateRematchPageClient', () => {
       await act(async () => {});
 
       expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     /**
@@ -1572,7 +1569,7 @@ describe('DebateRematchPageClient', () => {
       rerender(<DebateRematchPageClient sessionId="rematch-2" />);
       await settleTabSwap();
 
-      expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
     });
 
     /**
@@ -1806,7 +1803,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim Salina just answered')).toBeInTheDocument();
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
-    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    const tab = screen.getByRole('button', { name: /^Lobby/ });
     expect(within(tab).getByText('2')).toBeInTheDocument();
     // geo-chat's settled batch has no row for it, so it has no readiness row: not ready, drawn
     // without spending a per-space request to find that out.
@@ -2041,7 +2038,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Lobby/ }));
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
@@ -2057,7 +2054,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).not.toHaveTextContent('0');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).not.toHaveTextContent('0');
   });
 
   /**
@@ -2095,7 +2092,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveTextContent('1');
   });
 
   // A new response from the opponent restarts the lookups while `useLastSettled` still holds a list
@@ -2103,7 +2100,7 @@ describe('DebateRematchPageClient', () => {
   // on precisely the event that should be invisible.
   it('keeps showing a known count while a refetch is in flight', async () => {
     const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveTextContent('1');
 
     // Same instance, so `useLastSettled` is holding the list it already drew. A fresh render would
     // have no settled value to hold and would legitimately show the skeleton.
@@ -2111,7 +2108,7 @@ describe('DebateRematchPageClient', () => {
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveTextContent('1');
   });
 
   /**
@@ -2159,7 +2156,7 @@ describe('DebateRematchPageClient', () => {
       mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false)];
     }
 
-    const positionsTab = () => screen.getByRole('button', { name: /positions/ });
+    const positionsTab = () => screen.getByRole('button', { name: /^Lobby/ });
 
     it('holds the order it loaded with when a position becomes a match', async () => {
       twoUnmatchedPositions();
@@ -2328,8 +2325,10 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
       expect(tabStrip().className).toContain('overflow-x-auto');
-      // Without this the row is only as wide as its content allows, and there is nothing to scroll.
-      expect(tabStrip().className).toContain('min-w-0');
+      // Without this the row is only as wide as its content allows, and there is nothing to
+      // scroll. It sits on the wrapper that also carries the baseline rule (GEO-2992), so the rule
+      // spans the row rather than the tabs' own scrolled width.
+      expect(tabStrip().parentElement?.className).toContain('min-w-0');
     });
 
     // A swipe that reaches the end of the strip would otherwise chain outward, which on iOS is the
@@ -2345,7 +2344,7 @@ describe('DebateRematchPageClient', () => {
     it('lets each tab keep its natural width', async () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      for (const name of ['Explore', /positions/]) {
+      for (const name of ['Explore', /^Lobby/]) {
         expect(screen.getByRole('button', { name }).className).toContain('shrink-0');
       }
     });
@@ -2368,7 +2367,7 @@ describe('DebateRematchPageClient', () => {
     });
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Okonkwo/ })).toBeNull();
   });
 
@@ -2379,7 +2378,7 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Lobby/ }));
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
@@ -2987,7 +2986,7 @@ describe('DebateRematchPageClient', () => {
     await showOpponentClaims();
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
-    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    const tab = screen.getByRole('button', { name: /^Lobby/ });
     expect(within(tab).getByText('1')).toBeInTheDocument();
   });
 
@@ -3018,7 +3017,7 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
       await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
-      const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+      const tab = screen.getByRole('button', { name: /^Lobby/ });
       expect(within(tab).getByText('0')).toBeInTheDocument();
     });
 
@@ -3157,7 +3156,7 @@ describe('DebateRematchPageClient', () => {
     await showOpponentClaims();
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
-    expect(within(screen.getByRole('button', { name: /Salina’s positions/ })).getByText('1')).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /^Lobby/ })).getByText('1')).toBeInTheDocument();
 
     await showAllClaims();
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
@@ -3178,7 +3177,7 @@ describe('DebateRematchPageClient', () => {
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
-    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    const tab = screen.getByRole('button', { name: /^Lobby/ });
     expect(within(tab).getByText('1')).toBeInTheDocument();
 
     // They land, and the new claim joins the list.
@@ -3225,7 +3224,7 @@ describe('DebateRematchPageClient', () => {
     // The opponent's tab is their own positions, fetched by id and filtered here rather than by a
     // query — so the term carries across the switch and narrows that list too, keeping what matches
     // and dropping what does not.
-    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Lobby/ }));
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
@@ -3339,6 +3338,61 @@ describe('DebateRematchPageClient', () => {
     // And the list is outside it, or it would be pinned too and never scroll. Anchored on a claim
     // row: the scroll sentinel used to stand for the list here, and nothing pages any more.
     expect(screen.getByText('A newly published claim').closest('.sticky')).toBeNull();
+  });
+
+  // This page is a `fixed inset-0` layer over the whole app, and Leave is the only way off it.
+  // Moving it into the pair header put it behind `session && currentUserId` for a release —
+  // signed out, mid identity exchange, or on a failed session lookup the picker covered the screen
+  // with no exit at all.
+  it('draws Leave even when there is no pair to draw', async () => {
+    mocks.session = null;
+    mocks.sessionLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByTestId('rematch-pair-header')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+  });
+
+  // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
+  // viewport — outside the 720px column, and a scroll away from everything the viewer was reading.
+  // Its replacement has to be in the column, above the tabs, and pinned with them.
+  it('pins the pair header at the top of the content column', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const header = screen.getByTestId('rematch-pair-header');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    expect(header.closest('.sticky')).toBe(pinned);
+
+    // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
+    expect(header.closest('main')).not.toBeNull();
+    expect(header.closest('.fixed')).toBe(header.closest('[data-rematch-scroll]'));
+
+    // Above the tabs, which is the reading order the header is for: who you are with, then what
+    // you can pick.
+    const tabs = screen.getByRole('button', { name: 'Explore' });
+    expect(header.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The hub panel's tab row, reused (GEO-2992): two surfaces doing the same job had two different
+  // tab treatments.
+  it('names the tabs Lobby and Explore, in the hub panel\u2019s styles', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const lobby = screen.getByRole('button', { name: /^Lobby/ });
+    const explore = screen.getByRole('button', { name: 'Explore' });
+    // The opponent's name is in the header now, with their face next to it, so the tab no longer
+    // has to carry it — and a fixed label keeps the strip from reflowing when the name lands.
+    expect(screen.queryByRole('button', { name: /positions/ })).toBeNull();
+
+    expect(lobby.className).toContain('text-quoteMedium');
+    expect(lobby).toHaveAttribute('aria-pressed', 'true');
+    expect(lobby.className).toContain('text-text');
+    expect(explore.className).toContain('text-grey-04');
+
+    // The active tab draws its own 1px marker over the row's baseline rule.
+    expect(lobby.querySelector('.bg-text')).not.toBeNull();
+    expect(explore.querySelector('.bg-text')).toBeNull();
   });
 
   // The paging skeleton and the sentinel it followed are both gone (GEO-2771): the tag hands the
@@ -3992,7 +4046,7 @@ async function showAllClaims() {
 
 /** The opponent's own responses, which are a tab of their own rather than a source of Explore. */
 async function showOpponentClaims() {
-  fireEvent.click(screen.getByRole('button', { name: /positions/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Lobby/ }));
   await settleTabSwap();
 }
 
@@ -4580,7 +4634,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toBeInTheDocument();
   });
 
   // A tab that leads to an empty list is worse than no tab: the strip is not where someone should
@@ -4645,13 +4699,13 @@ describe('the Related tab', () => {
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /positions/ })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Lobby/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
   });
 
   // Related is where the pair land, and a strip that opens on its second item reads as though
   // something moved.
-  it('puts Related ahead of the opponent’s positions', async () => {
+  it('puts Related ahead of the Lobby', async () => {
     debateWithRelated();
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -4664,7 +4718,7 @@ describe('the Related tab', () => {
       .filter(button => button.hasAttribute('aria-pressed'))
       .map(button => button.textContent ?? '');
     expect(tabs[0]).toBe('Related');
-    expect(tabs[1]).toMatch(/positions/);
+    expect(tabs[1]).toMatch(/^Lobby/);
     expect(tabs[2]).toBe('Explore');
   });
 
@@ -4741,7 +4795,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   /**
@@ -4957,7 +5011,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   /**
@@ -4999,7 +5053,7 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
-    expect(screen.getByRole('button', { name: /positions/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('No related claims are left to debate.')).toBeNull();
   });
 
