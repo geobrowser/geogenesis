@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
@@ -107,6 +107,10 @@ beforeEach(() => {
   mocks.useQuery.mockClear();
   mocks.useScope.mockClear();
   mocks.getDebateActivity.mockReset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('debate query network ownership', () => {
@@ -232,6 +236,7 @@ describe('debate query network ownership', () => {
   });
 
   it('keeps a newly created outbound challenge cached instead of refetching stale activity over it', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(12_345);
     const { result } = renderHook(() => useCreateDebateChallenge());
     const mutation = result.current as unknown as {
       onSuccess(challenge: { id: string }): void;
@@ -261,6 +266,7 @@ describe('debate query network ownership', () => {
       ...warmActivity,
       challenge,
       outbound_challenge: challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
     });
     expect(update(undefined)).toEqual({
       online: true,
@@ -271,6 +277,7 @@ describe('debate query network ownership', () => {
       rematch: null,
       challenge,
       outbound_challenge: challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
     });
     expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: ['debates', 'account', 'user-a', 'activity'],
@@ -317,6 +324,7 @@ describe('debate query network ownership', () => {
   });
 
   it('briefly retains a newly created outbound challenge while activity propagation catches up', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(9_999);
     const outbound = {
       id: 'challenge-outbound',
       status: 'pending',
@@ -324,7 +332,10 @@ describe('debate query network ownership', () => {
       expires_at: '2099-01-01T00:00:00.000Z',
     };
     const activity = { challenge: null, debate: null, rematch: null };
-    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
     mocks.getDebateActivity.mockResolvedValue(activity);
     renderHook(() => useDebateActivity());
 
@@ -333,7 +344,72 @@ describe('debate query network ownership', () => {
     };
     const result = await query.queryFn({ signal: new AbortController().signal });
 
-    expect(result).toEqual({ ...activity, outbound_challenge: outbound });
+    expect(result).toEqual({
+      ...activity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
+  });
+
+  it('ends the propagation grace on monotonic time when the device clock trails the server', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(20_001);
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      // Five minutes ahead of this device. Wall-clock subtraction would keep the ten-second grace
+      // open for more than five minutes even though eleven monotonic seconds have elapsed.
+      created_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 10_000,
+    });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual(activity);
+  });
+
+  it('leaves server-timestamp expiry to the synchronized request filter', async () => {
+    const serverNow = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(serverNow + 60 * 60_000);
+    vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      created_at: new Date(serverNow).toISOString(),
+      expires_at: new Date(serverNow + 60_000).toISOString(),
+    };
+    const inbound = {
+      id: 'challenge-inbound',
+      status: 'pending',
+      expires_at: new Date(serverNow + 60_000).toISOString(),
+    };
+    const activity = { challenge: inbound, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({
+      ...activity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
   });
 
   // The rematch voice token is the one query whose cache policy is load-bearing rather than a

@@ -537,23 +537,38 @@ export function useDebateActivity(enabled = true) {
       // coexist, it keeps returning the inbound row until that row expires; without this overlay a
       // refetch hides the outbound card and makes the People tab offer another request. Retain the
       // create response until it expires or activity advances into a debate/rematch.
-      const retainedOutbound = queryClient.getQueryData<DebateActivity>(activityKey)?.outbound_challenge;
-      const outboundIsLive =
-        retainedOutbound?.status === 'pending' && Date.parse(retainedOutbound.expires_at) > Date.now();
+      const cachedActivity = queryClient.getQueryData<DebateActivity>(activityKey);
+      const retainedOutbound = cachedActivity?.outbound_challenge;
+      const retainedOutboundCachedAt = cachedActivity?.outbound_challenge_cached_at_monotonic_ms;
+      const outboundIsPending = retainedOutbound?.status === 'pending';
       // The create response can beat the activity read triggered by the gateway event. Keep its
-      // outbound row through that brief propagation window, then treat a null/non-pending server
-      // challenge as authoritative. A different live inbound challenge must keep the overlay: the
-      // wire shape has no outbound id/status with which to distinguish a still-pending request from
-      // one rejected remotely, and dropping it would erase valid simultaneous outbound requests.
-      const serverChallengeIsLive =
-        activity.challenge?.status === 'pending' && Date.parse(activity.challenge.expires_at) > Date.now();
-      const retainedOutboundCreatedAt = retainedOutbound ? Date.parse(retainedOutbound.created_at) : Number.NaN;
+      // outbound row through that brief local propagation window, then treat a null/non-pending
+      // server challenge as authoritative. Request expiry stays in `useUnexpiredRequests`, whose
+      // synchronized server clock avoids comparing server timestamps against a skewed device.
+      // A different pending inbound challenge must keep the overlay: the wire shape has no outbound
+      // id/status with which to distinguish a still-pending request from one rejected remotely, and
+      // dropping it would erase valid simultaneous outbound requests.
+      const serverChallengeIsPending = activity.challenge?.status === 'pending';
+      const hasRetainedOutboundCachedAt =
+        typeof retainedOutboundCachedAt === 'number' && Number.isFinite(retainedOutboundCachedAt);
+      const outboundPropagationElapsed = hasRetainedOutboundCachedAt
+        ? performance.now() - retainedOutboundCachedAt
+        : Number.POSITIVE_INFINITY;
       const outboundIsPropagating =
-        Number.isFinite(retainedOutboundCreatedAt) &&
-        Date.now() - retainedOutboundCreatedAt < OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS;
-      return outboundIsLive && (serverChallengeIsLive || outboundIsPropagating) && !activity.debate && !activity.rematch
-        ? { ...activity, outbound_challenge: retainedOutbound }
-        : activity;
+        outboundPropagationElapsed >= 0 && outboundPropagationElapsed < OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS;
+      if (
+        !outboundIsPending ||
+        (!serverChallengeIsPending && !outboundIsPropagating) ||
+        activity.debate ||
+        activity.rematch
+      ) {
+        return activity;
+      }
+      return {
+        ...activity,
+        outbound_challenge: retainedOutbound,
+        ...(hasRetainedOutboundCachedAt ? { outbound_challenge_cached_at_monotonic_ms: retainedOutboundCachedAt } : {}),
+      };
     },
     enabled: queryEnabled,
     // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
@@ -1265,6 +1280,7 @@ export function useCreateDebateChallenge() {
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
+      const cachedAtMonotonicMs = performance.now();
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
         // A successful create is enough to seed the activity cache when its initial read has not
         // landed yet. These are the same safe idle defaults used by the rematch transition above;
@@ -1274,6 +1290,7 @@ export function useCreateDebateChallenge() {
         // Keep an inbound challenge in the wire field so its popup and Received card survive.
         challenge: current?.challenge ?? challenge,
         outbound_challenge: challenge,
+        outbound_challenge_cached_at_monotonic_ms: cachedAtMonotonicMs,
       }));
       // The create response is the newest authoritative copy of this challenge. Refetching activity
       // immediately can still return the pre-create row and erase it from the cache, which removes
@@ -1301,7 +1318,13 @@ export function useAcceptDebateChallenge() {
       }
       // Accepting an inbound challenge cancels the viewer's outbound one on the server.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current ? { ...current, outbound_challenge: null } : current
+        current
+          ? {
+              ...current,
+              outbound_challenge: null,
+              outbound_challenge_cached_at_monotonic_ms: null,
+            }
+          : current
       );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
@@ -1321,6 +1344,10 @@ export function useRejectDebateChallenge() {
               ...current,
               challenge: current.challenge?.id === challengeId ? null : current.challenge,
               outbound_challenge: current.outbound_challenge?.id === challengeId ? null : current.outbound_challenge,
+              outbound_challenge_cached_at_monotonic_ms:
+                current.outbound_challenge?.id === challengeId
+                  ? null
+                  : current.outbound_challenge_cached_at_monotonic_ms,
             }
           : current
       );
