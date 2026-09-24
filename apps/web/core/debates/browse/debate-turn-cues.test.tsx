@@ -1,12 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
+import { DebateRoundBadge, DebateTurnCueOverlay } from './debate-turn-cues';
 
 afterEach(cleanup);
 
@@ -89,85 +88,5 @@ describe('DebateRoundBadge', () => {
   it('ramps in at the strength the handover gave it', () => {
     const { container } = render(<DebateRoundBadge badge={{ label: 'Round 1 · Opening', opacity: 0.5 }} />);
     expect((container.firstElementChild as HTMLElement).style.opacity).toBe('0.5');
-  });
-});
-
-describe('DebateScorecard', () => {
-  const card = (props: Partial<React.ComponentProps<typeof DebateScorecard>> = {}) =>
-    render(
-      <DebateScorecard
-        name="Maya"
-        avatar={<img alt="" data-testid="avatar" />}
-        claims={9}
-        speakingTime="4:07"
-        agreement={{ percent: 68, word: 'agreed' }}
-        won
-        onOpenProfile={vi.fn()}
-        {...props}
-      />
-    );
-
-  it('closes the video on the figures rather than a stop', () => {
-    card();
-    expect(screen.getByText('Maya')).toBeInTheDocument();
-    expect(screen.getByText('9')).toBeInTheDocument();
-    expect(screen.getByText('claims')).toBeInTheDocument();
-    expect(screen.getByText('4:07 speaking')).toBeInTheDocument();
-  });
-
-  it('opens with the person, not the number', () => {
-    card();
-    expect(screen.getByTestId('avatar')).toBeInTheDocument();
-  });
-
-  it('keeps the name a link to their profile', async () => {
-    const onOpenProfile = vi.fn();
-    card({ onOpenProfile });
-    await userEvent.click(screen.getByRole('button', { name: /Maya/ }));
-    expect(onOpenProfile).toHaveBeenCalledTimes(1);
-  });
-
-  it('leaves the rest of the card out of the way of the pointer', () => {
-    // Everything else on the tile is a click target for play/pause, and a full-cover layer that
-    // took events would swallow it.
-    const { container } = card();
-    expect([...(container.firstElementChild as HTMLElement).classList]).toContain('pointer-events-none');
-  });
-
-  it('says how the room received them, which is the reading a count cannot give', () => {
-    card();
-    expect(screen.getByText('68% agreed')).toBeInTheDocument();
-  });
-
-  it('borrows the vocabulary of the claims being counted', () => {
-    card({ agreement: { percent: 81, word: 'verified' } });
-    expect(screen.getByText('81% verified')).toBeInTheDocument();
-  });
-
-  it('says nothing where too few people have answered to characterise a split', () => {
-    // A share off three responses is arithmetic, not a reading, and this is the most confident
-    // place on the page to print one.
-    card({ agreement: null });
-    expect(screen.queryByText(/agreed|verified/)).toBeNull();
-  });
-
-  it('reads correctly for a debater who made one claim', () => {
-    card({ claims: 1, speakingTime: null, agreement: null });
-    expect(screen.getByText('claim')).toBeInTheDocument();
-  });
-
-  it('says nothing about time it does not have', () => {
-    card({ speakingTime: null });
-    expect(screen.queryByText(/speaking/)).toBeNull();
-  });
-
-  it('marks the higher count without calling the debate', () => {
-    // The vote decides who won; this only says who said more, which is a different sentence.
-    const { container: winner } = card({ won: true });
-    const { container: loser } = card({ name: 'Dev', claims: 4, won: false });
-    const figure = (root: HTMLElement, who: string) =>
-      root.querySelector(`[data-scorecard="${who}"] span.font-bold`) as HTMLElement;
-    expect(figure(winner, 'Maya').style.color).not.toBe('');
-    expect(figure(loser, 'Dev').style.color).toBe('');
   });
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,11 +84,13 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: () => null,
   // Stands in for the chip the tile now draws beside its round and timer: the player owns the
   // count and both latches, so what is under test here is what it hands over.
-  ClaimBacklogChip: ({ count, tally }: { count: number; tally: unknown }) => (
-    <button type="button" aria-label={`Show the ${count} claims said so far`}>
+  // Stands in for the readout the tile draws beside its round and timer: the player owns the
+  // count and the latches, so what is under test here is what it hands over.
+  DebateClaimCounter: ({ count, tally }: { count: number; tally: unknown }) => (
+    <span data-claim-counter>
       {count} claims
       {tally ? <span data-claim-burst>+1</span> : null}
-    </button>
+    </span>
   ),
 }));
 
@@ -102,7 +104,7 @@ const participant = (slot: 1 | 2): DebateParticipant =>
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
 const debate = {
   id: 'debate-1',
-  claim: { space_id: 'space-1', claim_entity_id: 'claim-entity-1' },
+  claim: { space_id: 'space-1', claim_entity_id: 'claim-entity-1', claim: 'Nuclear is cheapest' },
 } as unknown as Debate;
 
 /**
@@ -387,7 +389,7 @@ describe('a refused autoplay', () => {
 });
 
 describe('ended playback', () => {
-  it('centers one replay button over the video', () => {
+  it('hands the replay to the end card rather than floating it over the figures', () => {
     const controller = controllerFixture({
       mutedByUser: true,
       turnSlot: 1,
@@ -395,12 +397,13 @@ describe('ended playback', () => {
       playbackEnded: true,
     });
     mocks.controller = controller;
-    const { getByRole } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByRole, container } = render(<DebateFeedPlayer debate={debate} active />);
 
     const replayButton = getByRole('button', { name: 'Replay debate' });
-    expect([...replayButton.classList]).toEqual(
-      expect.arrayContaining(['top-1/2', 'left-1/2', '-translate-x-1/2', '-translate-y-1/2'])
-    );
+    // One button, and it belongs to the card: centred over the player it would land on top of
+    // the two debaters' figures, which are what the middle of the card is for.
+    expect(replayButton.closest('[data-debate-end-card]')).not.toBeNull();
+    expect(container.querySelectorAll('[aria-label="Replay debate"]')).toHaveLength(1);
 
     fireEvent.click(replayButton);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);
@@ -712,7 +715,7 @@ describe('the turn clock, replayed', () => {
     expect(phrases(container)).toEqual([]);
   });
 
-  it("puts the debater's count with the clock, not with their claims", () => {
+  it("puts the debater's count with the clock, as a readout rather than a control", () => {
     mocks.controller = at(12);
     mocks.ticker = {
       ...emptyTicker(),
@@ -721,12 +724,12 @@ describe('the turn clock, replayed', () => {
     };
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const chip = screen.getByRole('button', { name: /claims said so far/ });
-    // Beside the round and the turn timer — the tile's instruments — rather than in the corner
-    // the claims themselves occupy.
-    expect(chip.closest('[data-claim-corner]')).toBeNull();
-    expect(chip.textContent).toContain('4 claims');
-    expect(container.querySelector('[data-claim-burst]')).not.toBeNull();
+    const counter = container.querySelector('[data-claim-counter]') as HTMLElement;
+    // Beside the round and the turn timer — the tile's instruments — and not a button: where
+    // there is a pointer, the corner opens by pointing at the tile.
+    expect(counter.closest('[data-claim-corner]')).toBeNull();
+    expect(counter.querySelector('button')).toBeNull();
+    expect(counter.textContent).toContain('4');
   });
 
   it("ends the video on both debaters' figures rather than a stop", () => {
@@ -788,10 +791,12 @@ describe('the turn clock, replayed', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const prompt = container.querySelector('[data-claim-prompt]');
-    expect(prompt?.textContent).toContain('Where do you stand?');
-    // The debate's own claim, so the answer lands where the pills below the player publish it.
-    expect(prompt?.textContent).toContain('claim-entity-1');
+    const card = container.querySelector('[data-debate-end-card]');
+    expect(card?.textContent).toContain('Where do you stand?');
+    // The motion, so the question has something to be about, and the claim's own control, so the
+    // answer lands where the pills below the player publish it.
+    expect(card?.textContent).toContain('Nuclear is cheapest');
+    expect(card?.textContent).toContain('claim-entity-1');
   });
 
   it('does not ask until the debate is over', () => {
@@ -799,16 +804,7 @@ describe('the turn clock, replayed', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-claim-prompt]')).toBeNull();
-  });
-
-  it('leaves the scrubber reachable under the question', () => {
-    // Seeking back through the debate has to stay possible from the card that asks it.
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
-    mocks.ticker = emptyTicker();
-
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect([...(container.querySelector('[data-claim-prompt]') as HTMLElement).classList]).toContain('bottom-5');
+    expect(container.querySelector('[data-debate-end-card]')).toBeNull();
   });
 
   it('keeps the scorecard off a compact gallery tile', () => {

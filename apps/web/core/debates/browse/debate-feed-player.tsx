@@ -25,12 +25,13 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import {
-  ClaimBacklogChip,
   ClaimScrubberMarkers,
+  DebateClaimCounter,
   DebateClaimTickerStack,
   useDebateClaimTicker,
 } from './debate-claim-ticker';
-import { DebateClaimPrompt, DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
+import { DebateEndCard, type DebateEndCardSide } from './debate-end-card';
+import { DebateRoundBadge, DebateTurnCueOverlay } from './debate-turn-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateAgreement } from './use-debate-agreement';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -176,27 +177,20 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
   );
 
   /**
-   * The claim count for one tile, as its own instrument rather than part of the claim corner.
+   * The claim count as a readout beside the clock, for a device that has a pointer.
    *
-   * Built here because it needs what the corner needed — the backlog's length, the running tally,
-   * and both latches that hold the list open — none of which the tile knows. Off on a compact
-   * gallery tile with the rest of the claim layer, and off once the scorecard is up, which says
-   * the same number in full.
+   * A readout rather than a control: where there is hover, the backlog opens by pointing at the
+   * tile, so a button here would be a second way to do what the tile already does. Where there is
+   * not, this is hidden in CSS and the count is the chip in the corner instead — one number
+   * either way, because both read the same backlog.
    */
   const claimChipFor = (slot: 1 | 2) => {
     if (reducedOverlays || playbackEnded) return null;
     const count = ticker.historyBySlot.get(slot)?.length ?? 0;
     if (count === 0) return null;
 
-    const clearSlot = (current: number | null) => (current === slot ? null : current);
     return (
-      <ClaimBacklogChip
-        count={count}
-        tally={claimsOpenFor(slot) ? null : (ticker.tallyBySlot.get(slot) ?? null)}
-        expanded={claimsOpenFor(slot) && pinnedSlot === slot}
-        onClick={() => setPinnedSlot(current => (current === slot ? null : slot))}
-        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
-      />
+      <DebateClaimCounter count={count} tally={claimsOpenFor(slot) ? null : (ticker.tallyBySlot.get(slot) ?? null)} />
     );
   };
 
@@ -233,21 +227,34 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     enabled: playbackEnded && !reducedOverlays,
   });
 
-  const scorecardFor = (slot: 1 | 2) => {
-    if (reducedOverlays || !playbackEnded) return null;
-    const claims = ticker.historyBySlot.get(slot)?.length ?? 0;
-    const other = ticker.historyBySlot.get(slot === 1 ? 2 : 1)?.length ?? 0;
+  /** Whether the end card is up, which is also what takes the tiles' own name rows down. */
+  const endCardShown = playbackEnded && !reducedOverlays;
+
+  // The same link each tile puts on its own name row. Resolved here as well because the end card
+  // names both debaters and the hook cannot be called from inside a per-slot helper; the space
+  // lookup behind it is a shared cache entry, so the second pair costs nothing.
+  const openSlot1Profile = useOpenDebaterProfile(slot1Participant);
+  const openSlot2Profile = useOpenDebaterProfile(slot2Participant);
+
+  const endCardSideFor = (slot: 1 | 2): DebateEndCardSide => {
+    const participant = slot === 1 ? slot1Participant : slot2Participant;
     const seconds = speakingSeconds.get(slot);
     const agreement = agreementBySlot.get(slot);
     return {
-      claims,
+      name: participant ? speakerLabel(participant) : 'Debater',
+      avatar: <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />,
+      claims: ticker.historyBySlot.get(slot)?.length ?? 0,
       speakingTime: seconds ? formatSpeakingTime(seconds) : null,
-      agreement:
-        agreement && agreement.meetsFloor && agreement.percent !== null
-          ? { percent: agreement.percent, word: agreement.positiveWord }
-          : null,
-      // A draw marks neither, which is the honest reading of two equal counts.
-      won: claims > other,
+      agreement: agreement
+        ? {
+            percent: agreement.percent ?? 0,
+            positive: agreement.positive,
+            total: agreement.total,
+            word: agreement.positiveWord,
+            confident: agreement.meetsFloor,
+          }
+        : null,
+      onOpenProfile: slot === 1 ? openSlot1Profile : openSlot2Profile,
     };
   };
 
@@ -404,7 +411,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       <DebateClaimTickerStack
         cards={cards}
         history={history}
+        tally={ticker.tallyBySlot.get(slot) ?? null}
         open={claimsOpenFor(slot)}
+        pinned={pinnedSlot === slot}
+        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
         onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
         participantByClaimId={ticker.participantByClaimId}
         rowsByClaimId={ticker.rowsByClaimId}
@@ -413,6 +423,28 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
     );
   };
+
+  /**
+   * One replay/resume button, drawn wherever it currently belongs.
+   *
+   * Lifted out of its position so the end card can hold it. The two places differ only in where
+   * they put it: a control that was rebuilt per position would be two buttons that have to be
+   * kept saying the same thing.
+   */
+  const replayControl = (
+    <button
+      type="button"
+      aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
+      onClick={event => {
+        event.stopPropagation();
+        if (showReplay) playFromStart();
+        else togglePlayback();
+      }}
+      className={cx(PLAYBACK_CONTROL_CIRCLE_CLASS, 'grid', showReplay && '[&>svg]:scale-[2]')}
+    >
+      {showReplay ? <RetrySmall /> : <Play />}
+    </button>
+  );
 
   // Clicking the video briefly flashes the action it just took — feedback only, not a control.
   const [flash, setFlash] = React.useState<{ icon: 'play' | 'pause'; visible: boolean }>({
@@ -464,7 +496,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         turnCue={turnCueForSlot(turnCues, 1)}
         claimChip={claimChipFor(1)}
         roundBadge={turnState?.slot === 1 ? roundBadge : null}
-        scorecard={scorecardFor(1)}
+        covered={endCardShown}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -522,7 +554,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         turnCue={turnCueForSlot(turnCues, 2)}
         claimChip={claimChipFor(2)}
         roundBadge={turnState?.slot === 2 ? roundBadge : null}
-        scorecard={scorecardFor(2)}
+        covered={endCardShown}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -611,22 +643,33 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         </span>
       )}
 
-      {/* The replay and resume states are mutually exclusive, so they share one centered control.
-          Replay is shown at every width; the ordinary paused control stays mobile-only because
-          desktop retains its persistent corner play/pause control while playback is in progress. */}
-      {(showReplay || showPausedGlyph) && (
-        <button
-          type="button"
-          aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-          onClick={showReplay ? playFromStart : togglePlayback}
-          className={cx(
-            CENTERED_PLAYBACK_CONTROL_CLASS,
-            'z-30',
-            showReplay ? 'grid [&>svg]:scale-[2]' : 'hidden md:grid'
-          )}
-        >
-          {showReplay ? <RetrySmall /> : <Play />}
-        </button>
+      {/* What the video ends on: the motion, the question, and how the two of them did.
+          One card across the player rather than a panel per tile, because the question has to sit
+          above both debaters and two halves cannot put anything above both. */}
+      {endCardShown && (
+        <DebateEndCard
+          claim={debate.claim.claim}
+          prompt="Where do you stand?"
+          responseControl={
+            <EntityVoteButtons
+              entityId={debate.claim.claim_entity_id}
+              spaceId={debate.claim.space_id}
+              responseKind={undefined}
+              claimResponderAvatarsPosition="trailing"
+            />
+          }
+          sides={[endCardSideFor(1), endCardSideFor(2)]}
+          replay={replayControl}
+        />
+      )}
+
+      {/* The replay and resume states are mutually exclusive, so they share one control. It is
+          centred over the video, except where the end card is up — there it belongs to the card,
+          under the figures, rather than floating over the middle of them. */}
+      {(showReplay || showPausedGlyph) && !endCardShown && (
+        <div className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30', showReplay ? 'grid' : 'hidden md:grid')}>
+          {replayControl}
+        </div>
       )}
 
       {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
@@ -640,20 +683,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       >
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
-
-      {/* The question the debate was about, asked at the one moment the viewer has heard the whole
-          case. Across the foot of the player rather than in a tile: it belongs to the debate, not
-          to either debater. */}
-      {playbackEnded && !reducedOverlays && (
-        <DebateClaimPrompt prompt="Where do you stand?">
-          <EntityVoteButtons
-            entityId={debate.claim.claim_entity_id}
-            spaceId={debate.claim.space_id}
-            responseKind={undefined}
-            claimResponderAvatarsPosition="trailing"
-          />
-        </DebateClaimPrompt>
-      )}
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -673,7 +702,7 @@ function DebaterVideo({
   turnCue,
   claimChip,
   roundBadge,
-  scorecard,
+  covered = false,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -699,13 +728,8 @@ function DebaterVideo({
   claimChip?: React.ReactNode;
   /** The round in progress, parked beside this tile's timer. Only the speaker's tile has one. */
   roundBadge?: { label: string; opacity: number } | null;
-  /** How this debater finished, once the debate has. The tile supplies who they are. */
-  scorecard?: {
-    claims: number;
-    speakingTime: string | null;
-    agreement: { percent: number; word: string } | null;
-    won: boolean;
-  } | null;
+  /** The end card is over this tile, so anything the card says again stands down. */
+  covered?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -969,17 +993,6 @@ function DebaterVideo({
       )}
 
       <DebateTurnCueOverlay cue={turnCue ?? null} />
-      {scorecard && (
-        <DebateScorecard
-          name={name}
-          avatar={<Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />}
-          claims={scorecard.claims}
-          speakingTime={scorecard.speakingTime}
-          agreement={scorecard.agreement}
-          won={scorecard.won}
-          onOpenProfile={openProfile}
-        />
-      )}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -1085,7 +1098,7 @@ function DebaterVideo({
         // Hidden, not faded: the scorecard lifts this exact row — same avatar, same label, same
         // link — into the middle of the tile, and a second copy of it dimmed under the scrim reads
         // as the card having failed to cover something.
-        hidden={Boolean(scorecard)}
+        hidden={covered}
         className={cx(
           'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band

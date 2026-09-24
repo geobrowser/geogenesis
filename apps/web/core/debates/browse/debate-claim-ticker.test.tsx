@@ -925,7 +925,9 @@ describe('ClaimBacklogChip', () => {
 
   it('names how many claims are behind the playhead', () => {
     chip();
-    expect(screen.getByRole('button', { name: 'Show the 2 claims said so far' })).toHaveTextContent('2 claims');
+    const button = screen.getByRole('button', { name: 'Show the 2 claims said so far' });
+    expect(button.textContent).toContain('2');
+    expect(button.textContent).toContain('claims');
   });
 
   it('presses through to the caller, which owns whether the corner is open', () => {
@@ -944,13 +946,15 @@ describe('ClaimBacklogChip', () => {
     expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
   });
 
-  it('is up on a pointer device too, not only where there is no hover', () => {
-    // It is the only thing on the tile that says the backlog exists; hiding it everywhere a
-    // pointer could hover meant a viewer who never pointed at a debater's half never found it.
+  it('stays out of the way where there is a pointer, and reachable by keyboard', () => {
+    // Where there is hover the count is a readout beside the clock and the corner opens by
+    // pointing at the tile, so this is not drawn — but it stays in the DOM and focusable, or a
+    // keyboard would have no way into the backlog at all.
     chip();
     const button = screen.getByRole('button', { name: /claims said so far/ });
-    expect([...button.classList]).not.toContain('opacity-0');
-    expect([...button.classList]).toContain('pointer-events-auto');
+    expect([...button.classList]).toContain('opacity-0');
+    expect([...button.classList]).toContain('no-hover:opacity-100');
+    expect([...button.classList]).toContain('focus-visible:opacity-100');
   });
 
   it('wears the same glyph as the Claims button, which is the circled exclamation', () => {
@@ -986,6 +990,21 @@ describe('ClaimBacklogChip', () => {
 
   it('goes back to reporting once the run is over', () => {
     chip({ count: 9, tally: { count: 9, ageMs: 200, run: RUN_LENGTH - 1 } });
-    expect(screen.getByText('9 claims')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getByText('claims')).toBeInTheDocument();
+  });
+
+  it('swells as a claim lands, and settles again', () => {
+    // Driven by the playhead like everything else over this video, so a scrub lands on the size
+    // the moment actually had rather than part-way through an animation.
+    const face = () => document.querySelector('[data-claim-count]') as HTMLElement;
+
+    chip({ tally: { count: 2, ageMs: 220, run: 1 } });
+    const swollen = Number(face().style.transform.match(/scale\(([\d.]+)\)/)?.[1]);
+    cleanup();
+
+    chip({ tally: null });
+    expect(Number(face().style.transform.match(/scale\(([\d.]+)\)/)?.[1])).toBe(1);
+    expect(swollen).toBeGreaterThan(1);
   });
 });
