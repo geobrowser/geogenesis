@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -56,17 +57,23 @@ function timing(overrides: Partial<ClaimTiming> = {}): ClaimTiming {
 }
 
 function renderRow(overrides: Partial<React.ComponentProps<typeof ExtractedClaimRow>> = {}) {
+  // A row with comments and depth left mounts the list that fetches them, which needs a client even
+  // though this file never lets it resolve.
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <ExtractedClaimRow
-      claim={claim()}
-      debateId="debate-1"
-      debateSpaceId="debate-space"
-      responseKind="stance"
-      responseVocabulary="stance"
-      speaker={{ spaceId: 'speaker-space', name: 'Ada Reyes' }}
-      speakerPosition={null}
-      {...overrides}
-    />
+    <QueryClientProvider client={client}>
+      <ExtractedClaimRow
+        claim={claim()}
+        debateId="debate-1"
+        debateSpaceId="debate-space"
+        responseKind="stance"
+        responseVocabulary="stance"
+        speaker={{ spaceId: 'speaker-space', name: 'Ada Reyes' }}
+        speakerPosition={null}
+        depth={2}
+        {...overrides}
+      />
+    </QueryClientProvider>
   );
 }
 

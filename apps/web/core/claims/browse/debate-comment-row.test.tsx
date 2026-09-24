@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { CommentWithReplies } from '~/partials/comments/types';
+
+import { ACTIVITY_MAX_DEPTH } from './claim-activity-depth';
 
 const mocks = vi.hoisted(() => ({
   /** Responder space id → the side they hold on the claim, as the provider would resolve it. */
@@ -25,6 +27,11 @@ vi.mock('~/core/hooks/use-entity-comments-panel', () => ({
 }));
 vi.mock('~/core/state/editor/markdown-render', () => ({ renderMarkdownDocument: (text: string) => text }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => (
+    <a {...(props as Record<string, string>)}>{children}</a>
+  ),
+}));
 
 import { DebateCommentRow } from './debate-comment-row';
 
@@ -46,9 +53,10 @@ function comment(overrides: Partial<CommentWithReplies> = {}): CommentWithReplie
   };
 }
 
-function renderRow(overrides: Partial<CommentWithReplies> = {}, maxDepth = 2) {
+// Depth is counted from the claim: 1 is a debate or a top-level comment, 4 is the floor.
+function renderRow(overrides: Partial<CommentWithReplies> = {}, depth = 2) {
   return render(
-    <DebateCommentRow comment={comment(overrides)} debateId="debate-1" spaceId="space-1" maxDepth={maxDepth} />
+    <DebateCommentRow comment={comment(overrides)} targetEntityId="debate-1" spaceId="space-1" depth={depth} />
   );
 }
 
@@ -103,20 +111,41 @@ describe('DebateCommentRow', () => {
     expect(screen.getByText('Publishing…')).toBeInTheDocument();
   });
 
-  it('draws its replies while there is depth budget left', () => {
+  it('draws its replies while there is depth left', () => {
     renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'a reply' })] });
 
     expect(screen.getByText('a reply')).toBeInTheDocument();
-    // Drawn, so the count would be saying the same thing twice.
-    expect(screen.queryByRole('button', { name: '1 reply' })).not.toBeInTheDocument();
+    // Drawn, so offering to continue elsewhere would be saying the same thing twice.
+    expect(screen.queryByRole('link', { name: /Continue this thread/ })).not.toBeInTheDocument();
   });
 
-  // Past the budget the thread has its own home, and a count plus a way in beats a fifth indent.
-  it('counts its replies instead of drawing them once the budget runs out', () => {
-    renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'a reply' })] }, 0);
+  // At the floor there is no room to draw them, so the reader is sent to the page where this thread
+  // is the whole page rather than a branch of one. A navigation, not a load — Reddit's distinction.
+  it('offers to continue the thread on its own entity once it hits the floor', () => {
+    renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'a reply' })] }, ACTIVITY_MAX_DEPTH);
 
     expect(screen.queryByText('a reply')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '1 reply' })).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'Continue this thread — 1 more reply' });
+    expect(link).toHaveAttribute('href', expect.stringContaining('debate-1'));
+  });
+
+  // The other overflow: siblings held back for length. Already loaded, so it reveals in place.
+  it('holds back a long reply list and reveals it in place', async () => {
+    const replies = Array.from({ length: 5 }, (_, i) =>
+      comment({ id: `reply-${i}`, markdownContent: `reply body ${i}` })
+    );
+    renderRow({ replies });
+
+    expect(screen.getByText('reply body 0')).toBeInTheDocument();
+    expect(screen.queryByText('reply body 4')).not.toBeInTheDocument();
+
+    const more = screen.getByRole('button', { name: 'Show 2 more replies' });
+    expect(more).toBeInTheDocument();
+    // In place — no navigation offered for siblings we already hold.
+    expect(screen.queryByRole('link', { name: /Continue this thread/ })).not.toBeInTheDocument();
+
+    fireEvent.click(more);
+    expect(screen.getByText('reply body 4')).toBeInTheDocument();
   });
 
   it('offers no reply count when nobody has replied', () => {

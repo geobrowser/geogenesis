@@ -27,6 +27,7 @@ import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch
 import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ACTIVITY_ROOT_DEPTH } from './claim-activity-depth';
 import { orderExtractedClaims } from './claim-activity-order';
 import { DebateCommentRow } from './debate-comment-row';
 import { ExtractedClaimRow, type SpeakerProfile } from './extracted-claim-row';
@@ -54,15 +55,6 @@ const DEBATE_DENSITY: CommentDensity = {
   bodyInsetPx: KEYFRAME_WIDTH_PX + 12,
   headerMinHeightPx: KEYFRAME_HEIGHT_PX,
 };
-
-/**
- * How deep the feed draws before it stops and counts instead.
- *
- * Four: a debate, the claims it produced, the comments on one of those, and the replies to those.
- * Past that the page is showing a conversation that has its own home, and the row's count plus a
- * way in reads better than a fifth indent.
- */
-export const ACTIVITY_MAX_DEPTH = 4;
 
 /** How far the branch's connectors reach back to find this row's spine. */
 const BRANCH_REACH_PX = DEBATE_DENSITY.bodyInsetPx - DEBATE_DENSITY.avatarCenterPx;
@@ -365,8 +357,8 @@ function DebateBranch({
               debateId={debateId}
               debateSpaceId={spaceId}
               commentCount={commentCounts.get(uuidToHex(claim.id)) ?? 0}
-              // Level two, so its comments are level three and their replies level four.
-              maxDepth={ACTIVITY_MAX_DEPTH - 2}
+              // A debate is the root of this branch, so everything hanging off it is one below.
+              depth={ACTIVITY_ROOT_DEPTH + 1}
               // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
               // not that the claim is factual, and stance is what the graph defaults to as well.
               responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
@@ -393,11 +385,9 @@ function DebateBranch({
         <ThreadBranchRow key={comment.id} isLast={claimsInOrder.length + index === rowCount - 1}>
           <DebateCommentRow
             comment={comment}
-            debateId={debateId}
+            targetEntityId={debateId}
             spaceId={spaceId}
-            // The debate row is level one and these are level two, so their replies have two levels
-            // of the budget left.
-            maxDepth={ACTIVITY_MAX_DEPTH - 2}
+            depth={ACTIVITY_ROOT_DEPTH + 1}
           />
         </ThreadBranchRow>
       ))}

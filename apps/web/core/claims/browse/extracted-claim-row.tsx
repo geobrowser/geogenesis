@@ -19,6 +19,7 @@ import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { canNestBelow } from './claim-activity-depth';
 import type { OrderedTranscriptClaim } from './claim-activity-order';
 import { DebateCommentRow } from './debate-comment-row';
 import { ResponsePositionTag } from './claim-comment-position';
@@ -48,7 +49,7 @@ export function ExtractedClaimRow({
   speakerPosition,
   responseVocabulary,
   commentCount = 0,
-  maxDepth = 0,
+  depth,
   density = PAGE_DENSITY,
   className,
 }: {
@@ -84,8 +85,8 @@ export function ExtractedClaimRow({
    * comments — a number wrong in the one direction that tells the reader not to look.
    */
   commentCount?: number;
-  /** Rows deeper than this are counted, not drawn. Zero means this row is already at the floor. */
-  maxDepth?: number;
+  /** This row's depth, counted from the claim. Its comments sit one below it. */
+  depth: number;
   /** The surrounding thread's metrics, so these rows sit on the same ramp as the comments. */
   density?: CommentDensity;
   className?: string;
@@ -177,8 +178,8 @@ export function ExtractedClaimRow({
           </div>
         ) : null}
 
-        {claimSpaceId && commentCount > 0 && maxDepth > 0 && (
-          <ClaimComments claimId={claim.id} spaceId={claimSpaceId} maxDepth={maxDepth} />
+        {claimSpaceId && commentCount > 0 && canNestBelow(depth) && (
+          <ClaimComments claimId={claim.id} spaceId={claimSpaceId} depth={depth + 1} />
         )}
       </div>
     </div>
@@ -192,7 +193,7 @@ export function ExtractedClaimRow({
  * claims cost ten fetches of nothing. That gate is why this can be eager at all: in the corpus today
  * almost every extracted claim has no comments, and the few that do are worth a request.
  */
-function ClaimComments({ claimId, spaceId, maxDepth }: { claimId: string; spaceId: string; maxDepth: number }) {
+function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: string; depth: number }) {
   const { comments } = useComments({ entityId: claimId, spaceId });
   if (comments.length === 0) return null;
 
@@ -201,12 +202,7 @@ function ClaimComments({ claimId, spaceId, maxDepth }: { claimId: string; spaceI
       <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
         {comments.map((comment, index) => (
           <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
-            <DebateCommentRow
-              comment={comment}
-              debateId={claimId}
-              spaceId={spaceId}
-              maxDepth={maxDepth - 1}
-            />
+            <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
           </ThreadBranchRow>
         ))}
       </ThreadBranch>

@@ -11,8 +11,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 
+import { canNestBelow } from './claim-activity-depth';
+
 import { PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
+import { ThreadContinue, ThreadShowMore } from '~/partials/comments/thread-overflow';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import type { CommentWithReplies } from '~/partials/comments/types';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -28,26 +31,35 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
  * reply chain for that entity actually lives; threading a composer for a second entity into this
  * one's list would put the reply somewhere the surrounding thread cannot show it.
  */
+/** Replies drawn before the rest are offered in place. Beyond this a thread stops being scannable. */
+const REPLY_PAGE_SIZE = 3;
+
 export function DebateCommentRow({
   comment,
-  debateId,
+  targetEntityId,
   spaceId,
-  depth = 0,
-  maxDepth,
+  depth,
 }: {
   comment: CommentWithReplies;
-  debateId: string;
+  /** The entity this comment replies to — the debate, or the extracted claim. */
+  targetEntityId: string;
   spaceId: string;
-  /** How far below the branch's first row this one sits. */
-  depth?: number;
-  /** Rows deeper than this are counted, not drawn — the reader opens the debate for the rest. */
-  maxDepth: number;
+  /** Counted from the claim, not from this branch. See `claim-activity-depth.ts`. */
+  depth: number;
 }) {
   const { openComments } = useEntityCommentsPanel();
+  const [visibleReplies, setVisibleReplies] = React.useState(REPLY_PAGE_SIZE);
   const body = React.useMemo(() => renderMarkdownDocument(comment.markdownContent), [comment.markdownContent]);
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
-  const replyCount = replies.length;
-  const showsReplies = replies.length > 0 && depth < maxDepth;
+
+  // Two different overflows, and they want different offers. Replies we are holding back for length
+  // are already loaded, so revealing them is free and happens here. Replies below the depth floor
+  // are a different matter: there is no room to draw them, so the reader is sent to the page where
+  // this thread is the whole page rather than a branch of one.
+  const canNest = canNestBelow(depth);
+  const shown = canNest ? replies.slice(0, visibleReplies) : [];
+  const hiddenHere = canNest ? replies.length - shown.length : 0;
+  const belowFloor = canNest ? 0 : replies.length;
 
   return (
     <div className="flex min-w-0 gap-3">
@@ -97,42 +109,39 @@ export function DebateCommentRow({
           <button
             type="button"
             data-entity-comments-opener
-            onClick={() => openComments(debateId, spaceId)}
+            onClick={() => openComments(targetEntityId, spaceId)}
             className={cx(PAGE_DENSITY.metaClass, 'text-grey-04 transition-colors hover:text-text')}
           >
             Reply
           </button>
-          {replyCount > 0 && !showsReplies && (
-            <button
-              type="button"
-              data-entity-comments-opener
-              onClick={() => openComments(debateId, spaceId)}
-              className={cx(PAGE_DENSITY.metaClass, 'text-ctaPrimary transition-colors hover:text-ctaHover')}
-            >
-              {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
-            </button>
-          )}
+          <ThreadContinue href={NavUtils.toEntity(spaceId, targetEntityId)} count={belowFloor} />
         </div>
 
         {/*
           Replies come with the comment — they are already in the tree `useComments` built — so
-          drawing them costs nothing beyond the depth budget. Past that budget the count above takes
-          over and the debate's own panel is where the rest of the thread lives.
+          drawing them costs nothing but space, and the cap below is about legibility rather than
+          fetching.
         */}
-        {showsReplies && (
+        {shown.length > 0 && (
           <div className="mt-3">
             <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
-              {replies.map((reply, index) => (
-                <ThreadBranchRow key={reply.id} isLast={index === replies.length - 1}>
+              {shown.map((reply, index) => (
+                <ThreadBranchRow key={reply.id} isLast={index === shown.length - 1}>
                   <DebateCommentRow
                     comment={reply}
-                    debateId={debateId}
+                    targetEntityId={targetEntityId}
                     spaceId={spaceId}
                     depth={depth + 1}
-                    maxDepth={maxDepth}
                   />
                 </ThreadBranchRow>
               ))}
+              {hiddenHere > 0 && (
+                <ThreadShowMore
+                  count={hiddenHere}
+                  noun="reply"
+                  onShowMore={() => setVisibleReplies(count => count + REPLY_PAGE_SIZE)}
+                />
+              )}
             </ThreadBranch>
           </div>
         )}
