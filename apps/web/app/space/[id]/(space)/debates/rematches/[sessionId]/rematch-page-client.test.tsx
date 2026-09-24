@@ -202,8 +202,12 @@ vi.mock('next/navigation', () => ({
 vi.mock('./rematch-voice', () => ({
   // Renders its `leaveAction`, which really does live in the header now — stubbing it away would
   // take the Leave button off the page for every test below.
-  RematchVoiceHeader: ({ leaveAction }: { leaveAction?: ReactNode }) => (
-    <div data-testid="rematch-pair-header">{leaveAction}</div>
+  // `exiting` is surfaced because that flag is where the header's layout stability is decided, and
+  // the bug it exists for was in the wiring here rather than inside the header.
+  RematchVoiceHeader: ({ leaveAction, exiting }: { leaveAction?: ReactNode; exiting?: boolean }) => (
+    <div data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
+      {leaveAction}
+    </div>
   ),
 }));
 
@@ -3378,6 +3382,34 @@ describe('DebateRematchPageClient', () => {
     // And the list is outside it, or it would be pinned too and never scroll. Anchored on a claim
     // row: the scroll sentinel used to stand for the list here, and nothing pages any more.
     expect(screen.getByText('A newly published claim').closest('.sticky')).toBeNull();
+  });
+
+  // Leaving is not the only way out. The other person leaving ends the session too, and it reaches
+  // this page as a status change with no mutation of ours behind it — so a header that only knew
+  // about our own Leave button rebuilt itself in the render before the redirect landed.
+  it('tells the header it is on its way out however the session ended', async () => {
+    for (const status of ['ended', 'expired'] as const) {
+      mocks.session = session({ status });
+      const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByTestId('rematch-pair-header')).toHaveAttribute('data-exiting', 'true');
+      unmount();
+    }
+  });
+
+  // And a request being accepted, which walks the pair into the debate room.
+  it('tells the header it is on its way out when the session converts to a debate', async () => {
+    mocks.session = session({ status: 'converted', converted_debate_id: 'debate-9' });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByTestId('rematch-pair-header')).toHaveAttribute('data-exiting', 'true');
+  });
+
+  // The ordinary case stays ordinary: nothing is exiting, so nothing is frozen.
+  it('does not tell the header it is exiting while the session is live', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByTestId('rematch-pair-header')).not.toHaveAttribute('data-exiting');
   });
 
   // This page is a `fixed inset-0` layer over the whole app, and Leave is the only way off it.

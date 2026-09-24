@@ -1882,6 +1882,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
+  /**
+   * The session is over and this page is about to navigate away — whoever ended it.
+   *
+   * Leaving is not the only way out: the other person leaving ends the session too, and so does a
+   * request being accepted or the browsing window lapsing. All of them land here as a status the
+   * effect below redirects on, and in the render before that redirect the header must not start
+   * rebuilding itself for a page nobody will see.
+   */
+  const sessionEnded =
+    session !== null &&
+    ((session.status === 'converted' && Boolean(session.converted_debate_id)) ||
+      session.status === 'ended' ||
+      session.status === 'expired');
+
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
@@ -2015,8 +2029,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 leaveAction={leaveButton}
                 // `isSuccess` as well as `isPending`: the session is ended the moment the mutation
                 // answers, and the redirect lands a beat later. That gap is the whole window in
-                // which the controls used to vanish.
-                exiting={leaveSession.isPending || leaveSession.isSuccess}
+                // which the controls used to vanish. `sessionEnded` covers the same window when it
+                // was the other person who left, which reaches this page as a status change with no
+                // mutation of ours behind it.
+                exiting={leaveSession.isPending || leaveSession.isSuccess || sessionEnded}
               />
             ) : (
               <div className="flex justify-end">{leaveButton}</div>

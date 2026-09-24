@@ -634,6 +634,20 @@ function VoiceHeaderBody({
 
   const [opponentMuted, setOpponentMuted] = React.useState(true);
 
+  /**
+   * Whether the opponent has been in the room at all this visit.
+   *
+   * The unmute notice is gated on this rather than on them being here right now. "Nobody to talk
+   * to" is a reason never to raise it, but once it is up, taking it away again when the other
+   * person drops — for a reconnect, or for good — moves everything under it at a moment the viewer
+   * did nothing to cause. What the notice says is still true of the visit: you are muted, and there
+   * is somebody you came here to talk to.
+   */
+  const [opponentEverJoined, setOpponentEverJoined] = React.useState(false);
+  React.useEffect(() => {
+    if (opponentParticipant) setOpponentEverJoined(true);
+  }, [opponentParticipant]);
+
   // Everything below used to live in a `ConnectedPairHeader` this rendered instead of a message.
   // Swapping one component for another at the same position is a remount, and this subtree is the
   // wrong place for one: it would close an open Audio settings popover, drop focus from the Leave
@@ -746,10 +760,12 @@ function VoiceHeaderBody({
     talkingWhileMuted: TALKING_WHILE_MUTED,
   };
 
-  // Only while muted, only with somebody to talk to, only once the room is actually up, and only
-  // until the viewer has answered it once.
+  // Only while muted, only once there has been somebody to talk to, and only until the viewer has
+  // answered it once. Deliberately not gated on the connection: a dropped room does not make the
+  // viewer un-muted or the other person un-paired, and hiding the notice for the length of a blip
+  // is a layout shift charged for nothing.
   const notice =
-    !connectionMessage && muted && !micFailed && !noticeDismissed && opponentParticipant
+    muted && !micFailed && !noticeDismissed && opponentEverJoined
       ? { onUnmute: unmute, onDismiss: onDismissNotice }
       : null;
 

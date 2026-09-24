@@ -1743,6 +1743,40 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
   });
 
+  // The other person dropping out is not a reason to move everything under the notice. It says the
+  // viewer is muted and names who they came here to talk to, and neither stops being true of the
+  // visit when the other side reconnects — or goes for good, taking the session with it.
+  it('keeps the unmute notice when the opponent drops out of the room', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.remoteParticipants = [];
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+    // The opponent's own card still reports the truth — they are not here.
+    expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
+  });
+
+  // A blip is the same shift on a shorter clock.
+  it('keeps the unmute notice across a reconnect', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
   // Leaving ends the session, and an ended session is not voice-capable — so the controls used to
   // tear themselves down in the second before the redirect landed, collapsing the card in front of
   // someone who had already left.
