@@ -50,6 +50,28 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
+// People compares the roster with the signed-in viewer. This panel suite has no wallet or graph
+// providers and only verifies tab orchestration, so those reads settle to an empty comparison.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isLoading: false }),
+}));
+
+vi.mock('../participant-positions', async importOriginal => ({
+  ...(await importOriginal<typeof import('../participant-positions')>()),
+  useParticipantPositions: () => ({
+    byClaim: new Map(),
+    isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
+    error: null,
+  }),
+}));
+
+vi.mock('../claim-picker-page', async importOriginal => ({
+  ...(await importOriginal<typeof import('../claim-picker-page')>()),
+  useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
+}));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.

@@ -12,9 +12,12 @@ import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 import { DEFAULT_DEBATE_SORT, sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
 import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
+import { useProfileDebateVisibility } from '~/core/profile/use-profile-debate-visibility';
+import { normId } from '~/core/utils/norm-id';
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
+import { ProfileDebateVisibilityButton } from './profile-debate-visibility-button';
 import { ProfileHeadline } from './profile-headline';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
@@ -65,7 +68,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
        * stale. It is one card tall either way, so leading with it costs the
        * history nothing.
        */}
-      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
+      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} isOwner={isOwner} />
 
       {/* A failed history read is not an empty account. Keep its own sections
           unavailable so the owner cannot accidentally duplicate a hidden edge,
@@ -111,8 +114,17 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
  * costs no request — and both counts come from the rail's own facts rather than
  * from the page in hand, which is one page of twenty against a real 192.
  */
-function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
+function ProfileActivity({
+  spaceId,
+  personEntityId,
+  isOwner,
+}: {
+  spaceId: string;
+  personEntityId: string;
+  isOwner: boolean;
+}) {
   const debates = usePersonDebates(spaceId, true);
+  const visibility = useProfileDebateVisibility(spaceId);
 
   /*
    * Ranked the way the Debates tab opens, so "See all debates" leads to the same
@@ -162,6 +174,18 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
       seeAllLabel: 'View all debates',
+      debateEndSlot: isOwner
+        ? item => {
+            const id = normId(item.entityId);
+            return (
+              <ProfileDebateVisibilityButton
+                hidden={false}
+                pending={visibility.pendingIds.has(id)}
+                onClick={() => void visibility.setHidden(item, debates.hiddenRelationsByDebateId.get(id) ?? [], true)}
+              />
+            );
+          }
+        : undefined,
     },
     {
       key: 'claims',

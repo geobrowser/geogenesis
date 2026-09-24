@@ -159,6 +159,13 @@ export class DebateGatewayClient {
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
+  /**
+   * Whether this tab is visible right now, with no grace (GEO-3028). `debatePresence` keeps someone
+   * online for three minutes behind a video call; this is what decides whether they can be offered
+   * a request at all, and a hidden tab cannot see one. `null` until reported, and then left off the
+   * heartbeat entirely, which geo-chat reads as "unknown" rather than "hidden".
+   */
+  private tabVisible: boolean | null = null;
   private presenceTransitionPending = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -197,6 +204,18 @@ export class DebateGatewayClient {
   setDebatePresence(debatePresence: boolean) {
     if (this.debatePresence === debatePresence) return;
     this.debatePresence = debatePresence;
+    this.reportPresenceChange();
+  }
+
+  /** Reported on every `visibilitychange`, and sent at once: switching tabs should take someone
+   *  off other people's lists within a heartbeat round-trip, not at the next 30-second beat. */
+  setTabVisible(tabVisible: boolean) {
+    if (this.tabVisible === tabVisible) return;
+    this.tabVisible = tabVisible;
+    this.reportPresenceChange();
+  }
+
+  private reportPresenceChange() {
     if (!this.socket || this.socket.readyState !== OPEN) return;
     if (this.heartbeatsAwaitingAck > 0) {
       this.presenceTransitionPending = true;
@@ -716,7 +735,13 @@ export class DebateGatewayClient {
     }
     this.heartbeatsAwaitingAck += 1;
     this.presenceTransitionPending = false;
-    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
+    this.sendEnvelope(
+      'HEARTBEAT',
+      this.tabVisible === null
+        ? { debate_presence: this.debatePresence }
+        : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
+      this.lastSequence
+    );
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
   }
 
@@ -911,6 +936,15 @@ export function useDebateGateway(
   React.useEffect(() => {
     debateGateway.setDebatePresence(debatePresence);
   }, [debatePresence]);
+
+  // Raw visibility, deliberately without the grace `debatePresence` has: it answers "can this
+  // person see a request right now", which stops being true the moment the tab is hidden.
+  React.useEffect(() => {
+    const report = () => debateGateway.setTabVisible(document.visibilityState === 'visible');
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, []);
 
   React.useEffect(() => {
     if (!enabled || !accountKey) {

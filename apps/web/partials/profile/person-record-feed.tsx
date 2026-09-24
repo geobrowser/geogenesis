@@ -43,6 +43,7 @@ export function PersonRecordFeed({
   personName,
   fullWidthDebates = false,
   renderCard,
+  debateEndSlot,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -97,6 +98,8 @@ export function PersonRecordFeed({
    * The key stays here, so a caller cannot forget it.
    */
   renderCard?: (item: ExploreFeedItem) => React.ReactNode;
+  /** Profile-owner action placed in a debate card's metadata row. */
+  debateEndSlot?: (item: ExploreFeedItem) => React.ReactNode;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -168,6 +171,7 @@ export function PersonRecordFeed({
                 // losing the page to read one row is a worse trade here than it is
                 // anywhere.
                 titleOpensSidePanel
+                debateEndSlot={debateEndSlot?.(item)}
               />
             )}
           </React.Fragment>

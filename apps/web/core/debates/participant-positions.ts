@@ -382,7 +382,7 @@ export function applyPendingPositions(
 }
 
 export function useParticipantPositions(
-  participants: DebateRematchParticipant[],
+  participants: Array<Pick<DebateRematchParticipant, 'profile_space_id'>>,
   /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
   localProfileSpaceId?: string | null
 ) {
@@ -449,6 +449,8 @@ export function useParticipantPositions(
   return {
     byClaim,
     isLoading: query.isLoading,
+    /** The visible rows belong to the previous participant set while a new key is loading. */
+    isPlaceholderData: query.isPlaceholderData,
     /**
      * Whether an answer for *this* key is still on its way.
      *

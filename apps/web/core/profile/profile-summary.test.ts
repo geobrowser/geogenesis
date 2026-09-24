@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { EducationCard, EmploymentCard } from './normalize-history';
-import { collectSkills, currentRoles } from './profile-summary';
+import { collectSkills, currentAffiliation, currentRoles } from './profile-summary';
 
 const NOTHING = { relations: [], values: [] };
 
@@ -96,11 +96,21 @@ describe('currentRoles', () => {
     expect(currentRoles([card], [])).toHaveLength(1);
   });
 
-  it('keeps an undated degree that says it is being studied', () => {
-    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy', status: 'studying' });
+  it('keeps a modern undated degree whose missing status means still studying', () => {
+    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy' });
     card.entries[0].startDate = null;
 
     expect(currentRoles([], [card])).toHaveLength(1);
+    expect(currentAffiliation([], [card])).toBe('Doctor of Philosophy at Cincinnati');
+  });
+
+  it('leaves out an ambiguous legacy degree with no dates or status', () => {
+    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy' });
+    card.entries[0].startDate = null;
+    card.entries[0].isLegacy = true;
+
+    expect(currentRoles([], [card])).toEqual([]);
+    expect(currentAffiliation([], [card])).toBeNull();
   });
 
   it('leaves out a row that is undated and says nothing', () => {
@@ -146,6 +156,43 @@ describe('currentRoles', () => {
 
   it('says nothing for an account with no current anything', () => {
     expect(currentRoles([], [])).toEqual([]);
+  });
+});
+
+describe('currentAffiliation', () => {
+  it('uses the first current affiliation in profile order', () => {
+    expect(
+      currentAffiliation(
+        [
+          employmentCard('Geo', [{ name: 'Head of Product' }]),
+          employmentCard('EE Solutions', [{ name: 'Product manager' }]),
+        ],
+        [educationCard('Stanford', { name: 'PhD student', fields: ['Economics'], status: 'studying' })]
+      )
+    ).toBe('Head of Product at Geo');
+  });
+
+  it('falls back to a current degree and includes its field of study', () => {
+    expect(
+      currentAffiliation(
+        [employmentCard('Geo', [{ name: 'Former role', status: 'former' }])],
+        [educationCard('Stanford', { name: 'PhD student', fields: ['Economics'], status: 'studying' })]
+      )
+    ).toBe('PhD student, Economics at Stanford');
+  });
+
+  it('shows either half by itself without a dangling at', () => {
+    const roleOnly = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    roleOnly.organization.name = null;
+    expect(currentAffiliation([roleOnly], [])).toBe('Head of Product');
+
+    const organizationOnly = employmentCard('Geo', [{ name: 'Head of Product' }]);
+    organizationOnly.entries[0]!.subject.name = null;
+    expect(currentAffiliation([organizationOnly], [])).toBe('Geo');
+  });
+
+  it('shows nothing when there is no current affiliation', () => {
+    expect(currentAffiliation([employmentCard('Geo', [{ name: 'Engineer', status: 'former' }])], [])).toBeNull();
   });
 });
 

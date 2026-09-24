@@ -199,6 +199,7 @@ describe('useParticipantPositions holding its list', () => {
 
     const { result, rerender } = renderPositions([LOCAL, REMOTE]);
     await waitFor(() => expect(result.current.byClaim.size).toBe(1));
+    expect(result.current.isPlaceholderData).toBe(false);
 
     // A different participant set is a different query key, so the cache has nothing for it. The
     // list must not blank in the meantime — that is the reported bug.
@@ -207,6 +208,7 @@ describe('useParticipantPositions holding its list', () => {
     rerender({ participants: [LOCAL] });
 
     expect(result.current.byClaim.size).toBe(1);
+    expect(result.current.isPlaceholderData).toBe(true);
   });
 });
 
