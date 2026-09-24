@@ -471,6 +471,16 @@ const ACTIVITY_POLL_MS = 30_000;
 const ACTIVITY_DEGRADED_POLL_MS = 10_000;
 /** Let an immediate push-triggered refetch observe the create response before treating null as final. */
 const OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS = 10_000;
+/** Complete, conservative shape for successful mutations that land before the initial activity read. */
+const ACTIVITY_CACHE_FALLBACK = {
+  online: true,
+  available_to_debate: true,
+  cooldown_until: null,
+  match: null,
+  debate: null,
+  rematch: null,
+  challenge: null,
+} satisfies DebateActivity;
 
 /**
  * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
@@ -532,9 +542,9 @@ export function useDebateActivity(enabled = true) {
         retainedOutbound?.status === 'pending' && Date.parse(retainedOutbound.expires_at) > Date.now();
       // The create response can beat the activity read triggered by the gateway event. Keep its
       // outbound row through that brief propagation window, then treat a null/non-pending server
-      // challenge as authoritative so a rejected request cannot block every button until expiry.
-      // A live server challenge also keeps the overlay: it may be an inbound row that displaced the
-      // simultaneous outbound row from the wire shape's single `challenge` field.
+      // challenge as authoritative. A different live inbound challenge must keep the overlay: the
+      // wire shape has no outbound id/status with which to distinguish a still-pending request from
+      // one rejected remotely, and dropping it would erase valid simultaneous outbound requests.
       const serverChallengeIsLive =
         activity.challenge?.status === 'pending' && Date.parse(activity.challenge.expires_at) > Date.now();
       const retainedOutboundCreatedAt = retainedOutbound ? Date.parse(retainedOutbound.created_at) : Number.NaN;
@@ -970,9 +980,8 @@ export function useConsentToDebateRematch(debateId: string) {
       // `incoming_request_count` and `outbound_request`, which zeroed the navbar badge and stopped
       // the coordinator fetching requests until the invalidation below landed.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        ...ACTIVITY_CACHE_FALLBACK,
         ...current,
-        online: current?.online ?? true,
-        available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,
         match: null,
         debate: null,
@@ -1256,16 +1265,16 @@ export function useCreateDebateChallenge() {
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
-      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current
-          ? {
-              ...current,
-              // Keep an inbound challenge in the wire field so its popup and Received card survive.
-              challenge: current.challenge ?? challenge,
-              outbound_challenge: challenge,
-            }
-          : current
-      );
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        // A successful create is enough to seed the activity cache when its initial read has not
+        // landed yet. These are the same safe idle defaults used by the rematch transition above;
+        // spreading a warm cache keeps every viewer-relative field the endpoint already supplied.
+        ...ACTIVITY_CACHE_FALLBACK,
+        ...current,
+        // Keep an inbound challenge in the wire field so its popup and Received card survive.
+        challenge: current?.challenge ?? challenge,
+        outbound_challenge: challenge,
+      }));
       // The create response is the newest authoritative copy of this challenge. Refetching activity
       // immediately can still return the pre-create row and erase it from the cache, which removes
       // the outbound card and re-enables every request button until geo-chat catches up. The gateway

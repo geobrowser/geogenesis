@@ -245,10 +245,30 @@ describe('debate query network ownership', () => {
       expect.any(Function)
     );
     const update = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as (
-      current: Record<string, unknown>
+      current: Record<string, unknown> | undefined
     ) => unknown;
-    expect(update({ online: true, challenge: null })).toEqual({
+    const warmActivity = {
       online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+      challenge: null,
+      incoming_request_count: 2,
+    };
+    expect(update(warmActivity)).toEqual({
+      ...warmActivity,
+      challenge,
+      outbound_challenge: challenge,
+    });
+    expect(update(undefined)).toEqual({
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
       challenge,
       outbound_challenge: challenge,
     });
