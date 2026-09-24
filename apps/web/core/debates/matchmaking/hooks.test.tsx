@@ -124,6 +124,29 @@ describe('outbound request creation gate', () => {
       ).toBe(1)
     );
   });
+
+  it('keeps the shared gate closed until a successful claim request has reconciled', async () => {
+    mocks.createDebateRequest.mockResolvedValue({ id: 'request-1' });
+    let finishReconciliation!: () => void;
+    const reconciliation = new Promise<void>(resolve => {
+      finishReconciliation = resolve;
+    });
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockReturnValue(reconciliation);
+    const gateWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useCreateDebateRequest(), { wrapper: gateWrapper });
+    const mutationKey = ['debates', 'account', 'user-a', 'create-outbound-request'] as const;
+
+    result.current.mutate({ space_id: 'space-1', claim_entity_id: 'claim-1' });
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
+    expect(queryClient.isMutating({ mutationKey, exact: true })).toBe(1);
+
+    finishReconciliation();
+    await waitFor(() => expect(queryClient.isMutating({ mutationKey, exact: true })).toBe(0));
+  });
 });
 
 /**

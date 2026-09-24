@@ -334,7 +334,7 @@ export function useCreateDebateRequest() {
   return useMutation({
     mutationKey: outboundRequestCreationMutationKey(accountKey),
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    onSuccess: () => invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
