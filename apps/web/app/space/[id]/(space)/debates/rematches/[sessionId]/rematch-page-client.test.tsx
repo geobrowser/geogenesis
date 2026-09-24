@@ -1158,8 +1158,13 @@ describe('DebateRematchPageClient', () => {
     expect(within(card).getByText('Agree')).toBeInTheDocument();
     expect(within(card).getByText('Disagree')).toBeInTheDocument();
 
-    // It is in the content, under the pinned block, not inside it.
-    expect(card.closest('.sticky')).toBeNull();
+    // Pinned with the filters and the search box, where the hub's claims tab keeps it — so a
+    // request stays on screen while the viewer keeps browsing rather than scrolling away.
+    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    expect(card.closest('.sticky')).toBe(pinned);
+    // Above both of them, not wedged between.
+    const filters = screen.getByRole('button', { name: /Any space/ });
+    expect(card.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // And the viewer is the requester, so no dialog asking them to answer their own request.
     expect(screen.queryByRole('dialog')).toBeNull();
   });

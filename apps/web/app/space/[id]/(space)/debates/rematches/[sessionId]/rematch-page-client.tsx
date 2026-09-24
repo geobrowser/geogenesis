@@ -2093,6 +2093,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </header>
 
           <div className="flex flex-col gap-3">
+            {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
+                and inside the sticky block rather than over it, because two stickies would both
+                claim `top-0` and overlap. A request sent from here otherwise left no trace on the
+                surface that sent it: the claim card looks exactly as it did before. */}
+            {outboundRequest && currentUserId ? (
+              <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
+            ) : null}
+
             <SpaceTopicFilters
               spaceIds={spaceIds}
               onSpaceToggle={onSpaceToggle}
@@ -2182,16 +2190,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             {rematchCancellationMessage(session.request.cancellation_reason)}
           </Text>
         )}
-
-        {/* Above the list rather than in the header. Growing the sticky block a claim and two
-            position chips moved everything under it down at the moment the viewer was watching for
-            an answer; a card that arrives in the content says the same thing without pushing the
-            page around. Same shape as the one the debates panel draws for a request you sent. */}
-        {outboundRequest && currentUserId ? (
-          <div className="mb-4">
-            <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
-          </div>
-        ) : null}
 
         <HubQueryState
           // Only what the visible tab actually draws from, and only while it has nothing to show.
