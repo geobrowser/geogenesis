@@ -35,7 +35,9 @@ import {
   useTaggedTopicFacet,
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { DebateChallengeCard } from './challenge-card';
 import { claimRowKey } from './claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
@@ -52,6 +54,7 @@ import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facet
 import { useBoundedPaging } from './use-bounded-paging';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
+import { useOutboundDebateChallenge } from './use-outbound-debate-challenge';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
@@ -217,6 +220,8 @@ export function ClaimsTab({
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const currentUserId = useCurrentGeoChatUserId();
+  const { outboundChallenge } = useOutboundDebateChallenge(activity, currentUserId);
 
   const [search, setSearch] = useAtom(atoms.search);
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -977,6 +982,7 @@ export function ClaimsTab({
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
+        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
 
         <Input

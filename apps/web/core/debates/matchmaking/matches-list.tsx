@@ -9,6 +9,8 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { DebateChallengeCard } from './challenge-card';
 import { claimRowKey } from './claim-row-key';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
@@ -27,6 +29,7 @@ import {
   topicsFor,
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
+import { useOutboundDebateChallenge } from './use-outbound-debate-challenge';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
@@ -86,6 +89,8 @@ export function MatchesList({
 
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const currentUserId = useCurrentGeoChatUserId();
+  const { outboundChallenge } = useOutboundDebateChallenge(activity, currentUserId);
 
   // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest.
   const matches = useStableListOrder(serverMatches, claimRowKey, spaceIds.join(','));
@@ -231,6 +236,7 @@ export function MatchesList({
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
       <HubStickyControls>
+        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
         <Input
           withSearchIcon

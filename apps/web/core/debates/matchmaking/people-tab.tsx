@@ -42,8 +42,8 @@ import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
+import { useOutboundDebateChallenge } from './use-outbound-debate-challenge';
 import { usePersonRecords } from './use-person-records';
-import { useUnexpiredRequests } from './use-request-countdown';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
@@ -284,28 +284,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // one of the two things holding the list down.
   const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
-  const reportedChallenge =
-    activity?.outbound_challenge?.status === 'pending'
-      ? activity.outbound_challenge
-      : activity?.challenge?.status === 'pending'
-        ? activity.challenge
-        : null;
-  // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
-  // expiry has to be applied here — the same filter every other request surface derives from, so
-  // none of them disagree about a dead request while waiting for `debate.requests_changed`. Without
-  // it this tab would sit on an "Expired" card with every Debate button still dead underneath it.
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const pendingChallenge = liveChallenges[0] ?? null;
-  // `activity.challenge` is whichever challenge involves the viewer, in either direction. Only a
-  // request the viewer sent blocks another outbound request; an inbound request stays actionable in
-  // Requests without taking away the viewer's ability to ask somebody else (GEO-3027).
-  const outboundChallenge =
-    pendingChallenge && currentUserId && pendingChallenge.requester.user_id === currentUserId ? pendingChallenge : null;
-  // Until the viewer id resolves, the direction is genuinely unknown. Keep the conservative gate
-  // for that short window so an outbound request cannot be duplicated before it can be identified.
-  const challengeDirectionUnknown = Boolean(pendingChallenge && !currentUserId);
+  // `activity.challenge` is whichever challenge involves the viewer, in either direction. The
+  // shared resolver keeps every matchmaking surface on the same outbound gate and applies expiry
+  // even while the activity payload still reports the challenge as pending.
+  const { outboundChallenge, outboundChallengeDirectionUnknown: challengeDirectionUnknown } =
+    useOutboundDebateChallenge(activity, currentUserId);
 
   // Every Debate button greys out at once when the viewer already has something open, so say why
   // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
@@ -629,11 +612,7 @@ function PersonRow({
           </button>
         )}
         <HubPillButton
-          onClick={() =>
-            onRequireSignIn
-              ? onRequireSignIn()
-              : onRequest()
-          }
+          onClick={() => (onRequireSignIn ? onRequireSignIn() : onRequest())}
           // `in_debate` holds signed out too: it means this person is in an active debate right now,
           // which is true of them rather than of any viewer, so signing in would not make them
           // available. `can_challenge` and the viewer's own pending request are the viewer-relative

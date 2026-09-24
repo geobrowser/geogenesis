@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MatchmakingClaim } from '../api';
+import type { DebateChallenge, MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 import { AUTO_PAGES_WITHOUT_ROWS } from './use-bounded-paging';
 import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
+  outboundChallenge: null as DebateChallenge | null,
   claims: [] as MatchmakingClaim[],
   /** Which tag each enabled render of the graph hook asked for, in order. */
   tagsAskedFor: [] as string[],
@@ -273,7 +274,18 @@ vi.mock('../hooks', () => ({
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
-  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
+  useDebateActivity: () => ({
+    data: {
+      challenge: null,
+      outbound_challenge: mocks.outboundChallenge,
+      outbound_request: null,
+      available_to_debate: true,
+    },
+    isLoading: false,
+    error: null,
+  }),
+  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
   // for so the suites can assert the tab only asks about spaces it may show.
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
@@ -308,6 +320,10 @@ vi.mock('../hooks', () => ({
       unresolvedSpaceIds,
     };
   },
+}));
+
+vi.mock('../use-current-geo-chat-user-id', () => ({
+  useCurrentGeoChatUserId: () => 'user-me',
 }));
 
 /**
@@ -513,6 +529,24 @@ function render(ui: ReactElement, sharedStore?: ReturnType<typeof createStore>) 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
 
+function challenge(): DebateChallenge {
+  return {
+    id: 'challenge-1',
+    status: 'pending',
+    source_space_id: SPACE_ID,
+    requester: { user_id: 'user-me', profile_space_id: 'profile-user-me', display_name: 'You', avatar_cid: null },
+    recipient: {
+      user_id: 'user-them',
+      profile_space_id: 'profile-user-them',
+      display_name: 'Arturas',
+      avatar_cid: null,
+    },
+    rematch_session_id: null,
+    created_at: '2026-08-05T11:00:00.000Z',
+    expires_at: '2099-01-01T00:00:00.000Z',
+  };
+}
+
 /** What `BrowseSidebar` has already loaded by the time the debates panel opens. */
 function sidebarData() {
   return {
@@ -586,6 +620,7 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.outboundChallenge = null;
   mocks.accountKey = 'account-1' as string | null;
   mocks.taggedRowsError = false;
   mocks.unreadableSpaceIds = [];
@@ -666,6 +701,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimsTab', () => {
+  it('shows a sent person request above Explore claims', () => {
+    mocks.outboundChallenge = challenge();
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Search claims').closest('.sticky')).toContainElement(
+      screen.getByText('Awaiting response')
+    );
+  });
+
   // GEO-2684. The list pages forever, so controls left in the scrolling body meant scrolling back
   // to the start to change a filter. jsdom has no layout, so what's assertable is that they sit in
   // a pinned container rather than in the body that scrolls.
