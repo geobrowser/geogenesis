@@ -13,10 +13,9 @@ const ICON_SIZE = 13;
 /**
  * One stat: an icon, a count, and a label only a screen reader hears.
  *
- * `whitespace-nowrap` keeps each stat a single unbreakable unit, so a row too narrow for both
- * wraps *between* stats rather than through the middle of one. An icon beside a bare number is only
- * legible to someone who already knows the icon, so every stat carries real label text — `title`
- * alone would leave the row as two unexplained numbers to a screen reader.
+ * `whitespace-nowrap` keeps each stat a single unbreakable unit. An icon beside a bare number is
+ * only legible to someone who already knows the icon, so every stat carries real label text —
+ * `title` alone would leave the row as two unexplained numbers to a screen reader.
  *
  * The same text also rides on the hidden half as a `title`, so a pointer can reach what a screen
  * reader is already told. It sits on the `aria-hidden` spans rather than the item, where assistive
@@ -46,11 +45,11 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; la
  */
 export function PersonRecordLine({
   record,
-  disagreement,
+  match,
   activeSpaces,
 }: {
   record: PersonRecord | null;
-  disagreement?: React.ReactNode;
+  match?: React.ReactNode;
   activeSpaces?: React.ReactNode;
 }) {
   const positions = record?.positions ?? null;
@@ -58,11 +57,11 @@ export function PersonRecordLine({
   const joinedAt = record?.joinedAt ?? null;
   const hasStats = positions !== null || debatesArgued !== null;
 
-  if (!hasStats && !disagreement && !activeSpaces && !joinedAt) return null;
+  if (!hasStats && !match && !activeSpaces && !joinedAt) return null;
 
   return (
     <>
-      {hasStats || disagreement ? (
+      {hasStats || match ? (
         <ul className="m-0 flex list-none flex-nowrap items-center gap-x-1.5 p-0 whitespace-nowrap">
           {debatesArgued !== null && (
             <Stat
@@ -78,14 +77,14 @@ export function PersonRecordLine({
               label={`${positions} ${positions === 1 ? 'position' : 'positions'}`}
             />
           )}
-          {disagreement ? (
+          {match ? (
             <>
               {hasStats ? (
                 <li className="text-browseSection text-grey-03" aria-hidden>
                   ·
                 </li>
               ) : null}
-              <li className="inline-flex shrink-0 items-center text-browseSection">{disagreement}</li>
+              <li className="inline-flex shrink-0 items-center text-browseSection">{match}</li>
             </>
           ) : null}
         </ul>

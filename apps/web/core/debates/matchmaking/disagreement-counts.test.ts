@@ -2,11 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ParticipantPosition } from '../participant-positions';
 import { groupParticipantPositions } from '../participant-positions';
-import {
-  disagreementCountsByProfile,
-  disagreementCountsByProfileAndSpace,
-  disagreementsByProfile,
-} from './disagreement-counts';
+import { analyzeMatchingClaims } from './disagreement-counts';
 
 const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c500';
 const OTHER = '019fedae-72b6-7ab2-927a-df044d57c501';
@@ -22,7 +18,7 @@ function position(
   return { profileSpaceId, claimId, spaceId, responseKind, position: side };
 }
 
-describe('disagreementCountsByProfile', () => {
+describe('analyzeMatchingClaims', () => {
   it('counts distinct claims where comparable positions are opposite', () => {
     const positions = groupParticipantPositions([
       position(VIEWER, 'claim-1', true),
@@ -36,7 +32,7 @@ describe('disagreementCountsByProfile', () => {
       position(THIRD, 'claim-2', false),
     ]);
 
-    expect(disagreementCountsByProfile(positions, VIEWER)).toEqual(new Map([[OTHER.replaceAll('-', ''), 2]]));
+    expect(analyzeMatchingClaims(positions, VIEWER).byProfile.get(OTHER.replaceAll('-', ''))).toHaveLength(2);
   });
 
   it('does not compare positions from different spaces or response kinds', () => {
@@ -50,7 +46,7 @@ describe('disagreementCountsByProfile', () => {
       position(OTHER, 'claim-3', true),
     ]);
 
-    expect(disagreementCountsByProfile(positions, VIEWER)).toEqual(new Map());
+    expect(analyzeMatchingClaims(positions, VIEWER).byProfile).toEqual(new Map());
   });
 
   it('normalizes profile and space ids across service formats', () => {
@@ -60,13 +56,13 @@ describe('disagreementCountsByProfile', () => {
       position(OTHER, 'claim-1', false, space.replaceAll('-', '')),
     ]);
 
-    expect(disagreementCountsByProfile(positions, VIEWER)).toEqual(new Map([[OTHER.replaceAll('-', ''), 1]]));
+    expect(analyzeMatchingClaims(positions, VIEWER).byProfile.get(OTHER.replaceAll('-', ''))).toHaveLength(1);
   });
 
   it('returns no counts without a viewer', () => {
     const positions = groupParticipantPositions([position(VIEWER, 'claim-1', true), position(OTHER, 'claim-1', false)]);
 
-    expect(disagreementCountsByProfile(positions, null)).toEqual(new Map());
+    expect(analyzeMatchingClaims(positions, null).byProfile).toEqual(new Map());
   });
 
   it('keeps the claim context needed to open each disagreement', () => {
@@ -76,7 +72,7 @@ describe('disagreementCountsByProfile', () => {
       position(OTHER, 'claim-1', true, spaceId, 'veracity'),
     ]);
 
-    expect(disagreementsByProfile(positions, VIEWER)).toEqual(
+    expect(analyzeMatchingClaims(positions, VIEWER).byProfile).toEqual(
       new Map([
         [
           OTHER.replaceAll('-', ''),
@@ -110,7 +106,7 @@ describe('disagreementCountsByProfile', () => {
       position(OTHER, 'claim-2', true, firstSpace),
     ]);
 
-    expect(disagreementCountsByProfileAndSpace(positions, VIEWER)).toEqual(
+    expect(analyzeMatchingClaims(positions, VIEWER).countsByProfileAndSpace).toEqual(
       new Map([
         [
           OTHER.replaceAll('-', ''),

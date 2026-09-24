@@ -209,7 +209,6 @@ function record(over: Partial<PersonRecord> = {}): PersonRecord {
     debatesArgued: null,
     claimsBySpace: new Map(),
     debatesBySpace: new Map(),
-    winRate: null,
     joinedAt: null,
     activeSpaceIds: new Set(),
     ...over,
@@ -370,7 +369,7 @@ describe('PeopleTab', () => {
     expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
   });
 
-  it('uses singular copy for one disputed claim', () => {
+  it('uses singular copy for one matching claim', () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
     const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
@@ -389,7 +388,7 @@ describe('PeopleTab', () => {
     expect(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' })).toHaveTextContent('1 match');
   });
 
-  it('does not show a disagreement count on the viewer own row', () => {
+  it("does not show a match count on the viewer's own row", () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
     const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
@@ -777,7 +776,6 @@ describe('PeopleTab', () => {
         record({
           positions: 119,
           debatesArgued: 11,
-          winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],
@@ -994,7 +992,6 @@ describe('PeopleTab filters', () => {
           debatesArgued: null,
           claimsBySpace: new Map([['spacea', 1]]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -1005,7 +1002,6 @@ describe('PeopleTab filters', () => {
           debatesArgued: null,
           claimsBySpace: new Map([['spaceb', 1]]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -1034,7 +1030,6 @@ describe('PeopleTab filters', () => {
         debatesArgued: null,
         claimsBySpace: new Map(),
         debatesBySpace: new Map(),
-        winRate: null,
         joinedAt: null,
       })
     );
@@ -1060,7 +1055,6 @@ describe('PeopleTab filters', () => {
           ['spacec', 0],
         ]),
         debatesBySpace: new Map([['spacec', 0]]),
-        winRate: null,
         joinedAt: null,
       })
     );
@@ -1188,7 +1182,6 @@ describe('PeopleTab filters', () => {
             ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee'].map(spaceId => [spaceId, 1] as const)
           ),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -1215,7 +1208,6 @@ describe('PeopleTab filters', () => {
             ['spaceb', 1],
           ]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],
@@ -1283,7 +1275,6 @@ describe('PeopleTab filters', () => {
             [unranked, 1],
             [inactive, 0],
           ]),
-          winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],

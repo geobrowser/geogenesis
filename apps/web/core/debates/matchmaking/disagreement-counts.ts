@@ -2,7 +2,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 
-export type ClaimDisagreement = {
+export type ClaimMatch = {
   claimId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
@@ -10,87 +10,34 @@ export type ClaimDisagreement = {
   personPosition: boolean;
 };
 
+export type MatchingClaimsAnalysis = {
+  /** Distinct matching claims per person, used for row order and the claim dropdown. */
+  byProfile: Map<string, ClaimMatch[]>;
+  /** Distinct matching claims per person and space, used by the Active in breakdown. */
+  countsByProfileAndSpace: Map<string, Map<string, number>>;
+};
+
 /**
- * Distinct claims on which the viewer and each other person hold opposite positions.
+ * Claims on which the viewer and each other person hold comparable, opposite positions.
  *
  * A response is scoped by both space and kind: agreeing with a claim in one space is not the
- * opposite of disputing its veracity somewhere else. A claim still counts only once when the pair
- * opposes each other on more than one comparable response.
+ * opposite of disputing its veracity somewhere else. The person-level list counts a claim once;
+ * the space breakdown counts it once in every space where the pair actually opposes each other.
+ * Both projections are built in one pass so the People tab cannot drift between two definitions
+ * of a match or scan the same graph result twice.
  */
-export function disagreementCountsByProfile(
+export function analyzeMatchingClaims(
   positionsByClaim: ParticipantPositionsByClaim,
   viewerProfileSpaceId: string | null
-): Map<string, number> {
-  return new Map(
-    [...disagreementsByProfile(positionsByClaim, viewerProfileSpaceId)].map(([profileId, disagreements]) => [
-      profileId,
-      disagreements.length,
-    ])
-  );
-}
-
-/** Distinct opposing claims per person and space, for the Active in breakdown. */
-export function disagreementCountsByProfileAndSpace(
-  positionsByClaim: ParticipantPositionsByClaim,
-  viewerProfileSpaceId: string | null
-): Map<string, Map<string, number>> {
-  const counts = new Map<string, Map<string, number>>();
-  if (!viewerProfileSpaceId) return counts;
-
-  const seenByProfileAndSpace = new Map<string, Set<string>>();
-  for (const [profileId, rows] of opposingPositionsByProfile(positionsByClaim, viewerProfileSpaceId)) {
-    for (const row of rows) {
-      const spaceId = normId(row.spaceId);
-      const seenKey = `${profileId}|${spaceId}`;
-      const seenClaims = seenByProfileAndSpace.get(seenKey) ?? new Set<string>();
-      const claimId = normId(row.claimId);
-      if (seenClaims.has(claimId)) continue;
-      seenClaims.add(claimId);
-      seenByProfileAndSpace.set(seenKey, seenClaims);
-
-      const bySpace = counts.get(profileId) ?? new Map<string, number>();
-      bySpace.set(spaceId, (bySpace.get(spaceId) ?? 0) + 1);
-      counts.set(profileId, bySpace);
-    }
-  }
-
-  return counts;
-}
-
-/** The claim details behind each count, in the graph's most-recent-response-first order. */
-export function disagreementsByProfile(
-  positionsByClaim: ParticipantPositionsByClaim,
-  viewerProfileSpaceId: string | null
-): Map<string, ClaimDisagreement[]> {
-  const disagreements = new Map<string, ClaimDisagreement[]>();
-  const seenClaimsByProfile = new Map<string, Set<string>>();
-
-  for (const [profileId, rows] of opposingPositionsByProfile(positionsByClaim, viewerProfileSpaceId)) {
-    for (const row of rows) {
-      const claimId = normId(row.claimId);
-      const seenClaims = seenClaimsByProfile.get(profileId) ?? new Set<string>();
-      if (seenClaims.has(claimId)) continue;
-      seenClaims.add(claimId);
-      seenClaimsByProfile.set(profileId, seenClaims);
-
-      const existing = disagreements.get(profileId) ?? [];
-      existing.push(row);
-      disagreements.set(profileId, existing);
-    }
-  }
-
-  return disagreements;
-}
-
-/** Every comparable opposing response, before a caller applies its claim/space de-duplication. */
-function opposingPositionsByProfile(
-  positionsByClaim: ParticipantPositionsByClaim,
-  viewerProfileSpaceId: string | null
-): Map<string, ClaimDisagreement[]> {
-  const oppositions = new Map<string, ClaimDisagreement[]>();
-  if (!viewerProfileSpaceId) return oppositions;
+): MatchingClaimsAnalysis {
+  const byProfile = new Map<string, ClaimMatch[]>();
+  const countsByProfileAndSpace = new Map<string, Map<string, number>>();
+  if (!viewerProfileSpaceId) return { byProfile, countsByProfileAndSpace };
 
   const viewerId = normId(viewerProfileSpaceId);
+  const seenClaimsByProfile = new Map<string, Set<string>>();
+  const seenClaimsByProfileAndSpace = new Map<string, Set<string>>();
+
   for (const rows of positionsByClaim.values()) {
     const viewerPositions = new Map<string, boolean>();
     for (const row of rows) {
@@ -106,19 +53,38 @@ function opposingPositionsByProfile(
       const viewerPosition = viewerPositions.get(positionContext(row.spaceId, row.responseKind));
       if (viewerPosition === undefined || viewerPosition === row.position) continue;
 
-      const existing = oppositions.get(profileId) ?? [];
-      existing.push({
-        claimId: row.claimId,
-        spaceId: row.spaceId,
-        responseKind: row.responseKind,
-        viewerPosition,
-        personPosition: row.position,
-      });
-      oppositions.set(profileId, existing);
+      const claimId = normId(row.claimId);
+      const spaceId = normId(row.spaceId);
+
+      const seenForProfile = seenClaimsByProfile.get(profileId) ?? new Set<string>();
+      if (!seenForProfile.has(claimId)) {
+        seenForProfile.add(claimId);
+        seenClaimsByProfile.set(profileId, seenForProfile);
+
+        const matches = byProfile.get(profileId) ?? [];
+        matches.push({
+          claimId: row.claimId,
+          spaceId: row.spaceId,
+          responseKind: row.responseKind,
+          viewerPosition,
+          personPosition: row.position,
+        });
+        byProfile.set(profileId, matches);
+      }
+
+      const profileSpaceKey = `${profileId}|${spaceId}`;
+      const seenForProfileSpace = seenClaimsByProfileAndSpace.get(profileSpaceKey) ?? new Set<string>();
+      if (seenForProfileSpace.has(claimId)) continue;
+      seenForProfileSpace.add(claimId);
+      seenClaimsByProfileAndSpace.set(profileSpaceKey, seenForProfileSpace);
+
+      const bySpace = countsByProfileAndSpace.get(profileId) ?? new Map<string, number>();
+      bySpace.set(spaceId, (bySpace.get(spaceId) ?? 0) + 1);
+      countsByProfileAndSpace.set(profileId, bySpace);
     }
   }
 
-  return oppositions;
+  return { byProfile, countsByProfileAndSpace };
 }
 
 function positionContext(spaceId: string, responseKind: string): string {

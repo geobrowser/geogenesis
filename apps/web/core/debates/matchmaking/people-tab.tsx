@@ -32,15 +32,11 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-deb
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
-import {
-  type ClaimDisagreement,
-  disagreementCountsByProfileAndSpace,
-  disagreementsByProfile,
-} from './disagreement-counts';
+import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
-import { PersonDisagreements } from './person-disagreements';
+import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
@@ -58,7 +54,7 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  * have already left, or clearing it before a newly arrived person's activity has loaded.
  */
 const EMPTY_SPACE_IDS: string[] = [];
-const EMPTY_DISAGREEMENTS: ClaimDisagreement[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
@@ -111,28 +107,23 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     isLoading: positionsLoading,
     error: positionsError,
   } = useParticipantPositions(positionParticipants, personalSpaceId);
-  const disagreements = React.useMemo(
-    () => disagreementsByProfile(positionsByClaim, authenticated ? personalSpaceId : null),
-    [authenticated, personalSpaceId, positionsByClaim]
-  );
-  const matchesByProfileAndSpace = React.useMemo(
-    () => disagreementCountsByProfileAndSpace(positionsByClaim, authenticated ? personalSpaceId : null),
+  const matchAnalysis = React.useMemo(
+    () => analyzeMatchingClaims(positionsByClaim, authenticated ? personalSpaceId : null),
     [authenticated, personalSpaceId, positionsByClaim]
   );
   const matchesKnown = authenticated && personalSpaceId !== null && !positionsLoading && positionsError === null;
-  const disagreementClaimIds = React.useMemo(
-    () => [...new Set([...disagreements.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
-    [disagreements]
+  const matchingClaimIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
+    [matchAnalysis]
   );
-  const disagreementSpaceIds = React.useMemo(
-    () => [...new Set([...disagreements.values()].flatMap(items => items.map(item => item.spaceId)))],
-    [disagreements]
+  const matchingSpaceIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.spaceId)))],
+    [matchAnalysis]
   );
-  const { entities: disagreementClaims, isLoading: disagreementClaimsLoading } =
-    useClaimEntitiesByIds(disagreementClaimIds);
-  const disagreementClaimNamesById = React.useMemo(
-    () => new Map(disagreementClaims.map(claim => [normId(claim.id), claim.name])),
-    [disagreementClaims]
+  const { entities: matchingClaims, isLoading: matchingClaimsLoading } = useClaimEntitiesByIds(matchingClaimIds);
+  const matchingClaimNamesById = React.useMemo(
+    () => new Map(matchingClaims.map(claim => [normId(claim.id), claim.name])),
+    [matchingClaims]
   );
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
@@ -228,11 +219,11 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       .map((person, index) => ({
         person,
         index,
-        disagreementCount: disagreements.get(normId(person.profile_space_id))?.length ?? 0,
+        matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
       }))
-      .sort((left, right) => right.disagreementCount - left.disagreementCount || left.index - right.index)
+      .sort((left, right) => right.matchCount - left.matchCount || left.index - right.index)
       .map(({ person }) => person);
-  }, [debateSpacesByPerson, disagreements, effectiveSpaceIds, searchedPeople]);
+  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -265,8 +256,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // counted out of the facets, and it still has to be nameable in the trigger.
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...disagreementSpaceIds])],
-      [disagreementSpaceIds, effectiveSpaceIds, facetSpaces]
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...matchingSpaceIds])],
+      [effectiveSpaceIds, facetSpaces, matchingSpaceIds]
     )
   );
 
@@ -406,18 +397,19 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                   <PersonRow
                     key={person.user_id}
                     person={person}
-                    disagreements={
+                    matches={
                       isViewer
-                        ? EMPTY_DISAGREEMENTS
-                        : (disagreements.get(normId(person.profile_space_id)) ?? EMPTY_DISAGREEMENTS)
+                        ? EMPTY_MATCHES
+                        : (matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES)
                     }
                     matchesBySpace={
                       matchesKnown && !isViewer
-                        ? (matchesByProfileAndSpace.get(normId(person.profile_space_id)) ?? EMPTY_MATCH_COUNTS)
+                        ? (matchAnalysis.countsByProfileAndSpace.get(normId(person.profile_space_id)) ??
+                          EMPTY_MATCH_COUNTS)
                         : undefined
                     }
-                    claimNamesById={disagreementClaimNamesById}
-                    claimNamesLoading={disagreementClaimsLoading}
+                    claimNamesById={matchingClaimNamesById}
+                    claimNamesLoading={matchingClaimsLoading}
                     record={records.get(person.profile_space_id) ?? null}
                     spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                     labelsById={labelsById}
@@ -465,7 +457,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
 function PersonRow({
   person,
-  disagreements,
+  matches,
   matchesBySpace,
   claimNamesById,
   claimNamesLoading,
@@ -480,7 +472,7 @@ function PersonRow({
 }: {
   person: DebatePerson;
   /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
-  disagreements: ClaimDisagreement[];
+  matches: ClaimMatch[];
   /** Viewer-relative matching claims per space; absent until that comparison is known. */
   matchesBySpace?: ReadonlyMap<string, number>;
   claimNamesById: ReadonlyMap<string, string | null>;
@@ -517,11 +509,11 @@ function PersonRow({
         popoverPortal={popoverPortal}
       />
     ) : null;
-  const disagreement =
-    disagreements.length > 0 ? (
-      <PersonDisagreements
+  const match =
+    matches.length > 0 ? (
+      <PersonMatches
         personName={speakerLabel(person)}
-        disagreements={disagreements}
+        matches={matches}
         claimNamesById={claimNamesById}
         claimNamesLoading={claimNamesLoading}
         labelsById={labelsById}
@@ -569,9 +561,9 @@ function PersonRow({
         )}
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
-        {record || activeSpaces || disagreement ? (
+        {record || activeSpaces || match ? (
           <div className="flex min-w-0 flex-col gap-0.5">
-            <PersonRecordLine record={record} disagreement={disagreement} activeSpaces={activeSpaces} />
+            <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
           </div>
         ) : null}
       </div>

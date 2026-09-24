@@ -12,26 +12,26 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import type { ClaimDisagreement } from './disagreement-counts';
+import type { ClaimMatch } from './disagreement-counts';
 import { PersonSpaceIcon } from './person-space-icons';
 
-export function PersonDisagreements({
+export function PersonMatches({
   personName,
-  disagreements,
+  matches,
   claimNamesById,
   claimNamesLoading,
   labelsById,
   popoverPortal,
 }: {
   personName: string;
-  disagreements: ClaimDisagreement[];
+  matches: ClaimMatch[];
   claimNamesById: ReadonlyMap<string, string | null>;
   claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
-  const count = disagreements.length;
+  const count = matches.length;
   if (count === 0) return null;
 
   return (
@@ -69,39 +69,35 @@ export function PersonDisagreements({
               aria-label={`Matching claims with ${personName}`}
               className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
             >
-              {disagreements.map((disagreement, index) => {
-                const name = claimNamesById.get(normId(disagreement.claimId));
-                const space = spaceLabel(labelsById, disagreement.spaceId);
+              {matches.map((match, index) => {
+                const name = claimNamesById.get(normId(match.claimId));
+                const space = spaceLabel(labelsById, match.spaceId);
                 return (
                   <li
-                    key={`${normId(disagreement.claimId)}:${normId(disagreement.spaceId)}`}
+                    key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
                     className="border-t border-grey-02 first:border-t-0"
                   >
                     <Link
                       ref={index === 0 ? firstClaimRef : undefined}
-                      href={NavUtils.toEntity(disagreement.spaceId, disagreement.claimId)}
+                      href={NavUtils.toEntity(match.spaceId, match.claimId)}
                       className="block px-3 py-2.5 transition-colors duration-75 hover:bg-grey-01 focus-visible:bg-grey-01 focus-visible:outline-none"
                     >
                       <span className="mb-1 flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
-                        <PersonSpaceIcon spaceId={disagreement.spaceId} labelsById={labelsById} size={12} />
+                        <PersonSpaceIcon spaceId={match.spaceId} labelsById={labelsById} size={12} />
                         <span className="truncate">{space?.name?.trim() || 'Space'}</span>
                       </span>
                       <span className="block text-metadataMedium text-text">
                         {name?.trim() || (claimNamesLoading ? 'Loading claim…' : 'Untitled claim')}
                       </span>
                       <span className="mt-2 flex items-center gap-1.5">
-                        <PositionBadge
-                          actor="You"
-                          responseKind={disagreement.responseKind}
-                          position={disagreement.viewerPosition}
-                        />
+                        <PositionBadge actor="You" responseKind={match.responseKind} position={match.viewerPosition} />
                         <span className="shrink-0 text-footnote text-grey-03" aria-hidden>
                           vs
                         </span>
                         <PositionBadge
                           actor={personName}
-                          responseKind={disagreement.responseKind}
-                          position={disagreement.personPosition}
+                          responseKind={match.responseKind}
+                          position={match.personPosition}
                         />
                       </span>
                     </Link>
@@ -122,7 +118,7 @@ function PositionBadge({
   position,
 }: {
   actor: string;
-  responseKind: ClaimDisagreement['responseKind'];
+  responseKind: ClaimMatch['responseKind'];
   position: boolean;
 }) {
   const action = responseKind === 'veracity' ? (position ? 'Verify' : 'Dispute') : position ? 'Agree' : 'Disagree';

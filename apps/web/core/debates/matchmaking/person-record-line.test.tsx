@@ -12,12 +12,11 @@ const FULL: PersonRecord = {
   positions: 119,
   debatesArgued: 11,
   activeSpaceIds: new Set(),
-  winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
   joinedAt: new Date(Date.UTC(2026, 0, 29)),
 };
 
-function line(over: Partial<PersonRecord> = {}, disagreement?: ReactNode) {
-  return render(<PersonRecordLine record={{ ...FULL, ...over }} disagreement={disagreement} />);
+function line(over: Partial<PersonRecord> = {}, match?: ReactNode) {
+  return render(<PersonRecordLine record={{ ...FULL, ...over }} match={match} />);
 }
 
 afterEach(cleanup);
@@ -43,7 +42,7 @@ describe('PersonRecordLine', () => {
   });
 
   it('says "1 position" rather than "1 positions"', () => {
-    line({ positions: 1, debatesArgued: 1, winRate: { percent: 100, wins: 1, of: 1, judged: 1 } });
+    line({ positions: 1, debatesArgued: 1 });
 
     expect(screen.getByText('1 position')).toBeInTheDocument();
     expect(screen.getByText('1 debate')).toBeInTheDocument();
@@ -51,20 +50,13 @@ describe('PersonRecordLine', () => {
 
   // A row of zeroes reads as failure; absence reads as new.
   it('leaves out the stats a newcomer has none of, keeping the join date', () => {
-    const { container } = line({ positions: null, debatesArgued: null, winRate: null });
+    const { container } = line({ positions: null, debatesArgued: null });
 
     // No stat list at all, rather than a list of noughts.
     expect(container.querySelector('ul')).toBeNull();
     expect(screen.queryByText(/positions?$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/debates?$/)).not.toBeInTheDocument();
     expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
-  });
-
-  it('omits win rate even when the record includes one', () => {
-    line({ winRate: { percent: 33, wins: 1, of: 3, judged: 1 } });
-
-    expect(screen.queryByText(/^Won /)).not.toBeInTheDocument();
-    expect(screen.queryByText('33%')).not.toBeInTheDocument();
   });
 
   it('orders debates, positions, a dot and matches on one non-wrapping row', () => {
@@ -80,16 +72,14 @@ describe('PersonRecordLine', () => {
   });
 
   it('can show matches without a record or separator', () => {
-    const { container } = render(
-      <PersonRecordLine record={null} disagreement={<button type="button">1 match</button>} />
-    );
+    const { container } = render(<PersonRecordLine record={null} match={<button type="button">1 match</button>} />);
 
     expect(screen.getByRole('button', { name: '1 match' })).toBeInTheDocument();
     expect(container).not.toHaveTextContent('·');
   });
 
   it('renders nothing at all when there is nothing to say', () => {
-    const { container } = line({ positions: null, debatesArgued: null, winRate: null, joinedAt: null });
+    const { container } = line({ positions: null, debatesArgued: null, joinedAt: null });
 
     expect(container).toBeEmptyDOMElement();
   });
