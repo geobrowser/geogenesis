@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { NavUtils } from '~/core/utils/utils';
@@ -60,6 +61,14 @@ export function DebateCommentRow({
           <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
             <span className={cx(PAGE_DENSITY.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
           </a>
+          {/*
+            Where this person stands on the *claim*, not on the debate — the same badge, from the
+            same provider, that a commenter on the claim gets. Someone who argues under a debate and
+            holds a position on the claim it argued is the same person making the same commitment,
+            and the thread should say so in one place rather than only where the comment happened to
+            be filed. Renders nothing for a commenter who holds no position.
+          */}
+          <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
           <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
             {comment.isPublishing ? 'Publishing…' : getRelativeTime(comment.createdAt)}
           </span>

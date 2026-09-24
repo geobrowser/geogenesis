@@ -581,7 +581,7 @@ function CommentFilters({
   );
 }
 
-/** Top-level pill-style input matching the design ("Start the discussion...") */
+/** Top-level pill-style input matching the design ("Join the conversation...") */
 function TopLevelCommentInput({
   onSubmit,
   isLoggedIn,
@@ -638,7 +638,10 @@ function TopLevelCommentInput({
         onClick={openComposer}
         className="w-full rounded-lg border border-grey-02 px-4 py-3 text-left text-body text-grey-04 hover:border-text"
       >
-        Start the discussion...
+        {/* Same invitation the panel composer gives. The page variant said "Start the discussion",
+            which is the wrong offer on a thread that already holds debates and the claims from
+            them — there is a discussion, and the reader is being asked to join it. */}
+        Join the conversation...
       </button>
     );
   }

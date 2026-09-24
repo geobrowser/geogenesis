@@ -113,7 +113,13 @@ export function DebateActivityRow({
     () => new Map(sides.map(side => [uuidToHex(side.spaceId), side.position])),
     [sides]
   );
-  const title = debaters.length > 0 ? debaters.join(' vs. ') : (debate.name ?? 'Debate');
+  // Null when no debater profile has resolved yet. Deliberately *not* falling back to `debate.name`:
+  // a published debate is named "<claim> | <A> vs. <B>" (#2554), so using it as the byline would
+  // print the claim a second time under itself.
+  const debaterLine = debaters.length > 0 ? debaters.join(' vs. ') : null;
+  // What the debate argued, from its own `Claims` relation. `debate.name` is the last resort and
+  // already leads with the claim, so it degrades to roughly the right sentence.
+  const headline = claimText ?? debate.name ?? 'Debate';
   const debateHref = NavUtils.toEntity(spaceId, debate.id);
 
   // Measured from this row's top down to where the branch begins, so the spine stops exactly there
@@ -168,7 +174,7 @@ export function DebateActivityRow({
             // 540 × 820, so a 16:9 tile would letterbox every still it ever showed.
             <Link
               href={debateHref}
-              aria-label={`Watch ${title}`}
+              aria-label={`Watch ${debaterLine ?? headline}`}
               className="relative block w-full shrink-0 overflow-hidden rounded-md bg-grey-01"
               style={{ height: KEYFRAME_HEIGHT_PX }}
             >
@@ -180,11 +186,27 @@ export function DebateActivityRow({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {/*
+            The claim leads and the debaters follow, the other way round from the first cut.
+            A comment row's strong first line is what was said, and its byline is who said it; a
+            debate row reads as a peer of those rows only if it is built the same way. What the
+            debate argued is the row's substance — "Ada vs. Tomas" is its byline.
+          */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span className={cx(PAGE_DENSITY.nameClass, 'truncate text-text')}>{title}</span>
+            <Link href={debateHref} className="group/debate min-w-0 no-underline">
+              <span className={cx(PAGE_DENSITY.nameClass, 'wrap-break-word text-text group-hover/debate:underline')}>
+                {headline}
+              </span>
+            </Link>
             <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
               Debate
             </span>
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            {debaterLine && (
+              <span className={cx(PAGE_DENSITY.metaClass, 'min-w-0 truncate text-grey-04')}>{debaterLine}</span>
+            )}
             {publishedAt && (
               // Same helper and classes the comment rows use, so a debate and a comment in one
               // thread age identically rather than reading as two lists side by side.
@@ -193,14 +215,6 @@ export function DebateActivityRow({
               </span>
             )}
           </div>
-
-          {claimText && (
-            <Link href={debateHref} className="group/debate min-w-0 no-underline">
-              <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text group-hover/debate:underline')}>
-                {claimText}
-              </span>
-            </Link>
-          )}
 
           <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
             {!collapsed && (
