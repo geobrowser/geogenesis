@@ -272,6 +272,21 @@ describe('ClaimPageView record', () => {
     expect(screen.getByTestId('activity')).not.toBe(first);
   });
 
+  /*
+   * And the space, because a claim is not one record. It can live in several —
+   * `SpaceRedirect` only moves a reader on where the entity is absent from the
+   * space they asked for — and every row the card is given here is read through
+   * `spaceId`, so the same claim in two spaces is two different records.
+   */
+  it('remounts the activity card when the same claim is read in another space', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-2" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
   it('offers product tabs before authored claim tabs', () => {
     mocks.record.claimsTotal = 1;
 
