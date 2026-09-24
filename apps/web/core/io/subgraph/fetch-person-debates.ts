@@ -2,8 +2,11 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
+import type { HiddenProfileRelation } from '~/core/profile/profile-debate-visibility';
+import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
+import { hiddenProfileRelationRowsConnection } from './hidden-profile-relations-query';
 
 /** One debate a person argued, and which side they took. */
 export type PersonDebate = {
@@ -15,6 +18,8 @@ export type PersonDebate = {
   side: 'supported' | 'opposed';
   /** Unix seconds, for ordering. Zero where the indexer stamped none. */
   createdAt: number;
+  /** Every live hide row for this debate in this person's personal space. */
+  hiddenRelations: HiddenProfileRelation[];
 };
 
 type RelationNode = {
@@ -26,6 +31,7 @@ type RelationNode = {
 interface NetworkResult {
   supported: { nodes: RelationNode[] } | null;
   opposed: { nodes: RelationNode[] } | null;
+  hidden: { nodes: HiddenProfileRelation[] } | null;
 }
 
 /**
@@ -57,6 +63,7 @@ function personDebatesQuery(spaceId: string, first: number) {
   return `query {
     supported: ${side(DEBATE_SUPPORTED_BY_PROPERTY)}
     opposed: ${side(DEBATE_OPPOSED_BY_PROPERTY)}
+    hidden: ${hiddenProfileRelationRowsConnection(spaceId)}
   }`;
 }
 
@@ -83,6 +90,12 @@ export async function fetchPersonDebates(spaceId: string, first = 200): Promise<
   // the same person — duplicate writes, not somebody arguing three times — so a
   // page of relations can hold fewer debates than it has rows. Keyed by debate.
   const byDebate = new Map<string, PersonDebate>();
+  const hiddenByDebate = new Map<string, HiddenProfileRelation[]>();
+
+  for (const relation of result.right.hidden?.nodes ?? []) {
+    const key = normId(relation.toEntityId);
+    hiddenByDebate.set(key, [...(hiddenByDebate.get(key) ?? []), relation]);
+  }
 
   const collect = (nodes: RelationNode[], side: PersonDebate['side']) => {
     for (const node of nodes) {
@@ -95,6 +108,7 @@ export async function fetchPersonDebates(spaceId: string, first = 200): Promise<
         spaceId: node.spaceId,
         side,
         createdAt: Number(debate.createdAt ?? 0),
+        hiddenRelations: hiddenByDebate.get(normId(debate.id)) ?? [],
       });
     }
   };

@@ -74,6 +74,8 @@ export type ActivityKind = {
   seeAllLabel: string;
   /** Selects an in-place tab when the record is rendered inside a side panel. */
   onSeeAll?: () => void;
+  /** Profile-owner action placed in debate cards only. */
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 };
 
 /**
@@ -290,6 +292,7 @@ export function ProfileActivitySection({
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
             onNavigationChange={setNavigation}
+            debateEndSlot={selected.debateEndSlot}
           />
         )}
       </section>
@@ -544,12 +547,14 @@ function ActivityGallery({
   responseByClaimId,
   personName,
   onNavigationChange,
+  debateEndSlot,
 }: {
   rows: ExploreFeedRow[];
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
   /** Where the header's arrows learn whether this row can move, and how to move it. */
   onNavigationChange?: (navigation: GalleryNavigation | null) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
@@ -617,6 +622,7 @@ function ActivityGallery({
               personName={personName}
               onDebatePlaybackRequest={requestPlayback}
               onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
+              debateEndSlot={debateEndSlot}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
@@ -817,6 +823,7 @@ function GalleryCard({
   personName,
   onDebatePlaybackRequest,
   onDebatePlaybackAvailabilityChange,
+  debateEndSlot,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
@@ -824,6 +831,7 @@ function GalleryCard({
   personName?: string | null;
   onDebatePlaybackRequest: (debateId: string) => void;
   onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -867,6 +875,7 @@ function GalleryCard({
           compactDebateChrome
           onDebatePlaybackRequest={onDebatePlaybackRequest}
           onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+          debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
         />
       )}
     </div>

@@ -43,6 +43,8 @@ type ExploreFeedCardProps = {
   onDebatePlaybackRequest?: (debateId: string) => void;
   /** Register whether this debate currently has a mounted player. Ignored by other row types. */
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
+  /** Profile-only owner action shown beside the debate's full-screen control. */
+  debateEndSlot?: React.ReactNode;
 };
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
@@ -102,6 +104,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         fullWidth={props.fullWidthDebate}
         onPlaybackRequest={props.onDebatePlaybackRequest}
         onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
+        endSlot={props.debateEndSlot}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
@@ -133,6 +136,7 @@ function BaseExploreFeedCard({
   hideJoinButton = false,
   titleOpensSidePanel = false,
   compactDebateChrome = false,
+  debateEndSlot,
 }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
@@ -141,9 +145,20 @@ function BaseExploreFeedCard({
   return (
     <article className={EXPLORE_CARD_CLASS}>
       {compactDebateChrome ? (
-        <DebateExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} compact />
+        <DebateExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          compact
+          endSlot={debateEndSlot}
+        />
       ) : (
-        <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
+        <ExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          endSlot={isDebateEntity(item.types) ? debateEndSlot : undefined}
+        />
       )}
 
       {isCommunityCall ? (

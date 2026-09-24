@@ -16,8 +16,9 @@ type Params = {
 /**
  * The facts the profile rail states (GEO-2859).
  *
- * Held for a minute: none of it changes on any action taken from this page, and
- * the counts are seven aggregate queries the reader should not wait for twice.
+ * Held for a minute: the counts are seven aggregate queries the reader should
+ * not wait for twice. Profile debate visibility writes update this cache
+ * directly, then the normal stale window reconciles it with the graph index.
  */
 export function useProfileFacts({ spaceId, personEntityId, enabled = true }: Params) {
   const { data, isLoading, isError } = useQuery({
