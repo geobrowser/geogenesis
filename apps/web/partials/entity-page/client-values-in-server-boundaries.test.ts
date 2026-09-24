@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
  *
  * ## Why this parses instead of matching
  *
- * It used to match patterns near declarations rather than read them, and review found ten ways that
+ * It used to match patterns near declarations rather than read them, and review found a dozen ways that
  * was wrong. An unbounded matcher began on a bare CSS import and captured a later statement's
  * specifier. `import Default, * as Namespace` matched neither of two patterns. `'use client'` was
  * recognised only as the very first token, so a licence header would hide an entire client module —
@@ -263,7 +263,14 @@ type ExportKind = 'component' | 'erased' | 'value' | 'unknown';
  * tag, which is a visible failure rather than a silent one.
  */
 
-/** `memo(X)` and `forwardRef(X)`, plain or `React.`-qualified, produce components. Nothing else does. */
+/**
+ * The React calls that produce a component: `memo`, `forwardRef` and `lazy`, plain or
+ * `React.`-qualified. Every other call is a value.
+ *
+ * `lazy` arrived later than the other two and this comment did not, which is the small version of
+ * the mistake the rest of the file keeps making — a list extended in one place and described in
+ * another.
+ */
 const COMPONENT_WRAPPERS = new Set(['memo', 'forwardRef', 'lazy']);
 
 /** The local names in one module that actually refer to React's wrappers and base classes. */
