@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -170,6 +170,41 @@ describe('player layout', () => {
     );
     expect(tiles).toHaveLength(2);
     expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
+  });
+
+  /**
+   * GEO-3022. The chip was dropped from the tile alongside the "Winner?" pill in #2439, which left
+   * the two videos saying who was speaking but not which side they were arguing — the one thing a
+   * viewer dropping into the middle of a debate cannot infer.
+   */
+  it("shows each debater's position beside their name", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByText } = within(container);
+
+    // Beside the name and not inside its link: the position is a fact about the debater, not a
+    // second way to open their profile.
+    for (const [name, position] of [
+      ['space-1', 'For'],
+      ['space-2', 'Against'],
+    ]) {
+      const chip = getByText(position);
+      const nameNode = getByText(name);
+      expect(chip.closest('button')).toBeNull();
+      expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
+    }
+  });
+
+  it('draws no chip for a debater whose position has no label', () => {
+    mocks.controller = {
+      ...controllerFixture({ mutedByUser: true, turnSlot: 1 }),
+      slot1Participant: { ...participant(1), position_label: '' },
+    };
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('For')).toBeNull();
+    expect(queryByText('Against')).not.toBeNull();
   });
 });
 
