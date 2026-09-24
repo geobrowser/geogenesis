@@ -7,7 +7,9 @@ import * as React from 'react';
 import { type PersonDebatesQueryData, personDebatesRowsQueryKey } from '~/core/debates/use-person-debates';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { usePublish } from '~/core/hooks/use-publish';
+import { useToast } from '~/core/hooks/use-toast';
 import { personDebatesQueryKey } from '~/core/io/subgraph/fetch-person-debates';
+import { ProfileDebateHiddenToast } from '~/core/profile/profile-debate-hidden-toast';
 import {
   type HiddenProfileRelation,
   buildHideDebateRelation,
@@ -29,6 +31,7 @@ function publishOnce(
 export function useProfileDebateVisibility(personalSpaceId: string) {
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
+  const [, setToast] = useToast();
   const [pendingIds, setPendingIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const pendingRef = React.useRef<Set<string>>(new Set());
 
@@ -98,13 +101,16 @@ export function useProfileDebateVisibility(personalSpaceId: string) {
         queryClient.setQueriesData<ProfileFacts>({ queryKey: ['profile-facts', personalSpaceId] }, current =>
           current ? { ...current, debates: Math.max(0, current.debates + (shouldHide ? -1 : 1)) } : current
         );
+        if (shouldHide) {
+          setToast(React.createElement(ProfileDebateHiddenToast, { personalSpaceId }));
+        }
         invalidateSoon();
         return true;
       } finally {
         setPending(item.entityId, false);
       }
     },
-    [invalidateSoon, makeProposal, personalSpaceId, queryClient, setPending]
+    [invalidateSoon, makeProposal, personalSpaceId, queryClient, setPending, setToast]
   );
 
   return { setHidden, pendingIds };

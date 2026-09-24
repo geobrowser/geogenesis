@@ -4,6 +4,8 @@ import {
   HIDDEN_FROM_PROFILE_PROPERTY,
   buildHideDebateRelation,
   buildUnhideDebateRelations,
+  hiddenProfileDebatesPath,
+  requestsHiddenProfileDebates,
   visibleDebateCount,
 } from './profile-debate-visibility';
 
@@ -53,5 +55,12 @@ describe('profile debate visibility', () => {
         ['22222222-2222-2222-2222-222222222222']
       )
     ).toBe(1);
+  });
+
+  it('links directly to the hidden list on the profile debates tab', () => {
+    expect(hiddenProfileDebatesPath(PERSONAL_SPACE)).toBe(`/space/${PERSONAL_SPACE}/debates?hidden=true`);
+    expect(requestsHiddenProfileDebates('true')).toBe(true);
+    expect(requestsHiddenProfileDebates(['false', 'true'])).toBe(true);
+    expect(requestsHiddenProfileDebates(undefined)).toBe(false);
   });
 });

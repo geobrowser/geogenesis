@@ -70,7 +70,13 @@ const SORT_OPTIONS_UNRANKED = SORT_OPTIONS.filter(option => !RANKED_SORTS.includ
 
 const isRanked = (sort: DebateSort) => sort === 'top' || sort === 'best';
 
-export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
+export function PersonDebatesTab({
+  spaceId,
+  showHiddenInitially = false,
+}: {
+  spaceId: string;
+  showHiddenInitially?: boolean;
+}) {
   // Shared with the Activity gallery, which links here — see the constant.
   const [sort, setSort] = React.useState<DebateSort>(DEFAULT_DEBATE_SORT);
   const spaces = useRecordSelection();
@@ -79,11 +85,13 @@ export function PersonDebatesTab({ spaceId }: { spaceId: string }) {
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
   const { rows, hiddenRows, hiddenRelationsByDebateId, isLoading, isError } = usePersonDebates(spaceId, true);
   const visibility = useProfileDebateVisibility(spaceId);
-  const [showHidden, setShowHidden] = React.useState(false);
+  const [showHidden, setShowHidden] = React.useState(showHiddenInitially);
 
   React.useEffect(() => {
-    if (hiddenRows.length === 0) setShowHidden(false);
-  }, [hiddenRows.length]);
+    // Preserve a deep link while its rows are still loading. Once the request
+    // settles, fall back to the public list if there is nothing hidden.
+    if (!isLoading && hiddenRows.length === 0) setShowHidden(false);
+  }, [hiddenRows.length, isLoading]);
 
   const sourceRows = showHidden ? hiddenRows : rows;
 

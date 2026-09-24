@@ -6,6 +6,16 @@ import { normId } from '~/core/utils/norm-id';
 export const HIDDEN_FROM_PROFILE_PROPERTY = '79c2cdf1a40f4f93b7410df1b89821ed';
 export const HIDDEN_FROM_PROFILE_PROPERTY_NAME = 'Hidden from profile';
 
+/** A stable destination for the debates that disappear from the public profile. */
+export function hiddenProfileDebatesPath(personalSpaceId: string): string {
+  return `/space/${personalSpaceId}/debates?hidden=true`;
+}
+
+/** Next search params can contain one value or repeated values for a key. */
+export function requestsHiddenProfileDebates(value: string | string[] | undefined): boolean {
+  return Array.isArray(value) ? value.includes('true') : value === 'true';
+}
+
 export type HiddenProfileRelation = {
   id: string;
   spaceId: string;
