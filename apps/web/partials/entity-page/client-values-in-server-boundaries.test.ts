@@ -163,6 +163,16 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
     }
   }
 
+  /*
+   * `export default require('./x')` hands the whole module object on, and `export =` does the same
+   * wherever a bundler allows it. Both reached the fallback below and produced a reference with no
+   * binding, which `clientBindings` skips — so a barrel written this way re-exported a client module
+   * in silence. `export { x } from './x'` cannot arrive here: a call is never its direct child.
+   */
+  if (parent && ts.isExportAssignment(parent) && parent.expression === call) {
+    return [{ specifier, local: parent.isExportEquals ? 'export =' : 'export default', namespace: true }];
+  }
+
   // Anything else — a bare call for its side effects — loads the module and takes nothing.
   return [{ specifier, local: '' }];
 }
@@ -1121,6 +1131,94 @@ describe('SERVER_ENTRY', () => {
       expect(SERVER_ENTRY.test(file)).toBe(false);
     }
   );
+});
+
+describe('isClientModule', () => {
+  const isClient = (source: string) => isClientModule(parse('fixture.tsx', source));
+
+  it.each([
+    ['on its own', "'use client';"],
+    ['double-quoted', '"use client";'],
+    ['behind a licence header and a blank line', "/* Copyright */\n// notes\n\n'use client';"],
+    ['behind another directive', "'use strict';\n'use client';"],
+  ])('reads the directive %s', (_label, source) => {
+    expect(isClient(source)).toBe(true);
+  });
+
+  it.each([
+    ['a module with no directive', 'export const A = 1;'],
+    // A template literal is not a directive. Reading one as a directive moves a *server* module into
+    // the client set, which stops the walk at it and hides everything behind it.
+    ['a template literal spelling of it', '`use client`;'],
+    // The prologue ends at the first statement that is not a directive.
+    ['a directive after an import', "import './x';\n'use client';"],
+    ['the string used as an argument', "register('use client');"],
+  ])('does not read %s as opting into the client', (_label, source) => {
+    expect(isClient(source)).toBe(false);
+  });
+});
+
+describe('callReferences', () => {
+  const refs = (source: string) => callReferences(parse('fixture.ts', source));
+
+  it.each([
+    ['a string specifier', "void import('./panel');"],
+    ['a no-substitution template', 'void import(`./panel`);'],
+  ])('follows a dynamic import written with %s', (_label, source) => {
+    expect(refs(source)).toEqual([{ specifier: './panel', local: '' }]);
+  });
+
+  it.each([
+    ['an interpolated specifier', 'void import(`./${name}`);'],
+    ['a variable specifier', 'void import(name);'],
+    // Read from the tree rather than the text: an `ImportTypeNode` is not a call, and TypeScript
+    // erases it, so following it would walk to a module that does not exist at runtime.
+    ['an import type', "type T = import('./panel').T;"],
+    ['a spelling inside a string', 'const source = "import(\'./panel\')";'],
+  ])('does not follow %s', (_label, source) => {
+    expect(refs(source)).toEqual([]);
+  });
+
+  it('reads both the export a require names and the name it is bound to', () => {
+    // Losing the local name is how the both-names gate came to reject a component under a capital.
+    expect(refs("const Widget = require('./x').widget;")).toEqual([
+      { specifier: './x', exported: 'widget', local: 'Widget' },
+    ]);
+    expect(refs("const Widget = require('./x')['widget'];")).toEqual([
+      { specifier: './x', exported: 'widget', local: 'Widget' },
+    ]);
+  });
+
+  it('falls back to the exported name when nothing is bound to it', () => {
+    expect(refs("use(require('./x').widget);")).toEqual([{ specifier: './x', exported: 'widget', local: 'widget' }]);
+  });
+
+  it('reads every binding a destructured require takes', () => {
+    expect(refs("const { A, B: b } = require('./x');")).toEqual([
+      { specifier: './x', exported: 'A', local: 'A' },
+      { specifier: './x', exported: 'B', local: 'b' },
+    ]);
+  });
+
+  it('keeps the whole module object when a require is bound to one name', () => {
+    expect(refs("const ns = require('./x');")).toEqual([{ specifier: './x', local: '* as ns', namespace: true }]);
+  });
+
+  it.each([
+    ['a call for its side effects', "require('./x');"],
+    ['a computed property read', "const thing = require('./x')[key];"],
+  ])('takes no binding from %s, but still walks the module', (_label, source) => {
+    expect(refs(source)).toEqual([{ specifier: './x', local: '' }]);
+  });
+
+  it.each([
+    ['export default', "export default require('./x');", 'export default'],
+    ['export =', "export = require('./x');", 'export ='],
+  ])('records a %s require as the whole module object', (_label, source, local) => {
+    // Without this these produced a reference with no binding, which `clientBindings` skips — a
+    // barrel re-exporting a client module and nothing reported.
+    expect(refs(source)).toEqual([{ specifier: './x', local, namespace: true }]);
+  });
 });
 
 describe('verdictFor', () => {
