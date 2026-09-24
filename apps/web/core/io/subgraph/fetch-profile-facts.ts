@@ -2,10 +2,11 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
+import { debateVisibilityCounts } from '~/core/profile/profile-debate-visibility';
 import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
-import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
+import { hiddenProfileRelationTargetsConnection } from './hidden-profile-relations-query';
 
 /** A space, named the way `SpaceDto` names one: topic first, then page. */
 type NamedSpace = {
@@ -31,6 +32,7 @@ interface NetworkResult {
   positions: { totalCount: number } | null;
   supported: { nodes: { fromEntity: { id: string } | null }[] } | null;
   opposed: { nodes: { fromEntity: { id: string } | null }[] } | null;
+  hidden: { nodes: { toEntityId: string }[] } | null;
   verifiedBy: { nodes: VerifierNode[] } | null;
   person: { createdAt: string | null } | null;
 }
@@ -84,18 +86,6 @@ function debateSide(typeId: string, sp: string) {
  */
 const spaceName = (space: NamedSpace): string | null => space?.topic?.name ?? space?.page?.name ?? null;
 
-/** Distinct non-null values, which is what every count on this rail means. */
-function distinctCount<T>(nodes: T[], key: (node: T) => string | null | undefined): number {
-  const seen = new Set<string>();
-
-  for (const node of nodes) {
-    const id = key(node);
-    if (id) seen.add(normId(id));
-  }
-
-  return seen.size;
-}
-
 /**
  * Everything the rail states, in one request.
  *
@@ -122,6 +112,7 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
     positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
+    hidden: ${hiddenProfileRelationTargetsConnection(spaceId)}
     verifiedBy: subspacesConnection(
       filter: { childSpaceId: { is: ${sp} }, type: { is: VERIFIED } }, first: 60
     ) {
@@ -132,7 +123,11 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
 }
 
 export function profileFactsQueryKey(spaceId: string, personEntityId: string | null) {
-  return ['profile-facts', spaceId, personEntityId] as const;
+  return [...profileFactsQueryPrefix(spaceId), personEntityId] as const;
+}
+
+export function profileFactsQueryPrefix(spaceId: string) {
+  return ['profile-facts', spaceId] as const;
 }
 
 export async function fetchProfileFacts(spaceId: string, personEntityId: string | null): Promise<ProfileFacts> {
@@ -187,6 +182,13 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     isPerson: node.parentSpace?.type === 'PERSONAL',
   }));
 
+  const debateCounts = debateVisibilityCounts(
+    [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])].flatMap(node =>
+      node.fromEntity?.id ? [node.fromEntity.id] : []
+    ),
+    (data.hidden?.nodes ?? []).map(node => node.toEntityId)
+  );
+
   return {
     proposals: data.proposals?.totalCount ?? 0,
     // Claims, not vote rows. `votedBy` counts entities, so the stance and
@@ -196,11 +198,10 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     positions: data.positions?.totalCount ?? 0,
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes
-    // as separate debates, which is how 10 becomes 13.
-    debates: distinctCount(
-      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])],
-      node => node.fromEntity?.id
-    ),
+    // as separate debates, which is how 10 becomes 13. The public count excludes
+    // hidden targets; the total keeps the owner's route to restoring them.
+    debates: debateCounts.visible,
+    totalDebates: debateCounts.total,
     spaces: orderSpaces([...byId.values()]),
     verifiedBy,
     joinedAt: data.person?.createdAt ? Number(data.person.createdAt) : null,

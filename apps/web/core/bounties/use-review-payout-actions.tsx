@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
@@ -14,15 +15,6 @@ import { buildPayoutOps } from './payout-ops';
 import { type ReviewRatings, buildCreateReviewOps } from './review-ops';
 import { bountyQueryKeys } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
-
-function publishOnce(
-  makeProposal: ReturnType<typeof usePublish>['makeProposal'],
-  args: Omit<Parameters<typeof makeProposal>[0], 'onSuccess' | 'onError'>
-): Promise<boolean> {
-  return new Promise(resolve => {
-    void makeProposal({ ...args, onSuccess: () => resolve(true), onError: () => resolve(false) });
-  });
-}
 
 const REFETCH_DELAYS_MS = [3_000, 7_000, 12_000];
 

@@ -4,6 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { ID } from '~/core/id';
+import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
@@ -85,10 +88,13 @@ type BuildSpaceTabsParams = {
    * empty record and hide a tab holding hundreds of rows.
    */
   personRecordCounts?: PersonRecordCounts;
+  /** Whether the profile owner may need the route to manage hidden debates. */
+  isOwner?: boolean;
 };
 
 export type PersonRecordCounts = {
   debates: number;
+  totalDebates: number;
   positions: number;
   proposals: number;
 };
@@ -101,6 +107,7 @@ export function buildSpaceTabs({
   isDebugDebatesPageEnabled,
   isProfile,
   personRecordCounts,
+  isOwner = false,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -153,7 +160,7 @@ export function buildSpaceTabs({
   // Overview is not in here and is never hidden: it is the profile itself, and a
   // person with an empty record still has a name, a bio and a rail.
   const countFor: Record<string, number | undefined> = {
-    Debates: personRecordCounts?.debates,
+    Debates: profileDebateNavigationCount(personRecordCounts?.debates, personRecordCounts?.totalDebates, isOwner),
     Positions: personRecordCounts?.positions,
     Proposals: personRecordCounts?.proposals,
   };
@@ -240,6 +247,8 @@ export function SpaceTabs({
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -363,6 +372,7 @@ export function SpaceTabs({
     typeIds,
     isDebugDebatesPageEnabled,
     isProfile,
+    isOwner,
   });
 
   // Overview, then our Community tab, then everything else.
