@@ -193,25 +193,18 @@ export function DebateCoordinator() {
       : (incomingRequests.find(request => request.status === 'pending' && !snoozedRequestIds.includes(request.id)) ??
         null);
 
-  React.useEffect(() => {
-    const liveIds = new Set(incomingRequests.map(request => request.id));
-    setSnoozedRequestIds(current => {
-      const next = current.filter(id => liveIds.has(id));
-      return next.length === current.length ? current : next;
-    });
-  }, [incomingRequests]);
+  // Keep snoozed ids for this coordinator's lifetime. A request-list refresh can briefly have no
+  // data while an outbound challenge is being created; pruning against that empty transition made
+  // the same inbound popup reopen as soon as the viewer requested somebody else. Request ids are
+  // unique, short-lived values, so retaining answered/expired ids for one browser session is safe.
 
   // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
   // challenge keeps its place in the hub's Requests tab until it is answered or expires.
-  const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
-  const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+  const [snoozedChallengeIds, setSnoozedChallengeIds] = React.useState<string[]>([]);
+  const promptedChallenge = challenge && !snoozedChallengeIds.includes(challenge.id) ? challenge : null;
   // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
   // above reads it to keep other popups from stacking on top of an outstanding challenge.
   const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
-
-  React.useEffect(() => {
-    if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
-  }, [challenge, snoozedChallengeId]);
 
   // Everything waiting on this viewer's answer, for the tone and the tab title (GEO-3026). Snoozes
   // are ignored on purpose: a snoozed request was already seen, and each id alerts only once.
@@ -442,7 +435,11 @@ export function DebateCoordinator() {
           error={challengeError instanceof Error ? challengeError.message : null}
           onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
           onReject={() => rejectChallenge.mutate(promptedChallenge.id)}
-          onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
+          onNotNow={() =>
+            setSnoozedChallengeIds(current =>
+              current.includes(promptedChallenge.id) ? current : [...current, promptedChallenge.id]
+            )
+          }
         />
       )}
       {promptedRequest && currentUserId && (

@@ -222,6 +222,30 @@ describe('debate query network ownership', () => {
     });
   });
 
+  it('keeps a newly created outbound challenge cached instead of refetching stale activity over it', () => {
+    const { result } = renderHook(() => useCreateDebateChallenge());
+    const mutation = result.current as unknown as {
+      onSuccess(challenge: { id: string }): void;
+    };
+    const challenge = { id: 'challenge-1' };
+
+    mutation.onSuccess(challenge);
+
+    expect(mocks.queryClient.setQueryData).toHaveBeenCalledWith(
+      ['debates', 'account', 'user-a', 'activity'],
+      expect.any(Function)
+    );
+    const update = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as (current: Record<string, unknown>) => unknown;
+    expect(update({ online: true, challenge: null })).toEqual({
+      online: true,
+      challenge,
+      outbound_challenge: challenge,
+    });
+    expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+  });
+
   // The rematch voice token is the one query whose cache policy is load-bearing rather than a
   // freshness preference: `<LiveKitRoom>` cannot be handed a new token while it is mounted, so the
   // token has to be stable for as long as the room lives — and gone the moment the dock stops using

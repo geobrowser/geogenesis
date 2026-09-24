@@ -502,6 +502,7 @@ const ACTIVITY_DEGRADED_POLL_MS = 10_000;
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const activityKey = debateQueryKeys.activity(accountKey);
   const attentive = useDebateAttention();
   const present = useDebateVisibility();
   const { paused } = useDebateGatewaySnapshot();
@@ -511,7 +512,7 @@ export function useDebateActivity(enabled = true) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.activity(accountKey),
+    queryKey: activityKey,
     queryFn: async ({ signal }) => {
       const activity = await getDebateActivity(getPrivyIdentityToken, accountKey, signal);
       if (activity.debate) {
@@ -520,7 +521,16 @@ export function useDebateActivity(enabled = true) {
       if (activity.rematch) {
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, activity.rematch.id), activity.rematch);
       }
-      return activity;
+      // The wire shape can name only one challenge. After an inbound challenge and an outbound one
+      // coexist, it keeps returning the inbound row until that row expires; without this overlay a
+      // refetch hides the outbound card and makes the People tab offer another request. Retain the
+      // create response until it expires or activity advances into a debate/rematch.
+      const retainedOutbound = queryClient.getQueryData<DebateActivity>(activityKey)?.outbound_challenge;
+      const outboundIsLive =
+        retainedOutbound?.status === 'pending' && Date.parse(retainedOutbound.expires_at) > Date.now();
+      return outboundIsLive && !activity.debate && !activity.rematch
+        ? { ...activity, outbound_challenge: retainedOutbound }
+        : activity;
     },
     enabled: queryEnabled,
     // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
@@ -548,10 +558,14 @@ export function useDebateActivity(enabled = true) {
   // the usual case, so this costs nothing until there is something to draw. See
   // `participant-avatars`.
   const activityPeople = React.useMemo(() => {
-    const { challenge, outbound_request: outbound, debate, rematch } = query.data ?? {};
+    const { challenge, outbound_challenge: outboundChallenge, outbound_request: outbound, debate, rematch } =
+      query.data ?? {};
 
     return [
       ...(challenge ? [challenge.requester, challenge.recipient] : []),
+      ...(outboundChallenge && outboundChallenge.id !== challenge?.id
+        ? [outboundChallenge.requester, outboundChallenge.recipient]
+        : []),
       // The tabs fall back to `outbound_request` while `useDebateRequests` is still loading, and
       // draw both parties from it in `OutboundRequestCard`.
       ...(outbound ? [outbound.requester, outbound.recipient] : []),
@@ -568,14 +582,15 @@ export function useDebateActivity(enabled = true) {
 
   const data = React.useMemo(() => {
     if (!query.data) return query.data;
-    const { challenge, outbound_request: outbound, debate, rematch } = query.data;
-    if (!challenge && !outbound && !debate && !rematch) return query.data;
+    const { challenge, outbound_challenge: outboundChallenge, outbound_request: outbound, debate, rematch } = query.data;
+    if (!challenge && !outboundChallenge && !outbound && !debate && !rematch) return query.data;
 
     // `match` is deliberately left alone: nothing has populated it since GEO-2514 and nothing here
     // reads it, so resolving faces for it would be work for a field that is always null.
     return {
       ...query.data,
       challenge: challenge ? withParties(challenge, withAvatar) : challenge,
+      outbound_challenge: outboundChallenge ? withParties(outboundChallenge, withAvatar) : outboundChallenge,
       outbound_request: outbound ? withParties(outbound, withAvatar) : outbound,
       debate: debate ? withRowParticipantAvatars(debate, withAvatar) : debate,
       rematch: rematch ? withRowParticipantAvatars(rematch, withAvatar) : rematch,
@@ -1218,9 +1233,19 @@ export function useCreateDebateChallenge() {
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current ? { ...current, challenge } : current
+        current
+          ? {
+              ...current,
+              // Keep an inbound challenge in the wire field so its popup and Received card survive.
+              challenge: current.challenge ?? challenge,
+              outbound_challenge: challenge,
+            }
+          : current
       );
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      // The create response is the newest authoritative copy of this challenge. Refetching activity
+      // immediately can still return the pre-create row and erase it from the cache, which removes
+      // the outbound card and re-enables every request button until geo-chat catches up. The gateway
+      // and the activity poll still reconcile later changes; keep this response in place meanwhile.
     },
     onError: (error, request) => {
       if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
@@ -1241,6 +1266,10 @@ export function useAcceptDebateChallenge() {
       if (result.session) {
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
+      // Accepting an inbound challenge cancels the viewer's outbound one on the server.
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current ? { ...current, outbound_challenge: null } : current
+      );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
@@ -1252,9 +1281,16 @@ export function useRejectDebateChallenge() {
 
   return useMutation({
     mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
+    onSuccess: (_result, challengeId) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current ? { ...current, challenge: null } : current
+        current
+          ? {
+              ...current,
+              challenge: current.challenge?.id === challengeId ? null : current.challenge,
+              outbound_challenge:
+                current.outbound_challenge?.id === challengeId ? null : current.outbound_challenge,
+            }
+          : current
       );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },

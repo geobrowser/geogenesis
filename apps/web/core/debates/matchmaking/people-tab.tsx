@@ -79,6 +79,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
   const { personalSpaceId } = usePersonalSpaceId();
+  // One mutation for the whole list. A mutation per row only disables the row that was clicked,
+  // leaving every other person requestable while the same outbound request is still in flight.
+  const createChallenge = useCreateDebateChallenge();
   // One elevated portal for every row's menu. A portal per person would append a matching number
   // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const popoverPortal = useElevatedPopoverPortal();
@@ -281,7 +284,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // one of the two things holding the list down.
   const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const reportedChallenge =
+    activity?.outbound_challenge?.status === 'pending'
+      ? activity.outbound_challenge
+      : activity?.challenge?.status === 'pending'
+        ? activity.challenge
+        : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
   // expiry has to be applied here — the same filter every other request surface derives from, so
   // none of them disagree about a dead request while waiting for `debate.requests_changed`. Without
@@ -312,7 +320,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
   // Kept separate from `blockedReason`: the card replaces the sentence but not the reason every
   // button below is disabled.
-  const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge);
+  const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge) || createChallenge.isPending;
+  const disabledReason =
+    blockedReason ??
+    (createChallenge.isPending ? 'Sending your debate request…' : 'You have a debate request awaiting a reply.');
 
   return (
     <div className="flex flex-col">
@@ -428,7 +439,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                     labelsById={labelsById}
                     popoverPortal={popoverPortal}
                     disabled={buttonsDisabled}
-                    disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                    disabledReason={disabledReason}
+                    onRequest={() => createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })}
+                    requestPending={
+                      createChallenge.isPending &&
+                      createChallenge.variables?.recipient_profile_space_id === person.profile_space_id
+                    }
                     onRequireSignIn={onRequireSignIn}
                     onSeeTimes={
                       bookingEnabled
@@ -480,6 +496,8 @@ function PersonRow({
   popoverPortal,
   disabled,
   disabledReason,
+  onRequest,
+  requestPending,
   onRequireSignIn,
   onSeeTimes,
 }: {
@@ -501,6 +519,9 @@ function PersonRow({
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
+  onRequest: () => void;
+  /** Only the row whose shared mutation is running carries the progress label. */
+  requestPending: boolean;
   /**
    * Set only when signed out. Pressing Debate then opens Privy instead of sending a request, which
    * would fail at the token exchange with an error the viewer can do nothing about.
@@ -509,7 +530,6 @@ function PersonRow({
   /** Absent while the feature flag is off, which is what hides "See times". */
   onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null) => void;
 }) {
-  const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -612,14 +632,14 @@ function PersonRow({
           onClick={() =>
             onRequireSignIn
               ? onRequireSignIn()
-              : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+              : onRequest()
           }
           // `in_debate` holds signed out too: it means this person is in an active debate right now,
           // which is true of them rather than of any viewer, so signing in would not make them
           // available. `can_challenge` and the viewer's own pending request are the viewer-relative
           // ones, and those are what the press bypasses on its way to the sign-in.
           disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
-          pending={createChallenge.isPending}
+          pending={requestPending}
           pendingLabel="Requesting…"
           title={disabled ? disabledReason : undefined}
         >

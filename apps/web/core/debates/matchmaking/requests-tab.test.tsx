@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   incoming: [] as DebateRequest[],
   outbound: null as DebateRequest | null,
   challenge: null as DebateChallenge | null,
+  outboundChallenge: null as DebateChallenge | null,
   accept: vi.fn(),
   dismiss: vi.fn(),
   withdraw: vi.fn(),
@@ -27,7 +28,9 @@ vi.mock('../hooks', async importOriginal => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
-  useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
+  useDebateActivity: () => ({
+    data: { challenge: mocks.challenge, outbound_challenge: mocks.outboundChallenge, outbound_request: null },
+  }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
@@ -120,6 +123,7 @@ beforeEach(() => {
   mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
   mocks.outbound = null;
   mocks.challenge = null;
+  mocks.outboundChallenge = null;
   mocks.currentUserId = 'user-me';
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
@@ -290,6 +294,20 @@ describe('RequestsTab', () => {
     // Both sides run down the same 25-minute clock, so both say so — the sent one used to show
     // only "Awaiting response", with no hint of how long it had left.
     expect(screen.getAllByText(/^Expires in/)).toHaveLength(2);
+  });
+
+  it('keeps simultaneous inbound and outbound person requests in their respective sections', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('recipient');
+    mocks.outboundChallenge = { ...challenge('requester'), id: 'challenge-outbound' };
+
+    render(<RequestsTab />);
+
+    const sent = screen.getByRole('heading', { name: 'Sent' });
+    const received = screen.getByRole('heading', { name: 'Received' });
+    expect(sent.compareDocumentPosition(received) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
   it('narrows to one side with the status filter', () => {

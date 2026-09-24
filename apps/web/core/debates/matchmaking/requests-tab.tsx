@@ -102,6 +102,18 @@ function RequestsTabBody({
     React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
   );
   const challenge = liveChallenges[0] ?? null;
+  const reportedOutboundChallenge =
+    activity?.outbound_challenge?.status === 'pending' ? activity.outbound_challenge : null;
+  const liveOutboundChallenges = useUnexpiredRequests(
+    React.useMemo(
+      () =>
+        reportedOutboundChallenge && reportedOutboundChallenge.id !== reportedChallenge?.id
+          ? [reportedOutboundChallenge]
+          : [],
+      [reportedChallenge?.id, reportedOutboundChallenge]
+    )
+  );
+  const retainedOutboundChallenge = liveOutboundChallenges[0] ?? null;
   const currentUserId = useCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
@@ -113,7 +125,10 @@ function RequestsTabBody({
         ? 'recipient'
         : 'requester';
   const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
-  const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
+  const outgoingChallenge =
+    status === 'received'
+      ? null
+      : (retainedOutboundChallenge ?? (challengeRole === 'requester' ? challenge : null));
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
   const hasScheduled =
