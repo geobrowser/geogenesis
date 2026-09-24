@@ -22,8 +22,15 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
-import { DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
+import {
+  ClaimBacklogChip,
+  ClaimScrubberMarkers,
+  DebateClaimTickerStack,
+  useDebateClaimTicker,
+} from './debate-claim-ticker';
+import { DebateClaimPrompt, DebateRoundBadge, DebateScorecard, DebateTurnCueOverlay } from './debate-turn-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateAgreement } from './use-debate-agreement';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -167,6 +174,31 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     () => (playing && !reducedOverlays ? turnCuesAt(turnSpans, playheadSeconds) : []),
     [playheadSeconds, playing, reducedOverlays, turnSpans]
   );
+
+  /**
+   * The claim count for one tile, as its own instrument rather than part of the claim corner.
+   *
+   * Built here because it needs what the corner needed — the backlog's length, the running tally,
+   * and both latches that hold the list open — none of which the tile knows. Off on a compact
+   * gallery tile with the rest of the claim layer, and off once the scorecard is up, which says
+   * the same number in full.
+   */
+  const claimChipFor = (slot: 1 | 2) => {
+    if (reducedOverlays || playbackEnded) return null;
+    const count = ticker.historyBySlot.get(slot)?.length ?? 0;
+    if (count === 0) return null;
+
+    const clearSlot = (current: number | null) => (current === slot ? null : current);
+    return (
+      <ClaimBacklogChip
+        count={count}
+        tally={claimsOpenFor(slot) ? null : (ticker.tallyBySlot.get(slot) ?? null)}
+        expanded={claimsOpenFor(slot) && pinnedSlot === slot}
+        onClick={() => setPinnedSlot(current => (current === slot ? null : slot))}
+        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
+      />
+    );
+  };
 
   const roundBadge = React.useMemo(
     () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, playheadSeconds) : null),
@@ -366,17 +398,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;
 
-    const pinned = pinnedSlot === slot;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     return (
       <DebateClaimTickerStack
         cards={cards}
         history={history}
-        tally={ticker.tallyBySlot.get(slot) ?? null}
         open={claimsOpenFor(slot)}
-        pinned={pinned}
-        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
         onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
         participantByClaimId={ticker.participantByClaimId}
         rowsByClaimId={ticker.rowsByClaimId}
@@ -434,6 +462,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 1)}
+        claimChip={claimChipFor(1)}
         roundBadge={turnState?.slot === 1 ? roundBadge : null}
         scorecard={scorecardFor(1)}
         mutedByUser={mutedByUser}
@@ -491,6 +520,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         turnCue={turnCueForSlot(turnCues, 2)}
+        claimChip={claimChipFor(2)}
         roundBadge={turnState?.slot === 2 ? roundBadge : null}
         scorecard={scorecardFor(2)}
         mutedByUser={mutedByUser}
@@ -611,6 +641,20 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
 
+      {/* The question the debate was about, asked at the one moment the viewer has heard the whole
+          case. Across the foot of the player rather than in a tile: it belongs to the debate, not
+          to either debater. */}
+      {playbackEnded && !reducedOverlays && (
+        <DebateClaimPrompt prompt="Where do you stand?">
+          <EntityVoteButtons
+            entityId={debate.claim.claim_entity_id}
+            spaceId={debate.claim.space_id}
+            responseKind={undefined}
+            claimResponderAvatarsPosition="trailing"
+          />
+        </DebateClaimPrompt>
+      )}
+
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
           {error}
@@ -627,6 +671,7 @@ function DebaterVideo({
   audible,
   countdown,
   turnCue,
+  claimChip,
   roundBadge,
   scorecard,
   mutedByUser,
@@ -650,6 +695,8 @@ function DebaterVideo({
   countdown: TurnState;
   /** This tile's turn-clock overlay right now, if one is firing. */
   turnCue?: TurnCue | null;
+  /** This debater's claim count, which sits with the clock rather than with their claims. */
+  claimChip?: React.ReactNode;
   /** The round in progress, parked beside this tile's timer. Only the speaker's tile has one. */
   roundBadge?: { label: string; opacity: number } | null;
   /** How this debater finished, once the debate has. The tile supplies who they are. */
@@ -900,8 +947,26 @@ function DebaterVideo({
 
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
-      {countdown && <DebateRoundBadge badge={roundBadge ?? null} />}
+      {/* The tile's instruments, in one right-aligned column.
+
+          Two rows rather than one, and that is a width decision. The round label runs to about
+          130px and slot 1's play and mute controls take 128 of the other end on a phone; a single
+          row of round, timer and count does not fit a 360px tile beside them, and the thing that
+          would give way is whichever the flexbox happened to reach last. Stacked, the count sits
+          under the timer where there is nothing to compete with at any width.
+
+          The count is on both tiles; the round and the timer belong to whoever is speaking. */}
+      {(countdown || claimChip) && (
+        <div className="pointer-events-none absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
+          {countdown && (
+            <div className="flex items-center gap-2">
+              <DebateRoundBadge badge={roundBadge ?? null} />
+              <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />
+            </div>
+          )}
+          {claimChip}
+        </div>
+      )}
 
       <DebateTurnCueOverlay cue={turnCue ?? null} />
       {scorecard && (
@@ -1064,7 +1129,7 @@ function CountdownBadge({ seconds, progress }: { seconds: number; progress: numb
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const degrees = remaining * 360;
   return (
-    <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
+    <div className="grid size-8 shrink-0 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
       <span
         data-countdown-ring={countdownRingColor(seconds)}
         className="col-start-1 row-start-1 size-7 rounded-full transition-[background-image] duration-500"

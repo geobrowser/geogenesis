@@ -2,13 +2,16 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateParticipant } from '~/core/debates/api';
-import type { ClaimMarker, TickerWindow } from '~/core/debates/claim-ticker';
+import { type ClaimMarker, RUN_LENGTH, type TickerWindow } from '~/core/debates/claim-ticker';
 import type { TimedClaim } from '~/core/debates/claim-timing';
 
 import {
+  ClaimBacklogChip,
   ClaimScrubberMarkers,
   DebateClaimTickerCard,
   DebateClaimTickerStack,
@@ -402,101 +405,12 @@ describe('DebateClaimTickerStack', () => {
     expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
   });
 
-  // A caller that gives it no way to be pressed is hover-only, and an empty corner is correct there.
-  it('draws nothing at all when closed, nothing live, and there is no chip to press', () => {
+  it('draws nothing at all when closed and nothing is live', () => {
+    // The corner is claims and only claims now — the count and the way into the backlog moved up
+    // to the tile's instruments, beside the round and the turn timer.
     const { container } = renderStack({ cards: [] });
 
     expect(container).toBeEmptyDOMElement();
-  });
-
-  // The way in where there is no hover. Whether it is *drawn* is a media query — `no-hover:flex`,
-  // which jsdom does not evaluate — so what is checked here is that it exists and counts correctly.
-  it('rests on a chip naming how many claims are behind the playhead', () => {
-    renderStack({ cards: [], onTogglePinned: vi.fn() });
-
-    expect(screen.getByRole('button', { name: 'Show the 2 claims said so far' })).toHaveTextContent('2 claims');
-  });
-
-  it('presses through to the caller, which owns whether the corner is open', () => {
-    const onTogglePinned = vi.fn();
-    renderStack({ cards: [], onTogglePinned });
-
-    fireEvent.click(screen.getByRole('button', { name: /Show the 2 claims/ }));
-
-    expect(onTogglePinned).toHaveBeenCalledOnce();
-  });
-
-  // A pointer closes the corner by leaving the tile. A tap has nowhere to go, so the way in has to
-  // double as the way out — and only in that case, or a mouse user gets a control they never need.
-  it('offers a way back out only when the chip is what opened it', () => {
-    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
-    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
-
-    cleanup();
-    renderStack({ open: true, onTogglePinned: vi.fn() });
-    expect(screen.queryByRole('button', { name: /Hide the claims/ })).not.toBeInTheDocument();
-  });
-
-  /**
-   * It used to give way to a live card, so the card could sit 26px lower on a phone tile.
-   *
-   * The chip carries the running count now, and a count that vanishes at the moment it changes is
-   * the one moment it had something to say — so it stays, above the card rather than under it,
-   * and the card gives up the height instead.
-   */
-  it('stays up under a live claim, because that is when the count changes', () => {
-    renderStack({ onTogglePinned: vi.fn() });
-
-    expect(screen.getByText(/Supreme Court/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /claims said so far/ })).toBeInTheDocument();
-  });
-
-  it('is up on a pointer device too, not only where there is no hover', () => {
-    // It is the only thing on the tile that says the backlog exists; hiding it everywhere a
-    // pointer could hover meant a viewer who never pointed at a debater's half never found it.
-    const { container } = renderStack({ onTogglePinned: vi.fn() });
-    const chip = screen.getByRole('button', { name: /claims said so far/ });
-    expect([...chip.classList]).not.toContain('opacity-0');
-    expect([...chip.classList]).toContain('pointer-events-auto');
-    expect(container).toBeTruthy();
-  });
-
-  it('flies a +1 clear of the pill rather than over it', () => {
-    renderStack({ onTogglePinned: vi.fn(), tally: { count: 3, ageMs: 200, run: 1 } });
-    const burst = document.querySelector('[data-claim-burst]') as HTMLElement;
-    // Anchored to the top of the chip and climbing, so the two are never legible at once.
-    expect([...burst.classList]).toContain('bottom-full');
-    expect(Number(burst.style.opacity)).toBeGreaterThan(0);
-  });
-
-  it("outlines the +1 at the weight small type wants, not the count-in's", () => {
-    renderStack({ onTogglePinned: vi.fn(), tally: { count: 3, ageMs: 200, run: 1 } });
-    const shadow = (document.querySelector('[data-claim-burst]') as HTMLElement).style.textShadow;
-    // Eight 1px copies make a solid hairline halo. The count-in's four 2px copies are thicker than
-    // the strokes of a 16px glyph and close up its counters — which is what read as broken.
-    expect(shadow).not.toContain('2px');
-    expect(shadow.match(/0 #000/g)).toHaveLength(8);
-  });
-
-  it('wears the same glyph as the Claims button, which is the circled exclamation', () => {
-    const { container } = renderStack({ onTogglePinned: vi.fn() });
-    const chip = screen.getByRole('button', { name: /claims said so far/ });
-    // `Warning`'s mark: a 1×6 bar over a 1×1 dot, inside the same 16px circle the bar's button
-    // draws. `InfoSmall` — the circled question mark this used to draw — has neither.
-    expect(chip.querySelector('svg rect[height="6"]')).not.toBeNull();
-    expect(container).toBeTruthy();
-  });
-
-  it('calls out a run in place of the total, and only above the bar', () => {
-    renderStack({ onTogglePinned: vi.fn(), tally: { count: 9, ageMs: 200, run: 3 } });
-    expect(screen.getByText('3 in a row')).toBeInTheDocument();
-  });
-
-  // Still the way back out of an opened backlog, live card or not.
-  it('keeps the chip while the backlog is open', () => {
-    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
-
-    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
   });
 
   /**
@@ -758,24 +672,51 @@ describe('DebateClaimTickerStack', () => {
   });
 
   /**
+   * The chip has left the stack, and the latch it used to hold has to survive the move.
+   *
+   * It is drawn by the tile now, beside the round and the timer, so the stack's own focus boundary
+   * no longer contains it — the chip reports focus itself. What is checked here is the half the
+   * stack still owns: a keyboard inside the cards holds the list open, and only leaving the cards
+   * entirely lets it go.
+   */
+  it('holds the backlog open while a keyboard is anywhere inside the cards', async () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange, open: true });
+    const user = userEvent.setup();
+
+    await user.tab();
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+
+    // Between two controls inside the stack: still inside, so nothing is released.
+    await user.tab();
+    expect(onFocusChange).not.toHaveBeenCalledWith(false);
+  });
+
+  /**
+   * A click inside a live card is not a request for the backlog.
+   *
+   * The player opens the backlog on focus, and draws it narrower than a live card. Any focus
+   * counting meant clicking the expand toggle on a clamped claim swapped the card for the list
+   * mid-read, and re-laid the claim out at the list's width — so the reader asked for the rest of
+   * the sentence in front of them and got it in a different column.
+   */
+  it('does not report focus when a click lands inside it', async () => {
+    forceClampedOverflow();
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    await userEvent.click(screen.getByTitle('Show the whole claim'));
+
+    expect(screen.getByTitle('Show less')).toHaveAttribute('aria-expanded', 'true');
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
+  });
+
+  /**
    * The chip is a sibling of the scroll box, so a boundary drawn around the box alone reported
    * focus *gone* the moment a keyboard tabbed from the last card out to the chip. The player then
    * closed the backlog, `showChip` went false with a live card present, and the chip unmounted
    * mid-tab — dropping focus to the body, with the one control that reopens the list now missing.
    */
-  it('keeps reporting focus when a keyboard tabs from a card out to the chip', async () => {
-    const onFocusChange = vi.fn();
-    renderStack({ onFocusChange, open: true, pinned: true, onTogglePinned: vi.fn() });
-    const user = userEvent.setup();
-
-    // Into the stack, then on until the chip has it. The cards' own controls come first.
-    const chip = screen.getByRole('button', { name: /claims said so far|Hide the claims/i });
-    for (let i = 0; i < 12 && document.activeElement !== chip; i += 1) await user.tab();
-
-    expect(chip).toHaveFocus();
-    expect(onFocusChange).toHaveBeenLastCalledWith(true);
-    expect(onFocusChange).not.toHaveBeenCalledWith(false);
-  });
 
   // Same for the thumbs, which is the other thing a pointer comes to a live card to do.
   it('does not report focus when a thumb is clicked', async () => {
@@ -975,5 +916,76 @@ describe('ClaimScrubberMarkers', () => {
     const { container } = render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
 
     expect(container.querySelector('button')?.children).toHaveLength(0);
+  });
+});
+
+describe('ClaimBacklogChip', () => {
+  const chip = (props: Partial<React.ComponentProps<typeof ClaimBacklogChip>> = {}) =>
+    render(<ClaimBacklogChip count={2} tally={null} expanded={false} onClick={vi.fn()} {...props} />);
+
+  it('names how many claims are behind the playhead', () => {
+    chip();
+    expect(screen.getByRole('button', { name: 'Show the 2 claims said so far' })).toHaveTextContent('2 claims');
+  });
+
+  it('presses through to the caller, which owns whether the corner is open', () => {
+    const onClick = vi.fn();
+    chip({ onClick });
+
+    fireEvent.click(screen.getByRole('button', { name: /Show the 2 claims/ }));
+
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  // A pointer closes the corner by leaving the tile. A tap has nowhere to go, so the way in has to
+  // double as the way out — and only in that case, or a mouse user gets a control they never need.
+  it('offers a way back out only when it is what opened the corner', () => {
+    chip({ expanded: true });
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+  });
+
+  it('is up on a pointer device too, not only where there is no hover', () => {
+    // It is the only thing on the tile that says the backlog exists; hiding it everywhere a
+    // pointer could hover meant a viewer who never pointed at a debater's half never found it.
+    chip();
+    const button = screen.getByRole('button', { name: /claims said so far/ });
+    expect([...button.classList]).not.toContain('opacity-0');
+    expect([...button.classList]).toContain('pointer-events-auto');
+  });
+
+  it('wears the same glyph as the Claims button, which is the circled exclamation', () => {
+    chip();
+    // `Warning`'s mark: a 1x6 bar over a 1x1 dot, inside the same 16px circle that button draws.
+    // `InfoSmall` — the circled question mark this used to draw — has neither.
+    expect(screen.getByRole('button').querySelector('svg rect[height="6"]')).not.toBeNull();
+  });
+
+  it('sends the +1 sideways, because it has the top of the tile above it', () => {
+    chip({ tally: { count: 3, ageMs: 200, run: 1 } });
+    const burst = document.querySelector('[data-claim-burst]') as HTMLElement;
+    // Outside the pill either way, so the two are never legible at once — but leftward here,
+    // where there is empty frame, rather than up into the tile's own edge.
+    expect([...burst.classList]).toContain('right-full');
+    expect(burst.style.transform).toMatch(/translateX\(-/);
+    expect(Number(burst.style.opacity)).toBeGreaterThan(0);
+  });
+
+  it("outlines the +1 at the weight small type wants, not the count-in's", () => {
+    chip({ tally: { count: 3, ageMs: 200, run: 1 } });
+    const shadow = (document.querySelector('[data-claim-burst]') as HTMLElement).style.textShadow;
+    // Eight 1px copies make a solid hairline halo. The count-in's four 2px copies are thicker than
+    // the strokes of a 16px glyph and close up its counters — which is what read as broken.
+    expect(shadow).not.toContain('2px');
+    expect(shadow.match(/0 #000/g)).toHaveLength(8);
+  });
+
+  it('calls out a run in place of the total, and only above the bar', () => {
+    chip({ count: 9, tally: { count: 9, ageMs: 200, run: RUN_LENGTH } });
+    expect(screen.getByText(`${RUN_LENGTH} in a row`)).toBeInTheDocument();
+  });
+
+  it('goes back to reporting once the run is over', () => {
+    chip({ count: 9, tally: { count: 9, ageMs: 200, run: RUN_LENGTH - 1 } });
+    expect(screen.getByText('9 claims')).toBeInTheDocument();
   });
 });

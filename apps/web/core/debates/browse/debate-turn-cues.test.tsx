@@ -81,7 +81,9 @@ describe('DebateRoundBadge', () => {
     // Persistent state sits on a surface; only the transient phrases are outlined over the picture.
     const badge = container.firstElementChild as HTMLElement;
     expect(badge.style.textShadow).toBe('');
-    expect([...badge.classList]).toContain('pointer-events-none');
+    // A row child now rather than a layer of its own — the tile positions the whole instrument
+    // cluster, so the badge carries no placement of its own to drift out of step.
+    expect([...badge.classList]).not.toContain('absolute');
   });
 
   it('ramps in at the strength the handover gave it', () => {

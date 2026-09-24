@@ -480,10 +480,7 @@ function TickerClaimText({ text }: { text: string }) {
 export function DebateClaimTickerStack({
   cards,
   history,
-  tally = null,
   open = false,
-  pinned = false,
-  onTogglePinned,
   onFocusChange,
   participantByClaimId,
   rowsByClaimId,
@@ -493,14 +490,8 @@ export function DebateClaimTickerStack({
   cards: StackedCard[];
   /** Everything said so far. Falls back to the live cards where a caller has no history. */
   history?: StackedCard[];
-  /** Set while a claim of theirs has just landed — the chip's `+1` and its run state. */
-  tally?: ClaimTally | null;
   /** Show the backlog rather than the live cards. */
   open?: boolean;
-  /** Open because the chip was pressed rather than because the pointer is over the tile. */
-  pinned?: boolean;
-  /** Pressing the chip. Without it the corner has no chip and is hover-only. */
-  onTogglePinned?: () => void;
   /** Keyboard focus entering or leaving the stack, which opens it the way the pointer does. */
   onFocusChange?: (focused: boolean) => void;
   participantByClaimId?: Map<string, DebateParticipant>;
@@ -511,7 +502,6 @@ export function DebateClaimTickerStack({
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
 
   const shown = open ? (history ?? cards) : cards;
-  const backlog = history ?? cards;
 
   /**
    * Whether the list is sitting at its newest claim, and so should follow the next one down.
@@ -634,8 +624,7 @@ export function DebateClaimTickerStack({
    *
    * Still drawn while the backlog is *open*, because there it is the way back out.
    */
-  const showChip = backlog.length > 0 && onTogglePinned !== undefined;
-  if (shown.length === 0 && !showChip) return null;
+  if (shown.length === 0) return null;
 
   return (
     <div
@@ -671,19 +660,6 @@ export function DebateClaimTickerStack({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
       }}
     >
-      {/* Closed, the chip is a label and sits over the card: the corner reads top to bottom as
-          "this many so far, and here is the newest", and the `+1` has empty tile above it to climb
-          into.
-
-          Open, it is a control for the list and goes underneath it. A count standing at the head of
-          the backlog reads as a heading the list does not need — the claims are right there to be
-          counted — and it pushes the newest claim, which is what the list opens on, further from
-          the corner the reader's pointer is in. Below, it is where a control belongs and the list
-          grows away from it. */}
-      {showChip && onTogglePinned && !open && (
-        <ClaimBacklogChip count={backlog.length} tally={tally} expanded={false} onClick={onTogglePinned} />
-      )}
-
       <div
         ref={scrollRef}
         onScroll={onScroll}
@@ -725,19 +701,17 @@ export function DebateClaimTickerStack({
           />
         ))}
       </div>
-
-      {/* `expanded` only where the chip is what is holding it open. A pointer closes the list by
-          leaving the tile, so a chip offering to Hide it would be describing something it cannot
-          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
-      {showChip && onTogglePinned && open && (
-        <ClaimBacklogChip count={backlog.length} tally={null} expanded={pinned} onClick={onTogglePinned} />
-      )}
     </div>
   );
 }
 
 /**
- * The corner's resting state: how many claims this debater has made, and the way into them.
+ * How many claims this debater has made, and the way into them.
+ *
+ * It lived in the claim corner, under the cards and then over them, and neither worked: closed it
+ * was a label with nothing to label, and open it was a heading on a list that does not need one.
+ * It reads better as an instrument — beside the round and the turn timer, with the other things
+ * that say where the debate has got to — and that also frees the corner to be nothing but claims.
  *
  * It used to be invisible on a pointer device, on the reasoning that a permanent pill duplicating
  * a hover target is furniture over the video. Two things changed that. It is the only thing on the
@@ -745,33 +719,38 @@ export function DebateClaimTickerStack({
  * never learns it is there; and a count that climbs through a debate is worth watching in its own
  * right, which a hover target that is usually absent cannot be.
  *
- * So it is always up once a claim has been made, on every device, and it carries the running
- * count — {@link ClaimTally} — rather than only opening the list. It stays up under a live card
- * too. That costs the card about 26px of height on a phone, which is a real price and was once
- * paid the other way; the count arriving as the claim lands is what buys it back.
+ * Still the control as well as the readout. A pointer opens the backlog by pointing at the tile,
+ * but a touch screen has no hover and the video behind is one large play/pause button — so
+ * pressing this is the only way in there, and a keyboard reaching it opens the list for the same
+ * reason.
  *
  * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
  * same set of claims. Two different icons for one idea would be the harder thing to learn — which
- * is what this was until now: that button draws `Warning`, the circled exclamation, and the chip
- * drew `InfoSmall`, a circled question mark, while claiming in this very comment to match it.
+ * is what this was until recently: that button draws `Warning`, the circled exclamation, and the
+ * chip drew `InfoSmall`, a circled question mark, while claiming in its own comment to match it.
  */
-function ClaimBacklogChip({
+export function ClaimBacklogChip({
   count,
   tally,
   expanded,
   onClick,
+  onFocusChange,
 }: {
   count: number;
   /** Set while a claim of theirs has just landed, which is what the `+1` and the run read. */
   tally: ClaimTally | null;
   expanded: boolean;
   onClick: () => void;
+  /** Keyboard focus arriving here opens the backlog, the way it does inside the stack. */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const onARun = tally !== null && tally.run >= RUN_LENGTH;
   const burstOpacity = tally ? cueOpacity(tally.ageMs, TALLY_BURST_MS) : 0;
-  // Climbs clear of the chip as it fades. It starts *above* the pill rather than on it, so the two
-  // are never legible at once — which is what the first cut of this got wrong.
-  const burstRisePx = -14 * Math.min(1, (tally?.ageMs ?? 0) / TALLY_BURST_MS);
+  // Leaves to the left rather than upward. Up is the natural direction for a `+1` and there is no
+  // room for it here: the chip sits 12px from the top of the tile, under the turn timer, so a
+  // glyph climbing out of it would be cut off by the tile's own edge. To its left is empty frame
+  // in every state. It starts *outside* the pill either way, so the two are never legible at once.
+  const burstDriftPx = -16 * Math.min(1, (tally?.ageMs ?? 0) / TALLY_BURST_MS);
 
   return (
     <button
@@ -783,6 +762,13 @@ function ClaimBacklogChip({
         event.stopPropagation();
         onClick();
       }}
+      // A pointer that has *clicked* here has already said what it wants; only a keyboard arriving
+      // should open the list on focus alone. Same test the stack applies to its own cards.
+      onFocus={event => {
+        if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+        onFocusChange?.(true);
+      }}
+      onBlur={() => onFocusChange?.(false)}
       /**
        * 20px tall, which is the debater's avatar across the band from it — the two read as one row
        * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
@@ -824,10 +810,10 @@ function ClaimBacklogChip({
       <span
         aria-hidden
         data-claim-burst
-        className="pointer-events-none absolute right-1 bottom-full pb-0.5 text-[1rem] leading-none font-bold text-white tabular-nums"
+        className="pointer-events-none absolute top-0 right-full mr-1 text-[1rem] leading-none font-bold text-white tabular-nums"
         style={{
           opacity: burstOpacity,
-          transform: `translateY(${burstRisePx}px)`,
+          transform: `translateX(${burstDriftPx}px)`,
           ...smallOverlayTextShadow,
         }}
       >

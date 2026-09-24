@@ -119,10 +119,10 @@ export function DebateRoundBadge({ badge }: { badge: { label: string; opacity: n
   return (
     <div
       data-round-badge={badge.label}
-      className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium whitespace-nowrap text-white"
+      className="flex h-8 min-w-0 items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium text-white"
       style={{ opacity: badge.opacity }}
     >
-      {badge.label}
+      <span className="truncate">{badge.label}</span>
     </div>
   );
 }
@@ -212,6 +212,38 @@ export function DebateScorecard({
       {speakingTime && (
         <span className="text-[0.75rem] leading-none text-white/70 tabular-nums">{speakingTime} speaking</span>
       )}
+    </div>
+  );
+}
+
+/**
+ * The question the video leaves the viewer with, asked while it is still on screen.
+ *
+ * A debate is two people arguing a motion; the point of watching one is to arrive somewhere on it.
+ * The end card says how each of them did, and this asks the viewer to say where that left them —
+ * the one moment they have heard the whole case and the card is not covering anything they were
+ * watching.
+ *
+ * It is the claim's own control, not a copy of it. The pills below the player publish to the same
+ * entity, and two ways to answer that disagreed about the viewer's side would be worse than one
+ * of them being further away.
+ *
+ * Across the foot of the player rather than inside a tile. It belongs to the debate rather than to
+ * either debater, and sitting on one of their faces would read as a question about them.
+ */
+export function DebateClaimPrompt({ prompt, children }: { prompt: string; children: React.ReactNode }) {
+  return (
+    <div
+      data-claim-prompt
+      // The video behind is one big play/pause button; the control is what takes the clicks.
+      onClick={event => event.stopPropagation()}
+      // `bottom-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step, the way the
+      // claim corner and the debater's name already do. Seeking back through the debate has to
+      // stay possible from the card that asks the question.
+      className="pointer-events-auto absolute inset-x-0 bottom-5 z-[14] flex flex-col items-center gap-2 bg-linear-to-t from-black via-black/85 to-transparent px-4 pt-8 pb-3 text-center"
+    >
+      <span className="text-[0.8125rem] leading-none font-medium text-white">{prompt}</span>
+      {children}
     </div>
   );
 }

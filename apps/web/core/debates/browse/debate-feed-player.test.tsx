@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,6 +49,12 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 // The player carries a claim ticker now, which reaches for the transcript, the sync engine and a
 // query client. These tests are about the audio gate; the ticker has its own suite.
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  // The claim's own response control, which carries a page's worth of providers with it. What the
+  // player owns is which entity it is pointed at and when it is offered.
+  EntityVoteButtons: ({ entityId }: { entityId: string }) => <button type="button">Respond to {entityId}</button>,
+}));
+
 vi.mock('./use-debate-agreement', () => ({
   useDebateAgreement: () => mocks.agreement,
 }));
@@ -76,6 +82,14 @@ vi.mock('./debate-claim-ticker', () => ({
     );
   },
   ClaimScrubberMarkers: () => null,
+  // Stands in for the chip the tile now draws beside its round and timer: the player owns the
+  // count and both latches, so what is under test here is what it hands over.
+  ClaimBacklogChip: ({ count, tally }: { count: number; tally: unknown }) => (
+    <button type="button" aria-label={`Show the ${count} claims said so far`}>
+      {count} claims
+      {tally ? <span data-claim-burst>+1</span> : null}
+    </button>
+  ),
 }));
 
 const participant = (slot: 1 | 2): DebateParticipant =>
@@ -86,7 +100,10 @@ const participant = (slot: 1 | 2): DebateParticipant =>
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
-const debate = { id: 'debate-1', claim: { space_id: 'space-1' } } as unknown as Debate;
+const debate = {
+  id: 'debate-1',
+  claim: { space_id: 'space-1', claim_entity_id: 'claim-entity-1' },
+} as unknown as Debate;
 
 /**
  * A controller in the one state that matters here: playing, with a turn in progress, both
@@ -695,7 +712,7 @@ describe('the turn clock, replayed', () => {
     expect(phrases(container)).toEqual([]);
   });
 
-  it("hands the debater's running count to their own claim corner", () => {
+  it("puts the debater's count with the clock, not with their claims", () => {
     mocks.controller = at(12);
     mocks.ticker = {
       ...emptyTicker(),
@@ -703,10 +720,13 @@ describe('the turn clock, replayed', () => {
       tallyBySlot: new Map([[2, { count: 4, ageMs: 300, run: 1 }]]),
     };
 
-    render(<DebateFeedPlayer debate={debate} active />);
-    // The corner's own chip carries the count, so there is one number on the tile rather than two
-    // that can disagree. The stack stands in for that chip here.
-    expect(mocks.stackTallies).toContainEqual({ count: 4, ageMs: 300, run: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const chip = screen.getByRole('button', { name: /claims said so far/ });
+    // Beside the round and the turn timer — the tile's instruments — rather than in the corner
+    // the claims themselves occupy.
+    expect(chip.closest('[data-claim-corner]')).toBeNull();
+    expect(chip.textContent).toContain('4 claims');
+    expect(container.querySelector('[data-claim-burst]')).not.toBeNull();
   });
 
   it("ends the video on both debaters' figures rather than a stop", () => {
@@ -761,6 +781,34 @@ describe('the turn clock, replayed', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
     expect(container.textContent).toContain('68% agreed');
     expect(container.textContent).not.toContain('33%');
+  });
+
+  it('asks the viewer where the debate left them, on the claim it was about', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const prompt = container.querySelector('[data-claim-prompt]');
+    expect(prompt?.textContent).toContain('Where do you stand?');
+    // The debate's own claim, so the answer lands where the pills below the player publish it.
+    expect(prompt?.textContent).toContain('claim-entity-1');
+  });
+
+  it('does not ask until the debate is over', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-claim-prompt]')).toBeNull();
+  });
+
+  it('leaves the scrubber reachable under the question', () => {
+    // Seeking back through the debate has to stay possible from the card that asks it.
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playbackEnded: true });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect([...(container.querySelector('[data-claim-prompt]') as HTMLElement).classList]).toContain('bottom-5');
   });
 
   it('keeps the scorecard off a compact gallery tile', () => {
