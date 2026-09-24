@@ -3,9 +3,8 @@ import { atom } from 'jotai';
 import type { ScheduledDebateRequest } from '../api';
 
 /**
- * Scheduled requests waiting on the viewer's answer, for the request badges. An atom rather than a
- * query so the badges read a number without mounting a query client of their own; the watcher in
- * `DebateCoordinator` fills it. Zero wherever scheduling is off.
+ * Scheduled requests waiting on the viewer's answer, for the request badges. Written by the watcher
+ * in `DebateCoordinator`; an atom so the badges need no query client. Zero where scheduling is off.
  */
 export const scheduledAwaitingCountAtom = atom(0);
 
