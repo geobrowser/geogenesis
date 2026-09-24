@@ -90,28 +90,38 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
   // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
   // compare against, so they do not spend a public query fetching everybody else's positions.
+  // The presence service can hand us a malformed profile-space id; keep those out of the graph's
+  // UUID filter so one bad roster entry cannot discard every valid person's match data.
   const positionParticipants = React.useMemo(
     () =>
-      authenticated && personalSpaceId
+      viewerProfileSpaceId
         ? [
-            { profile_space_id: personalSpaceId },
-            ...allPeople.map(person => ({ profile_space_id: person.profile_space_id })),
+            { profile_space_id: viewerProfileSpaceId },
+            ...allPeople.flatMap(person =>
+              isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
+            ),
           ]
         : [],
-    [allPeople, authenticated, personalSpaceId]
+    [allPeople, viewerProfileSpaceId]
   );
   const {
     byClaim: positionsByClaim,
     isLoading: positionsLoading,
+    isPlaceholderData: positionsArePlaceholderData,
     error: positionsError,
-  } = useParticipantPositions(positionParticipants, personalSpaceId);
+  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId);
   const matchAnalysis = React.useMemo(
-    () => analyzeMatchingClaims(positionsByClaim, authenticated ? personalSpaceId : null),
-    [authenticated, personalSpaceId, positionsByClaim]
+    () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
+    [positionsByClaim, viewerProfileSpaceId]
   );
-  const matchesKnown = authenticated && personalSpaceId !== null && !positionsLoading && positionsError === null;
+  // A key-changing roster update retains the previous batch. It is useful placeholder UI for
+  // people already present, but an absent entry for somebody new means "unknown", not zero. A
+  // same-key background poll is not placeholder data, so settled counts stay visible while polling.
+  const matchesKnown =
+    viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
   const matchingClaimIds = React.useMemo(
     () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [matchAnalysis]

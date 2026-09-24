@@ -62,6 +62,7 @@ vi.mock('../participant-positions', async importOriginal => ({
     byClaim: new Map(),
     isLoading: false,
     isFetching: false,
+    isPlaceholderData: false,
     error: null,
   }),
 }));

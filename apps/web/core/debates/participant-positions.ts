@@ -449,6 +449,8 @@ export function useParticipantPositions(
   return {
     byClaim,
     isLoading: query.isLoading,
+    /** The visible rows belong to the previous participant set while a new key is loading. */
+    isPlaceholderData: query.isPlaceholderData,
     /**
      * Whether an answer for *this* key is still on its way.
      *

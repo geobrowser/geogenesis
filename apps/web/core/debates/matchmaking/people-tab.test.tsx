@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-me' as string | null,
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
   positionsByClaim: new Map() as ParticipantPositionsByClaim,
+  positionParticipants: [] as Array<{ profile_space_id: string }>,
+  positionsFetching: false,
+  positionsPlaceholderData: false,
   claimEntities: [] as ClaimPickerEntity[],
   claimEntitiesLoading: false,
   createChallenge: vi.fn(),
@@ -154,12 +157,16 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 
 vi.mock('../participant-positions', () => ({
-  useParticipantPositions: () => ({
-    byClaim: mocks.positionsByClaim,
-    isLoading: false,
-    isFetching: false,
-    error: null,
-  }),
+  useParticipantPositions: (participants: Array<{ profile_space_id: string }>) => {
+    mocks.positionParticipants = participants;
+    return {
+      byClaim: mocks.positionsByClaim,
+      isLoading: false,
+      isFetching: mocks.positionsFetching,
+      isPlaceholderData: mocks.positionsPlaceholderData,
+      error: null,
+    };
+  },
 }));
 
 vi.mock('../claim-picker-page', () => ({
@@ -278,6 +285,9 @@ beforeEach(() => {
   mocks.currentUserId = 'user-me';
   mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
   mocks.positionsByClaim = new Map();
+  mocks.positionParticipants = [];
+  mocks.positionsFetching = false;
+  mocks.positionsPlaceholderData = false;
   mocks.claimEntities = [];
   mocks.claimEntitiesLoading = false;
   mocks.createChallenge.mockReset();
@@ -337,6 +347,17 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('keeps malformed roster IDs out of the shared position query', () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(mocks.positionParticipants).toEqual([
+      { profile_space_id: mocks.personalSpaceId },
+      { profile_space_id: PROFILE_SPACE_IDS['user-them'] },
+    ]);
+  });
+
   it('shows the number of distinct claims where the viewer and a person hold opposite positions', () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
@@ -1230,6 +1251,50 @@ describe('PeopleTab filters', () => {
     expect(options[1]).toHaveAttribute('href', NavUtils.toSpace('spaceb'));
 
     await closeActiveSpacesPopover(trigger);
+  });
+
+  it('does not present an unknown per-space match count as zero while roster data is retained', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.positionsPlaceholderData = true;
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('1 claim')).toBeInTheDocument();
+    expect(within(list).queryByText('0 matches')).not.toBeInTheDocument();
+  });
+
+  it('keeps settled match counts visible during a same-key background poll', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const spaceId = 'spacea';
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.positionsFetching = true;
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          {
+            profileSpaceId: PROFILE_THEM,
+            claimId: 'claim-1',
+            spaceId,
+            responseKind: 'stance',
+            position: false,
+          },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('1 match')).toBeInTheDocument();
   });
 
   it('shows only spaces with activity and orders them by debates, then canonical rank', async () => {
