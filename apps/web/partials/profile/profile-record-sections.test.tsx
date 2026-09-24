@@ -135,6 +135,40 @@ describe('ProfileRecordSection', () => {
 
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('reserves the section for a visitor while the history is still on the way', () => {
+    // Nothing at all and then a section pushed the whole page down when the read
+    // landed — the largest single layout shift on a profile after the headline.
+    render(
+      <ProfileRecordSection kind="employment" cards={[]} isOwner={false} onEdit={() => {}} spaceId={SPACE} isLoading />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Experience' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /appears on your profile/ })).not.toBeInTheDocument();
+  });
+
+  it('does not invite the owner to add a role that may already be there', () => {
+    render(<ProfileRecordSection kind="employment" cards={[]} isOwner onEdit={() => {}} spaceId={SPACE} isLoading />);
+
+    expect(screen.queryByText('Nothing here yet.')).not.toBeInTheDocument();
+  });
+
+  it('draws the real section as soon as it has cards, loading or not', () => {
+    // A refetch keeps `isLoading` false, but a background poll must never
+    // replace cards already on screen with a placeholder.
+    render(
+      <ProfileRecordSection
+        kind="employment"
+        cards={[card('Geo', 'Head of Product')]}
+        isOwner={false}
+        onEdit={() => {}}
+        spaceId={SPACE}
+        isLoading
+      />
+    );
+
+    expect(screen.getByRole('link', { name: 'Head of Product' })).toBeInTheDocument();
+  });
 });
 
 describe('ProfileSkillsSection', () => {

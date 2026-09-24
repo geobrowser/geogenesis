@@ -79,6 +79,7 @@ export function ProfileRailSections({
   systemEntityId,
   address,
   spaceType,
+  description,
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
@@ -102,6 +103,7 @@ export function ProfileRailSections({
         systemEntityId={systemEntityId}
         address={address}
         spaceType={spaceType}
+        serverDescription={description}
       />
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
@@ -396,6 +398,7 @@ function AboutSection({
   systemEntityId,
   address,
   spaceType,
+  serverDescription,
 }: {
   facts: ReturnType<typeof useProfileFacts>['facts'];
   isLoading: boolean;
@@ -408,16 +411,35 @@ function AboutSection({
   systemEntityId: string;
   address: string | null;
   spaceType: ProfileRailProps['spaceType'];
+  /** The bio the server already read, shown until the store has the entity. */
+  serverDescription: string | null;
 }) {
   const joined = formatJoined(facts.joinedAt);
 
   // The person's description, read here rather than under their name. It is still edited in the
   // header, which is where its edit field is; the header shows it only while editing
   // (`hideWhenReading`).
-  const description = useValue({
+  const storedDescription = useValue({
     selector: v =>
       v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   })?.value;
+
+  /*
+   * Deleted rows included only to tell "the store has not hydrated this entity
+   * yet" from "the owner just cleared their bio". Without that distinction the
+   * server's copy comes back the moment a deletion is staged, and the card
+   * resurrects prose the user has removed.
+   */
+  const deletedDescription = useValue({
+    includeDeleted: true,
+    selector: v =>
+      v.entity.id === personEntityId &&
+      v.spaceId === spaceId &&
+      v.property.id === SystemIds.DESCRIPTION_PROPERTY &&
+      Boolean(v.isDeleted),
+  });
+
+  const description = storedDescription ?? (deletedDescription ? undefined : (serverDescription ?? undefined));
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (

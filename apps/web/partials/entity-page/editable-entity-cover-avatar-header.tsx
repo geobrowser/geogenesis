@@ -359,6 +359,15 @@ const AvatarCoverInput = ({
               value={imgUrl}
               unoptimized={true}
               alt=""
+              /*
+               * The cover is the Largest Contentful Paint on every page that has
+               * one, and it was being lazy-loaded: `next/image` defers anything
+               * without this, so the one image the reader is definitely looking
+               * at waited behind the ones they are not. Next says so itself in
+               * development. Only the cover — an avatar is 80px and worth no
+               * preload, and a compact header's cover is not above the fold.
+               */
+              priority={isCover}
               className="h-full w-full rounded-lg border border-white bg-white object-cover"
             />
           ))}

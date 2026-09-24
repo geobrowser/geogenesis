@@ -85,6 +85,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('employment')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
           <ProfileRecordSection
             kind="education"
@@ -92,6 +93,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('education')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
           <ProfileSkillsSection skills={skills} spaceId={spaceId} />
 

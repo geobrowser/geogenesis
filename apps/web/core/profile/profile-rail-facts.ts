@@ -1,5 +1,6 @@
 import type { Space } from '~/core/io/dto/spaces';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
+import { Entities } from '~/core/utils/entity';
 
 /**
  * The parts of a profile's rail that come from the space rather than a query.
@@ -24,6 +25,16 @@ export type ProfileRailFacts = {
   systemEntityId: string;
   address: string | null;
   spaceType: 'DAO' | 'PERSONAL';
+  /**
+   * The bio, as the server already read it.
+   *
+   * The rail renders this from the sync store, which hydrates the person entity
+   * over the network after the page is already on screen — so the About card
+   * painted without a bio and then grew one, pushing every fact under it down by
+   * the height of six lines of prose. The store stays authoritative once it has
+   * the entity; this is only what to show until then.
+   */
+  description: string | null;
 };
 
 /**
@@ -41,6 +52,9 @@ export function profileRailFacts(
       (space?.entity?.values ?? []).map(value => ({ property: { id: value.property.id }, value: value.value }))
     ),
     systemEntityId: space?.entity?.id ?? spaceId,
+    // Scoped to this space, matching the store selector the rail reads: a
+    // profile states the bio written here, not one borrowed from elsewhere.
+    description: Entities.descriptionInSpace(space?.entity?.values ?? [], spaceId),
     address: space?.address ?? null,
     spaceType: space?.type ?? 'PERSONAL',
   };

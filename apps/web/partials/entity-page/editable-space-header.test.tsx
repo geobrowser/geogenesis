@@ -13,12 +13,14 @@ const SPACE_ROOT = `/space/${SPACE_ID}`;
 const mocks = vi.hoisted(() => ({
   pathname: '',
   isEditing: false,
+  /** What the sync store answers for the name. `null` until it has the entity. */
+  name: 'Physics' as string | null,
 }));
 
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }));
-vi.mock('~/core/state/entity-page-store/entity-store', () => ({ useName: () => 'Physics' }));
+vi.mock('~/core/state/entity-page-store/entity-store', () => ({ useName: () => mocks.name }));
 vi.mock('~/core/sync/use-mutate', () => ({
   useMutate: () => ({ storage: { entities: { name: { set: vi.fn() } } } }),
 }));
@@ -63,6 +65,7 @@ function renderHeading(actionsComponent?: React.ReactNode) {
 beforeEach(() => {
   mocks.pathname = SPACE_ROOT;
   mocks.isEditing = false;
+  mocks.name = 'Physics';
 });
 
 afterEach(cleanup);
@@ -135,5 +138,36 @@ describe('EditableSpaceHeading create link', () => {
     renderHeading();
 
     expect(screen.queryByRole('link', { name: 'Create new entity' })).toBeNull();
+  });
+});
+
+/**
+ * The name before the sync store has the entity (profile load).
+ *
+ * `useName` reads the store, which fetches over the network once the page is
+ * mounted — so every space rendered its heading as a zero-width space for the
+ * length of that request and looked like it had failed to load its own title.
+ */
+describe('EditableSpaceHeading initial name', () => {
+  it('shows the name the server read until the store has one', () => {
+    mocks.name = null;
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Preston Mantel" />);
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Preston Mantel');
+  });
+
+  it('prefers the store, which is the one that can have been edited', () => {
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Stale" />);
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Physics');
+  });
+
+  it('does not bring the name back when the owner clears it', () => {
+    // Clearing the field writes an empty string rather than removing the row, so
+    // `''` is an answer from the store and not an absence of one.
+    mocks.name = '';
+    render(<EditableSpaceHeading spaceId={SPACE_ID} entityId="entity-1" initialName="Preston Mantel" />);
+
+    expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('Preston Mantel');
   });
 });

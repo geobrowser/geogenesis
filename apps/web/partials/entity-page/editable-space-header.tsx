@@ -72,6 +72,7 @@ export function EditableSpaceHeading({
   nameAccessoryComponent,
   actionsComponent,
   keepSpaceActions = false,
+  initialName = null,
 }: {
   spaceId: string;
   entityId: string;
@@ -82,8 +83,20 @@ export function EditableSpaceHeading({
   actionsComponent?: React.ReactNode;
   /** Keeps the history and overflow controls on routes below the space's own page. */
   keepSpaceActions?: boolean;
+  /**
+   * The name the server already read, shown until the store has the entity.
+   *
+   * `useName` reads the sync store, which hydrates over the network once the
+   * page is mounted — so the heading rendered as a zero-width space for the
+   * length of that request and the page looked like it had failed to load its
+   * own title. The store still wins the moment it has anything, an empty string
+   * included: clearing the name in edit mode sets `''`, which is a value rather
+   * than an absence and must not fall back to what the page was loaded with.
+   */
+  initialName?: string | null;
 }) {
-  const name = useName(entityId, spaceId);
+  const storedName = useName(entityId, spaceId);
+  const name = storedName ?? initialName;
   const isEditing = useUserIsEditing(spaceId);
   const { space } = useSpace(spaceId);
 

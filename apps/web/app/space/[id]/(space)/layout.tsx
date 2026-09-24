@@ -1,4 +1,5 @@
 import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { HydrationBoundary } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -7,7 +8,6 @@ import { notFound } from 'next/navigation';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
-import { fetchProfileFacts } from '~/core/io/subgraph/fetch-profile-facts';
 import { EntityId } from '~/core/io/substream-schema';
 import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
@@ -41,6 +41,7 @@ import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { prefetchProfileQueries } from './profile-prefetch';
 import { ProfileRailGate, SpaceChromeGate, SpaceHeaderContentGate } from './space-chrome-gate';
 import { resolveSpaceSidebar } from './space-sidebar';
 
@@ -60,13 +61,6 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const [props, { hasSidebar, isExternalTopic }] = await Promise.all([
-    getSpaceFrontPage(spaceId),
-    resolveSpaceSidebar(spaceId),
-  ]);
-
-  const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-
   /**
    * A personal space with a profile of its own (GEO-2859).
    *
@@ -77,8 +71,32 @@ export default async function Layout(props0: LayoutProps) {
    * Shared with `page.tsx` rather than spelled out twice: this decides the
    * header and the chrome, that one decides the body, and a page with one and
    * not the other is worse than neither.
+   *
+   * Asked before the page data rather than after it. `cachedFetchSpace` is the
+   * first thing `getSpaceFrontPage` does and its result is request-cached, so
+   * this costs no extra request — and it buys the one fact the profile's own
+   * reads need before they can start, which is whether to make them at all.
    */
-  const isProfile = Spaces.isPersonProfileSpace(props.space);
+  const space = await cachedFetchSpace(spaceId);
+  const isProfile = Spaces.isPersonProfileSpace(space);
+  const personEntityId = space?.entity?.id ?? '';
+
+  /**
+   * One wave rather than two.
+   *
+   * The profile read used to be a second `await` *after* this Promise.all, so
+   * its ~450ms sat end to end with the page data instead of beside it and every
+   * profile's HTML was held that much longer for a number in the tab bar. It
+   * depends on nothing the other two produce — only on the space, which is
+   * already in hand above.
+   */
+  const [props, { hasSidebar, isExternalTopic }, profile] = await Promise.all([
+    getSpaceFrontPage(spaceId),
+    resolveSpaceSidebar(spaceId),
+    isProfile && personEntityId !== '' ? prefetchProfileQueries(spaceId, personEntityId) : undefined,
+  ]);
+
+  const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
 
   /**
    * How much this person's record holds, so the tabs holding nothing are not
@@ -91,10 +109,16 @@ export default async function Layout(props0: LayoutProps) {
    * `undefined` on failure, and `buildSpaceTabs` reads that as "show
    * everything". A count that could not be read must not be mistaken for a
    * record that is empty — hiding a tab holding hundreds of rows is the one
-   * outcome worse than showing one holding none. The same query the rail makes,
-   * so this is a cache hit rather than a second request.
+   * outcome worse than showing one holding none.
    */
-  const personRecordCounts = isProfile ? await personRecordCountsFor(spaceId, props.id) : undefined;
+  const personRecordCounts: PersonRecordCounts | undefined = profile?.facts
+    ? {
+        debates: profile.facts.debates,
+        totalDebates: profile.facts.totalDebates,
+        positions: profile.facts.positions,
+        proposals: profile.facts.proposals,
+      }
+    : undefined;
 
   /**
    * The rail lives here rather than on the Overview page (GEO-2859).
@@ -113,142 +137,154 @@ export default async function Layout(props0: LayoutProps) {
   ) : null;
 
   return (
-    <EntityStoreProvider id={props.id} spaceId={spaceId}>
-      <RouteEditorProvider
-        id={props.id}
-        spaceId={spaceId}
-        initialBlockRelations={props.blockRelations}
-        initialBlocks={props.blocks}
-        initialTabs={props.tabs}
-        initialCollectionItems={props.initialCollectionItems}
-      >
-        <SpaceChromeGate keepChrome={isProfile}>
-          {/*
-           * A profile's text column is the wider with-sidebar variant — the rail
-           * is part of the page — so the avatar lines up against that rather
-           * than against the ordinary page width.
-           */}
-          <EntityPageCover
-            avatarUrl={props.avatarUrl}
-            coverUrl={props.coverUrl}
-            contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
-            coverSize={isProfile ? PROFILE_COVER_SIZE : undefined}
-          />
-          <SpaceHeaderContentGate
-            serverHasSidebar={hasSidebar}
-            isExternalTopic={isExternalTopic}
-            alwaysHasSidebar={isProfile}
-          >
+    /*
+     * The profile's two reads, handed to the client's `QueryClient` before it
+     * can ask for them itself — see `prefetchProfileQueries`. `undefined` off a
+     * profile and after a failed read, where this is a passthrough.
+     */
+    <HydrationBoundary state={profile?.dehydratedState}>
+      <EntityStoreProvider id={props.id} spaceId={spaceId}>
+        <RouteEditorProvider
+          id={props.id}
+          spaceId={spaceId}
+          initialBlockRelations={props.blockRelations}
+          initialBlocks={props.blocks}
+          initialTabs={props.tabs}
+          initialCollectionItems={props.initialCollectionItems}
+        >
+          <SpaceChromeGate keepChrome={isProfile}>
             {/*
-             * Pulled up on a profile. The shared header leaves 40px under an
-             * avatar that already overhangs the cover by 40 — right for a space,
-             * where the name is the first thing under it, and too much here
-             * where a name, three roles and a bio all follow.
+             * A profile's text column is the wider with-sidebar variant — the rail
+             * is part of the page — so the avatar lines up against that rather
+             * than against the ordinary page width.
              */}
-            <div className={isProfile ? '-mt-4 space-y-2' : 'space-y-2'}>
-              <EditableSpaceHeading
-                spaceId={spaceId}
-                entityId={props.id}
-                keepSpaceActions={isProfile}
-                nameAccessoryComponent={
-                  // Beside the name on every personal space, profile or not. It
-                  // is a statement about who this is rather than an action on
-                  // them, and it reads as one where it sits.
-                  props.space?.type === 'PERSONAL' ? <SpaceVerifyButton spaceId={spaceId} /> : null
-                }
-                actionsComponent={
-                  isProfile ? (
-                    <ProfileActions spaceId={spaceId} personEntityId={props.id} />
-                  ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
-                    <ProfileDebateButton spaceId={spaceId} />
-                  ) : null
-                }
-              />
-              {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
-              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} hideWhenReading={isProfile} />
+            <EntityPageCover
+              avatarUrl={props.avatarUrl}
+              coverUrl={props.coverUrl}
+              contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
+              coverSize={isProfile ? PROFILE_COVER_SIZE : undefined}
+            />
+            <SpaceHeaderContentGate
+              serverHasSidebar={hasSidebar}
+              isExternalTopic={isExternalTopic}
+              alwaysHasSidebar={isProfile}
+            >
               {/*
-               * A profile renders none of this row. Types move to the rail's
-               * About section, the vote pair into the action row beside Edit
-               * profile, and Import and the member avatars say nothing about a
-               * person — a personal space's only member is its owner. The
-               * editor still gets the row, because that is where types are
-               * added and the rail's pills are a read-only view — which is
-               * decided inside the component, since edit mode is client state.
+               * Pulled up on a profile. The shared header leaves 40px under an
+               * avatar that already overhangs the cover by 40 — right for a space,
+               * where the name is the first thing under it, and too much here
+               * where a name, three roles and a bio all follow.
                */}
-              <SpacePageMetadataHeader
-                spaceId={spaceId}
-                profileChrome={isProfile}
-                membersComponent={
-                  <div className="flex items-center gap-2">
-                    <React.Suspense fallback={<MembersSkeleton />}>
-                      <SpaceEditors spaceId={spaceId} />
-                    </React.Suspense>
-                    <React.Suspense fallback={null}>
-                      <SpaceMembers spaceId={spaceId} />
-                    </React.Suspense>
-                  </div>
-                }
-              />
-            </div>
-
-            {/* 40px above the tab bar on a profile, 24px elsewhere. The description's
-                own 20px bottom margin collapses into this one, so this is the gap. */}
-            <div className={isProfile ? 'mt-10 flex flex-col gap-6' : 'mt-6 flex flex-col gap-6'}>
-              <AddDataPanel spaceId={spaceId} />
-
-              {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-                <>
-                  <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
-                  <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                  {/*
-                   * The Get started card is off on a profile: its three prompts
-                   * — bio, skills, post — are all things the profile itself now
-                   * offers in place, on the section they belong to, and a
-                   * banner above the fold repeating them is the loudest thing
-                   * on a page about a person.
-                   */}
-                  {!isProfile && (
-                    <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
-                  )}
-                </>
-              ) : null}
-              <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-              {/*
-               * The tab bar is a link target, so a link can send the reader to the tabs rather than
-               * to the top of the page — see `withSpaceTabsAnchor`.
-               *
-               * The margin clears the navbar, which is `sticky top-0 h-11` and would otherwise cover
-               * the row the link exists to show — the same 44px the hub panel and the side rail sit
-               * below as `top-11`. `scroll-mt-14` is that plus 12px, so the tabs land under the
-               * navbar rather than welded to it.
-               */}
-              <div id={SPACE_TABS_ANCHOR} className="scroll-mt-14">
-                <React.Suspense fallback={null}>
-                  <SpaceTabs
-                    spaceId={spaceId}
-                    entityId={props.id}
-                    initialTabRelations={props.tabRelations ?? []}
-                    tabEntities={props.tabEntities}
-                    typeIds={typeIds}
-                    isProfile={isProfile}
-                    personRecordCounts={personRecordCounts}
-                  />
-                </React.Suspense>
+              <div className={isProfile ? '-mt-4 space-y-2' : 'space-y-2'}>
+                <EditableSpaceHeading
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  keepSpaceActions={isProfile}
+                  // The name the server already read. The title renders from the
+                  // sync store, which fetches the entity after the page is on
+                  // screen, so every space painted a nameless heading for the
+                  // length of that request.
+                  initialName={props.space?.entity?.name ?? null}
+                  nameAccessoryComponent={
+                    // Beside the name on every personal space, profile or not. It
+                    // is a statement about who this is rather than an action on
+                    // them, and it reads as one where it sits.
+                    props.space?.type === 'PERSONAL' ? <SpaceVerifyButton spaceId={spaceId} /> : null
+                  }
+                  actionsComponent={
+                    isProfile ? (
+                      <ProfileActions spaceId={spaceId} personEntityId={props.id} />
+                    ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                      <ProfileDebateButton spaceId={spaceId} />
+                    ) : null
+                  }
+                />
+                {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
+                <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} hideWhenReading={isProfile} />
+                {/*
+                 * A profile renders none of this row. Types move to the rail's
+                 * About section, the vote pair into the action row beside Edit
+                 * profile, and Import and the member avatars say nothing about a
+                 * person — a personal space's only member is its owner. The
+                 * editor still gets the row, because that is where types are
+                 * added and the rail's pills are a read-only view — which is
+                 * decided inside the component, since edit mode is client state.
+                 */}
+                <SpacePageMetadataHeader
+                  spaceId={spaceId}
+                  profileChrome={isProfile}
+                  membersComponent={
+                    <div className="flex items-center gap-2">
+                      <React.Suspense fallback={<MembersSkeleton />}>
+                        <SpaceEditors spaceId={spaceId} />
+                      </React.Suspense>
+                      <React.Suspense fallback={null}>
+                        <SpaceMembers spaceId={spaceId} />
+                      </React.Suspense>
+                    </div>
+                  }
+                />
               </div>
-            </div>
-          </SpaceHeaderContentGate>
-          <Spacer height={20} />
-        </SpaceChromeGate>
-        {/*
-         * Inside the gate's own file, so this rule and the header's cannot
-         * drift — see `ProfileRailGate`. A nested debate route is full-screen
-         * and takes neither.
-         */}
-        <ProfileRailGate isProfile={isProfile} sidebar={profileRail}>
-          {children}
-        </ProfileRailGate>
-      </RouteEditorProvider>
-    </EntityStoreProvider>
+
+              {/* 40px above the tab bar on a profile, 24px elsewhere. The description's
+                own 20px bottom margin collapses into this one, so this is the gap. */}
+              <div className={isProfile ? 'mt-10 flex flex-col gap-6' : 'mt-6 flex flex-col gap-6'}>
+                <AddDataPanel spaceId={spaceId} />
+
+                {typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                  <>
+                    <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
+                    <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+                    {/*
+                     * The Get started card is off on a profile: its three prompts
+                     * — bio, skills, post — are all things the profile itself now
+                     * offers in place, on the section they belong to, and a
+                     * banner above the fold repeating them is the loudest thing
+                     * on a page about a person.
+                     */}
+                    {!isProfile && (
+                      <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                    )}
+                  </>
+                ) : null}
+                <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+                {/*
+                 * The tab bar is a link target, so a link can send the reader to the tabs rather than
+                 * to the top of the page — see `withSpaceTabsAnchor`.
+                 *
+                 * The margin clears the navbar, which is `sticky top-0 h-11` and would otherwise cover
+                 * the row the link exists to show — the same 44px the hub panel and the side rail sit
+                 * below as `top-11`. `scroll-mt-14` is that plus 12px, so the tabs land under the
+                 * navbar rather than welded to it.
+                 */}
+                <div id={SPACE_TABS_ANCHOR} className="scroll-mt-14">
+                  <React.Suspense fallback={null}>
+                    <SpaceTabs
+                      spaceId={spaceId}
+                      entityId={props.id}
+                      initialTabRelations={props.tabRelations ?? []}
+                      tabEntities={props.tabEntities}
+                      typeIds={typeIds}
+                      isProfile={isProfile}
+                      personRecordCounts={personRecordCounts}
+                    />
+                  </React.Suspense>
+                </div>
+              </div>
+            </SpaceHeaderContentGate>
+            <Spacer height={20} />
+          </SpaceChromeGate>
+          {/*
+           * Inside the gate's own file, so this rule and the header's cannot
+           * drift — see `ProfileRailGate`. A nested debate route is full-screen
+           * and takes neither.
+           */}
+          <ProfileRailGate isProfile={isProfile} sidebar={profileRail}>
+            {children}
+          </ProfileRailGate>
+        </RouteEditorProvider>
+      </EntityStoreProvider>
+    </HydrationBoundary>
   );
 }
 
@@ -390,26 +426,3 @@ const getSpaceFrontPage = async (spaceId: string) => {
     coverUrl: Entities.cover(entity.relations) ?? null,
   };
 };
-
-/**
- * The three record counts behind the profile's tabs.
- *
- * Swallows the failure deliberately: `fetchProfileFacts` throws so the *rail*
- * can say its numbers are unavailable rather than print a confident zero, but
- * here there is no such distinction to draw — a tab is either offered or not.
- * Returning undefined offers all three, which is the outcome to prefer when
- * nothing is known.
- */
-async function personRecordCountsFor(spaceId: string, personEntityId: string): Promise<PersonRecordCounts | undefined> {
-  try {
-    const facts = await fetchProfileFacts(spaceId, personEntityId);
-    return {
-      debates: facts.debates,
-      totalDebates: facts.totalDebates,
-      positions: facts.positions,
-      proposals: facts.proposals,
-    };
-  } catch {
-    return undefined;
-  }
-}
