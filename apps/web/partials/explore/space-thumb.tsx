@@ -2,7 +2,7 @@
 
 import cx from 'classnames';
 
-import { FallbackImage } from '~/design-system/fallback-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 
 export function SpaceThumb({ image, name, className }: { image: string | null; name: string; className?: string }) {
   if (!image) {
@@ -20,7 +20,7 @@ export function SpaceThumb({ image, name, className }: { image: string | null; n
   }
   return (
     <span className={cx('relative h-3 w-3 shrink-0 overflow-hidden rounded-[4px] bg-grey-01', className)}>
-      <FallbackImage value={image} sizes="24px" className="object-cover" />
+      <ThumbGeoImage value={image} />
     </span>
   );
 }

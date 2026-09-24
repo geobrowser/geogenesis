@@ -31,7 +31,7 @@ import { normId } from '~/core/utils/norm-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { FallbackImage } from '~/design-system/fallback-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
@@ -178,7 +178,7 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         >
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
             {personalAvatar ? (
-              <FallbackImage value={personalAvatar} sizes="32px" className="object-cover" />
+              <ThumbGeoImage value={personalAvatar} />
             ) : (
               <Avatar size={16} avatarUrl={null} value={address ?? personalSpaceId ?? topicId ?? ''} square />
             )}
@@ -229,7 +229,7 @@ function SpaceRowThumb({ row }: { row: BrowseSpaceRow }) {
   }
   return (
     <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-      <FallbackImage value={row.image} sizes="32px" className="object-cover" />
+      <ThumbGeoImage value={row.image} />
     </span>
   );
 }

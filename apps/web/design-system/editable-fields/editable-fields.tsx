@@ -8,13 +8,13 @@ import Zoom from 'react-medium-image-zoom';
 import Textarea from 'react-textarea-autosize';
 
 import { VIDEO_ACCEPT } from '~/core/constants';
-import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { useMutate } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
+import { NativeGeoImage } from '~/design-system/geo-image';
 
 import { Dots } from '../dots';
 import { Trash } from '../icons/trash';
@@ -156,12 +156,13 @@ const imageStyles: Record<ImageVariant, React.CSSProperties> = {
 };
 
 export function ImageZoom({ imageSrc, variant = 'default', alt = '' }: ImageZoomProps) {
-  const { src, onError } = useImageWithFallback(imageSrc);
-
+  // NativeGeoImage, not the fill-based GeoImage: these thumbnails size to the image's natural
+  // aspect (only a height/maxHeight is fixed), so `fill` would collapse or crop them. This routes
+  // the raw value through the shared gateway/broken-image fallback while keeping the layout.
   return (
     <Zoom>
       <div className="relative overflow-hidden rounded-lg" style={imageStyles[variant]}>
-        <img src={src} alt={alt} onError={onError} loading="lazy" decoding="async" className="h-full object-cover" />
+        <NativeGeoImage value={imageSrc} alt={alt} loading="lazy" decoding="async" className="h-full object-cover" />
       </div>
     </Zoom>
   );
