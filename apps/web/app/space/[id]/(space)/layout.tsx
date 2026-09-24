@@ -403,7 +403,12 @@ const getSpaceFrontPage = async (spaceId: string) => {
 async function personRecordCountsFor(spaceId: string, personEntityId: string): Promise<PersonRecordCounts | undefined> {
   try {
     const facts = await fetchProfileFacts(spaceId, personEntityId);
-    return { debates: facts.debates, positions: facts.positions, proposals: facts.proposals };
+    return {
+      debates: facts.debates,
+      totalDebates: facts.totalDebates,
+      positions: facts.positions,
+      proposals: facts.proposals,
+    };
   } catch {
     return undefined;
   }

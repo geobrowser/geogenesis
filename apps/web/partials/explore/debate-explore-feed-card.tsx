@@ -108,6 +108,8 @@ type DebateExploreFeedCardProps = {
   onPlaybackRequest?: (debateId: string) => void;
   /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
   onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
+  /** Additional action placed beside the full-screen link. */
+  endSlot?: React.ReactNode;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -136,6 +138,7 @@ export function DebateExploreFeedCard({
   fullWidth = false,
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
+  endSlot,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -340,12 +343,15 @@ export function DebateExploreFeedCard({
           hideJoinButton={hideJoinButton}
           compact={compactChrome}
           endSlot={
-            <FullscreenLink
-              href={NavUtils.toEntity(item.spaceId, item.entityId)}
-              entityId={item.entityId}
-              spaceId={item.spaceId}
-              ariaLabel="Watch this debate full screen"
-            />
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {endSlot}
+              <FullscreenLink
+                href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                entityId={item.entityId}
+                spaceId={item.spaceId}
+                ariaLabel="Watch this debate full screen"
+              />
+            </div>
           }
         />
 
