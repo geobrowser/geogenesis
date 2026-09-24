@@ -1316,14 +1316,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const opponentCountPending =
     opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
 
-  // The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
-  // wrong for as long as the chain behind it is still running.
+  /**
+   * The same rule for the same reason: `0` is a claim about the viewer's own backlog, and it is
+   * wrong for as long as the chain behind it is still running.
+   *
+   * Not `publishabilityPending`, though it is tempting here — a debater's own responses often live
+   * in their personal space, `canPublishDebateIn` fails open until the space types land, and the
+   * number can therefore settle high and narrow as they resolve. It narrows because *the list
+   * narrows*: fail-open is what keeps a slow lookup from emptying the tab, and this number is of
+   * the rows the tab draws. Holding it back through that window would put a skeleton on the tab
+   * over a list already showing rows, which is a worse thing to be told than a count that follows
+   * what is under it. (Behind the `length === 0` guard the term did nothing either way: fail-open
+   * means the provisional rows are already there, so the guard is false wherever it would matter.)
+   */
   const viewerCountPending =
-    viewerClaims.length === 0 &&
-    // `publishabilityPending` as well, which the opponent's does not need as badly: a debater's own
-    // responses often live in their personal space, and `canPublishDebateIn` fails open until the
-    // space types land — so the number would settle high and then drop as they resolve.
-    (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling || publishabilityPending);
+    viewerClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's

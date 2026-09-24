@@ -275,8 +275,14 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
    * This decides whether to keep *connecting*, which is a different question from what the header
    * draws — `heldVoiceRef` below holds that still on its own. So the connection outlives the exit
    * only where there is a connection to outlive.
+   *
+   * Once the exit begins the status stops being consulted at all, rather than being one half of an
+   * `||`. Leaving is a mutation: `exiting` goes true on the click, and the session answers
+   * voice-capable for the whole round trip after it. Reading the status there would let the ladder
+   * finish the lock, the token and the connection *during* the request — publishing a microphone
+   * into a session because the viewer asked to leave it.
    */
-  const voiceActive = voiceCapableNow || (exiting && roomWasLive);
+  const voiceActive = exiting ? roomWasLive : voiceCapableNow;
 
   /**
    * The shape the header had before the exit began, `'room'` meaning the live tree itself.

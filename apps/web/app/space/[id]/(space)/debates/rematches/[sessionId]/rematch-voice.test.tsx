@@ -1825,6 +1825,27 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
   });
 
+  // Leaving is a mutation, and the session answers voice-capable for the whole round trip after the
+  // click. So `exiting` arrives while the status still says voice is on — and a keep-alive that
+  // reads the status at all would let the ladder finish the lock, the token and the connection
+  // during the request, publishing a microphone because the viewer asked to leave.
+  it('does not arm voice while the leave request is still in flight', async () => {
+    const session = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    // No `flushOwnership` before the click: the room has not come up yet, which is the only state
+    // where there is nothing to hold open and everything to avoid starting.
+    const { container, rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    // What Leave does first. The mutation is pending, so the session is still `browsing`.
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" exiting />);
+    await flushOwnership();
+
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+    expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+    // And the header has not collapsed for it: the line it was drawing is still the line it draws.
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+  });
+
   // Letting that room go must not take the header's shape with it. The connection is held open for
   // a room that was up; the shape is held whatever was drawn — here the one line the room itself
   // draws while it connects, which is what was on screen a moment before the click.

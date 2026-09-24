@@ -1735,6 +1735,31 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getAllByRole('article')).toHaveLength(Number(badge));
     });
 
+    /**
+     * And it keeps counting them while the space types are still out.
+     *
+     * An unresolved type reads as publishable on purpose, so a slow lookup cannot empty a list —
+     * which means the rows are on screen during that window and the number narrows with them as
+     * the types land. Holding the badge back through it would put a skeleton on the tab over a
+     * list already showing rows: the count and the thing it counts have to agree, and agreeing
+     * with the list is the whole contract of the test above.
+     */
+    it('keeps counting the rows it draws while the space types are unresolved', async () => {
+      viewerOnlyClaim();
+      mocks.spacesHeldOver = true;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
+
+      const badge = (
+        screen.getByRole('button', { name: /^Positions/ }).textContent?.replace('Positions', '') ?? ''
+      ).trim();
+      expect(badge).toMatch(/^\d+$/);
+
+      await showMyPositions();
+      expect(screen.getAllByRole('article')).toHaveLength(Number(badge));
+    });
+
     // The same window the opponent's tab waits out, on the other side of it: the ids here are the
     // viewer's own, so until their geo-chat id lands there are none, and "you haven't taken a
     // position" is a statement about them made before anyone knew who they were.
