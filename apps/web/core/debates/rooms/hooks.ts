@@ -1,10 +1,17 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { type DebateRoomView, getDebateRoom, listUpcomingDebateRooms, setDebateRoomPresence } from '../api';
+import {
+  type DebateRoomView,
+  type UpcomingDebateRoom,
+  getDebateRematch,
+  getDebateRoom,
+  listUpcomingDebateRooms,
+  setDebateRoomPresence,
+} from '../api';
 import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
@@ -213,4 +220,50 @@ export function useUpcomingDebateRooms(enabled = true) {
     enabled: enabled && authenticated,
     refetchInterval: present ? UPCOMING_ROOMS_POLL_MS : false,
   });
+}
+
+/**
+ * Rooms whose session has already become a debate. geo-chat keeps listing them as joinable until
+ * the empty-room sweep closes them, and joining one only walks back into the finished debate.
+ */
+export function useFinishedRoomIds(rooms: UpcomingDebateRoom[], enabled = true): ReadonlySet<string> {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const sessions = rooms.flatMap(room =>
+    room.rematch_session_id ? [{ roomId: room.room_id, sessionId: room.rematch_session_id }] : []
+  );
+
+  // Same key as `useDebateRematch`, so the room page's own read and the gateway's invalidation on a
+  // session change both land here.
+  const results = useQueries({
+    queries: sessions.map(({ sessionId }) => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.rematch(accountKey, sessionId),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
+      enabled: enabled && authenticated,
+      staleTime: 30_000,
+    })),
+  });
+
+  const finished = sessions
+    .filter((_, index) => results[index]?.data?.status === 'converted')
+    .map(session => session.roomId)
+    .sort()
+    .join(',');
+
+  return React.useMemo(() => new Set(finished ? finished.split(',') : []), [finished]);
+}
+
+/** A room session's status, on the same cache entry as `useDebateRematch`. `null` until known. */
+export function useRoomSessionStatus(sessionId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.rematch(accountKey, sessionId ?? ''),
+    queryFn: ({ signal }) => getDebateRematch(sessionId ?? '', getPrivyIdentityToken, accountKey, signal),
+    enabled: authenticated && Boolean(sessionId),
+  });
+
+  return query.data?.status ?? null;
 }

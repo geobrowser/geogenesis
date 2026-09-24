@@ -223,3 +223,38 @@ describe('useRoomPresence', () => {
     }
   });
 });
+
+describe('useFinishedRoomIds', () => {
+  const upcoming = (roomId: string, sessionId: string | null) => ({
+    room_id: roomId,
+    starts_at: '2026-09-22T09:00:00.000Z',
+    opens_at: '2026-09-22T08:50:00.000Z',
+    joinable: true,
+    due: true,
+    others_present: false,
+    rematch_session_id: sessionId,
+  });
+
+  it('names the rooms whose session has become a debate', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useFinishedRoomIds } = await import('./hooks');
+    const api = await import('../api');
+    const spy = vi
+      .spyOn(api, 'getDebateRematch')
+      .mockImplementation(
+        async sessionId => ({ status: sessionId === 'session-done' ? 'converted' : 'browsing' }) as never
+      );
+    const rooms = [
+      upcoming('room-done', 'session-done'),
+      upcoming('room-open', 'session-open'),
+      upcoming('room-new', null),
+    ];
+
+    const { result } = render(() => useFinishedRoomIds(rooms), { wrapper: withQueryClient });
+
+    await vi.waitFor(() => expect([...result.current]).toEqual(['room-done']));
+    // A room with no session yet has nothing to ask about.
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
+  });
+});

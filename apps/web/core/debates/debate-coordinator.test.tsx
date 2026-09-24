@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   /** The flags that make rooms reachable at all; off, nothing is polled and nothing is waited on. */
   roomsFeature: true,
   roomsError: null as Error | null,
+  finishedRoomIds: new Set<string>() as ReadonlySet<string>,
   refetchRooms: vi.fn(() => Promise.resolve()),
 }));
 
@@ -87,6 +88,7 @@ vi.mock('./rooms/hooks', () => ({
     error: mocks.roomsError,
     refetch: mocks.refetchRooms,
   }),
+  useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -165,6 +167,7 @@ beforeEach(() => {
   mocks.roomsSettled = true;
   mocks.roomsFeature = true;
   mocks.roomsError = null;
+  mocks.finishedRoomIds = new Set();
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
   mocks.prompts = [];
@@ -632,6 +635,17 @@ describe('DebateCoordinator', () => {
 
   // GEO-2941 bans automatic redirects into the debate-again flow, and a room's session is the exact
   // shape this effect pushes on.
+  // A room whose session became a debate stays listed until geo-chat's empty-room sweep closes it.
+  // Joining it only walks back into the finished debate.
+  it('stops offering a room once its debate has happened', async () => {
+    mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'session-done' })];
+    mocks.finishedRoomIds = new Set([mocks.upcomingRooms[0].room_id]);
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument());
+  });
+
   it('does not push a viewer into the picker for a room-held session', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';

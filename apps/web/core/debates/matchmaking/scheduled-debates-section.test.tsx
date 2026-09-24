@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   rooms: [] as UpcomingDebateRoom[],
   requestsError: null as Error | null,
   roomsError: null as Error | null,
+  finishedRoomIds: new Set<string>() as ReadonlySet<string>,
 }));
 
 const ADA = {
@@ -34,6 +35,7 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
   useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
+  useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
 vi.mock('./hooks', () => ({
@@ -108,6 +110,7 @@ afterEach(() => {
   mocks.rooms = [];
   mocks.requestsError = null;
   mocks.roomsError = null;
+  mocks.finishedRoomIds = new Set();
 });
 
 describe('answering in the tab', () => {
@@ -207,6 +210,15 @@ describe('pairing a room with the request that booked it', () => {
 
     expect(result.current.upcoming).toHaveLength(1);
     expect(result.current.upcoming[0].opponentUserId).toBe('user-them');
+  });
+
+  it('drops a room whose debate has already happened', () => {
+    mocks.rooms = [room({ room_id: 'room-done' }), room({ room_id: 'room-open' })];
+    mocks.finishedRoomIds = new Set(['room-done']);
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
   it('leaves the opponent unknown when no request owns the room', () => {

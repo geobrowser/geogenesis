@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
-import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
@@ -107,17 +107,22 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [rows]
   );
 
+  const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
+  const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
+
   const upcoming = React.useMemo(
     () =>
-      (rooms.data?.rooms ?? []).map(room => ({
-        room,
-        opponentUserId: opponentOf(
-          // The room's id is dashless here and dashed on the request, so these never match as written.
-          (rows ?? []).find(request => request.room_id && sameId(request.room_id, room.room_id)),
-          viewerId
-        ),
-      })),
-    [rooms.data, rows, viewerId]
+      roomList
+        .filter(room => !finishedRoomIds.has(room.room_id))
+        .map(room => ({
+          room,
+          opponentUserId: opponentOf(
+            // The room's id is dashless here and dashed on the request, so these never match as written.
+            (rows ?? []).find(request => request.room_id && sameId(request.room_id, room.room_id)),
+            viewerId
+          ),
+        })),
+    [finishedRoomIds, roomList, rows, viewerId]
   );
 
   return { answerable, upcoming, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };

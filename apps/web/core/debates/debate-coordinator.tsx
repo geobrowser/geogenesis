@@ -33,7 +33,7 @@ import {
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
-import { useUpcomingDebateRooms } from './rooms/hooks';
+import { useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { isDebateRoomPath } from './rooms/room-routes';
 import { ScheduledRequestsWatcher } from './rooms/scheduled-requests-watcher';
@@ -223,7 +223,12 @@ export function DebateCoordinator() {
   const upcomingRoomsQuery = useUpcomingDebateRooms(roomsFeatureEnabled && !atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
-  const joinableRooms = React.useMemo(() => upcomingRooms.filter(room => room.joinable), [upcomingRooms]);
+  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, roomsFeatureEnabled && !atRoom);
+  // A room whose debate already happened is never offered again.
+  const joinableRooms = React.useMemo(
+    () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
+    [finishedRoomIds, upcomingRooms]
+  );
   // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
   // from a challenge's on every device. A joinable room with none yet may be about to hand one out.
   const roomSessionIds = React.useMemo(

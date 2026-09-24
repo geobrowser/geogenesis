@@ -8,15 +8,21 @@ import { useRouter } from 'next/navigation';
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useDebateRoom, useDebateRoomPresence, useRoomPresence } from '~/core/debates/rooms/hooks';
+import {
+  useDebateRoom,
+  useDebateRoomPresence,
+  useRoomPresence,
+  useRoomSessionStatus,
+} from '~/core/debates/rooms/hooks';
 import {
   roomAccessDenialFor,
   roomAccessDenialForStatus,
   toRoomAccess,
 } from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
-import { ROOM_NOT_YET_OPEN } from '~/core/debates/rooms/room-copy';
+import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
@@ -54,6 +60,15 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
 
+  // A session already a debate when this visit first sees it is a room that has been used, not a
+  // handoff: mounting the picker would flash its claims and bounce into the finished debate.
+  const sessionId = room?.rematch_session_id ?? null;
+  const sessionStatus = useRoomSessionStatus(sessionId);
+  const [liveFor, setLiveFor] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (sessionId && sessionStatus && sessionStatus !== 'converted') setLiveFor(sessionId);
+  }, [sessionId, sessionStatus]);
+
   // Nothing renders for someone not in this room: not a degraded room, and not a 404 — the link is
   // valid, they are just not in this one.
   if (denial) return null;
@@ -87,7 +102,13 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }
 
   // Created on first join, so it trails admission by a round trip rather than being absent.
-  if (!room.rematch_session_id) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
+  if (!room.rematch_session_id || !sessionStatus) return <RoomNotice busy>Getting your claims ready…</RoomNotice>;
+
+  if (sessionStatus === 'converted' && liveFor !== room.rematch_session_id) {
+    return (
+      <RoomNotice action={{ href: NavUtils.toExplore(), label: 'Find a debate' }}>{ROOM_NO_ACCESS.ended}</RoomNotice>
+    );
+  }
 
   return (
     <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin}>
