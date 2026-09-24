@@ -411,6 +411,7 @@ describe('MatchesList', () => {
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
+    expect(request.parentElement).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
 
     await userEvent.hover(request.parentElement!);
 

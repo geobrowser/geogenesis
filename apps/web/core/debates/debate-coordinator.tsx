@@ -179,16 +179,26 @@ export function DebateCoordinator() {
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
-  // Only fetch the request list once activity says one exists, so idle sessions stay quiet. "Not
-  // now" snoozes a request for this session; it stays in the hub's Requests tab either way.
+  // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
+  // challenge keeps its place in the hub's Requests tab until it is answered or expires.
+  const [snoozedChallengeIds, setSnoozedChallengeIds] = React.useState<string[]>([]);
+  const promptedChallenge = challenge && !snoozedChallengeIds.includes(challenge.id) ? challenge : null;
+  // Only the recipient is prompted. `challenge` itself stays live for everyone so active debate
+  // and share-prompt coordination still knows a person request is outstanding.
+  const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
+
+  // Only fetch the request list once activity says one exists, so idle sessions stay quiet. An
+  // outbound person challenge is waiting state, not an active modal flow: incoming claim requests
+  // still need to interrupt the viewer while it is pending. A received person challenge gets first
+  // choice until it is answered or snoozed, which prevents two request dialogs stacking.
   const hasIncomingRequests = (activity?.incoming_request_count ?? 0) > 0;
-  const requestsQuery = useDebateRequests(hasIncomingRequests && !activeFlow);
+  const requestsQuery = useDebateRequests(hasIncomingRequests && !debate && !activity?.rematch);
   const [snoozedRequestIds, setSnoozedRequestIds] = React.useState<string[]>([]);
   // Expired requests are dropped here too, so the popup can never prompt for a dead request while
   // waiting on the server's `debate.requests_changed` event.
   const incomingRequests = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
   const promptedRequest =
-    activeFlow || !currentUserId
+    debate || activity?.rematch || isChallengeRecipient || !currentUserId
       ? null
       : (incomingRequests.find(request => request.status === 'pending' && !snoozedRequestIds.includes(request.id)) ??
         null);
@@ -197,14 +207,6 @@ export function DebateCoordinator() {
   // data while an outbound challenge is being created; pruning against that empty transition made
   // the same inbound popup reopen as soon as the viewer requested somebody else. Request ids are
   // unique, short-lived values, so retaining answered/expired ids for one browser session is safe.
-
-  // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
-  // challenge keeps its place in the hub's Requests tab until it is answered or expires.
-  const [snoozedChallengeIds, setSnoozedChallengeIds] = React.useState<string[]>([]);
-  const promptedChallenge = challenge && !snoozedChallengeIds.includes(challenge.id) ? challenge : null;
-  // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
-  // above reads it to keep other popups from stacking on top of an outstanding challenge.
-  const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
 
   // Everything waiting on this viewer's answer, for the tone and the tab title (GEO-3026). Snoozes
   // are ignored on purpose: a snoozed request was already seen, and each id alerts only once.

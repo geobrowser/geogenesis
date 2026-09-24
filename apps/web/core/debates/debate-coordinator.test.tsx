@@ -494,6 +494,26 @@ describe('DebateCoordinator', () => {
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
+  it('prompts an inbound person request while retaining a separate outbound person request', async () => {
+    mocks.currentUserId = 'user-recipient';
+    const inbound = pendingChallenge();
+    mocks.activity = {
+      ...idleActivity(),
+      challenge: inbound,
+      outbound_challenge: {
+        ...inbound,
+        id: 'challenge-outbound',
+        requester: inbound.recipient,
+        recipient: inbound.requester,
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
   it('does not reopen a snoozed challenge when activity switches between inbound and outbound', async () => {
     mocks.currentUserId = 'user-recipient';
     const inbound = pendingChallenge();
@@ -530,6 +550,24 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
     expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
+  });
+
+  it('still prompts for an incoming claim request while an outbound person request is pending', async () => {
+    mocks.currentUserId = 'user-requester';
+    const outboundChallenge = pendingChallenge();
+    mocks.activity = {
+      ...idleActivity(),
+      challenge: outboundChallenge,
+      outbound_challenge: outboundChallenge,
+      incoming_request_count: 1,
+    };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByText('Debates should hand off without flashing the page')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
   });
 
   // The stored geo-chat session is what names the viewer, and it isn't always written yet. An

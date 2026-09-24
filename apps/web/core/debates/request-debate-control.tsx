@@ -124,7 +124,11 @@ export function RequestDebateControl({
           // owns hover/touch and is focusable for keyboard readers, while leaving the button's
           // disabled semantics intact.
           trigger={
-            <span tabIndex={0} className={cx('inline-flex cursor-default', variant === 'block' && 'w-full')}>
+            <span
+              tabIndex={0}
+              title={blockedReason}
+              className={cx('inline-flex cursor-default', variant === 'block' && 'w-full')}
+            >
               {button}
             </span>
           }
