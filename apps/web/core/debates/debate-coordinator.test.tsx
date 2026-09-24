@@ -540,7 +540,9 @@ describe('DebateCoordinator', () => {
     mocks.hasAttention = true;
     view.rerender(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
@@ -557,7 +559,9 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   it('does not prompt for a request while a debate is under way', async () => {
@@ -571,7 +575,7 @@ describe('DebateCoordinator', () => {
   });
 
   it('does not route stale debate activity over an active rematch page', async () => {
-    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.pathname = '/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1';
     mocks.activity = {
       ...activityWithRematch('browsing'),
       debate: {
@@ -683,7 +687,28 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // The flags are per browser, so a room booked on another device is invisible here and the room
+  // list cannot rule one out. The session's own space is what proves it: geo-chat gives a room
+  // session the `debates` sentinel rather than a space, and the rematch route 404s on it.
+  it('never routes a room-held session, even with no room list to check it against', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsFeature = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null, source_space_id: 'debates' },
+      challenge: null,
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   // Nothing is asked for with the feature off, so there is nothing to wait on: the push has to
@@ -698,7 +723,9 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   // The other half of the same guard: suppressing the push for *any* session while a room happened
@@ -712,7 +739,9 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   // Until geo-chat reports the field, no room's session can be identified, so an open room has to
@@ -759,7 +788,9 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.refetchRooms).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   // The door check is the server's. Offering a room it would refuse is an offer that fails.
@@ -831,7 +862,7 @@ describe('DebateCoordinator', () => {
   // on its way into the room, then vanished when the navigation landed. Preston reported a popup
   // that "required no interaction" and redirected him anyway.
   it('does not prompt over the rematch page for a debate that page is about to open', async () => {
-    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.pathname = '/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1';
     mocks.activity = {
       ...activityWithDebate(),
       rematch: null,
@@ -1337,7 +1368,7 @@ function showSharePrompt() {
     {
       id: 'prompt-1',
       debate_id: 'debate-1',
-      source_space_id: 'space-1',
+      source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
       claim: 'Debates are useful',
       created_at: '2026-07-02T00:00:00.000Z',
     },
@@ -1384,7 +1415,7 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
     rematch: {
       id: 'rematch-1',
       source_debate_id: 'debate-1',
-      source_space_id: 'space-1',
+      source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
       status,
       participants: [],
       decision_expires_at: '2026-07-02T00:00:20.000Z',
@@ -1458,7 +1489,7 @@ function pendingChallenge() {
   return {
     id: 'challenge-1',
     status: 'pending',
-    source_space_id: 'space-1',
+    source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
     requester: party('user-requester', 'Ada'),
     recipient: party('user-recipient', 'Grace'),
     rematch_session_id: null,

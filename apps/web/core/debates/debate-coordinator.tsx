@@ -5,6 +5,7 @@ import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useDebugDebatesPageEnabled, useFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { validateSpaceId } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
@@ -353,6 +354,10 @@ export function DebateCoordinator() {
       return;
     }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
+      // A room's session carries geo-chat's `debates` sentinel rather than a space, and the
+      // rematch route 404s on it. It also proves the session is a room's when no room list can.
+      // A challenge's session carries its challenge's real space and still routes.
+      if (!validateSpaceId(rematch.source_space_id)) return;
       const path = debateRematchPath(rematch);
       if (pathname !== path) {
         rememberDebateReturnDestination();

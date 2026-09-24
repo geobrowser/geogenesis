@@ -3487,6 +3487,77 @@ describe('DebateRematchPageClient', () => {
     );
   });
 
+  // geo-chat stores `debates` as the source space of every room session and every profile
+  // challenge. It is a sentinel, so routing on it 404s; the claim carries the real space.
+  it('routes to the claim space when the session has no real source space', async () => {
+    mocks.session = session({
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: {
+        id: 'request-1',
+        status: 'accepted',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-remote',
+        recipient_user_id: 'user-local',
+        requester_position: false,
+        recipient_position: true,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
+  });
+
+  // The component is reused across sessions rather than remounted, so a remembered space has to
+  // name the session it came from.
+  it('will not send one session to the space another session was about', async () => {
+    mocks.session = session({
+      request: {
+        id: 'request-1',
+        status: 'accepted',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-remote',
+        recipient_user_id: 'user-local',
+        requester_position: false,
+        recipient_position: true,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // A different session, converted, with nothing of its own to resolve a space from.
+    mocks.session = session({
+      id: 'rematch-2',
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: null,
+    });
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('stays put rather than routing somewhere that cannot exist', async () => {
+    mocks.session = session({
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: null,
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   // A backend that predates the fields answers `undefined`, and the picker must keep working
   // exactly as before against it.
   it('falls back to the per-space lookup when the rematch response has no readiness', async () => {

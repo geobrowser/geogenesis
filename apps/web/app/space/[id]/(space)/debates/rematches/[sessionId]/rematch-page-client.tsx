@@ -95,7 +95,7 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -1895,13 +1895,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
+  // A room's session carries geo-chat's `debates` sentinel rather than a space and the debate route
+  // 404s on it; the claim carries the real one. Keyed by session, which this component is reused
+  // across rather than remounted for.
+  const requestSpaceRef = React.useRef<{ sessionId: string; spaceId: string } | null>(null);
+  const requestSpaceId = session?.request?.claim.space_id ?? null;
+  if (session && requestSpaceId) requestSpaceRef.current = { sessionId: session.id, spaceId: requestSpaceId };
+
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
       // The requester walks into the room the same way the accepter does, and without the intent
       // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
+      const remembered = requestSpaceRef.current?.sessionId === session.id ? requestSpaceRef.current.spaceId : null;
+      const spaceId = validateSpaceId(session.source_space_id) ? session.source_space_id : remembered;
+      if (!spaceId) return;
       markEnteringDebate(session.converted_debate_id);
-      router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
+      router.replace(`/space/${spaceId}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
