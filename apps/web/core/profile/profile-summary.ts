@@ -19,14 +19,22 @@ import { isOngoing } from './normalize-history';
  *
  * Requiring a start date kept those out and took the explicitly-marked rows with
  * them: somebody whose role says `current` but carries no date is making a
- * statement, and the headline promises "every current role and degree". So the
- * rule is the explicit signal *or* a start date — never the ambiguous pair of
- * neither.
+ * statement, and the headline promises "every current role and degree".
+ *
+ * Modern education is the one deliberate exception. "Still studying" has no
+ * graph option, so the writer persists it with no status or end date, and both
+ * dates are optional. `isLegacy` makes that absence unambiguous for a modern
+ * degree while keeping the graph's status-less undated back catalogue out.
  */
-function isCurrent(entry: { startDate: string | null; endDate: string | null; status?: string | null }): boolean {
+function isCurrent(
+  kind: 'employment' | 'education',
+  entry: EmploymentEntry | EducationEntry
+): boolean {
   if (!isOngoing(entry)) return false;
 
-  return entry.startDate !== null || entry.status === 'current' || entry.status === 'studying';
+  if (entry.startDate !== null || entry.status === 'current' || entry.status === 'studying') return true;
+
+  return kind === 'education' && !entry.isLegacy && entry.status === null;
 }
 
 const nonEmptyName = (name: string | null | undefined) => name?.trim() || null;
@@ -45,10 +53,14 @@ type CurrentHistoryRow =
 function currentHistoryRows(employment: EmploymentCard[], education: EducationCard[]): CurrentHistoryRow[] {
   return [
     ...employment.flatMap(card =>
-      card.entries.filter(isCurrent).map(entry => ({ kind: 'employment' as const, card, entry }))
+      card.entries
+        .filter(entry => isCurrent('employment', entry))
+        .map(entry => ({ kind: 'employment' as const, card, entry }))
     ),
     ...education.flatMap(card =>
-      card.entries.filter(isCurrent).map(entry => ({ kind: 'education' as const, card, entry }))
+      card.entries
+        .filter(entry => isCurrent('education', entry))
+        .map(entry => ({ kind: 'education' as const, card, entry }))
     ),
   ];
 }

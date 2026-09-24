@@ -96,11 +96,21 @@ describe('currentRoles', () => {
     expect(currentRoles([card], [])).toHaveLength(1);
   });
 
-  it('keeps an undated degree that says it is being studied', () => {
-    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy', status: 'studying' });
+  it('keeps a modern undated degree whose missing status means still studying', () => {
+    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy' });
     card.entries[0].startDate = null;
 
     expect(currentRoles([], [card])).toHaveLength(1);
+    expect(currentAffiliation([], [card])).toBe('Doctor of Philosophy at Cincinnati');
+  });
+
+  it('leaves out an ambiguous legacy degree with no dates or status', () => {
+    const card = educationCard('Cincinnati', { name: 'Doctor of Philosophy' });
+    card.entries[0].startDate = null;
+    card.entries[0].isLegacy = true;
+
+    expect(currentRoles([], [card])).toEqual([]);
+    expect(currentAffiliation([], [card])).toBeNull();
   });
 
   it('leaves out a row that is undated and says nothing', () => {
