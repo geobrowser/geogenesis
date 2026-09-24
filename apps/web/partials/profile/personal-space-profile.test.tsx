@@ -14,7 +14,17 @@ vi.mock('~/core/hooks/use-profile-history', () => ({
 }));
 
 vi.mock('~/core/debates/use-person-debates', () => ({
-  usePersonDebates: () => ({ rows: [], isLoading: false, isError: false }),
+  usePersonDebates: () => ({
+    rows: [],
+    hiddenRows: [],
+    hiddenRelationsByDebateId: new Map(),
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+vi.mock('~/core/profile/use-profile-debate-visibility', () => ({
+  useProfileDebateVisibility: () => ({ setHidden: vi.fn(), pendingIds: new Set() }),
 }));
 
 vi.mock('~/core/profile/use-entity-scores', () => ({

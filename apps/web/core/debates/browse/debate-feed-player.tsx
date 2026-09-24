@@ -7,6 +7,8 @@ import cx from 'classnames';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { useParticipantAffiliations } from '~/core/debates/participant-affiliations';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
@@ -99,6 +101,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
+  const showAffiliations = !reducedOverlays;
+  const affiliations = useParticipantAffiliations(debate.participants, showAffiliations && (active || preload));
+  const affiliationFor = (participant: DebateParticipant | null) => {
+    if (!showAffiliations) return null;
+    const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
+    return spaceId ? (affiliations.get(spaceId) ?? null) : null;
+  };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();
@@ -352,6 +361,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     >
       <DebaterVideo
         participant={slot1Participant}
+        affiliation={affiliationFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -406,6 +416,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
       <DebaterVideo
         participant={slot2Participant}
+        affiliation={affiliationFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
@@ -535,6 +546,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
 
 function DebaterVideo({
   participant,
+  affiliation,
   src,
   videoRef,
   audible,
@@ -554,6 +566,7 @@ function DebaterVideo({
   scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
+  affiliation: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
@@ -939,7 +952,7 @@ function DebaterVideo({
           they were reading something that debater had said. */}
       <div
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -956,7 +969,14 @@ function DebaterVideo({
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
           </span>
-          <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+            {affiliation && (
+              <span title={affiliation} className="truncate text-[0.75rem] leading-4 text-white/80">
+                {affiliation}
+              </span>
+            )}
+          </span>
         </button>
         {/* Guarded on the text rather than only on the participant: `position_label` is typed
             non-null but arrives from geo-chat, and an empty one would draw a bare pill that says

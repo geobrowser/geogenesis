@@ -74,6 +74,8 @@ export type ActivityKind = {
   seeAllLabel: string;
   /** Selects an in-place tab when the record is rendered inside a side panel. */
   onSeeAll?: () => void;
+  /** Profile-owner action placed in debate cards only. */
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 };
 
 /**
@@ -110,22 +112,81 @@ export function ProfileActivitySection({
   // A failed kind is available: it has something to say, even if the something
   // is that it could not be read.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  // Whether the card is still assembling. Read twice: the skeleton below waits on
+  // it, and so does the default — see `defaultKey`.
+  const isLoading = kinds.some(kind => kind.isLoading);
+
+  /**
+   * The lead kind: the first that has a *settled* record to show.
+   *
+   * Settled, not merely non-empty, because the rows can arrive before their order
+   * does. `usePersonDebates` hands the profile its debates a round trip before
+   * `useEntityScores` says how to rank them, and the caller folds that second wait
+   * into `isLoading` precisely so a row about to reshuffle is not put up as though
+   * it were final. Preferring a settled kind here honours that.
+   *
+   * A preference, not a guarantee. Where nothing available has settled — one kind,
+   * rows in, ranks still out — the fallback puts it up unsettled, because the
+   * alternative is holding the card blank behind the slower request, which is the
+   * one thing the skeleton gate below is written not to do. That case paints once
+   * and reshuffles, exactly as it did before this change. Closing it means moving
+   * when the card first paints, which is the gate's decision to make and not this
+   * line's.
+   */
+  const lead = available.find(kind => !kind.isLoading) ?? available[0];
+
+  /** The reader's own pick, and only that. Null until they make one. */
+  const [pickedKey, setPickedKey] = React.useState<string | null>(null);
+  /**
+   * The default, fixed at the moment the card first settles (GEO-3021).
+   *
+   * Two failure modes bracket this. Storing the default the first time *either*
+   * kind had rows — what this used to do — let the network choose it: the kinds
+   * are separate requests, so a profile whose claims came back first committed to
+   * Claims and stayed there, because the debates landing did not invalidate a key
+   * that still named an available kind. Deriving it on every render instead fixes
+   * that end and breaks the other: a focus refetch turning up a first debate half
+   * an hour later would pull a reader off the Claims they were reading, remount
+   * the gallery under their cursor and start a video playing.
+   *
+   * So the default follows the record while the card is still assembling, and
+   * stops the moment it has finished. After that, only the reader moves it.
+   */
+  const [defaultKey, setDefaultKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (available[0] && !available.some(kind => kind.key === selectedKey)) setSelectedKey(available[0].key);
-  }, [available, selectedKey]);
+    if (isLoading || defaultKey !== null || !lead) return;
 
-  // Whichever the reader picked, or the first with anything in it. Held as a key
-  // rather than an index so a kind arriving late — the two load separately —
-  // cannot shift the selection out from under them.
-  const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
+    setDefaultKey(lead.key);
+  }, [defaultKey, isLoading, lead]);
+
+  /*
+   * A pick whose kind has gone away is adopted onto what replaced it, rather than
+   * dropped. Dropping it would hand the reader back to the default, which would
+   * then pull them off this kind the moment their emptied one returned — a jump
+   * under somebody who has not touched the toggle since. Falling back is already
+   * a choice made on their behalf; this makes it the one that sticks.
+   *
+   * Not while there is nothing to adopt, though. Both kinds can blank at once —
+   * the space Overview withholds every row while its counts are in flight — and
+   * writing the fallback there would spend their pick on a gap in the data.
+   */
+  React.useEffect(() => {
+    if (pickedKey === null || !lead || available.some(kind => kind.key === pickedKey)) return;
+
+    setPickedKey(lead.key);
+  }, [available, lead, pickedKey]);
+
+  // Their pick, else the settled default, else the lead kind — Debates, on every
+  // surface that renders this. All three held as keys rather than indexes, so a
+  // kind arriving late cannot shift the selection out from under them.
+  const selected =
+    available.find(kind => kind.key === pickedKey) ?? available.find(kind => kind.key === defaultKey) ?? lead;
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
   const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
-  const isLoading = kinds.some(kind => kind.isLoading);
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
   // draw it immediately rather than holding the whole card behind the slower request.
@@ -177,7 +238,7 @@ export function ProfileActivitySection({
                   // let the shorter DOM clamp `scrollY` while it is being
                   // measured, before the reserve could help.
                   prepareSwitch();
-                  setSelectedKey(kind.key);
+                  setPickedKey(kind.key);
                 }}
                 // The same pill as View all beside it — 28px, 16px type, the same padding — black
                 // when selected (the Log in pill) and the secondary outline otherwise.
@@ -231,6 +292,7 @@ export function ProfileActivitySection({
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
             onNavigationChange={setNavigation}
+            debateEndSlot={selected.debateEndSlot}
           />
         )}
       </section>
@@ -485,12 +547,14 @@ function ActivityGallery({
   responseByClaimId,
   personName,
   onNavigationChange,
+  debateEndSlot,
 }: {
   rows: ExploreFeedRow[];
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
   /** Where the header's arrows learn whether this row can move, and how to move it. */
   onNavigationChange?: (navigation: GalleryNavigation | null) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
@@ -558,6 +622,7 @@ function ActivityGallery({
               personName={personName}
               onDebatePlaybackRequest={requestPlayback}
               onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
+              debateEndSlot={debateEndSlot}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
@@ -758,6 +823,7 @@ function GalleryCard({
   personName,
   onDebatePlaybackRequest,
   onDebatePlaybackAvailabilityChange,
+  debateEndSlot,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
@@ -765,6 +831,7 @@ function GalleryCard({
   personName?: string | null;
   onDebatePlaybackRequest: (debateId: string) => void;
   onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -808,6 +875,7 @@ function GalleryCard({
           compactDebateChrome
           onDebatePlaybackRequest={onDebatePlaybackRequest}
           onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+          debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
         />
       )}
     </div>

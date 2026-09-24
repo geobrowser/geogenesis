@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
@@ -22,16 +23,20 @@ import { PeerAvailabilityModal } from '~/partials/availability/peer-availability
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
+import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
+import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
+import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
@@ -49,6 +54,8 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  * have already left, or clearing it before a newly arrived person's activity has loaded.
  */
 const EMPTY_SPACE_IDS: string[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
+const EMPTY_MATCH_COUNTS = new Map<string, number>();
 
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
@@ -70,9 +77,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
-  // One elevated portal for every row's space list. A portal per person would append a matching
-  // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
-  const spacesPopoverPortal = useElevatedPopoverPortal();
+  const { personalSpaceId } = usePersonalSpaceId();
+  // One elevated portal for every row's menu. A portal per person would append a matching number
+  // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
+  const popoverPortal = useElevatedPopoverPortal();
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
@@ -82,6 +90,51 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
+  // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
+  // compare against, so they do not spend a public query fetching everybody else's positions.
+  // The presence service can hand us a malformed profile-space id; keep those out of the graph's
+  // UUID filter so one bad roster entry cannot discard every valid person's match data.
+  const positionParticipants = React.useMemo(
+    () =>
+      viewerProfileSpaceId
+        ? [
+            { profile_space_id: viewerProfileSpaceId },
+            ...allPeople.flatMap(person =>
+              isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
+            ),
+          ]
+        : [],
+    [allPeople, viewerProfileSpaceId]
+  );
+  const {
+    byClaim: positionsByClaim,
+    isLoading: positionsLoading,
+    isPlaceholderData: positionsArePlaceholderData,
+    error: positionsError,
+  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId);
+  const matchAnalysis = React.useMemo(
+    () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
+    [positionsByClaim, viewerProfileSpaceId]
+  );
+  // A key-changing roster update retains the previous batch. It is useful placeholder UI for
+  // people already present, but an absent entry for somebody new means "unknown", not zero. A
+  // same-key background poll is not placeholder data, so settled counts stay visible while polling.
+  const matchesKnown =
+    viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
+  const matchingClaimIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
+    [matchAnalysis]
+  );
+  const matchingSpaceIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.spaceId)))],
+    [matchAnalysis]
+  );
+  const { entities: matchingClaims, isLoading: matchingClaimsLoading } = useClaimEntitiesByIds(matchingClaimIds);
+  const matchingClaimNamesById = React.useMemo(
+    () => new Map(matchingClaims.map(claim => [normId(claim.id), claim.name])),
+    [matchingClaims]
+  );
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
@@ -163,12 +216,24 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   }, [allPeople, search]);
 
   const people = React.useMemo(() => {
-    if (effectiveSpaceIds.length === 0) return searchedPeople;
-    const wanted = new Set(effectiveSpaceIds.map(normId));
-    return searchedPeople.filter(person =>
-      (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
-    );
-  }, [debateSpacesByPerson, effectiveSpaceIds, searchedPeople]);
+    let filtered = searchedPeople;
+    if (effectiveSpaceIds.length > 0) {
+      const wanted = new Set(effectiveSpaceIds.map(normId));
+      filtered = searchedPeople.filter(person =>
+        (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
+      );
+    }
+
+    // The server's roster order breaks ties, so equal matches stay stable as live updates land.
+    return filtered
+      .map((person, index) => ({
+        person,
+        index,
+        matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
+      }))
+      .sort((left, right) => right.matchCount - left.matchCount || left.index - right.index)
+      .map(({ person }) => person);
+  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -201,8 +266,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // counted out of the facets, and it still has to be nameable in the trigger.
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds])],
-      [effectiveSpaceIds, facetSpaces]
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...matchingSpaceIds])],
+      [effectiveSpaceIds, facetSpaces, matchingSpaceIds]
     )
   );
 
@@ -334,27 +399,45 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
               </Text>
             ) : null}
             <ul className="flex flex-col">
-              {people.map(person => (
-                <PersonRow
-                  key={person.user_id}
-                  person={person}
-                  record={records.get(person.profile_space_id) ?? null}
-                  spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
-                  labelsById={labelsById}
-                  popoverPortal={spacesPopoverPortal}
-                  disabled={buttonsDisabled}
-                  disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
-                  onRequireSignIn={onRequireSignIn}
-                  onSeeTimes={
-                    peerAvailabilityEnabled || bookingEnabled
-                      ? (peer, opener) => {
-                          seeTimesOpenerRef.current = opener;
-                          setViewingTimes(peer);
-                        }
-                      : undefined
-                  }
-                />
-              ))}
+              {people.map(person => {
+                const isViewer =
+                  (currentUserId !== null && person.user_id === currentUserId) ||
+                  (personalSpaceId !== null && normId(person.profile_space_id) === normId(personalSpaceId));
+                return (
+                  <PersonRow
+                    key={person.user_id}
+                    person={person}
+                    matches={
+                      isViewer
+                        ? EMPTY_MATCHES
+                        : (matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES)
+                    }
+                    matchesBySpace={
+                      matchesKnown && !isViewer
+                        ? (matchAnalysis.countsByProfileAndSpace.get(normId(person.profile_space_id)) ??
+                          EMPTY_MATCH_COUNTS)
+                        : undefined
+                    }
+                    claimNamesById={matchingClaimNamesById}
+                    claimNamesLoading={matchingClaimsLoading}
+                    record={records.get(person.profile_space_id) ?? null}
+                    spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
+                    labelsById={labelsById}
+                    popoverPortal={popoverPortal}
+                    disabled={buttonsDisabled}
+                    disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                    onRequireSignIn={onRequireSignIn}
+                    onSeeTimes={
+                      bookingEnabled
+                        ? (peer, opener) => {
+                            seeTimesOpenerRef.current = opener;
+                            setViewingTimes(peer);
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
             </ul>
           </>
         </HubQueryState>
@@ -384,6 +467,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
 
 function PersonRow({
   person,
+  matches,
+  matchesBySpace,
+  claimNamesById,
+  claimNamesLoading,
   record,
   spaceIds,
   labelsById,
@@ -394,6 +481,12 @@ function PersonRow({
   onSeeTimes,
 }: {
   person: DebatePerson;
+  /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
+  matches: ClaimMatch[];
+  /** Viewer-relative matching claims per space; absent until that comparison is known. */
+  matchesBySpace?: ReadonlyMap<string, number>;
+  claimNamesById: ReadonlyMap<string, string | null>;
+  claimNamesLoading: boolean;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
   /** Debate-enabled spaces where this person has at least one claim position or recorded debate. */
@@ -422,6 +515,18 @@ function PersonRow({
         labelsById={labelsById}
         claimsBySpace={record?.claimsBySpace}
         debatesBySpace={record?.debatesBySpace}
+        matchesBySpace={matchesBySpace}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
+  const match =
+    matches.length > 0 ? (
+      <PersonMatches
+        personName={speakerLabel(person)}
+        matches={matches}
+        claimNamesById={claimNamesById}
+        claimNamesLoading={claimNamesLoading}
+        labelsById={labelsById}
         popoverPortal={popoverPortal}
       />
     ) : null;
@@ -464,12 +569,11 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in"
-            immediately above "On Geo since" makes both read as profile context, while the popup
-            gives the compact avatar stack somewhere to reveal its full answer. */}
-        {record || spaceIds.length > 0 ? (
+        {/* One compact row: debates, positions, then the viewer-relative match count. The
+            latter opens the exact claims without making every person row permanently taller. */}
+        {record || activeSpaces || match ? (
           <div className="flex min-w-0 flex-col gap-0.5">
-            {record ? <PersonRecordLine record={record} activeSpaces={activeSpaces} /> : activeSpaces}
+            <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
           </div>
         ) : null}
       </div>

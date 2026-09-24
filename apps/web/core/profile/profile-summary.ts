@@ -1,4 +1,10 @@
-import type { EducationCard, EmploymentCard, HistoryCard, HistoryEntry, NamedRef } from './normalize-history';
+import type {
+  EducationCard,
+  EducationEntry,
+  EmploymentCard,
+  EmploymentEntry,
+  NamedRef,
+} from './normalize-history';
 import { isOngoing } from './normalize-history';
 
 /**
@@ -13,14 +19,72 @@ import { isOngoing } from './normalize-history';
  *
  * Requiring a start date kept those out and took the explicitly-marked rows with
  * them: somebody whose role says `current` but carries no date is making a
- * statement, and the headline promises "every current role and degree". So the
- * rule is the explicit signal *or* a start date — never the ambiguous pair of
- * neither.
+ * statement, and the headline promises "every current role and degree".
+ *
+ * Modern education is the one deliberate exception. "Still studying" has no
+ * graph option, so the writer persists it with no status or end date, and both
+ * dates are optional. `isLegacy` makes that absence unambiguous for a modern
+ * degree while keeping the graph's status-less undated back catalogue out.
  */
-function isCurrent(entry: { startDate: string | null; endDate: string | null; status?: string | null }): boolean {
+function isCurrent(
+  kind: 'employment' | 'education',
+  entry: EmploymentEntry | EducationEntry
+): boolean {
   if (!isOngoing(entry)) return false;
 
-  return entry.startDate !== null || entry.status === 'current' || entry.status === 'studying';
+  if (entry.startDate !== null || entry.status === 'current' || entry.status === 'studying') return true;
+
+  return kind === 'education' && !entry.isLegacy && entry.status === null;
+}
+
+const nonEmptyName = (name: string | null | undefined) => name?.trim() || null;
+
+/** Join whichever halves of an affiliation are present, without leaving a dangling "at". */
+function affiliationLine(subject: string | null, organization: string | null): string | null {
+  if (subject && organization) return `${subject} at ${organization}`;
+  return subject ?? organization;
+}
+
+type CurrentHistoryRow =
+  | { kind: 'employment'; card: EmploymentCard; entry: EmploymentEntry }
+  | { kind: 'education'; card: EducationCard; entry: EducationEntry };
+
+/** The shared current-role selection and profile ordering behind every summary of this history. */
+function currentHistoryRows(employment: EmploymentCard[], education: EducationCard[]): CurrentHistoryRow[] {
+  return [
+    ...employment.flatMap(card =>
+      card.entries
+        .filter(entry => isCurrent('employment', entry))
+        .map(entry => ({ kind: 'employment' as const, card, entry }))
+    ),
+    ...education.flatMap(card =>
+      card.entries
+        .filter(entry => isCurrent('education', entry))
+        .map(entry => ({ kind: 'education' as const, card, entry }))
+    ),
+  ];
+}
+
+/**
+ * The first current affiliation in the same order the profile presents its headline.
+ *
+ * Experience comes before education on the profile, and cards and rows are already newest first.
+ * Rows with no printable title or organisation are skipped: an empty graph record is not an
+ * affiliation, and must not hide the next complete one.
+ */
+export function currentAffiliation(employment: EmploymentCard[], education: EducationCard[]): string | null {
+  for (const row of currentHistoryRows(employment, education)) {
+    const subject =
+      row.kind === 'education'
+        ? [nonEmptyName(row.entry.subject.name), ...row.entry.fields.map(field => nonEmptyName(field.name))]
+            .filter((part): part is string => part !== null)
+            .join(', ')
+        : nonEmptyName(row.entry.subject.name);
+    const line = affiliationLine(subject || null, nonEmptyName(row.card.organization.name));
+    if (line) return line;
+  }
+
+  return null;
 }
 
 /** One thing a person is doing now, for the headline under their name. */
@@ -46,23 +110,14 @@ export type CurrentRole = {
  * headline, which is most accounts.
  */
 export function currentRoles(employment: EmploymentCard[], education: EducationCard[]): CurrentRole[] {
-  const from = (cards: HistoryCard<HistoryEntry>[], kind: CurrentRole['kind']): CurrentRole[] =>
-    cards.flatMap(card =>
-      card.entries
-        .filter(entry => isCurrent(entry))
-        .map(entry => ({
-          kind,
-          subject: entry.subject.name ?? 'Untitled',
-          subjectId: entry.subject.id,
-          organization: card.organization.name ?? 'Untitled',
-          organizationId: card.organization.id,
-          avatarUrl: card.avatarUrl ?? null,
-        }))
-    );
-
-  // Cards arrive newest first and their rows are sorted within them, so the
-  // concatenation is already in the order the headline wants.
-  return [...from(employment, 'employment'), ...from(education, 'education')];
+  return currentHistoryRows(employment, education).map(({ kind, card, entry }) => ({
+    kind,
+    subject: entry.subject.name ?? 'Untitled',
+    subjectId: entry.subject.id,
+    organization: card.organization.name ?? 'Untitled',
+    organizationId: card.organization.id,
+    avatarUrl: card.avatarUrl ?? null,
+  }));
 }
 
 /**
