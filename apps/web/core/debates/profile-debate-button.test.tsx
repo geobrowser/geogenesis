@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   isPending: false,
   activityOutboundRequest: null as { id: string } | null,
   requestsOutboundRequest: null as { id: string } | null,
+  disabledRequestsOutboundRequest: null as { id: string } | null,
   outboundChallenge: null as { id: string } | null,
   outboundChallengeDirectionUnknown: false,
 }));
@@ -24,7 +25,11 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./matchmaking/hooks', () => ({
-  useDebateRequests: () => ({ data: { outbound: mocks.requestsOutboundRequest } }),
+  useDebateRequests: (enabled: boolean) => ({
+    data: {
+      outbound: enabled ? mocks.requestsOutboundRequest : mocks.disabledRequestsOutboundRequest,
+    },
+  }),
 }));
 
 vi.mock('./matchmaking/use-outbound-debate-challenge', () => ({
@@ -45,6 +50,7 @@ beforeEach(() => {
   mocks.isPending = false;
   mocks.activityOutboundRequest = null;
   mocks.requestsOutboundRequest = null;
+  mocks.disabledRequestsOutboundRequest = null;
   mocks.outboundChallenge = null;
   mocks.outboundChallengeDirectionUnknown = false;
   mocks.createChallenge.mockReset();
@@ -106,6 +112,17 @@ describe('ProfileDebateButton', () => {
 
     fireEvent.click(button);
     expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  it('stops blocking after the authoritative request list clears a stale cached outbound request', () => {
+    mocks.disabledRequestsOutboundRequest = { id: 'stale-claim-request' };
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+    expect(mocks.createChallenge).toHaveBeenCalledWith({ recipient_profile_space_id: 'profile-them' });
   });
 
   it('stays hidden when the server says this person cannot be challenged', () => {

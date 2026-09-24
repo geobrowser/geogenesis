@@ -19,9 +19,10 @@ import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
   const profileQuery = useDebateProfile(spaceId);
   const { data: activity } = useDebateActivity();
-  // Read any request list already loaded by the hub or coordinator without making a profile page
-  // fetch it just to repeat the activity payload's gate.
-  const { data: requests } = useDebateRequests(false);
+  // The request list is authoritative for claim requests while this control is visible. It must be
+  // enabled rather than cache-only: `debate.requests_changed` invalidates this key when a request
+  // ends, and a disabled observer would keep gating on its stale outbound row indefinitely.
+  const { data: requests } = useDebateRequests(profileQuery.data?.can_challenge === true);
   const currentUserId = useCurrentGeoChatUserId();
   const { outboundChallenge, outboundChallengeDirectionUnknown } = useOutboundDebateChallenge(activity, currentUserId);
   const createChallenge = useCreateDebateChallenge();
