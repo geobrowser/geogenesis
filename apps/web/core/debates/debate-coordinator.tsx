@@ -20,6 +20,7 @@ import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } from './debate-entry-intent';
 import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { useDebateRequestAlert } from './debate-request-alert';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
 import { debateRematchPath } from './debate-routes';
 import {
@@ -211,6 +212,18 @@ export function DebateCoordinator() {
   React.useEffect(() => {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
   }, [challenge, snoozedChallengeId]);
+
+  // Everything waiting on this viewer's answer, for the tone and the tab title (GEO-3026). Snoozes
+  // are ignored on purpose: a snoozed request was already seen, and each id alerts only once.
+  const challengeForViewerId = challenge && challenge.recipient.user_id === currentUserId ? challenge.id : null;
+  const pendingIncomingIds = React.useMemo(
+    () => [
+      ...(challengeForViewerId ? [challengeForViewerId] : []),
+      ...incomingRequests.filter(request => request.status === 'pending').map(request => request.id),
+    ],
+    [challengeForViewerId, incomingRequests]
+  );
+  useDebateRequestAlert(pendingIncomingIds);
 
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
