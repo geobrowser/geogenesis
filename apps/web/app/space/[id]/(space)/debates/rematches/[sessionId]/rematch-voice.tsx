@@ -63,6 +63,13 @@ const NUDGE_MS = 10_000;
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
+/**
+ * Said from three places — before the tab lock, before the token, and from inside a room that has
+ * mounted but not connected — because to the viewer they are one wait. Shared so that the exit
+ * path, which stands in for the third, cannot drift from what it is standing in for.
+ */
+const CONNECTING_VOICE = { kind: 'message', message: 'Connecting voice…' } as const satisfies PairHeaderVoice;
+
 function voiceCapable(status: DebateRematchSession['status']) {
   return status === 'browsing' || status === 'request_pending';
 }
@@ -246,24 +253,45 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
 
 function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
   const voiceCapableNow = voiceCapable(session.status);
-  /**
-   * Whether voice has been live at all this visit.
-   *
-   * `exiting` alone is not enough to hold the room open, because it is also true from the first
-   * render of a rematch that was already over when the link was opened — and "keep what is there"
-   * would become "start a room, take the tab lock and publish a microphone" into a session the
-   * viewer is not in, on a page that is busy redirecting. A debate-sourced rematch joins unmuted,
-   * so that is a live microphone rather than a wasted request.
-   */
-  const [voiceWasActive, setVoiceWasActive] = React.useState(false);
-  React.useEffect(() => {
-    if (voiceCapableNow) setVoiceWasActive(true);
-  }, [voiceCapableNow]);
 
-  // Sticky on the way out, but only over a room that was already up: the connection and its
-  // controls last until the page unmounts, which is what stops the card resizing between the click
-  // and the redirect.
-  const voiceActive = voiceCapableNow || (exiting && voiceWasActive);
+  /**
+   * Whether a room has actually come up this visit. Latched by `onConnected` and never released —
+   * a retry is still a room that was live a moment ago.
+   *
+   * The session's own status is the wrong thing to latch on, even though it is the thing that
+   * turns voice on. It reads voice-capable on the first render of a rematch that was already over
+   * when the link was opened — React Query serves the stale answer, and the ladder below is
+   * several awaits deep in ownership and token before anything connects — so a status latch is
+   * set in states where there is nothing up to keep. Paired with `exiting`, “hold what is there”
+   * then becomes “take the tab lock, mint a token and publish a microphone” into a session the
+   * viewer has just left. A debate-sourced rematch joins unmuted, so that is a live microphone
+   * going out after they are gone rather than a wasted request.
+   */
+  const [roomWasLive, setRoomWasLive] = React.useState(false);
+
+  /**
+   * Sticky on the way out, but only over a room that was already up.
+   *
+   * This decides whether to keep *connecting*, which is a different question from what the header
+   * draws — `heldVoiceRef` below holds that still on its own. So the connection outlives the exit
+   * only where there is a connection to outlive.
+   */
+  const voiceActive = voiceCapableNow || (exiting && roomWasLive);
+
+  /**
+   * The shape the header had before the exit began, `'room'` meaning the live tree itself.
+   *
+   * `exiting` freezes what is drawn so the card cannot re-lay-out between the click and the
+   * redirect — but freezing it by re-deriving it would mean keeping the connection open just to
+   * keep the derivation true, which is how the microphone got out. Holding the last shape instead
+   * separates the two: the room goes when it was never up, and the header still draws what it was
+   * drawing a moment ago. `null` is “nothing drawn yet”, which is a session already over on load.
+   *
+   * Written during render because the exit render is the one that needs it, and an effect runs a
+   * beat too late. The write is derived from the same props each time, so a double invocation
+   * under StrictMode stores the same value twice.
+   */
+  const heldVoiceRef = React.useRef<PairHeaderVoice | 'room' | null>(null);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
 
@@ -384,6 +412,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     connectedRef.current = true;
     setConnectFailed(false);
   }, []);
+
+  // Latched from inside the room, off the same connection state `everConnected` reads, so "a room
+  // was up" means one thing on both sides of the boundary. `<LiveKitRoom onConnected>` fires for a
+  // first connect only; this also covers a room that came back.
+  const handleRoomLive = React.useCallback(() => setRoomWasLive(true), []);
   const handleError = React.useCallback(() => {
     if (connectedRef.current) return;
     setConnectFailed(true);
@@ -455,37 +488,54 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
 
   const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;
 
-  if (!voiceActive) return headerWith({ kind: 'absent' });
+  /** Everything the header can say before there is a room to say it from. `null` hands over. */
+  const preRoomVoice = ((): PairHeaderVoice | null => {
+    if (!voiceActive) return { kind: 'absent' };
 
-  if (ownership === 'elsewhere') {
-    return headerWith({
-      kind: 'message',
-      message: 'Voice is active in another tab',
-      actionLabel: 'Use voice here',
-      onAction: takeOver,
-    });
-  }
-
-  if (ownership === 'pending' || join.isLoading) return headerWith({ kind: 'message', message: 'Connecting voice…' });
-
-  if (join.error) {
-    // No backend support: LiveKit unconfigured (503) or the endpoint not deployed yet (404). The
-    // picker works exactly as before voice existed. A blocked state (400/403) likewise has no
-    // user-facing remedy here.
-    if (join.error instanceof GeoChatRequestError && [400, 403, 404].includes(join.error.status)) {
-      return headerWith({ kind: 'absent' });
+    if (ownership === 'elsewhere') {
+      return {
+        kind: 'message',
+        message: 'Voice is active in another tab',
+        actionLabel: 'Use voice here',
+        onAction: takeOver,
+      };
     }
-    if (join.error instanceof GeoChatRequestError && join.error.code === 'livekit_not_configured') {
-      return headerWith({ kind: 'absent' });
+
+    if (ownership === 'pending' || join.isLoading) return CONNECTING_VOICE;
+
+    if (join.error) {
+      // No backend support: LiveKit unconfigured (503) or the endpoint not deployed yet (404). The
+      // picker works exactly as before voice existed. A blocked state (400/403) likewise has no
+      // user-facing remedy here.
+      if (join.error instanceof GeoChatRequestError && [400, 403, 404].includes(join.error.status)) {
+        return { kind: 'absent' };
+      }
+      if (join.error instanceof GeoChatRequestError && join.error.code === 'livekit_not_configured') {
+        return { kind: 'absent' };
+      }
+      return { kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry };
     }
-    return headerWith({ kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry });
-  }
 
-  if (!join.data) return headerWith({ kind: 'message', message: 'Connecting voice…' });
+    if (!join.data) return CONNECTING_VOICE;
 
-  if (connectFailed) {
-    return headerWith({ kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry });
-  }
+    if (connectFailed) {
+      return { kind: 'message', message: 'Voice is unavailable', actionLabel: 'Retry', onAction: retry };
+    }
+
+    return null;
+  })();
+
+  if (!exiting) heldVoiceRef.current = preRoomVoice ?? 'room';
+
+  const held = heldVoiceRef.current;
+  const voice = exiting ? (held === 'room' ? null : (held ?? { kind: 'absent' })) : preRoomVoice;
+
+  if (voice) return headerWith(voice);
+
+  // Only reachable on the way out, and only where the room was mounted but had not connected when
+  // the exit began: there is nothing to hold open, so the header keeps the one line the room was
+  // drawing from inside rather than collapsing to nothing.
+  if (!voiceActive || !join.data) return headerWith(CONNECTING_VOICE);
 
   return (
     <LiveKitRoom
@@ -504,6 +554,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
       <VoiceHeaderBody
         pair={pair}
         exiting={exiting}
+        onRoomLive={handleRoomLive}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
         onMicIntentChange={setMicIntent}
@@ -578,6 +629,7 @@ type VoiceAnalytics = ReturnType<typeof useVoiceAnalytics>;
 function VoiceHeaderBody({
   pair,
   exiting,
+  onRoomLive,
   opponentUserId,
   micFailure,
   onMicIntentChange,
@@ -590,6 +642,8 @@ function VoiceHeaderBody({
 }: {
   pair: PairContext;
   exiting: boolean;
+  /** Tells the header above that a room has come up — what makes holding one open on exit legal. */
+  onRoomLive: () => void;
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
   onMicIntentChange: (enabled: boolean) => void;
@@ -633,9 +687,10 @@ function VoiceHeaderBody({
   React.useEffect(() => {
     if (connectionState === ConnectionState.Connected) {
       setEverConnected(true);
+      onRoomLive();
       analytics.recordJoined();
     }
-  }, [analytics, connectionState]);
+  }, [analytics, connectionState, onRoomLive]);
 
   const remoteParticipants = useRemoteParticipants();
   const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponentUserId) ?? null;
@@ -746,7 +801,7 @@ function VoiceHeaderBody({
     if (connectionState !== ConnectionState.Connected) {
       const reconnecting =
         connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
-      return { kind: 'message', message: reconnecting ? 'Reconnecting…' : 'Connecting voice…' };
+      return reconnecting ? { kind: 'message', message: 'Reconnecting…' } : CONNECTING_VOICE;
     }
     if (!canPlayAudio) {
       return {

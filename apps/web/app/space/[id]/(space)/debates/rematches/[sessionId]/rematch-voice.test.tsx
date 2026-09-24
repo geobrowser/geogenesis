@@ -1800,6 +1800,48 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByText('Salina')).toBeInTheDocument();
   });
 
+  // The status is not the room. A rematch that ended while this page was still working through
+  // ownership and the token answers `browsing` for a render or two longer — React Query serves the
+  // stale one — so latching "voice was live" off the status latched it where nothing was live. With
+  // `exiting`, holding that open is not holding anything: it is taking the tab lock, minting a
+  // token and publishing the microphone into a session the viewer has already left.
+  it('does not arm voice for a status that went stale before the room came up', async () => {
+    const carriedOver = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    // No `flushOwnership` between the two: the point is that the exit lands while the ladder is
+    // still several awaits from a room.
+    const { container, rerender } = render(<RematchVoiceHeader session={carriedOver} currentUserId="me" exiting />);
+
+    rerender(
+      <RematchVoiceHeader
+        session={{ ...makeSession('ended'), source_debate_id: 'debate-1' }}
+        currentUserId="me"
+        exiting
+      />
+    );
+    await flushOwnership();
+
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+    expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  // Letting that room go must not take the header's shape with it. The connection is held open for
+  // a room that was up; the shape is held whatever was drawn — here the one line the room itself
+  // draws while it connects, which is what was on screen a moment before the click.
+  it('keeps the connecting line when it leaves before the room connected', async () => {
+    mocks.connectionState = 'connecting';
+    const session = makeSession('browsing');
+    const { container, rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+  });
+
   // A room that has given up is not a blip. Its Unmute is a button that cannot work, and pressing
   // it would still spend the notice's one dismissal on a click that did nothing — so here the
   // notice gives way to the card's own "Voice disconnected · Retry", which is the actionable thing.
