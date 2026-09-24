@@ -68,9 +68,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const [filterTypeIds, setFilterTypeIds] = useState<string[]>([]);
   const [filterSpaceId, setFilterSpaceId] = useState<string | null>(null);
   const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
-  // Explicit `true` (not just omitted) when off — useSearch uses this to tell
-  // "user asked for unrestricted search" apart from "caller has no opinion",
-  // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
+  const [filterPopoverHost, setFilterPopoverHost] = useState<HTMLDivElement | null>(null);
+
   const autocomplete = useSearch({
     enabled: open,
     includeNonCanonical: canonicalOnly ? false : true,
@@ -84,6 +83,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const toggleFilterType = useCallback((id: string) => {
     setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
   }, []);
+  const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
   const addFilterTag = useCallback((tag: SearchFilterTag) => {
     setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
   }, []);
@@ -252,11 +252,13 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         <AdvancedSearchFilters
                           typeIds={filterTypeIds}
                           onToggleType={toggleFilterType}
+                          onClearTypes={clearFilterTypes}
                           spaceId={filterSpaceId}
                           onSelectSpace={setFilterSpaceId}
                           tags={filterTags}
                           onAddTag={addFilterTag}
                           onRemoveTag={removeFilterTag}
+                          portalContainer={filterPopoverHost}
                         />
                         <button
                           type="button"
@@ -380,6 +382,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
               </div>
             )}
           </Command.List>
+          <div ref={setFilterPopoverHost} />
         </div>
       </div>
     </Command.Dialog>
