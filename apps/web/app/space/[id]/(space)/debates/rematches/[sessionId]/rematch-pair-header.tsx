@@ -390,6 +390,12 @@ function OpponentCard({
 }) {
   const talking = showMicState && state === 'talking';
 
+  // Base and hover in one expression, because a hover variant outranks a plain utility on
+  // specificity whichever order they are written in. An unconditional `hover:border-grey-03`
+  // therefore erased the talking outline exactly while the viewer was pointing at the card — the
+  // one moment they are most likely to be looking at it.
+  const border = talking ? 'border-green hover:border-green' : 'border-grey-02 hover:border-grey-03';
+
   const body = (
     <PairCardBody
       avatar={
@@ -421,11 +427,7 @@ function OpponentCard({
       data-testid="rematch-opponent-card"
       onClick={onOpen}
       aria-label={`Open ${name}’s personal space`}
-      className={cx(
-        CARD_SURFACE,
-        talking ? 'border-green' : 'border-grey-02',
-        'flex flex-col gap-2.5 text-left transition-colors hover:border-grey-03'
-      )}
+      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5 text-left transition-colors')}
     >
       {body}
     </button>

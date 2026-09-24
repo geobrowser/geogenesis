@@ -1650,6 +1650,28 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent('View profile');
   });
 
+  // A hover variant outranks a plain utility on specificity whichever order they are written in,
+  // so an unconditional `hover:border-grey-03` erased the talking outline exactly while the viewer
+  // was pointing at the card — the one moment they are most likely to be looking at it.
+  it('keeps the talking outline on the opponent card under the pointer', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: false };
+    mocks.isSpeaking = true;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const card = screen.getByTestId('rematch-opponent-card');
+    expect(card).toHaveClass('border-green', 'hover:border-green');
+    expect(card).not.toHaveClass('hover:border-grey-03');
+
+    // And the ordinary card still lifts to grey under the pointer.
+    mocks.isSpeaking = false;
+    mocks.opponentMicPublication = { isMuted: true };
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-opponent-card')).toHaveClass('border-grey-02', 'hover:border-grey-03');
+  });
+
   // GEO-2992 instrumentation: the share of participants who ever unmute, and how long it takes
   // them, read against the corner dock this replaced.
   it('records joining and the first unmute', async () => {
