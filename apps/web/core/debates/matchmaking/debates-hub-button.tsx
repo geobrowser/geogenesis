@@ -3,10 +3,12 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtomValue } from 'jotai';
 
 import { Megaphone } from '~/design-system/icons/megaphone';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { scheduledAwaitingCountAtom } from '../rooms/scheduled-awaiting';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -33,7 +35,10 @@ export function DebatesHubButton() {
 
   // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
   // since signed out would otherwise badge the button for nobody.
-  const requestCount = !authenticated ? 0 : requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  const scheduledAwaiting = useAtomValue(scheduledAwaitingCountAtom);
+  const requestCount = !authenticated
+    ? 0
+    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) + scheduledAwaiting;
 
   return (
     <button

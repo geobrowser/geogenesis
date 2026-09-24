@@ -36,6 +36,7 @@ import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { isDebateRoomPath } from './rooms/room-routes';
+import { ScheduledRequestsWatcher } from './rooms/scheduled-requests-watcher';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -387,6 +388,7 @@ export function DebateCoordinator() {
 
   return (
     <>
+      <ScheduledRequestsWatcher />
       {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
