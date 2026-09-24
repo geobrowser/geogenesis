@@ -314,7 +314,6 @@ describe('PeerAvailabilityView', () => {
   });
 });
 
-
 describe('booking a slot', () => {
   it('renders no action at all without a booking caller', () => {
     setup({ slots: [slot(13)] });
@@ -360,7 +359,6 @@ describe('booking a slot', () => {
     expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
   });
 });
-
 
 describe('what the footer has to say', () => {
   it('names both zones for the picked time', async () => {
@@ -410,7 +408,6 @@ describe('a week with nothing in it', () => {
     expect(screen.queryByLabelText('Time to request')).not.toBeInTheDocument();
   });
 });
-
 
 describe('times that have already gone', () => {
   // The week starts at today's midnight and geo-chat refuses a past start, so a booking caller

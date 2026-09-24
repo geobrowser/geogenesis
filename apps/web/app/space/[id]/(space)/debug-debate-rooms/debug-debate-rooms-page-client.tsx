@@ -84,8 +84,8 @@ export function DebugDebateRoomsPageClient() {
           Book a debate room
         </Text>
         <Text variant="footnote" color="grey-04">
-          Accept below as the person who was invited: that second answer is what books the room. To propose, use
-          Debates hub, People, See times, and pick a slot. Your own id is {viewerId ?? 'still resolving'}.
+          Accept below as the person who was invited: that second answer is what books the room. To propose, use Debates
+          hub, People, See times, and pick a slot. Your own id is {viewerId ?? 'still resolving'}.
         </Text>
       </header>
 

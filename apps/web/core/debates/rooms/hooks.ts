@@ -131,9 +131,18 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
 
     void announce();
 
-    // A departure nobody recorded leaves the opponent looking at "is here" indefinitely, so the
-    // unmount leave is retried too. `pagehide` gets one keepalive attempt: there is no later.
-    const departOnce = () => void send(false, true).catch(() => undefined);
+    // `pagehide` has no later, so the request is made rather than queued: a leave waiting behind
+    // an in-flight join is never sent at all once the document freezes, and the server has no
+    // staleness window to clean up after it. Ordering is worth less here than the request
+    // existing -- losing the race leaves the same stale occupancy that queuing guarantees.
+    const departOnce = () =>
+      void setDebateRoomPresence(
+        roomId,
+        { connection_id: connectionId, joined: false },
+        () => tokenRef.current(),
+        accountKey,
+        true
+      ).catch(() => undefined);
     // `pageshow` is how a bfcached document comes back, restored without re-running effects, so
     // without it a back navigation reports a departure nothing ever takes back.
     const restore = (event: PageTransitionEvent) => {

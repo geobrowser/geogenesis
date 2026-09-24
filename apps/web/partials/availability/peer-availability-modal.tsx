@@ -90,7 +90,9 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerR
 
             {/* Mounted only while open, so a closed dialog issues no request. It is also what keeps
                 an empty `userId` away from the hook while nobody is selected. */}
-            {open && <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" booking={booking} />}
+            {open && (
+              <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" booking={booking} />
+            )}
           </div>
         </Content>
       </Portal>

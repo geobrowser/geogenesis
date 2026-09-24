@@ -146,4 +146,31 @@ describe('useRoomPresence', () => {
     await vi.waitFor(() => expect(spy.mock.calls.some(call => call[1].joined === false)).toBe(true));
     spy.mockRestore();
   });
+
+  // The queue's ordering guarantee is worth nothing at `pagehide`: there is no later turn for a
+  // queued continuation to run in, so a leave behind an in-flight join is simply never sent.
+  it('sends the leave during pagehide even while the join is still in flight', async () => {
+    const { renderHook: render } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    const join: { settle: (() => void) | null } = { settle: null };
+    const spy = vi.spyOn(api, 'setDebateRoomPresence').mockImplementation((_room, body) =>
+      body.joined
+        ? new Promise(resolve => {
+            join.settle = () => resolve({} as never);
+          })
+        : Promise.resolve({} as never)
+    );
+
+    render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+
+    // The join never settles, which is the tab closing mid-request.
+    window.dispatchEvent(new Event('pagehide'));
+
+    await vi.waitFor(() => expect(spy.mock.calls.some(call => call[1].joined === false)).toBe(true));
+    const leave = spy.mock.calls.find(call => call[1].joined === false);
+    expect(leave?.[4]).toBe(true);
+    spy.mockRestore();
+  });
 });

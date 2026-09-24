@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   upcomingRooms: [] as UpcomingDebateRoom[],
   /** False is a first load still in flight, which is not the same as no rooms. */
   roomsSettled: true,
+  roomsError: null as Error | null,
   refetchRooms: vi.fn(() => Promise.resolve()),
 }));
 
@@ -80,7 +81,8 @@ vi.mock('./rooms/hooks', () => ({
   useUpcomingDebateRooms: () => ({
     data: mocks.roomsSettled ? { rooms: mocks.upcomingRooms } : undefined,
     isSuccess: mocks.roomsSettled,
-    isError: false,
+    isError: mocks.roomsError !== null,
+    error: mocks.roomsError,
     refetch: mocks.refetchRooms,
   }),
 }));
@@ -157,6 +159,7 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
   mocks.roomsSettled = true;
+  mocks.roomsError = null;
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
   mocks.prompts = [];
@@ -645,6 +648,37 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A failed lookup is not an empty one either: the session may well be room-owned and this cannot
+  // tell, so it must not route on the assumption that it is not.
+  it('will not route on a room lookup that failed', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.roomsError = new Error('Service unavailable.');
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A backend with no rooms endpoint has no rooms, so nothing it serves can be room-owned and the
+  // ordinary push is safe. Without this an older geo-chat loses matchmaking routing entirely.
+  it('still routes when the rooms endpoint does not exist', async () => {
+    const { GeoChatRequestError } = await import('./api');
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.roomsError = new GeoChatRequestError('Not found', null, 404);
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   // The other half of the same guard: suppressing the push for *any* session while a room happened

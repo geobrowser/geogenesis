@@ -171,7 +171,6 @@ describe('joining from the tab', () => {
   });
 });
 
-
 describe('naming the other person', () => {
   it('links a resolved opponent to their profile', () => {
     mocks.people = [ADA];
@@ -196,7 +195,6 @@ describe('naming the other person', () => {
     expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
   });
 });
-
 
 describe('pairing a room with the request that booked it', () => {
   // geo-chat sends the room's id dashless and the request's dashed, so a literal compare misses.
@@ -227,7 +225,6 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.answerable).toHaveLength(0);
   });
 });
-
 
 describe('a schedule that could not be read', () => {
   // An unread schedule drawn as an empty one tells someone with a debate in four minutes that

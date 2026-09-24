@@ -35,7 +35,13 @@ const mocks = vi.hoisted(() => ({
   publishableSpacesLoading: false,
   peerAvailability: true,
   debugBooking: false,
-  propose: { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null as Error | null, data: undefined as unknown },
+  propose: {
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    error: null as Error | null,
+    data: undefined as unknown,
+  },
   usePeerSchedule: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */

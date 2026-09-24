@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import Link from 'next/link';
+
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
@@ -9,8 +11,6 @@ import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
-
-import Link from 'next/link';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
