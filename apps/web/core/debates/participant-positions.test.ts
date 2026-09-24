@@ -92,6 +92,34 @@ describe('fetchParticipantPositions', () => {
     ]);
   });
 
+  /**
+   * One person, one claim, both kinds — and they disagree.
+   *
+   * Somebody could Verify a claim (kind 2, position true) and separately Disagree with it (kind 1,
+   * position false): two answers to two different questions, which is what the old vocabulary made
+   * possible. There is one question now, and the stance is the one that answers it — so the side
+   * reported is Disagree, not the Verify sitting beside it.
+   *
+   * Pinned because "ignore kind 2" and "prefer kind 1" only look the same while nobody holds both.
+   */
+  it('reports the stance when a person holds both kinds on one claim, even opposite ones', async () => {
+    const fetchPage = vi.fn().mockResolvedValue([
+      { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 2 },
+      { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 1 },
+    ]);
+
+    await expect(fetchParticipantPositions([LOCAL.profile_space_id], undefined, fetchPage)).resolves.toEqual([
+      {
+        profileSpaceId: LOCAL.profile_space_id,
+        claimId: 'claim-1',
+        spaceId: 'space-1',
+        responseKind: 'stance',
+        // `false` — the stance. Not the `true` the verify row carries.
+        position: false,
+      },
+    ]);
+  });
+
   it('pages until a short page comes back', async () => {
     const full = Array.from({ length: 500 }, (_, index) => ({
       userId: LOCAL.profile_space_id,

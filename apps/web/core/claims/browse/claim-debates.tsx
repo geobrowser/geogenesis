@@ -69,7 +69,6 @@ export function ClaimDebates({
 }: {
   claimId: string;
   spaceId: string;
-  /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
 }) {
   // A page at a time rather than an accumulating list: appending pushes everything below the
   // section down the page as the reader loads more, where swapping keeps the layout where they

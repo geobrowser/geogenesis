@@ -13,13 +13,14 @@ import { ClaimResponseTag, firstName } from './claim-response-tag';
  * A visitor could see *which* claims somebody had answered and not *how* — a
  * record of attention with the verdict left out.
  *
- * Two things carry the meaning together. The **wording** follows the claim's own
- * question. A claim marked factual used to ask Verify or Dispute rather than
- * Disagree, so a tag that always said "agrees" would contradict the control
- * above it on exactly the claims where the distinction matters — 18 of the
- * reference account's 208 positions are answered that way. The **placement**
- * says which side: the tag renders inside one of the two response cells, so
- * `forPosition` decides whether it appears at all.
+ * The **placement** is what says which side: the tag renders inside one of the
+ * two response cells, so `forPosition` decides whether it appears at all.
+ *
+ * The **wording** used to carry half of it too. A claim marked factual asked
+ * Verify or Dispute rather than Agree or Disagree, so a tag that always said
+ * "agrees" would have contradicted the control above it on exactly the claims
+ * where the distinction mattered. Every claim asks the same question now, so
+ * there is one pair of words and nothing for the tag to resolve.
  */
 describe('ClaimResponseTag', () => {
   afterEach(cleanup);

@@ -158,14 +158,13 @@ const ORDER_MAX_PAGES = 20;
 export type Stance = 'agree' | 'disagree';
 
 /**
- * How this person answered a claim, by the question they were answering.
+ * How this person answered a claim.
  *
- * **Both kinds, not just the stance.** A claim marked factual asks Verify or
- * Dispute rather than Agree or Disagree, and that answer is a `voteKind` 2 vote
- * — which the stance-only shape threw away, so 18 of the reference account's 208
- * positions had no indicator anywhere and nothing said why. Which one a card
- * shows is the card's to decide: it resolves the claim's response kind itself,
- * and the same claim can be factual in one space and not in another.
+ * One field, because there is one question. A claim marked factual used to ask Verify or Dispute
+ * rather than Agree or Disagree, and that answer was a `voteKind` 2 vote carried here in a
+ * `veracity` field of its own — so that a card could show whichever matched the claim's own
+ * vocabulary, which was a per-space property the decode could not see. Claims ask one question
+ * now: the stance is the answer, and a kind-2 row is not read at all.
  */
 export type ClaimResponse = {
   stance?: Stance;

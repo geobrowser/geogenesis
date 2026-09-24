@@ -91,7 +91,7 @@ export function ClaimExploreFeedCard({
    * only this card knows. Absent everywhere else, which is every surface where
    * the only answer worth reporting is the reader's own.
    */
-  responseNote?: (responseKind: ResponseKind, position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -183,13 +183,12 @@ export function ClaimExploreFeedCard({
    * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
    * nothing else moves.
    *
-   * Held back until the response kind is known, or a factual claim reads
-   * "agrees" for a beat and then corrects itself to "verifies".
+   * No longer held back on the claim's metadata. It was, because a factual claim would have read
+   * "agrees" for a beat and then corrected itself to "verifies" — and there is one wording now, so
+   * there is nothing to correct. Waiting only delayed an answer already in hand, and hid it for
+   * good on a card where both metadata reads fail.
    */
-  const noteFor = React.useCallback(
-    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
-    [isResponseKindResolved, responseKind, responseNote]
-  );
+  const noteFor = React.useCallback((position: boolean) => responseNote?.(position), [responseNote]);
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';

@@ -215,18 +215,11 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('65% agree')).toBeInTheDocument();
   });
 
-  // This used to read "65% verify" on a factual claim, from that claim's own vocabulary. There is
-  // one vocabulary now, so the share says "agree" whatever the claim is flagged as — asserted here
-  // on the case that used to differ.
-  it('reads the share with agree even on a claim geo-chat still calls factual', () => {
-    mocks.percent = 65;
-    mocks.responseKind = 'veracity' as 'stance';
-
-    renderCard();
-
-    expect(screen.getByText('65% agree')).toBeInTheDocument();
-    expect(screen.queryByText('65% verify')).not.toBeInTheDocument();
-  });
+  // A case that used to sit here — "reads the share with agree even on a claim geo-chat still calls
+  // factual" — is gone, and the type is why. The share verb comes from the kind this hook returns,
+  // which is `DebateResponseKind` and so can only be `stance`; geo-chat's own word for it never
+  // reaches here. Setting `mocks.responseKind = 'veracity'` no longer compiles, and with the input
+  // unrepresentable the case is the one directly above it.
 
   // A genuine 0% and "nobody has answered" are different statements, and the great majority of
   // claims are the second one.

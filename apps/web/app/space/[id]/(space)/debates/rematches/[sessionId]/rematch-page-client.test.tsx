@@ -1128,10 +1128,10 @@ describe('DebateRematchPageClient', () => {
   });
 
   it('uses Agree and Disagree for a claim geo-chat still calls factual', async () => {
-    mocks.claims = [{ ...sharedClaim(), response_kind: 'veracity' as 'stance' }];
+    mocks.claims = [{ ...sharedClaim(), response_kind: 'veracity' }];
     mocks.positions = [
-      { ...position('profile-local', CLAIM_SHARED, SPACE_1, true), responseKind: 'veracity' as 'stance' },
-      { ...position('profile-remote', CLAIM_SHARED, SPACE_1, false), responseKind: 'veracity' as 'stance' },
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
     ];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);

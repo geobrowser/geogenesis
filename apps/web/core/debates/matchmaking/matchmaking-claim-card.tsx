@@ -21,7 +21,12 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
-import { CLAIM_RESPONSE_COPY, CLAIM_RESPONSE_KIND, responsePositionLabel } from '~/core/responses/entity-response';
+import {
+  CLAIM_RESPONSE_COPY,
+  CLAIM_RESPONSE_KIND,
+  type ResponseKind,
+  responsePositionLabel,
+} from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -997,7 +1002,7 @@ export function PositionRow({
   endSlot,
 }: {
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   viewerPosition: boolean | null;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
@@ -1130,7 +1135,7 @@ function PositionButton({
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   position: boolean;
   selected: boolean;
   onRespond?: (position: boolean) => void;

@@ -48,13 +48,27 @@ describe('how a claim was answered', () => {
     expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({});
   });
 
-  it('keeps only the stance when somebody answered both questions', () => {
+  /**
+   * Both kinds on one claim, disagreeing — and the veracity row is the newer one.
+   *
+   * Rows arrive newest-first and the decode takes the first it sees per field, so putting the
+   * retired row first is the ordering that would win if it were still read at all. The stance is
+   * the answer either way.
+   *
+   * Both directions, because "the stance wins" and "agree wins" only look the same in the first
+   * case: a Verify sitting beside a Disagree must read as Disagree, not as the agreement the
+   * verify row would otherwise imply.
+   */
+  it.each([
+    ['a stance of agree under a dispute', 0, 1, 'agree'],
+    ['a stance of disagree under a verify', 1, 0, 'disagree'],
+  ] as const)('keeps only %s', (_case, stanceVoteType, veracityVoteType, expected) => {
     const order = decodeVoteOrder([
-      vote({ objectId: 'a', voteKind: 1, voteType: 0 }),
-      vote({ objectId: 'a', voteKind: 2, voteType: 1 }),
+      vote({ objectId: 'a', voteKind: 2, voteType: veracityVoteType }),
+      vote({ objectId: 'a', voteKind: 1, voteType: stanceVoteType }),
     ]);
 
-    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree' } });
+    expect(order.responseByClaimId).toEqual({ a: { stance: expected } });
   });
 
   it('does not list a claim answered only for veracity', () => {

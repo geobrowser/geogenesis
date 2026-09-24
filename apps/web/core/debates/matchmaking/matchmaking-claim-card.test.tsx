@@ -547,7 +547,7 @@ describe('position avatar stack', () => {
         <MatchmakingClaimCard
           claim={claim}
           positions={twoSides()}
-          readiness={readiness({ response_kind: 'veracity' as 'stance' })}
+          readiness={readiness({ response_kind: 'veracity' })}
         />
       );
 

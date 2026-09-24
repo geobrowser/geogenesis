@@ -248,7 +248,7 @@ describe('MatchesList', () => {
   // Inverted rather than deleted: a claim geo-chat still labels `veracity` is exactly the case that
   // has to come out Agree/Disagree now.
   it('uses Agree and Disagree for a claim geo-chat still calls factual', () => {
-    mocks.matches = [match({ response_kind: 'veracity' as 'stance', positions: [] })];
+    mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
     render(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();

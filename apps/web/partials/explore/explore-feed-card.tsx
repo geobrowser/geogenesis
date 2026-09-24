@@ -8,7 +8,6 @@ import { useRecordingSources } from '~/core/community-calls/use-recording-source
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
-import type { ResponseKind } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
@@ -35,7 +34,7 @@ type ExploreFeedCardProps = {
   /** Presentation used for Claim rows; other entity types ignore it. */
   claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
-  responseNote?: (responseKind: ResponseKind, position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
   /** Compact title and metadata treatment for a debate in profile Activity. */
   compactDebateChrome?: boolean;
   /** Let a debate fill the column rather than its viewport-fitted cap. See `DebateExploreFeedCard`. */
