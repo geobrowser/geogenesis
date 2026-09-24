@@ -94,6 +94,24 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('picker for session-1')).toBeInTheDocument();
   });
 
+  it('says a cancelled debate has already had its turn too', () => {
+    mocks.session = converted;
+    mocks.debateStatus = { data: 'cancelled', isLoading: false };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText('That debate has already finished.')).toBeInTheDocument();
+  });
+
+  // Mounting the picker before the debate's status is known would flash it and redirect.
+  it('waits while the debate is being read', () => {
+    mocks.session = converted;
+    mocks.debateStatus = { data: undefined, isLoading: true };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.queryByText(/picker for/)).not.toBeInTheDocument();
+    expect(screen.getByText('Getting your claims ready…')).toBeInTheDocument();
+  });
+
   it('waits while the session is being read', () => {
     render(<DebateRoomPageClient roomId="room-1" />);
 
