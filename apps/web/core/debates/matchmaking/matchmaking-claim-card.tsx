@@ -533,7 +533,7 @@ export function useClaimPositionControl({
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
-    return position ? copy.positiveAction : copy.negativeAction;
+    return responsePositionLabel(position);
   };
 
   return {
