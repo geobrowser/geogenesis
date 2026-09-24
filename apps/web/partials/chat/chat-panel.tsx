@@ -22,6 +22,7 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { Context } from '~/design-system/icons/context';
 import { Menu, MenuItem } from '~/design-system/menu';
 
+import { type AttachmentState, ChatAttachment } from './chat-attachment';
 import { ChatInput } from './chat-input';
 import { ChatMessages } from './chat-messages';
 import { ChatWelcome } from './chat-welcome';
@@ -38,12 +39,20 @@ type Props = {
   onStop: () => void;
   onSuggestion: (text: string, source: 'welcome' | 'follow_up') => void;
   onNewChat: () => void;
+  /** Actionable only when nothing is running — see the meter beside the input. */
+  onCompact?: () => void;
+  /** How full the chat is, 0-1. Undefined until the meter is worth showing. */
+  contextFraction?: number;
   onClose: () => void;
   // A seeded first message is about to auto-send; don't flash the welcome screen.
   suppressWelcome?: boolean;
   history: PersistedChat[];
   onSwitchChat: (id: string) => void;
   onClearHistory: () => void;
+  /** Undefined outside a space — an import needs somewhere to land. */
+  onAttachFile?: (file: File) => void;
+  attachment?: AttachmentState | null;
+  onRemoveAttachment?: () => void;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -60,11 +69,16 @@ export function ChatPanel({
   onStop,
   onSuggestion,
   onNewChat,
+  onCompact,
+  contextFraction,
   onClose,
   suppressWelcome,
   history,
   onSwitchChat,
   onClearHistory,
+  onAttachFile,
+  attachment,
+  onRemoveAttachment,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -261,13 +275,20 @@ export function ChatPanel({
         <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
       )}
 
+      {attachment && onRemoveAttachment ? (
+        <ChatAttachment attachment={attachment} onRemove={onRemoveAttachment} />
+      ) : null}
       <ChatInput
         value={input}
         onChange={onInputChange}
         onSubmit={onSend}
         onStop={onStop}
         isBusy={isBusy || isCompacting}
+        isParsing={attachment?.status === 'parsing'}
         placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
+        contextFraction={contextFraction}
+        onCompact={onCompact}
+        onAttachFile={onAttachFile}
       />
     </motion.div>
   );

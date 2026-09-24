@@ -37,6 +37,7 @@ import {
   isEditToolPartType,
   lookupFailed,
 } from './edit-types';
+import { ImageAttachments } from './image-attachment';
 import { planWriteTool } from './write-validators';
 import { editorContentVersionAtom } from '~/atoms';
 
@@ -61,6 +62,7 @@ const VIEW_TO_NAME: Record<DataBlockView, string> = {
 export type ApplyCtx = {
   setEditable: (value: boolean) => void;
   bumpEditorVersion: () => void;
+  signal?: AbortSignal;
 };
 
 // Intents that need the Tiptap editor to reset — in edit mode it ignores
@@ -165,24 +167,53 @@ function extensionForMime(mime: string): string {
   return MIME_TO_EXTENSION[normalized] ?? 'png';
 }
 
-// Mints an Image entity from a source URL and writes the link relation via
-// the same `storage.images.createAndLink` helper the in-page editor uses for
-// file uploads. http(s) URLs go through /api/chat/proxy-image (CORS); ipfs://
-// URLs short-circuit since they're already pinned.
-async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntityImage' }>): Promise<ApplyResult> {
-  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl } = intent;
+// Mints an Image entity and writes the link relation via the same
+// `storage.images.createAndLink` helper the in-page editor uses for file
+// uploads. A file the user attached goes straight in as a blob; http(s) URLs
+// go through /api/chat/proxy-image (CORS); ipfs:// URLs short-circuit since
+// they're already pinned.
+async function applySetEntityImage(
+  intent: Extract<EditIntent, { kind: 'setEntityImage' }>,
+  signal?: AbortSignal
+): Promise<ApplyResult> {
+  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl, attachment } = intent;
 
-  // Replace, don't stack: tombstone any existing same-property image relations
-  // on this entity in this space first. Mirrors the in-page editor's behavior
-  // (see image-node `handleChange`). Without this, useRelation returns the
-  // first match — typically the published one — and the gallery / cover hook
-  // ignores the new local relation entirely.
+  // Keep the previous image until its replacement has uploaded successfully.
   const existing = await resolveEntity(entityId, spaceId);
+  signal?.throwIfAborted();
   const oldImageRelations = (existing?.relations ?? []).filter(
     r => r.fromEntity.id === entityId && r.type.id === propertyId && r.spaceId === spaceId && !r.isDeleted
   );
-  for (const old of oldImageRelations) {
-    storage.relations.delete(old);
+  const removePrevious = () => {
+    for (const old of oldImageRelations) storage.relations.delete(old);
+  };
+
+  // The user handed us the bytes. No proxy, no fetch — `createAndLink` takes a
+  // File directly, which is the path the entity page's own upload control uses.
+  if (attachment) {
+    const held = ImageAttachments.get(attachment.id);
+    if (!held) {
+      return applyFailed('that attached image is no longer available');
+    }
+    try {
+      await storage.images.createAndLink({
+        signal,
+        file: held.file,
+        fromEntityId: entityId,
+        fromEntityName: entityName,
+        relationPropertyId: propertyId,
+        relationPropertyName: propertyName,
+        spaceId,
+      });
+    } catch (err) {
+      console.error('[chat/edit-dispatcher] image attachment upload failed', err);
+      return applyFailed('the image could not be uploaded');
+    }
+    // Consumed. Leaving it would let a later turn silently re-upload the same
+    // picture onto a different entity.
+    ImageAttachments.clear(attachment.id);
+    removePrevious();
+    return { ok: true };
   }
 
   if (sourceUrl.toLowerCase().startsWith('ipfs://')) {
@@ -221,6 +252,7 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
       fromEntity: { id: entityId, name: entityName },
       toEntity: { id: imageEntityId, name: null, value: imageEntityId },
     });
+    removePrevious();
     return { ok: true };
   }
 
@@ -230,6 +262,7 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
   try {
     const response = await fetch('/api/chat/proxy-image', {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: sourceUrl }),
     });
@@ -249,6 +282,7 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
 
   try {
     await storage.images.createAndLink({
+      signal,
       file,
       fromEntityId: entityId,
       fromEntityName: entityName,
@@ -260,6 +294,7 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
     console.error('[chat/edit-dispatcher] image upload failed', err);
     return applyFailed('image upload failed; try a different URL');
   }
+  removePrevious();
   return { ok: true };
 }
 
@@ -961,11 +996,13 @@ async function applyMoveEntityToSpace(
 }
 
 async function applyChangePropertyDataType(
-  intent: Extract<EditIntent, { kind: 'changePropertyDataType' }>
+  intent: Extract<EditIntent, { kind: 'changePropertyDataType' }>,
+  signal?: AbortSignal
 ): Promise<ApplyResult> {
   const { propertyId, spaceId, propertyName, dataType, renderableTypeId } = intent;
 
   const propertyEntity = await resolveEntity(propertyId, spaceId);
+  signal?.throwIfAborted();
   if (!propertyEntity) {
     return applyFailed(`property ${propertyId} not found in space ${spaceId}`);
   }
@@ -1214,6 +1251,7 @@ async function applyMoveRelation(intent: Extract<EditIntent, { kind: 'moveRelati
 }
 
 export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<ApplyResult> {
+  ctx.signal?.throwIfAborted();
   switch (intent.kind) {
     case 'toggleEditMode':
       return applyToggleEditMode(intent, ctx);
@@ -1226,7 +1264,7 @@ export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<Ap
     case 'deleteRelation':
       return applyDeleteRelation(intent);
     case 'setEntityImage':
-      return applySetEntityImage(intent);
+      return applySetEntityImage(intent, ctx.signal);
     case 'createProperty':
       return applyCreateProperty(intent);
     case 'createEntity':
@@ -1240,7 +1278,7 @@ export async function applyIntent(intent: EditIntent, ctx: ApplyCtx): Promise<Ap
     case 'deleteProperty':
       return applyDeleteProperty(intent);
     case 'changePropertyDataType':
-      return applyChangePropertyDataType(intent);
+      return applyChangePropertyDataType(intent, ctx.signal);
     case 'createTab':
       return applyCreateTab(intent);
     case 'renameTab':
@@ -1317,24 +1355,32 @@ export function useEditDispatcher(
   const { setEditable } = useEditable();
   const setEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const dispatchedRef = React.useRef(new Set<string>());
-  const cancelledRef = React.useRef(false);
-  // Aborted on unmount so pending fetches don't resolve against a torn-down
-  // dispatcher.
-  const abortRef = React.useRef<AbortController | null>(null);
-
+  const controllers = React.useRef(new Map<string, AbortController>());
   React.useEffect(() => {
-    // Reset on remount so StrictMode double-mount resumes processing;
-    // dispatchedRef still guards against double-apply.
-    cancelledRef.current = false;
-    abortRef.current = new AbortController();
+    const active = controllers.current;
+    const dispatched = dispatchedRef.current;
     return () => {
-      cancelledRef.current = true;
-      abortRef.current?.abort();
+      for (const [id, controller] of active) {
+        controller.abort();
+        dispatched.delete(id);
+      }
+      active.clear();
     };
   }, []);
 
   React.useEffect(() => {
     const bumpEditorVersion = () => setEditorContentVersion(v => v + 1);
+    const pending = new Set(
+      messages.flatMap(message =>
+        message.parts.flatMap(part => (isToolUIPart(part) && part.state === 'input-available' ? [part.toolCallId] : []))
+      )
+    );
+    for (const [id, controller] of controllers.current) {
+      if (!pending.has(id)) {
+        controller.abort();
+        controllers.current.delete(id);
+      }
+    }
 
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
@@ -1352,49 +1398,62 @@ export function useEditDispatcher(
         const inputSpaceId = typeof input.spaceId === 'string' ? input.spaceId : undefined;
         const inputTargetSpaceId = typeof input.targetSpaceId === 'string' ? input.targetSpaceId : undefined;
 
+        // Every dispatched call must be answered exactly once. An unanswered
+        // one is not a dropped edit — it is a turn that never ends: the model
+        // waits on a result that will never come and the panel stays "working"
+        // until the user reloads. `enqueue` only console.errors a throw, so
+        // without this catch a failure inside `planWriteTool` reaches nobody —
+        // not the user, not the model. The read dispatcher already works this
+        // way; this is the write side catching up.
+        const controller = new AbortController();
+        controllers.current.set(toolCallId, controller);
+        const signal = controller.signal;
         enqueue(async () => {
-          if (cancelledRef.current) return;
-
-          // Lazy controller for the StrictMode pre-mount-effect window.
-          const signal = (abortRef.current ??= new AbortController()).signal;
-          const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
-          if (cancelledRef.current) return;
-          if (auth.ok !== true) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
-            return;
-          }
-
-          const ctx = { store, cache: queryClient };
-          const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
-          if (cancelledRef.current) return;
-          if (!planned.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
-            return;
-          }
-
-          let applyResult: ApplyResult;
           try {
-            applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion });
-          } catch (err) {
-            console.error('[chat/edit-dispatcher] applyIntent threw', err);
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
-            return;
-          }
-          // No cancellation gate past this point — the mutation has landed,
-          // so the model has to hear about it or the turn hangs forever.
-          if (!applyResult.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
-            return;
-          }
+            if (signal.aborted) return;
+            const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
+            if (signal.aborted) return;
+            if (auth.ok !== true) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
+              return;
+            }
 
-          if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
-            bumpEditorVersion();
+            const ctx = { store, cache: queryClient };
+            const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
+            if (signal.aborted) return;
+            if (!planned.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
+              return;
+            }
+
+            let applyResult: ApplyResult;
+            try {
+              applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion, signal });
+            } catch (err) {
+              if (signal.aborted) return;
+              console.error('[chat/edit-dispatcher] applyIntent threw', err);
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
+              return;
+            }
+            if (signal.aborted) return;
+            if (!applyResult.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
+              return;
+            }
+
+            if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
+              bumpEditorVersion();
+            }
+            addToolResultRef.current?.({
+              tool: toolName,
+              toolCallId,
+              output: { ok: true, intent: planned.intent },
+            });
+          } catch (err) {
+            if (signal.aborted) return;
+            console.error('[chat/edit-dispatcher] tool execution threw', toolName, err);
+            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
           }
-          addToolResultRef.current?.({
-            tool: toolName,
-            toolCallId,
-            output: { ok: true, intent: planned.intent },
-          });
         });
       }
     }

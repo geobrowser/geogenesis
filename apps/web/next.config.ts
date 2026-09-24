@@ -137,7 +137,7 @@ const nextConfig: NextConfig = {
       }
     : undefined,
   experimental: {
-    turbopackRustReactCompiler: true,
+    turbopackRustReactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
     ...turbopackOptimizations,
     optimizePackageImports,
   },

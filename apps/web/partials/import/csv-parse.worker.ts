@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { parse } from 'csv/sync';
+import { parse } from 'csv/browser/esm/sync';
 
 export type ParseSuccess = { ok: true; headers: string[]; rows: string[][]; rowCount: number };
 export type ParseError = { ok: false; message: string };

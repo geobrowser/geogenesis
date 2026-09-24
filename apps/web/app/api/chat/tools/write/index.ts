@@ -1,3 +1,4 @@
+import { applyImport } from './apply-import';
 import { createBlock, deleteBlock, updateBlock } from './blocks';
 import { changePropertyDataType } from './change-property-data-type';
 import { WriteContext, buildWriteContext } from './context';
@@ -53,6 +54,10 @@ export const writeTools = {
   setDataBlockShownColumns,
   addCollectionItem,
   removeCollectionItem,
+  // Client-dispatched, but by core/chat/import-dispatcher rather than
+  // edit-dispatcher — it runs the import engine instead of planning an intent.
+  // Deliberately absent from EDIT_TOOL_NAMES so only one dispatcher answers it.
+  applyImport,
 };
 
 export type WriteToolName = keyof typeof writeTools;

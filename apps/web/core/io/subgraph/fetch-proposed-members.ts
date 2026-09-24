@@ -21,7 +21,8 @@ export type ActiveMemberRequest = {
  */
 export async function fetchActiveMemberRequest(
   spaceId: string,
-  memberSpaceId: string
+  memberSpaceId: string,
+  { signal, throwOnError = false }: { signal?: AbortSignal; throwOnError?: boolean } = {}
 ): Promise<ActiveMemberRequest | null> {
   const config = Environment.getConfig();
 
@@ -34,19 +35,23 @@ export async function fetchActiveMemberRequest(
       restFetch<unknown>({
         endpoint: config.api,
         path,
+        signal,
       })
     )
   );
 
   if (Either.isLeft(result)) {
     const error = result.left;
-    if (error instanceof AbortError) throw error;
+    // Display callers may degrade to no pending badge. Callers deciding whether
+    // to sign a new proposal must distinguish an outage from no existing request.
+    if (throwOnError || error instanceof AbortError) throw error;
     console.error(`Failed to fetch member requests for space ${spaceId}, member ${memberSpaceId}:`, error);
     return null;
   }
 
   const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
   if (Either.isLeft(decoded)) {
+    if (throwOnError) throw decoded.left;
     console.error(`Failed to decode member requests for space ${spaceId}, member ${memberSpaceId}:`, decoded.left);
     return null;
   }

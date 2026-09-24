@@ -102,10 +102,11 @@ const isRetryableSubmissionError = (error: unknown): boolean => {
  * Exhaustion is reported: before this, the only signal these were happening at all was a
  * user pasting a screenshot (GEO-2810).
  */
-export const withSubmissionRetry = async <T>(task: () => Promise<T>): Promise<T> => {
+export const withSubmissionRetry = async <T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> => {
   const attempts = SUBMISSION_RETRY_DELAYS_MS.length + 1;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
+    signal?.throwIfAborted();
     try {
       return await task();
     } catch (error) {
@@ -126,10 +127,11 @@ export const withSubmissionRetry = async <T>(task: () => Promise<T>): Promise<T>
 export const enqueueFor = <T>(
   address: string,
   task: () => Promise<T>,
-  { maxQueueWaitMs }: { maxQueueWaitMs?: number } = {}
+  { maxQueueWaitMs, signal }: { maxQueueWaitMs?: number; signal?: AbortSignal } = {}
 ): Promise<T> => {
   const enqueuedAt = Date.now();
   const guarded = () => {
+    signal?.throwIfAborted();
     const waited = Date.now() - enqueuedAt;
     if (maxQueueWaitMs !== undefined && waited > maxQueueWaitMs) {
       return Promise.reject(new QueuedSendTimeoutError(waited));

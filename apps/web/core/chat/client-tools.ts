@@ -17,6 +17,15 @@ export const CLIENT_EXECUTED_TOOL_TYPES = new Set<string>([
   'tool-research',
   'tool-searchImages',
   'tool-webFetch',
+  'tool-geoQuery',
+  // Dispatched by core/chat/import-dispatcher. applyImport is a write but is
+  // not an edit intent, so it is named here rather than reached through
+  // EDIT_TOOL_NAMES below.
+  'tool-proposeImportMapping',
+  'tool-applyImport',
+  // Dispatched by core/chat/join-space-dispatcher. Not an edit intent — it
+  // signs a membership proposal rather than staging a graph change.
+  'tool-joinSpace',
   ...EDIT_TOOL_NAMES.map(name => `tool-${name}`),
 ]);
 
