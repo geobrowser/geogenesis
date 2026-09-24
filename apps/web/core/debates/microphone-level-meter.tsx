@@ -2,14 +2,18 @@
 
 import * as React from 'react';
 
+import {
+  GATE_CLOSE_DECIBELS,
+  GATE_CLOSE_DELAY_MS,
+  GATE_OPEN_DECIBELS,
+  GATE_OPEN_DELAY_MS,
+  decibelsFromSamples,
+} from './speech-activity';
+
 const SEGMENT_COUNT = 16;
 const MIN_DECIBELS = -60;
 const MAX_DECIBELS = -10;
 const HEALTHY_DECIBELS = -35;
-const GATE_OPEN_DECIBELS = -50;
-const GATE_CLOSE_DECIBELS = -52;
-const GATE_OPEN_DELAY_MS = 100;
-const GATE_CLOSE_DELAY_MS = 300;
 const RELEASE_DECIBELS_PER_SECOND = 60;
 
 type MeterStatus = 'neutral' | 'silent' | 'low' | 'healthy';
@@ -76,10 +80,7 @@ export function MicrophoneLevelMeter({ stream }: { stream: MediaStream | null })
       if (disposed) return;
 
       activeAnalyser.getFloatTimeDomainData(samples);
-      let sumOfSquares = 0;
-      for (const sample of samples) sumOfSquares += sample * sample;
-      const rms = Math.sqrt(sumOfSquares / samples.length);
-      const rawDecibels = rms > 0 ? 20 * Math.log10(rms) : Number.NEGATIVE_INFINITY;
+      const rawDecibels = decibelsFromSamples(samples);
       const clampedDecibels = Math.min(MAX_DECIBELS, Math.max(MIN_DECIBELS, rawDecibels));
       const elapsedSeconds = previousTimestamp === null ? 0 : Math.max(0, timestamp - previousTimestamp) / 1000;
       const decibels =
