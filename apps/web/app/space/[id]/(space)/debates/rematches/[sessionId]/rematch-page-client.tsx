@@ -2004,7 +2004,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
         <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
-          {roomPresence && <DebateRoomPresenceIndicator presence={roomPresence} />}
+          {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
+              "Waiting for …", and the pill has its own fallback. */}
+          {roomPresence && (
+            <DebateRoomPresenceIndicator
+              presence={roomPresence}
+              opponentName={remoteParticipant?.display_name || undefined}
+            />
+          )}
           <h1 className="sr-only">Rematch {remoteName}</h1>
           {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
               where the unmute control lives now — the 200px dock it replaced was pinned to the

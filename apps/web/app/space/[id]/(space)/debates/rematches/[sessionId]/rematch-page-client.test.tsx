@@ -5248,6 +5248,39 @@ describe('inside a debate room', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
+  const waitingFor = (children: React.ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'waiting', opponentUserId: 'user-remote', opponentPresent: false }}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  it('names the opponent in the presence pill', async () => {
+    mocks.session = session();
+
+    render(waitingFor(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(screen.getByText('Waiting for Salina')).toBeInTheDocument());
+  });
+
+  // The page's own name falls back to a raw profile id, which has no place in "Waiting for …".
+  it('keeps the pill generic rather than showing an id when they have no name', async () => {
+    const base = session();
+    mocks.session = {
+      ...base,
+      participants: base.participants.map(participant =>
+        participant.user_id === 'user-remote' ? { ...participant, display_name: null } : participant
+      ),
+    };
+
+    const { container } = render(waitingFor(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(container.querySelector('[data-room-presence]')).not.toBeNull());
+    expect(container.querySelector('[data-room-presence]')?.textContent).not.toContain('profile-remote');
+  });
+
   // Off a room the flow is unchanged: a terminal session still returns the viewer where they came
   // from.
   it('still navigates away outside a room', async () => {
