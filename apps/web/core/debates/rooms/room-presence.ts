@@ -85,6 +85,9 @@ export function debateRoomPresence({
 
 function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOpponent: boolean): DebateRoomPresenceState {
   if (opponentPresent) return 'present';
+  // Ahead of the server's `no_show`, which is only a clock: geo-chat reports it once the viewer has
+  // waited long enough alone, whether or not the opponent ever came.
+  if (sawOpponent) return 'left';
 
   // `waiting` is null until the viewer has joined themselves, so there is no one-sided wait to
   // describe yet and nothing has happened the indicator can report.
@@ -94,9 +97,8 @@ function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOppone
     case 'opponent_in_another_debate':
       return 'waiting_elsewhere';
     case 'not_yet_due':
-      // Someone who was here and stepped out has left, whatever the clock says.
-      return sawOpponent ? 'left' : 'arrived_early';
+      return 'arrived_early';
     default:
-      return sawOpponent ? 'left' : 'waiting';
+      return 'waiting';
   }
 }

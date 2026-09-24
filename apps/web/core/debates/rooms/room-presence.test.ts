@@ -87,9 +87,14 @@ describe('debateRoomPresence', () => {
     expect(stateOf({ occupants: [VIEWER, OPPONENT], waiting: null }, true)).toBe('present');
   });
 
-  // A no-show is the server's verdict and outranks the client's own recollection.
-  it('prefers no show over left', () => {
-    expect(stateOf({ waiting: { reason: 'no_show' } }, true)).toBe('no_show');
+  // geo-chat's `no_show` is a clock, not a verdict: it fires once the viewer has waited long enough
+  // alone, including after an opponent who came and went.
+  it('says they left, not that they never came, once the wait runs out', () => {
+    expect(stateOf({ waiting: { reason: 'no_show' } }, true)).toBe('left');
+  });
+
+  it('says they never came when they were never seen', () => {
+    expect(stateOf({ waiting: { reason: 'no_show' } }, false)).toBe('no_show');
   });
 
   // `waiting` is null until the viewer joins, so there is no one-sided wait to describe.
