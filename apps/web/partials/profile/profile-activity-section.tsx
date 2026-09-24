@@ -110,44 +110,73 @@ export function ProfileActivitySection({
   // A failed kind is available: it has something to say, even if the something
   // is that it could not be read.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
+  // Whether the card is still assembling. Read twice: the skeleton below waits on
+  // it, and so does the default — see `defaultKey`.
+  const isLoading = kinds.some(kind => kind.isLoading);
+
   /**
-   * The reader's own pick, and only that. Null until they make one.
+   * The lead kind: the first that has a *settled* record to show.
    *
-   * Nothing is stored for the default, because storing it is what broke it
-   * (GEO-3021): the two kinds load separately, so a profile whose claims landed
-   * first committed to Claims while the debates were still in flight and then sat
-   * there — the debates arriving changed nothing, because the stored key already
-   * named an available kind. Leaving the default underived means it is re-read
-   * from the kinds on every render, so the moment debates have something to show,
-   * they are what is shown.
+   * Settled, not merely non-empty, because the rows can arrive before their order
+   * does. `usePersonDebates` hands the profile its debates a round trip before
+   * `useEntityScores` says how to rank them, and the caller folds that second wait
+   * into `isLoading` precisely so nobody is shown a row that is about to reshuffle
+   * under them. Waiting for it here is what honours that.
    */
+  const lead = available.find(kind => !kind.isLoading) ?? available[0];
+
+  /** The reader's own pick, and only that. Null until they make one. */
   const [pickedKey, setPickedKey] = React.useState<string | null>(null);
+  /**
+   * The default, fixed at the moment the card first settles (GEO-3021).
+   *
+   * Two failure modes bracket this. Storing the default the first time *either*
+   * kind had rows — what this used to do — let the network choose it: the kinds
+   * are separate requests, so a profile whose claims came back first committed to
+   * Claims and stayed there, because the debates landing did not invalidate a key
+   * that still named an available kind. Deriving it on every render instead fixes
+   * that end and breaks the other: a focus refetch turning up a first debate half
+   * an hour later would pull a reader off the Claims they were reading, remount
+   * the gallery under their cursor and start a video playing.
+   *
+   * So the default follows the record while the card is still assembling, and
+   * stops the moment it has finished. After that, only the reader moves it.
+   */
+  const [defaultKey, setDefaultKey] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isLoading || defaultKey !== null || !lead) return;
+
+    setDefaultKey(lead.key);
+  }, [defaultKey, isLoading, lead]);
 
   /*
-   * A pick whose kind has gone away is adopted onto whatever replaced it, rather
-   * than dropped.
+   * A pick whose kind has gone away is adopted onto what replaced it, rather than
+   * dropped. Dropping it would hand the reader back to the default, which would
+   * then pull them off this kind the moment their emptied one returned — a jump
+   * under somebody who has not touched the toggle since. Falling back is already
+   * a choice made on their behalf; this makes it the one that sticks.
    *
-   * Dropping it would hand the reader back to the default — and the default would
-   * pull them to Debates the moment their emptied Claims returned, which is a
-   * jump under somebody who has not touched the toggle since. Falling back is
-   * already a choice made on their behalf; this makes it the one that sticks.
+   * Not while there is nothing to adopt, though. Both kinds can blank at once —
+   * the space Overview withholds every row while its counts are in flight — and
+   * writing the fallback there would spend their pick on a gap in the data.
    */
   React.useEffect(() => {
-    if (pickedKey === null || available.some(kind => kind.key === pickedKey)) return;
+    if (pickedKey === null || !lead || available.some(kind => kind.key === pickedKey)) return;
 
-    setPickedKey(available[0]?.key ?? null);
-  }, [available, pickedKey]);
+    setPickedKey(lead.key);
+  }, [available, lead, pickedKey]);
 
-  // Whichever the reader picked, or else the first kind with anything in it —
-  // Debates, on every surface that renders this. Held as a key rather than an
-  // index so a kind arriving late cannot shift their pick out from under them.
-  const selected = available.find(kind => kind.key === pickedKey) ?? available[0];
+  // Their pick, else the settled default, else the lead kind — Debates, on every
+  // surface that renders this. All three held as keys rather than indexes, so a
+  // kind arriving late cannot shift the selection out from under them.
+  const selected =
+    available.find(kind => kind.key === pickedKey) ?? available.find(kind => kind.key === defaultKey) ?? lead;
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
   const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
-  const isLoading = kinds.some(kind => kind.isLoading);
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
   // draw it immediately rather than holding the whole card behind the slower request.
