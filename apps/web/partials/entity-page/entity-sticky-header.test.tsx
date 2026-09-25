@@ -9,6 +9,8 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   storedName: null as string | null,
+  /** Stands in for the tracked title element the bar measures its column from. */
+  title: null as Element | null,
   queriedName: null as string | null,
   mediaUrl: undefined as string | undefined,
   scrolledPast: true,
@@ -16,12 +18,22 @@ const mocks = vi.hoisted(() => ({
   voteProps: null as Record<string, unknown> | null,
   /** The arguments `useScrolledPastElement` was called with on the last render. */
   scrollOptions: null as Record<string, unknown> | null,
+  /** What the page's content column measured, or null when there is none to mirror. */
+  column: null as { left: number; width: number } | null,
+  /** The (anchor, host, attribute) the bar asked to mirror. */
+  columnArgs: null as unknown[] | null,
 }));
 
 vi.mock('~/core/hooks/use-scrolled-past-element', () => ({
   useScrolledPastElement: (options: Record<string, unknown>) => {
     mocks.scrollOptions = options;
-    return mocks.scrolledPast;
+    return { scrolledPast: mocks.scrolledPast, target: mocks.title };
+  },
+}));
+vi.mock('~/core/hooks/use-mirrored-content-column', () => ({
+  useMirroredContentColumn: (...args: unknown[]) => {
+    mocks.columnArgs = args;
+    return mocks.column;
   },
 }));
 vi.mock('~/core/state/entity-page-store/entity-store', () => ({
@@ -65,6 +77,9 @@ beforeEach(() => {
   mocks.scrolledPast = true;
   mocks.voteProps = null;
   mocks.scrollOptions = null;
+  mocks.title = null;
+  mocks.column = null;
+  mocks.columnArgs = null;
 });
 
 afterEach(() => {
@@ -147,6 +162,41 @@ describe('EntityStickyHeader', () => {
     renderBar();
 
     expect(screen.getByText('Vitalik Buterin')).toHaveClass('truncate');
+  });
+
+  /**
+   * The pages this bar covers are 900, 840, 720 and 1142 wide with two different gutters, so a width
+   * written here would be a fourth opinion that drifts. It mirrors whichever column the title it is
+   * tracking sits in.
+   */
+  it('matches the page’s own content column when there is one to measure', () => {
+    mocks.column = { left: 220, width: 800 };
+    renderBar();
+
+    const row = screen.getByTestId('entity-sticky-header-row');
+    expect(row).toHaveStyle({ marginLeft: '220px', width: '800px' });
+    // No centring and no gutter of its own: both come from the column it copied.
+    expect(row).not.toHaveClass('mx-auto');
+    expect(row).not.toHaveClass('px-4');
+  });
+
+  it('mirrors the column around the title it tracks, in the host’s coordinates', () => {
+    const title = document.createElement('h1');
+    mocks.title = title;
+    renderBar();
+
+    const [anchor, host, attribute] = mocks.columnArgs ?? [];
+    expect(anchor).toBe(title);
+    expect(host).toBe(screen.getByTestId('entity-sticky-header').parentElement);
+    expect(attribute).toBe('data-entity-page-content');
+  });
+
+  it('falls back to the generic page width for a view that tags no column', () => {
+    renderBar();
+
+    const row = screen.getByTestId('entity-sticky-header-row');
+    expect(row).toHaveStyle({ maxWidth: '900px' });
+    expect(row).toHaveClass('mx-auto');
   });
 
   it('draws nothing before the shell has registered its host', () => {

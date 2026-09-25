@@ -10,6 +10,13 @@ type Options = {
   enabled?: boolean;
 };
 
+type Result = {
+  /** Whether the watched element has scrolled up out of view. */
+  scrolledPast: boolean;
+  /** The element being watched, so a caller can measure it or what it sits inside. */
+  target: Element | null;
+};
+
 /**
  * Whether the element matching `selector` has scrolled up out of view, above `topOffset`.
  *
@@ -29,18 +36,23 @@ type Options = {
  * Answers `false` where `IntersectionObserver` is missing (jsdom, older browsers). The safe failure
  * for a decoration is to stay out of the way.
  */
-export function useScrolledPastElement({ selector, topOffset, enabled = true }: Options): boolean {
+export function useScrolledPastElement({ selector, topOffset, enabled = true }: Options): Result {
   const [scrolledPast, setScrolledPast] = React.useState(false);
+  // Handed back as well as watched. The one element this hook goes to the trouble of finding is also
+  // the only handle a caller has on the page it belongs to — the sticky header measures the content
+  // column around it — and finding it twice would mean a second `MutationObserver` over the body.
+  const [target, setTarget] = React.useState<Element | null>(null);
 
   React.useEffect(() => {
     if (!enabled) {
       setScrolledPast(false);
+      setTarget(null);
       return;
     }
 
     if (typeof document === 'undefined' || typeof IntersectionObserver === 'undefined') return;
 
-    let target: Element | null = null;
+    let watched: Element | null = null;
 
     const observer = new IntersectionObserver(
       entries => {
@@ -56,16 +68,17 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     );
 
     const sync = () => {
-      if (target?.isConnected) return;
+      if (watched?.isConnected) return;
 
       const next = document.querySelector(selector);
-      if (next === target) return;
+      if (next === watched) return;
 
-      if (target) observer.unobserve(target);
-      target = next;
+      if (watched) observer.unobserve(watched);
+      watched = next;
+      setTarget(next);
 
-      if (target) {
-        observer.observe(target);
+      if (watched) {
+        observer.observe(watched);
       } else {
         // Nothing to watch means nothing to be past. Without this the bar would stay up after the
         // title it belongs to was unmounted.
@@ -88,5 +101,5 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     };
   }, [selector, topOffset, enabled]);
 
-  return scrolledPast;
+  return { scrolledPast, target };
 }

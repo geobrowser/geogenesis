@@ -34,6 +34,7 @@ import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
 } from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_PAGE_CONTENT_ATTRIBUTE } from '~/partials/entity-page/entity-page-layout';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
@@ -213,6 +214,7 @@ export function ClaimPageView({
   return (
     <div className="@container">
       <div
+        {...{ [ENTITY_PAGE_CONTENT_ATTRIBUTE]: '' }}
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >

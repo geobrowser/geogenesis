@@ -4,7 +4,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { ENTITY_PAGE_WIDTH_VARIABLES, type EntityPageContentVariant } from './entity-page-layout';
+import {
+  ENTITY_PAGE_CONTENT_ATTRIBUTE,
+  ENTITY_PAGE_WIDTH_VARIABLES,
+  type EntityPageContentVariant,
+} from './entity-page-layout';
 
 type Props = {
   children: React.ReactNode;
@@ -22,6 +26,7 @@ export function EntityPageContentContainer({ children, variant = 'content' }: Pr
   return (
     <div
       className={cx('mx-auto w-full', variantClassName[variant])}
+      {...{ [ENTITY_PAGE_CONTENT_ATTRIBUTE]: '' }}
       data-entity-page-content-variant={variant}
       style={ENTITY_PAGE_WIDTH_VARIABLES}
     >

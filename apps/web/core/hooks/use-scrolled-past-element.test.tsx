@@ -109,9 +109,9 @@ describe('useScrolledPastElement', () => {
     const title = addTitle();
     const { result } = render();
 
-    expect(result.current).toBe(false);
+    expect(result.current.scrolledPast).toBe(false);
     notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
-    expect(result.current).toBe(true);
+    expect(result.current.scrolledPast).toBe(true);
   });
 
   it('stays false for an element that is merely out of view below the fold', () => {
@@ -121,7 +121,7 @@ describe('useScrolledPastElement', () => {
     // Not intersecting, but still ahead of the reader — raising the bar here would announce a
     // title nobody has scrolled to yet.
     notify(latestObserver(), title, { isIntersecting: false, bottom: 2400 });
-    expect(result.current).toBe(false);
+    expect(result.current.scrolledPast).toBe(false);
   });
 
   it('goes back to false when the element scrolls into view again', () => {
@@ -129,10 +129,10 @@ describe('useScrolledPastElement', () => {
     const { result } = render();
 
     notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
-    expect(result.current).toBe(true);
+    expect(result.current.scrolledPast).toBe(true);
 
     notify(latestObserver(), title, { isIntersecting: true, bottom: 200 });
-    expect(result.current).toBe(false);
+    expect(result.current.scrolledPast).toBe(false);
   });
 
   it('follows the last transition when several are batched', () => {
@@ -140,7 +140,7 @@ describe('useScrolledPastElement', () => {
     const { result } = render();
 
     notify(latestObserver(), title, { isIntersecting: false, bottom: -120 }, { isIntersecting: true, bottom: 200 });
-    expect(result.current).toBe(false);
+    expect(result.current.scrolledPast).toBe(false);
   });
 
   it('picks up a title that mounts after it starts watching', async () => {
@@ -151,7 +151,7 @@ describe('useScrolledPastElement', () => {
     await waitFor(() => expect(latestObserver().observed).toEqual([title]));
 
     notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
-    expect(result.current).toBe(true);
+    expect(result.current.scrolledPast).toBe(true);
   });
 
   it('clears when the watched title is removed from the document', async () => {
@@ -159,10 +159,10 @@ describe('useScrolledPastElement', () => {
     const { result } = render();
 
     notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
-    expect(result.current).toBe(true);
+    expect(result.current.scrolledPast).toBe(true);
 
     act(() => title.remove());
-    await waitFor(() => expect(result.current).toBe(false));
+    await waitFor(() => expect(result.current.scrolledPast).toBe(false));
   });
 
   it('ignores a title belonging to some other entity', () => {
@@ -177,13 +177,28 @@ describe('useScrolledPastElement', () => {
     const { result } = render(false);
 
     expect(observers).toHaveLength(0);
-    expect(result.current).toBe(false);
+    expect(result.current.scrolledPast).toBe(false);
   });
 
   it('stays false when IntersectionObserver is unavailable', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     addTitle();
 
-    expect(render().result.current).toBe(false);
+    expect(render().result.current.scrolledPast).toBe(false);
+  });
+
+  /**
+   * Handed back as well as watched, so the sticky header can measure the content column around it
+   * without mounting a second `MutationObserver` over the body to find the same element again.
+   */
+  it('hands back the element it is watching', async () => {
+    const { result } = render();
+    expect(result.current.target).toBeNull();
+
+    const title = addTitle();
+    await waitFor(() => expect(result.current.target).toBe(title));
+
+    act(() => title.remove());
+    await waitFor(() => expect(result.current.target).toBeNull());
   });
 });

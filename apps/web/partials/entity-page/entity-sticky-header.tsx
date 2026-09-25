@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { createPortal } from 'react-dom';
 
+import { useMirroredContentColumn } from '~/core/hooks/use-mirrored-content-column';
 import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -16,7 +18,7 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { APP_NAVBAR_HEIGHT } from '~/partials/entity-page/entity-sticky-header-host';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
-import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from './entity-page-layout';
+import { ENTITY_PAGE_CONTENT_ATTRIBUTE, ENTITY_PAGE_CONTENT_MAX_WIDTH } from './entity-page-layout';
 import { entityStickyHeaderHostElementAtom } from '~/atoms';
 
 /**
@@ -34,6 +36,10 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * should offer from the entity's own types: upvote/downvote for an ordinary entity, agree/disagree
  * for a claim, verify/dispute for a factual one. Reproducing that choice here would be a second
  * place for it to be made, and a second place for it to be made differently.
+ *
+ * Its row is measured off the page's own content column rather than given a width, for the same
+ * reason: the pages it covers are 900, 840, 720 and 1142 wide with two different gutters between
+ * them, and a number here would be a fourth opinion that drifts. See `useMirroredContentColumn`.
  */
 export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const host = useAtomValue(entityStickyHeaderHostElementAtom);
@@ -46,13 +52,23 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
 
   const mediaUrl = useEntityMediaUrl(entityId, spaceId);
 
-  const isScrolledPastTitle = useScrolledPastElement({
+  const { scrolledPast: isScrolledPastTitle, target: title } = useScrolledPastElement({
     selector: `[data-entity-page-title="${escapeSelectorValue(entityId)}"]`,
     topOffset: APP_NAVBAR_HEIGHT,
     enabled: Boolean(name),
   });
 
+  // The column the tracked title sits in, so the bar lines up with the page under it whatever that
+  // page's width happens to be.
+  const column = useMirroredContentColumn(title, host, ENTITY_PAGE_CONTENT_ATTRIBUTE);
+
   if (!host) return null;
+
+  // Falls back to the generic page's width until there is a column to read — the same answer this
+  // gave before it measured anything, and the right one for a view that has not tagged its own.
+  const rowStyle = column
+    ? { marginLeft: column.left, width: column.width }
+    : { maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH };
 
   return createPortal(
     <AnimatePresence>
@@ -66,8 +82,9 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
           className="absolute inset-x-0 top-0 border-b border-divider bg-white"
         >
           <div
-            className="mx-auto flex h-12 w-full items-center gap-3 px-4 mobile:px-5"
-            style={{ maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}
+            data-testid="entity-sticky-header-row"
+            className={cx('flex h-12 items-center gap-3', column ? null : 'mx-auto w-full px-4 mobile:px-5')}
+            style={rowStyle}
           >
             {mediaUrl ? (
               <span className="size-7 shrink-0 overflow-hidden rounded-full bg-grey-01">
