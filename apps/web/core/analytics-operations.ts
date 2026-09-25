@@ -23,6 +23,21 @@ export function classifyOperationFailure(error: unknown): 'rejected' | 'unavaila
   return classification;
 }
 
+/** Queue wait and depth from a QueuedSendTimeoutError anywhere in the cause chain. */
+export function queueTimeoutMetrics(error: unknown): { queue_wait_ms: number; queue_depth: number } | undefined {
+  for (let current = error, depth = 0; current != null && depth < 10; depth++) {
+    if (current instanceof Error && current.name === 'QueuedSendTimeoutError') {
+      const { waitedMs, queueDepth } = current as Error & { waitedMs?: unknown; queueDepth?: unknown };
+      if (typeof waitedMs === 'number' && typeof queueDepth === 'number') {
+        return { queue_wait_ms: waitedMs, queue_depth: queueDepth };
+      }
+      return undefined;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
 export type OperationContext = { opportunity_id: string; presentation_instance_id: string };
 
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */
@@ -58,8 +73,15 @@ export function observeOperation(
   if (opportunity) emit('action_attempted', 'attempt', {});
   return {
     operationId,
-    failed(code: 'rejected' | 'unavailable' | 'invalid_input' | 'publish_failed' | 'unknown') {
-      emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, { failure_code: code });
+    /** `metrics` is numbers only, so no provider text or payload can reach analytics. */
+    failed(
+      code: 'rejected' | 'unavailable' | 'invalid_input' | 'publish_failed' | 'unknown',
+      metrics?: Record<string, number>
+    ) {
+      emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
+        ...metrics,
+        failure_code: code,
+      });
     },
     outcome(
       event: 'vote_cast' | 'ranking_submitted',
