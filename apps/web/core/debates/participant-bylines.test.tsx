@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import type { PropsWithChildren } from 'react';
-import { renderHook, waitFor } from '@testing-library/react';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ProfileHistory } from '~/core/io/subgraph/fetch-profile-history';
@@ -26,11 +27,7 @@ vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile-history', () => ({
-  profileHistoryQueryKey: (entityId: string | undefined, spaceId: string) => [
-    'profile-history',
-    entityId,
-    spaceId,
-  ],
+  profileHistoryQueryKey: (entityId: string | undefined, spaceId: string) => ['profile-history', entityId, spaceId],
   fetchProfileHistory: (entityId: string, spaceId: string) => mocks.fetchHistory(entityId, spaceId),
 }));
 
@@ -146,10 +143,9 @@ describe('useParticipantBylines', () => {
   });
 
   it('normalizes a dashed participant space id before resolving its profile', async () => {
-    const { result } = renderHook(
-      () => useParticipantBylines([{ profile_space_id: SPACE_A_DASHED }]),
-      { wrapper: wrapper() }
-    );
+    const { result } = renderHook(() => useParticipantBylines([{ profile_space_id: SPACE_A_DASHED }]), {
+      wrapper: wrapper(),
+    });
 
     await waitFor(() => expect(result.current.get(SPACE_A)).toBe('Head of Product at Geo'));
     expect(mocks.profileLookup).toHaveBeenCalledWith([SPACE_A], true);

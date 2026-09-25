@@ -121,11 +121,7 @@ function isClaimResponseKind(responseKind: unknown): responseKind is DebateRespo
 export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
   const [scope, personalSpaceId, entityId, spaceId, responseKind] = queryKey;
   const indexingState = data as EntityResponseIndexingState | undefined;
-  if (
-    scope !== 'entity-response-indexing' ||
-    !indexingState?.pending ||
-    !isClaimResponseKind(responseKind)
-  ) {
+  if (scope !== 'entity-response-indexing' || !indexingState?.pending || !isClaimResponseKind(responseKind)) {
     return null;
   }
   return {

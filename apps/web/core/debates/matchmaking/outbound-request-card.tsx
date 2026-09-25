@@ -9,8 +9,8 @@ import { Text } from '~/design-system/text';
 
 import type { DebateRequest } from '../api';
 import { useWithdrawDebateRequest } from './hooks';
-import { hubCardMotion } from './hub-motion';
 import { hubAnalyticsAttributes } from './hub-analytics';
+import { hubCardMotion } from './hub-motion';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestParties } from './request-parties';
 import { useRequestCountdown } from './use-request-countdown';

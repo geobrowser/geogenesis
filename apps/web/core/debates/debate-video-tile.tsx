@@ -82,10 +82,7 @@ export function DebatePositionChip({
   ...spanProps
 }: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
   return (
-    <DebateTileChip
-      {...spanProps}
-      className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}
-    >
+    <DebateTileChip {...spanProps} className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
       {label}
     </DebateTileChip>
   );
