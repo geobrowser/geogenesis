@@ -41,8 +41,9 @@ describe('fetchProfileHistory', () => {
     });
 
     const query = (graphqlMock.mock.calls[0]?.[0] as { query: string }).query;
-    expect(query).toContain(`propertyId: { is: "${DESCRIPTION_PROPERTY}" }`);
-    expect(query).toContain(`spaceId: { is: "${SPACE_ID}" }`);
+    const descriptionSelection = query.slice(query.indexOf('description:'), query.indexOf('employment:'));
+    expect(descriptionSelection).toContain(`propertyId: { is: "${DESCRIPTION_PROPERTY}" }`);
+    expect(descriptionSelection).toContain(`spaceId: { is: "${SPACE_ID}" }`);
   });
 
   it('returns no description when the profile has not filled one out', async () => {

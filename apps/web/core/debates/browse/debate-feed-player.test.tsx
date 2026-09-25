@@ -13,13 +13,13 @@ const SPACE_2 = '22222222222222222222222222222222';
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
-  affiliations: new Map<string, string>(),
+  bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
 }));
 
-vi.mock('~/core/debates/participant-affiliations', () => ({
-  useParticipantAffiliations: () => mocks.affiliations,
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => mocks.bylines,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -159,7 +159,7 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
-  mocks.affiliations = new Map();
+  mocks.bylines = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -189,7 +189,7 @@ describe('player layout', () => {
    */
   it("puts each debater's position immediately after their name", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    mocks.bylines = new Map([
       [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
       [SPACE_2, 'Another affiliation whose width must not place the position chip'],
     ]);
@@ -233,36 +233,27 @@ describe('player layout', () => {
     expect(queryByText('Against')).not.toBeNull();
   });
 
-  it('shows each participant affiliation below their name and exposes the full line on hover', () => {
+  it('shows each participant byline below their name, clamped with the full line on hover', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
+    mocks.bylines = new Map([
       [SPACE_1, 'Head of Product at Geo'],
-      [SPACE_2, 'PhD student, Economics at Stanford'],
+      [SPACE_2, description],
     ]);
 
     const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
 
-    expect(getByText('Head of Product at Geo').className).toContain('truncate');
-    expect(getByTitle('PhD student, Economics at Stanford')).not.toBeNull();
-  });
-
-  it('clamps a participant description fallback to the same single line', () => {
-    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
-    mocks.affiliations = new Map([[SPACE_1, description]]);
-
-    const { getByText, getByTitle } = render(<DebateFeedPlayer debate={debate} active />);
-
+    expect(getByText('Head of Product at Geo').hasAttribute('data-debate-byline')).toBe(true);
     expect(getByText(description).className).toContain('truncate');
     expect(getByTitle(description)).not.toBeNull();
   });
 
-  it('leaves no affiliation row when a participant has none', () => {
+  it('leaves no byline row when a participant has no affiliation or description', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
-    expect(container.querySelector('[title*=" at "]')).toBeNull();
+    expect(container.querySelector('[data-debate-byline]')).toBeNull();
   });
 });
 
@@ -279,9 +270,9 @@ describe('overlay variants', () => {
     expect(queryByTestId('claim-stack')).toBeNull();
   });
 
-  it('hides participant affiliations in a compact debate card', () => {
+  it('hides participant bylines in a compact debate card', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    mocks.bylines = new Map([
       [SPACE_1, 'Head of Product at Geo'],
       [SPACE_2, 'PhD student, Economics at Stanford'],
     ]);

@@ -18,14 +18,14 @@ import { currentAffiliation } from '~/core/profile/profile-summary';
 type ParticipantLike = Pick<DebateParticipant, 'profile_space_id'>;
 
 /**
- * Resolve the one-line context shown beneath each recorded-debate participant's name.
+ * Resolve the one-line byline shown beneath each recorded-debate participant's name.
  *
  * Debate rows carry a personal-space id, while profile history hangs off the person's entity. The
  * profile batch is therefore the necessary first hop. The history queries keep their profile-page
  * cache keys, so opening a participant's profile after watching them reuses the same response. A
  * current affiliation is preferred; the person's description fills the line when they have none.
  */
-export function useParticipantAffiliations(
+export function useParticipantBylines(
   participants: readonly (ParticipantLike | null | undefined)[],
   enabled = true
 ): Map<string, string> {
