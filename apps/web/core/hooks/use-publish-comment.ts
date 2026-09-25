@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { commentCreated } from '~/core/analytics';
+import { commentCreated, commentEdited } from '~/core/analytics';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 
 import type { CreateCommentParams } from '~/partials/comments/types';
@@ -13,6 +13,11 @@ type PublishCommentInput = Pick<CreateCommentParams, 'text' | 'ancestorComments'
   onOptimistic?: (commentId: string) => void;
 };
 
+type CommentAnalyticsContext = {
+  targetEntityType?: string;
+  interactionSurface?: string;
+};
+
 /**
  * The complete create-comment path used by every composer.
  *
@@ -21,8 +26,12 @@ type PublishCommentInput = Pick<CreateCommentParams, 'text' | 'ancestorComments'
  * optimistic entity and retry the same publish once the space is ready. Keeping that policy here
  * prevents a new comment surface from silently accepting a draft that can never reach the graph.
  */
-export function usePublishComment(targetEntityId: string, targetSpaceId: string) {
-  const { createComment, editComment, isCreating, error } = useCreateComment(targetEntityId);
+export function usePublishComment(
+  targetEntityId: string,
+  targetSpaceId: string,
+  { targetEntityType = 'entity', interactionSurface = 'comment_section' }: CommentAnalyticsContext = {}
+) {
+  const { createComment, editComment: updateComment, isCreating, error } = useCreateComment(targetEntityId);
   const enqueuePendingAction = useEnqueuePendingAction();
 
   const publishComment = React.useCallback(
@@ -34,6 +43,8 @@ export function usePublishComment(targetEntityId: string, targetSpaceId: string)
           commentCreated(result.id, targetEntityId, {
             space_id: targetSpaceId,
             parent_comment_id: ancestorComments?.[0]?.id,
+            target_entity_type: targetEntityType,
+            interaction_surface: interactionSurface,
           });
         } catch {
           /* Analytics must never turn a successful publish into a failed comment. */
@@ -69,7 +80,27 @@ export function usePublishComment(targetEntityId: string, targetSpaceId: string)
 
       return result;
     },
-    [createComment, enqueuePendingAction, targetEntityId, targetSpaceId]
+    [createComment, enqueuePendingAction, interactionSurface, targetEntityId, targetEntityType, targetSpaceId]
+  );
+
+  const editComment = React.useCallback(
+    async (input: Parameters<typeof updateComment>[0]) => {
+      const published = await updateComment(input);
+      if (!published) return false;
+
+      try {
+        commentEdited(input.commentId, targetEntityId, {
+          space_id: targetSpaceId,
+          target_entity_type: targetEntityType,
+          interaction_surface: interactionSurface,
+        });
+      } catch {
+        /* Analytics must never turn a successful edit into a failed comment. */
+      }
+
+      return true;
+    },
+    [interactionSurface, targetEntityId, targetEntityType, targetSpaceId, updateComment]
   );
 
   return { publishComment, editComment, isCreating, error };

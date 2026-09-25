@@ -66,7 +66,10 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const { publishComment: submitComment } = usePublishComment(entityId, spaceId);
+  const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
+    targetEntityType: 'claim',
+    interactionSurface: 'claim_position_explanation',
+  });
 
   const closeComposer = React.useCallback(() => {
     setPromptedPosition(null);

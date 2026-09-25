@@ -223,10 +223,14 @@ describe('analytics', () => {
     const {
       browseModeToggled: browse,
       commentCreated,
+      commentEdited,
       editModeToggled: edit,
+      personProfileOpened,
       personalSpaceViewed,
+      profileUpdated,
       publishedEdit,
       reviewChangesOpened,
+      signupCompleted,
       upvoted: up,
       voteCast: vote,
     } = await import('./analytics');
@@ -236,9 +240,13 @@ describe('analytics', () => {
     edit({ space_id: 'space-1' });
     browse({ space_id: 'space-1' });
     personalSpaceViewed('personal-space-1');
+    personProfileOpened('profile-space-1', 'person-1', { interaction_surface: 'claim_vote_list' });
     reviewChangesOpened({ space_id: 'space-1' });
     publishedEdit({ space_id: 'space-1' });
+    profileUpdated('person-1', 'profile-space-1');
     commentCreated('comment-1', 'claim-1', { space_id: 'space-1' });
+    commentEdited('comment-1', 'claim-1', { space_id: 'space-1' });
+    signupCompleted('newsletter', { signup_surface: 'explore_email_capture' });
 
     expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
     expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
@@ -260,6 +268,21 @@ describe('analytics', () => {
       source: 'publishing',
       space_id: 'space-1',
     });
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: 'person-1',
+      graph_entity_type: 'person',
+      profile_space_id: 'profile-space-1',
+      interaction_surface: 'claim_vote_list',
+    });
+    expect(capture).toHaveBeenCalledWith('published_edit', {
+      app: 'genesis',
+      source: 'profile_editor',
+      content_id: 'person-1',
+      content_type: 'profile',
+      space_id: 'profile-space-1',
+    });
     expect(capture).toHaveBeenCalledWith('comment_created', {
       app: 'genesis',
       source: 'commenting',
@@ -268,5 +291,78 @@ describe('analytics', () => {
       target_id: 'claim-1',
       space_id: 'space-1',
     });
+    expect(capture).toHaveBeenCalledWith('content_edited', {
+      app: 'genesis',
+      source: 'commenting',
+      content_id: 'comment-1',
+      content_type: 'comment',
+      target_type: 'entity',
+      target_id: 'claim-1',
+      space_id: 'space-1',
+    });
+    expect(capture).toHaveBeenCalledWith('signup_completed', {
+      app: 'genesis',
+      source: 'signup_form',
+      form_type: 'newsletter',
+      signup_surface: 'explore_email_capture',
+    });
+  });
+
+  it('keeps product actions best-effort when the analytics runtime throws', async () => {
+    window.lytics = {
+      capture: vi.fn(() => {
+        throw new Error('collector unavailable');
+      }),
+    };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    expect(() => personProfileOpened('profile-space-1', 'person-1')).not.toThrow();
+  });
+
+  it('attributes a profile entity fallback as its personal space', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('profile-space-1', 'profile-space-1', { interaction_surface: 'claim_vote_list' });
+
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: 'profile-space-1',
+      graph_entity_type: 'personal_space',
+      profile_space_id: 'profile-space-1',
+      interaction_surface: 'claim_vote_list',
+    });
+  });
+
+  it('recognizes dashed and differently cased forms of the same personal-space id', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('4C81561D-1F95-4131-9CDD-DD20AB831BA2', '4c81561d1f9541319cdddd20ab831ba2');
+
+    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
+      app: 'genesis',
+      source: 'person_profile',
+      entity_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+      graph_entity_type: 'personal_space',
+      profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+    });
+  });
+
+  it('does not attribute a profile open to a pending personal-space sentinel', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('pending:0x123', null, { interaction_surface: 'comment_author' });
+
+    expect(capture).not.toHaveBeenCalled();
   });
 });

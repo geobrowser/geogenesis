@@ -6,6 +6,9 @@ import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { useParticipantAffiliations } from '~/core/debates/participant-affiliations';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
@@ -98,6 +101,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
+  const showAffiliations = !reducedOverlays;
+  const affiliations = useParticipantAffiliations(debate.participants, showAffiliations && (active || preload));
+  const affiliationFor = (participant: DebateParticipant | null) => {
+    if (!showAffiliations) return null;
+    const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
+    return spaceId ? (affiliations.get(spaceId) ?? null) : null;
+  };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();
@@ -351,6 +361,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     >
       <DebaterVideo
         participant={slot1Participant}
+        affiliation={affiliationFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -405,6 +416,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
       <DebaterVideo
         participant={slot2Participant}
+        affiliation={affiliationFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
@@ -534,6 +546,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
 
 function DebaterVideo({
   participant,
+  affiliation,
   src,
   videoRef,
   audible,
@@ -553,6 +566,7 @@ function DebaterVideo({
   scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
+  affiliation: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
@@ -753,6 +767,16 @@ function DebaterVideo({
   };
 
   const openProfile = useOpenDebaterProfile(participant);
+  const onIdentityClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // The position sits inside the name row for layout, but it remains part of the video's
+    // play/pause surface rather than becoming a second link to the participant's profile.
+    if (event.target instanceof Element && event.target.closest('[data-debate-position-chip]')) {
+      event.stopPropagation();
+      onToggle();
+      return;
+    }
+    openProfile(event);
+  };
 
   return (
     <div
@@ -919,24 +943,25 @@ function DebaterVideo({
         </div>
       )}
 
-      {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
-          claim corner.
+      {/* Debater identity — who is speaking and which side they are arguing — opening their
+          personal space in the side panel. On the left, opposite the claim corner.
+
+          The position chip shares the name's row, before the affiliation gets its own row. Keeping
+          those as separate flex rows means a long affiliation can use the available identity width
+          without pushing the chip away from the name. The chip cannot shrink, so at narrow widths
+          the name truncates first and the short stance remains readable.
+
+          The row is `pointer-events-none` with the button opting back in, because it now spans the
+          band rather than hugging the name: everything it covers and does not use belongs to the
+          pause/play surface underneath.
 
           A generous 55%, and it no longer rations the claim corner's width: the corner shares this
           row and draws over it rather than sitting beside it. It also stays put — it used to fade
           out under a card, which cost the viewer the link to the debater's profile exactly when
-          they were reading something that debater had said.
-
-          Absolute rather than the flex row #2466 put here. That row exists so the name cannot run
-          under the "Winner?" pill at a 312px gallery width; the pill and the position chip are off
-          the tile in this redesign — winner voting lives in the scorecard and the claims panel — so
-          the name has the band to itself and there is nothing left to overlap. The 55% is still
-          what keeps it clear of the claim card above. */}
-      <button
-        type="button"
-        onClick={openProfile}
+          they were reading something that debater had said. */}
+      <div
         className={cx(
-          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom] duration-150',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -945,11 +970,32 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-          <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
-      </button>
+        <button
+          type="button"
+          onClick={onIdentityClick}
+          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+          </span>
+          <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+              {/* Guarded on the text rather than only on the participant: `position_label` is
+                  typed non-null but arrives from geo-chat, and an empty one would draw a bare pill
+                  that says nothing. The room tile guards it the same way. */}
+              {participant?.position_label && (
+                <DebatePositionChip data-debate-position-chip label={participant.position_label} />
+              )}
+            </span>
+            {affiliation && (
+              <span title={affiliation} className="truncate text-[0.75rem] leading-4 text-white/80">
+                {affiliation}
+              </span>
+            )}
+          </span>
+        </button>
+      </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>

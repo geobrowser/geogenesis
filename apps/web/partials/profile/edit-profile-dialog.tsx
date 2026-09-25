@@ -324,6 +324,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
         >
           <form
             data-geo-analytics-label="Edit profile"
+            data-geo-analytics-type="profile"
+            data-geo-analytics-intent="edit_profile"
             onSubmit={onSubmit}
             className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown"
           >

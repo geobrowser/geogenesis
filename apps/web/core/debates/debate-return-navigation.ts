@@ -1,5 +1,7 @@
 'use client';
 
+import { isDebateRoomPath } from './rooms/room-routes';
+
 const debateReturnDestinationKey = 'geo.debates.return-destination';
 const debateReturnDestinationMaxAgeMs = 6 * 60 * 60 * 1_000;
 
@@ -75,6 +77,10 @@ function safeInternalHref(href: string): string | null {
 
 function isDebateFlowHref(href: string) {
   const pathname = href.split(/[?#]/, 1)[0];
+  // A room is a debate surface like the rest: captured as a destination, it saves itself as its
+  // own, and leaving lands back in it.
+  if (isDebateRoomPath(pathname)) return true;
+
   const segments = pathname.split('/').filter(Boolean);
   return segments[0] === 'space' && segments[2] === 'debates' && segments.length > 3;
 }

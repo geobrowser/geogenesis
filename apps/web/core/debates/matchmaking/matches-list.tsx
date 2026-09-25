@@ -241,6 +241,7 @@ export function MatchesList({
         />
 
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -255,6 +256,7 @@ export function MatchesList({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           // `activity` is a second query, and an empty list cannot be described without it: both
           // the message and the note below say something different depending on whether the viewer
           // has marked themselves unavailable. Whichever request lands second decides what this

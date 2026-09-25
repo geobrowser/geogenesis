@@ -59,6 +59,36 @@ export function DebateTileChip({
 }
 
 /**
+ * Which side of the claim a debater is arguing, as it reads over their video: the tile chip in the
+ * shared fill, carrying whatever the claim's response kind calls that side — "Agree"/"Disagree" on
+ * a stance claim, "Verify"/"Dispute" on a factual one.
+ *
+ * One component rather than the recipe twice, because the room and the feed player state the same
+ * fact about the same person in the same corner of the same picture; the only difference is where
+ * they read it from. It also keeps the fill with the contrast note that justifies it — a caller
+ * reaching for `DebateTileChip` and picking its own background is exactly what {@link
+ * tileChipSurface} is written to prevent.
+ *
+ * `shrink-0`, so the position is never the thing that truncates: these labels are short and
+ * bounded, and half of "Disagree" is worse than a shortened name beside it. `max-w-full` is what
+ * caps it in a column narrower than the word — it truncates there rather than overflowing.
+ */
+export function DebatePositionChip({
+  label,
+  className,
+  ...spanProps
+}: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
+  return (
+    <DebateTileChip
+      {...spanProps}
+      className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}
+    >
+      {label}
+    </DebateTileChip>
+  );
+}
+
+/**
  * One participant's tile, shared by the intro screen and the recording modal so the two have the
  * same geometry. Everything past the video is optional: the intro passes a label and an overlay,
  * the debate adds turn countdowns and phase overlays.
@@ -173,11 +203,7 @@ export function DebateVideoTile({
       {(positionLabel || tileControls || status) && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2">
           <div className="flex min-w-0 justify-start">
-            {positionLabel && (
-              <DebateTileChip className={cx('max-w-full truncate text-text', tileChipSurface)}>
-                {positionLabel}
-              </DebateTileChip>
-            )}
+            {positionLabel && <DebatePositionChip label={positionLabel} />}
           </div>
           <div className="pointer-events-auto">{tileControls}</div>
           {/* No `min-w-0` here, unlike the label: it is what lets the column's `auto` minimum see

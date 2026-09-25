@@ -31,6 +31,7 @@ import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -388,6 +389,27 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // preserves their mute state, without re-running the handler.)
   const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
 
+  // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
+  // is not undone the moment the opponent walks in.
+  const micSettledRef = React.useRef(false);
+  const handleMicIntentChange = React.useCallback((enabled: boolean) => {
+    micSettledRef.current = true;
+    setMicIntent(enabled);
+  }, []);
+
+  // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
+  // there is no join event to key on and the dock stays muted, per GEO-2838.
+  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
+  React.useEffect(() => {
+    if (!roomOpponentPresent || micSettledRef.current) return;
+    micSettledRef.current = true;
+    setMicIntent(true);
+    // `<LiveKitRoom audio>` is replayed only from its `SignalConnected` handler, so raising the
+    // intent alone does nothing to a room that is already connected — and would then publish the
+    // mic at the next reconnect instead. Drive the device here, as the mute button does.
+    void roomRef.current?.localParticipant?.setMicrophoneEnabled(true)?.catch(() => undefined);
+  }, [roomOpponentPresent]);
+
   // Owned here, where nothing below the page itself can remount them, so each one-shot is spent
   // once per visit rather than once per connection.
   const nudgeSpentRef = React.useRef(false);
@@ -578,7 +600,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
         onRoomLive={handleRoomLive}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
-        onMicIntentChange={setMicIntent}
+        onMicIntentChange={handleMicIntentChange}
         onRetry={retry}
         roomRef={roomRef}
         nudgeSpentRef={nudgeSpentRef}

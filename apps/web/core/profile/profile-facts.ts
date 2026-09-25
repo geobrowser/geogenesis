@@ -31,8 +31,10 @@ export type ProfileFacts = {
   proposals: number;
   /** Claims this person holds a position on. */
   positions: number;
-  /** Debates they argued a side of. */
+  /** Publicly visible debates they argued a side of. */
   debates: number;
+  /** Debates they argued before profile visibility is applied. Owner navigation only. */
+  totalDebates: number;
   spaces: ProfileSpace[];
   verifiedBy: Verifier[];
   /** Unix seconds, from the person entity rather than the space. */
@@ -43,6 +45,7 @@ export const NO_FACTS: ProfileFacts = {
   proposals: 0,
   positions: 0,
   debates: 0,
+  totalDebates: 0,
   spaces: [],
   verifiedBy: [],
   joinedAt: null,

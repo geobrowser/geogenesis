@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { COMMENT_MARKDOWN_CONTENT_ID, COMMENT_REPLY_TO_ID, COMMENT_RESOLVED_ID } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
-import { getCommentEntitiesViaParentEntityReplyBacklinks } from '~/core/io/queries';
+import { getCommentEntitiesViaReplyRelations } from '~/core/io/queries';
 import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
@@ -149,7 +149,7 @@ export async function fetchCommentEntitiesForTarget(
   entityId: string,
   signal?: AbortController['signal']
 ): Promise<CommentEntity[]> {
-  const loaded = await Effect.runPromise(getCommentEntitiesViaParentEntityReplyBacklinks(entityId, signal));
+  const loaded = await Effect.runPromise(getCommentEntitiesViaReplyRelations(entityId, signal));
   const targetKey = uuidToHex(entityId);
   const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
 

@@ -13,6 +13,7 @@ import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from 
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
+import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
@@ -52,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   back: vi.fn(),
+  push: vi.fn(),
   mutate: vi.fn(),
   leaveMutate: vi.fn(),
   acceptMutate: vi.fn(),
@@ -112,6 +114,11 @@ const mocks = vi.hoisted(() => ({
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
   fetchNextTaggedPage: vi.fn(),
+  boundedPagingOverride: null as {
+    autoPages: boolean;
+    stoppedShort: boolean;
+    keepLooking: () => void;
+  } | null,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -193,7 +200,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
+  useRouter: () => ({ replace: mocks.replace, back: mocks.back, push: mocks.push }),
 }));
 
 // The pair header has its own colocated suite (rematch-voice.test.tsx); rendering it here would
@@ -483,6 +490,16 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     };
   },
 }));
+
+vi.mock('~/core/debates/matchmaking/use-bounded-paging', async importOriginal => {
+  const original = await importOriginal<typeof import('~/core/debates/matchmaking/use-bounded-paging')>();
+
+  return {
+    ...original,
+    useBoundedPaging: (options: Parameters<typeof original.useBoundedPaging>[0]) =>
+      mocks.boundedPagingOverride ?? original.useBoundedPaging(options),
+  };
+});
 
 const HYDRATION_ERROR = new Error('hydration exploded');
 
@@ -854,6 +871,7 @@ beforeEach(() => {
   clearDebateReturnDestination();
   mocks.replace.mockReset();
   mocks.back.mockReset();
+  mocks.push.mockReset();
   mocks.mutate.mockReset();
   mocks.leaveMutate.mockReset();
   mocks.acceptMutate.mockReset();
@@ -878,6 +896,7 @@ beforeEach(() => {
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
+  mocks.boundedPagingOverride = null;
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
   mocks.savedClaimsError = null;
@@ -1503,6 +1522,32 @@ describe('DebateRematchPageClient', () => {
       expect(toggle.previousElementSibling?.className).toContain('flex-1');
     });
 
+    it('attributes shared filters and switches to rematch rather than the debate hub', async () => {
+      // A curated page, so the source menu has two entries and therefore exists at all. Positions
+      // left it for a tab of its own (GEO-2992) and Featured went with the menu it lived in, so a
+      // pairing with no curator has a single source and no trigger to attribute.
+      curatedPage();
+      mocks.entities = [sharedEntity(), publishedEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showExplore();
+
+      expect(screen.getByRole('button', { name: 'All claims' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Claims source filter'
+      );
+      expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Space filter'
+      );
+      expect(screen.getByRole('button', { name: /Any topic/ })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Topic filter'
+      );
+      const toggle = screen.getByRole('switch', { name: 'Hide my positions' });
+      expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Hide my positions');
+      expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
+    });
+
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
     it('offers the sources in a fixed order, Recommended first', async () => {
       curatedPage();
@@ -2063,6 +2108,16 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
+  });
+
+  it('keeps the same rematch attribution when Keep looking appears below existing rows', async () => {
+    mocks.boundedPagingOverride = { autoPages: false, stoppedShort: true, keepLooking: vi.fn() };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const keepLooking = screen.getByRole('button', { name: 'Keep looking' });
+    expect(keepLooking).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Keep looking');
+    expect(keepLooking).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
   });
 
   it('leaves the sentinel out once there is no page left to fetch', async () => {
@@ -3677,6 +3732,77 @@ describe('DebateRematchPageClient', () => {
     );
   });
 
+  // geo-chat stores `debates` as the source space of every room session and every profile
+  // challenge. It is a sentinel, so routing on it 404s; the claim carries the real space.
+  it('routes to the claim space when the session has no real source space', async () => {
+    mocks.session = session({
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: {
+        id: 'request-1',
+        status: 'accepted',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-remote',
+        recipient_user_id: 'user-local',
+        requester_position: false,
+        recipient_position: true,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
+  });
+
+  // The component is reused across sessions rather than remounted, so a remembered space has to
+  // name the session it came from.
+  it('will not send one session to the space another session was about', async () => {
+    mocks.session = session({
+      request: {
+        id: 'request-1',
+        status: 'accepted',
+        claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+        requester_user_id: 'user-remote',
+        recipient_user_id: 'user-local',
+        requester_position: false,
+        recipient_position: true,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // A different session, converted, with nothing of its own to resolve a space from.
+    mocks.session = session({
+      id: 'rematch-2',
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: null,
+    });
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('stays put rather than routing somewhere that cannot exist', async () => {
+    mocks.session = session({
+      status: 'converted',
+      converted_debate_id: 'debate-9',
+      source_space_id: 'debates',
+      request: null,
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   // A backend that predates the fields answers `undefined`, and the picker must keep working
   // exactly as before against it.
   it('falls back to the per-space lookup when the rematch response has no readiness', async () => {
@@ -5288,5 +5414,177 @@ describe('the Related tab', () => {
     await settleTabSwap();
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+  });
+});
+
+describe('inside a debate room', () => {
+  const inRoom = (children: React.ReactElement) => (
+    <DebateRoomProvider roomId="room-1" presence={null}>
+      {children}
+    </DebateRoomProvider>
+  );
+
+  // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
+  // waiting for someone looks like. Acting on it threw the waiting person out of the room.
+  it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {
+    mocks.session = session({ status });
+
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The exit freeze is about navigating, not about ending.
+   *
+   * Outside a room an ended session is a redirect one render away, so the pair header holds its
+   * shape rather than rebuilding for a page nobody will see. In a room the same status is rejoined
+   * in place — nothing navigates — and a header frozen on it would stay frozen over a session that
+   * is coming back. A room's own Leave is a `router.push` with no mutation behind it, so there is
+   * no window to hold open here either.
+   */
+  it.each([['ended'], ['expired']] as const)('does not freeze the header on a %s session', async status => {
+    mocks.session = session({ status });
+
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(screen.getByTestId('rematch-pair-header')).toBeInTheDocument());
+    expect(screen.getByTestId('rematch-pair-header')).not.toHaveAttribute('data-exiting');
+  });
+
+  // Converted is not excepted: a request accepted in a room walks the pair into the debate the same
+  // way it does anywhere else, so the header holds through that redirect as it always has.
+  it('still freezes the header when the session converts to a debate', async () => {
+    mocks.session = session({ status: 'converted', converted_debate_id: 'debate-9' });
+
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.getByTestId('rematch-pair-header')).toHaveAttribute('data-exiting', 'true');
+  });
+
+  const waitingFor = (children: React.ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'waiting', opponentUserId: 'user-remote', opponentPresent: false }}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  const presentWith = (rejoin: () => Promise<boolean>, children: React.ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'present', opponentUserId: 'user-remote', opponentPresent: true }}
+      rejoin={rejoin}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  // geo-chat ends a room's session when someone goes offline long enough, and replaces it on the
+  // next join. Someone still in the room never sends one, so the page asks, once.
+  it('asks the room for a fresh session when its own has ended, once', async () => {
+    const rejoin = vi.fn().mockResolvedValue(true);
+    mocks.session = session({ status: 'expired' });
+
+    const view = render(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+    await waitFor(() => expect(rejoin).toHaveBeenCalledTimes(1));
+
+    mocks.session = session({ status: 'expired' });
+    view.rerender(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+    expect(rejoin).toHaveBeenCalledTimes(1);
+  });
+
+  // Each rejoin already retries its request. When all of those fail, the session is still ended and
+  // will not change, so nothing would ever ask again without this.
+  it('tries a failed rejoin again, a bounded number of times', async () => {
+    vi.useFakeTimers();
+    try {
+      const rejoin = vi.fn().mockResolvedValue(false);
+      mocks.session = session({ status: 'expired' });
+
+      render(presentWith(rejoin, <DebateRematchPageClient sessionId="rematch-1" />));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(15_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(rejoin).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps Request debate off while the room session has ended', async () => {
+    mocks.session = session({ status: 'expired' });
+
+    render(presentWith(vi.fn().mockResolvedValue(true), <DebateRematchPageClient sessionId="rematch-1" />));
+    await showAllClaims();
+
+    // Hidden or disabled are both fine; offered is not.
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+    const offered = screen
+      .queryAllByRole('button', { name: 'Request debate' })
+      .filter(button => !(button as HTMLButtonElement).disabled);
+    expect(offered).toHaveLength(0);
+  });
+
+  it('offers Request debate on a live room session with the opponent here', async () => {
+    mocks.session = session({ status: 'browsing' });
+
+    render(presentWith(vi.fn().mockResolvedValue(true), <DebateRematchPageClient sessionId="rematch-1" />));
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
+  });
+
+  it('names the opponent in the presence pill', async () => {
+    mocks.session = session();
+
+    render(waitingFor(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(screen.getByText('Waiting for Salina')).toBeInTheDocument());
+  });
+
+  // The page's own name falls back to a raw profile id, which has no place in "Waiting for …".
+  it('keeps the pill generic rather than showing an id when they have no name', async () => {
+    const base = session();
+    mocks.session = {
+      ...base,
+      participants: base.participants.map(participant =>
+        participant.user_id === 'user-remote' ? { ...participant, display_name: null } : participant
+      ),
+    };
+
+    const { container } = render(waitingFor(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    await waitFor(() => expect(container.querySelector('[data-room-presence]')).not.toBeNull());
+    expect(container.querySelector('[data-room-presence]')?.textContent).not.toContain('profile-remote');
+  });
+
+  // Off a room the flow is unchanged: a terminal session still returns the viewer where they came
+  // from.
+  it('still navigates away outside a room', async () => {
+    mocks.session = session({ status: 'ended' });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.replace.mock.calls.length + mocks.back.mock.calls.length).toBeGreaterThan(0));
+    expect(screen.queryByText('This room has closed')).not.toBeInTheDocument();
   });
 });

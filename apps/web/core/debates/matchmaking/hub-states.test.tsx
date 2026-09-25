@@ -22,7 +22,14 @@ describe('a viewer geo-chat has not registered yet', () => {
 
   it('says what is happening rather than that something broke', () => {
     render(
-      <HubQueryState isLoading={false} error={refused} isEmpty={false} emptyMessage="" onRetry={vi.fn()}>
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading={false}
+        error={refused}
+        isEmpty={false}
+        emptyMessage=""
+        onRetry={vi.fn()}
+      >
         <div>rows</div>
       </HubQueryState>
     );
@@ -36,7 +43,14 @@ describe('a viewer geo-chat has not registered yet', () => {
   // reading only the settled error left the viewer on a skeleton for as long as the waiting lasted.
   it('says it while the reads are still waiting the refusal out', () => {
     render(
-      <HubQueryState isLoading error={null} failureReason={refused} isEmpty={false} emptyMessage="">
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading
+        error={null}
+        failureReason={refused}
+        isEmpty={false}
+        emptyMessage=""
+      >
         <div>rows</div>
       </HubQueryState>
     );
@@ -54,7 +68,15 @@ describe('a viewer geo-chat has not registered yet', () => {
    */
   it('offers no retry while the reads are still trying', () => {
     render(
-      <HubQueryState isLoading error={null} failureReason={refused} isEmpty={false} emptyMessage="" onRetry={vi.fn()}>
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading
+        error={null}
+        failureReason={refused}
+        isEmpty={false}
+        emptyMessage=""
+        onRetry={vi.fn()}
+      >
         <div>rows</div>
       </HubQueryState>
     );
@@ -66,7 +88,14 @@ describe('a viewer geo-chat has not registered yet', () => {
   // And offers it once they are, which is the state that can act on a press.
   it('offers one once they have given up', () => {
     render(
-      <HubQueryState isLoading={false} error={refused} isEmpty={false} emptyMessage="" onRetry={vi.fn()}>
+      <HubQueryState
+        analyticsSurface="hub"
+        isLoading={false}
+        error={refused}
+        isEmpty={false}
+        emptyMessage=""
+        onRetry={vi.fn()}
+      >
         <div>rows</div>
       </HubQueryState>
     );
@@ -84,6 +113,7 @@ describe('a viewer geo-chat has not registered yet', () => {
   it('is the sign-in prompt where the caller offers one', () => {
     render(
       <HubQueryState
+        analyticsSurface="hub"
         isLoading={false}
         error={refused}
         isEmpty={false}
@@ -102,6 +132,7 @@ describe('a viewer geo-chat has not registered yet', () => {
   it('leaves a server fault as an error', () => {
     render(
       <HubQueryState
+        analyticsSurface="hub"
         isLoading={false}
         error={new GeoChatRequestError('boom', null, 500)}
         isEmpty={false}
@@ -113,5 +144,26 @@ describe('a viewer geo-chat has not registered yet', () => {
     );
 
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+});
+
+describe('shared query-state analytics', () => {
+  it('attributes an empty-state action to rematch when rematch owns the state', () => {
+    render(
+      <HubQueryState
+        analyticsSurface="rematch"
+        isLoading={false}
+        error={null}
+        isEmpty
+        emptyMessage="No claims match these filters."
+        emptyAction={{ label: 'Clear filters', onClick: vi.fn() }}
+      >
+        <div>rows</div>
+      </HubQueryState>
+    );
+
+    const action = screen.getByRole('button', { name: 'Clear filters' });
+    expect(action).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Clear filters');
+    expect(action).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
   });
 });

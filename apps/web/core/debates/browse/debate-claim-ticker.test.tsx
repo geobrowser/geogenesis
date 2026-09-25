@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,6 +69,8 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn()
 // The card's header names its speaker and links to them, which reaches for the side panel and for
 // the space behind the profile. Neither is what these tests are about.
 const openSidePanel = vi.fn();
+const analyticsMocks = vi.hoisted(() => ({ personProfileOpened: vi.fn() }));
+vi.mock('~/core/analytics', () => ({ personProfileOpened: analyticsMocks.personProfileOpened }));
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
@@ -159,6 +161,7 @@ describe('DebateClaimTickerCard', () => {
   // The same link as the name in the corner of the tile, and the same person.
   it('opens the speaker from the card, the way the tile corner does', () => {
     openSidePanel.mockClear();
+    analyticsMocks.personProfileOpened.mockClear();
     renderCard();
 
     fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
@@ -166,6 +169,14 @@ describe('DebateClaimTickerCard', () => {
     expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false, {
       forceRequestedSpace: true,
     });
+    expect(analyticsMocks.personProfileOpened).toHaveBeenCalledWith(
+      SPEAKER.profile_space_id,
+      `page-${SPEAKER.profile_space_id}`,
+      {
+        interaction_surface: 'debate_media',
+        navigation_mode: 'entity_side_panel',
+      }
+    );
   });
 
   // The video behind is one big play/pause button.
@@ -911,6 +922,29 @@ describe('markerHitWidth', () => {
 });
 
 describe('ClaimScrubberMarkers', () => {
+  // The hover preview is a Radix tooltip, and Radix measures its arrow with a ResizeObserver that
+  // jsdom does not implement. Nothing here asserts on size, so an inert one is enough.
+  beforeEach(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  });
+
+  // Radix opens on a `setTimeout` of the delay it was given, so how long that wait is is the only
+  // thing separating this preview from the one it replaced. Under a real clock nothing here could
+  // tell them apart: `findBy*` polls for a second, which is long enough to swallow the 300ms
+  // default and call it instant.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Hover `target` and let exactly `ms` pass — no more, so a longer wait stays unsatisfied. */
+  const hoverFor = (target: HTMLElement, ms: number) => {
+    fireEvent.pointerMove(target, { pointerType: 'mouse' });
+    act(() => void vi.advanceTimersByTime(ms));
+  };
+
   const marker = (id: string, fraction: number): ClaimMarker => ({
     id,
     text: `Claim ${id}`,
@@ -935,5 +969,37 @@ describe('ClaimScrubberMarkers', () => {
     const { container } = render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
 
     expect(container.querySelector('button')?.children).toHaveLength(0);
+  });
+
+  /**
+   * The preview used to be a `title`, and a native tooltip waits a second or more before it
+   * appears — long enough on a scrubber that viewers read the preview as missing rather than slow.
+   * That wait is the browser's and cannot be shortened, so the fix was to stop using `title` at
+   * all. Both halves of that are held here: the attribute gone, since one left behind would bring
+   * the slow preview back alongside the fast one, and the replacement opening on the hover itself.
+   *
+   * Zero elapsed milliseconds is the whole point. Radix schedules the open on a timer even at a
+   * delay of zero, so the hover alone leaves nothing on screen and draining the queue is what
+   * stands in for the browser's next tick. A tooltip that wanted 300ms would still be waiting.
+   */
+  it('previews a claim on the hover itself, with no native title left to lag behind it', () => {
+    render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
+
+    const target = screen.getByLabelText('Jump to: Claim a');
+    expect(target).not.toHaveAttribute('title');
+
+    hoverFor(target, 0);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a');
+  });
+
+  // A hash stands for whatever ended in its segment, and the card only ever shows one of them.
+  // The preview says how many are behind it so a click on a crowded hash is not a surprise.
+  it('says how many claims share a hash', () => {
+    render(<ClaimScrubberMarkers markers={[{ ...marker('a', 0.5), count: 3 }]} onSeek={vi.fn()} />);
+
+    hoverFor(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), 0);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a (+2 more)');
   });
 });

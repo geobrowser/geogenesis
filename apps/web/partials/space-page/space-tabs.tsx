@@ -4,6 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { ID } from '~/core/id';
+import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
@@ -85,10 +88,13 @@ type BuildSpaceTabsParams = {
    * empty record and hide a tab holding hundreds of rows.
    */
   personRecordCounts?: PersonRecordCounts;
+  /** Whether the profile owner may need the route to manage hidden debates. */
+  isOwner?: boolean;
 };
 
 export type PersonRecordCounts = {
   debates: number;
+  totalDebates: number;
   positions: number;
   proposals: number;
 };
@@ -101,6 +107,7 @@ export function buildSpaceTabs({
   isDebugDebatesPageEnabled,
   isProfile,
   personRecordCounts,
+  isOwner = false,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -115,6 +122,13 @@ export function buildSpaceTabs({
   const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
     label: 'Debug debates',
     href: `/space/${spaceId}/debug-debates`,
+    priority: 3,
+  };
+
+  /** Answering a scheduled debate, which has no other surface yet (GEO-2940). */
+  const DEBUG_ROOMS_TAB: BuiltSpaceTab = {
+    label: 'Debug rooms',
+    href: `/space/${spaceId}/debug-debate-rooms`,
     priority: 3,
   };
 
@@ -146,7 +160,7 @@ export function buildSpaceTabs({
   // Overview is not in here and is never hidden: it is the profile itself, and a
   // person with an empty record still has a name, a bio and a rail.
   const countFor: Record<string, number | undefined> = {
-    Debates: personRecordCounts?.debates,
+    Debates: profileDebateNavigationCount(personRecordCounts?.debates, personRecordCounts?.totalDebates, isOwner),
     Positions: personRecordCounts?.positions,
     Proposals: personRecordCounts?.proposals,
   };
@@ -172,7 +186,7 @@ export function buildSpaceTabs({
       // is the only path to the rail's facts below 1024px, where the rail drops
       // itself. Shadowing one does not replace it; it makes it unreachable.
       const reservedLabels = new Set([
-        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
+        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label, DEBUG_ROOMS_TAB.label] : []),
         ...(isPerson ? PERSON_TAB_LABELS : []),
       ]);
       const visibleDynamicTabs =
@@ -192,7 +206,7 @@ export function buildSpaceTabs({
     }
   }
 
-  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
+  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB, DEBUG_ROOMS_TAB);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !isPerson) {
     tabs.push(...SOME_SPACES_TABS);
@@ -233,6 +247,8 @@ export function SpaceTabs({
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -279,7 +295,10 @@ export function SpaceTabs({
   const systemTabsAfter: SystemTab[] = [];
 
   if (isDebugDebatesPageEnabled) {
-    systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
+    systemTabsAfter.push(
+      { label: 'Debug debates', href: `/space/${spaceId}/debug-debates` },
+      { label: 'Debug rooms', href: `/space/${spaceId}/debug-debate-rooms` }
+    );
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
@@ -353,6 +372,7 @@ export function SpaceTabs({
     typeIds,
     isDebugDebatesPageEnabled,
     isProfile,
+    isOwner,
   });
 
   // Overview, then our Community tab, then everything else.

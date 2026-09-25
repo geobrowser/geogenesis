@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
 import { RematchVoiceHeader } from './rematch-voice';
@@ -67,6 +68,7 @@ const mocks = vi.hoisted(() => ({
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
   capture: vi.fn(),
+  personProfileOpened: vi.fn(),
   openSidePanel: vi.fn(),
   spaceLookups: [] as Array<string | undefined>,
   /**
@@ -114,7 +116,10 @@ vi.mock('@livekit/components-react', () => ({
     microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
-  useRoomContext: () => ({ disconnect: mocks.disconnect }),
+  useRoomContext: () => ({
+    disconnect: mocks.disconnect,
+    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+  }),
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
     mocks.deviceSelectCalls.push({ kind, requestPermissions });
     return kind === 'audiooutput'
@@ -208,6 +213,7 @@ vi.mock('~/design-system/avatar', () => ({
 
 vi.mock('~/core/analytics', () => ({
   capture: (...args: unknown[]) => mocks.capture(...args),
+  personProfileOpened: (...args: unknown[]) => mocks.personProfileOpened(...args),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -394,6 +400,7 @@ beforeEach(() => {
   mocks.microphoneTrack = undefined;
   mocks.useKrispNoiseFilter.mockClear();
   mocks.capture.mockReset();
+  mocks.personProfileOpened.mockReset();
   mocks.openSidePanel.mockReset();
   mocks.spaceLookups = [];
   mocks.opponentSpace = { topicId: null, entity: { id: 'them-home' } };
@@ -2214,5 +2221,83 @@ describe('RematchVoiceHeader', () => {
     mocks.requestTakeover.mockResolvedValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
     await waitFor(() => expect(screen.getByTestId('livekit-room')).toBeInTheDocument());
+  });
+});
+
+describe('the mic inside a debate room', () => {
+  const presence = (opponentPresent: boolean) => ({
+    state: opponentPresent ? ('present' as const) : ('waiting' as const),
+    opponentUserId: 'them',
+    opponentPresent,
+  });
+
+  const lastAudio = () => mocks.livekitRoomProps.at(-1)?.audio;
+
+  // GEO-2941 state 3, and the only behaviour the ticket changes. Off a room there is no join event
+  // to key on, so the dock stays muted per GEO-2838.
+  it('stays muted while the viewer is on their own', async () => {
+    render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+  });
+
+  it('opens the mic once the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(lastAudio()).toBe(true));
+    // The prop alone is not enough: LiveKit replays it only from `SignalConnected`, so on a room
+    // that is already connected the device has to be driven directly.
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+  });
+
+  // A mute chosen while waiting is a choice, and the opponent walking in must not undo it.
+  it('leaves a deliberate mute alone when the opponent arrives', async () => {
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await flushOwnership();
+    // A deliberate mute, made while waiting, through the dock's own control.
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false));
+    mocks.setMicrophoneEnabled.mockClear();
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  // Outside a room the context is absent, and the dock's own default governs.
+  it('stays muted with no room around it', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    expect(lastAudio()).toBe(false);
   });
 });
