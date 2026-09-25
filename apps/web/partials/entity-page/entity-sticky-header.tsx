@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { createPortal } from 'react-dom';
 
-import { useMirroredContentColumn } from '~/core/hooks/use-mirrored-content-column';
+import { type ContentColumnBox, useMirroredContentColumn } from '~/core/hooks/use-mirrored-content-column';
 import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -18,7 +18,8 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { APP_NAVBAR_HEIGHT } from '~/partials/entity-page/entity-sticky-header-host';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
-import { ENTITY_PAGE_CONTENT_ATTRIBUTE, ENTITY_PAGE_CONTENT_MAX_WIDTH } from './entity-page-layout';
+import { ENTITY_PAGE_CONTENT_ATTRIBUTE, entityPageTitleSelector } from './entity-page-anchors';
+import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from './entity-page-layout';
 import { entityStickyHeaderHostElementAtom } from '~/atoms';
 
 /**
@@ -53,7 +54,7 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
   const mediaUrl = useEntityMediaUrl(entityId, spaceId);
 
   const { scrolledPast: isScrolledPastTitle, target: title } = useScrolledPastElement({
-    selector: `[data-entity-page-title="${escapeSelectorValue(entityId)}"]`,
+    selector: entityPageTitleSelector(entityId),
     topOffset: APP_NAVBAR_HEIGHT,
     enabled: Boolean(name),
   });
@@ -66,9 +67,7 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
 
   // Falls back to the generic page's width until there is a column to read — the same answer this
   // gave before it measured anything, and the right one for a view that has not tagged its own.
-  const rowStyle = column
-    ? { marginLeft: column.left, width: column.width }
-    : { maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH };
+  const rowStyle = column ? rowGeometry(column) : { maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH };
 
   return createPortal(
     <AnimatePresence>
@@ -110,9 +109,15 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
 }
 
 /**
- * Entity ids are uuids, so this is belt and braces — but the selector is built from a route param,
- * and `CSS.escape` is missing in jsdom, so the fallback has to be the identity rather than a throw.
+ * The measured column, clipped to the bar it is drawn in.
+ *
+ * A collapsed sidebar insets the host by the rail's 24px while the page's column keeps starting at
+ * the content edge, so on a viewport narrow enough for the column to reach that edge the mirrored
+ * offset goes negative — and a negative margin paints the avatar and the name outside the bar's own
+ * white background, over the rail. The right edge is held while the left is clamped, so what gives
+ * is the alignment of the one edge that cannot be honoured rather than both.
  */
-function escapeSelectorValue(value: string): string {
-  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(value) : value;
+function rowGeometry({ left, width }: ContentColumnBox) {
+  const clampedLeft = Math.max(0, left);
+  return { marginLeft: clampedLeft, width: Math.max(0, left + width - clampedLeft) };
 }

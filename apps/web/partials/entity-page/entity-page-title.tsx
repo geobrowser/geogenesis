@@ -9,6 +9,8 @@ import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
+
 /** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
 const titleTypographyClassName = 'text-entityTitle';
 
@@ -21,12 +23,8 @@ type EntityPageTitleProps = {
   /** Rendered inline directly after the title in browse mode, e.g. a verification badge. */
   accessory?: React.ReactNode;
   /**
-   * The entity this title names, published to the DOM as `data-entity-page-title`.
-   *
-   * The sticky entity header watches for it to leave the viewport. An attribute rather than a ref
-   * because the watcher is mounted above every branch that draws a title — see
-   * `useScrolledPastElement`. Scoped by id so a side panel open on some *other* entity cannot be
-   * mistaken for the page's own title.
+   * The entity this title names, marked in the DOM for the sticky header — see
+   * `entity-page-anchors`, which says why it is an attribute rather than a ref.
    */
   entityId?: string;
 };
@@ -55,7 +53,7 @@ export function EntityPageTitle({
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
-      <div className={cx('text-text', className)} data-entity-page-title={entityId}>
+      <div className={cx('text-text', className)} {...entityPageTitleAnchor(entityId)}>
         <Textarea
           value={value}
           onChange={event => onChange(event.currentTarget.value)}
@@ -71,7 +69,7 @@ export function EntityPageTitle({
   }
 
   return (
-    <div className={className} data-entity-page-title={entityId}>
+    <div className={className} {...entityPageTitleAnchor(entityId)}>
       {accessory ? (
         <div className="flex min-w-0 items-center gap-2">
           <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>

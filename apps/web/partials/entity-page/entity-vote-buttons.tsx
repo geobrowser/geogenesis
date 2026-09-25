@@ -301,16 +301,21 @@ export function EntityVoteButtons({
   /**
    * The faces, wrapped in their own trigger for the responder list.
    *
-   * Only once there is somebody to list. `ClaimResponderAvatars` draws nothing until the responder
-   * rows arrive, and a trigger around nothing is an invisible tab stop with a tooltip; `empty:hidden`
-   * covers the gap between the count arriving and the faces doing so.
+   * Gated on `totalResponders` — the served counts — rather than on `effectiveTotal`, which carries
+   * the viewer's own unconfirmed vote. The list this opens reads the served responders, so on the
+   * optimistic count a viewer's first vote made their own face open a popover reporting that nobody
+   * has responded. It is the same gate the tally beside it is disabled by, which is the point: the
+   * two open one list and have no business disagreeing about whether there is one.
+   *
+   * `ClaimResponderAvatars` also draws nothing until the responder rows arrive, and a trigger around
+   * nothing is an invisible tab stop with a tooltip; `empty:hidden` covers that gap.
    */
   const claimResponderAvatarsTrigger = (position: 'leading' | 'trailing') => {
     if (!claimResponderAvatars) return null;
 
     const spacing = position === 'leading' ? 'mr-1' : 'ml-1';
 
-    if (effectiveTotal === 0) {
+    if (totalResponders === 0) {
       return <span className={cx(claimResponderAvatarsClassName, spacing)}>{claimResponderAvatars}</span>;
     }
 

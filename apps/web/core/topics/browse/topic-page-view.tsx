@@ -22,11 +22,11 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
 } from '~/partials/entity-page/entity-page-inline-description';
-import { ENTITY_PAGE_CONTENT_ATTRIBUTE } from '~/partials/entity-page/entity-page-layout';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
@@ -148,7 +148,7 @@ export function TopicPageView({
   return (
     <div className="@container">
       <div
-        {...{ [ENTITY_PAGE_CONTENT_ATTRIBUTE]: '' }}
+        {...ENTITY_PAGE_CONTENT_ANCHOR}
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${TOPIC_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: TOPIC_PAGE_CONTENT_MAX_WIDTH }}
       >
@@ -191,7 +191,7 @@ export function TopicPageView({
               variant="entityTitle"
               color="text"
               className="block text-pretty wrap-break-word"
-              data-entity-page-title={entityId}
+              {...entityPageTitleAnchor(entityId)}
             >
               {entity.name ?? entity.id}
             </Text>

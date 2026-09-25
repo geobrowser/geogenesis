@@ -22,6 +22,8 @@ const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const mocks = vi.hoisted(() => ({
   positive: 2,
   negative: 1,
+  /** The viewer's own vote, before it has been served back. */
+  optimistic: undefined as 'positive' | 'negative' | undefined,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -40,7 +42,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: vi.fn(),
     submitResponseAsync: vi.fn(),
-    optimisticResponse: undefined,
+    optimisticResponse: mocks.optimistic,
     isResponseIndexingDelayed: false,
     isConnected: true,
     personalSpaceId: 'profile-1',
@@ -79,6 +81,7 @@ function facesTrigger() {
 beforeEach(() => {
   mocks.positive = 2;
   mocks.negative = 1;
+  mocks.optimistic = undefined;
 });
 
 afterEach(cleanup);
@@ -120,6 +123,24 @@ describe('the responder faces on a claim', () => {
 
     await screen.findByTestId('responder-faces');
     expect(facesTrigger()).toBeNull();
+  });
+
+  /**
+   * The list reads the served responders, so on the optimistic count a viewer's first vote made
+   * their own face open a popover reporting that nobody has responded — while the tally beside it,
+   * gated on the served counts, stayed disabled. One list, one rule about whether there is one.
+   */
+  it('stay a plain span on the viewer’s own unserved vote, as the tally does', async () => {
+    mocks.positive = 0;
+    mocks.negative = 0;
+    mocks.optimistic = 'positive';
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+
+    await screen.findByTestId('responder-faces');
+    expect(facesTrigger()).toBeNull();
+    // The tally shows the viewer's own vote but stays disabled — it carries no `title` either, since
+    // there is nothing served to view.
+    expect(screen.getByRole('button', { name: '100%' })).toBeDisabled();
   });
 
   it('are not drawn at all for a plain entity, which has no responder faces', async () => {

@@ -52,6 +52,13 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
 
     if (typeof document === 'undefined' || typeof IntersectionObserver === 'undefined') return;
 
+    // A new selector is a new entity, and its title may not be in the document yet. Without this the
+    // early return in `sync` — `next === watched` is true when both are null — leaves the previous
+    // entity's answer standing, so moving between two entities opened the next one with the bar
+    // already up and the last one's detached title still being measured.
+    setScrolledPast(false);
+    setTarget(null);
+
     let watched: Element | null = null;
 
     const observer = new IntersectionObserver(
@@ -92,10 +99,23 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
       return () => observer.disconnect();
     }
 
-    const mutations = new MutationObserver(sync);
+    // Coalesced to one lookup a frame. `sync` is cheap while the title is mounted — a connectedness
+    // test — but a route that draws none, the debates feed, leaves it querying the document on every
+    // batch, and that feed mutates continuously.
+    let queued = 0;
+    const scheduleSync = () => {
+      if (queued) return;
+      queued = requestAnimationFrame(() => {
+        queued = 0;
+        sync();
+      });
+    };
+
+    const mutations = new MutationObserver(scheduleSync);
     mutations.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      if (queued) cancelAnimationFrame(queued);
       mutations.disconnect();
       observer.disconnect();
     };

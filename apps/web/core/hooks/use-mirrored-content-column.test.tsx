@@ -128,6 +128,19 @@ describe('useMirroredContentColumn', () => {
     expect(result.current).toBeNull();
   });
 
+  /**
+   * A detached or hidden column measures all zeros, which is an absence rather than a width —
+   * passing it on would have the caller draw a blank strip instead of falling back to its own.
+   */
+  it('reports nothing for a column with no width', () => {
+    const { host, column, anchor } = buildPage();
+    withBox(column, { left: 0, width: 0 });
+
+    const { result } = renderHook(() => useMirroredContentColumn(anchor, host, ATTRIBUTE));
+
+    expect(result.current).toBeNull();
+  });
+
   it('reports nothing without an anchor or a host', () => {
     const { host, anchor } = buildPage();
 

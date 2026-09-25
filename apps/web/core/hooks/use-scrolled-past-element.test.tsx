@@ -95,6 +95,12 @@ function render(enabled = true) {
   return renderHook(() => useScrolledPastElement({ selector: SELECTOR, topOffset: TOP_OFFSET, enabled }));
 }
 
+function renderForSelector(selector: string) {
+  return renderHook(({ selector }) => useScrolledPastElement({ selector, topOffset: TOP_OFFSET }), {
+    initialProps: { selector },
+  });
+}
+
 describe('useScrolledPastElement', () => {
   it('observes the matching element below the docked offset', () => {
     const title = addTitle();
@@ -178,6 +184,49 @@ describe('useScrolledPastElement', () => {
 
     expect(observers).toHaveLength(0);
     expect(result.current.scrolledPast).toBe(false);
+  });
+
+  /**
+   * Moving between two entities. The next one's title is not in the document at the moment the
+   * selector changes, and `next === watched` is true when both are null — so without an explicit
+   * reset the previous entity's answer stood, opening the new page with the bar already up and the
+   * old, detached title still being handed out for measuring.
+   */
+  it('forgets the previous entity when the selector changes', async () => {
+    const title = addTitle('entity-1');
+    const { result, rerender } = renderForSelector('[data-entity-page-title="entity-1"]');
+
+    notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
+    expect(result.current.scrolledPast).toBe(true);
+
+    // The old title goes with the old page; the new one has not mounted yet.
+    act(() => title.remove());
+    rerender({ selector: '[data-entity-page-title="entity-2"]' });
+
+    await waitFor(() => expect(result.current.scrolledPast).toBe(false));
+    expect(result.current.target).toBeNull();
+  });
+
+  /**
+   * One lookup a frame. While a title is mounted `sync` is a connectedness test, but a route that
+   * draws none — the debates feed — would otherwise query the document on every mutation batch, and
+   * that feed mutates continuously.
+   */
+  it('coalesces document lookups when there is no title to find', async () => {
+    const querySelector = vi.spyOn(document, 'querySelector');
+    render();
+    const initialLookups = querySelector.mock.calls.length;
+
+    act(() => {
+      for (let index = 0; index < 20; index++) {
+        document.body.append(document.createElement('div'));
+      }
+    });
+
+    await waitFor(() => expect(querySelector.mock.calls.length).toBeGreaterThan(initialLookups));
+    // One frame's worth, not one per mutation batch.
+    expect(querySelector.mock.calls.length - initialLookups).toBeLessThanOrEqual(2);
+    querySelector.mockRestore();
   });
 
   it('stays false when IntersectionObserver is unavailable', () => {

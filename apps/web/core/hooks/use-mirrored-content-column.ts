@@ -9,9 +9,14 @@ export type ContentColumnBox = {
   width: number;
 };
 
-function measure(content: Element, host: Element): ContentColumnBox {
+function measure(content: Element, host: Element): ContentColumnBox | null {
   const contentRect = content.getBoundingClientRect();
   const hostRect = host.getBoundingClientRect();
+
+  // A detached or hidden column measures all zeros, which is not a width — it is an absence, and
+  // reporting it as `{ left: -hostLeft, width: 0 }` would have the caller draw a blank strip rather
+  // than fall back to a width of its own.
+  if (contentRect.width === 0) return null;
 
   // The *content* box, not the border box. Every page but the generic one pads its column
   // (`px-4`/`px-5`), and mirroring the border box would put the bar's text a gutter's width outside
@@ -65,7 +70,9 @@ export function useMirroredContentColumn(
       // Compared before storing: a `ResizeObserver` fires for changes on both axes, and a bar that
       // re-rendered every time the page below it grew a row would be paying for nothing — the
       // horizontal geometry is all this reports.
-      setBox(previous => (previous && previous.left === next.left && previous.width === next.width ? previous : next));
+      setBox(previous =>
+        previous && next && previous.left === next.left && previous.width === next.width ? previous : next
+      );
     };
 
     sync();

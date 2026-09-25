@@ -180,6 +180,21 @@ describe('EntityStickyHeader', () => {
     expect(row).not.toHaveClass('px-4');
   });
 
+  /**
+   * A collapsed sidebar insets the host by the rail's 24px while the page's column still starts at
+   * the content edge, so a viewport narrow enough for the column to reach that edge puts the
+   * mirrored offset below zero — and a negative margin paints the avatar and the name outside the
+   * bar's own white background, over the rail.
+   */
+  it('never draws outside its own background when the column starts left of the host', () => {
+    mocks.column = { left: -24, width: 900 };
+    renderBar();
+
+    // The right edge is held while the left is clamped: what gives is the one edge that cannot be
+    // honoured, not both.
+    expect(screen.getByTestId('entity-sticky-header-row')).toHaveStyle({ marginLeft: '0px', width: '876px' });
+  });
+
   it('mirrors the column around the title it tracks, in the host’s coordinates', () => {
     const title = document.createElement('h1');
     mocks.title = title;
