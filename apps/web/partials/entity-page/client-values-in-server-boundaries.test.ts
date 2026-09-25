@@ -500,8 +500,6 @@ function staticReferences(sourceFile: ts.SourceFile): Reference[] {
  *   across two features and wants someone who can look at the bounties board while doing it.
  * - `read-block-media-dimensions` would return a client reference in place of its empty-dimensions
  *   object. Nothing calls it outside its own test today, so it is a landmine rather than a fault.
- * - `entity-response` calls `getChecked` while deriving a response kind. A server caller would
- *   throw rather than render something wrong, which is the better failure of the two.
  * - `bounties/config` is inert: `useFeatureFlag` is only ever called from `useBountiesEnabled`,
  *   which is a client hook. The module is in the server graph for `bountiesEnabledForNetwork`.
  *   Untangling it moves a hook out of `config.ts` and repoints nine files, for no behaviour change.
@@ -510,7 +508,6 @@ const KNOWN = new Set([
   'partials/bounties/bounty-board-skeleton.tsx -> BOARD_CARD_HEIGHT_PX (from partials/bounties/board-bounty-card.tsx)',
   'partials/bounties/bounty-board-skeleton.tsx -> BOARD_GRID_CLASS (from partials/bounties/board-bounty-card.tsx)',
   'core/blocks/data/read-block-media-dimensions.ts -> NO_BLOCK_MEDIA_DIMENSIONS (from core/hooks/use-block-media-dimensions.ts)',
-  'core/responses/entity-response.ts -> getChecked (from design-system/checkbox.tsx)',
   'core/bounties/config.ts -> useFeatureFlag (from core/state/feature-flags.ts)',
 ]);
 
