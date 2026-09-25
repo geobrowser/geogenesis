@@ -4,7 +4,6 @@ import {
   DEBATE_TIME_PARAM,
   TIMECODE_PREROLL_SECONDS,
   debateSeekSeconds,
-  formatTimecode,
   parseDebateTimeParam,
   withDebateTimecode,
 } from './debate-timecode';
@@ -83,21 +82,5 @@ describe('withDebateTimecode', () => {
   it('never writes a negative or fractional position', () => {
     expect(withDebateTimecode('/x', -5)).toBe(`/x?${DEBATE_TIME_PARAM}=0`);
     expect(withDebateTimecode('/x', 12.7)).toBe(`/x?${DEBATE_TIME_PARAM}=12`);
-  });
-});
-
-describe('formatTimecode', () => {
-  it('drops the hour when there is none', () => {
-    expect(formatTimecode(724_000)).toBe('12:04');
-    expect(formatTimecode(4_000)).toBe('0:04');
-  });
-
-  it('keeps padded minutes once there is an hour', () => {
-    expect(formatTimecode(3_724_000)).toBe('1:02:04');
-  });
-
-  it('reads zero for a position that is not a number', () => {
-    expect(formatTimecode(Number.NaN)).toBe('0:00');
-    expect(formatTimecode(-1)).toBe('0:00');
   });
 });

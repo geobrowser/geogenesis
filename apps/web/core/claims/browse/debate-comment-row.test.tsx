@@ -34,19 +34,23 @@ vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
 // one, against the right entity, carrying the right ancestor chain.
 vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => ({
   ...((await importOriginal()) as Record<string, unknown>),
+  // Visibility lives in the component, not in the row, so the stand-in has to honour it too.
   InlineCommentComposer: ({
+    composer,
     targetEntityId,
     ancestors,
   }: {
+    composer: { isComposing: boolean };
     targetEntityId: string;
     ancestors?: Array<{ id: string }>;
-  }) => (
-    <div
-      data-testid="inline-composer"
-      data-target={targetEntityId}
-      data-ancestors={(ancestors ?? []).map(ancestor => ancestor.id).join(',')}
-    />
-  ),
+  }) =>
+    composer.isComposing ? (
+      <div
+        data-testid="inline-composer"
+        data-target={targetEntityId}
+        data-ancestors={(ancestors ?? []).map(ancestor => ancestor.id).join(',')}
+      />
+    ) : null,
 }));
 vi.mock('~/core/state/editor/markdown-render', () => ({ renderMarkdownDocument: (text: string) => text }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));

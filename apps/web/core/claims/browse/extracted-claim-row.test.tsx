@@ -67,9 +67,14 @@ vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
 // rather than sending the reader to the panel.
 vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  InlineCommentComposer: ({ targetEntityId }: { targetEntityId: string }) => (
-    <div data-testid="inline-composer" data-target={targetEntityId} />
-  ),
+  // Visibility lives in the component, not in the row, so the stand-in has to honour it too.
+  InlineCommentComposer: ({
+    composer,
+    targetEntityId,
+  }: {
+    composer: { isComposing: boolean };
+    targetEntityId: string;
+  }) => (composer.isComposing ? <div data-testid="inline-composer" data-target={targetEntityId} /> : null),
 }));
 
 function claim(overrides: Partial<OrderedTranscriptClaim> = {}): OrderedTranscriptClaim {
@@ -247,22 +252,23 @@ describe('ExtractedClaimRow, saying what it is and answering in place', () => {
   /**
    * jsdom computes no layout, so this asserts the structural condition rather than the pixels.
    *
-   * The avatar's frame is a span sized by inline width and height, which only apply because the span
-   * is blockified as a flex item. Wrapping it in an anchor made the *anchor* the flex item and left
-   * the span inline, so both dimensions were ignored and the `h-full w-full` image inside rendered
-   * at its natural size — measured on the preview at 987px across, in a 32px row.
+   * Twice this row drew a 987px face: once with no sized frame at all, once with the frame wrapped
+   * in a link, which made the *link* the flex item and left the frame `display: inline` — ignoring
+   * both dimensions. The frame and the link are one element now, so neither failure has anywhere to
+   * happen; this pins that down.
    */
-  it('keeps the avatar frame a flex item of the link that wraps it', () => {
+  it('makes the profile link the sized avatar frame rather than nesting one inside it', () => {
     const { container } = renderRow();
 
-    const frame = container.querySelector<HTMLElement>('span[style*="width"]');
+    const frame = container.querySelector<HTMLElement>('[style*="width"]');
     expect(frame).not.toBeNull();
-    const wrapper = frame!.parentElement!;
-    expect(wrapper.tagName).toBe('A');
-    expect(wrapper.className).toMatch(/\b(inline-)?flex\b/);
-    // And it must not stretch: a stretched link centres the 32px frame against the row's whole
-    // height, which puts the face beside the claim text instead of on the name line.
-    expect(wrapper.className).toMatch(/\bself-start\b/);
+    expect(frame!.tagName).toBe('A');
+    expect(frame!.style.width).toBe('32px');
+    expect(frame!.style.height).toBe('32px');
+    // And it must not stretch: a stretched frame centres against a row whose height includes
+    // everything nested under it, which puts the face beside the claim text instead of on the name
+    // line.
+    expect(frame!.className).toMatch(/\bself-start\b/);
   });
 
   it('opens a composer against the claim rather than the comments panel', () => {

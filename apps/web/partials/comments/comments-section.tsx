@@ -9,7 +9,6 @@ import { useAtom } from 'jotai';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { personProfileOpened } from '~/core/analytics';
 import { mergeActivityRows } from '~/core/claims/browse/claim-activity-order';
-import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
@@ -27,12 +26,12 @@ import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
+import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
@@ -53,13 +52,9 @@ import {
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
-import {
-  ThreadCollapseToggle,
-  ThreadListSpine,
-  ThreadParentSpine,
-  branchPointerBlurProps,
-} from './thread-branch';
 import { getRelativeTime } from './comment-time';
+import { ThreadAvatar } from './thread-avatar';
+import { ThreadCollapseToggle, ThreadListSpine, ThreadParentSpine, branchPointerBlurProps } from './thread-branch';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
@@ -210,7 +205,6 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
   return false;
 }
 
-
 export type CommentSectionVariant = 'page' | 'panel' | 'tab';
 
 interface CommentSectionProps {
@@ -338,10 +332,7 @@ export function CommentSection({
   );
   const isRanked = sortOrder === 'best' || sortOrder === 'top';
   const scoresById = useEntityResponseScores(isRanked ? scoreTargets : EMPTY_SCORE_TARGETS);
-  const scoreFor = React.useCallback(
-    (row: { id: string }) => scoresById.get(uuidToHex(row.id)) ?? null,
-    [scoresById]
-  );
+  const scoreFor = React.useCallback((row: { id: string }) => scoresById.get(uuidToHex(row.id)) ?? null, [scoresById]);
   const [filter, setFilter] = useState<CommentFilter>('all');
 
   React.useEffect(() => {
@@ -629,12 +620,7 @@ function TopLevelCommentInput({
           onClick={openComposer}
           className="flex w-full items-center gap-3 border-b border-grey-02 pb-3 text-left"
         >
-          <span
-            className="relative shrink-0 overflow-hidden rounded-full"
-            style={{ width: density.avatarPx, height: density.avatarPx }}
-          >
-            <Avatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} size={density.avatarPx} />
-          </span>
+          <ThreadAvatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} sizePx={density.avatarPx} />
           <span className={cx(density.bodyClass, 'min-w-0 flex-1 truncate text-grey-04')}>
             Join the conversation...
           </span>
@@ -1194,14 +1180,13 @@ function CommentItem({
         className="flex shrink-0 items-center justify-center"
         style={{ width: density.avatarPx, height: density.avatarPx }}
       >
-        <a
+        <ThreadAvatar
           href={NavUtils.toSpace(comment.author.spaceId)}
           onClick={recordAuthorOpen}
-          className="relative shrink-0 overflow-hidden rounded-full"
-          style={{ width: density.avatarPx, height: density.avatarPx }}
-        >
-          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={density.avatarPx} />
-        </a>
+          avatarUrl={comment.author.avatarUrl}
+          value={comment.author.address}
+          sizePx={density.avatarPx}
+        />
       </div>
       {/* Single line, no wrapping: a wrapped header doubles the row height, and
           because the avatar is centred against it the body ends up stranded far
@@ -1445,4 +1430,3 @@ function CommentItem({
     </div>
   );
 }
-

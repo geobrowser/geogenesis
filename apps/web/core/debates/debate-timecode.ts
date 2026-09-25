@@ -78,23 +78,3 @@ export function withDebateTimecode(href: string, seconds: number): string {
 
   return `${path}?${params.toString()}${hash}`;
 }
-
-/**
- * A position on the debate timeline, as a reader reads it.
- *
- * Hours only when there are hours: `12:04` rather than `00:12:04`, and `1:02:04` once a debate runs
- * past the hour. Minutes keep their leading zero inside an hour-long stamp so the columns line up.
- */
-export function formatTimecode(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) return '0:00';
-
-  const total = Math.floor(ms / 1000);
-  const seconds = total % 60;
-  const minutes = Math.floor(total / 60) % 60;
-  const hours = Math.floor(total / 3600);
-
-  const paddedSeconds = String(seconds).padStart(2, '0');
-  if (hours === 0) return `${minutes}:${paddedSeconds}`;
-
-  return `${hours}:${String(minutes).padStart(2, '0')}:${paddedSeconds}`;
-}

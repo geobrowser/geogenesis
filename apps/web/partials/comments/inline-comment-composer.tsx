@@ -24,14 +24,21 @@ import { CommentInput } from './comments-section';
  * made in the panel are the same comment.
  */
 export function InlineCommentComposer({
+  composer,
   targetEntityId,
   targetSpaceId,
   targetEntityType = 'entity',
   ancestors,
   placeholder,
-  onCancel,
-  onPosted,
 }: {
+  /**
+   * The row's disclosure, from {@link useInlineComposer}.
+   *
+   * Passed whole rather than as an `isComposing` prop plus two callbacks, because every caller wired
+   * the same three things the same way around the same conditional — and the spacing above the box
+   * belongs to the box, not to three copies of a wrapper.
+   */
+  composer: InlineComposerState;
   /** The entity being commented on: the debate, or the extracted claim, not the page's claim. */
   targetEntityId: string;
   targetSpaceId: string;
@@ -45,9 +52,6 @@ export function InlineCommentComposer({
    */
   ancestors?: Array<{ id: string; spaceId: string }>;
   placeholder: string;
-  onCancel: () => void;
-  /** Fired once the optimistic row exists, so the caller can reveal the thread it landed in. */
-  onPosted?: (commentId: string) => void;
 }) {
   const { publishComment } = usePublishComment(targetEntityId, targetSpaceId, {
     targetEntityType,
@@ -56,33 +60,36 @@ export function InlineCommentComposer({
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
   const isSignedIn = !!smartAccount;
+  const { isComposing, close, markPosted } = composer;
 
   // Asked before the box opens, not after a draft is typed into it. The thread's own composer
   // checks at the same moment — on the press, not on the submit — because a signed-out reader who
   // types a paragraph and is then asked to sign in loses the paragraph.
   React.useEffect(() => {
-    if (isSignedIn) return;
+    if (!isComposing || isSignedIn) return;
     openSignInPrompt('comment');
-    onCancel();
-    // Only on the transition into a signed-out composer; `onCancel` is a fresh closure each render.
+    close();
+    // Only on the transition into a signed-out open composer; `close` is a fresh closure each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn]);
+  }, [isComposing, isSignedIn]);
 
-  if (!isSignedIn) return null;
+  if (!isComposing || !isSignedIn) return null;
 
   return (
-    <CommentInput
-      analyticsLabel="Activity comment"
-      placeholder={placeholder}
-      autoFocus
-      onCancel={onCancel}
-      onSubmit={text => {
-        // Fire and forget, like every other composer: the box closes now and the optimistic row
-        // carries the "Publishing…" state.
-        void publishComment({ text, ancestorComments: ancestors, onOptimistic: onPosted });
-        onCancel();
-      }}
-    />
+    <div className="mt-2">
+      <CommentInput
+        analyticsLabel="Activity comment"
+        placeholder={placeholder}
+        autoFocus
+        onCancel={close}
+        onSubmit={text => {
+          // Fire and forget, like every other composer: the box closes now and the optimistic row
+          // carries the "Publishing…" state.
+          void publishComment({ text, ancestorComments: ancestors, onOptimistic: markPosted });
+          close();
+        }}
+      />
+    </div>
   );
 }
 
@@ -93,6 +100,8 @@ export function InlineCommentComposer({
  * branches is a reasonable thing to want — a reader part-way through a reply should not lose it by
  * opening another. It also means nothing has to be torn down when a branch collapses.
  */
+export type InlineComposerState = ReturnType<typeof useInlineComposer>;
+
 export function useInlineComposer() {
   const [isComposing, setIsComposing] = React.useState(false);
   // Sticky: once something has been posted here the row keeps showing its thread, even while the
@@ -106,7 +115,7 @@ export function useInlineComposer() {
       toggle: () => setIsComposing(open => !open),
       open: () => setIsComposing(true),
       close: () => setIsComposing(false),
-      markPosted: () => {
+      markPosted: (_commentId?: string) => {
         setHasPosted(true);
         setIsComposing(false);
       },

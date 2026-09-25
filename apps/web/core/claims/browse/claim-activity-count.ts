@@ -13,8 +13,12 @@ import { graphql } from '~/core/io/graphql-client';
 
 import { CLAIM_ACTIVITY_COUNT_FIELDS, type ClaimActivityCount, countActivityForNode } from './claim-activity-fields';
 
-export { CLAIM_ACTIVITY_COUNT_FIELDS, countActivityForNode } from './claim-activity-fields';
-export type { ClaimActivityCount } from './claim-activity-fields';
+// Deliberately not re-exported from here. `claim-activity-fields` is a server-safe module on
+// purpose: the explore feed assembles its card selection on the server, and importing these through
+// this `'use client'` module turns them into client-reference proxies at build time — the fields
+// interpolate to nothing and the query fails to parse. A convenience re-export is a working import
+// path to that failure, so the split is only real if this file does not offer one. Import from
+// `./claim-activity-fields`.
 
 /**
  * Activity totals for a set of claims, in one request.

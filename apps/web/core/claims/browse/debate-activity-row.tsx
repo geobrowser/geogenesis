@@ -24,10 +24,11 @@ import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-d
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
-import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
+import { ThreadCollapseToggle, ThreadParentSpine, useThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ActivityRowTag } from './activity-row-tag';
 import { ACTIVITY_ROOT_DEPTH } from './claim-activity-depth';
 import { orderExtractedClaims } from './claim-activity-order';
 import { DebateCommentRow } from './debate-comment-row';
@@ -124,43 +125,19 @@ export function DebateActivityRow({
   const headline = claimText ?? debate.name ?? 'Debate';
   const debateHref = NavUtils.toEntity(spaceId, debate.id);
 
-  // Measured from this row's top down to where the branch begins, so the spine stops exactly there
-  // rather than guessing at the body's height. Same approach, and the same reason, as `CommentItem`.
-  const rowRef = React.useRef<HTMLDivElement>(null);
-  const branchRef = React.useRef<HTMLDivElement>(null);
-  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
-
-  const measureSpine = React.useCallback(() => {
-    const row = rowRef.current;
-    const branch = branchRef.current;
-    if (!row || !branch) {
-      setSpineHeightPx(null);
-      return;
-    }
-    // Starts below the thumbnail, so drop that much off its length.
-    setSpineHeightPx(
-      branch.getBoundingClientRect().top - row.getBoundingClientRect().top - KEYFRAME_HEIGHT_PX - SPINE_START_GAP_PX
-    );
-  }, []);
-
-  React.useLayoutEffect(() => {
-    measureSpine();
-    const row = rowRef.current;
-    if (row == null || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measureSpine());
-    observer.observe(row);
-    return () => observer.disconnect();
-  });
+  // Below the thumbnail rather than `avatarBottomInRowPx`: this row's left column is a keyframe, not
+  // an avatar, so its own height is where the spine starts.
+  const spine = useThreadParentSpine(KEYFRAME_HEIGHT_PX + SPINE_START_GAP_PX);
 
   const branchLabel = { expand: 'Expand this debate', collapse: 'Collapse this debate' };
 
   return (
-    <div ref={rowRef} className="thread-branch-hover-root relative">
+    <div ref={spine.rowRef} className="thread-branch-hover-root relative">
       {!collapsed && (
         <ThreadParentSpine
           leftPx={DEBATE_DENSITY.avatarCenterPx}
-          topPx={KEYFRAME_HEIGHT_PX + SPINE_START_GAP_PX}
-          heightPx={spineHeightPx}
+          topPx={spine.topPx}
+          heightPx={spine.heightPx}
           lit={false}
           label={branchLabel.collapse}
           onToggle={() => setCollapsed(true)}
@@ -212,9 +189,7 @@ export function DebateActivityRow({
                 {debaterLine}
               </Link>
             )}
-            <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
-              Debate
-            </span>
+            <ActivityRowTag kind="debate" />
             {publishedAt && (
               // Same helper and classes the comment rows use, so a debate and a comment in one
               // thread age identically rather than reading as two lists side by side.
@@ -271,21 +246,16 @@ export function DebateActivityRow({
             </Link>
           </div>
 
-          {composer.isComposing && (
-            <div className="mt-2">
-              <InlineCommentComposer
-                targetEntityId={debate.id}
-                targetSpaceId={spaceId}
-                targetEntityType="debate"
-                placeholder="Comment on this debate..."
-                onCancel={composer.close}
-                onPosted={composer.markPosted}
-              />
-            </div>
-          )}
+          <InlineCommentComposer
+            composer={composer}
+            targetEntityId={debate.id}
+            targetSpaceId={spaceId}
+            targetEntityType="debate"
+            placeholder="Comment on this debate..."
+          />
 
           {!collapsed && (
-            <div ref={branchRef} className="mt-4">
+            <div ref={spine.branchRef} className="mt-4">
               <DebateBranch
                 debateId={debate.id}
                 spaceId={spaceId}

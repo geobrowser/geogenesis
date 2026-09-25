@@ -76,6 +76,49 @@ type BranchFocusHandlers = {
  * measured down to wherever the branch actually begins. Measured rather than computed because the
  * rows between are variable height — a body that wraps to three lines moves it.
  */
+/**
+ * The measured length of the spine descending from a row's avatar to the branch hanging off it.
+ *
+ * Three rows in the claim feed each grew their own copy of this — the same two refs, the same
+ * state, the same `getBoundingClientRect` subtraction and the same `ResizeObserver` — differing
+ * only in where the spine starts. Measured rather than computed because these rows are variable
+ * height: a claim sentence wraps to one line or three, a comment body to any number.
+ *
+ * **Put the ref on the element that carries the branch's top margin.** The spine stops where
+ * `branchRef` begins, so a margin *inside* that element is length the spine never covers — which
+ * shipped as a 12px break between a claim's collapse control and the first comment under it.
+ *
+ * @param startPx Where the spine begins, measured down from the row's top: the avatar's bottom edge
+ *   via {@link avatarBottomInRowPx} for a normal row, or the media's height for a row whose left
+ *   column is not an avatar.
+ */
+export function useThreadParentSpine(startPx: number) {
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  const branchRef = React.useRef<HTMLDivElement>(null);
+  const [heightPx, setHeightPx] = React.useState<number | null>(null);
+
+  const measure = React.useCallback(() => {
+    const row = rowRef.current;
+    const branch = branchRef.current;
+    if (!row || !branch) {
+      setHeightPx(null);
+      return;
+    }
+    setHeightPx(branch.getBoundingClientRect().top - row.getBoundingClientRect().top - startPx);
+  }, [startPx]);
+
+  React.useLayoutEffect(() => {
+    measure();
+    const row = rowRef.current;
+    if (row == null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
+
+  return { rowRef, branchRef, heightPx, topPx: startPx };
+}
+
 export function ThreadParentSpine({
   leftPx,
   topPx,

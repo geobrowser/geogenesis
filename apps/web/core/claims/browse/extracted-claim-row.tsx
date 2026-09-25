@@ -6,19 +6,24 @@ import cx from 'classnames';
 
 import type { DebateResponseKind } from '~/core/debates/api';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
-import { isAssertableMoment } from '~/core/debates/claim-timing';
-import { debateSeekSeconds, formatTimecode, withDebateTimecode } from '~/core/debates/debate-timecode';
+import { formatTimecode, isAssertableMoment } from '~/core/debates/claim-timing';
+import { debateSeekSeconds, withDebateTimecode } from '~/core/debates/debate-timecode';
 import { useComments } from '~/core/hooks/use-comments';
 import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { type CommentDensity, PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
+import {
+  type CommentDensity,
+  PAGE_DENSITY,
+  avatarBottomInRowPx,
+  threadSpineOffsetPx,
+} from '~/partials/comments/comment-density';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
-import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
+import { ThreadAvatar } from '~/partials/comments/thread-avatar';
+import { ThreadCollapseToggle, ThreadParentSpine, useThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -29,9 +34,6 @@ import { ClaimCommentPositionBoundary, ResponsePositionTag } from './claim-comme
 import { DebateCommentRow } from './debate-comment-row';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
-
-/** Gap between the avatar's bottom edge and where its spine starts, as on the debate row. */
-const SPINE_START_GAP_PX = 4;
 
 /**
  * One claim a debater made, as a row under the debate it was extracted from.
@@ -102,34 +104,9 @@ export function ExtractedClaimRow({
   const openSpeakerProfile = useOpenDebaterProfile(speaker?.spaceId, { interactionSurface: 'extracted_claim_speaker' });
   const [commentsCollapsed, setCommentsCollapsed] = React.useState(false);
 
-  // Measured from this row's top down to where its comments begin, so the spine ends exactly at the
-  // first elbow rather than guessing at a body whose height depends on how the sentence wraps. The
-  // same approach, for the same reason, as `CommentItem` and the debate row.
-  const rowRef = React.useRef<HTMLDivElement>(null);
-  const branchRef = React.useRef<HTMLDivElement>(null);
-  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
-
-  const measureSpine = React.useCallback(() => {
-    const row = rowRef.current;
-    const branch = branchRef.current;
-    if (!row || !branch) {
-      setSpineHeightPx(null);
-      return;
-    }
-    // Starts below the avatar, so drop that much off its length.
-    setSpineHeightPx(
-      branch.getBoundingClientRect().top - row.getBoundingClientRect().top - density.avatarPx - SPINE_START_GAP_PX
-    );
-  }, [density.avatarPx]);
-
-  React.useLayoutEffect(() => {
-    measureSpine();
-    const row = rowRef.current;
-    if (row == null || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => measureSpine());
-    observer.observe(row);
-    return () => observer.disconnect();
-  });
+  // Starts at the avatar's bottom edge, which is what `avatarBottomInRowPx` already means and what
+  // the comment rows already use — so a claim's spine and a comment's leave from the same place.
+  const spine = useThreadParentSpine(avatarBottomInRowPx(density));
 
   // Null where the graph reports no home space. The claim is then unlinkable and unrespondable —
   // pointing a vote at this page's space instead would record it somewhere the claim does not live,
@@ -151,37 +128,36 @@ export function ExtractedClaimRow({
   return (
     // `gap-3` is the comment header's own 12px avatar gap, so a claim row and a comment row put
     // their text on the same left edge.
-    <div ref={rowRef} className={cx('thread-branch-hover-root relative flex min-w-0 gap-3', className)}>
+    <div ref={spine.rowRef} className={cx('thread-branch-hover-root relative flex min-w-0 gap-3', className)}>
       {/* The line from this claim's face down to the comments hanging off it. Without it the branch
           below draws an elbow reaching back to a spine that was never there — an arm pointing at
           nothing, which is what a reader sees as a broken connector. */}
       {hasComments && !commentsCollapsed && (
         <ThreadParentSpine
           leftPx={density.avatarCenterPx}
-          topPx={density.avatarPx + SPINE_START_GAP_PX}
-          heightPx={spineHeightPx}
+          topPx={spine.topPx}
+          heightPx={spine.heightPx}
           lit={false}
           label={branchLabel.collapse}
           onToggle={() => setCommentsCollapsed(true)}
         />
       )}
-      {/*
-        `Avatar` fills its container whenever it has a real `avatarUrl` to draw — `size` only sizes
-        the generated fallback — so the frame is the caller's job. Same shape the comment rows in
-        this thread use, off the same density, which is what keeps the two kinds of row aligned.
-      */}
-      <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile} className="self-start">
-        <span
-          className="relative shrink-0 overflow-hidden rounded-full"
-          style={{ width: density.avatarPx, height: density.avatarPx }}
-        >
-          <Avatar avatarUrl={speaker?.avatarUrl ?? null} value={speaker?.spaceId} size={density.avatarPx} />
-        </span>
-      </SpeakerLink>
+      {/* The frame is the link rather than sitting inside one: an anchor wrapping a sized span makes
+          the anchor the flex item and leaves the span inline, which is how a 987px face ended up in
+          a 32px row. `self-start` keeps it on the name's line instead of centred against a row whose
+          height includes everything nested under it. */}
+      <ThreadAvatar
+        href={speaker ? NavUtils.toSpace(speaker.spaceId) : undefined}
+        onClick={speaker ? openSpeakerProfile : undefined}
+        avatarUrl={speaker?.avatarUrl ?? null}
+        value={speaker?.spaceId}
+        sizePx={density.avatarPx}
+        className="self-start"
+      />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile} className="min-w-0">
+          <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile}>
             <span className={cx(density.nameClass, 'truncate text-text')}>
               {speaker?.name?.trim() || 'Unnamed debater'}
             </span>
@@ -267,24 +243,21 @@ export function ExtractedClaimRow({
           </div>
         ) : null}
 
-        {claimSpaceId && composer.isComposing && (
-          <div className="mt-2">
-            <InlineCommentComposer
-              targetEntityId={claim.id}
-              targetSpaceId={claimSpaceId}
-              targetEntityType="claim"
-              placeholder="Comment on this claim..."
-              onCancel={composer.close}
-              onPosted={composer.markPosted}
-            />
-          </div>
+        {claimSpaceId && (
+          <InlineCommentComposer
+            composer={composer}
+            targetEntityId={claim.id}
+            targetSpaceId={claimSpaceId}
+            targetEntityType="claim"
+            placeholder="Comment on this claim..."
+          />
         )}
 
         {/* `composer.hasPosted` as well as the server count: the aggregate that gates this is from
             the page load, so a reader's first comment on a silent claim would otherwise be written
             and then not drawn. */}
         {hasComments && !commentsCollapsed && (
-          <div ref={branchRef} className="mt-3">
+          <div ref={spine.branchRef} className="mt-3">
             <ClaimComments
               claimId={claim.id}
               spaceId={claimSpaceId!}
@@ -363,18 +336,9 @@ function ClaimComments({
  * the context loss the side panel exists to avoid. Unattributed turns get no link — there is no
  * person to open.
  *
- * `inline-flex`, and this is load-bearing rather than tidiness. The avatar's frame is a `span` sized
- * by inline width and height, and it used to be a direct child of the row's flex container, where
- * being a flex item blockified it and those dimensions applied. Wrapping it in an anchor made the
- * anchor the flex item and left the span `display: inline`, which ignores both — so the `h-full
- * w-full` image inside resolved against nothing and rendered at its natural size, a 987px face in a
- * 32px row. Making this a flex container puts the span back to being a flex item.
- *
- * The caller supplies the cross-axis alignment, because the two uses want opposite things and the
- * wrapper cannot know which it is. The face needs `self-start`: it is a flex item of the row, which
- * stretches its items, and a stretched anchor centres the 32px frame against the row's full height —
- * dropping the avatar off the name line and down beside the claim text. The name is inside an
- * already-centred header, so it wants no alignment of its own.
+ * The name only. The face is its own link — see `ThreadAvatar`, which is the frame rather than
+ * something wrapped around one, because an anchor around a sized frame is what made a 987px face
+ * render in a 32px row.
  */
 function SpeakerLink({
   speaker,
@@ -393,7 +357,7 @@ function SpeakerLink({
     <a
       href={NavUtils.toSpace(speaker.spaceId)}
       onClick={onOpenProfile}
-      className={cx('inline-flex shrink-0 overflow-hidden no-underline hover:underline', className)}
+      className={cx('min-w-0 truncate no-underline hover:underline', className)}
     >
       {children}
     </a>
