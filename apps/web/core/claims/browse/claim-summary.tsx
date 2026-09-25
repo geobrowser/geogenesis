@@ -12,7 +12,7 @@ import { getEntityResponders } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
-  ENTITY_RESPONSE_COPY,
+  CLAIM_RESPONSE_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -63,7 +63,7 @@ export function ClaimSummary({
    */
   layout?: 'stacked' | 'inline';
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const tier = claimSummaryTier(summary.total);
 
   // Nothing where the counts never answered, before asking what the tier is.
@@ -119,7 +119,7 @@ export function ClaimSummary({
         {/* The bar takes the middle and gives way first: `min-w-0` so a narrow card shortens the
             rail rather than wrapping the reading off the end of it. Thinner than the stacked one —
             at full width it is a chart, inline it is a rule between two readings. */}
-        <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-0.5 min-w-0 flex-1" />
+        <ClaimSplitBar percent={percent} className="h-0.5 min-w-0 flex-1" />
         {responders}
       </div>
     );
@@ -127,7 +127,7 @@ export function ClaimSummary({
 
   return (
     <div className={className}>
-      <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-1.5" />
+      <ClaimSplitBar percent={percent} className="h-1.5" />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         {share}
         {responders}
@@ -149,14 +149,12 @@ export function ClaimSummary({
  */
 export function ClaimSplitBar({
   percent,
-  responseKind,
   className,
 }: {
   percent: number;
-  responseKind: ResponseKind;
   className?: string;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
 
   return (
     <div
@@ -196,7 +194,7 @@ export function ClaimSides({
   /** True where the two sit on one row with room between them, so the second reads as its end. */
   alignSecondEnd?: boolean;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const shared = {
     entityId,
     spaceId,

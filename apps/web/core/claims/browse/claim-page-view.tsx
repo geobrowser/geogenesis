@@ -15,6 +15,7 @@ import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -531,7 +532,7 @@ function ClaimPositionSection({
         entityId={entityId}
         spaceId={spaceId}
         positions={control.optimisticPositions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         promptForComment={control.isConnected}

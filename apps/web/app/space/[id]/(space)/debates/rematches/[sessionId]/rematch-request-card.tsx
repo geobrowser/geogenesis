@@ -42,12 +42,11 @@ export function RematchRequestCard({
   const parties = participants.map(participant => {
     const isRequester = participant.user_id === request.requester_user_id;
     const position = isRequester ? request.requester_position : request.recipient_position;
-    const label = isRequester ? request.requester_position_label : request.recipient_position_label;
 
     return {
       ...participant,
       position,
-      position_label: label ?? responsePositionLabel(request.response_kind ?? null, position),
+      position_label: responsePositionLabel(position),
     };
   });
 

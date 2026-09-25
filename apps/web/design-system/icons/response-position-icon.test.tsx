@@ -7,8 +7,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ResponseKind } from '~/core/responses/entity-response';
 
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
@@ -16,10 +14,12 @@ import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { ResponsePositionIcon } from './response-position-icon';
 
 /**
- * The mapping used to be written out at all three surfaces that draw it — the entity vote buttons,
- * the claim ticker over the video, and the position pills — and the pills' copy was the one missing
- * the veracity branch, so a factual claim was thumbed in the claims side panel while the ticker
- * above it drew a chevron for the same claim. These pin the mapping now that there is one of it.
+ * There are two glyphs now, not three.
+ *
+ * A claim carrying the "Is factual" flag used to draw a chevron, because it was verified or
+ * disputed rather than agreed with. Every claim is a stance now, so a thumb is the only thing a
+ * claim draws — and `ResponseKind` no longer has a value that could ask for anything else, which
+ * is what keeps a third glyph from creeping back.
  */
 describe('ResponsePositionIcon', () => {
   afterEach(cleanup);
@@ -43,12 +43,7 @@ describe('ResponsePositionIcon', () => {
   const glyph = (responseKind: ResponseKind, position: boolean, selected = false) =>
     markup(<ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />);
 
-  it('draws chevrons for a veracity claim, where the act is confirming rather than approving', () => {
-    expect(glyph('veracity', true)).toBe(markup(<ChevronUp />));
-    expect(glyph('veracity', false)).toBe(markup(<ChevronDown />));
-  });
-
-  it('draws thumbs for a stance claim', () => {
+  it('draws thumbs for a claim', () => {
     expect(glyph('stance', true)).toBe(markup(<ThumbUp filled={false} />));
     expect(glyph('stance', false)).toBe(markup(<ThumbDown filled={false} />));
   });
@@ -58,10 +53,7 @@ describe('ResponsePositionIcon', () => {
     expect(glyph('curation', false)).toBe(markup(<VoteArrow direction="down" filled={false} />));
   });
 
-  // `selected` is advisory: it fills the glyphs that have a filled form and is inert on the one
-  // that does not. A chevron that quietly dropped it would read as veracity having a fill that
-  // never arrives, which is the bug a previous shared `Icon` const shipped.
-  it('fills the held side of a stance claim', () => {
+  it('fills the held side of a claim', () => {
     expect(glyph('stance', true, true)).toBe(markup(<ThumbUp filled />));
     expect(glyph('stance', false, true)).toBe(markup(<ThumbDown filled />));
   });
@@ -70,9 +62,19 @@ describe('ResponsePositionIcon', () => {
     expect(glyph('curation', true, true)).toBe(markup(<VoteArrow direction="up" filled />));
     expect(glyph('curation', false, true)).toBe(markup(<VoteArrow direction="down" filled />));
   });
+  /**
+   * The wire can still say `"veracity"`.
+   *
+   * geo-chat labels claims minted before the vocabularies merged with a kind this app no longer
+   * has, and the value reaches here typed as one it does — TypeScript cannot catch it. An unguarded
+   * lookup returns `undefined` and throws on the call, which blanks the whole surface: the claims
+   * ticker over a debate video, or a card in the matches list.
+   */
+  it('falls back to the claim glyph for a kind that is no longer a kind', () => {
+    const retired = 'veracity' as unknown as ResponseKind;
 
-  it('leaves a chevron unchanged when held, having no filled form to switch to', () => {
-    expect(glyph('veracity', true, true)).toBe(glyph('veracity', true, false));
-    expect(glyph('veracity', false, true)).toBe(glyph('veracity', false, false));
+    expect(() => glyph(retired, true)).not.toThrow();
+    expect(glyph(retired, true)).toBe(markup(<ThumbUp filled={false} />));
+    expect(glyph(retired, false)).toBe(markup(<ThumbDown filled={false} />));
   });
 });

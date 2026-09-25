@@ -1,7 +1,9 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { DebateClaim } from '~/core/debates/api';
 import type { Entity } from '~/core/types';
 
@@ -59,40 +61,40 @@ function rowWith(viewerResponse: DebateClaim['viewer_response']): DebateClaim {
 /**
  * The guard `EntityVoteButtons` carried and the shared card dropped.
  *
- * An unpublished edit to the claim's "Is factual" value — or to its Claim type — puts the draft and
- * the published graph into disagreement about which vocabulary the claim uses. The kind selects
- * `voteKind` on the write, so responding across that disagreement publishes the wrong kind of vote,
- * not merely a mislabelled one.
+ * An unpublished edit to the claim's *type* puts the draft and the published graph into
+ * disagreement about whether the entity is a claim at all — curation and stance are different vote
+ * kinds, so responding across that disagreement publishes the wrong kind of vote, not merely a
+ * mislabelled one.
+ *
+ * The "Is factual" value used to be watched here for the same reason, when it chose between a
+ * stance and a veracity response. It chooses nothing now, so an unpublished edit to it cannot
+ * change what gets published and must not disable the pills.
  */
 describe('useClaimResponseState and an unpublished vocabulary edit', () => {
-  it('blocks responding while the factual flag has an unpublished local edit', () => {
+  it('lets someone respond while the factual flag has an unpublished local edit', () => {
     const result = render(
       entityWith([{ spaceId: SPACE, property: { id: CLAIM_IS_FACTUAL }, value: '1', isLocal: true }])
     );
 
+    expect(result.current.responseBlockedReason).toBeNull();
+  });
+
+  it('still blocks responding while the Claim type itself has an unpublished local edit', () => {
+    const result = render(
+      entityWith(
+        [],
+        [
+          {
+            spaceId: SPACE,
+            type: { id: SystemIds.TYPES_PROPERTY },
+            toEntity: { id: CLAIM_TYPE_ID },
+            isLocal: true,
+          },
+        ]
+      )
+    );
+
     expect(result.current.responseBlockedReason).toBe('Publish the claim type change before responding.');
-  });
-
-  it('does not block once that edit has been published', () => {
-    const result = render(
-      entityWith([
-        { spaceId: SPACE, property: { id: CLAIM_IS_FACTUAL }, value: '1', isLocal: true, hasBeenPublished: true },
-      ])
-    );
-
-    expect(result.current.responseBlockedReason).toBeNull();
-  });
-
-  it('ignores a draft edit made in a different space', () => {
-    // Responses are published per space, so an edit elsewhere says nothing about this one's
-    // vocabulary.
-    const result = render(
-      entityWith([
-        { spaceId: 'da4a6c1f9d4446f9832ff3b49a4400aa', property: { id: CLAIM_IS_FACTUAL }, value: '1', isLocal: true },
-      ])
-    );
-
-    expect(result.current.responseBlockedReason).toBeNull();
   });
 
   it('leaves an ordinary claim alone', () => {

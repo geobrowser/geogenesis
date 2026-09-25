@@ -654,7 +654,7 @@ describe('claim response indexing notifications', () => {
     vi.stubGlobal('fetch', fetch);
 
     await expect(
-      notifyClaimResponseIndexed('space-1', 'claim-1', 'veracity', false, vi.fn(), 'user-a')
+      notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', false, vi.fn(), 'user-a')
     ).resolves.toBeUndefined();
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/response-indexed', {
@@ -663,7 +663,7 @@ describe('claim response indexing notifications', () => {
         Authorization: 'Bearer access-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ response_kind: 'veracity', position: false }),
+      body: JSON.stringify({ response_kind: 'stance', position: false }),
       signal: undefined,
     });
   });

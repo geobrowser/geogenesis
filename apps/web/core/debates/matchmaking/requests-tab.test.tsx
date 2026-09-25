@@ -381,7 +381,10 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     const parties = screen.getByText('Arturas').closest('div')!;
-    expect(within(parties).getByText('No')).toBeInTheDocument();
+    // Named from the side rather than from the fixture's `position_label` — geo-chat's label reads
+    // "Dispute" on a claim it still calls factual, which this app cannot publish.
+    expect(within(parties).getByText('Disagree')).toBeInTheDocument();
+    expect(within(parties).queryByText('No')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('button', { name: 'Block Arturas' }));

@@ -245,12 +245,16 @@ describe('MatchesList', () => {
     expect(screen.queryByRole('button', { name: /Upvote|Downvote|vote/i })).not.toBeInTheDocument();
   });
 
-  it('uses the veracity vocabulary for a factual claim', () => {
+  // Inverted rather than deleted: a claim geo-chat still labels `veracity` is exactly the case that
+  // has to come out Agree/Disagree now.
+  it('uses Agree and Disagree for a claim geo-chat still calls factual', () => {
     mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
     render(<MatchesList onTabChange={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: /^Verify/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Dispute/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Dispute/ })).not.toBeInTheDocument();
   });
 
   it('publishes the opposite response when the other side is chosen', () => {

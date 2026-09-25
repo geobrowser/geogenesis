@@ -1127,11 +1127,11 @@ describe('DebateRematchPageClient', () => {
     expect(within(syntheticClaimCard!).getByRole('button', { name: /^Disagree/ })).toBeEnabled();
   });
 
-  it('uses Verify and Dispute for factual claims', async () => {
+  it('uses Agree and Disagree for a claim geo-chat still calls factual', async () => {
     mocks.claims = [{ ...sharedClaim(), response_kind: 'veracity' }];
     mocks.positions = [
-      { ...position('profile-local', CLAIM_SHARED, SPACE_1, true), responseKind: 'veracity' },
-      { ...position('profile-remote', CLAIM_SHARED, SPACE_1, false), responseKind: 'veracity' },
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
     ];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -1139,8 +1139,9 @@ describe('DebateRematchPageClient', () => {
 
     const claimCard = screen.getByText('A claim both participants chose').closest('article');
     expect(claimCard).not.toBeNull();
-    expect(within(claimCard!).getByRole('button', { name: /^Verify/ })).toBeEnabled();
-    expect(within(claimCard!).getByRole('button', { name: /^Dispute/ })).toBeEnabled();
+    expect(within(claimCard!).getByRole('button', { name: /^Agree/ })).toBeEnabled();
+    expect(within(claimCard!).getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+    expect(within(claimCard!).queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
   });
 
   // The header used to grow the claim and two position chips the moment a request went out, moving

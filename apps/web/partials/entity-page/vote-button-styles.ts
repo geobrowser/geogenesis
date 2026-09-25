@@ -16,23 +16,10 @@
  * (`#606060`) gives 6.29:1. The pill was already the one surface meeting it, which is why hover
  * borrows its `text` as well — a control resting at `grey-04` has to go somewhere darker still.
  *
- * The veracity chevrons are the deliberate exception and keep their own selected colour. A chevron
- * has no filled form to switch to, so colour is the only signal it has.
+ * There used to be one exception — the veracity chevrons kept their own selected colour, because a
+ * chevron has no filled form to switch to and colour was the only signal it had. Claims are all
+ * answered with thumbs now, so every control here fills its icon and this is the only shade.
  *
  * One definition so these cannot drift apart again.
  */
 export const VOTE_BUTTON_CLASS = 'text-grey-04 hover:text-text';
-
-/**
- * The veracity chevrons' selected colour, kept exactly as it shipped.
- *
- * Not a token: `#2A2B2E` is a near-black written by hand in about a dozen files, ten units off the
- * theme's own `text` (`#202020`). Left alone because this ticket is about the greys, but it is the
- * one hardcoded colour still in this control.
- *
- * Applied *instead of* {@link VOTE_BUTTON_CLASS}, never alongside it. `cx` is `classnames`, which
- * concatenates — it does not resolve conflicting Tailwind utilities the way `tailwind-merge` would,
- * and this repo does not use that. Emitting both leaves the winner to whichever rule Tailwind
- * happens to emit second, which is not something a component gets to decide.
- */
-export const VOTE_CHEVRON_SELECTED_CLASS = 'text-[#2A2B2E]';

@@ -44,7 +44,7 @@ describe('ClaimPositionCommentControl', () => {
     viewerPosition?: boolean | null;
     promptForComment?: boolean;
     onRespond?: (position: boolean) => void;
-    responseKind?: 'stance' | 'veracity';
+    responseKind?: 'stance';
     positionRowEndSlot?: ReactNode;
   } = {}) {
     render(
@@ -299,15 +299,9 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('uses the factual-claim vocabulary in the prompt', () => {
-    renderControl({ responseKind: 'veracity' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Dispute' }));
-
-    expect(screen.getByRole('textbox', { name: 'Why do you dispute?' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Dispute' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
-  });
+  // A case that used to sit here — "uses the factual-claim vocabulary in the prompt" — asserted the
+  // composer said "Why do you dispute?" on a factual claim. The prompt is built from the action
+  // label, and there is one label per side now, so it would be a copy of the disagree case above.
 
   it('preserves the sign-in flow instead of opening a composer while signed out', () => {
     const { onRespond } = renderControl({ promptForComment: false });

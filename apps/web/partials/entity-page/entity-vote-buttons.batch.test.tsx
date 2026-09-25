@@ -145,13 +145,16 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
   });
 
-  it('renders factual claims with the original chevron controls and no explanatory label', () => {
-    const view = renderButtons(true, true, 'veracity');
+  // This used to assert chevrons — the `0 0 16 16` glyphs a factual claim drew. Claims are thumbs
+  // now, which are `0 0 12 12`, so the case is kept and its expectation inverted: the chevrons must
+  // not come back on a claim.
+  it('renders a claim with thumb controls and no explanatory label', () => {
+    const view = renderButtons(true, true, 'stance');
 
     expect(view.queryByText('Is factual')).not.toBeInTheDocument();
     const responseIcons = [...view.container.querySelectorAll('svg')];
     expect(responseIcons).toHaveLength(2);
-    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
   it('renders persisted curation state in the fullscreen debate pill', () => {
@@ -226,7 +229,7 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('renders 50 batched claims with one summary request and no individual response requests', async () => {
     const targets = Array.from({ length: 50 }, (_, index) => ({
       entityId: `claim-${index}`,
-      responseKind: index % 2 === 0 ? ('stance' as const) : ('veracity' as const),
+      responseKind: 'stance' as const,
     }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -247,7 +250,7 @@ describe('EntityVoteButtons claims-page batching', () => {
   });
 });
 
-function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' | 'veracity' }> }) {
+function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' }> }) {
   const batch = useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true });
   return (
     <ClaimResponseBatchBoundary ready={batch.isSuccess}>
@@ -263,7 +266,7 @@ function BatchedClaims({ targets }: { targets: Array<{ entityId: string; respons
   );
 }
 
-function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' | 'veracity' = 'stance') {
+function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' = 'stance') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seedCaches) {
     queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, responseKind), {

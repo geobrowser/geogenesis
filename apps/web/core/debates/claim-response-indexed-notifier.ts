@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import {
   type DebateResponseKind,
@@ -76,7 +77,7 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
     scope !== 'entity-response-indexing' ||
     indexingState?.status !== 'indexed' ||
     !indexingState.pending ||
-    (responseKind !== 'stance' && responseKind !== 'veracity')
+    !isClaimResponseKind(responseKind)
   ) {
     return null;
   }
@@ -84,10 +85,24 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
     entityId: String(entityId),
     position:
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
-    responseKind: responseKind as DebateResponseKind,
+    responseKind,
     runId: indexingState.runId,
     spaceId: String(spaceId),
   };
+}
+
+/**
+ * Whether a query key's response-kind segment is a claim's.
+ *
+ * A type guard, so the two parses below narrow rather than cast. They each spelled this inline and
+ * then asserted the result with `as DebateResponseKind` — which was how `"veracity"` stayed
+ * admissible here after it stopped being a kind: the cast said it was one.
+ *
+ * Only `"stance"` now. Nothing writes an indexing key under the retired kind, and forwarding one to
+ * geo-chat would record a kind against a response published as a stance.
+ */
+function isClaimResponseKind(responseKind: unknown): responseKind is DebateResponseKind {
+  return responseKind === CLAIM_RESPONSE_KIND;
 }
 
 /**
@@ -109,7 +124,7 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
   if (
     scope !== 'entity-response-indexing' ||
     !indexingState?.pending ||
-    (responseKind !== 'stance' && responseKind !== 'veracity')
+    !isClaimResponseKind(responseKind)
   ) {
     return null;
   }
@@ -117,7 +132,7 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
     entityId: String(entityId),
     position:
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
-    responseKind: responseKind as DebateResponseKind,
+    responseKind,
     spaceId: String(spaceId),
     /** Whose write this is, so a reader can attribute the row without assuming the current viewer. */
     personalSpaceId: String(personalSpaceId),

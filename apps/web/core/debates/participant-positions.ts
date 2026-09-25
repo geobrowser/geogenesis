@@ -51,10 +51,10 @@ export function isParticipantPositionsQueryKey(queryKey: readonly unknown[]) {
   return queryKey[0] === PARTICIPANT_POSITIONS_QUERY_ROOT;
 }
 
-const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([
-  [responseKindToVoteKind('stance'), 'stance'],
-  [responseKindToVoteKind('veracity'), 'veracity'],
-]);
+// Vote kind 2 — the old veracity responses — is deliberately absent. Those rows are no longer read
+// anywhere, so a participant's position on a claim they verified before the vocabularies were
+// merged does not show. See the PR that removed Verify/Dispute.
+const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([[responseKindToVoteKind('stance'), 'stance']]);
 
 /**
  * Hand-written rather than generated so it doesn't require regenerating `gql.ts`. The generated

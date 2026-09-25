@@ -8,14 +8,13 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import {
   type DebateClaimPositionSummary,
   type DebateRematchClaim,
   type DebateRematchClaimPosition,
   type DebateRematchParticipant,
   type DebateRematchSession,
-  type DebateResponseKind,
   type MatchmakingReadiness,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
@@ -580,12 +579,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // A claim's sides, from the graph. The shape the rest of the page was already drawing.
   const sidesOf = React.useCallback(
-    (claimId: string, claimSpaceId: string, responseKind: DebateResponseKind | null): DebateRematchClaimPosition[] =>
+    (claimId: string, claimSpaceId: string): DebateRematchClaimPosition[] =>
       participantSidesOn(positions.byClaim, claimId, claimSpaceId, participants).map(side => ({
         user_id: side.participant.user_id,
         position: side.position,
-        position_label:
-          side.position === null ? null : responsePositionLabel(side.responseKind ?? responseKind, side.position),
+        position_label: side.position === null ? null : responsePositionLabel(side.position),
       })),
     [participants, positions.byClaim]
   );
@@ -847,7 +845,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const recordedRow = sessionRowFor(entity.id);
       const sessionRow =
         preferred && recordedRow && !idEquals(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
-      const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
+      const responseKind = resolveClaimResponseKind();
       return {
         /**
          * Left in whichever spelling its source used, deliberately.
@@ -867,7 +865,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           description: entity.description,
         },
         response_kind: responseKind,
-        participants: sidesOf(entity.id, sessionRow?.claim.space_id ?? homeSpaceId, responseKind),
+        participants: sidesOf(entity.id, sessionRow?.claim.space_id ?? homeSpaceId),
         shared_preference: sessionRow?.shared_preference ?? false,
         recently_rejected: sessionRow?.recently_rejected ?? recentlyRejectedClaimIds.has(normId(entity.id)),
         previously_debated: sessionRow?.previously_debated ?? false,
@@ -2088,14 +2086,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? session.participants.map(participant => {
           const requester = participant.user_id === incomingRequest.requester_user_id;
           const position = requester ? incomingRequest.requester_position : incomingRequest.recipient_position;
-          const positionLabel = requester
-            ? incomingRequest.requester_position_label
-            : incomingRequest.recipient_position_label;
-
           return {
             ...participant,
             position,
-            position_label: positionLabel ?? responsePositionLabel(incomingRequest.response_kind ?? null, position),
+            // Our word, not the request's. geo-chat labels the sides of a claim it still calls
+            // factual "Verify" and "Dispute", and this pair sits beside pills that can only
+            // publish an Agree — see `positionSummariesFromCounts`.
+            position_label: responsePositionLabel(position),
           };
         })
       : [];
@@ -2590,7 +2587,7 @@ function RematchClaimCard({
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
-  const responseKind = claim.response_kind ?? 'stance';
+  const responseKind = resolveClaimResponseKind();
 
   // The client knows its own answer long before geo-chat echoes it back. Reading the optimistic
   // copy is what keeps the side you just picked highlighted, and Request debate appearing with it,
@@ -2693,10 +2690,7 @@ function RematchClaimCard({
     request != null &&
     idEquals(request.claim.claim_entity_id, claim.claim.claim_entity_id);
 
-  const positions = React.useMemo(
-    () => rematchPositionSummaries(claim, session, responseKind),
-    [claim, responseKind, session]
-  );
+  const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
   // geo-chat's copy, deliberately — not the optimistic one. The card reads the viewer's own
   // in-flight response off the indexing snapshot for display, and uses this field for the two
@@ -2716,7 +2710,7 @@ function RematchClaimCard({
     viewer_response:
       chatPosition === null || chatPosition === undefined
         ? null
-        : { position: chatPosition, position_label: responsePositionLabel(responseKind, chatPosition) },
+        : { position: chatPosition, position_label: responsePositionLabel(chatPosition) },
     viewer_debate_ready: claimReadiness?.viewer_debate_ready ?? false,
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
@@ -2831,8 +2825,7 @@ function RecommendedSection({ name, count, children }: { name: string; count: nu
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */
 function rematchPositionSummaries(
   claim: DebateRematchClaim,
-  session: DebateRematchSession | null,
-  responseKind: 'stance' | 'veracity'
+  session: DebateRematchSession | null
 ): DebateClaimPositionSummary[] {
   return [true, false].map(position => {
     const holders = claim.participants.filter(side => side.position === position);
@@ -2842,9 +2835,10 @@ function rematchPositionSummaries(
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
-      position_label:
-        holders.find(holder => holder.position_label)?.position_label ?? responsePositionLabel(responseKind, position),
+      // Our word, not the holder's — see `positionSummariesFromCounts`. This used to prefer a
+      // server-supplied label so that an authoritative Verify/Dispute survived, which is exactly
+      // what must not happen now.
+      position_label: responsePositionLabel(position),
       total_count: holders.length,
       // Only meaningful for the hub's "available now" counts; a rematch is already a fixed pair,
       // so there is nobody here the viewer would send a request to.
