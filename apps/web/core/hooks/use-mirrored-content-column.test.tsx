@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -154,6 +154,65 @@ describe('useMirroredContentColumn', () => {
     // The host too: collapsing the browse sidebar widens the column under a bar that has not
     // otherwise changed.
     expect(observed).toEqual([column, host]);
+  });
+
+  /**
+   * The whole point of the observer. A column's width is not fixed for the life of the page — it
+   * changes when the window resizes, when a rail appears beside it, and whenever somebody edits the
+   * constant it is set from — and none of those re-render the caller.
+   */
+  it('re-measures when the column changes size', () => {
+    let fire = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          fire = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+
+    const { host, column, anchor } = buildPage();
+    const { result, rerender } = renderHook(() => useMirroredContentColumn(anchor, host, ATTRIBUTE));
+    expect(result.current).toEqual({ left: 220, width: 800 });
+
+    withBox(column, { left: 300, width: 1040 });
+    act(() => fire());
+    rerender();
+
+    expect(result.current).toEqual({ left: 120, width: 1000 });
+  });
+
+  /**
+   * The host is watched as well as the column, for the case the column alone would miss: a column at
+   * its max width does not resize when the window does, it only moves.
+   */
+  it('re-measures when the host moves under an unchanged column', () => {
+    let fire = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          fire = callback;
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+
+    const { host, anchor } = buildPage();
+    const { result, rerender } = renderHook(() => useMirroredContentColumn(anchor, host, ATTRIBUTE));
+    expect(result.current).toEqual({ left: 220, width: 800 });
+
+    withBox(host, { left: 24, width: 1416 });
+    act(() => fire());
+    rerender();
+
+    expect(result.current).toEqual({ left: 396, width: 800 });
   });
 
   it('still measures where ResizeObserver is missing', () => {
