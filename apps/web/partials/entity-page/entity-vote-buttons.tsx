@@ -24,6 +24,7 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
+  RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -402,7 +403,7 @@ export function EntityVoteButtons({
       ) : null}
       {isResponseIndexingDelayed ? (
         <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
-          Response submitted. Waiting for confirmation.
+          {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}
     </div>

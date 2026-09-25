@@ -362,7 +362,10 @@ describe('MatchesList', () => {
     const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
-    expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
+    expect(mocks.createRequestMutate).toHaveBeenCalledWith(
+      { space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID },
+      expect.anything()
+    );
 
     mocks.outbound = {
       id: 'request-1',

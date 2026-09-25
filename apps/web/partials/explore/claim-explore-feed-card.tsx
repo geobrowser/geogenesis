@@ -10,7 +10,10 @@ import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-s
 import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import {
+  trustedIndexedPosition,
+  useBackfillReadinessForHeldPosition,
+} from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -152,7 +155,12 @@ export function ClaimExploreFeedCard({
   // The feed is where the gap showed itself: a viewer scrolling past claims they hold positions on
   // saw their own face on the repaired ones and not the rest (GEO-2821). The card cannot be the one
   // surface that draws a held position without standing the viewer up on it.
-  useBackfillReadinessForHeldPosition({ readiness: row, entityId: item.entityId, spaceId: item.spaceId });
+  useBackfillReadinessForHeldPosition({
+    readiness: row,
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
+  });
 
   // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
   // action at all. Checking only the server seed would keep the button hidden after this card's
@@ -310,6 +318,7 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
+            pending={control.isResponsePending}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"
