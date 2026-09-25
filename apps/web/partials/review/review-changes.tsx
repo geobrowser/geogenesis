@@ -26,7 +26,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import {
   buildIsNewEntity,
@@ -80,6 +80,8 @@ import {
 } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+const EMPTY_ID_SET: ReadonlySet<string> = new Set();
 
 function orderVisibleEntitiesStable(
   entities: EntityDiff[],
@@ -514,9 +516,36 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isNewEntity = React.useMemo(
+  const storeIsNewEntity = React.useMemo(
     () => buildIsNewEntity(candidateValues, candidateRelations),
     [candidateValues, candidateRelations]
+  );
+
+  // Relation targets with no review row that the store still reads as new.
+  const unresolvedLinkTargetIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const relation of relationsFromSpace) {
+      const targetId = relation.toEntity.id;
+      if (ownershipIndex.ownerOf.has(targetId)) continue; // has a row, or folds into one
+      if (!storeIsNewEntity(targetId)) continue; // store already knows it exists
+      ids.add(targetId);
+    }
+    return [...ids].sort();
+  }, [relationsFromSpace, ownershipIndex, storeIsNewEntity]);
+
+  const { data: confirmedOnGraphIds = EMPTY_ID_SET, isFetching: isResolvingLinkTargets } = useQuery({
+    queryKey: ['review-link-target-existence', unresolvedLinkTargetIds.join(',')],
+    enabled: isReviewOpen && unresolvedLinkTargetIds.length > 0,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const entities = await Effect.runPromise(getBatchEntities(unresolvedLinkTargetIds));
+      return new Set(entities.map(entity => entity.id));
+    },
+  });
+
+  const isNewEntity = React.useMemo(
+    () => buildIsNewEntity(candidateValues, candidateRelations, confirmedOnGraphIds),
+    [candidateValues, candidateRelations, confirmedOnGraphIds]
   );
 
   const deselectionBlockers = React.useMemo(
@@ -748,6 +777,7 @@ export const ReviewChanges = () => {
   const handleSubmit = React.useCallback(async () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
+    if (isResolvingLinkTargets) return;
 
     const dangling = findDanglingDependencies(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity);
     if (dangling.length > 0) {
@@ -939,6 +969,7 @@ export const ReviewChanges = () => {
   }, [
     activeSpace,
     isReadyToPublish,
+    isResolvingLinkTargets,
     makeProposal,
     relationsFromSpace,
     publishSelection,
@@ -959,8 +990,10 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
-      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+        isReviewOpen && isReadyToPublish && !isPublishing && !isResolvingLinkTargets
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, isResolvingLinkTargets, handleSubmit]
     )
   );
 
@@ -1075,7 +1108,7 @@ export const ReviewChanges = () => {
                 <Button
                   variant="primary"
                   onClick={handleSubmit}
-                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup || isResolvingLinkTargets}
                 >
                   <Pending isPending={isPublishing}>{publishButtonLabel}</Pending>
                 </Button>
