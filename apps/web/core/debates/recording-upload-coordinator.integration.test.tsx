@@ -9,6 +9,7 @@ import type { DebateRecordingUpload } from './recording-upload-queue';
 
 const mocks = vi.hoisted(() => ({
   activityDebate: null as null | { id: string; status: string },
+  capture: vi.fn(),
   cancelRecording: vi.fn(),
   completeUpload: vi.fn(),
   createUpload: vi.fn(),
@@ -60,6 +61,8 @@ class FakeUploadRequest {
     void mocks.holdUpload.then(() => this.onload?.());
   }
 }
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
@@ -194,6 +197,7 @@ function uploadId(debateId: string) {
 
 beforeEach(() => {
   idNonce += 1;
+  mocks.capture.mockClear();
   mocks.activityDebate = null;
   mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
@@ -354,6 +358,16 @@ describe('DebateRecordingUploadCoordinator', () => {
       screen.getByText('Waiting to upload 1 debate — Finalization unavailable. Retrying automatically.')
     ).toBeInTheDocument();
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: 1,
+      online: true,
+      error_code: null,
+      http_status: null,
+      error_name: 'Error',
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_failed', expect.anything());
     expect(warning).toHaveBeenCalledWith(
       '[DebateRecordingUploadCoordinator] upload attempt failed:',
       expect.objectContaining({
@@ -437,6 +451,15 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_failed', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: 1,
+      error_code: 'recording_not_ready',
+      http_status: 400,
+      error_name: 'GeoChatRequestError',
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
@@ -473,6 +496,33 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancelled', {
+      debate_id: 'debate-1',
+      source: 'upload_banner',
+      upload_finished: false,
+      already_cancelled: false,
+    });
+  });
+
+  it('counts a cancellation prompt that is backed out of, without cancelling', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await screen.findByRole('button', { name: 'Delete debate forever' });
+    // The banner's Cancel is hidden while the prompt is open, so this is the prompt's own.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancel_dismissed', {
+        debate_id: 'debate-1',
+        source: 'upload_banner',
+      })
+    );
+    expect(mocks.cancelRecording).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_cancelled', expect.anything());
   });
 
   it('drops a recording row that finishes persisting after publication was cancelled', async () => {
@@ -718,6 +768,10 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_cancelled',
+      expect.objectContaining({ debate_id: 'debate-1', source: 'thanking_toggle' })
+    );
   });
 
   it('matches the thank-you debate even though the queue stores ids dashless', async () => {
