@@ -181,12 +181,23 @@ export function TopicPageView({
    */
   const hasBlocks = useBlocks(entityId, spaceId).length > 0;
 
-  // An editor gets the tab whether or not it has content yet — it is the only way to start a body —
-  // and a reader only when there is a body to read. `isEditing` is edit *intent*, which is held
-  // through the access check to avoid hydration flicker; the tab is a mutation surface, so it waits
-  // for access to resolve, matching what `EntityTabs` does with the Add tab control.
+  /*
+   * An editor gets the tab whether or not it has content yet — it is the only way to start a body —
+   * and a reader only when there is a body to read.
+   *
+   * `isEditing` is edit *intent*, held through the access check to avoid hydration flicker, so it
+   * is paired with `canEdit` here: until access resolves `EntityTabs` draws the *browse* bar, and
+   * intent alone would put an Overview tab for an empty topic into it.
+   *
+   * And the tab stays for whoever is already on it. Both conditions above can go false underneath
+   * a reader — an editor opens an empty Overview and leaves edit mode, or a link points at
+   * `/overview` on a topic that never had a body — and hiding it there left `TopicTabPanel` still
+   * drawing the editor under a row with nothing selected. Redirecting them to Explore instead
+   * would be worse: `hasBlocks` reads false for a frame before the entity hydrates, so it would
+   * fire on a legitimate visit and bounce the reader off the URL they asked for.
+   */
   const canEdit = useCanUserEdit(spaceId);
-  const showBlocksTab = hasBlocks || (isEditing && canEdit);
+  const showBlocksTab = hasBlocks || (isEditing && canEdit) || activeTab === 'blocks';
 
   const systemTabs = [
     { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },

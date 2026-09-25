@@ -39,6 +39,8 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   /** Props the votes/history/menu cluster received, or null if the page rendered none. */
   pageActions: null as Record<string, unknown> | null,
+  /** Side-panel tab selection, or null when the view is on a route rather than in the panel. */
+  panel: null as { activeTabId: string | null; activeSystemTab: string | null } | null,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -98,6 +100,9 @@ vi.mock('~/core/sync/use-store', () => ({
 vi.mock('~/core/state/editor/use-blocks', () => ({
   useBlocks: () => mocks.blocks,
 }));
+vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
+  useEntitySidePanelActiveTab: () => mocks.panel,
+}));
 vi.mock('~/core/hooks/use-user-is-editing', () => ({
   useCanUserEdit: () => mocks.canEdit,
   useUserIsEditing: () => false,
@@ -154,6 +159,7 @@ beforeEach(() => {
   mocks.blocks = [];
   mocks.canEdit = true;
   mocks.pageActions = null;
+  mocks.panel = null;
 });
 
 afterEach(cleanup);
@@ -438,6 +444,39 @@ describe('TopicPageView Overview tab', () => {
   it('withholds it from someone with edit intent but no write access and no body', () => {
     mocks.canEdit = false;
     render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
+  });
+
+  /*
+   * The route and the panel can both select this tab, and the conditions that show it can go false
+   * underneath them — an editor opens an empty Overview and leaves edit mode, or a reader follows
+   * a link to a topic that never had a body. Hiding the tab there left the editor rendering under
+   * a row with nothing selected: the URL said one thing and the tab bar said another.
+   *
+   * Resolved by keeping the tab for whoever is on it, rather than by redirecting them off it.
+   * `hasBlocks` reads false for a frame before the entity hydrates, so a redirect would fire on a
+   * legitimate `/overview` visit and bounce the reader to the feed before the blocks arrived.
+   */
+  it('keeps the tab for a reader who is on the route while it holds nothing', () => {
+    mocks.pathname = '/space/space-1/topic-1/overview';
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
+    expect(mocks.tabs?.divideBeforeAuthored).toBe(false);
+  });
+
+  it('keeps the tab for a panel whose selection is on it while it holds nothing', () => {
+    mocks.panel = { activeTabId: null, activeSystemTab: 'blocks' };
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
+  });
+
+  // The other half of that rule: being *somewhere else* must not conjure the tab back.
+  it('still hides it from a reader who is on any other tab', () => {
+    mocks.pathname = '/space/space-1/topic-1/comments';
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
   });
