@@ -57,8 +57,8 @@ interface SearchOptions {
    * asked for unrestricted results.
    */
   alsoSearchSpaceIds?: string[];
-  /** Stable analytics classification for the surface. Inferred for shared entity pickers. */
-  analyticsSurface?: SearchAnalyticsSurface;
+  /** Stable analytics classification for the surface. Inferred for shared entity pickers; false disables tracking. */
+  analyticsSurface?: SearchAnalyticsSurface | false;
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -70,12 +70,9 @@ type SearchPage = {
   serverCount: number;
   total: number;
   succeeded: boolean;
-  latencyMs: number;
 };
 
-type UntimedSearchPage = Omit<SearchPage, 'latencyMs'>;
-
-const emptySearchPage = (offset: number, succeeded = true): UntimedSearchPage => ({
+const emptySearchPage = (offset: number, succeeded = true): SearchPage => ({
   rows: [],
   offset,
   serverCount: 0,
@@ -167,27 +164,21 @@ export function useSearch({
     queryKey: searchQueryKey,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
-      const startedAt = searchClock();
-      const completePage = (page: UntimedSearchPage): SearchPage => ({
-        ...page,
-        latencyMs: searchClock() - startedAt,
-      });
-
       try {
         const isValidEntityId = validateEntityId(maybeEntityId);
 
         if (isValidEntityId) {
-          if (pageParam > 0) return completePage(emptySearchPage(pageParam));
+          if (pageParam > 0) return emptySearchPage(pageParam);
 
           const merged = await mergeSearchResult({
             id: maybeEntityId,
             store,
           });
-          if (!merged) return completePage(emptySearchPage(pageParam));
+          if (!merged) return emptySearchPage(pageParam);
           if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
-            return completePage(emptySearchPage(pageParam));
+            return emptySearchPage(pageParam);
           }
-          return completePage({ rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true });
+          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
         }
 
         const page = await E.findFuzzyPage({
@@ -219,13 +210,13 @@ export function useSearch({
           ? page.results
           : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-        return completePage({
+        return {
           rows,
           offset: pageParam,
           serverCount: page.serverCount,
           total: page.total,
           succeeded: true,
-        });
+        };
       } catch (error) {
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
@@ -240,7 +231,7 @@ export function useSearch({
           throw error;
         }
         console.error(error);
-        return completePage(emptySearchPage(pageParam, false));
+        return emptySearchPage(pageParam, false);
       }
     },
     getNextPageParam: lastPage => {
@@ -297,13 +288,14 @@ export function useSearch({
   }, [resultPages]);
 
   const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
-  const analyticsAttemptRef = React.useRef({ key: '', emitted: false });
+  const analyticsAttemptRef = React.useRef({ key: '', startedAt: 0, emitted: false });
 
   React.useEffect(() => {
     if (analyticsAttemptRef.current.key === analyticsSearchKey) return;
 
     analyticsAttemptRef.current = {
       key: analyticsSearchKey,
+      startedAt: searchClock(),
       emitted: false,
     };
   }, [analyticsSearchKey]);
@@ -314,7 +306,9 @@ export function useSearch({
     if (
       attempt.key !== analyticsSearchKey ||
       attempt.emitted ||
+      analyticsSurface === false ||
       cappedQuery.trim() === '' ||
+      query !== debouncedQuery ||
       !shouldSearch ||
       isFetching ||
       shouldPumpEmptyPage ||
@@ -328,17 +322,19 @@ export function useSearch({
     searchSubmitted({
       queryText: cappedQuery,
       resultCount: results.length,
-      latencyMs: pages.reduce((total, page) => total + page.latencyMs, 0),
+      latencyMs: searchClock() - attempt.startedAt,
       surface: analyticsSurface ?? (filterBySpace ? 'space' : 'entity'),
     });
   }, [
     analyticsSearchKey,
     analyticsSurface,
     cappedQuery,
+    debouncedQuery,
     filterBySpace,
     isFetching,
     resultPages,
     results.length,
+    query,
     shouldPumpEmptyPage,
     shouldSearch,
   ]);

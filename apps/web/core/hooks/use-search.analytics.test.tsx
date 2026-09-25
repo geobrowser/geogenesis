@@ -28,8 +28,23 @@ function searchResult(id: string) {
   return { id, name: id, description: null, spaces: [], types: [] };
 }
 
+type SearchResponse = {
+  results: ReturnType<typeof searchResult>[];
+  rawCount: number;
+  serverCount: number;
+  total: number;
+};
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(complete => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
   mocks.findFuzzyPage.mockReset();
   mocks.searchSubmitted.mockReset();
 });
@@ -81,19 +96,11 @@ describe('useSearch analytics', () => {
   });
 
   it('waits for the empty-page pump and includes its visible results', async () => {
-    let resolveSecondPage!: (page: {
-      results: ReturnType<typeof searchResult>[];
-      rawCount: number;
-      serverCount: number;
-      total: number;
-    }) => void;
-    const secondPage = new Promise<Parameters<typeof resolveSecondPage>[0]>(resolve => {
-      resolveSecondPage = resolve;
-    });
+    const secondPage = deferred<SearchResponse>();
 
     mocks.findFuzzyPage
       .mockResolvedValueOnce({ results: [], rawCount: 0, serverCount: 1, total: 2 })
-      .mockReturnValueOnce(secondPage);
+      .mockReturnValueOnce(secondPage.promise);
 
     renderHook(() => useSearch({ initialQuery: 'knowledge graph', pageSize: 1 }), { wrapper });
 
@@ -101,8 +108,8 @@ describe('useSearch analytics', () => {
     expect(mocks.searchSubmitted).not.toHaveBeenCalled();
 
     await act(async () => {
-      resolveSecondPage({ results: [searchResult('visible result')], rawCount: 1, serverCount: 1, total: 2 });
-      await secondPage;
+      secondPage.resolve({ results: [searchResult('visible result')], rawCount: 1, serverCount: 1, total: 2 });
+      await secondPage.promise;
     });
 
     await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledOnce());
@@ -122,6 +129,70 @@ describe('useSearch analytics', () => {
     const { result } = renderHook(() => useSearch({ initialQuery: 'knowledge graph', pageSize: 1 }), { wrapper });
 
     await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(mocks.searchSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('does not emit a superseded query while the next input is debouncing', async () => {
+    const firstPage = deferred<SearchResponse>();
+    mocks.findFuzzyPage.mockReturnValueOnce(firstPage.promise);
+
+    const { result, unmount } = renderHook(() => useSearch({ initialQuery: 'first query' }), { wrapper });
+
+    await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledOnce());
+    await act(async () => {
+      result.current.onQueryChange('next query');
+      firstPage.resolve({ results: [searchResult('superseded result')], rawCount: 1, serverCount: 1, total: 1 });
+      await firstPage.promise;
+    });
+
+    await waitFor(() => expect(result.current.isFetching).toBe(false), { timeout: 100 });
+    expect(mocks.searchSubmitted).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('measures a cache hit as the current search attempt', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0);
+    const firstPage = deferred<SearchResponse>();
+    mocks.findFuzzyPage
+      .mockReturnValueOnce(firstPage.promise)
+      .mockResolvedValueOnce({ results: [searchResult('second result')], rawCount: 1, serverCount: 1, total: 1 });
+
+    const { result } = renderHook(() => useSearch({ initialQuery: 'first query' }), { wrapper });
+
+    await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledOnce());
+    clock.mockReturnValue(100);
+    await act(async () => {
+      firstPage.resolve({ results: [searchResult('first result')], rawCount: 1, serverCount: 1, total: 1 });
+      await firstPage.promise;
+    });
+    await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledOnce());
+    expect(mocks.searchSubmitted.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ latencyMs: 100 }));
+
+    clock.mockReturnValue(200);
+    act(() => result.current.onQueryChange('second query'));
+    await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledTimes(2));
+
+    clock.mockReturnValue(500);
+    act(() => result.current.onQueryChange('first query'));
+    await waitFor(() => expect(mocks.searchSubmitted).toHaveBeenCalledTimes(3));
+
+    expect(mocks.findFuzzyPage).toHaveBeenCalledTimes(2);
+    expect(mocks.searchSubmitted.mock.calls[2]?.[0]).toEqual(expect.objectContaining({ latencyMs: 0 }));
+  });
+
+  it('supports opting programmatic entity loading out of search analytics', async () => {
+    mocks.findFuzzyPage.mockResolvedValue({
+      results: [searchResult('loaded entity')],
+      rawCount: 1,
+      serverCount: 1,
+      total: 1,
+    });
+
+    const { result } = renderHook(() => useSearch({ analyticsSurface: false }), { wrapper });
+
+    act(() => result.current.onQueryChange('programmatic entity id'));
+    await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledOnce());
     await waitFor(() => expect(result.current.isFetching).toBe(false));
     expect(mocks.searchSubmitted).not.toHaveBeenCalled();
   });
