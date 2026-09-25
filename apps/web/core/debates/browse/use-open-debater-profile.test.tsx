@@ -37,6 +37,29 @@ function click(result: { current: (event: React.MouseEvent) => void }) {
   return stopPropagation;
 }
 
+/**
+ * A click with the element it was handled on, which is what decides whether the browser has anything
+ * to do instead of us.
+ */
+function clickOn(
+  result: { current: (event: React.MouseEvent) => void },
+  currentTarget: Element,
+  modifiers: { metaKey?: boolean; shiftKey?: boolean; button?: number } = {}
+) {
+  const preventDefault = vi.fn();
+  const stopPropagation = vi.fn();
+  act(() =>
+    result.current({ currentTarget, preventDefault, stopPropagation, ...modifiers } as unknown as React.MouseEvent)
+  );
+  return { preventDefault, stopPropagation };
+}
+
+function anchor(href: string | null): HTMLAnchorElement {
+  const element = document.createElement('a');
+  if (href != null) element.setAttribute('href', href);
+  return element;
+}
+
 beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.sidePanelTarget = null;
@@ -131,5 +154,69 @@ describe('useOpenDebaterProfile', () => {
     rerender();
 
     expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A name in the claim's thread is a real link to the person's space, and the reader may want it in a
+ * new tab rather than in the panel. `ProfileEntityLink` and `ExploreCardEntityLink` both already keep
+ * that rule — "Cmd-click, shift-click and middle click must still open the entity page in a new tab,
+ * which is how people read a graph" — and this hook was preventing the default on every click, so the
+ * anchors it was newly attached to could not be opened any other way.
+ */
+describe("useOpenDebaterProfile and the browser's own click", () => {
+  beforeEach(() => {
+    mocks.spaces.set(PERSONAL_SPACE_ID, { topicId: TOPIC_ENTITY_ID, entity: { id: PAGE_ENTITY_ID } });
+  });
+
+  it('leaves a modified click on a real link to the browser', () => {
+    const { result } = renderHook(() => useOpenDebaterProfile(PERSONAL_SPACE_ID));
+
+    const cmd = clickOn(result, anchor('/space/' + PERSONAL_SPACE_ID), { metaKey: true });
+
+    expect(cmd.preventDefault).not.toHaveBeenCalled();
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+
+    // Middle click is the other half of the same gesture and reaches here as `button: 1`.
+    const middle = clickOn(result, anchor('/space/' + PERSONAL_SPACE_ID), { button: 1 });
+
+    expect(middle.preventDefault).not.toHaveBeenCalled();
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('still opens the panel on a plain click on that same link', () => {
+    const { result } = renderHook(() => useOpenDebaterProfile(PERSONAL_SPACE_ID));
+
+    const plain = clickOn(result, anchor('/space/' + PERSONAL_SPACE_ID));
+
+    expect(plain.preventDefault).toHaveBeenCalledOnce();
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(TOPIC_ENTITY_ID, PERSONAL_SPACE_ID, false, {
+      forceRequestedSpace: true,
+    });
+  });
+
+  /**
+   * The debate surfaces hang this on a button laid over the video, which is one large play/pause
+   * control. There is no href for the browser to honour there, so a modified click still has to open
+   * the profile — deferring to the browser would toggle playback and open nothing.
+   */
+  it('keeps opening the panel for a modified click on a button', () => {
+    const { result } = renderHook(() => useOpenDebaterProfile(PERSONAL_SPACE_ID));
+
+    const cmd = clickOn(result, document.createElement('button'), { metaKey: true });
+
+    expect(cmd.preventDefault).toHaveBeenCalledOnce();
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(TOPIC_ENTITY_ID, PERSONAL_SPACE_ID, false, {
+      forceRequestedSpace: true,
+    });
+  });
+
+  // An anchor with no href navigates nowhere, so there is nothing to defer to.
+  it('keeps opening the panel for a modified click on a link with no destination', () => {
+    const { result } = renderHook(() => useOpenDebaterProfile(PERSONAL_SPACE_ID));
+
+    clickOn(result, anchor(null), { shiftKey: true });
+
+    expect(mocks.openSidePanel).toHaveBeenCalledOnce();
   });
 });

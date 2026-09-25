@@ -653,6 +653,19 @@ describe('ClaimPageView comments', () => {
       isViewerResponseLoading: true,
     });
   });
+
+  /**
+   * Which claim an Agree is about. By the time a reader reaches the thread the title is off screen,
+   * and a badge on a comment under an extracted claim answers for a different claim than the page —
+   * so each badge names its own in its hover title. The page-level provider left the name out while
+   * the prop was optional, which meant the badges on the claim's *own* comments, the common case and
+   * the one this was added for, explained nothing.
+   */
+  it('names the claim its side badges are about', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.commentPosition).toMatchObject({ claimName: 'Pineapple belongs on pizza' });
+  });
 });
 
 // Topics live on their own tab for now; the hero's row is switched off (`SHOW_HERO_TOPICS`). The

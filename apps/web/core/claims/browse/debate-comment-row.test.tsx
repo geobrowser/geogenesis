@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommentWithReplies } from '~/partials/comments/types';
 
 import { ACTIVITY_MAX_DEPTH } from './claim-activity-depth';
+import { DebateCommentRow } from './debate-comment-row';
 
 const mocks = vi.hoisted(() => ({
   /** Responder space id → the side they hold on the claim, as the provider would resolve it. */
@@ -59,8 +60,6 @@ vi.mock('~/design-system/prefetch-link', () => ({
     <a {...(props as Record<string, string>)}>{children}</a>
   ),
 }));
-
-import { DebateCommentRow } from './debate-comment-row';
 
 function comment(overrides: Partial<CommentWithReplies> = {}): CommentWithReplies {
   return {
@@ -158,6 +157,45 @@ describe('DebateCommentRow', () => {
     expect(link).toHaveAttribute('href', expect.stringContaining('comment-1'));
     expect(link).toHaveAttribute('href', expect.stringContaining('author-space'));
     expect(link).not.toHaveAttribute('href', expect.stringContaining('debate-1'));
+  });
+
+  /**
+   * How many rows are down there, which is what the control promises and what makes the offer worth
+   * taking. It counted this comment's own replies, so a single reply carrying ten of its own read as
+   * "Continue this thread (1)" — undersold by an order of magnitude on exactly the threads deep enough
+   * to reach the floor.
+   */
+  it('counts every reply below it, not just the ones hanging off it directly', () => {
+    renderRow(
+      {
+        replies: [
+          comment({
+            id: 'reply-1',
+            markdownContent: 'a reply',
+            replies: [
+              comment({ id: 'reply-1-1', replies: [comment({ id: 'reply-1-1-1' })] }),
+              comment({ id: 'reply-1-2' }),
+            ],
+          }),
+          comment({ id: 'reply-2' }),
+        ],
+      },
+      ACTIVITY_MAX_DEPTH
+    );
+
+    // Five: two replies, two under the first of those, and one under the first of *those*.
+    expect(screen.getByRole('link', { name: 'Continue this thread — 5 more replies' })).toBeInTheDocument();
+  });
+
+  // An optimistic reply is inserted before its `replies` array exists, and a count that walks the
+  // tree must not throw on it — the row guards its own `replies` read for the same reason.
+  it('survives a reply with no replies array at all', () => {
+    renderRow(
+      { replies: [comment({ id: 'reply-1', replies: undefined as unknown as CommentWithReplies[] })] },
+      ACTIVITY_MAX_DEPTH
+    );
+
+    expect(screen.getByRole('link', { name: 'Continue this thread — 1 more reply' })).toBeInTheDocument();
   });
 
   // The other overflow: siblings held back for length. Already loaded, so it reveals in place.

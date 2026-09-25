@@ -337,6 +337,7 @@ export function ClaimPageView({
           activeTab={requestedTab}
           entityId={entityId}
           spaceId={spaceId}
+          claimName={entity.name ?? null}
           entityRelations={entity.relations}
           responseKind={responseKind}
           summary={summary}
@@ -356,6 +357,7 @@ function ClaimTabPanel({
   activeTab,
   entityId,
   spaceId,
+  claimName,
   entityRelations,
   responseKind,
   summary,
@@ -368,6 +370,8 @@ function ClaimTabPanel({
   activeTab: ClaimTab;
   entityId: string;
   spaceId: string;
+  /** Passed down to the thread, where every side badge names the claim it is about. */
+  claimName: string | null;
   entityRelations: Relation[];
   responseKind: ClaimResponseState['responseKind'];
   summary: ClaimResponseState['summary'];
@@ -417,6 +421,7 @@ function ClaimTabPanel({
     <ClaimOverviewTab
       entityId={entityId}
       spaceId={spaceId}
+      claimName={claimName}
       responseKind={responseKind}
       summary={summary}
       record={record}
@@ -442,6 +447,7 @@ function ClaimTabPanel({
 function ClaimOverviewTab({
   entityId,
   spaceId,
+  claimName,
   responseKind,
   summary,
   record,
@@ -450,6 +456,8 @@ function ClaimOverviewTab({
 }: {
   entityId: string;
   spaceId: string;
+  /** For the hover title on every commenter's side badge — see `ClaimCommentPositionProvider`. */
+  claimName: string | null;
   responseKind: ClaimResponseState['responseKind'];
   summary: ClaimResponseState['summary'];
   record: ReturnType<typeof useClaimRecord>;
@@ -536,6 +544,10 @@ function ClaimOverviewTab({
         entityId={entityId}
         spaceId={spaceId}
         responseKind={responseKind}
+        // Which claim an Agree or a Disagree is about. By the time a reader is this far down the page
+        // the title above it is out of sight, and a badge on a comment under an extracted claim is
+        // answering for a different claim than the one the page is about — so each badge names its own.
+        claimName={claimName}
         viewerDirection={summary.viewerDirection}
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}

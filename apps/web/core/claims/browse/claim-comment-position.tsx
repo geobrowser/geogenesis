@@ -80,7 +80,7 @@ export function ClaimCommentPositionProvider({
   entityId,
   spaceId,
   responseKind,
-  claimName = null,
+  claimName,
   viewerDirection,
   viewerSpaceId,
   isViewerResponseLoading,
@@ -89,8 +89,15 @@ export function ClaimCommentPositionProvider({
   entityId: string;
   spaceId: string;
   responseKind: DebateResponseKind;
-  /** The claim these positions are about, named for the badge's hover title. */
-  claimName?: string | null;
+  /**
+   * The claim these positions are about, for the badge's hover title.
+   *
+   * Required rather than defaulted, and `null` only where there is genuinely no name to give. It was
+   * optional, and the page-level provider then silently left it out — so the badge explained itself on
+   * comments under an extracted claim and said nothing on the claim's own top-level comments, which is
+   * the case the title was added for. A default is what let one of two call sites forget.
+   */
+  claimName: string | null;
   viewerDirection: ActiveResponseDirection | null;
   viewerSpaceId: string | null;
   /** True until the viewer read succeeds; failures stay unresolved rather than becoming a clear. */

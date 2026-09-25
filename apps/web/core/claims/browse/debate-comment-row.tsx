@@ -40,6 +40,21 @@ const REPLY_PAGE_SIZE = 3;
 /** Stable identity for a row directly under the entity, so the default doesn't rebuild each render. */
 const NO_ANCESTORS: Array<{ id: string; spaceId: string }> = [];
 
+/**
+ * Every reply in a subtree, at every depth.
+ *
+ * Only asked at the depth floor, where the tree is already loaded and none of it is being drawn — so
+ * this walks what the comment query returned rather than counting what is on screen. A reply with no
+ * `replies` array is one row and nothing under it; the guard is the same one the row itself uses,
+ * because an optimistic comment is inserted before that array exists.
+ */
+function countRepliesDeep(replies: CommentWithReplies[]): number {
+  return replies.reduce(
+    (total, reply) => total + 1 + countRepliesDeep(Array.isArray(reply.replies) ? reply.replies : []),
+    0
+  );
+}
+
 export function DebateCommentRow({
   comment,
   targetEntityId,
@@ -77,7 +92,11 @@ export function DebateCommentRow({
   const canNest = canNestBelow(depth);
   const shown = canNest ? replies.slice(0, visibleReplies) : [];
   const hiddenHere = canNest ? replies.length - shown.length : 0;
-  const belowFloor = canNest ? 0 : replies.length;
+  // The whole subtree, not this comment's own replies. `ThreadContinue` promises "how many rows are
+  // down there", and one reply carrying ten of its own is eleven rows the reader is not being shown —
+  // offering that as "Continue this thread (1)" undersells it by an order of magnitude on exactly the
+  // threads deep enough to reach the floor in the first place.
+  const belowFloor = canNest ? 0 : countRepliesDeep(replies);
 
   const branchLabel = { expand: 'Show replies', collapse: 'Hide replies' };
   const drawnReplies = repliesCollapsed ? [] : shown;

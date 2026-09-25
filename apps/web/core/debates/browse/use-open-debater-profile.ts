@@ -6,6 +6,7 @@ import { personProfileOpened } from '~/core/analytics';
 import type { DebateParticipant } from '~/core/debates/api';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { getSpaceSubtopicRootEntityId } from '~/core/utils/space/spaces';
 
 import type { EntitySidePanelTarget } from '~/atoms';
@@ -77,6 +78,18 @@ export function useOpenDebaterProfile(
 
   return React.useCallback(
     (event: React.MouseEvent) => {
+      // Cmd-click, shift-click and middle click on a real link belong to the browser: that is how
+      // people read a graph, and it is the contract `ProfileEntityLink` and `ExploreCardEntityLink`
+      // already keep — "a button with an onClick would look identical and break all of them, along
+      // with copy link address". The thread's speaker names, comment authors and faces are anchors
+      // with hrefs to the person's space, and this handler was swallowing every one of those clicks.
+      //
+      // Only for an anchor, and only one that has somewhere to go. The debate surfaces hang this on a
+      // button over the video, where there is no href to honour and swallowing the click is the
+      // entire point — otherwise a Cmd-click on a name there would toggle playback and open nothing.
+      const anchor = event.currentTarget instanceof HTMLAnchorElement ? event.currentTarget : null;
+      if (anchor?.getAttribute('href') && isModifiedClick(event)) return;
+
       // The video behind is one large play/pause button, and a name in a thread is commonly inside
       // a link to somewhere else entirely.
       event.preventDefault();

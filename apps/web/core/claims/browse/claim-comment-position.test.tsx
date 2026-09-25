@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
@@ -78,6 +78,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId={null}
           isViewerResponseLoading={false}
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="author-space" />
         </ClaimCommentPositionProvider>
@@ -95,9 +96,7 @@ describe('claim comment position badges', () => {
    */
   it('reports the nearest claim, not the page claim, when a provider is nested inside another', async () => {
     mocks.getEntityResponders.mockImplementation((entityId: string) =>
-      Effect.succeed([
-        { userId: 'author-space', direction: entityId === 'extracted-claim' ? 'negative' : 'positive' },
-      ])
+      Effect.succeed([{ userId: 'author-space', direction: entityId === 'extracted-claim' ? 'negative' : 'positive' }])
     );
 
     render(
@@ -110,6 +109,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId={null}
           isViewerResponseLoading={false}
+          claimName={null}
         >
           <ClaimCommentPositionProvider
             entityId="extracted-claim"
@@ -118,6 +118,7 @@ describe('claim comment position badges', () => {
             viewerDirection={null}
             viewerSpaceId={null}
             isViewerResponseLoading={false}
+            claimName={null}
           >
             <ClaimCommentPositionBadge authorSpaceId="author-space" />
           </ClaimCommentPositionProvider>
@@ -171,6 +172,7 @@ describe('claim comment position badges', () => {
           viewerDirection="positive"
           viewerSpaceId="viewer-space"
           isViewerResponseLoading
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
         </ClaimCommentPositionProvider>
@@ -196,6 +198,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId="viewer-space"
           isViewerResponseLoading
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
         </ClaimCommentPositionProvider>
@@ -220,6 +223,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId="viewer-space"
           isViewerResponseLoading={false}
+          claimName={null}
         >
           <span data-testid="claim-comment-position-empty">
             <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
