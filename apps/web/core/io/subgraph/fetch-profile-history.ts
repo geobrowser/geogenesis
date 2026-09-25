@@ -4,6 +4,7 @@ import { Environment } from '~/core/environment';
 import {
   AVATAR_PROPERTY,
   COVER_PROPERTY,
+  DESCRIPTION_PROPERTY,
   EDUCATION_PROPERTY,
   EMPLOYMENT_PROPERTY,
 } from '~/core/profile/history-ontology';
@@ -19,12 +20,14 @@ import { graphql } from './graphql';
 
 interface NetworkResult {
   entity: {
+    description: Array<{ text: string | null }>;
     employment: HistoryEdgeNode[];
     education: HistoryEdgeNode[];
   } | null;
 }
 
 export interface ProfileHistory {
+  description: string | null;
   employment: EmploymentCard[];
   education: EducationCard[];
 }
@@ -130,6 +133,10 @@ const orgAvatar = `
 const profileHistoryQuery = (entityId: string, spaceId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
+      description: valuesList(first: 1, filter: {
+        propertyId: { is: ${JSON.stringify(DESCRIPTION_PROPERTY)} }
+        spaceId: { is: ${JSON.stringify(spaceId)} }
+      }) { text }
       employment: relationsList(first: ${HISTORY_LIST_LIMIT}, filter: {
         typeId: { is: ${JSON.stringify(EMPLOYMENT_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
@@ -185,6 +192,7 @@ export async function fetchProfileHistory(entityId: string, spaceId: string): Pr
   const entity = result.right.entity;
 
   return {
+    description: entity?.description[0]?.text?.trim() || null,
     employment: normalizeEmployment(entity?.employment ?? []),
     education: normalizeEducation(entity?.education ?? []),
   };

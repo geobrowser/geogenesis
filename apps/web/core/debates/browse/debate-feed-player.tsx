@@ -7,7 +7,7 @@ import cx from 'classnames';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
-import { useParticipantAffiliations } from '~/core/debates/participant-affiliations';
+import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
@@ -102,12 +102,12 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
-  const showAffiliations = !reducedOverlays;
-  const affiliations = useParticipantAffiliations(debate.participants, showAffiliations && (active || preload));
-  const affiliationFor = (participant: DebateParticipant | null) => {
-    if (!showAffiliations) return null;
+  const showBylines = !reducedOverlays;
+  const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
+  const bylineFor = (participant: DebateParticipant | null) => {
+    if (!showBylines) return null;
     const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
-    return spaceId ? (affiliations.get(spaceId) ?? null) : null;
+    return spaceId ? (bylines.get(spaceId) ?? null) : null;
   };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
@@ -362,7 +362,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     >
       <DebaterVideo
         participant={slot1Participant}
-        affiliation={affiliationFor(slot1Participant)}
+        byline={bylineFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -417,7 +417,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
       <DebaterVideo
         participant={slot2Participant}
-        affiliation={affiliationFor(slot2Participant)}
+        byline={bylineFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
@@ -547,7 +547,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
 
 function DebaterVideo({
   participant,
-  affiliation,
+  byline,
   src,
   videoRef,
   audible,
@@ -567,7 +567,7 @@ function DebaterVideo({
   scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
-  affiliation: string | null;
+  byline: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
@@ -947,8 +947,8 @@ function DebaterVideo({
       {/* Debater identity — who is speaking and which side they are arguing — opening their
           personal space in the side panel. On the left, opposite the claim corner.
 
-          The position chip shares the name's row, before the affiliation gets its own row. Keeping
-          those as separate flex rows means a long affiliation can use the available identity width
+          The position chip shares the name's row, before the byline gets its own row. Keeping
+          those as separate flex rows means a long byline can use the available identity width
           without pushing the chip away from the name. The chip cannot shrink, so at narrow widths
           the name truncates first and the short stance remains readable.
 
@@ -991,9 +991,13 @@ function DebaterVideo({
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
             </span>
-            {affiliation && (
-              <span title={affiliation} className="truncate text-[0.75rem] leading-4 text-white/80">
-                {affiliation}
+            {byline && (
+              <span
+                data-debate-byline
+                title={byline}
+                className="truncate text-[0.75rem] leading-4 text-white/80"
+              >
+                {byline}
               </span>
             )}
           </span>
