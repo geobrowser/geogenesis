@@ -69,8 +69,8 @@ function renderDialog(onOpenChange = vi.fn()) {
 }
 
 const nameField = () => screen.getByPlaceholderText('Your name');
-const taglineField = () => screen.getByPlaceholderText('Engineer at Geo');
-const descriptionField = () => screen.getByPlaceholderText(/A sentence about who you are/);
+const taglineField = () => screen.getByPlaceholderText('Head of Product at Geo');
+const descriptionField = () => screen.getByPlaceholderText(/A few sentences on your background/);
 const saveButton = () => screen.getByRole('button', { name: /Save profile|Publishing|Retry/ });
 
 beforeEach(() => {
@@ -112,6 +112,7 @@ describe('EditProfileDialog', () => {
     await userEvent.click(saveButton());
 
     expect(taglineField()).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
+    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 'Building debates'.length} left`)).toBeInTheDocument();
     expect(mocks.publish).toHaveBeenCalledWith(
       expect.objectContaining({ tagline: 'Building debates' }),
       expect.anything()
@@ -124,6 +125,11 @@ describe('EditProfileDialog', () => {
   it('cuts an over-long stored tagline when something else is saved', async () => {
     mocks.current = { ...mocks.current, tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
     renderDialog();
+
+    // Cut in the field too, not just on the way out: the count beside it and the value that
+    // publishes have to be the same thing, and a raw 260-character seed showed "-40 left".
+    expect(taglineField()).toHaveValue('y'.repeat(TAGLINE_MAX_LENGTH));
+    expect(screen.getByText('0 left')).toBeInTheDocument();
 
     await userEvent.type(nameField(), '!');
     await userEvent.click(saveButton());

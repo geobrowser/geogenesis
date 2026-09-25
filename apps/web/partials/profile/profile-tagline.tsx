@@ -46,13 +46,20 @@ export function PersonalSpaceTagline({
    * cleared, and falling back there would put it straight back on screen.
    */
   const tagline = value === undefined ? (fallbackTagline ?? '') : (value ?? '');
+  // Counted down rather than up. `12/220` asks the reader to do the subtraction, and the number
+  // they actually want is how much room is left.
+  const remaining = TAGLINE_MAX_LENGTH - tagline.length;
 
   if (isEditing) {
     return (
       <div className="text-text">
         <PageStringField
           variant="body"
-          placeholder="Add a tagline..."
+          // The guidance rides in the placeholder rather than a hint line below, because the
+          // header is wide enough to hold it on one line and a permanent second line of chrome
+          // directly under someone's name is not. It is only needed while the field is empty,
+          // which is exactly as long as a placeholder lasts.
+          placeholder="Add a tagline — your role, or what you’re working on"
           aria-label="Tagline"
           maxLength={TAGLINE_MAX_LENGTH}
           value={tagline}
@@ -61,7 +68,13 @@ export function PersonalSpaceTagline({
           onChange={next => setValue(normalizeTagline(next))}
         />
         <p className="mt-1 text-footnote text-grey-04">
-          {tagline.length}/{TAGLINE_MAX_LENGTH}
+          {remaining >= 0
+            ? `${remaining} character${remaining === 1 ? '' : 's'} left`
+            : // Unreachable by typing, and reachable by opening a tagline written before this
+              // limit existed or by another client. Saying "0 left" over 260 characters of text
+              // would read as a broken counter. Editing is what shortens it — `onChange` cuts
+              // the value — so this does not promise anything a save will do.
+              `Over the ${TAGLINE_MAX_LENGTH}-character limit — editing this will shorten it`}
         </p>
       </div>
     );

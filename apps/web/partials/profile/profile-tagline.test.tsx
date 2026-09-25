@@ -82,13 +82,26 @@ describe('PersonalSpaceTagline', () => {
     );
   });
 
+  // Reachable by opening a tagline written before this limit existed, or by another client.
+  // A counter reading "0 left" over 260 characters of text reads as broken rather than as a
+  // warning, and the value really is going to be shortened on save.
+  it('says an over-long tagline will be shortened rather than counting past zero', () => {
+    mocks.isEditing = true;
+    mocks.stored = { id: 'v1', value: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
+    render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
+
+    expect(screen.getByText(/editing this will shorten it/)).toBeInTheDocument();
+    // Never a negative count.
+    expect(screen.queryByText(/-\d+ characters? left/)).toBeNull();
+  });
+
   it('caps the field at the tagline limit and counts against it', () => {
     mocks.isEditing = true;
     mocks.stored = { id: 'v1', value: 'x'.repeat(10) };
     render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
 
     expect(screen.getByRole('textbox', { name: 'Tagline' })).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
-    expect(screen.getByText(`10/${TAGLINE_MAX_LENGTH}`)).toBeInTheDocument();
+    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 10} characters left`)).toBeInTheDocument();
   });
 
   it('deletes the row rather than storing an empty tagline', async () => {

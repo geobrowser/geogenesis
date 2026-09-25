@@ -155,7 +155,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   React.useEffect(() => {
     if (!open) return;
     if (pristineRef.current.name) setName(current.name);
-    if (pristineRef.current.tagline) setTagline(current.tagline);
+    // Seeded already cut. A stored tagline can be longer than the limit — written before this
+    // field existed, or by another client — and `maxLength` does not touch a value set
+    // programmatically, so the raw one would sit in the field under a negative count while
+    // `publishTagline` quietly published something shorter.
+    if (pristineRef.current.tagline) setTagline(normalizeTagline(current.tagline));
     if (pristineRef.current.description) setDescription(current.description);
   }, [open, current.name, current.tagline, current.description]);
 
@@ -472,12 +476,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       maxLength={TAGLINE_MAX_LENGTH}
-                      placeholder="Engineer at Geo"
+                      // An example rather than an instruction. The two fields here are both
+                      // "about you", and one filled-in tagline says which is which faster than
+                      // a sentence describing it.
+                      placeholder="Head of Product at Geo"
                     />
-                    {/* The count is the whole hint: there is no error state to reach, since the
-                    field cannot hold more than it allows. */}
-                    <span className="text-footnote text-grey-04">
-                      Shown under your name. {tagline.length}/{TAGLINE_MAX_LENGTH}
+                    {/* What it is on the left, how much room is left on the right. There is no
+                    error state to reach — the field cannot hold more than it allows — so the
+                    count is guidance rather than validation. */}
+                    <span className="flex items-baseline justify-between gap-3 text-footnote text-grey-04">
+                      <span>One line under your name. Your role, or what you’re working on now.</span>
+                      <span className="shrink-0 tabular-nums">{TAGLINE_MAX_LENGTH - tagline.length} left</span>
                     </span>
                   </label>
 
@@ -491,10 +500,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       rows={3}
-                      placeholder="A sentence about who you are and what you work on."
+                      placeholder="A few sentences on your background, what you work on, and what you’re interested in."
                       className={cx(inputStyles(), 'resize-none')}
                     />
-                    <span className="text-footnote text-grey-04">Shown in the About section of your profile.</span>
+                    {/* Named against the tagline above it — "the longer version" is the whole
+                    distinction, and it is the one thing somebody looking at both fields needs. */}
+                    <span className="text-footnote text-grey-04">
+                      The longer version, shown in the About section of your profile.
+                    </span>
                   </label>
 
                   <HistorySection

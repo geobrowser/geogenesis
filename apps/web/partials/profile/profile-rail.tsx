@@ -465,11 +465,18 @@ export function AboutSection({
         <div className="mb-2 text-metadata text-text">
           <PageStringField
             variant="metadata"
-            placeholder="Add a description..."
+            // Short on purpose. `react-textarea-autosize` sizes to the *value*, so an empty
+            // field is one row tall with its overflow hidden — a placeholder that wraps in a
+            // 280px rail would be cut off mid-sentence. The guidance goes below instead.
+            placeholder="Add a description…"
             aria-label="Description"
             value={description ?? ''}
             onChange={setDescription}
           />
+          {/* Says what belongs here rather than what the field is, because the tagline under
+              their name is the other place a person writes about themselves and the only real
+              question is which one this is. */}
+          <p className="mt-1 text-footnote text-grey-04">A few sentences on your background and what you work on.</p>
         </div>
       ) : (
         description && (
