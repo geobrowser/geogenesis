@@ -101,6 +101,21 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
       setTarget(next);
 
       if (watched) {
+        // Measured here rather than left to the observer's first notification, which does not arrive
+        // until a task later. A tab swapping the title for another element of the *same* entity
+        // leaves `selector` untouched, so the render-time reset above never runs, and without this
+        // the element that just left carried its answer onto the one that replaced it — long enough
+        // to paint the bar over a title sitting at the top of a newly opened tab.
+        //
+        // Measured rather than simply cleared, which would only move the wrong frame to the other
+        // direction: a tab opened already scrolled past its title would blink the bar off and back
+        // on. This is the predicate the observer itself applies — `isIntersecting` is redundant
+        // against a root shrunk by `topOffset`, since anything whose bottom is above that line
+        // cannot be intersecting it.
+        const rect = watched.getBoundingClientRect();
+        const isRendered = rect.width > 0 || rect.height > 0;
+        setScrolledPast(isRendered && rect.bottom <= topOffset);
+
         observer.observe(watched);
       } else {
         // Nothing to watch means nothing to be past. Without this the bar would stay up after the

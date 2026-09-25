@@ -68,6 +68,23 @@ function addTitle(id = 'entity-1') {
   return title;
 }
 
+/** jsdom lays nothing out, so a title's position on screen has to be stated. */
+function atViewportBottom(element: Element, bottom: number) {
+  element.getBoundingClientRect = () =>
+    ({
+      x: 0,
+      y: bottom - 30,
+      left: 0,
+      right: 300,
+      top: bottom - 30,
+      bottom,
+      width: 300,
+      height: 30,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  return element;
+}
+
 function latestObserver() {
   const record = observers.at(-1);
   if (!record) throw new Error('Expected an IntersectionObserver to have been created');
@@ -276,6 +293,46 @@ describe('useScrolledPastElement', () => {
     expect(underNewSelector.length).toBeGreaterThan(0);
     expect(underNewSelector.every(entry => entry.scrolledPast === false)).toBe(true);
     expect(underNewSelector.every(entry => entry.hasTarget === false)).toBe(true);
+  });
+
+  /**
+   * A tab swaps the title for another element belonging to the same entity, so the selector never
+   * changes and the render-time reset above never runs. The old element's answer is not about the
+   * new one, and `IntersectionObserver` does not report on a freshly observed element until a task
+   * later — long enough to paint the bar over a title sitting at the top of a newly opened tab.
+   */
+  it('does not carry a scrolled answer onto a title swapped in under the same selector', async () => {
+    const first = atViewportBottom(addTitle(), -200);
+    const { result } = render();
+
+    notify(latestObserver(), first, { isIntersecting: false, bottom: -200 });
+    expect(result.current.scrolledPast).toBe(true);
+
+    // The tab swaps the title, and the new one sits in view. No notification yet.
+    act(() => first.remove());
+    const second = atViewportBottom(addTitle(), 300);
+    await waitFor(() => expect(result.current.target).toBe(second));
+
+    expect(result.current.scrolledPast).toBe(false);
+  });
+
+  /**
+   * And the other direction, which a blind clear would get wrong: the element swapped in is already
+   * above the fold, so the answer is `true` from the first frame rather than after the observer
+   * catches up. Measuring the new target is what covers both.
+   */
+  it('reports a title swapped in already above the fold without waiting for the observer', async () => {
+    const first = atViewportBottom(addTitle(), 300);
+    const { result } = render();
+
+    notify(latestObserver(), first, { isIntersecting: true, bottom: 300 });
+    expect(result.current.scrolledPast).toBe(false);
+
+    act(() => first.remove());
+    const second = atViewportBottom(addTitle(), -120);
+    await waitFor(() => expect(result.current.target).toBe(second));
+
+    expect(result.current.scrolledPast).toBe(true);
   });
 
   it('stays false when IntersectionObserver is unavailable', () => {
