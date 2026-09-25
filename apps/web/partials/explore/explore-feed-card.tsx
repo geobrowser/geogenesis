@@ -34,7 +34,7 @@ type ExploreFeedCardProps = {
   /** Presentation used for Claim rows; other entity types ignore it. */
   claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
-  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
   /** Compact title and metadata treatment for a debate in profile Activity. */
   compactDebateChrome?: boolean;
   /** Let a debate fill the column rather than its viewport-fitted cap. See `DebateExploreFeedCard`. */

@@ -198,7 +198,6 @@ export function DebatePreScreen({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      positionLabel={localParticipant?.position_label ?? null}
       active={false}
       // Permission is reported inside the tile, not in place of the layout: replacing the screen
       // hid the opponent and their readiness from whoever was slowest to grant.
@@ -269,7 +268,6 @@ export function DebatePreScreen({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      positionLabel={remoteParticipant?.position_label ?? null}
       active={false}
       // Presence and video are separate facts: not yet granted reads very differently from
       // someone who was here and left.

@@ -174,7 +174,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     mocks.runEffectEither.mockResolvedValue({ _tag: 'Left', left: new Error('User rejected') });
     const { wrapper } = createHarness();
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
     await act(async () => {
@@ -366,7 +366,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const setQueryData = vi.spyOn(queryClient, 'setQueryData');
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
 
@@ -383,7 +383,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expectNoVotedListRefresh(invalidateQueries);
 
     expect(queryClient.getQueryData(votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'))).toEqual({
-      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 2 })],
+      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 1 })],
       removed: [],
     });
   });
@@ -662,7 +662,7 @@ describe('useEntityResponse indexing reconciliation', () => {
 });
 
 describe('useEntityResponse claim-space membership', () => {
-  it.each(['stance', 'veracity'] as const)(
+  it.each(['stance'] as const)(
     'requests membership of the claim space after a %s response lands',
     async responseKind => {
       mocks.fetchResponse.mockReturnValue('positive');
@@ -685,7 +685,7 @@ describe('useEntityResponse claim-space membership', () => {
     mocks.fetchResponse.mockReturnValue('negative');
     const { wrapper } = createHarness();
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
 

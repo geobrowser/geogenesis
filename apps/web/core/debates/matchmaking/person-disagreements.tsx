@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -136,7 +137,7 @@ function PositionBadge({
   responseKind: ClaimMatch['responseKind'];
   position: boolean;
 }) {
-  const action = responseKind === 'veracity' ? (position ? 'Verify' : 'Dispute') : position ? 'Agree' : 'Disagree';
+  const action = responsePositionLabel(position);
 
   return (
     <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-transparent bg-divider px-2 py-1 text-footnote">

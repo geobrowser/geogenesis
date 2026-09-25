@@ -68,11 +68,17 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: () => null,
 }));
 
+/**
+ * `position_label` is set to the retired wording on purpose. geo-chat still sends "Verify" and
+ * "Dispute" for a claim it calls factual, and the chip is named from `position` instead — so the
+ * chip reading "Agree"/"Disagree" below is what proves the server's label is not the source.
+ */
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
     profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
-    position_label: slot === 1 ? 'For' : 'Against',
+    position: slot === 1,
+    position_label: slot === 1 ? 'Verify' : 'Dispute',
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
@@ -197,8 +203,8 @@ describe('player layout', () => {
     const { getByText } = within(container);
 
     for (const [name, position, affiliation] of [
-      [SPACE_1_DASHED, 'For', 'A deliberately much longer affiliation than the participant name'],
-      [SPACE_2, 'Against', 'Another affiliation whose width must not place the position chip'],
+      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
@@ -217,20 +223,25 @@ describe('player layout', () => {
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
-    fireEvent.click(within(container).getByText('For'));
+    fireEvent.click(within(container).getByText('Agree'));
     expect(controller.togglePlayback).toHaveBeenCalledOnce();
   });
 
-  it('draws no chip for a debater whose position has no label', () => {
-    mocks.controller = {
-      ...controllerFixture({ mutedByUser: true, turnSlot: 1 }),
-      slot1Participant: { ...participant(1), position_label: '' },
-    };
+  /**
+   * A test here covered an empty `position_label`, which typed non-null but arrived from geo-chat
+   * and would have drawn a bare pill. The chip is named from `position` now — a non-null boolean —
+   * so there is no label for the server to leave blank and the case is gone rather than untested.
+   * What replaces it is the fixture above: a stale server label that must not reach the chip.
+   */
+  it('names the side itself rather than repeating the label geo-chat sent', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const { queryByText } = within(container);
+    const { queryByText, getByText } = within(container);
 
-    expect(queryByText('For')).toBeNull();
-    expect(queryByText('Against')).not.toBeNull();
+    expect(getByText('Agree')).not.toBeNull();
+    expect(getByText('Disagree')).not.toBeNull();
+    expect(queryByText('Verify')).toBeNull();
+    expect(queryByText('Dispute')).toBeNull();
   });
 
   it('shows each participant byline below their name, clamped with the full line on hover', () => {

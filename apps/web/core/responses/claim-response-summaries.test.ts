@@ -23,45 +23,53 @@ import {
 } from './entity-response';
 
 const targets = [
-  { entityId: 'claim-veracity', responseKind: 'veracity' as const },
-  { entityId: 'claim-stance', responseKind: 'stance' as const },
+  { entityId: 'claim-b', responseKind: 'stance' as const },
+  { entityId: 'claim-a', responseKind: 'stance' as const },
 ];
 
 describe('claim response summaries', () => {
   it('normalizes duplicate claim-kind pairs deterministically', () => {
     expect(normalizeClaimResponseTargets([targets[0], targets[1], targets[0]])).toEqual([
-      { entityId: 'claim-stance', responseKind: 'stance' },
-      { entityId: 'claim-veracity', responseKind: 'veracity' },
+      { entityId: 'claim-a', responseKind: 'stance' },
+      { entityId: 'claim-b', responseKind: 'stance' },
     ]);
   });
 
-  it('builds an exact-space entity filter with one exact branch per active vote kind', () => {
+  it('builds an exact-space entity filter with one exact branch per claim', () => {
     expect(buildClaimResponseSummaryFilter('space-1', targets)).toEqual({
       spaceId: { is: 'space-1' },
       objectType: { is: 0 },
       voteType: { in: [0, 1] },
       or: [
-        { objectId: { is: 'claim-stance' }, voteKind: { is: 1 } },
-        { objectId: { is: 'claim-veracity' }, voteKind: { is: 2 } },
+        { objectId: { is: 'claim-a' }, voteKind: { is: 1 } },
+        { objectId: { is: 'claim-b' }, voteKind: { is: 1 } },
       ],
     });
   });
 
-  it('groups active positive and negative rows and ignores cleared or inactive-kind rows', () => {
+  /**
+   * The retired veracity rows are the interesting half here.
+   *
+   * Vote kind 2 is what a Verify or a Dispute was published as, and there are real ones indexed.
+   * Dropping the kind was the deliberate choice when Verify/Dispute was removed, so a legacy row
+   * must not reappear in a claim's tally — and it must not reappear as the *viewer's* position
+   * either, which would draw a side as held that this app can no longer publish or clear.
+   */
+  it('counts only stance rows, leaving retired veracity rows out of the tally', () => {
     const summaries = groupClaimResponseSummaryRows(
       targets,
       [
-        row('claim-stance', 1, 'viewer', 0),
-        row('claim-stance', 1, 'negative-user', 1),
-        row('claim-stance', 1, 'cleared-user', 2),
-        row('claim-stance', 2, 'wrong-kind', 0),
-        row('claim-veracity', 2, 'verifier', 0),
+        row('claim-a', 1, 'viewer', 0),
+        row('claim-a', 1, 'negative-user', 1),
+        row('claim-a', 1, 'cleared-user', 2),
+        row('claim-a', 2, 'legacy-verifier', 0),
+        row('claim-b', 2, 'viewer', 0),
         row('another-claim', 1, 'wrong-claim', 0),
       ],
       'viewer'
     );
 
-    expect(summaries.get('claim-stance:stance')).toEqual({
+    expect(summaries.get('claim-a:stance')).toEqual({
       counts: { positive: 1, negative: 1 },
       viewerResponse: 'positive',
       responders: [
@@ -69,21 +77,24 @@ describe('claim response summaries', () => {
         { userId: 'negative-user', direction: 'negative' },
       ],
     });
-    expect(summaries.get('claim-veracity:veracity')).toEqual({
-      counts: { positive: 1, negative: 0 },
+
+    // Every row this claim has is a retired verify, the viewer's own among them. It reads as a
+    // claim nobody has answered, which is the agreed cost of the clean break.
+    expect(summaries.get('claim-b:stance')).toEqual({
+      counts: { positive: 0, negative: 0 },
       viewerResponse: null,
-      responders: [{ userId: 'verifier', direction: 'positive' }],
+      responders: [],
     });
   });
 
   it('does not assign a viewer response for anonymous requests', () => {
     const summaries = groupClaimResponseSummaryRows(
-      [{ entityId: 'claim-stance', responseKind: 'stance' }],
-      [row('claim-stance', 1, 'user-1', 1)],
+      [{ entityId: 'claim-a', responseKind: 'stance' }],
+      [row('claim-a', 1, 'user-1', 1)],
       null
     );
 
-    expect(summaries.get('claim-stance:stance')?.viewerResponse).toBeNull();
+    expect(summaries.get('claim-a:stance')?.viewerResponse).toBeNull();
   });
 
   it('paginates in deterministic 1,000-row pages and deduplicates rows repeated across pages', async () => {

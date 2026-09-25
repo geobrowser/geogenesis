@@ -87,6 +87,7 @@ import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-clai
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -2633,7 +2634,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                         className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
                       >
                         <span className="truncate">
-                          {participant.display_name || participant.profile_space_id} · {participant.position_label}
+                          {participant.display_name || participant.profile_space_id} ·{' '}
+                          {responsePositionLabel(participant.position)}
                         </span>
                       </span>
                     ))}
@@ -2859,7 +2861,6 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      positionLabel={localParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
         (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
@@ -2911,7 +2912,6 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      positionLabel={remoteParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
         (countdown.activeSlot === remoteParticipant?.participant_slot ||
@@ -4036,7 +4036,10 @@ function rematchDestination(session: DebateRematchSession | null | undefined) {
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
-  return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
+  // Named from the side rather than read off `position_label`, which says "Verify" on a claim
+  // geo-chat still calls factual — see `positionSummariesFromCounts`.
+  const participant = debate.participants.find(candidate => candidate.participant_slot === slot);
+  return participant ? responsePositionLabel(participant.position) : 'Position';
 }
 
 function speakerName(participant: Pick<Debate['participants'][number], 'display_name' | 'profile_space_id'>) {

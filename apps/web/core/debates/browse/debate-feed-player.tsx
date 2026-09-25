@@ -9,6 +9,7 @@ import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { validateSpaceId } from '~/core/io/rest/validation';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
@@ -981,11 +982,13 @@ function DebaterVideo({
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
-              {/* Guarded on the text rather than only on the participant: `position_label` is
-                  typed non-null but arrives from geo-chat, and an empty one would draw a bare pill
-                  that says nothing. The room tile guards it the same way. */}
-              {participant?.position_label && (
-                <DebatePositionChip data-debate-position-chip label={participant.position_label} />
+              {/* Named from the side rather than read off `position_label`, for the same reason
+                  the room tile is: geo-chat still calls a factual claim's sides "Verify" and
+                  "Dispute", which is a word this app no longer has a way to publish. `position`
+                  is a non-null boolean, so the label is always a real one and the participant is
+                  the only thing left to guard. */}
+              {participant && (
+                <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
             </span>
             {byline && (

@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY, getResponseActionMethod, type ResponseKind } from '~/core/responses/entity-response';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -534,40 +534,35 @@ describe('position avatar stack', () => {
     });
 
     /**
-     * And a remembered side belongs to the vocabulary it was read under.
+     * The write must never be handed geo-chat's word for the kind.
      *
-     * The summary query is keyed by response kind, so a claim that changes from stance to
-     * Verify/Dispute starts a fresh read — and a memory that ignored the kind would hand that read's
-     * question the previous one's answer while it was still out, treating an Agree as a Verify and
-     * enabling the controls over it.
+     * geo-chat still labels claims minted before the vocabularies merged `"veracity"`, and that
+     * value arrives typed as the narrowed kind it no longer matches, so nothing catches it. Handed
+     * to `getResponseActionMethod` it selects no SDK method at all, and the click throws on
+     * `undefined['positive']` rather than publishing — on every claim with existing verify or
+     * dispute activity.
      */
-    it('does not carry a side across a change of vocabulary', () => {
-      mocks.summaryIndexedViewerDirection = 'negative';
-      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const card = (responseKind: 'stance' | 'veracity') => (
-        <QueryClientProvider client={queryClient}>
-          <MatchmakingClaimCard
-            claim={claim}
-            positions={twoSides()}
-            readiness={readiness({ viewer_response: null, response_kind: responseKind })}
-            answersReady={false}
-            answersMayComeFromIndex
-          />
-        </QueryClientProvider>
+    it('publishes under a real response kind even when the row still says veracity', () => {
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ response_kind: 'veracity' })}
+        />
       );
-      const view = render(card('stance'));
-      expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
 
-      // The kind changes, so its read starts again — and is in flight.
-      mocks.summaryViewerResponseLoading = true;
-      view.rerender(card('veracity'));
+      const passed = mocks.useEntityResponse.mock.calls.at(-1)?.[0] as { responseKind: ResponseKind };
 
-      // The pills take their labels from the positions, so they read the same; what changes is that
-      // the card no longer claims to know the side.
-      const negative = screen.getByRole('button', { name: /^Disagree/ });
-      expect(negative).toBeDisabled();
-      expect(negative).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+      expect(passed.responseKind).toBe('stance');
+      // The assertion that actually matters: whatever kind was passed, it names an SDK method.
+      expect(getResponseActionMethod(passed.responseKind, 'positive')).toBe('agree');
+      expect(getResponseActionMethod(passed.responseKind, 'negative')).toBe('disagree');
     });
+
+    // A case that used to sit here — "does not carry a side across a change of vocabulary" — is
+    // gone with the vocabularies. A claim had two possible kinds and could move between them, so a
+    // remembered side had to be dropped when it did. There is one kind now, so there is no change
+    // to carry a side across.
 
     // And it does hand back, once geo-chat says the same thing.
     it('retires it when geo-chat answers with the side the viewer took', () => {

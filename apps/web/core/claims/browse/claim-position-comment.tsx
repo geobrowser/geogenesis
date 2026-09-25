@@ -5,10 +5,10 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
+import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -48,7 +48,7 @@ export function ClaimPositionCommentControl({
   entityId: string;
   spaceId: string;
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   viewerPosition: boolean | null;
   onRespond: (position: boolean) => void;
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
@@ -57,7 +57,7 @@ export function ClaimPositionCommentControl({
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
-  /** Compact action rendered after Disagree/Dispute, such as the Explore comments-panel opener. */
+  /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
 }) {
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
@@ -140,7 +140,7 @@ export function ClaimPositionCommentControl({
     setIsSubmitting(false);
   };
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const action = promptedPosition === null ? null : promptedPosition ? copy.positiveAction : copy.negativeAction;
 
   return (

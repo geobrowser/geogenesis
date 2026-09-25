@@ -333,9 +333,9 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-1']], {});
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-2']], {});
     queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']], new Map());
-    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
-    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
-    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:stance']], new Map());
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-2']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', []], {});
@@ -379,14 +379,14 @@ describe('DebateGatewayClient', () => {
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:stance']] })!
       )
     ).toBe(true);
     expect(
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:stance']] })!
       )
     ).toBe(true);
     // The rematch picker draws both participants' sides, so a claim change has to reach the batch
@@ -419,7 +419,7 @@ describe('DebateGatewayClient', () => {
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:stance']] })!
       )
     ).toBe(false);
     // The rematch picker reads both participants' sides straight from the graph in one query;
@@ -441,10 +441,10 @@ describe('DebateGatewayClient', () => {
     await flushInvalidations();
     invalidateQueries.mockRestore();
 
-    const responseTargets = ['claim-1:stance', 'claim-2:veracity'];
+    const responseTargets = ['claim-1:stance', 'claim-2:stance'];
     const summaryDataKey = ['claim-response-summary-data', 'profile-1', 'space-1', responseTargets] as const;
     const responseBatchKey = ['claim-response-summaries', 'profile-1', 'space-1', responseTargets] as const;
-    const fetchSummaryData = vi.fn(async () => new Map([['claim-2:veracity', { negative: 1 }]]));
+    const fetchSummaryData = vi.fn(async () => new Map([['claim-2:stance', { negative: 1 }]]));
     const observer = new QueryObserver(queryClient, {
       queryKey: responseBatchKey,
       queryFn: () =>

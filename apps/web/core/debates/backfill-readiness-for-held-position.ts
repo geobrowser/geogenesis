@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
+
 import { type MatchmakingReadiness, notifyClaimResponseIndexed } from './api';
 import { useGeoChatAuth } from './hooks';
 
@@ -66,13 +68,18 @@ export function useBackfillReadinessForHeldPosition({
   const sentOrder = React.useRef<string[]>([]);
 
   const viewerResponse = readiness?.viewer_response ?? null;
-  const responseKind = readiness?.response_kind ?? null;
+  // `readiness.response_kind` is deliberately not read. It can still say "veracity" for a claim
+  // minted before the vocabularies merged, and this forwards the kind back to geo-chat — so the
+  // backfill would record the retired kind against a response published as a stance. The field was
+  // also doing duty as a "readiness has arrived" guard, which is said directly below instead: the
+  // type makes it non-null, so it was only ever null when the readiness itself was.
+  const hasReadiness = readiness != null;
   const alreadyReady = readiness?.viewer_debate_ready ?? false;
   const disabledReason = readiness?.readiness_disabled_reason ?? null;
 
   React.useEffect(() => {
     if (!ready || !authenticated || !accountKey) return;
-    if (!viewerResponse || !responseKind) return;
+    if (!viewerResponse || !hasReadiness) return;
     if (alreadyReady || disabledReason) return;
 
     const key = `${accountKey}:${spaceId}:${entityId}`;
@@ -91,7 +98,7 @@ export function useBackfillReadinessForHeldPosition({
     void notifyClaimResponseIndexed(
       spaceId,
       entityId,
-      responseKind,
+      CLAIM_RESPONSE_KIND,
       viewerResponse.position,
       getPrivyIdentityToken,
       accountKey,
@@ -106,8 +113,8 @@ export function useBackfillReadinessForHeldPosition({
     disabledReason,
     entityId,
     getPrivyIdentityToken,
+    hasReadiness,
     ready,
-    responseKind,
     spaceId,
     viewerResponse,
   ]);
