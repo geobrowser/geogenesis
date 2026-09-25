@@ -41,6 +41,13 @@ const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/claims',
   searchParams: new URLSearchParams(),
   isMobile: false,
+  peerAvailability: false,
+  scheduledAwaitingAnswerCount: undefined as number | undefined,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -78,7 +85,13 @@ vi.mock('../hooks', () => ({
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
-  useDebateActivity: () => ({ data: { available_to_debate: mocks.available, incoming_request_count: 0 } }),
+  useDebateActivity: () => ({
+    data: {
+      available_to_debate: mocks.available,
+      incoming_request_count: 0,
+      scheduled_awaiting_answer_count: mocks.scheduledAwaitingAnswerCount,
+    },
+  }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -190,6 +203,8 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/claims';
   mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
+  mocks.peerAvailability = false;
+  mocks.scheduledAwaitingAnswerCount = undefined;
 });
 
 afterEach(cleanup);
@@ -687,5 +702,38 @@ describe('warming Explore', () => {
     renderOpen('lobby');
 
     expect(screen.queryByTestId('claims-tab-warm')).toBeNull();
+  });
+});
+
+// The Requests tab's badge counts scheduled requests from activity, behind the flag.
+describe('Requests badge', () => {
+  function renderRequestsButton() {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    return screen.getByRole('button', { name: /^Requests/ });
+  }
+
+  it('counts scheduled requests waiting on an answer', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+
+  it('shows no badge when activity has no count', () => {
+    mocks.peerAvailability = true;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
+  });
+
+  it('counts no scheduled requests with the flag off, even when activity has some', () => {
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 });

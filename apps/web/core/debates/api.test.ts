@@ -8,6 +8,7 @@ import {
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
+  createScheduledDebate,
   dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
@@ -980,5 +981,40 @@ describe('GeoChatSessionError', () => {
   it('keeps the Retry-After delay of the error it wraps', () => {
     const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
     expect(wrapped.retryAfterMs).toBe(1_500);
+  });
+});
+
+describe('scheduled debate limit', () => {
+  it("keeps geo-chat's message and code on a refused invitation", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'too_many_open_invitations',
+              message:
+                'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const body = {
+      opponent_user_id: 'user-b',
+      scheduled_start_at: '2026-09-26T10:00:00.000Z',
+      scheduled_end_at: '2026-09-26T10:30:00.000Z',
+    };
+    const error = await createScheduledDebate(body, vi.fn(), 'user-a').catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'too_many_open_invitations',
+      message:
+        'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+    });
   });
 });

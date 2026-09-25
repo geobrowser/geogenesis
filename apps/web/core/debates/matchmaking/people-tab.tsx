@@ -13,6 +13,7 @@ import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Time } from '~/design-system/icons/time';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -603,9 +604,11 @@ function PersonRow({
                 ? onRequireSignIn()
                 : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)
             }
-            className="shrink-0 text-metadata whitespace-nowrap text-grey-04 transition-colors hover:text-text"
+            title="See times"
+            // An icon rather than text: the stats beside it need the width in a narrow panel.
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
           >
-            See times
+            <Time />
           </button>
         )}
         <HubPillButton
