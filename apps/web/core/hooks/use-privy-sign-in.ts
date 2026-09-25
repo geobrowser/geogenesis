@@ -28,10 +28,9 @@ type UsePrivySignInOptions = {
 /**
  * Opens Privy's own "Log in or sign up" dialog straight away, the way the upvote control does.
  *
- * This is now the only way in. An interstitial "create your personal space" card used to sit in
- * front of the comment composer and the join controls; it cost the viewer a second click and a
- * tinted overlay on the way to this same Privy dialog, so it was removed. For a control whose only
- * barrier is "you are signed out", going directly to the login is the shorter path.
+ * Signed-out gates use this rather than an interstitial "create your personal space" card, which
+ * cost the viewer a second click and a tinted overlay on the way to this same dialog. For a control
+ * whose only barrier is "you are signed out", going directly to the login is the shorter path.
  *
  * Clears any half-finished onboarding first, and records where to return to so the viewer lands
  * back on the page they left rather than being bounced to explore.

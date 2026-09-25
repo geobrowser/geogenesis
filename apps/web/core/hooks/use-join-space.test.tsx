@@ -1,11 +1,8 @@
-import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
-import * as React from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { useJoinSpace } from './use-join-space';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -19,7 +16,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => mocks.personalSpace }));
-vi.mock('~/core/hooks/use-pending-memberships', () => ({ useIsMembershipPending: () => false }));
 vi.mock('~/core/hooks/use-request-to-be-member', () => ({
   useRequestToBeMember: () => ({
     requestToBeMember: mocks.requestToBeMember,
@@ -31,38 +27,47 @@ vi.mock('~/core/state/pending-actions', () => ({ useEnqueuePendingAction: () => 
 vi.mock('~/core/state/pending-join-intents', () => ({ useDeferredJoin: () => mocks.deferJoin }));
 
 beforeEach(() => {
-  mocks.promptSignIn.mockClear();
-  mocks.deferJoin.mockClear();
-  mocks.requestToBeMember.mockClear();
+  vi.clearAllMocks();
   mocks.smartAccount = null;
   mocks.personalSpace = { personalSpaceId: null, isRegistered: false };
 });
 
-afterEach(cleanup);
+describe('useJoinSpace', () => {
+  // Signed out goes straight to Privy — no interstitial card — with the intent parked so it
+  // fires once the account exists.
+  it('parks the join intent and opens Privy when signed out', () => {
+    const { result } = renderHook(() => useJoinSpace({ spaceId: 'space-1' }));
 
-describe('ExploreJoinSpaceButton', () => {
-  // The interstitial "Create your personal space to join spaces" card used to sit here, costing a
-  // second click to reach the same Privy dialog. Pressing Join while signed out goes straight to
-  // Privy now, and the join intent is still parked so it fires once the account exists.
-  it('opens Privy directly when signed out, after parking the join intent', () => {
-    render(<ExploreJoinSpaceButton spaceId="space-1" hasRequestedSpaceMembership={false} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Join space' }));
+    act(() => result.current.join());
 
     expect(mocks.deferJoin).toHaveBeenCalledTimes(1);
     expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
     expect(mocks.requestToBeMember).not.toHaveBeenCalled();
+    expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
   });
 
-  it('requests membership without any sign-in prompt once the personal space is live', () => {
+  it('requests membership immediately once the personal space is registered', () => {
     mocks.smartAccount = { account: { address: '0xabc' } };
     mocks.personalSpace = { personalSpaceId: 'personal-1', isRegistered: true };
+    const { result } = renderHook(() => useJoinSpace({ spaceId: 'space-1' }));
 
-    render(<ExploreJoinSpaceButton spaceId="space-1" hasRequestedSpaceMembership={false} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Join space' }));
+    act(() => result.current.join());
 
     expect(mocks.requestToBeMember).toHaveBeenCalledTimes(1);
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
+  });
+
+  it('queues the request, and shows it as requested, while the personal space is still registering', () => {
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    const { result } = renderHook(() => useJoinSpace({ spaceId: 'space-1' }));
+
+    act(() => result.current.join());
+
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'join:space-1', requires: 'personalSpace' })
+    );
+    expect(result.current.optimisticRequested).toBe(true);
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    expect(mocks.requestToBeMember).not.toHaveBeenCalled();
   });
 });

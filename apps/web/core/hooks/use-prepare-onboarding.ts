@@ -69,10 +69,10 @@ export function usePrepareOnboarding() {
       // Nothing is cleared for somebody already signed in, and that is the point of the check.
       //
       // The leak this reset exists to stop needs a *different* person arriving on a browser where
-      // the last one abandoned onboarding — which means not authenticated. `use-ranking-compose-
-      // access.ts` gates on `!smartAccount` rather than `!authenticated`, and a brand-new account
-      // from the email capture is authenticated with no
-      // smart account for as long as wallet creation and activation take. Clearing in that window
+      // the last one abandoned onboarding — which means not authenticated.
+      // `use-ranking-compose-access.ts` gates on `!smartAccount` rather than `!authenticated`, and
+      // a brand-new account from the email capture is authenticated with no smart account for as
+      // long as wallet creation and activation take. Clearing in that window
       // wipes the interests somebody is part-way through picking, and
       // `PendingPersonalSpaceRunner` then submits no membership proposals for choices they made.
       //
