@@ -10,7 +10,7 @@ import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/con
 import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useBlocks } from '~/core/state/editor/use-blocks';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -176,10 +176,21 @@ export function TopicPageView({
    * Overview tab, and which a topic page had no tab for at all, so anything written into a topic's
    * body was unreachable (and unwritable) from the topic view.
    *
-   * Same selector the editor itself runs, so the tab appears exactly when the editor would have
-   * something to draw rather than on a second, drifting definition of "empty".
+   * Same selector *and* the same server snapshot the editor itself runs on, so the tab appears
+   * exactly when the editor would have something to draw rather than on a second, drifting
+   * definition of "empty". The snapshot is the half that is easy to miss: `useBlocks` without it
+   * reads only the reactive store, which on a client-side navigation holds the entity's name long
+   * before it holds its relations — so a topic that plainly has a body lost its tab until
+   * `useHydrateEntity` settled, and kept losing it if that read failed. `EntityTabs`, just below,
+   * merges its own `initialTabRelations` for the same reason.
+   *
+   * Guarded on the id because the provider belongs to whatever entity the route or panel opened
+   * on. That is this topic on every path that renders this view, and a snapshot read for a
+   * different one would advertise somebody else's body as this topic's.
    */
-  const hasBlocks = useBlocks(entityId, spaceId).length > 0;
+  const editor = useEditorInstance();
+  const serverBlockRelations = ID.equals(editor.id, entityId) ? editor.initialBlockRelations : undefined;
+  const hasBlocks = useBlocks(entityId, spaceId, serverBlockRelations).length > 0;
 
   /*
    * An editor gets the tab whether or not it has content yet — it is the only way to start a body —

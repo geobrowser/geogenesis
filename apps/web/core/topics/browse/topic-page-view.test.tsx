@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => ({
   pageActions: null as Record<string, unknown> | null,
   /** Side-panel tab selection, or null when the view is on a route rather than in the panel. */
   panel: null as { activeTabId: string | null; activeSystemTab: string | null } | null,
+  /** What the route handed the editor provider: the server's snapshot of this entity's blocks. */
+  editorInstance: { id: 'topic-1', initialBlockRelations: [] as unknown[] },
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -98,7 +100,17 @@ vi.mock('~/core/sync/use-store', () => ({
 // The page asks the same question the editor does — "would this draw anything?" — through the same
 // hook, so the tests drive the answer rather than the sync store behind it.
 vi.mock('~/core/state/editor/use-blocks', () => ({
-  useBlocks: () => mocks.blocks,
+  // Mirrors the real hook: reactive store merged with whatever snapshot the caller passes. Returning
+  // `mocks.blocks` flat would make the snapshot argument untestable — the bug being covered here is
+  // precisely that the page never passed one.
+  useBlocks: (_entityId: string, _spaceId: string, initialBlockRelations: unknown[] = []) => [
+    ...mocks.blocks,
+    ...initialBlockRelations,
+  ],
+}));
+vi.mock('~/core/state/editor/editor-provider', () => ({
+  useActiveTabIdForEditor: () => null,
+  useEditorInstance: () => mocks.editorInstance,
 }));
 vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
   useEntitySidePanelActiveTab: () => mocks.panel,
@@ -160,6 +172,7 @@ beforeEach(() => {
   mocks.canEdit = true;
   mocks.pageActions = null;
   mocks.panel = null;
+  mocks.editorInstance = { id: 'topic-1', initialBlockRelations: [] };
 });
 
 afterEach(cleanup);
@@ -476,6 +489,32 @@ describe('TopicPageView Overview tab', () => {
   // The other half of that rule: being *somewhere else* must not conjure the tab back.
   it('still hides it from a reader who is on any other tab', () => {
     mocks.pathname = '/space/space-1/topic-1/comments';
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
+  });
+
+  /*
+   * The reactive store starts empty on a client-side navigation — the entity arrives with a name
+   * from whatever list was clicked, and its relations only land when `useHydrateEntity` settles.
+   * The route already fetched the blocks and handed them to the editor provider, so reading the
+   * store alone hid the tab on a topic that plainly has a body, and hid it permanently if that
+   * fetch failed. `EntityTabs` merges its own server snapshot the same way, two lines below.
+   */
+  it('shows the tab from the server snapshot before the store has the relations', () => {
+    mocks.blocks = [];
+    mocks.editorInstance = { id: 'topic-1', initialBlockRelations: [{ id: 'block-relation-1' }] };
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
+  });
+
+  // The provider belongs to whatever entity the route or panel opened on. It is this topic in every
+  // path that renders this view, but a snapshot read for a different entity would put a tab on a
+  // topic whose body is somebody else's.
+  it('ignores a snapshot belonging to a different entity', () => {
+    mocks.blocks = [];
+    mocks.editorInstance = { id: 'some-other-entity', initialBlockRelations: [{ id: 'block-relation-1' }] };
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
