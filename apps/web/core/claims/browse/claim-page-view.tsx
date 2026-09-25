@@ -14,7 +14,7 @@ import {
   useBackfillReadinessForHeldPosition,
 } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { ResponseConfirmingNote, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
@@ -546,7 +546,6 @@ function ClaimPositionSection({
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
       />
-      {control.isResponsePending ? <ResponseConfirmingNote /> : null}
       {control.responseError ? (
         <div role="alert" className="mt-2">
           <Text as="p" variant="footnote" color="red-01">

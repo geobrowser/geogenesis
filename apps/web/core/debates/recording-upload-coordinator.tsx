@@ -658,7 +658,7 @@ export function DebateRecordingUploadCoordinator() {
     if (cancelTargetDebateId) {
       capture('debate_recording_upload_cancel_dismissed', {
         debate_id: cancelTargetDebateId,
-        source: cancelSourceRef.current,
+        cancel_source: cancelSourceRef.current,
       });
     }
     setCancelTargetDebateId(null);
@@ -687,7 +687,7 @@ export function DebateRecordingUploadCoordinator() {
       // so a storage failure below cannot lose a cancellation that did happen.
       capture('debate_recording_upload_cancelled', {
         debate_id: cancelTargetDebateId,
-        source: cancelSourceRef.current,
+        cancel_source: cancelSourceRef.current,
         // Whether every byte was already out: cancelling then withdraws a finished upload.
         upload_finished: uploadedDebateIds.has(normalizedTargetDebateId),
         already_cancelled: alreadyCancelled,
