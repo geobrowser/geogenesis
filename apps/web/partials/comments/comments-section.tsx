@@ -374,7 +374,7 @@ export function CommentSection({
   // `totalOverride`: that number is a server aggregate over debates and extracted claims as well as
   // comments, so nothing in the comment caches can move it. See `activity-posts.tsx`.
   const [activityPosts, setActivityPosts] = useState(0);
-  const reportActivityPost = React.useCallback(() => setActivityPosts(posts => posts + 1), []);
+  const adjustActivityPosts = React.useCallback((delta: number) => setActivityPosts(posts => posts + delta), []);
 
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
   // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
@@ -388,11 +388,15 @@ export function CommentSection({
         ancestorComments,
         onOptimistic: commentId => {
           markSessionNew(commentId);
-          reportActivityPost();
+          adjustActivityPosts(1);
         },
+      }).then(result => {
+        // Rolled back by `useCreateComment` when the transaction is rejected, so the heading gives
+        // back what it counted. A publish retained for retry keeps both its row and its count.
+        if (!result) adjustActivityPosts(-1);
       });
     },
-    [markSessionNew, publishComment, reportActivityPost, smartAccount]
+    [adjustActivityPosts, markSessionNew, publishComment, smartAccount]
   );
 
   const handleEditComment = React.useCallback(
@@ -444,7 +448,7 @@ export function CommentSection({
     <CommentDensityContext.Provider value={density}>
       {/* Every composer inside — the one below and the inline ones on the activity rows — reports a
           publish here, because the heading's number is an aggregate none of them can otherwise move. */}
-      <ActivityPostsProvider onPost={reportActivityPost}>
+      <ActivityPostsProvider onAdjust={adjustActivityPosts}>
         <CommentBranchHighlightProvider>
           <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
             {!isPanel && (

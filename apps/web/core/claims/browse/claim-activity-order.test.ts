@@ -202,3 +202,36 @@ describe('activityTime', () => {
     expect(activityTime({ id: 'a', createdAt: 'nope' })).toBe(Number.NEGATIVE_INFINITY);
   });
 });
+
+describe('rows nothing can place in time', () => {
+  const dated = (id: string, createdAt: string) => ({ id, createdAt });
+  const undated = (id: string) => ({ id, createdAt: '' });
+
+  // The bug this closes: `activityTime` answers -Infinity, the direction multiplies it, and under
+  // Old that puts the undated row *first*. A row nothing can place is not the oldest thing that
+  // ever happened any more than it is the newest.
+  it('keeps an undated row last under Old, not first', () => {
+    const merged = mergeActivityRows([], [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')], 'oldest');
+
+    expect(merged.map(entry => entry.row.id)).toEqual(['older', 'newer', 'no-date']);
+  });
+
+  it('keeps it last under New as well', () => {
+    const merged = mergeActivityRows([], [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')], 'newest');
+
+    expect(merged.map(entry => entry.row.id)).toEqual(['newer', 'older', 'no-date']);
+  });
+
+  // `-Infinity - -Infinity` is NaN, which is the unstable comparator the sentinel existed to avoid.
+  it('does not compare two undated rows by arithmetic', () => {
+    const merged = mergeActivityRows([], [undated('a'), undated('b'), dated('dated', '2026-01-01T00:00:00Z')], 'oldest');
+
+    expect(merged.map(entry => entry.row.id)).toEqual(['dated', 'a', 'b']);
+  });
+
+  it('still sorts undated rows behind dated ones when Best has no scores to go on', () => {
+    const merged = mergeActivityRows([], [undated('no-date'), dated('dated', '2026-01-01T00:00:00Z')], 'best');
+
+    expect(merged.map(entry => entry.row.id)).toEqual(['dated', 'no-date']);
+  });
+});

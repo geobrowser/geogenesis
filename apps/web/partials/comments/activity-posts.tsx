@@ -20,20 +20,31 @@ import * as React from 'react';
  * delta count them twice. Navigating away and back re-reads the aggregate and resets the delta,
  * which is the same answer arrived at from the other side.
  */
-const ActivityPostsContext = React.createContext<(() => void) | null>(null);
+const ActivityPostsContext = React.createContext<((delta: number) => void) | null>(null);
 
-export function ActivityPostsProvider({ onPost, children }: { onPost: () => void; children: React.ReactNode }) {
-  return <ActivityPostsContext.Provider value={onPost}>{children}</ActivityPostsContext.Provider>;
+export function ActivityPostsProvider({
+  onAdjust,
+  children,
+}: {
+  onAdjust: (delta: number) => void;
+  children: React.ReactNode;
+}) {
+  return <ActivityPostsContext.Provider value={onAdjust}>{children}</ActivityPostsContext.Provider>;
 }
 
 /**
- * Reports a comment published here, if anything is counting.
+ * Reports a comment appearing or disappearing here, if anything is counting.
+ *
+ * A signed delta rather than a bare "posted", because a publish can fail: `useCreateComment` removes
+ * the optimistic row when the transaction is rejected, and without the matching `-1` the heading
+ * stayed one above the truth for as long as the page was open. A publish that is merely *retained*
+ * for retry keeps its row, so it keeps its `+1`.
  *
  * Returns a no-op outside a provider rather than throwing: the same composer runs in the entity
  * comments panel and on proposal threads, neither of which has a heading with an aggregate behind
  * it.
  */
-export function useReportActivityPost(): () => void {
-  const report = React.useContext(ActivityPostsContext);
-  return React.useCallback(() => report?.(), [report]);
+export function useAdjustActivityPosts(): (delta: number) => void {
+  const adjust = React.useContext(ActivityPostsContext);
+  return React.useCallback((delta: number) => adjust?.(delta), [adjust]);
 }

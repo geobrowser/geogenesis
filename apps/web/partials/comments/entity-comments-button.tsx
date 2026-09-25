@@ -29,7 +29,7 @@ export function EntityCommentsButton({
   className,
   onActivate,
   isActive,
-  broaderThanComments = false,
+  commentsInCount,
 }: {
   entityId: string;
   spaceId: string;
@@ -42,17 +42,17 @@ export function EntityCommentsButton({
   /** What the button reports as expanded when the caller owns the disclosure. */
   isActive?: boolean;
   /**
-   * `count` measures more than this entity's comments — an activity total, say.
+   * How many of `count` are this entity's comments, when `count` measures more than them.
    *
    * Without it the live comment list replaces the number as soon as anything fetches that list, and
    * a pill showing a whole claim's activity collapses to its direct comments. See `useCommentCount`.
    */
-  broaderThanComments?: boolean;
+  commentsInCount?: number;
 }) {
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   const isOpen = onActivate ? (isActive ?? false) : commentsTarget?.entityId === entityId;
   // Commenting from the panel this button opens used to leave the number beside it behind.
-  const liveCount = useCommentCount(entityId, count, { broaderThanComments });
+  const liveCount = useCommentCount(entityId, count, { commentsInSeed: commentsInCount });
 
   return (
     <button

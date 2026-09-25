@@ -1,7 +1,6 @@
-import { uuidToHex } from '~/core/id/normalize';
-
 import type { ClaimTiming } from '~/core/debates/claim-timing';
 import type { TranscriptClaim } from '~/core/debates/transcript-claims';
+import { uuidToHex } from '~/core/id/normalize';
 
 /**
  * Ordering for the claim page's activity feed.
@@ -69,10 +68,15 @@ const NO_SCORES: ActivityScoreLookup = () => null;
 /**
  * The instant a row claims, for ordering purposes.
  *
- * An unparseable or missing timestamp answers `-Infinity` for newest-first, which puts the row at
- * the end of the list rather than at the top of it. A row with no date is not the newest thing that
- * ever happened, and `new Date(undefined).getTime()` is `NaN`, which makes every comparison false
- * and leaves a sort silently unstable rather than merely wrong.
+ * An unparseable or missing timestamp answers `-Infinity`, which is a marker rather than a position:
+ * `new Date(undefined).getTime()` is `NaN`, and NaN makes every comparison false, leaving a sort
+ * silently unstable rather than merely wrong.
+ *
+ * It is not enough on its own, which this comment used to claim. `-Infinity` puts an undated row
+ * last under newest-first and *first* under oldest-first, because the direction multiplies it — so
+ * a debate with no date led the Old order. And two undated rows subtract to `NaN`, which is the
+ * unstable comparator the sentinel was introduced to avoid. {@link compareByTime} handles the marker
+ * before any arithmetic touches it.
  */
 export function activityTime(row: ActivityOrderable): number {
   const ms = new Date(row.createdAt).getTime();
@@ -104,8 +108,7 @@ export function mergeActivityRows<C extends ActivityOrderable, E extends Activit
   // `sort` is stable in every engine we target, so rows that compare equal keep insertion order —
   // which above is "comments, then extras". Said out loud because the tie-break is a decision.
   if (order === 'newest' || order === 'oldest') {
-    const direction = order === 'newest' ? -1 : 1;
-    merged.sort((a, b) => direction * (activityTime(a.row) - activityTime(b.row)));
+    merged.sort((a, b) => compareByTime(a.row, b.row, order === 'newest' ? -1 : 1));
     return merged;
   }
 
@@ -113,9 +116,32 @@ export function mergeActivityRows<C extends ActivityOrderable, E extends Activit
   // thread rather than as whatever order the two lists happened to arrive in. It is also what the
   // list falls back to while the counts are still arriving, since an unanswered row scores zero.
   const rank = order === 'best' ? netScoreOf : upvotesOf;
-  merged.sort((a, b) => rank(scoreFor(b.row)) - rank(scoreFor(a.row)) || activityTime(b.row) - activityTime(a.row));
+  merged.sort((a, b) => rank(scoreFor(b.row)) - rank(scoreFor(a.row)) || compareByTime(a.row, b.row, -1));
 
   return merged;
+}
+
+/**
+ * Chronological order with undated rows kept at the tail, whichever way time is running.
+ *
+ * The undated case is settled before any subtraction happens, for two reasons. Multiplying the
+ * sentinel by the direction sorts it to whichever end the direction points at, so a row with no date
+ * led the Old order — a row nothing can place is not the oldest thing that ever happened any more
+ * than it is the newest. And `-Infinity - -Infinity` is `NaN`, so two undated rows returned a
+ * comparator result that leaves the sort undefined.
+ *
+ * @param direction -1 for newest first, 1 for oldest first. It applies only to rows that have a date.
+ */
+function compareByTime(a: ActivityOrderable, b: ActivityOrderable, direction: -1 | 1): number {
+  const aTime = activityTime(a);
+  const bTime = activityTime(b);
+  const aDated = Number.isFinite(aTime);
+  const bDated = Number.isFinite(bTime);
+
+  // Equally undated: no opinion, so the stable sort keeps the order the lists arrived in.
+  if (!aDated || !bDated) return aDated === bDated ? 0 : aDated ? -1 : 1;
+
+  return direction * (aTime - bTime);
 }
 
 /** Net of the two directions: a row people disagree about falls behind one they merely like. */

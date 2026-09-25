@@ -72,14 +72,14 @@ describe('useCommentCount', () => {
    * visit, so without this a reader who opened a claim and went back to Explore found the card's 33
    * had become 1.
    */
-  it('keeps a broader seed when the comment list answers with its own smaller measurement', async () => {
+  it('replaces only the comments part of a broader seed', async () => {
     // Both readings of the same cache, because asserting the broader one alone cannot fail: 33 is
     // also its answer before the list arrives, so `waitFor` would pass on the first tick whatever
     // the list went on to say. The plain count is the control — when it drops to 1 the list has
     // definitely replaced, and only then does the broader one holding 33 mean anything.
     const { result } = renderHook(
       () => ({
-        broader: useCommentCount(ENTITY_ID, 33, { broaderThanComments: true }),
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
         plain: useCommentCount(ENTITY_ID, 33),
       }),
       { wrapper }
@@ -94,16 +94,61 @@ describe('useCommentCount', () => {
     expect(result.current.broader).toBe(33);
   });
 
-  it('still adds a row the viewer has only just posted to a broader seed', async () => {
-    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 33, { broaderThanComments: true }), { wrapper });
+  /**
+   * The failure a pending-row delta had: once a published row is indexed it loses `isPendingPublish`
+   * and the pill fell back to the seed — 33 → 34 → 33 with the comment still on screen. Counting the
+   * list's own share instead holds through indexing, because the row never leaves the list.
+   */
+  it('keeps a published comment counted once it is indexed and no longer flagged', async () => {
+    // The control again, and for the same reason: the expected value after indexing is the value it
+    // already held, so `waitFor` alone would pass before the re-render it is meant to observe. The
+    // plain reading moving to 2 is proof the new list landed.
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
 
-    // The list answers after the count was rendered, and the reader has a row in flight.
     vi.setSystemTime(2_000);
     act(() => {
       writeFetchedList([comment('c1'), comment('c2', { isPendingPublish: true } as Partial<CommentEntity>)]);
     });
+    await waitFor(() => expect(result.current.broader).toBe(34));
 
-    await waitFor(() => expect(result.current).toBe(34));
+    // Indexed: the server row replaces the optimistic one and carries no pending flag.
+    vi.setSystemTime(3_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(2));
+    expect(result.current.broader).toBe(34);
+  });
+
+  it('gives back the count when a failed publish takes its row out again', async () => {
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2', { isPendingPublish: true } as Partial<CommentEntity>)]);
+    });
+    await waitFor(() => expect(result.current.broader).toBe(34));
+
+    vi.setSystemTime(3_000);
+    act(() => {
+      writeFetchedList([comment('c1')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(1));
+    expect(result.current.broader).toBe(33);
   });
 
   it('follows the list once something has read it', async () => {

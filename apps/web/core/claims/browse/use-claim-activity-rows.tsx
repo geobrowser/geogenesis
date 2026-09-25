@@ -11,6 +11,7 @@ import {
   DEBATE_TYPE_ID,
 } from '~/core/debates/ontology';
 import { useDebateClaimCounts } from '~/core/debates/use-debate-claim-counts';
+import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { uuidToHex } from '~/core/id/normalize';
@@ -65,6 +66,12 @@ export function useClaimActivityRows({
       relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } }],
     },
     first: ACTIVITY_DEBATE_LIMIT,
+    // Newest first, and said explicitly. The limit above promises the *most recent* few, and an
+    // unordered bounded query returns whichever page the server likes — so on a claim with more
+    // debates than the limit the feed would have shown an arbitrary subset while claiming they were
+    // the latest. `ID_ASC` settles ties, so two debates published in the same second do not swap
+    // places between reads.
+    orderBy: [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdAsc],
     enabled,
   });
 

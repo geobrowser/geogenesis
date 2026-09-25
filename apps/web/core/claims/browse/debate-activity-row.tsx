@@ -136,9 +136,15 @@ export function DebateActivityRow({
 
   const branchLabel = { expand: 'Expand this debate', collapse: 'Collapse this debate' };
 
+  // A debate with no claims and no comments has no branch: `DebateBranch` returns null for it. The
+  // collapse control was drawn anyway, so pressing it on a transcript-less debate collapsed nothing
+  // and merely swapped the keyframe for a plus. `composer.hasPosted` as well as the two counts,
+  // because a comment written here is a branch the server aggregate has not heard about yet.
+  const hasBranch = claimCount + commentCount > 0 || composer.hasPosted;
+
   return (
     <div ref={spine.rowRef} className="thread-branch-hover-root relative">
-      {!collapsed && (
+      {hasBranch && !collapsed && (
         <ThreadParentSpine
           leftPx={DEBATE_DENSITY.avatarCenterPx}
           topPx={spine.topPx}
@@ -151,7 +157,7 @@ export function DebateActivityRow({
 
       <div className="flex items-start gap-3">
         <div className="flex shrink-0 items-start justify-center" style={{ width: DEBATE_DENSITY.avatarPx }}>
-          {collapsed ? (
+          {hasBranch && collapsed ? (
             <ThreadCollapseToggle collapsed label={branchLabel} onToggle={() => setCollapsed(false)} />
           ) : (
             // Portrait, because that is the shape the video actually is: `Debate videos` declares
@@ -207,7 +213,7 @@ export function DebateActivityRow({
           <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text')}>{headline}</span>
 
           <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
-            {!collapsed && (
+            {hasBranch && !collapsed && (
               <ThreadCollapseToggle
                 collapsed={false}
                 // Back out of the body box onto the spine, which is what threads the control onto
@@ -257,7 +263,7 @@ export function DebateActivityRow({
             placeholder="Comment on this debate..."
           />
 
-          {!collapsed && (
+          {hasBranch && !collapsed && (
             <div ref={spine.branchRef} className="mt-4">
               <DebateBranch
                 debateId={debate.id}

@@ -163,13 +163,12 @@ export function ClaimExploreFeedCard({
   // from one query so a reader who opens the card is not told a different number. Falls back to the
   // comment count for a row built somewhere that does not fetch it.
   const activityCount = item.activityCount ?? item.commentCount;
-  // The activity total counts debates and extracted claims as well as comments, so the comment list
-  // is not allowed to stand in for it — see `useCommentCount`. A card falling back to the plain
-  // comment count keeps the old behaviour, because there the list really is the same measurement.
-  const showsActivityTotal = item.activityCount != null;
-  const liveCommentCount = useCommentCount(item.entityId, activityCount, {
-    broaderThanComments: showsActivityTotal,
-  });
+  // The activity total counts debates and extracted claims as well as comments, so the live comment
+  // list replaces only its own share of it — see `useCommentCount`. A card falling back to the plain
+  // comment count passes nothing and keeps the old behaviour, because there the list really is the
+  // same measurement.
+  const commentsInCount = item.activityCount != null ? item.activityCommentCount : undefined;
+  const liveCommentCount = useCommentCount(item.entityId, activityCount, { commentsInSeed: commentsInCount });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -328,7 +327,7 @@ export function ClaimExploreFeedCard({
             positionRowEndSlot={
               liveCommentCount > 0 ? (
                 <EntityCommentsButton
-                  broaderThanComments={showsActivityTotal}
+                  commentsInCount={commentsInCount}
                   entityId={item.entityId}
                   spaceId={item.spaceId}
                   targetEntityType="claim"
