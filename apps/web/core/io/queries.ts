@@ -61,6 +61,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
+import { promoteEntityIds } from './entity-id-filter';
 import { collapseOrFilter } from './filter-or-collapse';
 import { graphql } from './graphql-client';
 import {
@@ -391,6 +392,10 @@ export function getEntitiesOrderedByPropertyConnection(
   if (topLevelTypeIds) {
     normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
   }
+  // The connection's filter applies after the SQL function has sorted every entity carrying the
+  // property; entityIds is applied inside it. See entity-id-filter.ts.
+  const { entityIds, filter: filterWithoutIds } = promoteEntityIds(normalizedFilter);
+  normalizedFilter = filterWithoutIds;
 
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
@@ -404,6 +409,7 @@ export function getEntitiesOrderedByPropertyConnection(
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
+      entityIds,
       limit,
       after,
       offset,
