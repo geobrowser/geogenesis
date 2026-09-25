@@ -93,10 +93,20 @@ export type RoundCue = {
   opacity: number;
 };
 
-function cueFor(span: TurnSpan, turnCount: number, opacity: number): RoundCue {
+function cueFor(span: TurnSpan, turnCount: TurnCount, opacity: number): RoundCue {
   const { round, role } = roundParts(span.index, turnCount);
   return { label: role ? `${round} · ${role}` : round, round, role, opacity };
 }
+
+/**
+ * How many turns the *format* has, which is not how many the render cut.
+ *
+ * `debateTurnRole` reads the count to decide which round is the closing one, so it has to be the
+ * allowance's — a debater who yields their last turn instantly leaves a segment short, and taking
+ * the count from the spans would promote the round before it to "Closing" and caption a rebuttal
+ * as one. The same number the recording room's own countdown classified turns with.
+ */
+type TurnCount = number;
 
 /** The turn the playhead is inside, or nothing before the first and after the last. */
 function currentSpan(spans: TurnSpan[], playheadSeconds: number) {
@@ -127,7 +137,7 @@ function opensRound(span: TurnSpan) {
  *
  * Nothing before the first turn and nothing on the reply: see {@link opensRound}.
  */
-export function roundCardAt(spans: TurnSpan[], playheadSeconds: number): RoundCue | null {
+export function roundCardAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current || !opensRound(current)) return null;
 
@@ -138,7 +148,7 @@ export function roundCardAt(spans: TurnSpan[], playheadSeconds: number): RoundCu
   const opacity = ageMs < FADE_IN_MS ? ageMs / FADE_IN_MS : untilEnd < FADE_OUT_MS ? untilEnd / FADE_OUT_MS : 1;
   if (opacity <= 0) return null;
 
-  return cueFor(current, spans.length, opacity);
+  return cueFor(current, turnCount, opacity);
 }
 
 /**
@@ -152,7 +162,7 @@ export function roundCardAt(spans: TurnSpan[], playheadSeconds: number): RoundCu
  * Where a card opened the round it comes up over that card's fade. Where none did — the reply — it
  * arrives with the turn, because there is nothing for it to wait for.
  */
-export function roundBadgeAt(spans: TurnSpan[], playheadSeconds: number): RoundCue | null {
+export function roundBadgeAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current) return null;
 
@@ -162,5 +172,5 @@ export function roundBadgeAt(spans: TurnSpan[], playheadSeconds: number): RoundC
   const opacity = Math.max(0, Math.min(1, (ageMs - from) / over));
   if (opacity <= 0) return null;
 
-  return cueFor(current, spans.length, opacity);
+  return cueFor(current, turnCount, opacity);
 }

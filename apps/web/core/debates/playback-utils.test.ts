@@ -719,8 +719,8 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
 describe('turn spans', () => {
   it('walks the allowance into alternating turns', () => {
     expect(turnSpansForDurations(2, [30_000, 45_000])).toEqual([
-      { index: 0, slot: 2, startSeconds: 0, endSeconds: 30, clockStartSeconds: 0 },
-      { index: 1, slot: 1, startSeconds: 30, endSeconds: 75, clockStartSeconds: 30 },
+      { index: 0, slot: 2, startSeconds: 0, endSeconds: 30 },
+      { index: 1, slot: 1, startSeconds: 30, endSeconds: 75 },
     ]);
   });
 
@@ -736,6 +736,6 @@ describe('turn spans', () => {
       },
     ]);
 
-    expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35, clockStartSeconds: 5 });
+    expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35 });
   });
 });

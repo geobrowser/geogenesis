@@ -111,6 +111,9 @@ function controllerFixture(overrides: {
     // Four 30s turns, the speaking one first — two rounds, so a card firing on the second can be
     // told apart from one firing on every turn.
     turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]),
+    // The format's count, which is what names a round. Equal to the spans here because nothing
+    // was yielded early; the two part company on a debate that was.
+    turnCount: 4,
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),

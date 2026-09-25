@@ -91,6 +91,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     timelineSeconds,
     turnState,
     turnSpans,
+    turnCount,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -156,12 +157,12 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
    * small for a phrase across it.
    */
   const roundCard = React.useMemo(
-    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnSpans]
+    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
   );
   const roundBadge = React.useMemo(
-    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnSpans]
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
   );
 
   const showReplay = ready && playbackEnded;
@@ -524,8 +525,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           seam.
 
           Stood down while the round card has the seam — the two are given the same 20 pixels and
-          would otherwise be printed over each other. The card is at most 1.8s at the top of a
-          round, which is a beat before anyone has said anything worth captioning. */}
+          would otherwise be printed over each other, and a card the size of this one wins that.
+          It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
+          real only where the render retained speech from before the incoming debater's clock
+          started (GEO-2754), which is the one case where they are already talking as it lands. */}
       {subtitle && !roundCard && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
