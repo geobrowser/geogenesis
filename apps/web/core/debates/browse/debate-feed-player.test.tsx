@@ -765,6 +765,33 @@ describe('the round it is playing', () => {
     expect(cards[0].getAttribute('data-round-card')).toBe('Round 1 · Opening');
   });
 
+  it('takes the top tile\u2019s name with it and gives it straight back', () => {
+    // A lower third under a title card is something no broadcast does, because neither gets read.
+    // It crossfades against the card, so at full card the name is gone and a second later it is
+    // not — and the bottom tile's name, half a player away, never moves.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(0.5);
+    const up = render(<DebateFeedPlayer debate={debate} active />).container;
+    const [topUnder, bottomUnder] = [...up.querySelectorAll('[data-debater-row]')] as HTMLElement[];
+    expect(topUnder.style.opacity).toBe('0');
+    expect(bottomUnder.style.opacity).toBe('1');
+
+    mocks.controller = at(12);
+    const after = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect((after.querySelector('[data-debater-row]') as HTMLElement).style.opacity).toBe('1');
+  });
+
+  it('does not leave an invisible profile link on the pause surface', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('[&_button]:pointer-events-none');
+  });
+
   it('keeps the seam to itself while it is up', () => {
     const subtitle = 'The line under the round card';
     mocks.controller = { ...at(0.5), subtitle };

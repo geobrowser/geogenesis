@@ -386,6 +386,9 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         roundBadge={turnState?.slot === 1 ? roundBadge : null}
+        // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
+        // band and comes nowhere near the bottom tile's, half a player away.
+        cardYield={roundCard?.opacity ?? 0}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -577,6 +580,7 @@ function DebaterVideo({
   audible,
   countdown,
   roundBadge,
+  cardYield = 0,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -598,6 +602,13 @@ function DebaterVideo({
   countdown: TurnState;
   /** The round, beside this tile's timer for as long as this tile's turn runs. */
   roundBadge?: RoundCue | null;
+  /**
+   * How much of this tile's bottom band the round card has taken, 0–1.
+   *
+   * The card's own opacity, handed straight back, so the name crossfades against it rather than
+   * running a timer of its own. See where it is applied below.
+   */
+  cardYield?: number;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -975,12 +986,26 @@ function DebaterVideo({
           pause/play surface underneath.
 
           A generous 55%, and it no longer rations the claim corner's width: the corner shares this
-          row and draws over it rather than sitting beside it. It also stays put — it used to fade
-          out under a card, which cost the viewer the link to the debater's profile exactly when
-          they were reading something that debater had said. */}
+          row and draws over it rather than sitting beside it. It also stays put under a claim
+          card — it used to fade out under those, which cost the viewer the link to the debater's
+          profile exactly when they were reading something that debater had said.
+
+          The round card is the one thing it does yield to, and the difference is attribution. A
+          claim card is a quotation and the name under it is who said it, so the two belong on
+          screen together. A round card attributes nothing, sits across this exact band, and is
+          gone in under two seconds — and a lower third under a title card is something no
+          broadcast does, because neither gets read.
+
+          It crossfades against the card's own opacity rather than running a timer, so the name
+          leaves as the card arrives and is back as it goes: one movement, and nothing to fall out
+          of step with a scrub. Its link goes with it while it is under — an invisible profile
+          button in the middle of the pause surface is a misclick waiting to happen. */}
       <div
+        data-debater-row
+        style={{ opacity: 1 - cardYield }}
         className={cx(
           'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom] duration-150',
+          cardYield > 0.5 && '[&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
