@@ -27,10 +27,12 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
 } from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
@@ -41,8 +43,19 @@ import { TopicFeed } from './topic-feed';
 import { limitTopicFeedSpaceIds } from './topic-feed-params';
 import { useTopicAncestors } from './use-topic-ancestors';
 
-/** Shared with the cover/avatar header so its left edge stays aligned with the topic column. */
-export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
+/**
+ * Shared with the cover/avatar header so its left edge stays aligned with the topic column.
+ *
+ * The *same* width an ordinary entity page gets, taken from its constant rather than restated, so
+ * a topic cannot drift narrower than the page it replaces again. It was 720 against the entity
+ * page's 900, which on a desktop read as a column squeezed for no reason a reader could see.
+ *
+ * The inset is the one difference and it stays: this view is also the side panel's and a phone's,
+ * where content cannot run to the edge. It costs the text column 32–40px against a route-only
+ * entity page, which is what keeps the avatar lined up with the name at every width — the header
+ * applies the same pair.
+ */
+export const TOPIC_PAGE_CONTENT_MAX_WIDTH = ENTITY_PAGE_CONTENT_MAX_WIDTH;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
 /**
@@ -288,20 +301,26 @@ export function TopicPageView({
               elsewhere being the generic metadata header, which the topic view replaces. Dropping
               Topic here is allowed: the page re-routes to the generic editor on the next render,
               which is what an entity that is no longer a topic should look like. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {isEditing ? (
-              <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-            ) : (
-              <>
-                <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
-                {additionalTypes.map(type => (
-                  <span key={type.id} className={`${META_CHIP_CLASS} text-grey-04`}>
-                    {type.name ?? type.id}
-                  </span>
-                ))}
-              </>
-            )}
-            {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
+          {/* Types on the left, the entity's own controls on the right — the row an ordinary entity
+              page draws under its description. A topic had neither half of it: no votes, no
+              history, no overflow menu, on a page that is otherwise a full entity page. */}
+          <div className="flex items-center gap-4 text-text">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {isEditing ? (
+                <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+              ) : (
+                <>
+                  <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+                  {additionalTypes.map(type => (
+                    <span key={type.id} className={`${META_CHIP_CLASS} text-grey-04`}>
+                      {type.name ?? type.id}
+                    </span>
+                  ))}
+                </>
+              )}
+              {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
+            </div>
+            <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
           </div>
 
           <TopicComposition topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />

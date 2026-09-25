@@ -8,7 +8,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 
-import { TOPIC_BLOCKS_PANEL_KEY, TOPIC_BLOCKS_PATH_SEGMENT, TopicPageView, resolveTopicTab } from './topic-page-view';
+import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
+
+import {
+  TOPIC_BLOCKS_PANEL_KEY,
+  TOPIC_BLOCKS_PATH_SEGMENT,
+  TOPIC_PAGE_CONTENT_MAX_WIDTH,
+  TopicPageView,
+  resolveTopicTab,
+} from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -35,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   /** The topic's own block relations — what the Overview tab would have to draw. */
   blocks: [] as unknown[],
   canEdit: true,
+  /** Props the votes/history/menu cluster received, or null if the page rendered none. */
+  pageActions: null as Record<string, unknown> | null,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -96,6 +106,15 @@ vi.mock('~/core/state/editor/use-blocks', () => ({
 }));
 vi.mock('~/core/hooks/use-user-is-editing', () => ({
   useCanUserEdit: () => mocks.canEdit,
+  useUserIsEditing: () => false,
+}));
+// Votes, history and the overflow menu each reach for the sync engine and the wallet. What this
+// file asserts is that the topic header hands them this entity at all.
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({
+  EntityPageActions: (props: Record<string, unknown>) => {
+    mocks.pageActions = props;
+    return <div data-testid="entity-page-actions" />;
+  },
 }));
 
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
@@ -140,6 +159,7 @@ beforeEach(() => {
   mocks.typesEditor = null;
   mocks.blocks = [];
   mocks.canEdit = true;
+  mocks.pageActions = null;
 });
 
 afterEach(cleanup);
@@ -351,6 +371,42 @@ describe('TopicPageView types', () => {
  * thing every other entity calls Overview — had no tab and no route. Anything written into a
  * topic's body was invisible from the topic view, and there was no way to start one.
  */
+/**
+ * The topic view replaces the generic entity page on a topic's own route, so anything the generic
+ * page carries and this one drops is simply gone for topics. Two things were: the column's width,
+ * and the entity's own controls.
+ */
+describe('TopicPageView parity with the generic entity page', () => {
+  // Asserted against the entity page's constant rather than against 900 — the point is that the
+  // two columns are one number, not that the number happens to be 900 today.
+  it('takes its column width from the entity page rather than setting its own', () => {
+    expect(TOPIC_PAGE_CONTENT_MAX_WIDTH).toBe(ENTITY_PAGE_CONTENT_MAX_WIDTH);
+  });
+
+  it('renders votes, history and the overflow menu for the topic entity', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('entity-page-actions')).toBeInTheDocument();
+    expect(mocks.pageActions).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1', isVoteable: true });
+  });
+
+  it('keeps them in the header, beside the types, where the entity page puts them', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    const actions = screen.getByTestId('entity-page-actions');
+    expect(actions.closest('header')).not.toBeNull();
+    // Same row as the type chips, not a line of its own.
+    expect(actions.parentElement?.textContent).toContain('Topic');
+  });
+
+  it('keeps them in edit mode, where the types turn into an editor', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('entity-page-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
+  });
+});
+
 describe('TopicPageView Overview tab', () => {
   const overviewTab = {
     label: 'Overview',
