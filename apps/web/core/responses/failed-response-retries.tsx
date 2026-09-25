@@ -60,6 +60,8 @@ export async function retryFailedResponses() {
       // Cleared by a newer vote on the same entity since the retry started.
       if (!entry) continue;
       await waitForQueuedSends();
+      // Dismissed, or superseded by a newer vote, while waiting.
+      if (failedResponses.get(key) !== entry) continue;
       try {
         await entry.retry();
       } catch {

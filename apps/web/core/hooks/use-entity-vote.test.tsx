@@ -844,6 +844,28 @@ describe('useEntityResponse failed-vote retry', () => {
     expect(first.failed.result.current.count).toBe(2);
   });
 
+  it('does not offer a retry for an older vote that timed out after a newer one was cast', async () => {
+    const older = deferred<ReturnType<typeof queueTimeout>>();
+    const newer = deferred<{ _tag: 'Right'; right: string }>();
+    mocks.runEffectEither.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const { vote, failed } = renderVote();
+
+    let olderVote!: Promise<unknown>;
+    let newerVote!: Promise<unknown>;
+    act(() => {
+      olderVote = vote.result.current.submitResponseAsync('positive').catch(() => undefined);
+      newerVote = vote.result.current.submitResponseAsync('negative');
+    });
+    await act(async () => {
+      older.resolve(queueTimeout());
+      await olderVote;
+      newer.resolve({ _tag: 'Right', right: '0xtransaction' });
+      await newerVote;
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
   it('does not replay a failed vote under a different account', async () => {
     mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
     const { vote, failed } = renderVote();
