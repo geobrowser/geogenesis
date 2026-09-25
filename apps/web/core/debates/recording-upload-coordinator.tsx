@@ -751,11 +751,11 @@ export function DebateRecordingUploadCoordinator() {
   const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
   // The banner sits on the bottom edge of the viewport across its full width, so anything else
   // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
-  // clear it. `h-7` is 28px; the two have to be changed together.
+  // clear it. `h-10` is 40px; the two have to be changed together.
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
-  useAppBottomInset('debate-upload-banner', 28, bannerVisible && !inLiveDebate);
+  useAppBottomInset('debate-upload-banner', 40, bannerVisible && !inLiveDebate);
 
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
@@ -849,7 +849,7 @@ export function DebateRecordingUploadBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center justify-center bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex h-10 min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
     >
       <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
         <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
@@ -860,21 +860,21 @@ export function DebateRecordingUploadBanner({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent ?? undefined}
-            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
+            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-04"
           >
             <div
-              className={`h-full rounded-full bg-text transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
               style={percent === null ? undefined : { width: `${percent}%` }}
             />
           </div>
         )}
-        {showKeepBrowserOpen && <span className="shrink-0 text-grey-04">Keep browser open</span>}
+        {showKeepBrowserOpen && <span className="shrink-0">Keep browser open</span>}
         {canCancel && (
           <SmallButton
             type="button"
             variant="ghost"
             onClick={onCancel}
-            className="shrink-0 bg-transparent! hover:bg-bg!"
+            className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none"
           >
             Cancel
           </SmallButton>
