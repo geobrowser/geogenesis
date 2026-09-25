@@ -7,12 +7,17 @@ import cx from 'classnames';
 import type { RoundCue } from '~/core/debates/round-cues';
 
 /**
- * A 2px outline in every direction rather than the four corners the recording room uses.
+ * An outline in every direction rather than the four corners the recording room uses.
  *
  * Its `recordingOverlayTextShadow` is sized for the 7.5rem count-in, where corner copies of a
- * stroke that thick overlap into a continuous edge. At this size they do not, and the gaps land on
- * the cardinal points — the top of an "R", the side of an "1" — which reads as a broken outline
- * rather than a thin one. Eight copies close it for the cost of four more shadows.
+ * stroke that thick overlap into a continuous edge. At smaller sizes they do not, and the gaps
+ * land on the cardinal points — the top of an "R", the side of a "1" — which reads as a broken
+ * outline rather than a thin one. Eight copies close it for the cost of four more shadows.
+ *
+ * In `em` rather than pixels, because this card is sized as a fraction of the player and so spans
+ * something like 60px on a phone to 180px on a wide one. A fixed 2px outline is right at the
+ * bottom of that range and invisible at the top; a proportional one is the same outline at every
+ * width, which is the whole point of sizing the card this way.
  *
  * Black, and white type inside it, which is the opposite of the phrase treatment the debaters see.
  * That one is dark type in a white outline and it works because it sits mid-frame over a face; the
@@ -21,8 +26,27 @@ import type { RoundCue } from '~/core/debates/round-cues';
  */
 const roundCardTextShadow = {
   textShadow:
-    '-2px -2px 0 #000, 0 -2px 0 #000, 2px -2px 0 #000, 2px 0 0 #000, 2px 2px 0 #000, 0 2px 0 #000, -2px 2px 0 #000, -2px 0 0 #000, 0 3px 10px rgba(0,0,0,0.55)',
+    '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)',
 };
+
+/**
+ * How wide the round's name is drawn, as a share of the player.
+ *
+ * One size for every round name rather than a size fitted to each — "Closing" set to the same
+ * width as "Rebuttal" would be visibly larger type, and the card would appear to change its voice
+ * from round to round. So the longest name is what gets measured and the rest come out shorter.
+ *
+ * "Rebuttal" is that name, at 3.533em in Calibre Bold (measured off `calibre-bold.woff2`, not
+ * estimated), so 18cqw puts it at 64% of the player and leaves "Opening" at 62% and "Closing" at
+ * 55%. Roughly two thirds, which is the size this reads as a title card rather than as a caption.
+ *
+ * `cqw` with no clamp, and that is deliberate. A clamp is what makes type inconsistent *between*
+ * players — it pins a feed card and a fullscreen player to different fractions of their width — and
+ * the card is a proportion of the picture at every size, the way a broadcast title is.
+ */
+const NAME_CQW = 18;
+/** The round number above it, at half the name's size: an eyebrow, not a second headline. */
+const ROUND_CQW = NAME_CQW / 2;
 
 /**
  * The round announced across the seam between the two tiles, as the round opens.
@@ -35,11 +59,10 @@ const roundCardTextShadow = {
  * things in one place is one thing nobody reads. It is a fair trade for under two seconds at the
  * top of a round, which is a beat before anyone has said anything worth captioning.
  *
- * Stacked rather than run together on one line, and large. This is a title card, not a caption:
- * it is read from across a room and from the corner of the eye, on a phone in a feed as often as
- * on a laptop. Two short lines centred on the seam carry at a size one long line cannot — the
- * single line had to stay narrow enough not to reach the edges of a 355px tile, which held it to
- * about the size of the subtitle it was replacing.
+ * Stacked rather than run together on one line, and large — see {@link NAME_CQW}. This is a title
+ * card, not a caption: it is read from across a room and out of the corner of an eye, on a phone
+ * in a feed as often as on a laptop. Two short lines are what let it be this size at all; one long
+ * line at two thirds of the player would have to be a third the height to fit.
  *
  * The round on top and its name beneath, largest: the name is the informative half. "Rebuttal" is
  * what tells a viewer why this stretch is worth watching; the number only says how far in they are.
@@ -69,23 +92,24 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       // part-way through an animation that started when the element mounted.
       style={{ opacity: cue.opacity }}
     >
-      {/* The round alone where the format names no role, at the headline size — a lone small line
-          over the seam would read as a stray caption rather than as a card. */}
+      {/* The round takes the headline itself where the format names no role — a lone eyebrow over
+          the seam would read as a stray caption rather than as a card. */}
       <span
-        className={cx(
-          'block leading-[1.1]',
-          cue.role
-            ? 'text-[clamp(1.125rem,4.5cqw,1.75rem)] font-semibold text-white/85'
-            : 'text-[clamp(1.75rem,7.5cqw,3rem)] font-bold text-white'
-        )}
-        style={roundCardTextShadow}
+        className={cx('block', cue.role ? 'font-semibold text-white/85' : 'font-bold tracking-[-0.02em] text-white')}
+        style={{
+          ...roundCardTextShadow,
+          fontSize: `${cue.role ? ROUND_CQW : NAME_CQW}cqw`,
+          // Set tight, the way display type wants to be: the default line box leaves a gap at this
+          // size that reads as two separate captions rather than as one card.
+          lineHeight: 1,
+        }}
       >
         {cue.round}
       </span>
       {cue.role && (
         <span
-          className="block text-[clamp(1.75rem,7.5cqw,3rem)] leading-[1.05] font-bold text-white"
-          style={roundCardTextShadow}
+          className="block font-bold tracking-[-0.02em] text-white"
+          style={{ ...roundCardTextShadow, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
         >
           {cue.role}
         </span>

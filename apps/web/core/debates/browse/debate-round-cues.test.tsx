@@ -30,7 +30,32 @@ describe('DebateRoundCard', () => {
 
     expect(round).toHaveTextContent('Round 2');
     expect(role).toHaveTextContent('Rebuttal');
-    expect([...role.classList]).toContain('text-[clamp(1.75rem,7.5cqw,3rem)]');
+    // Two thirds of the player, sized off the longest name there is. See `NAME_CQW`.
+    expect(role.style.fontSize).toBe('18cqw');
+    expect(round.style.fontSize).toBe('9cqw');
+  });
+
+  it('sets every round name at the same size, whichever name it is', () => {
+    // A size fitted to each word would set "Closing" visibly larger than "Rebuttal", and the card
+    // would appear to change its voice from round to round.
+    const sizeOf = (role: string) =>
+      (render(<DebateRoundCard cue={cue('Round 1', role)} />).container.querySelectorAll('span')[1] as HTMLElement)
+        .style.fontSize;
+
+    expect(new Set(['Opening', 'Rebuttal', 'Closing'].map(sizeOf)).size).toBe(1);
+  });
+
+  it('scales with the player rather than clamping, so the fraction holds at every width', () => {
+    // A clamp is what makes a feed card and a fullscreen player show different fractions of their
+    // width; a broadcast title is a proportion of the picture at every size.
+    const { container } = render(<DebateRoundCard cue={cue('Round 1', 'Opening')} />);
+    const outline = (container.querySelector('span') as HTMLElement).style.textShadow;
+
+    expect(
+      [...container.querySelectorAll('span')].every(line => (line as HTMLElement).style.fontSize.endsWith('cqw'))
+    ).toBe(true);
+    // And the outline goes with it, or it is a 2px hairline on 180px type.
+    expect(outline).toContain('em');
   });
 
   it('gives the round the headline to itself where the format names no role', () => {
@@ -41,7 +66,7 @@ describe('DebateRoundCard', () => {
 
     expect(lines).toHaveLength(1);
     expect(screen.getByText('Round 3')).toBeInTheDocument();
-    expect([...lines[0].classList]).toContain('text-[clamp(1.75rem,7.5cqw,3rem)]');
+    expect(lines[0].style.fontSize).toBe('18cqw');
   });
 
   it('sits on the seam between the tiles, where the subtitle sits', () => {
