@@ -185,6 +185,10 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
     if (ts.isIdentifier(parent.name)) {
       return [{ specifier, local: `* as ${parent.name.text}`, namespace: true }];
     }
+
+    // `const [first] = require('./x')` reads `Symbol.iterator` off the module object. No named
+    // export, but a read of the client module all the same.
+    return [{ specifier, local: '[ … ]', namespace: true }];
   }
 
   /*
@@ -197,8 +201,20 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
     return [{ specifier, local: parent.isExportEquals ? 'export =' : 'export default', namespace: true }];
   }
 
-  // Anything else — a bare call for its side effects — loads the module and takes nothing.
-  return [{ specifier, local: '' }];
+  /*
+   * Only a result that is thrown away is a side-effect load: `require('./x');`, parenthesised or
+   * `void`ed. This fallback used to assume that of everything it did not recognise, so a module
+   * object passed to a function, picked by a ternary or called outright was recorded as taking
+   * nothing — and `clientBindings` skips a reference that takes nothing. Whatever escapes is the
+   * whole module object, which is the position a namespace binding is in.
+   */
+  let outer: ts.Node = call;
+  while (outer.parent && ts.isParenthesizedExpression(outer.parent)) outer = outer.parent;
+  if (outer.parent && (ts.isExpressionStatement(outer.parent) || ts.isVoidExpression(outer.parent))) {
+    return [{ specifier, local: '' }];
+  }
+
+  return [{ specifier, local: 'require(…)', namespace: true }];
 }
 
 /** One binding taken from another module: a named export, a default, or a whole namespace. */
@@ -236,6 +252,38 @@ type Reference = {
  * `callReferences` fixtures were written for.
  */
 /**
+ * Whether a namespace builds anything at runtime. One holding only types, interfaces, type-only
+ * imports and exports, ambient declarations, or other namespaces like it compiles to nothing.
+ *
+ * A `const enum` inside one counts as instantiated. Whether it survives depends on
+ * `preserveConstEnums`, and guessing wrong in this direction reports rather than hides.
+ */
+function isInstantiated(node: ts.ModuleDeclaration): boolean {
+  const body = node.body;
+  if (!body) return false;
+  // `namespace A.B {}` nests the second name as the body of the first.
+  if (ts.isModuleDeclaration(body)) return isInstantiated(body);
+  if (!ts.isModuleBlock(body)) return false;
+
+  return body.statements.some(statement => {
+    if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) return false;
+    if (ts.isModuleDeclaration(statement)) return isInstantiated(statement);
+    if (ts.isImportDeclaration(statement) && statement.importClause?.isTypeOnly) return false;
+    if (ts.isExportDeclaration(statement) && statement.isTypeOnly) return false;
+    return !hasModifier(statement, ts.SyntaxKind.DeclareKeyword);
+  });
+}
+
+/**
+ * Every name a declaration binds. `export const { a, b: { c }, ...rest } = values` exports `a`,
+ * `c` and `rest`; reading only a plain identifier exported none of them.
+ */
+function bindingNames(name: ts.BindingName): string[] {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap(element => (ts.isOmittedExpression(element) ? [] : bindingNames(element.name)));
+}
+
+/**
  * Every export name a module states for itself, which is every name a star cannot supply.
  *
  * An explicit export shadows `export * from` whatever order the two are written in, so a barrel
@@ -263,7 +311,7 @@ function claimedExportNames(sourceFile: ts.SourceFile): Set<string> {
 
     if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) claimed.add(declaration.name.text);
+        for (const name of bindingNames(declaration.name)) claimed.add(name);
       }
       continue;
     }
@@ -825,9 +873,17 @@ function exportKindsOf(
       continue;
     }
 
-    // `export namespace Foo {}` builds an object at runtime, so it is a value.
+    /*
+     * `export namespace Foo { export const a = 1 }` builds an object at runtime, so it is a value —
+     * unless it merges onto a function or class declared above it, which is legal and leaves the
+     * binding that function or class: `export function Card() {…}` then `export namespace Card {…}`
+     * is still a component with properties on it, and writing `value` over it accused one. And a
+     * namespace holding only types builds nothing at all, so it is erased like a type alias.
+     */
     if (ts.isModuleDeclaration(statement) && isExported(statement) && ts.isIdentifier(statement.name)) {
-      kinds.set(statement.name.text, 'value');
+      const name = statement.name.text;
+      if (!isInstantiated(statement)) recordErased(name);
+      else if (!kinds.has(name) || kinds.get(name) === 'erased') kinds.set(name, 'value');
       continue;
     }
 
@@ -845,7 +901,16 @@ function exportKindsOf(
 
     if (ts.isVariableStatement(statement) && isExported(statement)) {
       for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) continue;
+        /*
+         * `export const { Foo } = values` exports `Foo` and says nothing about what it is. Skipping it
+         * left the name unclaimed, so a star beside it filled the slot with whatever *its* `Foo` was —
+         * a component, and the real value waved through. Unknown is the honest answer, and it is
+         * reported.
+         */
+        if (!ts.isIdentifier(declaration.name)) {
+          for (const name of bindingNames(declaration.name)) kinds.set(name, 'unknown');
+          continue;
+        }
         kinds.set(declaration.name.text, declaration.initializer ? classify(declaration.initializer) : 'unknown');
       }
       continue;
@@ -1325,6 +1390,15 @@ describe('claimedExportNames', () => {
     expect(claimed(source)).toEqual([]);
   });
 
+  it.each([
+    ['an object pattern', 'export const { Foo } = values;', ['Foo']],
+    ['a nested pattern with a rest', 'export const { a: { Foo }, ...Rest } = values;', ['Foo', 'Rest']],
+    ['an array pattern with a hole', 'export const [Foo, , Bar] = values;', ['Bar', 'Foo']],
+  ])('counts every name %s binds', (_label, source, names) => {
+    // Reading only a plain identifier claimed none of these, so a star could supply any of them.
+    expect(claimed(source)).toEqual(names);
+  });
+
   it('reads the aliased name, not the origin one', () => {
     // `export { Inner as Foo }` claims `Foo`. Claiming `Inner` would leave `Foo` open to a star and
     // shadow a name the barrel never mentions.
@@ -1507,12 +1581,25 @@ describe('callReferences', () => {
 
   it.each([
     ['a call for its side effects', "require('./x');"],
+    ['a parenthesised call for its side effects', "(require('./x'));"],
+    ['a voided call', "void require('./x');"],
     // Binds nothing and still loads the module, the same way `import {} from './x'` does.
     ['a destructure that binds nothing', "const {} = require('./x');"],
-    // Reads `x[0]`, which is not a named export of anything.
-    ['an array destructure', "const [first] = require('./x');"],
   ])('takes no binding from %s, but still walks the module', (_label, source) => {
     expect(refs(source)).toEqual([{ specifier: './x', local: '' }]);
+  });
+
+  it.each([
+    // Reads `Symbol.iterator` off the module object. I had this as a bare edge on the grounds that
+    // `x[0]` names no export; the question here is whether the module object is read, and it is.
+    ['an array destructure', "const [first] = require('./x');", '[ … ]'],
+    ['a module passed to a function', "use(require('./x'));", 'require(…)'],
+    ['a module picked by a ternary', "const m = on ? require('./x') : null;", 'require(…)'],
+    ['a module called outright', "require('./x')();", 'require(…)'],
+  ])('reports %s as the whole module object escaping', (_label, source, local) => {
+    // Only a result thrown away is a side-effect load. These were all recorded as taking nothing,
+    // which `clientBindings` skips.
+    expect(refs(source)).toEqual([{ specifier: './x', local, namespace: true }]);
   });
 
   it.each([
@@ -1731,6 +1818,55 @@ describe('exportKindsOf', () => {
     const kinds = exportKindsOf(parse('barrel.tsx', "export * from './missing';"), () => null);
 
     expect(kinds.get('*')).toBe('unknown');
+  });
+
+  it.each([
+    ['above', "export const { Foo } = values;\nexport * from './components';"],
+    ['below', "export * from './components';\nexport const { Foo } = values;"],
+  ])('does not let a star fill a name destructured %s it', (_label, source) => {
+    // `Foo` is this module's own, from `values`, and nothing here says what it is. The star used to
+    // fill it with its component and wave the real one through.
+    const origin = new Map<string, ExportKind>([['Foo', 'component']]);
+    const kinds = exportKindsOf(parse('barrel.tsx', source), () => origin);
+
+    expect(kinds.get('Foo')).toBe('unknown');
+  });
+
+  it('records every name a destructured export binds', () => {
+    const kinds = exportKindsOf(parse('fixture.tsx', 'export const { a: { Foo }, ...Rest } = values;'), () => null);
+
+    expect([kinds.get('Foo'), kinds.get('Rest')]).toEqual(['unknown', 'unknown']);
+  });
+
+  it.each([
+    ['a function', 'export function Subject() { return <div />; }\nexport namespace Subject { export const a = 1; }'],
+    [
+      'a React class',
+      "import * as React from 'react';\nexport class Subject extends React.Component {}\nexport namespace Subject { export const a = 1; }",
+    ],
+  ])('keeps %s a component when a namespace merges onto it', (_label, source) => {
+    // Legal, and the binding is still the function or class — with properties on it. Writing
+    // `value` over it accused a real component.
+    expect(kindOf(source)).toBe('component');
+  });
+
+  it.each([
+    ['holding only types', 'export namespace Subject { export type T = 1; export interface U {} }'],
+    ['with nothing in it', 'export namespace Subject {}'],
+    ['nesting only types', 'export namespace Subject { export namespace Inner { export type T = 1; } }'],
+  ])('erases a namespace %s, which builds nothing', (_label, source) => {
+    expect(kindOf(source)).toBe('erased');
+  });
+
+  it.each([
+    ['dotted', 'export namespace Subject.Inner { export const a = 1; }'],
+    ['after a type of the same name', 'export interface Subject {}\nexport namespace Subject { export const a = 1; }'],
+    [
+      'after a type-only block',
+      'export namespace Subject { export type T = 1; }\nexport namespace Subject { export const a = 1; }',
+    ],
+  ])('keeps a namespace that builds something a value: %s', (_label, source) => {
+    expect(kindOf(source)).toBe('value');
   });
 
   it('erases an ambient namespace and keeps a real one', () => {
