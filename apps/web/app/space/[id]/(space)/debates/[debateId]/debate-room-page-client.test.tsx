@@ -4726,6 +4726,92 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  // geo-chat ends the session and completes the debate the moment one debater leaves, so the one
+  // still on the thank-you screen is holding a completed debate whose rematch is already dead.
+  it('returns to the page that opened the flow when the opponent leaves during the thank-you phase', async () => {
+    setHistoryLength(2);
+    rememberDebateReturnDestination('/explore');
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:30.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:30.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('ended');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/explore'));
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  it('returns to the page that opened the flow when the room drops after the opponent leaves', async () => {
+    setHistoryLength(2);
+    rememberDebateReturnDestination('/explore');
+    installRecordingMocks();
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:30.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+
+    act(() => emitRoomEvent('disconnected', 99));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:30.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('ended');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/explore'));
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+  });
+
+  it('returns to the page that opened the flow when the room reloads onto a debate whose rematch ended', async () => {
+    setHistoryLength(2);
+    rememberDebateReturnDestination('/explore');
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('ended');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/explore'));
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+  });
+
   it('does not leave the rematch flow when the local recording cannot be persisted', async () => {
     mocks.debate = {
       ...completedDebate(),

@@ -683,7 +683,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     ((debate.status === 'complete' && !debate.rematch_session_id) ||
       (debate.status === 'cancelled' && debate.cancellation_reason !== 'connection_timeout'))
   );
-  const shouldReturnFromTerminalDebate = shouldExitTerminalDebate && roomState === 'idle';
+  // geo-chat ends the session and completes the debate the moment either debater leaves the
+  // thank-you screen, so the one still on it holds a completed debate whose rematch is already
+  // dead. A connected room gets there through `finishLiveDebate` once the countdown ends; an idle
+  // one (a dropped call, a remount) has no thank-you screen left to hold and nowhere to go but out.
+  const idleDebateWithEndedRematch = Boolean(
+    debate &&
+    recordingCancelledBy === null &&
+    debate.status === 'complete' &&
+    debate.rematch_session_id &&
+    (rematchSessionStatus === 'ended' || rematchSessionStatus === 'expired') &&
+    roomState === 'idle'
+  );
+  const shouldReturnFromTerminalDebate =
+    (shouldExitTerminalDebate && roomState === 'idle') || idleDebateWithEndedRematch;
   /** Where a session both debaters have accepted sends them; null while the decision is open. */
   const liveRematchDestination = rematchDestination(rematchQuery.data);
   /**
@@ -724,6 +737,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const shouldHideTerminalDebate =
     (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
+    idleDebateWithEndedRematch ||
     (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation);
   // A disconnected or reloaded room can discover that it should enter an already-live rematch.
   // Keep the recording surface over the app while that prefetched route replaces it; swapping to
