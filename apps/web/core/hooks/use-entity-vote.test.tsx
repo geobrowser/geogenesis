@@ -895,6 +895,28 @@ describe('useEntityResponse failed-vote retry', () => {
     expect(failed.result.current.count).toBe(0);
   });
 
+  it('does not replay a failed vote once the control targets a different response kind', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { wrapper } = createHarness();
+    const vote = renderHook(
+      ({ responseKind }: { responseKind: 'curation' | 'stance' }) =>
+        useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind }),
+      { wrapper, initialProps: { responseKind: 'curation' } }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    vote.rerender({ responseKind: 'stance' });
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(1);
+    expect(failed.result.current.count).toBe(0);
+  });
+
   it('does not replay a failed vote under a different account', async () => {
     mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
     const { vote, failed } = renderVote();

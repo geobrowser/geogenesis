@@ -13,7 +13,7 @@ import { Close } from '~/design-system/icons/close';
  * Module scope: one burst fails many buttons, some unmounted, sharing one toast.
  */
 type FailedResponse = {
-  /** Re-submits the same direction. Resolves without submitting when the account changed. */
+  /** Re-submits the same vote. Resolves without submitting when its target or account changed. */
   retry: () => Promise<unknown>;
 };
 
