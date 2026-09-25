@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from '~/core/debates/api';
+
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   reset: vi.fn(),
@@ -27,10 +29,18 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 // The week itself is covered by peer-availability.test.tsx; this suite is about what the modal
 // sends, which nothing else asserts.
 vi.mock('./peer-availability', () => ({
-  PeerAvailability: ({ booking }: { booking?: { onRequest: (startsAt: string) => void } }) => (
-    <button type="button" onClick={() => booking?.onRequest('2026-09-24T13:00:00.000Z')}>
-      pick
-    </button>
+  PeerAvailability: ({
+    booking,
+  }: {
+    booking?: { onRequest: (startsAt: string) => void; error: string | null; requestedStart: string | null };
+  }) => (
+    <>
+      <button type="button" onClick={() => booking?.onRequest('2026-09-24T13:00:00.000Z')}>
+        pick
+      </button>
+      <output aria-label="error">{booking?.error ?? ''}</output>
+      <output aria-label="requested">{booking?.requestedStart ?? ''}</output>
+    </>
   ),
 }));
 
@@ -78,6 +88,31 @@ describe('what reaches the server', () => {
 
     screen.getByLabelText('Close').click();
 
+    expect(onClose).toHaveBeenCalled();
+    expect(mocks.reset).toHaveBeenCalled();
+  });
+});
+
+describe('a refused invitation', () => {
+  const LIMIT =
+    'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more';
+
+  it("hands geo-chat's message to the footer and shows no confirmation", () => {
+    mocks.error = new GeoChatRequestError(LIMIT, 'too_many_open_invitations', 409);
+    setup();
+
+    expect(screen.getByLabelText('error')).toHaveTextContent(LIMIT);
+    expect(screen.getByLabelText('requested')).toBeEmptyDOMElement();
+  });
+
+  it('still sends a retry, and clears the refusal on close', async () => {
+    mocks.error = new GeoChatRequestError(LIMIT, 'too_many_open_invitations', 409);
+    const { user, onClose } = setup();
+
+    await user.click(screen.getByRole('button', { name: 'pick' }));
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+
+    screen.getByLabelText('Close').click();
     expect(onClose).toHaveBeenCalled();
     expect(mocks.reset).toHaveBeenCalled();
   });

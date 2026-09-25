@@ -12,8 +12,8 @@ import {
 import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 
-/** geo-chat publishes no event for these, so the poll is the mechanism rather than a backstop. */
-const SCHEDULED_POLL_MS = 10_000;
+/** Backstop for an event refetch that failed past the gateway's retries; the socket stays ready. */
+const SCHEDULED_POLL_MS = 60_000;
 
 /**
  * Proposing and answering a scheduled debate (GEO-2934). The second answer books the room, so this

@@ -457,8 +457,12 @@ export class DebateGatewayClient {
       case 'debate.share_prompts_changed':
         this.queueAccountQuery('share-prompts');
         break;
+      // Also carries scheduled requests and room arrivals, so the scheduled and room reads go too.
       case 'debate.requests_changed':
         this.queueAccountQuery('requests');
+        this.queueAccountQuery('scheduled-debates');
+        this.queueAccountQuery('upcoming-rooms');
+        this.queueAccountQuery('room');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -521,7 +525,17 @@ export class DebateGatewayClient {
 
   private queueAccountQuery(
     kind:
-      'activity' | 'rematch' | 'share-prompts' | 'profile' | 'people' | 'matchmaking-claims' | 'matches' | 'requests',
+      | 'activity'
+      | 'rematch'
+      | 'share-prompts'
+      | 'profile'
+      | 'people'
+      | 'matchmaking-claims'
+      | 'matches'
+      | 'requests'
+      | 'scheduled-debates'
+      | 'upcoming-rooms'
+      | 'room',
     id?: string
   ) {
     if (!this.accountKey) return;

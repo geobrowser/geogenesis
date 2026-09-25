@@ -231,6 +231,9 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.requests_changed', payload: {} },
       [
         ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'account', 'user-a', 'scheduled-debates'],
+        ['debates', 'account', 'user-a', 'upcoming-rooms'],
+        ['debates', 'account', 'user-a', 'room'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],

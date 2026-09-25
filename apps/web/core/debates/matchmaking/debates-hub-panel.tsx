@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -19,7 +19,7 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { scheduledAwaitingCountAtom } from '../rooms/scheduled-awaiting';
+import { useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
@@ -252,7 +252,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: requests } = useDebateRequests(authenticated);
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const scheduledAwaiting = useAtomValue(scheduledAwaitingCountAtom);
+  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
   const requestCount = (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) + scheduledAwaiting;
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
