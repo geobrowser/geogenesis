@@ -112,3 +112,65 @@ describe('EditableTabGroup active indicator', () => {
     expect(screen.getByText('7')).toBeInTheDocument();
   });
 });
+
+/**
+ * The browse bar has always drawn a rule where one group of tabs ends and another begins; the edit
+ * bar drew none, so a row that split in two while reading merged back together the moment you
+ * clicked Edit. A page may also put a system tab *after* the rule — a topic's Overview does — which
+ * `divideBeforeAuthored` alone cannot express on either bar.
+ */
+describe('EditableTabGroup divider', () => {
+  const dividerSelector = 'span[aria-hidden].w-px';
+
+  it('draws no rule when no system tab asks for one', () => {
+    render(
+      <EditableTabGroup
+        entityId="topic-1"
+        spaceId="space-1"
+        editableTabs={[]}
+        systemTabsBefore={[{ label: 'Explore', href: '/topic' }]}
+        overviewHref="/topic"
+      />
+    );
+
+    expect(document.querySelectorAll(dividerSelector)).toHaveLength(0);
+  });
+
+  it('draws one before the system tab that asks for it', () => {
+    render(
+      <EditableTabGroup
+        entityId="topic-1"
+        spaceId="space-1"
+        editableTabs={[]}
+        systemTabsBefore={[
+          { label: 'Explore', href: '/topic' },
+          { label: 'Overview', href: '/topic/overview', dividerBefore: true },
+        ]}
+        overviewHref="/topic"
+      />
+    );
+
+    const dividers = document.querySelectorAll(dividerSelector);
+    expect(dividers).toHaveLength(1);
+    // Before Overview, not before Explore — DOCUMENT_POSITION_FOLLOWING is 4.
+    expect(dividers[0].compareDocumentPosition(screen.getByText('Overview')) & 4).toBe(4);
+  });
+
+  // Both rows go through one renderer. They used to be two copies of the same block, which is how
+  // a trailing tab would have silently lost its rule — and `space-tabs` fills that row.
+  it('draws one for a trailing system tab too', () => {
+    render(
+      <EditableTabGroup
+        entityId="space-1"
+        spaceId="space-1"
+        editableTabs={[]}
+        systemTabsBefore={[{ label: 'Overview', href: '/space' }]}
+        systemTabsAfter={[{ label: 'Governance', href: '/space/governance', dividerBefore: true }]}
+        overviewHref="/space"
+      />
+    );
+
+    expect(document.querySelectorAll(dividerSelector)).toHaveLength(1);
+    expect(screen.getByText('Governance')).toBeInTheDocument();
+  });
+});

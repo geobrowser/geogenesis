@@ -10,13 +10,7 @@ import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/con
 
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 
-import {
-  TOPIC_BLOCKS_PANEL_KEY,
-  TOPIC_BLOCKS_PATH_SEGMENT,
-  TOPIC_PAGE_CONTENT_MAX_WIDTH,
-  TopicPageView,
-  resolveTopicTab,
-} from './topic-page-view';
+import { TOPIC_PAGE_CONTENT_MAX_WIDTH, TopicPageView, resolveTopicTab } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -410,8 +404,8 @@ describe('TopicPageView parity with the generic entity page', () => {
 describe('TopicPageView Overview tab', () => {
   const overviewTab = {
     label: 'Overview',
-    href: `/space/space-1/topic-1/${TOPIC_BLOCKS_PATH_SEGMENT}`,
-    sidePanelKey: TOPIC_BLOCKS_PANEL_KEY,
+    href: '/space/space-1/topic-1/overview',
+    sidePanelKey: 'blocks',
     dividerBefore: true,
   };
 
@@ -450,7 +444,7 @@ describe('TopicPageView Overview tab', () => {
 
   it('renders the block editor on that route instead of the feed', () => {
     mocks.blocks = [{ id: 'block-1' }];
-    mocks.pathname = `/space/space-1/topic-1/${TOPIC_BLOCKS_PATH_SEGMENT}`;
+    mocks.pathname = '/space/space-1/topic-1/overview';
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('editor')).toBeInTheDocument();
@@ -469,18 +463,14 @@ describe('resolveTopicTab', () => {
   });
 
   // A generic entity's blocks live at its bare URL; a topic's bare URL is the explore feed, so the
-  // blocks get a segment of their own. Two names for one thing, which is why both live in this
-  // module as constants rather than as literals on either side.
+  // blocks get a segment of their own. Spelled out rather than imported: this is the URL a reader
+  // can bookmark, and a test that shares a constant with the page cannot notice it moving.
   it('resolves the blocks route a topic keeps its Overview tab at', () => {
-    expect(
-      resolveTopicTab({ pathname: `/space/a/b/${TOPIC_BLOCKS_PATH_SEGMENT}`, authoredTabId: null, panel: null })
-    ).toBe('blocks');
+    expect(resolveTopicTab({ pathname: '/space/a/b/overview', authoredTabId: null, panel: null })).toBe('blocks');
   });
 
   it('still lets an authored tab win over the blocks route', () => {
-    expect(
-      resolveTopicTab({ pathname: `/space/a/b/${TOPIC_BLOCKS_PATH_SEGMENT}`, authoredTabId: 'tab-1', panel: null })
-    ).toBe('custom');
+    expect(resolveTopicTab({ pathname: '/space/a/b/overview', authoredTabId: 'tab-1', panel: null })).toBe('custom');
   });
 
   it('resolves the side-panel blocks selection independently of the route behind it', () => {
@@ -488,7 +478,7 @@ describe('resolveTopicTab', () => {
       resolveTopicTab({
         pathname: '/space/a/b/comments',
         authoredTabId: null,
-        panel: { activeTabId: null, activeSystemTab: TOPIC_BLOCKS_PANEL_KEY },
+        panel: { activeTabId: null, activeSystemTab: 'blocks' },
       })
     ).toBe('blocks');
   });

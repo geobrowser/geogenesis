@@ -37,6 +37,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import {
   ActiveTabIndicator,
   Badge,
+  TabGroupDivider,
   type TabGroupTab,
   tabGroupTabLinkStyles,
   useActiveTabIndicator,
@@ -266,14 +267,54 @@ export function EditableTabGroup({
   // Key the memo on a joined string so we only allocate a new array when the id set actually changes.
   const sortableIdsKey = editableTabs.map(t => t.relation.id).join(',');
   const sortableIds = React.useMemo(() => (sortableIdsKey === '' ? [] : sortableIdsKey.split(',')), [sortableIdsKey]);
+  // The divider is part of the key because it takes width: the indicator measures offsets, so a row
+  // whose tabs are unchanged but whose rule appeared still moved every tab after it.
+  const systemTabLayoutKey = (tab: SystemTab) =>
+    `${tab.href}:${tab.label}:${String(tab.badge ?? '')}:${String(tab.dividerBefore ?? false)}`;
   const indicatorLayoutKey = [
-    ...systemTabsBefore.map(
-      tab => `${tab.href}:${tab.label}:${String(tab.badge ?? '')}:${String(tab.dividerBefore ?? false)}`
-    ),
+    ...systemTabsBefore.map(systemTabLayoutKey),
     ...editableTabs.map(tab => `${tab.relation.id}:${tab.name}`),
-    ...systemTabsAfter.map(tab => `${tab.href}:${tab.label}:${String(tab.badge ?? '')}`),
+    ...systemTabsAfter.map(systemTabLayoutKey),
   ].join('|');
   const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
+
+  /*
+   * Both system-tab rows, drawn by one function.
+   *
+   * They were two copies of the same twenty lines, which is how `dividerBefore` support would
+   * otherwise have landed on the leading row alone — and `space-tabs` puts real tabs in the
+   * trailing one. The divider lives here rather than with `divideBeforeAuthored` because a page may
+   * put a system tab *after* the rule, as a topic's Overview does, and the edit bar would otherwise
+   * lose the divider the browse bar draws.
+   */
+  const renderSystemTab = (tab: SystemTab) => (
+    <React.Fragment key={tab.href}>
+      {tab.dividerBefore && <TabGroupDivider />}
+      <StaticTab
+        href={tab.href}
+        label={tab.label}
+        badge={tab.badge}
+        onlyWhenNarrow={tab.onlyWhenNarrow}
+        active={isEntityTabActive({
+          href: tab.href,
+          activeTabId,
+          sidePanel: Boolean(sidePanelTab),
+          fullPath,
+          sidePanelKey: tab.sidePanelKey,
+          activeSystemTab: sidePanelTab?.activeSystemTab,
+        })}
+        onSelect={
+          sidePanelTab
+            ? () =>
+                tab.sidePanelKey
+                  ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
+                  : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
+            : undefined
+        }
+        activeRef={registerActiveTab}
+      />
+    </React.Fragment>
+  );
 
   return (
     <div className="relative">
@@ -293,38 +334,7 @@ export function EditableTabGroup({
           )}
         >
           <div className="relative z-10 flex w-max items-center gap-6 pb-2">
-            {systemTabsBefore.map(tab => (
-              <React.Fragment key={tab.href}>
-                {/* Same rule the browse bar follows: a system tab can open the authored half of the
-                    row. Drawn here rather than left to `divideBeforeAuthored` because a page may
-                    put a system tab *after* the divider — a topic's Overview does — and the edit
-                    bar would otherwise lose the divider the browse bar draws. */}
-                {tab.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
-                <StaticTab
-                  href={tab.href}
-                  label={tab.label}
-                  badge={tab.badge}
-                  onlyWhenNarrow={tab.onlyWhenNarrow}
-                  active={isEntityTabActive({
-                    href: tab.href,
-                    activeTabId,
-                    sidePanel: Boolean(sidePanelTab),
-                    fullPath,
-                    sidePanelKey: tab.sidePanelKey,
-                    activeSystemTab: sidePanelTab?.activeSystemTab,
-                  })}
-                  onSelect={
-                    sidePanelTab
-                      ? () =>
-                          tab.sidePanelKey
-                            ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
-                            : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
-                      : undefined
-                  }
-                  activeRef={registerActiveTab}
-                />
-              </React.Fragment>
-            ))}
+            {systemTabsBefore.map(renderSystemTab)}
 
             <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
               {editableTabs.map(tab => (
@@ -345,32 +355,7 @@ export function EditableTabGroup({
               ))}
             </SortableContext>
 
-            {systemTabsAfter.map(tab => (
-              <StaticTab
-                key={tab.href}
-                href={tab.href}
-                label={tab.label}
-                badge={tab.badge}
-                onlyWhenNarrow={tab.onlyWhenNarrow}
-                active={isEntityTabActive({
-                  href: tab.href,
-                  activeTabId,
-                  sidePanel: Boolean(sidePanelTab),
-                  fullPath,
-                  sidePanelKey: tab.sidePanelKey,
-                  activeSystemTab: sidePanelTab?.activeSystemTab,
-                })}
-                onSelect={
-                  sidePanelTab
-                    ? () =>
-                        tab.sidePanelKey
-                          ? sidePanelTab.setActiveSystemTab(tab.sidePanelKey)
-                          : sidePanelTab.setActiveTabId(entityTabIdFromHref(tab.href))
-                    : undefined
-                }
-                activeRef={registerActiveTab}
-              />
-            ))}
+            {systemTabsAfter.map(renderSystemTab)}
 
             <button
               type="button"

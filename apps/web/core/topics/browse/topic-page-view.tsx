@@ -58,21 +58,23 @@ import { useTopicAncestors } from './use-topic-ancestors';
 export const TOPIC_PAGE_CONTENT_MAX_WIDTH = ENTITY_PAGE_CONTENT_MAX_WIDTH;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
+/** Every chip in the header row — types and the curated tag — reads the same. */
+const TOPIC_META_CHIP_CLASS = `${META_CHIP_CLASS} text-grey-04`;
+
 /**
  * `explore` is the landing tab — the topic feed — and is what an unqualified topic URL means.
- * `blocks` is the entity's own block content, which a generic entity calls Overview and reaches at
- * its bare URL; a topic's bare URL is already spoken for, so it gets the `/overview` segment and
- * the `blocks` panel key instead. `explore` keeps the `overview` panel key because that is the key
- * `EntityTabs` falls back to when a selected product tab disappears, and falling back to Explore is
- * right — falling back to a blocks tab that may not even be rendered is not.
+ *
+ * `blocks` is the entity's own block content, which a generic entity labels Overview and reaches
+ * at its bare URL. A topic's bare URL is already spoken for, so that content takes the `/overview`
+ * segment and the `blocks` panel key. Three names for one tab, which is why they are spelled out
+ * here: the label a reader sees, the route they can bookmark, and the key the side panel selects
+ * by.
+ *
+ * `explore` keeps the `overview` *panel key* because that is the key `EntityTabs` reconciles to
+ * when a selected product tab disappears, and falling back to Explore is right — falling back to a
+ * blocks tab that may not even be rendered is not.
  */
 type TopicTab = 'explore' | 'blocks' | 'comments' | 'custom';
-
-/** The path segment a topic's own block content lives under, relative to the topic's entity URL. */
-export const TOPIC_BLOCKS_PATH_SEGMENT = 'overview';
-
-/** The side-panel system-tab key for that same content. */
-export const TOPIC_BLOCKS_PANEL_KEY = 'blocks';
 
 export function resolveTopicTab({
   pathname,
@@ -86,13 +88,13 @@ export function resolveTopicTab({
   if (panel) {
     if (panel.activeTabId) return 'custom';
     if (panel.activeSystemTab === 'comments') return 'comments';
-    if (panel.activeSystemTab === TOPIC_BLOCKS_PANEL_KEY) return 'blocks';
+    if (panel.activeSystemTab === 'blocks') return 'blocks';
     return 'explore';
   }
 
   if (authoredTabId) return 'custom';
   if (pathname.endsWith('/comments')) return 'comments';
-  if (pathname.endsWith(`/${TOPIC_BLOCKS_PATH_SEGMENT}`)) return 'blocks';
+  if (pathname.endsWith('/overview')) return 'blocks';
   return 'explore';
 }
 
@@ -200,8 +202,8 @@ export function TopicPageView({
       ? [
           {
             label: 'Overview',
-            href: `${overviewHref}/${TOPIC_BLOCKS_PATH_SEGMENT}`,
-            sidePanelKey: TOPIC_BLOCKS_PANEL_KEY,
+            href: `${overviewHref}/overview`,
+            sidePanelKey: 'blocks',
             dividerBefore: true,
           },
         ]
@@ -292,33 +294,34 @@ export function TopicPageView({
             )
           )}
 
-          {/* Browse shows the one word that says what this page is. Edit shows the entity's real
-              Types relations, with the same chips, the same X and the same `Find or create type...`
-              picker every other entity gets.
+          {/* The row an ordinary entity page draws under its description: what it is on the left,
+              what you can do to it on the right. The topic view replaces that page, and had
+              neither half — the left was a literal `Topic` span and the right was missing
+              entirely, so a topic had no votes, no history and no overflow menu.
 
-              A topic's types were previously uneditable *anywhere*: this row was a literal, and the
-              edit-mode property sheet drops `Types` as a system property "editable elsewhere" —
-              elsewhere being the generic metadata header, which the topic view replaces. Dropping
-              Topic here is allowed: the page re-routes to the generic editor on the next render,
-              which is what an entity that is no longer a topic should look like. */}
-          {/* Types on the left, the entity's own controls on the right — the row an ordinary entity
-              page draws under its description. A topic had neither half of it: no votes, no
-              history, no overflow menu, on a page that is otherwise a full entity page. */}
+              Browse keeps the one word that says what this page is, now followed by whatever else
+              the entity is typed as. Edit swaps it for the entity's real Types relations, with the
+              same chips, the same X and the same `Find or create type...` picker every other
+              entity gets — the only place a topic's types can be edited at all, since the
+              edit-mode property sheet drops `Types` as a system property "editable elsewhere" and
+              elsewhere is the generic metadata header this view replaces. Dropping Topic is
+              allowed: the page re-routes to the generic editor on the next render, which is what
+              an entity that is no longer a topic should look like. */}
           <div className="flex items-center gap-4 text-text">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               {isEditing ? (
                 <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
               ) : (
                 <>
-                  <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+                  <span className={TOPIC_META_CHIP_CLASS}>Topic</span>
                   {additionalTypes.map(type => (
-                    <span key={type.id} className={`${META_CHIP_CLASS} text-grey-04`}>
+                    <span key={type.id} className={TOPIC_META_CHIP_CLASS}>
                       {type.name ?? type.id}
                     </span>
                   ))}
                 </>
               )}
-              {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
+              {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
             </div>
             <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
           </div>
