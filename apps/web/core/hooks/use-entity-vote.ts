@@ -10,7 +10,7 @@ import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { useToast } from '~/core/hooks/use-toast';
+import { useSetToast } from '~/core/hooks/use-toast';
 import {
   EMPTY_PENDING_VOTED_OVERRIDES,
   type EntityVoteDirectionFilter,
@@ -214,7 +214,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   // A failed-vote retry can run from an older render; it must see the current account.
   const readRegisteredSpaceRef = useRef(readRegisteredSpace);
   readRegisteredSpaceRef.current = readRegisteredSpace;
-  const [, setToast] = useToast();
+  const setToast = useSetToast();
 
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
@@ -490,10 +490,14 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
             )
           );
       const operation = observeOperation('vote', 'entity', entityId);
+      // Keyed by the space the vote is sent from, which can differ from the reactive one
+      // (a vote replayed before personalSpaceId resolves).
+      const votingPersonalSpaceId = readRegisteredSpace().personalSpaceId;
+      const retryKey = hashKey(entityResponseIndexingQueryKey(votingPersonalSpaceId, entityId, spaceId, responseKind));
       // Last write wins: a newer vote on this entity supersedes any pending retry.
-      clearFailedResponse(indexingKeyId);
+      clearFailedResponse(retryKey);
       const { runId, runOrder } = createResponseIndexingRunId();
-      responseIndexingRegistry.latestRunOrders.set(indexingKeyId, runOrder);
+      responseIndexingRegistry.latestRunOrders.set(retryKey, runOrder);
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
         pending,
@@ -515,7 +519,8 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         previousResponse,
         operation,
         entityName,
-        personalSpaceId: readRegisteredSpace().personalSpaceId,
+        personalSpaceId: votingPersonalSpaceId,
+        retryKey,
       };
     },
     onSuccess: (submission, direction, context) => {
@@ -571,10 +576,11 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       const failure = classifyOperationFailure(_error);
       context?.operation.failed(failure, queueTimeoutMetrics(_error));
       // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
-      const isLatestVote = responseIndexingRegistry.latestRunOrders.get(indexingKeyId) === context?.runOrder;
+      const isLatestVote =
+        context !== undefined && responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
       if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
         const failedPersonalSpaceId = context.personalSpaceId;
-        recordFailedResponse(indexingKeyId, {
+        recordFailedResponse(context.retryKey, {
           retry: async () => {
             if (readRegisteredSpaceRef.current().personalSpaceId !== failedPersonalSpaceId) return;
             await responseMutation.mutateAsync(direction);

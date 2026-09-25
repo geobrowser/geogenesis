@@ -866,6 +866,35 @@ describe('useEntityResponse failed-vote retry', () => {
     expect(failed.result.current.count).toBe(0);
   });
 
+  it('lets a newer vote supersede a retry cast before the personal space resolved', async () => {
+    const { queryClient, wrapper } = createHarness();
+    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
+      personalSpaceId: PERSONAL_SPACE_ID,
+      isRegistered: true,
+    });
+    mocks.personalSpaceId = null;
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const vote = renderHook(
+      () => useEntityResponse({ entityId: 'story-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+
+    mocks.personalSpaceId = PERSONAL_SPACE_ID;
+    vote.rerender();
+    await act(async () => {
+      await vote.result.current.submitResponseAsync('negative');
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
   it('does not replay a failed vote under a different account', async () => {
     mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
     const { vote, failed } = renderVote();
