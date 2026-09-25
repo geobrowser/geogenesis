@@ -89,6 +89,18 @@ function controllerFixture(overrides: {
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
 }) {
+  /*
+   * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
+   *
+   * `turnSpansForDurations` takes the debate's *first* slot, so pinning `turnState.slot` to it
+   * made the fixture contradict itself the moment a test moved the playhead past the first turn:
+   * at 30.5s the spans say slot 2 is speaking while `turnState` still said slot 1. The reply tests
+   * were then checking that a badge existed somewhere rather than that it had crossed tiles.
+   */
+  const turnSpans = turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]);
+  const playheadSeconds = overrides.playheadSeconds ?? 5;
+  const speakingSlot = turnSpans.find(span => playheadSeconds < span.endSeconds)?.slot ?? overrides.turnSlot;
+
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
@@ -105,16 +117,15 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: overrides.playheadSeconds ?? 5,
-    timelineSeconds: 60,
-    turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
-    // Four 30s turns, the speaking one first — two rounds, so a card firing on the second can be
-    // told apart from one firing on every turn.
-    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]),
-    // The format's count, which is what names a round. Equal to the spans here because nothing
-    // was yielded early; the two part company on a debate that was.
+    playheadSeconds,
+    // Four 30s turns, so the whole timeline is 120s.
+    timelineSeconds: 120,
+    turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
+    turnSpans,
+    // The format's count, which is what names a round. Equal to the spans here because nothing was
+    // yielded early; the two part company on a debate that was.
     turnCount: 4,
-    activeSlot: overrides.turnSlot,
+    activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
     resyncSlot: vi.fn(),
@@ -826,6 +837,35 @@ describe('the round it is playing', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
     expect(container.querySelector('[data-round-card]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')?.getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('carries the badge across to the tile whose turn it now is', () => {
+    // The same round on the other debater: the badge belongs to the timer, and the timer follows
+    // the speaker. Slot 1 opens, so at 12s it is on slot 1's tile and at 30.5s on slot 2's.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(12);
+    const opening = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(opening.querySelector('[data-debate-slot="1"] [data-round-badge]')).not.toBeNull();
+    expect(opening.querySelector('[data-debate-slot="2"] [data-round-badge]')).toBeNull();
+
+    mocks.controller = at(30.5);
+    const reply = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(reply.querySelector('[data-debate-slot="2"] [data-round-badge]')).not.toBeNull();
+    expect(reply.querySelector('[data-debate-slot="1"] [data-round-badge]')).toBeNull();
+  });
+
+  it('names the round in words a screen reader can read', () => {
+    // The card is aria-hidden, so this badge is the only non-visual route to the one thing the
+    // page states nowhere else: whether this turn is an opening, a rebuttal or a closing.
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const badge = container.querySelector('[data-round-badge]') as HTMLElement;
+
+    expect(badge.hasAttribute('aria-hidden')).toBe(false);
+    expect(badge.querySelector('.sr-only')?.textContent).toBe('Round 1, Opening');
   });
 
   it('names the round the playhead is actually in', () => {

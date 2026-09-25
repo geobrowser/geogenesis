@@ -724,7 +724,10 @@ describe('turn spans', () => {
     ]);
   });
 
-  it('prefers the clock the debaters watched over the cut, where the render kept a lead-in', () => {
+  it('spans the rendered cut, lead-in included, rather than the clock the debaters watched', () => {
+    // `countdown_start_ms` sits 5s after the cut (GEO-2754) and the span deliberately ignores it:
+    // naming a turn is about when the speaker arrives on screen, which is the cut. Timing one is a
+    // different question, and `turnStateFromSegments` answers it off the clock.
     const spans = turnSpansFromSegments([
       {
         turn_index: 0,

@@ -133,20 +133,33 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
  *
  * Drawn per tile, so it crosses to the other debater with the turn and sits beside whichever timer
  * is counting.
+ *
+ * The one piece of this layer that is *not* `aria-hidden`, and the card's being hidden is why.
+ * Which round it is — and above all whether this is an opening, a rebuttal or a closing — is new
+ * information the page states nowhere else: the speaker's name and the scrubber's time say who and
+ * when, not what the turn is for. Hiding both surfaces would make the feature sighted-only.
+ *
+ * Exposed through a `sr-only` twin rather than by unhiding the visual label, the pattern
+ * `person-space-icons.tsx` uses: the middle dot is typography, and a screen reader reading it out
+ * as "middle dot" is worse than the comma that belongs there. Not a live region either — it sits
+ * in the tree to be found by someone browsing the player, and a turn change is not an event worth
+ * interrupting them over.
  */
 export function DebateRoundBadge({ cue }: { cue: RoundCue | null }) {
   if (!cue) return null;
 
   return (
     <div
-      aria-hidden
       data-round-badge={cue.label}
       className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium text-white"
       style={{ opacity: cue.opacity }}
     >
+      <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
       {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
           line would push it off the top of the tile. */}
-      <span className="truncate">{cue.label}</span>
+      <span aria-hidden className="truncate">
+        {cue.label}
+      </span>
     </div>
   );
 }

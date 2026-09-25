@@ -814,6 +814,10 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
+      // Which half of the debate this is, readable from outside React like the player's own state
+      // above it. The turn overlays move between the tiles as the turn does, and "on the right
+      // tile" is otherwise only checkable by counting DOM order.
+      data-debate-slot={participant?.participant_slot}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
