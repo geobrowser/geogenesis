@@ -4,9 +4,17 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Provider } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { enqueueFor } from '~/core/hooks/smart-account-send-queue';
 import { Toast, useToast } from '~/core/hooks/use-toast';
 
-import { FailedResponsesToast, recordFailedResponse, resetFailedResponses } from './failed-response-retries';
+import {
+  FailedResponsesToast,
+  clearAllFailedResponses,
+  clearFailedResponse,
+  recordFailedResponse,
+  resetFailedResponses,
+  retryFailedResponses,
+} from './failed-response-retries';
 
 function ShowFailedToast() {
   const [, setToast] = useToast();
@@ -64,6 +72,28 @@ describe('FailedResponsesToast', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText(/didn't go through/)).not.toBeInTheDocument();
+    expect(retry).not.toHaveBeenCalled();
+  });
+});
+
+describe('retryFailedResponses while the queue drains', () => {
+  beforeEach(() => resetFailedResponses());
+
+  it.each([
+    ['dismissed', () => clearAllFailedResponses()],
+    ['superseded by a newer vote', () => clearFailedResponse('a')],
+  ])('does not send a retry %s during the wait', async (_, supersede) => {
+    const retry = vi.fn(async () => undefined);
+    recordFailedResponse('a', { retry });
+    let release!: () => void;
+    void enqueueFor('0xqueue-drain', () => new Promise<void>(resolve => (release = resolve)));
+
+    const retrying = retryFailedResponses();
+    await Promise.resolve();
+    supersede();
+    release();
+    await retrying;
+
     expect(retry).not.toHaveBeenCalled();
   });
 });

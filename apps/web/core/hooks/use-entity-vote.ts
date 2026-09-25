@@ -114,6 +114,8 @@ type ResponseSubmissionRun = {
 type ResponseIndexingRegistry = {
   activeReconciliations: Map<string, { controller: AbortController; runId: string }>;
   submissionRuns: Map<string, Map<string, ResponseSubmissionRun>>;
+  /** runOrder of the newest vote cast per response, so an older vote's failure can't offer a retry. */
+  latestRunOrders: Map<string, number>;
 };
 const responseIndexingRegistries = new WeakMap<object, ResponseIndexingRegistry>();
 
@@ -128,7 +130,7 @@ function createResponseIndexingRunId() {
 function getResponseIndexingRegistry(queryClient: object) {
   let registry = responseIndexingRegistries.get(queryClient);
   if (!registry) {
-    registry = { activeReconciliations: new Map(), submissionRuns: new Map() };
+    registry = { activeReconciliations: new Map(), submissionRuns: new Map(), latestRunOrders: new Map() };
     responseIndexingRegistries.set(queryClient, registry);
   }
   return registry;
@@ -491,6 +493,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       // Last write wins: a newer vote on this entity supersedes any pending retry.
       clearFailedResponse(indexingKeyId);
       const { runId, runOrder } = createResponseIndexingRunId();
+      responseIndexingRegistry.latestRunOrders.set(indexingKeyId, runOrder);
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
         pending,
@@ -568,7 +571,8 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       const failure = classifyOperationFailure(_error);
       context?.operation.failed(failure, queueTimeoutMetrics(_error));
       // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
-      if (failure === 'unavailable' && context?.personalSpaceId) {
+      const isLatestVote = responseIndexingRegistry.latestRunOrders.get(indexingKeyId) === context?.runOrder;
+      if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
         const failedPersonalSpaceId = context.personalSpaceId;
         recordFailedResponse(indexingKeyId, {
           retry: async () => {
