@@ -2,14 +2,15 @@
 
 import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
-import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
+import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useSetToast } from '~/core/hooks/use-toast';
 import {
   EMPTY_PENDING_VOTED_OVERRIDES,
   type EntityVoteDirectionFilter,
@@ -40,6 +41,11 @@ import {
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
+import {
+  FailedResponsesToast,
+  clearFailedResponse,
+  recordFailedResponse,
+} from '~/core/responses/failed-response-retries';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -108,6 +114,8 @@ type ResponseSubmissionRun = {
 type ResponseIndexingRegistry = {
   activeReconciliations: Map<string, { controller: AbortController; runId: string }>;
   submissionRuns: Map<string, Map<string, ResponseSubmissionRun>>;
+  /** runOrder of the newest vote cast per response, so an older vote's failure can't offer a retry. */
+  latestRunOrders: Map<string, number>;
 };
 const responseIndexingRegistries = new WeakMap<object, ResponseIndexingRegistry>();
 
@@ -122,7 +130,7 @@ function createResponseIndexingRunId() {
 function getResponseIndexingRegistry(queryClient: object) {
   let registry = responseIndexingRegistries.get(queryClient);
   if (!registry) {
-    registry = { activeReconciliations: new Map(), submissionRuns: new Map() };
+    registry = { activeReconciliations: new Map(), submissionRuns: new Map(), latestRunOrders: new Map() };
     responseIndexingRegistries.set(queryClient, registry);
   }
   return registry;
@@ -203,6 +211,13 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     const account = readCachedSmartAccount(queryClient, null);
     return readCachedPersonalSpace(queryClient, account?.account.address);
   }, [personalSpaceId, isRegistered, queryClient]);
+  // The retry key for the current account and args. Retry replays through the latest mutation
+  // options, so it must only run while they still target the vote that failed.
+  const currentRetryKey = () =>
+    hashKey(entityResponseIndexingQueryKey(readRegisteredSpace().personalSpaceId, entityId, spaceId, responseKind));
+  const currentRetryKeyRef = useRef(currentRetryKey);
+  currentRetryKeyRef.current = currentRetryKey;
+  const setToast = useSetToast();
 
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
@@ -478,7 +493,14 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
             )
           );
       const operation = observeOperation('vote', 'entity', entityId);
+      // Keyed by the space the vote is sent from, which can differ from the reactive one
+      // (a vote replayed before personalSpaceId resolves).
+      const votingPersonalSpaceId = readRegisteredSpace().personalSpaceId;
+      const retryKey = hashKey(entityResponseIndexingQueryKey(votingPersonalSpaceId, entityId, spaceId, responseKind));
+      // Last write wins: a newer vote on this entity supersedes any pending retry.
+      clearFailedResponse(retryKey);
       const { runId, runOrder } = createResponseIndexingRunId();
+      responseIndexingRegistry.latestRunOrders.set(retryKey, runOrder);
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
         pending,
@@ -493,7 +515,16 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         pending,
         runId,
       });
-      return { previousState, runId, runOrder, previousResponse, operation, entityName };
+      return {
+        previousState,
+        runId,
+        runOrder,
+        previousResponse,
+        operation,
+        entityName,
+        personalSpaceId: votingPersonalSpaceId,
+        retryKey,
+      };
     },
     onSuccess: (submission, direction, context) => {
       const previousDirection =
@@ -544,8 +575,23 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         void reconcileResponseIndexing(submission.pending, context.runId);
       }
     },
-    onError: (_error, _direction, context) => {
-      context?.operation.failed(classifyOperationFailure(_error));
+    onError: (_error, direction, context) => {
+      const failure = classifyOperationFailure(_error);
+      context?.operation.failed(failure, queueTimeoutMetrics(_error));
+      // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
+      const isLatestVote =
+        context !== undefined && responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
+      if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
+        const { retryKey } = context;
+        recordFailedResponse(retryKey, {
+          retry: async () => {
+            // Account, entity, space or response kind changed since the failure.
+            if (currentRetryKeyRef.current() !== retryKey) return;
+            await responseMutation.mutateAsync(direction);
+          },
+        });
+        setToast(createElement(FailedResponsesToast), { persistent: true });
+      }
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);

@@ -7,7 +7,13 @@ import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } fr
 
 import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
+import {
+  resetFailedResponses,
+  retryFailedResponses,
+  useFailedResponses,
+} from '~/core/responses/failed-response-retries';
 
+import { QueuedSendTimeoutError } from './smart-account-send-queue';
 import {
   responseIndexingRetryDelayMs,
   useEntityResponse,
@@ -121,6 +127,7 @@ beforeEach(() => {
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
   mocks.ensureSpaceMembership.mockReset();
   mocks.ensureSpaceMembership.mockResolvedValue(false);
+  resetFailedResponses();
 });
 
 afterEach(() => {
@@ -747,6 +754,186 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+describe('useEntityResponse failed-vote retry', () => {
+  const queueTimeout = () =>
+    ({
+      _tag: 'Left',
+      left: new Error('Transaction failed', { cause: new QueuedSendTimeoutError(121_000, 3) }),
+    }) as const;
+
+  function renderVote(entityId = 'story-1') {
+    const { wrapper } = createHarness();
+    const vote = renderHook(() => useEntityResponse({ entityId, spaceId: TARGET_SPACE_ID, responseKind: 'curation' }), {
+      wrapper,
+    });
+    const failed = renderHook(() => useFailedResponses());
+    return { vote, failed };
+  }
+
+  let consoleError: MockInstance;
+  beforeEach(() => {
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.fetchResponse.mockReturnValue('negative');
+  });
+  afterEach(() => consoleError.mockRestore());
+
+  it('offers a retry for a vote that never submitted, and Retry re-sends the same direction', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('negative')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'action_failed',
+      expect.objectContaining({ failure_code: 'unavailable', queue_wait_ms: 121_000, queue_depth: 3 })
+    );
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(2);
+    expect(failed.result.current).toEqual({ count: 0, retrying: false });
+    expect(mocks.capture).toHaveBeenCalledWith('vote_cast', expect.objectContaining({ vote_direction: 'down' }));
+  });
+
+  it('does not offer a retry when the vote may have been submitted', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('receipt timeout') });
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('drops a pending retry when a newer vote on the same entity is cast', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+
+    await act(async () => {
+      await vote.result.current.submitResponseAsync('negative');
+    });
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('stops at a vote that times out again and keeps the rest for the next Retry', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout()).mockResolvedValueOnce(queueTimeout());
+    const first = renderVote('story-1');
+    const second = renderVote('story-2');
+
+    await act(async () => {
+      await expect(first.vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+      await expect(second.vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(first.failed.result.current.count).toBe(2);
+
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    // The first timed out again, so the second was never attempted.
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(3);
+    expect(first.failed.result.current.count).toBe(2);
+  });
+
+  it('does not offer a retry for an older vote that timed out after a newer one was cast', async () => {
+    const older = deferred<ReturnType<typeof queueTimeout>>();
+    const newer = deferred<{ _tag: 'Right'; right: string }>();
+    mocks.runEffectEither.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const { vote, failed } = renderVote();
+
+    let olderVote!: Promise<unknown>;
+    let newerVote!: Promise<unknown>;
+    act(() => {
+      olderVote = vote.result.current.submitResponseAsync('positive').catch(() => undefined);
+      newerVote = vote.result.current.submitResponseAsync('negative');
+    });
+    await act(async () => {
+      older.resolve(queueTimeout());
+      await olderVote;
+      newer.resolve({ _tag: 'Right', right: '0xtransaction' });
+      await newerVote;
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('lets a newer vote supersede a retry cast before the personal space resolved', async () => {
+    const { queryClient, wrapper } = createHarness();
+    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
+      personalSpaceId: PERSONAL_SPACE_ID,
+      isRegistered: true,
+    });
+    mocks.personalSpaceId = null;
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const vote = renderHook(
+      () => useEntityResponse({ entityId: 'story-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+
+    mocks.personalSpaceId = PERSONAL_SPACE_ID;
+    vote.rerender();
+    await act(async () => {
+      await vote.result.current.submitResponseAsync('negative');
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('does not replay a failed vote once the control targets a different response kind', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { wrapper } = createHarness();
+    const vote = renderHook(
+      ({ responseKind }: { responseKind: 'curation' | 'stance' }) =>
+        useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind }),
+      { wrapper, initialProps: { responseKind: 'curation' } }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    vote.rerender({ responseKind: 'stance' });
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(1);
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('does not replay a failed vote under a different account', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    mocks.personalSpaceId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    vote.rerender();
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(1);
+    expect(failed.result.current.count).toBe(0);
+  });
+});
 
 function createHarness() {
   const queryClient = new QueryClient({
