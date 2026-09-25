@@ -150,8 +150,8 @@ describe('usePrepareOnboarding', () => {
     // The navbar's button signs you in from anywhere rather than returning you anywhere, so it
     // clears the destination. `null` has to mean that rather than falling through to the default —
     // an easy thing to get wrong with `??`, and the reason this case is spelled out.
-    // Two callers track their own destination and would be fighting this one:
-    // `use-ranking-compose-access.ts` holds it in a ref, and `sign-in-prompt.tsx` has never set it.
+    // `use-ranking-compose-access.ts` tracks its own destination in a ref and would be fighting
+    // this one.
     it('leaves the destination untouched when asked to keep it', () => {
       const { result } = setup();
       act(() => {

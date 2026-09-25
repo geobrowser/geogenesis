@@ -46,8 +46,8 @@ const REMOTE: DebateRematchParticipant = {
 
 describe('fetchParticipantPositions', () => {
   // Positions are on-chain claim responses, which the graph indexes as `userVotes` keyed on the
-  // responder's personal space. One filter for both people, active responses only, both kinds.
-  it('asks for both participants’ active stance and veracity responses in one filter', async () => {
+  // responder's personal space. One filter for both people, active responses only.
+  it('asks for both participants’ active stance responses in one filter', async () => {
     const fetchPage = vi.fn().mockResolvedValue([]);
 
     await fetchParticipantPositions([LOCAL.profile_space_id, REMOTE.profile_space_id], undefined, fetchPage);
@@ -57,7 +57,8 @@ describe('fetchParticipantPositions', () => {
       userId: { in: [LOCAL.profile_space_id, REMOTE.profile_space_id] },
       objectType: { is: 0 },
       voteType: { in: [0, 1] },
-      voteKind: { in: [1, 2] },
+      // Kind 2 — the retired veracity responses — is deliberately not asked for.
+      voteKind: { in: [1] },
     });
   });
 
@@ -67,9 +68,10 @@ describe('fetchParticipantPositions', () => {
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
-  it('decodes rows into sides, dropping anything that is not an active stance or veracity response', async () => {
+  it('decodes rows into sides, dropping anything that is not an active stance response', async () => {
     const fetchPage = vi.fn().mockResolvedValue([
       { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 1 },
+      // A retired veracity response. It is no longer a position this app reports.
       { userId: REMOTE.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 2 },
       // A curation vote is not a position.
       { userId: REMOTE.profile_space_id, objectId: 'claim-2', spaceId: 'space-1', voteType: 0, voteKind: 0 },
@@ -87,11 +89,32 @@ describe('fetchParticipantPositions', () => {
         responseKind: 'stance',
         position: true,
       },
+    ]);
+  });
+
+  /**
+   * One person, one claim, both kinds — and they disagree.
+   *
+   * Somebody could Verify a claim (kind 2, position true) and separately Disagree with it (kind 1,
+   * position false): two answers to two different questions, which is what the old vocabulary made
+   * possible. There is one question now, and the stance is the one that answers it — so the side
+   * reported is Disagree, not the Verify sitting beside it.
+   *
+   * Pinned because "ignore kind 2" and "prefer kind 1" only look the same while nobody holds both.
+   */
+  it('reports the stance when a person holds both kinds on one claim, even opposite ones', async () => {
+    const fetchPage = vi.fn().mockResolvedValue([
+      { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 2 },
+      { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 1 },
+    ]);
+
+    await expect(fetchParticipantPositions([LOCAL.profile_space_id], undefined, fetchPage)).resolves.toEqual([
       {
-        profileSpaceId: REMOTE.profile_space_id,
+        profileSpaceId: LOCAL.profile_space_id,
         claimId: 'claim-1',
         spaceId: 'space-1',
-        responseKind: 'veracity',
+        responseKind: 'stance',
+        // `false` — the stance. Not the `true` the verify row carries.
         position: false,
       },
     ]);

@@ -13,7 +13,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { entitySidePanelAtom } from '~/atoms';
+import { entityCommentsPanelAtom, entitySidePanelAtom } from '~/atoms';
 
 // Reached through the claims panel, which now carries the shared response controls. The module's
 // top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
@@ -247,6 +247,15 @@ function PanelProbe() {
   return <div data-testid="panel">{target ? `${target.entityId} in ${target.spaceId}` : 'closed'}</div>;
 }
 
+function CommentsPanelProbe() {
+  const target = useAtomValue(entityCommentsPanelAtom);
+  return (
+    <div data-testid="comments-panel-target">
+      {target ? `${target.entityId} in ${target.spaceId} (${target.targetEntityType})` : 'closed'}
+    </div>
+  );
+}
+
 // The card is rendered inside the app's query provider — its comment count reads the comments cache —
 // so the harness has to provide one too, or the double is laxer than the real tree.
 let client: QueryClient;
@@ -265,6 +274,7 @@ function CardHarness({
       <Provider>
         {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
         <PanelProbe />
+        <CommentsPanelProbe />
       </Provider>
     </QueryClientProvider>
   );
@@ -558,10 +568,20 @@ describe('DebateExploreFeedCard', () => {
     const comments = screen.getByRole('button', { name: /^Comments/ });
     expect(comments.textContent).toBe('3');
     expect(screen.getByRole('button', { name: /^Claims/ }).textContent).toBe('18');
+    expect(comments).toHaveAttribute('data-geo-analytics-label', 'Debate comments');
+    expect(screen.getByRole('button', { name: /^Claims/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate claims'
+    );
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.
     expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
+
+    fireEvent.click(comments);
+    expect(screen.getByTestId('comments-panel-target')).toHaveTextContent(
+      `${item.entityId} in ${item.spaceId} (debate)`
+    );
   });
 
   it('keeps votes and comments while the debate is still loading', () => {

@@ -56,6 +56,10 @@ const mocks = vi.hoisted(() => ({
   },
   /** Claim response context supplied to the otherwise generic comment thread. */
   commentPosition: null as Record<string, unknown> | null,
+  /** Whether the viewer's own response is still confirming, per the shared position control. */
+  isResponsePending: false,
+  /** Props the position pills received. */
+  positionControl: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -149,10 +153,14 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     actionTitle: () => undefined,
     responseError: null,
     isConnected: false,
+    isResponsePending: mocks.isResponsePending,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
-  ClaimPositionCommentControl: () => <div data-testid="position" />,
+  ClaimPositionCommentControl: (props: Record<string, unknown>) => {
+    mocks.positionControl = props;
+    return <div data-testid="position" />;
+  },
 }));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
@@ -170,6 +178,7 @@ vi.mock('~/design-system/prefetch-link', () => ({
   ),
 }));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
+  trustedIndexedPosition: () => null,
   useBackfillReadinessForHeldPosition: () => {},
 }));
 vi.mock('~/partials/explore/claim-explore-feed-card', () => ({
@@ -245,9 +254,50 @@ beforeEach(() => {
   mocks.record.debatesHasNextPage = false;
   mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
+  mocks.isResponsePending = false;
+  mocks.positionControl = null;
 });
 
 describe('ClaimPageView record', () => {
+  /*
+   * GEO-3021, reached by walking rather than by loading. The route renders
+   * `EntityPageBody` unkeyed, so following a related claim reuses this page — and
+   * the activity card keeps the reader's Debates/Claims selection in its own
+   * state, so without a key a claim that has debates would land on the Claims left
+   * over from one that had none.
+   *
+   * Asserted on the node rather than through the mock: a remount builds a new DOM
+   * element and a re-render keeps the old one, so element identity is the question
+   * itself rather than a proxy for it.
+   */
+  it('remounts the activity card when the page is pointed at another claim', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    // Re-rendered on the same claim: still the reader's own card, untouched.
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.getByTestId('activity')).toBe(first);
+
+    view.rerender(<ClaimPageView entityId="claim-2" spaceId="space-1" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
+  /*
+   * And the space, because a claim is not one record. It can live in several —
+   * `SpaceRedirect` only moves a reader on where the entity is absent from the
+   * space they asked for — and every row the card is given here is read through
+   * `spaceId`, so the same claim in two spaces is two different records.
+   */
+  it('remounts the activity card when the same claim is read in another space', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-2" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
   it('offers product tabs before authored claim tabs', () => {
     mocks.record.claimsTotal = 1;
 
@@ -506,6 +556,25 @@ describe('ClaimPageView description', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+describe('ClaimPageView position', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction.
+  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
+  // cursor, and only the presses that would undo it are dropped until it lands.
+  it('marks the pills pending while the response confirms, without announcing a wait', () => {
+    mocks.isResponsePending = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(true);
+    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+  });
+
+  it('releases the pills once it has landed', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
   });
 });
 

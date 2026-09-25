@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -40,6 +40,7 @@ import { claimRowKey } from './claim-row-key';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
+import type { DebateAnalyticsSurface } from './hub-analytics';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
@@ -456,7 +457,7 @@ export function ClaimsTab({
 
     return taggedPage.map(({ claim, spaceId }) => {
       const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = row?.response_kind ?? claimResponseKind(claim.entity, spaceId);
+      const responseKind = resolveClaimResponseKind();
 
       return {
         claim: {
@@ -472,7 +473,7 @@ export function ClaimsTab({
         viewer_position: row?.viewer_response?.position ?? null,
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row, responseKind),
+        positions: taggedPositionSummaries(row),
         // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
         score: 0,
         active_debate: Boolean(row?.active_debate),
@@ -987,6 +988,7 @@ export function ClaimsTab({
         />
 
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -1006,7 +1008,7 @@ export function ClaimsTab({
             isLobby ? (
               trailing
             ) : filter === 'mine' || !authenticated ? null : (
-              <HideMyPositionsSwitch checked={hideMyPositions} onChange={setHideMyPositions} />
+              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
             )
           }
         />
@@ -1014,6 +1016,7 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={
@@ -1192,17 +1195,14 @@ export function HubStickyControls({ children }: { children: React.ReactNode }) {
  * off `total_count`, so the online count stands in for it: it is the only count this endpoint
  * gives, and undercounting a side is better than claiming a total it never told us.
  */
-function taggedPositionSummaries(
-  row: DebateClaim | undefined,
-  responseKind: 'stance' | 'veracity'
-): DebateClaimPositionSummary[] {
+function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
   return [true, false].map(position => {
     const choice = row?.online_choices.find(candidate => candidate.position === position);
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
-      position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
+      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
+      position_label: responsePositionLabel(position),
       total_count: choice?.participant_count ?? 0,
       available_now_count: choice?.participant_count ?? 0,
       // These are `online_choices`, so the count already *is* the present population — the same
@@ -1216,6 +1216,7 @@ function taggedPositionSummaries(
 }
 
 type SpaceTopicFiltersProps = {
+  analyticsSurface: DebateAnalyticsSurface;
   spaceIds: string[];
   onSpaceToggle: (spaceId: string) => void;
   onSpacesClear: () => void;
@@ -1249,6 +1250,7 @@ type SpaceTopicFiltersProps = {
  * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
 export function SpaceTopicFilters({
+  analyticsSurface,
   spaceIds,
   onSpaceToggle,
   onSpacesClear,
@@ -1311,6 +1313,7 @@ export function SpaceTopicFilters({
         // their adaptive placement.
         align="start"
         label={spaceMenuLabel}
+        analytics={{ name: 'Space', surface: analyticsSurface }}
         labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
         values={spaceIds}
@@ -1328,6 +1331,7 @@ export function SpaceTopicFilters({
         <HubMultiFilterMenu
           align="start"
           label={topicMenuLabel}
+          analytics={{ name: 'Topic', surface: analyticsSurface }}
           options={topicOptions}
           values={topicIds}
           onToggle={onTopicToggle}

@@ -5,10 +5,10 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
+import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -40,6 +40,7 @@ export function ClaimPositionCommentControl({
   onRespond,
   promptForComment,
   disabled,
+  pending,
   titleFor,
   noteFor,
   positionRowClassName,
@@ -48,16 +49,18 @@ export function ClaimPositionCommentControl({
   entityId: string;
   spaceId: string;
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   viewerPosition: boolean | null;
   onRespond: (position: boolean) => void;
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
   promptForComment: boolean;
   disabled?: boolean;
+  /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
+  pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
-  /** Compact action rendered after Disagree/Dispute, such as the Explore comments-panel opener. */
+  /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
 }) {
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
@@ -66,7 +69,10 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const { publishComment: submitComment } = usePublishComment(entityId, spaceId);
+  const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
+    targetEntityType: 'claim',
+    interactionSurface: 'claim_position_explanation',
+  });
 
   const closeComposer = React.useCallback(() => {
     setPromptedPosition(null);
@@ -137,7 +143,7 @@ export function ClaimPositionCommentControl({
     setIsSubmitting(false);
   };
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const action = promptedPosition === null ? null : promptedPosition ? copy.positiveAction : copy.negativeAction;
 
   return (
@@ -149,6 +155,7 @@ export function ClaimPositionCommentControl({
           viewerPosition={viewerPosition}
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
+          pending={pending}
           titleFor={titleFor}
           noteFor={noteFor}
           endSlot={positionRowEndSlot}

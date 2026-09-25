@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { applyClaimReusePolicy } from './claim-reuse';
-import { DebateNotPublishableError, listSweepCandidateDebateIds, loadDebatePublishSource } from './debate-source';
+import {
+  DebateNotPublishableError,
+  listSweepCandidateDebateIds,
+  loadDebateOgPreview,
+  loadDebatePublishSource,
+} from './debate-source';
 
 // The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
 // passes claims through, so what the loader decodes from geo-chat is observable on the input.
@@ -326,5 +331,76 @@ describe('listSweepCandidateDebateIds', () => {
     );
 
     await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['eligible']);
+  });
+});
+
+/**
+ * The share card names each speaker's side, and it is the least forgiving place to get that wrong:
+ * the card is generated once at publish time and never revisited, so a label baked in now cannot be
+ * corrected later.
+ *
+ * geo-chat sends a `position_label` per participant, and it still reads "Verify"/"Dispute" for a
+ * claim it calls factual — a word this app no longer has any way to publish. The card takes the
+ * side instead and names it itself.
+ */
+describe('the debate share card’s speaker sides', () => {
+  /** The card path also resolves a presigned still per speaker, which the shared mock does not answer. */
+  function mockCardFetch(debate = debateBody()) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        const url = String(input);
+        if (url.includes('/media/artifacts/url')) {
+          return new Response(JSON.stringify({ upload: { url: 'https://stills.example/still.png' } }), {
+            status: 200,
+          });
+        }
+        if (url.endsWith('/media')) {
+          return new Response(
+            JSON.stringify({
+              job: { status: 'succeeded' },
+              artifacts: [{ kind: 'speaker_still_slot_1' }, { kind: 'speaker_still_slot_2' }],
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response(JSON.stringify(debate), { status: 200 });
+      })
+    );
+  }
+
+  it('names each side Agree and Disagree', async () => {
+    mockCardFetch();
+
+    const card = await loadDebateOgPreview(DEBATE_ID);
+
+    expect(card?.speakers.map(speaker => speaker.stance)).toEqual(['Agree', 'Disagree']);
+  });
+
+  it('ignores a retired Verify/Dispute label geo-chat still sends', async () => {
+    mockCardFetch(
+      debateBody({
+        participants: [
+          {
+            profile_space_id: 'space-1',
+            display_name: 'Specter',
+            position: true,
+            participant_slot: 1,
+            position_label: 'Verify',
+          },
+          {
+            profile_space_id: 'space-2',
+            display_name: 'Antispecter',
+            position: false,
+            participant_slot: 2,
+            position_label: 'Dispute',
+          },
+        ],
+      })
+    );
+
+    const card = await loadDebateOgPreview(DEBATE_ID);
+
+    expect(card?.speakers.map(speaker => speaker.stance)).toEqual(['Agree', 'Disagree']);
   });
 });

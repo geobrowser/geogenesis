@@ -21,13 +21,14 @@ import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { uuidToHex } from '~/core/id/normalize';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
+import { Tooltip } from '~/design-system/tooltip';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -754,8 +755,7 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
  * query that stacks its two pills vertically below ~230px, which is exactly the width this card
  * wants to be. Reusing it would force the card wide enough to cover the face it sits beside. What
  * matters is shared underneath — `useClaimResponseState` and `useClaimPositionControl` resolve the
- * vocabulary and publish the response, so a factual claim still reads Verify/Dispute here and the
- * share is the same number the claim page prints.
+ * response and publish it, so the share is the same number the claim page prints.
  *
  * The crowd split is shown up front, per the Figma card. It is worth knowing that this cuts against
  * the usual argument for withholding it — a viewer who sees "65% agree" before answering is being
@@ -798,7 +798,7 @@ function TickerClaimHeader({
     onAnswered(claimId, position);
   }, [position, claimId, onAnswered]);
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   // Null on a claim nobody has answered, which is most of them — and a genuine 0% is a different
   // statement from "no responses", so the share drops out rather than printing a zero.
   const percent = summary.percent;
@@ -834,8 +834,8 @@ function TickerClaimHeader({
                 ·
               </span>
             )}
-            {/* Same wording as the verdict on the claim page — "65% agree", or "65% verify" on a
-                factual claim, so the share reads the same wherever it is printed. */}
+            {/* Same wording as the verdict on the claim page — "65% agree" — so the share reads
+                the same wherever it is printed. */}
             <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
@@ -877,9 +877,9 @@ function TickerClaimHeader({
  * about it. The label survives as the accessible name and the tooltip, so nothing is lost to
  * anyone reading it aloud or hovering.
  *
- * Thumbs for a stance claim, chevrons for a factual one, which is the split the rest of the app
- * already draws: agreeing with a position and verifying a fact are different acts, and a thumb on
- * "the SEC sued Coinbase" reads as approval rather than confirmation.
+ * Thumbs, on every claim. A factual one used to draw chevrons here, because verifying a fact and
+ * agreeing with a position were different acts; claims ask one question now, so there is one
+ * glyph.
  */
 function ClaimIconButton({
   responseKind,
@@ -890,7 +890,7 @@ function ClaimIconButton({
   title,
   onClick,
 }: {
-  responseKind: 'stance' | 'veracity' | 'curation';
+  responseKind: ResponseKind;
   position: boolean;
   label: string;
   selected: boolean;
@@ -930,8 +930,6 @@ function ClaimIconButton({
           : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
       )}
     >
-      {/* A veracity chevron has no filled form to switch to, so its selected state is the
-          background and colour above rather than the glyph. See `ResponsePositionIcon`. */}
       <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
     </button>
   );
@@ -997,32 +995,45 @@ export function ClaimScrubberMarkers({
   return (
     <div className={cx('pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2', className)}>
       {markers.map((marker, index) => {
+        // Several claims can finish in one segment and share a hash. Saying so beats announcing one
+        // of them and silently standing for the others. `marker.text` is the one the card will show
+        // — not the first of the group — so both strings name what a click surfaces.
+        const alsoHere = marker.count - 1;
+        const preview = alsoHere > 0 ? `${marker.text} (+${alsoHere} more)` : marker.text;
+        const label =
+          alsoHere > 0 ? `Jump to ${marker.count} claims, showing: ${marker.text}` : `Jump to: ${marker.text}`;
+
         return (
-          <button
+          <Tooltip
             key={marker.id}
-            type="button"
-            title={marker.count > 1 ? `${marker.text} (+${marker.count - 1} more)` : marker.text}
-            // Several claims can finish in one segment and share a hash. Saying so beats announcing
-            // one of them and silently standing for the others. `marker.text` is the one the card
-            // will show — not the first of the group — so the label names what the click surfaces.
-            aria-label={
-              marker.count > 1 ? `Jump to ${marker.count} claims, showing: ${marker.text}` : `Jump to: ${marker.text}`
+            position="top"
+            // A `title` did this before, and the browser's own wait — a second or more, and not
+            // ours to shorten — was long enough that the preview read as broken. A hash is 12px
+            // wide at most: nobody rests a pointer on one by accident, so there is nothing for a
+            // delay to protect against and the preview opens on arrival.
+            delayDuration={0}
+            label={preview}
+            trigger={
+              <button
+                type="button"
+                aria-label={label}
+                onClick={event => {
+                  event.stopPropagation();
+                  onSeek(marker.seekMs);
+                }}
+                style={{ left: `${marker.fraction * 100}%`, width: markerHitWidth(markers, index) }}
+                // The button is the target and draws nothing; `before:` draws the 2px hash at its
+                // centre, so the hash stays 2px however wide the target around it grows.
+                className={cx(
+                  'pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent',
+                  MARKER_HIT_HEIGHT,
+                  'before:absolute before:top-1/2 before:left-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white/80 before:transition-[height,background-color] before:content-[""]',
+                  'hover:before:h-3.5 hover:before:bg-white',
+                  // A control in the tab order has to show where focus is; there was nothing before.
+                  'focus-visible:outline-none focus-visible:before:h-3.5 focus-visible:before:bg-white'
+                )}
+              />
             }
-            onClick={event => {
-              event.stopPropagation();
-              onSeek(marker.seekMs);
-            }}
-            style={{ left: `${marker.fraction * 100}%`, width: markerHitWidth(markers, index) }}
-            // The button is the target and draws nothing; `before:` draws the 2px hash at its
-            // centre, so the hash stays 2px however wide the target around it grows.
-            className={cx(
-              'pointer-events-auto absolute top-1/2 -translate-x-1/2 -translate-y-1/2 bg-transparent',
-              MARKER_HIT_HEIGHT,
-              'before:absolute before:top-1/2 before:left-1/2 before:h-2.5 before:w-0.5 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:bg-white/80 before:transition-[height,background-color] before:content-[""]',
-              'hover:before:h-3.5 hover:before:bg-white',
-              // A control in the tab order has to show where focus is; there was nothing before.
-              'focus-visible:outline-none focus-visible:before:h-3.5 focus-visible:before:bg-white'
-            )}
           />
         );
       })}

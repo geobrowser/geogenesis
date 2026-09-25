@@ -18,6 +18,7 @@ import { visibleHistoryCards } from '~/core/profile/visible-history';
 import { SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
 import { EditSmall } from '~/design-system/icons/edit-small';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { OrganizationImage } from './organization-image';
 import { ProfileEntityLink } from './profile-entity-link';
@@ -61,6 +62,16 @@ type Props = {
   onEdit: () => void;
   /** Where every name on this card opens, which is the space the profile is in. */
   spaceId: string;
+  /**
+   * The history is still on the way.
+   *
+   * Distinct from "there is none", and the two cannot share a rendering: with no
+   * cards yet a visitor got nothing at all and then a section, which moved
+   * everything under it, while the owner got *Nothing here yet — add a role* over
+   * a profile that already had four. One row is reserved instead, which is what
+   * most accounts settle at.
+   */
+  isLoading?: boolean;
 };
 
 /**
@@ -75,7 +86,7 @@ type Props = {
  * for anyone else it is a fact about somebody they cannot act on, and four empty
  * cards make an active account look abandoned.
  */
-export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: Props) {
+export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId, isLoading = false }: Props) {
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   // Counted in roles rather than employers, and a company is all-or-nothing —
@@ -93,6 +104,12 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: 
   const collapsed = React.useMemo(() => visibleHistoryCards(cards), [cards]);
 
   const copy = COPY[kind];
+
+  // Reserved before anything is known, for everyone. The read decides whether
+  // there is a section here at all, so neither branch below can be drawn yet —
+  // and a visitor is the case that needs it most, since for them the section
+  // appears from nothing rather than replacing an empty state.
+  if (isLoading && cards.length === 0) return <RecordSectionSkeleton title={copy.title} />;
 
   if (cards.length === 0 && !isOwner) return null;
 
@@ -137,6 +154,39 @@ export function ProfileRecordSection({ kind, cards, isOwner, onEdit, spaceId }: 
           {isExpanded ? 'Show fewer' : `Show all ${cards.length} ${kind === 'employment' ? 'experiences' : 'schools'}`}
         </button>
       )}
+    </section>
+  );
+}
+
+/**
+ * One card's worth of height under the section's own title.
+ *
+ * The title is real text rather than a bar: it is known before the read is, it
+ * is what tells a reader which section is arriving, and drawing it as a
+ * placeholder would make the one certain thing on screen look uncertain.
+ *
+ * The block measures like `OrganizationBlock` — a 50px logo beside three lines,
+ * which is the shape of both kinds — inside the same `py-4` the real list item
+ * carries. The logo box takes `OrganizationImage`'s own dimensions, so the row
+ * cannot settle a pixel off the reserve.
+ *
+ * Named and marked busy as `ProfileActivitySkeleton` is, which is also what
+ * tells the two apart: the real section draws the same heading.
+ */
+function RecordSectionSkeleton({ title }: { title: string }) {
+  return (
+    <section aria-label={`Loading ${title.toLowerCase()}`} aria-busy="true" className="flex flex-col">
+      <header className="flex items-center justify-between gap-2 pb-2">
+        <h3 className="text-mediumTitle text-text">{title}</h3>
+      </header>
+      <div className="flex min-w-0 gap-5 py-4">
+        <Skeleton className="h-[50px] w-[50px] shrink-0 rounded" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <Skeleton className="h-5 w-2/5" />
+          <Skeleton className="h-5 w-1/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+      </div>
     </section>
   );
 }

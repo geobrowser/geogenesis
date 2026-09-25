@@ -19,11 +19,13 @@ import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
 export function EntityCommentsButton({
   entityId,
   spaceId,
+  targetEntityType = 'entity',
   count,
   className,
 }: {
   entityId: string;
   spaceId: string;
+  targetEntityType?: string;
   /** A server-rendered count; the live one takes over as soon as the list has been read. */
   count: number;
   className?: string;
@@ -39,13 +41,15 @@ export function EntityCommentsButton({
       // Marks this as an opener: clicking one while the panel is open switches
       // it to that entity rather than dismissing it as an outside click.
       data-entity-comments-opener
+      data-geo-analytics-label={`Open ${targetEntityType} comments panel`}
+      data-geo-analytics-intent="open_comments_panel"
       aria-label={`Comments (${liveCount})`}
       aria-expanded={isOpen}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.
         event.preventDefault();
         event.stopPropagation();
-        openComments(entityId, spaceId);
+        openComments(entityId, spaceId, targetEntityType);
       }}
       className={className ?? 'inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text'}
     >

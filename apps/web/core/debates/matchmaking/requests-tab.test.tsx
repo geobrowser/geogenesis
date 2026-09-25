@@ -141,6 +141,40 @@ afterEach(cleanup);
 const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
 
 describe('RequestsTab', () => {
+  it('gives plain request and filter controls stable analytics metadata', () => {
+    mocks.outbound = request('request-outbound', SPACE_B, 'A second claim');
+    mocks.challenge = challenge('requester');
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('button', { name: /Any status/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Status filter'
+    );
+    expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Space filter'
+    );
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Cancel request'
+    );
+    expect(screen.getByRole('button', { name: 'Withdraw' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Withdraw request'
+    );
+
+    const overflow = screen.getByRole('button', { name: 'More options' });
+    expect(overflow).toHaveAttribute('data-geo-analytics-label', 'Debate hub Request options');
+    fireEvent.click(overflow);
+    expect(screen.getByRole('button', { name: "I don't want to debate this claim" })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Remove claim request intent'
+    );
+    expect(screen.getByRole('button', { name: /Block/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Block requester'
+    );
+  });
   // GEO-2684. The shared helper's own test only proves it carries the sticky classes, so this is
   // what would catch these filters being moved back into the scrolling body.
   it('pins the status and space filters above the requests', () => {
@@ -347,7 +381,10 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     const parties = screen.getByText('Arturas').closest('div')!;
-    expect(within(parties).getByText('No')).toBeInTheDocument();
+    // Named from the side rather than from the fixture's `position_label` — geo-chat's label reads
+    // "Dispute" on a claim it still calls factual, which this app cannot publish.
+    expect(within(parties).getByText('Disagree')).toBeInTheDocument();
+    expect(within(parties).queryByText('No')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('button', { name: 'Block Arturas' }));

@@ -638,13 +638,13 @@ describe('useGeoChatAuth', () => {
     invalidateQueries.mockClear();
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',
@@ -693,13 +693,13 @@ describe('useGeoChatAuth', () => {
     await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',

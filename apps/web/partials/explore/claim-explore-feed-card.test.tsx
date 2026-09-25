@@ -348,20 +348,21 @@ describe('ClaimExploreFeedCard', () => {
     expect(mocks.summaryEnabledCalls.at(-1)).toBe(false);
   });
 
-  it('waits for the vocabulary before reading the split, not just for the viewport', () => {
+  it('waits for the claim’s data before reading the split, not just for the viewport', () => {
     mocks.entity = factualClaim();
     const { rerender } = render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
     rerender(<ClaimExploreFeedCard item={item} />);
 
     expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
-    // And under the kind the entity supplied, never the fallback it would have used a beat earlier.
-    expect(mocks.summaryKindCalls.at(-1)).toBe('veracity');
+    // One kind for every claim now, the factual ones included — this fixture is a factual claim.
+    expect(mocks.summaryKindCalls.at(-1)).toBe('stance');
   });
 
-  it('will not let anyone answer before the claim’s vocabulary is known', () => {
-    // `stance` is the fallback while the lookups are out, and the kind selects `voteKind` on the
-    // write — so a click inside that window publishes the wrong vote on a factual claim.
+  it('will not let anyone answer before the claim’s responses are known', () => {
+    // The vocabulary is no longer what is being waited for — there is one. What is still being
+    // waited for is the claim's own data, without which a pill cannot say which side the viewer
+    // already holds, and a click would republish rather than clear it.
     mocks.entity = factualClaim();
     render(<ClaimExploreFeedCard item={item} />);
     // Off-screen nothing has been asked, so nothing has answered — including on a claim whose
@@ -376,7 +377,7 @@ describe('ClaimExploreFeedCard', () => {
 
     const pills = screen.getByTestId('pills');
     expect(pills.getAttribute('data-disabled')).toBe('false');
-    expect(pills.getAttribute('data-response-kind')).toBe('veracity');
+    expect(pills.getAttribute('data-response-kind')).toBe('stance');
   });
 
   it('draws no verdict, and no rule, on a claim nobody has answered', () => {

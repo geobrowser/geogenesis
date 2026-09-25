@@ -7,11 +7,20 @@ import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
+const SPACE_1 = '11111111111111111111111111111111';
+const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
+const SPACE_2 = '22222222222222222222222222222222';
+
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
+  bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+}));
+
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => mocks.bylines,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -60,11 +69,17 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: () => null,
 }));
 
+/**
+ * `position_label` is set to the retired wording on purpose. geo-chat still sends "Verify" and
+ * "Dispute" for a claim it calls factual, and the chip is named from `position` instead — so the
+ * chip reading "Agree"/"Disagree" below is what proves the server's label is not the source.
+ */
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
-    profile_space_id: `space-${slot}`,
-    position_label: slot === 1 ? 'For' : 'Against',
+    profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
+    position: slot === 1,
+    position_label: slot === 1 ? 'Verify' : 'Dispute',
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
@@ -170,6 +185,7 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
+  mocks.bylines = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -197,34 +213,78 @@ describe('player layout', () => {
    * the two videos saying who was speaking but not which side they were arguing — the one thing a
    * viewer dropping into the middle of a debate cannot infer.
    */
-  it("shows each debater's position beside their name", () => {
+  it("puts each debater's position immediately after their name", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.bylines = new Map([
+      [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Another affiliation whose width must not place the position chip'],
+    ]);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
     const { getByText } = within(container);
 
-    // Beside the name and not inside its link: the position is a fact about the debater, not a
-    // second way to open their profile.
-    for (const [name, position] of [
-      ['space-1', 'For'],
-      ['space-2', 'Against'],
+    for (const [name, position, affiliation] of [
+      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
-      expect(chip.closest('button')).toBeNull();
-      expect(chip.parentElement).toBe(nameNode.closest('button')?.parentElement);
+      const nameRow = nameNode.parentElement;
+
+      expect(chip.parentElement).toBe(nameRow);
+      expect(nameNode.nextElementSibling).toBe(chip);
+      expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
+      expect(nameNode.closest('button')?.className).toContain('items-center');
     }
   });
 
-  it('draws no chip for a debater whose position has no label', () => {
-    mocks.controller = {
-      ...controllerFixture({ mutedByUser: true, turnSlot: 1 }),
-      slot1Participant: { ...participant(1), position_label: '' },
-    };
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const { queryByText } = within(container);
+  it('keeps the position chip in the video playback surface', () => {
+    const controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.controller = controller;
 
-    expect(queryByText('For')).toBeNull();
-    expect(queryByText('Against')).not.toBeNull();
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    fireEvent.click(within(container).getByText('Agree'));
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * A test here covered an empty `position_label`, which typed non-null but arrived from geo-chat
+   * and would have drawn a bare pill. The chip is named from `position` now — a non-null boolean —
+   * so there is no label for the server to leave blank and the case is gone rather than untested.
+   * What replaces it is the fixture above: a stale server label that must not reach the chip.
+   */
+  it('names the side itself rather than repeating the label geo-chat sent', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { queryByText, getByText } = within(container);
+
+    expect(getByText('Agree')).not.toBeNull();
+    expect(getByText('Disagree')).not.toBeNull();
+    expect(queryByText('Verify')).toBeNull();
+    expect(queryByText('Dispute')).toBeNull();
+  });
+
+  it('shows each participant byline below their name, clamped with the full line on hover', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
+    mocks.bylines = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, description],
+    ]);
+
+    const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(getByText('Head of Product at Geo').hasAttribute('data-debate-byline')).toBe(true);
+    expect(getByText(description).className).toContain('truncate');
+    expect(getByTitle(description)).not.toBeNull();
+  });
+
+  it('leaves no byline row when a participant has no affiliation or description', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelector('[data-debate-byline]')).toBeNull();
   });
 });
 
@@ -239,6 +299,20 @@ describe('overlay variants', () => {
     const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('hides participant bylines in a compact debate card', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.bylines = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('Head of Product at Geo')).toBeNull();
+    expect(queryByText('PhD student, Economics at Stanford')).toBeNull();
   });
 
   it('shows subtitles only for an active, playing, muted compact debate', () => {
@@ -813,6 +887,20 @@ describe('the round it is playing', () => {
     // And leaves again once focus goes somewhere outside the row.
     fireEvent.blur(row.querySelector('button') as HTMLElement, { relatedTarget: container });
     expect(row.style.opacity).toBe('0');
+  });
+
+  it('lets CSS carry the crossfade between playhead samples', () => {
+    // The playhead arrives about four times a second against a 250ms fade, so without this the
+    // name steps once and is gone rather than leaving — and where it lands in that step varies
+    // from round to round. The row can do this because it is always mounted; the card and the
+    // badge are drawn only inside their windows and have nothing to interpolate from.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('transition-[padding-bottom,opacity]');
   });
 
   it('does not leave an invisible profile link on the pause surface', () => {

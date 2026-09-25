@@ -7,11 +7,14 @@ import cx from 'classnames';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
+import { validateSpaceId } from '~/core/io/rest/validation';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -104,6 +107,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
+  const showBylines = !reducedOverlays;
+  const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
+  const bylineFor = (participant: DebateParticipant | null) => {
+    if (!showBylines) return null;
+    const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
+    return spaceId ? (bylines.get(spaceId) ?? null) : null;
+  };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();
@@ -382,6 +392,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     >
       <DebaterVideo
         participant={slot1Participant}
+        byline={bylineFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -440,6 +451,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       />
       <DebaterVideo
         participant={slot2Participant}
+        byline={bylineFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
@@ -578,6 +590,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
 
 function DebaterVideo({
   participant,
+  byline,
   src,
   videoRef,
   audible,
@@ -599,6 +612,7 @@ function DebaterVideo({
   scrimClassName = 'h-14',
 }: {
   participant: DebateParticipant | null;
+  byline: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
@@ -808,6 +822,16 @@ function DebaterVideo({
   };
 
   const openProfile = useOpenDebaterProfile(participant);
+  const onIdentityClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // The position sits inside the name row for layout, but it remains part of the video's
+    // play/pause surface rather than becoming a second link to the participant's profile.
+    if (event.target instanceof Element && event.target.closest('[data-debate-position-chip]')) {
+      event.stopPropagation();
+      onToggle();
+      return;
+    }
+    openProfile(event);
+  };
 
   /**
    * Whether the keyboard is on this tile's name, which overrides the round card's crossfade.
@@ -995,11 +1019,10 @@ function DebaterVideo({
       {/* Debater identity — who is speaking and which side they are arguing — opening their
           personal space in the side panel. On the left, opposite the claim corner.
 
-          The position chip is beside the name rather than inside the profile button: the button is
-          capped at 55% so the name cannot run the width of the tile, and a chip inside that cap
-          would be taken out of the name's share at exactly the widths where the name is already
-          truncating. Outside it, the name keeps its 55% and the chip takes its own width from the
-          remaining 45% — and the chip is not a link, which is the honest thing for it anyway.
+          The position chip shares the name's row, before the byline gets its own row. Keeping
+          those as separate flex rows means a long byline can use the available identity width
+          without pushing the chip away from the name. The chip cannot shrink, so at narrow widths
+          the name truncates first and the short stance remains readable.
 
           The row is `pointer-events-none` with the button opting back in, because it now spans the
           band rather than hugging the name: everything it covers and does not use belongs to the
@@ -1020,6 +1043,16 @@ function DebaterVideo({
           leaves as the card arrives and is back as it goes: one movement, and nothing to fall out
           of step with a scrub.
 
+          `opacity` is in the transition because the value it crossfades against arrives about four
+          times a second — `playheadSeconds` is maintained by `timeupdate`, which
+          `use-debate-playback.ts` documents at that rate — and the card's fades are 250ms and
+          300ms. Left to the playhead alone the name would step once and be gone rather than
+          leaving, and where it landed in that step would vary from round to round. Letting CSS
+          interpolate between the samples is the whole fix here, and it works *here* because this
+          row is always mounted and so always has a value to interpolate from; the card and the
+          badge are drawn only inside their windows, so they have no from-state on the way in and
+          nothing to animate into on the way out. Those two would need a clock, and do not have one.
+
           Its link goes with it for the pointer — an invisible profile button in the middle of the
           pause surface is a misclick waiting to happen — but not for the keyboard, which keeps the
           row in the tab order and brings it back into view on focus. `pointer-events-none` does
@@ -1032,7 +1065,7 @@ function DebaterVideo({
         }}
         style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
           cardYield > 0.5 && '[&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
@@ -1044,18 +1077,31 @@ function DebaterVideo({
       >
         <button
           type="button"
-          onClick={openProfile}
+          onClick={onIdentityClick}
           className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
           </span>
-          <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
+          <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+              {/* Named from the side rather than read off `position_label`, for the same reason
+                  the room tile is: geo-chat still calls a factual claim's sides "Verify" and
+                  "Dispute", which is a word this app no longer has a way to publish. `position`
+                  is a non-null boolean, so the label is always a real one and the participant is
+                  the only thing left to guard. */}
+              {participant && (
+                <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
+              )}
+            </span>
+            {byline && (
+              <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
+                {byline}
+              </span>
+            )}
+          </span>
         </button>
-        {/* Guarded on the text rather than only on the participant: `position_label` is typed
-            non-null but arrives from geo-chat, and an empty one would draw a bare pill that says
-            nothing. The room tile guards it the same way. */}
-        {participant?.position_label && <DebatePositionChip label={participant.position_label} />}
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}

@@ -1,11 +1,16 @@
 import { normId } from '~/core/utils/norm-id';
 
-import type { ParticipantPositionsByClaim } from '../participant-positions';
+import type { ParticipantPosition, ParticipantPositionsByClaim } from '../participant-positions';
 
 export type ClaimMatch = {
   claimId: string;
   spaceId: string;
-  responseKind: 'stance' | 'veracity';
+  /**
+   * Taken from the row rather than written out. It was its own `'stance' | 'veracity'` literal, and
+   * a claim only ever asks one question now — so the two spellings had already diverged by the time
+   * they met here.
+   */
+  responseKind: ParticipantPosition['responseKind'];
   viewerPosition: boolean;
   personPosition: boolean;
 };
@@ -21,7 +26,10 @@ export type MatchingClaimsAnalysis = {
  * Claims on which the viewer and each other person hold comparable, opposite positions.
  *
  * A response is scoped by both space and kind: agreeing with a claim in one space is not the
- * opposite of disputing its veracity somewhere else. The person-level list counts a claim once;
+ * opposite of disagreeing with it somewhere else. Kind is a single value today — every claim asks
+ * whether you agree — but it stays in the key because it is half of what makes two responses
+ * comparable, and dropping it would silently pair responses to different questions if a second
+ * kind ever returns. The person-level list counts a claim once;
  * the space breakdown counts it once in every space where the pair actually opposes each other.
  * Both projections are built in one pass so the People tab cannot drift between two definitions
  * of a match or scan the same graph result twice.

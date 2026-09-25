@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { personProfileOpened } from '~/core/analytics';
 import type { DebateParticipant } from '~/core/debates/api';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
@@ -41,6 +42,10 @@ export function useOpenDebaterProfile(participant: Pick<DebateParticipant, 'prof
 
   const openResolvedProfile = React.useCallback(() => {
     if (!profileSpaceId || !profileEntityId) return;
+    personProfileOpened(profileSpaceId, profileEntityId, {
+      interaction_surface: 'debate_media',
+      navigation_mode: 'entity_side_panel',
+    });
     openSidePanel(profileEntityId, profileSpaceId, false, { forceRequestedSpace: true });
   }, [openSidePanel, profileEntityId, profileSpaceId]);
 

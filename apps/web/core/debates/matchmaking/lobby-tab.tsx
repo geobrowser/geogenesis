@@ -90,6 +90,7 @@ export function LobbyTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =>
 
   const toggle = (
     <MatchesOnlySwitch
+      analyticsSurface="hub"
       // The effective state, not the stored one. A switch reading "on" over the unfiltered list is
       // telling the viewer something that is not true of what they are looking at, and pressing it
       // would then appear to do nothing.

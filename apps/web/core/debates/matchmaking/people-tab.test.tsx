@@ -57,7 +57,10 @@ const mocks = vi.hoisted(() => ({
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
+  personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
@@ -302,6 +305,7 @@ beforeEach(() => {
   mocks.publishableSpacesLoading = false;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
+  mocks.personProfileOpened.mockReset();
 });
 
 /**
@@ -479,8 +483,8 @@ describe('PeopleTab', () => {
       [
         'claim-2',
         [
-          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: false },
-          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'veracity', position: true },
+          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'stance', position: false },
+          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'stance', position: true },
         ],
       ],
     ]);
@@ -502,11 +506,14 @@ describe('PeopleTab', () => {
     expect(within(firstMatch).getByText('Disagree')).toBeInTheDocument();
     expect(firstMatch.querySelectorAll('svg')).toHaveLength(2);
 
+    // The second claim used to be a veracity match and read Dispute/Verify here. Every claim asks
+    // the same question now, so the sides are named the same way on both rows — the two matches
+    // still differ by side, which is what the row is for.
     const secondMatch = within(list).getByText('Is this true?').closest('a')!;
     expect(within(secondMatch).getByText('You:')).toBeInTheDocument();
-    expect(within(secondMatch).getByText('Dispute')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Disagree')).toBeInTheDocument();
     expect(within(secondMatch).getByText('Arturas:')).toBeInTheDocument();
-    expect(within(secondMatch).getByText('Verify')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Agree')).toBeInTheDocument();
   });
 
   it('distinguishes an untitled claim from unavailable claim metadata', async () => {
@@ -984,7 +991,7 @@ describe('See times', () => {
 });
 
 // GEO-2788 / GEO-2611. The name goes to the person's personal space, and the hub stays open on the
-// way — which is why this needs no click handler and so keeps cmd-click and middle click working.
+// way. Its click handler only observes analytics, so Next still owns cmd-click and middle click.
 describe('the person link', () => {
   it("points the name at the person's space", () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -995,20 +1002,21 @@ describe('the person link', () => {
     );
   });
 
-  // The guarantee is that *we* add no handler of our own. `next/link` underneath does intercept a
-  // plain left click — that is how client-side routing works, and it already honours cmd-click and
-  // middle click. A second handler layered on top is what would break them, which is what GEO-2701
-  // restored, so the absence of one is the thing worth pinning.
-  //
-  // Asserted on the props rather than by dispatching a click: the mock here is a bare anchor, so a
-  // `defaultPrevented` check would only describe the mock and would pass whether or not the real
-  // component ever received a handler.
-  it('adds no click handler of its own to the name', () => {
+  // Analytics observes the click without replacing navigation, so Next still owns cmd-click,
+  // middle-click and the eventual route change.
+  it('attributes a profile click without intercepting navigation', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
     expect(nameLink).toBeDefined();
-    expect(nameLink).not.toHaveProperty('onClick');
+    const onClick = nameLink?.onClick as (() => void) | undefined;
+    expect(onClick).toBeTypeOf('function');
+
+    onClick?.();
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith(PROFILE_SPACE_IDS['user-them'], null, {
+      interaction_surface: 'debates_hub_people',
+    });
   });
 
   // An anchor to `/space/undefined` looks identical until it is clicked.

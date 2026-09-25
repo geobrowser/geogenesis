@@ -35,9 +35,8 @@ export const featureFlagDefinitions = [
   },
   {
     id: 'peerAvailability',
-    label: "View someone's availability",
-    description:
-      'Show "See times" on People rows, opening another debater\'s week and letting you request one of their times (GEO-2938). Scheduled debates then appear in the Requests tab, to accept and to join.',
+    label: 'Availability and scheduling',
+    description: "Book a debate from another debater's week, and answer or join scheduled debates in the Requests tab.",
     enabledByDefault: false,
   },
   {

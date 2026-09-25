@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { responsePositionLabel } from '~/core/responses/entity-response';
+
 import { Text } from '~/design-system/text';
 
 import { MutedMicrophoneIndicator } from './debate-room-controls';
@@ -60,8 +62,9 @@ export function DebateTileChip({
 
 /**
  * Which side of the claim a debater is arguing, as it reads over their video: the tile chip in the
- * shared fill, carrying whatever the claim's response kind calls that side — "Agree"/"Disagree" on
- * a stance claim, "Verify"/"Dispute" on a factual one.
+ * shared fill, carrying "Agree" or "Disagree". Every claim asks the same question, so those are the
+ * only two words it renders — pass a label from {@link responsePositionLabel} rather than geo-chat's
+ * `position_label`, which still says "Verify" on a claim it calls factual.
  *
  * One component rather than the recipe twice, because the room and the feed player state the same
  * fact about the same person in the same corner of the same picture; the only difference is where
@@ -73,9 +76,13 @@ export function DebateTileChip({
  * bounded, and half of "Disagree" is worse than a shortened name beside it. `max-w-full` is what
  * caps it in a column narrower than the word — it truncates there rather than overflowing.
  */
-export function DebatePositionChip({ label, className }: { label: string; className?: string }) {
+export function DebatePositionChip({
+  label,
+  className,
+  ...spanProps
+}: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
   return (
-    <DebateTileChip className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
+    <DebateTileChip {...spanProps} className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
       {label}
     </DebateTileChip>
   );
@@ -85,10 +92,14 @@ export function DebatePositionChip({ label, className }: { label: string; classN
  * One participant's tile, shared by the intro screen and the recording modal so the two have the
  * same geometry. Everything past the video is optional: the intro passes a label and an overlay,
  * the debate adds turn countdowns and phase overlays.
+ *
+ * **The side is named here, not passed.** Every caller had a `position_label` from geo-chat to
+ * hand down beside the position itself — and that label reads "Verify" or "Dispute" on a claim
+ * geo-chat still calls factual, which is a word this app no longer has a way to publish. The side
+ * is the same boolean either way, so the name is ours to say.
  */
 export function DebateVideoTile({
   participantPosition,
-  positionLabel,
   active,
   overlayText,
   overlayCompact = false,
@@ -111,7 +122,6 @@ export function DebateVideoTile({
   children,
 }: {
   participantPosition: boolean | null;
-  positionLabel: string | null;
   active: boolean;
   overlayText?: string | null;
   /** For overlays that are a sentence rather than a label: smaller, wrapped and centred. */
@@ -142,6 +152,7 @@ export function DebateVideoTile({
   status?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const positionLabel = participantPosition === null ? null : responsePositionLabel(participantPosition);
   const showInactiveIndicator =
     showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
 
@@ -193,10 +204,10 @@ export function DebateVideoTile({
           own width first, so the label gives up the space instead and truncates. Everywhere there
           is room for equal columns, which is every width from ~360px up, the two resolve equal and
           the controls land exactly on the centre line. */}
-      {(positionLabel || tileControls || status) && (
+      {(positionLabel !== null || tileControls || status) && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2">
           <div className="flex min-w-0 justify-start">
-            {positionLabel && <DebatePositionChip label={positionLabel} />}
+            {positionLabel !== null && <DebatePositionChip label={positionLabel} />}
           </div>
           <div className="pointer-events-auto">{tileControls}</div>
           {/* No `min-w-0` here, unlike the label: it is what lets the column's `auto` minimum see

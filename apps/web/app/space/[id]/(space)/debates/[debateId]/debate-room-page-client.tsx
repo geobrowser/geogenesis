@@ -22,6 +22,11 @@ import {
   startLocalRecordingMultipart,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import {
+  preferredRecordingMimeType,
+  reportDebateRecorderFailure,
+  startDebateRecorder,
+} from '~/core/debates/debate-recorder';
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
@@ -87,6 +92,7 @@ import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-clai
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -408,6 +414,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
+  const reportedRecorderFailuresRef = React.useRef(new Set<string>());
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
   // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
@@ -1002,62 +1009,76 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, []);
 
   const startLocalRecorder = React.useCallback((stream: MediaStream) => {
-    if (typeof MediaRecorder === 'undefined') return;
     if (recordingStartedAtRef.current !== null) return;
     if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
-    const mimeType = preferredRecordingMimeType();
-    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    recordingChunksRef.current = [];
-    recordingEndedAtRef.current = null;
-    recorder.addEventListener(
-      'start',
-      () => {
-        recordingStartedAtRef.current = serverNowRef.current();
-        const userId = currentUserIdRef.current;
-        if (userId) {
-          liveRecordingStreamRef.current = startRoomRecordingStream({
-            debateId: debateIdRef.current,
-            userId,
-            auth: geoChatAuthRef.current,
-            recorder,
-            stream,
-            mimeType: recorder.mimeType || mimeType || 'video/webm',
-            startedAtMs: recordingStartedAtRef.current,
-            shouldPause: () =>
-              callConnectionPoorRef.current ||
-              roomStateRef.current !== 'connected' ||
-              (typeof navigator !== 'undefined' && navigator.onLine === false),
-          });
-        }
-        // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
-        // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
-        // room connection, both before LiveKit has published the tracks this recorder consumes —
-        // so the window used to open while one participant was still acquiring a device, costing
-        // 20-50s off the head of their recording, permanently.
-        //
-        // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
-        // that is already running. The worst case is the server waiting out its grace, which is
-        // the old behaviour rather than a new one.
-        markCapturingRef.current();
-        // GEO-2819. The recording pill is driven from here rather than from the debate status, so
-        // what it claims and what is on disk cannot drift apart.
-        setCapturing(true);
+    const debateId = debateIdRef.current;
+    // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
+    // browser has always left: the pill never lights and there is nothing to persist. The calling
+    // effect re-runs on every debate refresh, so each stage is reported once per debate.
+    const started = startDebateRecorder({
+      stream,
+      debateId,
+      timesliceMs: 1_000,
+      report: failure => {
+        const key = `${failure.debateId}:${failure.stage}`;
+        if (reportedRecorderFailuresRef.current.has(key)) return;
+        reportedRecorderFailuresRef.current.add(key);
+        reportDebateRecorderFailure(failure);
       },
-      { once: true }
-    );
-    // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
-    // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
-    // clear it from the recorder's own events or the pill keeps claiming to record.
-    recorder.addEventListener('stop', () => setCapturing(false), { once: true });
-    recorder.addEventListener('error', () => setCapturing(false), { once: true });
-    recorder.ondataavailable = event => {
-      if (event.data.size > 0) {
-        recordingChunksRef.current.push(event.data);
-        liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
-      }
-    };
-    recorder.start(1_000);
-    recorderRef.current = recorder;
+      wire: (recorder, mimeType) => {
+        recordingChunksRef.current = [];
+        recordingEndedAtRef.current = null;
+        recorder.addEventListener(
+          'start',
+          () => {
+            recordingStartedAtRef.current = serverNowRef.current();
+            const userId = currentUserIdRef.current;
+            if (userId) {
+              liveRecordingStreamRef.current = startRoomRecordingStream({
+                debateId: debateIdRef.current,
+                userId,
+                auth: geoChatAuthRef.current,
+                recorder,
+                stream,
+                mimeType: recorder.mimeType || mimeType || 'video/webm',
+                startedAtMs: recordingStartedAtRef.current,
+                shouldPause: () =>
+                  callConnectionPoorRef.current ||
+                  roomStateRef.current !== 'connected' ||
+                  (typeof navigator !== 'undefined' && navigator.onLine === false),
+              });
+            }
+            // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+            // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+            // room connection, both before LiveKit has published the tracks this recorder consumes —
+            // so the window used to open while one participant was still acquiring a device, costing
+            // 20-50s off the head of their recording, permanently.
+            //
+            // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+            // that is already running. The worst case is the server waiting out its grace, which is
+            // the old behaviour rather than a new one.
+            markCapturingRef.current();
+            // GEO-2819. The recording pill is driven from here rather than from the debate status, so
+            // what it claims and what is on disk cannot drift apart.
+            setCapturing(true);
+          },
+          { once: true }
+        );
+        // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
+        // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
+        // clear it from the recorder's own events or the pill keeps claiming to record.
+        recorder.addEventListener('stop', () => setCapturing(false), { once: true });
+        // `startDebateRecorder` reports the `error` itself; this only clears the pill.
+        recorder.addEventListener('error', () => setCapturing(false), { once: true });
+        recorder.ondataavailable = event => {
+          if (event.data.size > 0) {
+            recordingChunksRef.current.push(event.data);
+            liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
+          }
+        };
+      },
+    });
+    if (started) recorderRef.current = started.recorder;
   }, []);
 
   const stopLocalRecorder = React.useCallback(async () => {
@@ -2633,7 +2654,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                         className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
                       >
                         <span className="truncate">
-                          {participant.display_name || participant.profile_space_id} · {participant.position_label}
+                          {participant.display_name || participant.profile_space_id} ·{' '}
+                          {responsePositionLabel(participant.position)}
                         </span>
                       </span>
                     ))}
@@ -2859,7 +2881,6 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      positionLabel={localParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
         (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
@@ -2911,7 +2932,6 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      positionLabel={remoteParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
         (countdown.activeSlot === remoteParticipant?.participant_slot ||
@@ -4036,7 +4056,10 @@ function rematchDestination(session: DebateRematchSession | null | undefined) {
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
-  return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
+  // Named from the side rather than read off `position_label`, which says "Verify" on a claim
+  // geo-chat still calls factual — see `positionSummariesFromCounts`.
+  const participant = debate.participants.find(candidate => candidate.participant_slot === slot);
+  return participant ? responsePositionLabel(participant.position) : 'Position';
 }
 
 function speakerName(participant: Pick<Debate['participants'][number], 'display_name' | 'profile_space_id'>) {
@@ -4047,12 +4070,4 @@ function timestampMs(value: string | null) {
   if (!value) return null;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function preferredRecordingMimeType() {
-  if (typeof MediaRecorder === 'undefined') return '';
-  for (const mimeType of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']) {
-    if (MediaRecorder.isTypeSupported(mimeType)) return mimeType;
-  }
-  return '';
 }

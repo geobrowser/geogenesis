@@ -5,8 +5,6 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 
@@ -141,51 +139,84 @@ describe('PositionRow', () => {
     expect(screen.getByText('+3')).toBeInTheDocument();
   });
 
-  it('keeps the vocabulary for the response kind on both pills', () => {
-    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
+  /**
+   * The pills name the sides Agree and Disagree for every claim.
+   *
+   * This case used to render `responseKind="veracity"` and expect Verify and Dispute. The flag that
+   * selected that vocabulary no longer selects anything, so the assertion is inverted rather than
+   * deleted: the claims that used to read Verify/Dispute are exactly the ones this has to prove now
+   * read Agree/Disagree.
+   */
+  it('names both sides Agree and Disagree', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 
-    expect(screen.getByText('Verify')).toBeInTheDocument();
-    expect(screen.getByText('Dispute')).toBeInTheDocument();
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A server label must not put the retired vocabulary back.
+   *
+   * geo-chat still labels the sides of a claim minted before the change, and the pills used to
+   * prefer `position_label` over their own copy — so a stale "Verify" would render on a control
+   * that can only publish an Agree. The label the pill shows and the response it sends have to be
+   * the same word.
+   */
+  it('ignores a stale Verify/Dispute label from the server', () => {
+    const labelled: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Verify',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+      {
+        position: false,
+        position_label: 'Dispute',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+    ];
+
+    render(<PositionRow positions={labelled} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
   });
 
   /**
    * The glyph a pill draws, pinned against the icon it should be.
    *
-   * Not asserted as "not the chevron": a thumb, a vote arrow and an empty span all satisfy that,
-   * so a pill that never got the veracity branch — the bug this file's chevron cases exist to
-   * catch — would pass its own regression test. Comparing the rendered icon says which glyph it
-   * is, and re-rendering the expectation from the component means redrawing an icon's art does
-   * not fail these.
+   * Not asserted as "not a chevron": a vote arrow and an empty span satisfy that too. Comparing the
+   * rendered icon says which glyph it is, and re-rendering the expectation from the component means
+   * redrawing an icon's art does not fail these.
    */
   const glyphMarkup = (label: string) =>
     screen.getByText(label).closest('span')?.parentElement?.querySelector('svg')?.outerHTML ?? null;
 
   const iconMarkup = (node: React.ReactNode) => render(<>{node}</>).container.innerHTML;
 
-  // A thumb is an opinion and Verify/Dispute is not one — it says the claim is or is not true. The
-  // claim ticker over the video already splits its glyphs this way, so a pill that thumbed both
-  // kinds made the same claim read differently in the panel and on the video.
-  it('draws chevrons for a factual claim rather than thumbs', () => {
-    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
-
-    expect(glyphMarkup('Verify')).toBe(iconMarkup(<ChevronUp />));
-    expect(glyphMarkup('Dispute')).toBe(iconMarkup(<ChevronDown />));
-  });
-
-  it('keeps the thumbs on a stance claim', () => {
+  it('draws thumbs on both pills', () => {
     render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 
     expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled={false} />));
     expect(glyphMarkup('Disagree')).toBe(iconMarkup(<ThumbDown filled={false} />));
   });
 
-  // A chevron has no filled form, so the pill's own fill is the only thing left saying which side
-  // the viewer holds. Losing it would leave a factual claim with no visible record of a response.
-  it('still marks the held side on a factual claim, where the glyph cannot', () => {
-    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={true} />);
+  it('fills the pill and its thumb on the side the viewer holds', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} />);
 
-    const verify = screen.getByText('Verify').closest('div.flex.min-h-7') as HTMLElement;
-
-    expect([...verify.classList]).toContain('bg-divider');
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled />));
+    expect([...(screen.getByText('Agree').closest('div.flex.min-h-7') as HTMLElement).classList]).toContain(
+      'bg-divider'
+    );
   });
 });

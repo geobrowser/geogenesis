@@ -9,12 +9,16 @@ import { ClaimCommentPositionProvider } from '~/core/claims/browse/claim-comment
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import {
+  trustedIndexedPosition,
+  useBackfillReadinessForHeldPosition,
+} from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -438,7 +442,26 @@ function ClaimTabPanel({
 
   return (
     <>
-      <ProfileActivitySection kinds={kinds} />
+      {/*
+       * Keyed, because the route does not remount this page between records.
+       *
+       * `default-entity-page` renders `EntityPageBody` unkeyed, so following a related claim reuses
+       * this component — and the card's selection would come with it, landing a claim that has
+       * debates on the Claims left over from one that had none. That is GEO-3021 again, reached by
+       * walking rather than by loading.
+       *
+       * On the space as well as the claim, because a claim is not one record. It can live in
+       * several spaces — `SpaceRedirect` sends a reader on only where the entity is *absent* from
+       * the one they asked for — and everything the card is fed here is read through `spaceId`
+       * alone, so the same claim in two spaces is two different sets of debates and claims under
+       * one entity id. Keying on the entity would have carried a selection across that, which is
+       * the same leak one step further out. `EntitySidePanelBody` keys on both for this reason.
+       *
+       * Keyed here rather than by giving the card an `entityId` prop, because the card takes a list
+       * of kinds and knows nothing about whose they are — which is what lets a space and a person
+       * share it.
+       */}
+      <ProfileActivitySection key={`${spaceId}:${entityId}`} kinds={kinds} />
       {/* Last, like the ordinary entity page. An empty thread is an invitation, not absence. */}
       <ClaimCommentPositionProvider
         entityId={entityId}
@@ -448,7 +471,7 @@ function ClaimTabPanel({
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+        <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="claim" />
       </ClaimCommentPositionProvider>
     </>
   );
@@ -503,7 +526,8 @@ function ClaimPositionSection({
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
-  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
+  const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
+  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
 
   return (
     // No card of its own: it renders in the hero's left column, under the claim.
@@ -512,11 +536,12 @@ function ClaimPositionSection({
         entityId={entityId}
         spaceId={spaceId}
         positions={control.optimisticPositions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
+        pending={control.isResponsePending}
         titleFor={control.actionTitle}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
@@ -542,6 +567,7 @@ function ClaimPositionSection({
         // The offer rests on the side set by the pills directly above it, so it moves when they do.
         // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
         viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+        indexedViewerPosition={indexedPosition}
         className="mt-2"
       />
     </section>
