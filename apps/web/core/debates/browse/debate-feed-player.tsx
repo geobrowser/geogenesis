@@ -8,10 +8,10 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { useParticipantAffiliations } from '~/core/debates/participant-affiliations';
-import { validateSpaceId } from '~/core/io/rest/validation';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
+import { validateSpaceId } from '~/core/io/rest/validation';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -45,6 +45,34 @@ const MAX_MEDIA_RECOVERY_ATTEMPTS = 3;
  * looking at the card sees it heal rather than reload.
  */
 const MEDIA_RECOVERY_BACKOFF_MS = 400;
+
+/**
+ * When a presigned recording URL stops being valid, read out of the URL itself.
+ */
+export function signedUrlExpiryMs(src: string): number | null {
+  let params: URLSearchParams;
+  try {
+    params = new URL(src).searchParams;
+  } catch {
+    return null;
+  }
+
+  const signedAt = params.get('X-Amz-Date');
+  const lifetimeSeconds = Number(params.get('X-Amz-Expires'));
+  if (!signedAt || !Number.isFinite(lifetimeSeconds) || lifetimeSeconds <= 0) return null;
+
+  const stamp = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(signedAt);
+  if (!stamp) return null;
+
+  const [, year, month, day, hour, minute, second] = stamp;
+  return Date.UTC(+year, +month - 1, +day, +hour, +minute, +second) + lifetimeSeconds * 1000;
+}
+
+/** Whether `src` is a signed URL whose signature has lapsed. False whenever that cannot be known. */
+export function isSignedUrlExpired(src: string, now: number = Date.now()): boolean {
+  const expiry = signedUrlExpiryMs(src);
+  return expiry !== null && now >= expiry;
+}
 
 /** How every big round control in the player looks, wherever it is put. */
 const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
@@ -744,6 +772,21 @@ function DebaterVideo({
     // failing source from spinning.
     if (recoveryTimerRef.current !== null) return;
 
+    // The signature has lapsed, so the budget below cannot possibly help: every attempt re-fetches
+    // the same bytes from the same dead signature, and 2.4s of backoff later the tile escalates to
+    // the one thing that was going to work from the start. Go there directly.
+    //
+    // Guarded by `escalatedRef` rather than a clock-skew margin. A device running fast would read a
+    // live URL as expired and escalate early; that spends the one re-mint `refreshSlotUrl` allows
+    // per slot, and after it the guard sends every later error down the ordinary budget — so a
+    // wrong clock costs a redundant re-sign and then behaves exactly as it does today.
+    if (!escalatedRef.current && isSignedUrlExpired(src)) {
+      escalatedRef.current = true;
+      setExhausted(true);
+      onExhausted?.();
+      return;
+    }
+
     if (recoveryAttemptsRef.current >= MAX_MEDIA_RECOVERY_ATTEMPTS) {
       // Out of attempts on this URL. One escalation to a freshly signed one, then the tile is
       // honest about it.
@@ -973,7 +1016,7 @@ function DebaterVideo({
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />

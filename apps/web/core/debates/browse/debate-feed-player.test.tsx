@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, isSignedUrlExpired, signedUrlExpiryMs } from './debate-feed-player';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
@@ -209,7 +209,6 @@ describe('player layout', () => {
       expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
       expect(nameNode.closest('button')?.className).toContain('items-center');
     }
-
   });
 
   it('keeps the position chip in the video playback surface', () => {
@@ -701,6 +700,56 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   });
 
   /**
+   * The budget exists for a pipeline that died on a URL that still works.
+   */
+  it('re-signs immediately when the signature has already lapsed, without spending the budget', () => {
+    const { slot1, hand } = renderPair();
+    const expired = `https://cdn.test/slot1.webm?X-Amz-Date=20260924T120000Z&X-Amz-Expires=900`;
+    vi.setSystemTime(new Date(Date.UTC(2026, 8, 24, 12, 20, 0)));
+    hand({ slot1: expired, slot2: 'https://cdn.test/slot2.webm' });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().refreshSlotUrl).toHaveBeenCalledWith(1);
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+
+  // A signature still inside its window says nothing about the failure, so the budget it was
+  // written for is exactly what should run.
+  it('still spends the budget when the signature is live', () => {
+    const { slot1, hand } = renderPair();
+    const live = `https://cdn.test/slot1.webm?X-Amz-Date=20260924T120000Z&X-Amz-Expires=900`;
+    vi.setSystemTime(new Date(Date.UTC(2026, 8, 24, 12, 5, 0)));
+    hand({ slot1: live, slot2: 'https://cdn.test/slot2.webm' });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).toHaveBeenCalled();
+    expect(controller().refreshSlotUrl).not.toHaveBeenCalled();
+  });
+
+  // One re-mint is all `refreshSlotUrl` allows per slot, so a clock reading a live URL as expired
+  // must not keep asking. After the escalation the ordinary budget takes over.
+  it('falls back to the budget once it has already escalated', () => {
+    const { slot1, hand } = renderPair();
+    const expired = `https://cdn.test/slot1.webm?X-Amz-Date=20260924T120000Z&X-Amz-Expires=900`;
+    vi.setSystemTime(new Date(Date.UTC(2026, 8, 24, 12, 20, 0)));
+    hand({ slot1: expired, slot2: 'https://cdn.test/slot2.webm' });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+    expect(controller().resyncSlot).toHaveBeenCalled();
+  });
+
+  /**
    * `error.code === 2` covers a dead URL as well as a dead pipeline, and every rebuild re-fetches
    * the same bytes from the same signature — so the budget running out is the moment to ask
    * whether the signature is what expired, rather than the moment to give up.
@@ -802,5 +851,58 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     act(() => vi.advanceTimersByTime(2_000));
 
     expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+// geo-chat signs playback URLs with a 15 minute TTL. When one lapses, re-fetching the same bytes
+// from the same signature cannot work, so the tile used to spend 400/800/1200ms of backoff proving
+// it before reaching the re-sign that was always the answer.
+describe('signedUrlExpiryMs', () => {
+  const signed = (date: string, expires: string) =>
+    `https://example.test/rec.webm?X-Amz-Date=${date}&X-Amz-Expires=${expires}&X-Amz-Signature=abc`;
+
+  it('reads the deadline out of the query string', () => {
+    // 2026-09-24T12:00:00Z signed, 900s TTL -> expires 12:15:00Z.
+    expect(signedUrlExpiryMs(signed('20260924T120000Z', '900'))).toBe(Date.UTC(2026, 8, 24, 12, 15, 0));
+  });
+
+  // `X-Amz-Date` is ISO 8601 basic, which `new Date(...)` cannot parse.
+  it('parses the basic-format stamp rather than relying on Date', () => {
+    expect(signedUrlExpiryMs(signed('20260101T000000Z', '60'))).toBe(Date.UTC(2026, 0, 1, 0, 1, 0));
+  });
+
+  it.each([
+    ['a URL with no signature at all', 'https://example.test/rec.webm'],
+    ['a missing expiry', 'https://example.test/rec.webm?X-Amz-Date=20260924T120000Z'],
+    ['a missing date', 'https://example.test/rec.webm?X-Amz-Expires=900'],
+    ['a malformed stamp', 'https://example.test/rec.webm?X-Amz-Date=2026-09-24&X-Amz-Expires=900'],
+    ['a non-numeric expiry', 'https://example.test/rec.webm?X-Amz-Date=20260924T120000Z&X-Amz-Expires=soon'],
+    ['a relative src', '/recordings/rec.webm'],
+  ])('has no opinion about %s', (_label, src) => {
+    expect(signedUrlExpiryMs(src)).toBeNull();
+  });
+});
+
+describe('isSignedUrlExpired', () => {
+  const src = 'https://example.test/rec.webm?X-Amz-Date=20260924T120000Z&X-Amz-Expires=900';
+  const expiry = Date.UTC(2026, 8, 24, 12, 15, 0);
+
+  it('is false while the signature is still good', () => {
+    expect(isSignedUrlExpired(src, expiry - 1)).toBe(false);
+  });
+
+  it('is true once the signature has lapsed', () => {
+    expect(isSignedUrlExpired(src, expiry + 1)).toBe(true);
+  });
+
+  // The boundary itself counts as expired: a request sent at exactly the deadline is refused.
+  it('treats the deadline itself as expired', () => {
+    expect(isSignedUrlExpired(src, expiry)).toBe(true);
+  });
+
+  // Falling back to the existing budget is the safe default — guessing would turn a slow recovery
+  // into a broken one.
+  it('is false when the URL says nothing about expiry', () => {
+    expect(isSignedUrlExpired('https://example.test/rec.webm', expiry + 1)).toBe(false);
   });
 });
