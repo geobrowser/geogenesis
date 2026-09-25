@@ -851,8 +851,18 @@ export function DebateRecordingUploadBanner({
       aria-live="polite"
       className={`fixed inset-x-0 bottom-0 flex h-10 min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
     >
-      <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
-        <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
+      {/* Figma centers the progress bar on the viewport with the message and the warning 50px either
+          side of it. Equal `1fr` side columns keep the bar dead centre whatever the two labels
+          measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". With no
+          bar there is nothing to centre on, so the line and its actions just sit together. */}
+      <div
+        className={
+          showProgress
+            ? 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 md:gap-x-[50px]'
+            : 'flex max-w-full min-w-0 items-center justify-center gap-3 md:gap-[50px]'
+        }
+      >
+        <span className={`min-w-0 truncate ${showProgress ? 'justify-self-end' : ''}`}>{message}</span>
         {showProgress && (
           <div
             role="progressbar"
@@ -860,7 +870,7 @@ export function DebateRecordingUploadBanner({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent ?? undefined}
-            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-04"
+            className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-04"
           >
             <div
               className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
@@ -868,16 +878,20 @@ export function DebateRecordingUploadBanner({
             />
           </div>
         )}
-        {showKeepBrowserOpen && <span className="shrink-0">Keep browser open</span>}
-        {canCancel && (
-          <SmallButton
-            type="button"
-            variant="ghost"
-            onClick={onCancel}
-            className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none"
-          >
-            Cancel
-          </SmallButton>
+        {(showKeepBrowserOpen || canCancel) && (
+          <div className={`flex min-w-0 shrink-0 items-center gap-2 ${showProgress ? 'justify-self-start' : ''}`}>
+            {showKeepBrowserOpen && <span className="shrink-0">Keep browser open</span>}
+            {canCancel && (
+              <SmallButton
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none"
+              >
+                Cancel
+              </SmallButton>
+            )}
+          </div>
         )}
       </div>
     </div>

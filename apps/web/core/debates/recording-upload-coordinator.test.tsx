@@ -252,8 +252,10 @@ describe('DebateRecordingUploadBanner', () => {
     const banner = screen.getByRole('status');
     const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
     expect(banner).toHaveClass('h-10', 'items-center', 'justify-center');
-    expect(content).toHaveClass('w-auto', 'items-center', 'gap-2', 'md:w-full');
-    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('flex-initial', 'md:flex-1');
+    // The bar sits in the middle column of three, so it stays centred on the viewport.
+    expect(content).toHaveClass('grid', 'w-full', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'md:gap-x-[50px]');
+    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('justify-self-end', 'truncate');
+    expect(content?.children[1]).toHaveAttribute('role', 'progressbar');
     const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
     expect(progress).toHaveAttribute('aria-valuemin', '0');
     expect(progress).toHaveAttribute('aria-valuemax', '100');
