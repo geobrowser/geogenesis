@@ -7,6 +7,7 @@ import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { entityTabIdFromHref } from '~/core/utils/entity-tab-navigation';
 
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 
@@ -43,6 +44,8 @@ const mocks = vi.hoisted(() => ({
   panel: null as { activeTabId: string | null; activeSystemTab: string | null } | null,
   /** What the route handed the editor provider: the server's snapshot of this entity's blocks. */
   editorInstance: { id: 'topic-1', initialBlockRelations: [] as unknown[] },
+  /** `?tabId=` as the editor resolves it. Equal to the entity id means the entity's own blocks. */
+  authoredTabId: null as string | null,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -109,7 +112,7 @@ vi.mock('~/core/state/editor/use-blocks', () => ({
   ],
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({
-  useActiveTabIdForEditor: () => null,
+  useActiveTabIdForEditor: () => mocks.authoredTabId,
   useEditorInstance: () => mocks.editorInstance,
 }));
 vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
@@ -182,6 +185,7 @@ beforeEach(() => {
   mocks.pageActions = null;
   mocks.panel = null;
   mocks.editorInstance = { id: 'topic-1', initialBlockRelations: [] };
+  mocks.authoredTabId = null;
 });
 
 afterEach(cleanup);
@@ -459,8 +463,7 @@ describe('TopicPageView parity with the generic entity page', () => {
 describe('TopicPageView Overview tab', () => {
   const overviewTab = {
     label: 'Overview',
-    href: '/space/space-1/topic-1/overview',
-    sidePanelKey: 'blocks',
+    href: '/space/space-1/topic-1?tabId=topic-1',
     dividerBefore: true,
   };
 
@@ -507,8 +510,8 @@ describe('TopicPageView Overview tab', () => {
    * `hasBlocks` reads false for a frame before the entity hydrates, so a redirect would fire on a
    * legitimate `/overview` visit and bounce the reader to the feed before the blocks arrived.
    */
-  it('keeps the tab for a reader who is on the route while it holds nothing', () => {
-    mocks.pathname = '/space/space-1/topic-1/overview';
+  it('keeps the tab for a reader who is on it while it holds nothing', () => {
+    mocks.authoredTabId = 'topic-1';
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
@@ -516,7 +519,7 @@ describe('TopicPageView Overview tab', () => {
   });
 
   it('keeps the tab for a panel whose selection is on it while it holds nothing', () => {
-    mocks.panel = { activeTabId: null, activeSystemTab: 'blocks' };
+    mocks.panel = { activeTabId: 'topic-1', activeSystemTab: null };
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
@@ -556,9 +559,9 @@ describe('TopicPageView Overview tab', () => {
     expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
   });
 
-  it('renders the block editor on that route instead of the feed', () => {
+  it('renders the block editor for that selection instead of the feed', () => {
     mocks.blocks = [{ id: 'block-1' }];
-    mocks.pathname = '/space/space-1/topic-1/overview';
+    mocks.authoredTabId = 'topic-1';
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('editor')).toBeInTheDocument();
@@ -567,43 +570,69 @@ describe('TopicPageView Overview tab', () => {
 });
 
 describe('resolveTopicTab', () => {
+  const topic = { entityId: 'topic-1' };
+
   it('resolves the Comments route', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe('comments');
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe(
+      'comments'
+    );
   });
 
   it('resolves legacy system routes to the explore feed', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('explore');
-    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('explore');
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe(
+      'explore'
+    );
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe(
+      'explore'
+    );
   });
 
-  // A generic entity's blocks live at its bare URL; a topic's bare URL is the explore feed, so the
-  // blocks get a segment of their own. Spelled out rather than imported: this is the URL a reader
-  // can bookmark, and a test that shares a constant with the page cannot notice it moving.
-  it('resolves the blocks route a topic keeps its Overview tab at', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/overview', authoredTabId: null, panel: null })).toBe('blocks');
+  /*
+   * A generic entity's blocks live at its bare URL; a topic's bare URL is the explore feed, so the
+   * blocks are addressed the way every other tab is — `?tabId=`, naming the entity itself. The
+   * editor already reads that as the root blocks, and unlike a path segment it stays a valid URL
+   * when the entity stops being a topic.
+   */
+  it("reads a tab id equal to the entity as the topic's own blocks", () => {
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b', authoredTabId: 'topic-1', panel: null })).toBe('blocks');
   });
 
-  it('still lets an authored tab win over the blocks route', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/overview', authoredTabId: 'tab-1', panel: null })).toBe('custom');
+  it('still reads any other tab id as an authored tab', () => {
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b', authoredTabId: 'tab-1', panel: null })).toBe('custom');
   });
 
   it('resolves the side-panel blocks selection independently of the route behind it', () => {
     expect(
       resolveTopicTab({
+        ...topic,
         pathname: '/space/a/b/comments',
         authoredTabId: null,
-        panel: { activeTabId: null, activeSystemTab: 'blocks' },
+        panel: { activeTabId: 'topic-1', activeSystemTab: null },
       })
     ).toBe('blocks');
   });
 
+  it('keeps an authored tab in the panel distinct from the blocks tab', () => {
+    expect(
+      resolveTopicTab({
+        ...topic,
+        pathname: '/space/a/b',
+        authoredTabId: null,
+        panel: { activeTabId: 'tab-1', activeSystemTab: null },
+      })
+    ).toBe('custom');
+  });
+
   it('lets an authored tab take precedence over the route', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/claims', authoredTabId: 'tab-1', panel: null })).toBe('custom');
+    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/claims', authoredTabId: 'tab-1', panel: null })).toBe(
+      'custom'
+    );
   });
 
   it('uses the side panel selection instead of the page behind it', () => {
     expect(
       resolveTopicTab({
+        ...topic,
         pathname: '/space/a/b/coverage',
         authoredTabId: 'page-tab',
         panel: { activeTabId: null, activeSystemTab: 'debates' },
@@ -614,10 +643,29 @@ describe('resolveTopicTab', () => {
   it('resolves the side-panel Comments selection independently of the route behind it', () => {
     expect(
       resolveTopicTab({
+        ...topic,
         pathname: '/space/a/b',
         authoredTabId: null,
         panel: { activeTabId: null, activeSystemTab: 'comments' },
       })
     ).toBe('comments');
+  });
+
+  /*
+   * The reason this is a query parameter and not a path segment. `/overview` needed a route, the
+   * route needed `TopicRecordPage`'s required-type guard, and dropping the Topic type while
+   * standing on it turned the reader's URL into a 404 on the next server navigation. There is no
+   * topic-only route left to 404: this URL is the entity's own, and a former topic's page reads
+   * the same parameter.
+   */
+  it('names a URL that stays valid after the entity stops being a topic', () => {
+    // A real entity id, not the short fixture ids above: `entityTabIdFromHref` runs
+    // `IdUtils.isValid`, and the side panel selects this tab by round-tripping the href through it.
+    const realEntityId = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+    const href = `/space/${'f'.repeat(32)}/${realEntityId}?tabId=${realEntityId}`;
+
+    // The path is the entity's own, so nothing type-guarded stands between a refresh and the page.
+    expect(href.split('?')[0]).toBe(`/space/${'f'.repeat(32)}/${realEntityId}`);
+    expect(entityTabIdFromHref(href)).toBe(realEntityId);
   });
 });

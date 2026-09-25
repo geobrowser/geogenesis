@@ -66,36 +66,40 @@ const TOPIC_META_CHIP_CLASS = `${META_CHIP_CLASS} text-grey-04`;
  * `explore` is the landing tab — the topic feed — and is what an unqualified topic URL means.
  *
  * `blocks` is the entity's own block content, which a generic entity labels Overview and reaches
- * at its bare URL. A topic's bare URL is already spoken for, so that content takes the `/overview`
- * segment and the `blocks` panel key. Three names for one tab, which is why they are spelled out
- * here: the label a reader sees, the route they can bookmark, and the key the side panel selects
- * by.
+ * at its bare URL. A topic's bare URL is already spoken for, so the blocks are addressed the way
+ * every other tab in the app is addressed: `?tabId=`, pointing at the entity itself.
  *
- * `explore` keeps the `overview` *panel key* because that is the key `EntityTabs` reconciles to
- * when a selected product tab disappears, and falling back to Explore is right — falling back to a
- * blocks tab that may not even be rendered is not.
+ * That is not a trick. `EditorBlocksProvider` already reads a tab id equal to the entity id as
+ * "this entity's own blocks" — its `isTab` test is `tabId !== entityId` — so the editor resolves
+ * this URL to the root blocks, with the route's server snapshot, through the path it already had.
+ *
+ * It is also the only form that survives the entity ceasing to be a topic. A path segment needs a
+ * route, the route needs a type guard, and the guard answers 404 the moment somebody drops the
+ * Topic type while standing on it. A query parameter on the entity's own URL stays valid: the
+ * generic entity page reads it, renders the same blocks, and the reader keeps their place.
  */
 type TopicTab = 'explore' | 'blocks' | 'comments' | 'custom';
 
 export function resolveTopicTab({
+  entityId,
   pathname,
   authoredTabId,
   panel,
 }: {
+  /** The topic itself — as a tab id, it names the topic's own block content. */
+  entityId: string;
   pathname: string;
   authoredTabId: string | null;
   panel: { activeTabId: string | null; activeSystemTab: string | null } | null;
 }): TopicTab {
   if (panel) {
-    if (panel.activeTabId) return 'custom';
+    if (panel.activeTabId) return ID.equals(panel.activeTabId, entityId) ? 'blocks' : 'custom';
     if (panel.activeSystemTab === 'comments') return 'comments';
-    if (panel.activeSystemTab === 'blocks') return 'blocks';
     return 'explore';
   }
 
-  if (authoredTabId) return 'custom';
+  if (authoredTabId) return ID.equals(authoredTabId, entityId) ? 'blocks' : 'custom';
   if (pathname.endsWith('/comments')) return 'comments';
-  if (pathname.endsWith('/overview')) return 'blocks';
   return 'explore';
 }
 
@@ -179,7 +183,12 @@ export function TopicPageView({
   // The whole path down to this topic, not just the rung above it — a topic can sit several levels
   // deep, and showing one parent reads as though the hierarchy is flat.
   const ancestors = useTopicAncestors(entityId, spaceId);
-  const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
+  const activeTab = resolveTopicTab({
+    entityId,
+    pathname,
+    authoredTabId: activeAuthoredTabId,
+    panel: sidePanelTab,
+  });
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
 
   /*
@@ -230,13 +239,14 @@ export function TopicPageView({
       badge: commentCountLoading ? undefined : String(commentCount),
     },
     // Sits on the authored side of the rule, at the head of the tabs this topic wrote for itself —
-    // it is one of them, not one of the product's record tabs.
+    // it is one of them, not one of the product's record tabs, and it is addressed like one. No
+    // `sidePanelKey`: the panel selects it by tab id, which is what `StaticTab` falls back to, so
+    // the route and the panel agree on one identifier instead of keeping a second name for it.
     ...(showBlocksTab
       ? [
           {
             label: 'Overview',
-            href: `${overviewHref}/overview`,
-            sidePanelKey: 'blocks',
+            href: `${overviewHref}?tabId=${entityId}`,
             dividerBefore: true,
           },
         ]
