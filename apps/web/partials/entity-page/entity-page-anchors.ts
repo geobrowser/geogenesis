@@ -36,9 +36,22 @@ export function entityPageTitleAnchor(entityId: string | undefined) {
  */
 export const ENTITY_PAGE_CONTENT_ANCHOR = { [ENTITY_PAGE_CONTENT_ATTRIBUTE]: '' };
 
-/** The selector matching one entity's title. */
+/**
+ * The selector matching one entity's title **on the route**, not in an overlay.
+ *
+ * Scoped to `<main>`, which holds the routed page and nothing else: both the entity side panel's
+ * branches portal to `document.body`, as does every slide-up. Those surfaces draw their own titles
+ * through the same components — `EditableHeading`, `ClaimPageView`, `TopicPageView` all serve the
+ * panel too — and a panel opened on the entity the route is already showing puts a second matching
+ * title in the document. Document order hides that while the route has a title of its own, and stops
+ * hiding it on a route that draws none: a Debate renders the live feed instead, so the panel's title
+ * became the only match and scrolling the panel's own container raised the route's bar.
+ *
+ * An allowlist rather than excluding the panel by name, so the next surface portalled out of the
+ * page is excluded by construction rather than by somebody remembering to add it here.
+ */
 export function entityPageTitleSelector(entityId: string) {
-  return `[${ENTITY_PAGE_TITLE_ATTRIBUTE}="${escapeAttributeValue(entityId)}"]`;
+  return `main [${ENTITY_PAGE_TITLE_ATTRIBUTE}="${escapeAttributeValue(entityId)}"]`;
 }
 
 /**

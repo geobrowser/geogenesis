@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { entityPageTitleSelector } from './entity-page-anchors';
 import { EntityStickyHeader } from './entity-sticky-header';
 import { entityStickyHeaderHostElementAtom } from '~/atoms';
 
@@ -137,8 +138,11 @@ describe('EntityStickyHeader', () => {
   it('watches only this entity’s title, below the navbar', () => {
     renderBar();
 
+    // Derived rather than spelled out, so this cannot go stale against the selector it is asserting
+    // — which is exactly how it did go stale when the selector was scoped to the route.
+    // `entity-page-anchors.test.tsx` is where what that selector *matches* is pinned.
     expect(mocks.scrollOptions).toMatchObject({
-      selector: '[data-entity-page-title="entity-1"]',
+      selector: entityPageTitleSelector('entity-1'),
       topOffset: 44,
       enabled: true,
     });
