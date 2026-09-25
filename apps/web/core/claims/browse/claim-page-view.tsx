@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -40,7 +42,7 @@ import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
-import { useClaimActivityCounts } from './claim-activity-count';
+import { adjustClaimActivityTotal, useClaimActivityCounts } from './claim-activity-count';
 import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
@@ -461,6 +463,16 @@ function ClaimOverviewTab({
   const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
   const activityTotal = activityCounts.get(ID.uuidToHex(entityId))?.total;
 
+  // The thread can add to that number but cannot compute it, so the page that owns the aggregate
+  // owns the adjustment too. It lands in the query cache rather than in the section's state, which
+  // is what makes it survive the section remounting and stay behind when the reader walks to the
+  // next claim — see `adjustClaimActivityTotal`.
+  const queryClient = useQueryClient();
+  const adjustActivityTotal = React.useCallback(
+    (delta: number) => adjustClaimActivityTotal(queryClient, entityId, delta),
+    [entityId, queryClient]
+  );
+
   const activity = useClaimActivityRows({
     claimId: entityId,
     spaceId,
@@ -537,6 +549,7 @@ function ClaimOverviewTab({
           title="Activity"
           activityRows={activity.rows}
           totalOverride={activityTotal}
+          onActivityPublish={adjustActivityTotal}
           // Best rather than most-recent: this list is the record of an argument, not a running
           // conversation, and the thing worth reading first is what the thread rates highest.
           defaultSortOrder="best"

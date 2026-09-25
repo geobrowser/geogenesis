@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 /**
- * How many comments the reader has added to this thread since it loaded.
+ * A comment the reader just published, reported to whoever owns the heading's number.
  *
  * The Activity heading's number is a server aggregate — the claim's debates, the claims extracted
  * from them, and every comment anywhere in that tree. It is the only way to count things the section
@@ -11,14 +11,17 @@ import * as React from 'react';
  * aggregate answered before the comment existed, and nothing in the comment caches can move a number
  * that counts debates and extracted claims too.
  *
- * So the aggregate is a baseline and this is the delta. Every composer inside the section reports
- * here — the top-level one and the inline ones on debates, extracted claims and replies — because a
- * reader who has just written something expects the count above to have noticed.
+ * So every composer inside the section reports here — the top-level one and the inline ones on
+ * debates, extracted claims and replies — because a reader who has just written something expects
+ * the count above to have noticed.
  *
- * The baseline has to hold still for that to be right: `useClaimActivityCounts` does not refetch on
- * window focus, so a refetch that already included these posts cannot land underneath and make the
- * delta count them twice. Navigating away and back re-reads the aggregate and resets the delta,
- * which is the same answer arrived at from the other side.
+ * What it reaches is the host's adjustment, not a counter kept here. That matters, and it is the
+ * whole history of this file: the count used to live in `CommentSection`'s own state, which meant it
+ * was lost every time the section unmounted — a reader who posted, left and came back inside the
+ * aggregate's `staleTime` got the pre-publish number with an empty delta — and kept every time the
+ * section was reused for a different record, since `EntityPageBody` is not remounted between claims.
+ * The claim page now moves the aggregate in the query cache instead, which is keyed by claim and
+ * lives exactly as long as the number it corrects.
  */
 const ActivityPostsContext = React.createContext<((delta: number) => void) | null>(null);
 
@@ -37,8 +40,8 @@ export function ActivityPostsProvider({
  *
  * A signed delta rather than a bare "posted", because a publish can fail: `useCreateComment` removes
  * the optimistic row when the transaction is rejected, and without the matching `-1` the heading
- * stayed one above the truth for as long as the page was open. A publish that is merely *retained*
- * for retry keeps its row, so it keeps its `+1`.
+ * stayed one above the truth. A publish that is merely *retained* for retry keeps its row, so it
+ * keeps its `+1`.
  *
  * Returns a no-op outside a provider rather than throwing: the same composer runs in the entity
  * comments panel and on proposal threads, neither of which has a heading with an aggregate behind

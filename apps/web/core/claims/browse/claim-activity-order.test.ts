@@ -74,7 +74,10 @@ describe('orderExtractedClaims', () => {
 
   it('matches timings keyed by canonical id regardless of the id format on the claim', () => {
     const hyphenated = '3e4a0955-699a-4c8f-813f-cc803a3335ba';
-    const { timed } = orderExtractedClaims([claim(hyphenated)], new Map([['3e4a0955699a4c8f813fcc803a3335ba', timing(7_000)]]));
+    const { timed } = orderExtractedClaims(
+      [claim(hyphenated)],
+      new Map([['3e4a0955699a4c8f813fcc803a3335ba', timing(7_000)]])
+    );
 
     expect(timed).toHaveLength(1);
     expect(timed[0]!.timing?.startMs).toBe(7_000);
@@ -128,6 +131,73 @@ describe('mergeActivityRows', () => {
     );
 
     expect(merged.map(entry => entry.row.id)).toEqual(['c1', 'd1']);
+  });
+
+  /**
+   * The thread pins a comment the reader wrote in this session to the top whatever the sort says, so
+   * that it does not scroll away from the person who just wrote it — `sortWithSessionPinned` does it
+   * at every nesting level. This merge re-sorts a list that has already been pinned, so it is the one
+   * place that can undo it, and it did: under Best, which is what the claim page opens on, any row
+   * with a single upvote went above a brand-new comment scoring zero.
+   */
+  describe('comments the reader wrote in this session', () => {
+    const pinned = new Set(['c1']);
+
+    it('stay in front under Best, however the rest of the page ranks', () => {
+      const scoreFor = (row: { id: string }) => (row.id === 'd1' ? { positive: 6, negative: 0 } : null);
+
+      expect(mergeActivityRows(comments, debates, 'best', scoreFor, pinned).map(entry => entry.row.id)).toEqual([
+        'c1',
+        'd1',
+        'd2',
+        'c2',
+      ]);
+    });
+
+    // The other end of the same failure: oldest-first sent the newest thing on the page — the
+    // comment just written — to the very bottom of it. `c2` is the newest comment here, so this only
+    // says something if the pin is what moves it.
+    it('stay in front under Oldest, which otherwise sends them to the bottom', () => {
+      const justWritten = new Set(['c2']);
+
+      expect(mergeActivityRows(comments, debates, 'oldest', undefined, justWritten).map(e => e.row.id)).toEqual([
+        'c2',
+        'c1',
+        'd1',
+        'd2',
+      ]);
+    });
+
+    it('keep the order they were pinned in, which is the order the list arrived in', () => {
+      const both = new Set(['c2', 'c1']);
+      // `sortWithSessionPinned` has already put them most-recent-first at the head of the list, so
+      // this holds them in that order rather than inventing one of its own.
+      expect(mergeActivityRows(comments, debates, 'best', undefined, both).map(entry => entry.row.id)).toEqual([
+        'c1',
+        'c2',
+        'd2',
+        'd1',
+      ]);
+    });
+
+    it('changes nothing when the reader has not written anything', () => {
+      expect(mergeActivityRows(comments, debates, 'oldest', undefined, new Set()).map(entry => entry.row.id)).toEqual([
+        'c1',
+        'd1',
+        'c2',
+        'd2',
+      ]);
+    });
+
+    // A debate is not something the reader typed, so an id that only matches an extra is ignored.
+    it('does not lift a non-comment row that happens to share an id', () => {
+      expect(mergeActivityRows(comments, debates, 'oldest', undefined, new Set(['d2'])).map(e => e.row.id)).toEqual([
+        'c1',
+        'd1',
+        'c2',
+        'd2',
+      ]);
+    });
   });
 
   describe('ranked orders', () => {
@@ -211,20 +281,32 @@ describe('rows nothing can place in time', () => {
   // Old that puts the undated row *first*. A row nothing can place is not the oldest thing that
   // ever happened any more than it is the newest.
   it('keeps an undated row last under Old, not first', () => {
-    const merged = mergeActivityRows([], [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')], 'oldest');
+    const merged = mergeActivityRows(
+      [],
+      [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')],
+      'oldest'
+    );
 
     expect(merged.map(entry => entry.row.id)).toEqual(['older', 'newer', 'no-date']);
   });
 
   it('keeps it last under New as well', () => {
-    const merged = mergeActivityRows([], [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')], 'newest');
+    const merged = mergeActivityRows(
+      [],
+      [undated('no-date'), dated('older', '2026-01-01T00:00:00Z'), dated('newer', '2026-06-01T00:00:00Z')],
+      'newest'
+    );
 
     expect(merged.map(entry => entry.row.id)).toEqual(['newer', 'older', 'no-date']);
   });
 
   // `-Infinity - -Infinity` is NaN, which is the unstable comparator the sentinel existed to avoid.
   it('does not compare two undated rows by arithmetic', () => {
-    const merged = mergeActivityRows([], [undated('a'), undated('b'), dated('dated', '2026-01-01T00:00:00Z')], 'oldest');
+    const merged = mergeActivityRows(
+      [],
+      [undated('a'), undated('b'), dated('dated', '2026-01-01T00:00:00Z')],
+      'oldest'
+    );
 
     expect(merged.map(entry => entry.row.id)).toEqual(['dated', 'a', 'b']);
   });

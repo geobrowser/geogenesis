@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
+import { type QueryClient, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -87,12 +87,56 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
       ),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
-    // The Activity heading treats this as a baseline and adds the comments published since it
-    // loaded (see `activity-posts.tsx`). A refetch on focus could land with those comments already
-    // indexed, and the delta would then count them a second time. Navigating away and back re-reads
-    // it and resets the delta together, which is the same answer without the window in between.
+    // Not on focus. A reader's own comment is counted by adjusting this cache
+    // ({@link adjustClaimActivityTotal}), and a refetch replaces that adjustment with whatever the
+    // server says — which, if the indexer has not caught up, is a number without their comment in
+    // it. Returning to a tab is not a moment to take someone's comment back out of the count. A
+    // remount past `staleTime` does re-read, and by then the indexer has had a minute.
     refetchOnWindowFocus: false,
   });
 
   return data ?? EMPTY_COUNTS;
+}
+
+/**
+ * Count a comment the reader just published, or take one back that failed.
+ *
+ * The heading over the claim's activity is this aggregate: the claim's debates, the claims extracted
+ * from them, and every comment anywhere in that tree. Nothing in the comment caches can move it, so
+ * publishing used to leave the number standing still — the aggregate answered before the comment
+ * existed.
+ *
+ * The adjustment goes into the query cache rather than into the section's own state, which is where
+ * the previous version of this kept it. Two things followed from that and both were wrong. React
+ * Query holds this answer for `staleTime`, so a reader who posted, navigated away and came back
+ * inside the minute got the pre-publish aggregate with a delta that had reset to zero — the heading
+ * dropped their comment while the comment sat in the list below it. And the state outlived the
+ * claim: `EntityPageBody` is reused between records, so walking to another claim carried the delta
+ * onto a number it had nothing to do with. The cache is keyed by claim, and it is the same thing
+ * whose lifetime the baseline already has.
+ *
+ * Signed, because a publish can fail: `useCreateComment` drops the optimistic row when the
+ * transaction is rejected, and the count has to give back what it counted. A publish merely
+ * *retained* for retry keeps its row, so it keeps its count.
+ *
+ * A claim with no entry yet is left alone rather than invented: the aggregate is still in flight and
+ * will answer for itself. That loses a comment published in the few hundred milliseconds before the
+ * first response lands, which is not long enough to write one.
+ */
+export function adjustClaimActivityTotal(queryClient: QueryClient, claimId: string, delta: number): void {
+  if (delta === 0) return;
+  const id = uuidToHex(claimId);
+
+  // Every cached set that holds this claim, not one key: the page asks for one claim and other
+  // surfaces ask for a screenful, and a number that moves on one of them has moved on all of them.
+  queryClient.setQueriesData<Map<string, ClaimActivityCount>>({ queryKey: ['claim-activity-counts'] }, counts => {
+    const current = counts?.get(id);
+    // `undefined` bails out of the update rather than writing anything, so a cached set that does
+    // not hold this claim — or one that has not answered yet — is left untouched instead of being
+    // re-set to itself and waking its subscribers.
+    if (current == null) return undefined;
+    const next = new Map(counts);
+    next.set(id, { ...current, total: Math.max(0, current.total + delta) });
+    return next;
+  });
 }

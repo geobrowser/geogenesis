@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render as renderBare, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -10,6 +11,24 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
 import { ClaimPageView, resolveClaimTab } from './claim-page-view';
+
+/**
+ * The page inside the provider it actually runs inside.
+ *
+ * It reads the activity aggregate out of the query cache and writes a reader's own comment back into
+ * it, so a bare render throws "No QueryClient set" — the client is not optional context here. One
+ * client per render, kept across `rerender` so that a re-render with different props stays a
+ * re-render rather than becoming a fresh cache.
+ */
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = renderBare(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: React.ReactElement) =>
+      view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>),
+  };
+}
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -126,7 +145,8 @@ vi.mock('./use-claim-activity-rows', () => ({
 // The heading's number, which is the same one the claim's Explore card shows. Its own query is
 // covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
 vi.mock('./claim-activity-count', () => ({
-  useClaimActivityCounts: () => new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+  useClaimActivityCounts: () =>
+    new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({

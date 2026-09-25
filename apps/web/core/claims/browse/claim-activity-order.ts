@@ -93,23 +93,36 @@ export function activityTime(row: ActivityOrderable): number {
  * Stable within a timestamp: rows that arrive at the same instant keep the order their own lists
  * gave them, and comments come first. A debate and a comment published in the same second is not a
  * tie worth breaking on identity, and reordering on every render is worse than either choice.
+ *
+ * `pinnedIds` are comments the reader wrote in this session, which the thread already keeps at the
+ * top of their group whatever the sort says, so that a comment does not scroll away from the person
+ * who has just written it. The comment list arrives here already ordered that way and this sort ran
+ * straight over it — under Best, which is what the claim page opens on, any row with a single upvote
+ * went above a brand-new comment scoring zero, and under Oldest it went to the bottom of the page.
+ * So they are held out of the sort and put back in front of it, in the order the thread pinned them.
  */
-export function mergeActivityRows<C extends ActivityOrderable, E extends ActivityOrderable>(
+export function mergeActivityRows<C extends ActivityOrderable & { id: string }, E extends ActivityOrderable>(
   comments: C[],
   extras: E[],
   order: 'best' | 'top' | 'newest' | 'oldest',
-  scoreFor: ActivityScoreLookup = NO_SCORES
+  scoreFor: ActivityScoreLookup = NO_SCORES,
+  pinnedIds?: ReadonlySet<string>
 ): Array<{ kind: 'comment'; row: C } | { kind: 'extra'; row: E }> {
-  const merged: Array<{ kind: 'comment'; row: C } | { kind: 'extra'; row: E }> = [
-    ...comments.map(row => ({ kind: 'comment' as const, row })),
-    ...extras.map(row => ({ kind: 'extra' as const, row })),
-  ];
+  const pinned: Array<{ kind: 'comment'; row: C }> = [];
+  const sortable: Array<{ kind: 'comment'; row: C } | { kind: 'extra'; row: E }> = [];
+
+  for (const row of comments) {
+    (pinnedIds?.has(row.id) ? pinned : sortable).push({ kind: 'comment' as const, row });
+  }
+  for (const row of extras) sortable.push({ kind: 'extra' as const, row });
+
+  const merged = sortable;
 
   // `sort` is stable in every engine we target, so rows that compare equal keep insertion order —
   // which above is "comments, then extras". Said out loud because the tie-break is a decision.
   if (order === 'newest' || order === 'oldest') {
     merged.sort((a, b) => compareByTime(a.row, b.row, order === 'newest' ? -1 : 1));
-    return merged;
+    return [...pinned, ...merged];
   }
 
   // Newest breaks a score tie, so a thread where nothing has been voted on yet still reads as a
@@ -118,7 +131,7 @@ export function mergeActivityRows<C extends ActivityOrderable, E extends Activit
   const rank = order === 'best' ? netScoreOf : upvotesOf;
   merged.sort((a, b) => rank(scoreFor(b.row)) - rank(scoreFor(a.row)) || compareByTime(a.row, b.row, -1));
 
-  return merged;
+  return [...pinned, ...merged];
 }
 
 /**

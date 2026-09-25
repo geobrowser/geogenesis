@@ -240,6 +240,20 @@ interface CommentSectionProps {
    */
   totalOverride?: number;
   /**
+   * A comment appearing or disappearing inside this section, for the host that owns
+   * {@link totalOverride}.
+   *
+   * Paired with it deliberately: the host is the only thing that can move a number it computed, and
+   * this component is the only thing that knows a comment was written. The delta is signed — `-1`
+   * when a publish is rejected and its optimistic row goes away.
+   *
+   * This used to be counted here instead, in component state, which broke in both directions: the
+   * count was lost whenever the section remounted (leaving the heading behind the list it was
+   * drawing), and kept when the section was reused for another record (leaving the heading ahead of
+   * one it had never seen).
+   */
+  onActivityPublish?: (delta: number) => void;
+  /**
    * Where the sort starts. Threads default to most-recent; the claim page's activity feed opens on
    * Best, because there the list is a record of an argument rather than a running conversation.
    */
@@ -254,6 +268,7 @@ export function CommentSection({
   activityRows = NO_ACTIVITY_ROWS,
   title = 'Comments',
   totalOverride,
+  onActivityPublish,
   defaultSortOrder = 'newest',
 }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
@@ -370,11 +385,12 @@ export function CommentSection({
     setSessionNewIds((prev: string[]) => (prev.includes(id) ? prev : [id, ...prev]));
   }, []);
 
-  // Comments published from anywhere in this section since it loaded. Only meaningful beside
-  // `totalOverride`: that number is a server aggregate over debates and extracted claims as well as
-  // comments, so nothing in the comment caches can move it. See `activity-posts.tsx`.
-  const [activityPosts, setActivityPosts] = useState(0);
-  const adjustActivityPosts = React.useCallback((delta: number) => setActivityPosts(posts => posts + delta), []);
+  // Comments published from anywhere in this section are reported to whoever supplied
+  // `totalOverride`, because that number is a server aggregate over debates and extracted claims as
+  // well as comments and nothing in the comment caches can move it. Deliberately not counted here:
+  // this component is remounted and reused across records, and a count kept in its own state was
+  // lost on the first and carried onto the second. See `activity-posts.tsx`.
+  const adjustActivityPosts = React.useCallback((delta: number) => onActivityPublish?.(delta), [onActivityPublish]);
 
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
   // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
@@ -436,6 +452,10 @@ export function CommentSection({
     [sortOrder, sessionNewIds]
   );
 
+  // As a set, because the activity merge tests every comment against it. Same source as the pin
+  // inside `sortWithSessionPinned` — one idea, read two ways, rather than two lists to keep in step.
+  const sessionNewIdSet = React.useMemo(() => new Set(sessionNewIds), [sessionNewIds]);
+
   const filteredComments = React.useMemo(() => {
     let result = comments;
     if (filter === 'editors') {
@@ -454,7 +474,7 @@ export function CommentSection({
             {!isPanel && (
               <>
                 <div className="text-mediumTitle">
-                  {title} ({totalOverride == null ? totalCount + activityRows.length : totalOverride + activityPosts})
+                  {title} ({totalOverride == null ? totalCount + activityRows.length : totalOverride})
                 </div>
                 <Spacer height={16} />
               </>
@@ -496,6 +516,7 @@ export function CommentSection({
                         comments={filteredComments}
                         activityRows={activityRows}
                         activityOrder={sortOrder}
+                        activityPinnedIds={sessionNewIdSet}
                         activityScoreFor={scoreFor}
                         entityId={entityId}
                         spaceId={spaceId}
@@ -786,6 +807,7 @@ function CommentList({
   activityRows = NO_ACTIVITY_ROWS,
   activityOrder = 'newest',
   activityScoreFor,
+  activityPinnedIds,
   entityId,
   spaceId,
   onReply,
@@ -809,6 +831,14 @@ function CommentList({
   activityOrder?: CommentSortOrder;
   /** Looks up a top-level row's votes, for the ranked orders. */
   activityScoreFor?: (row: { id: string }) => { positive: number; negative: number } | null;
+  /**
+   * Comments written in this session, which stay at the top of the merged list however it is sorted.
+   *
+   * Passed in rather than re-derived, because the pin at every other nesting level comes from the
+   * same state inside `sortWithSessionPinned`; this merge is the one place that re-sorts a list
+   * which has already been pinned, so it is the one place that has to know.
+   */
+  activityPinnedIds?: ReadonlySet<string>;
   entityId: string;
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
@@ -875,7 +905,7 @@ function CommentList({
   if (depth === 0) {
     // Activity rows only exist at the top level — a debate is not a reply to a comment — so the
     // merge lives inside this branch and the recursive one below is untouched.
-    const merged = mergeActivityRows(comments, activityRows, activityOrder, activityScoreFor);
+    const merged = mergeActivityRows(comments, activityRows, activityOrder, activityScoreFor, activityPinnedIds);
 
     return (
       <div>
