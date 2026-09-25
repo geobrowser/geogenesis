@@ -96,6 +96,16 @@ export function useActiveTabIndicator(layoutKey: unknown) {
   return { indicator, registerActiveTab };
 }
 
+/**
+ * The rule that separates one group of tabs from another.
+ *
+ * Shared with `EditableTabGroup` — the browse and edit bars draw the same row, and two copies of
+ * this span drifted apart the moment either was touched.
+ */
+export function TabGroupDivider() {
+  return <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />;
+}
+
 export function ActiveTabIndicator({ indicator }: { indicator: ActiveTabIndicatorPosition | null }) {
   if (!indicator) return null;
 
@@ -210,7 +220,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         <div className="relative flex w-max items-center gap-6 pb-2">
           {tabs.map(t => (
             <React.Fragment key={t.href}>
-              {t.dividerBefore && <span aria-hidden className="h-4 w-px shrink-0 bg-grey-02" />}
+              {t.dividerBefore && <TabGroupDivider />}
               {t.onlyWhenNarrow ? (
                 <span className="hidden lg:contents">
                   <Tab
