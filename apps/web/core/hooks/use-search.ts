@@ -259,9 +259,16 @@ export function useSearch({
   });
 
   const emptyPagePumpCountRef = React.useRef(0);
+  const lastPage = resultPages?.pages.at(-1);
+  const shouldPumpEmptyPage =
+    lastPage !== undefined &&
+    lastPage.rows.length === 0 &&
+    hasNextPage === true &&
+    lastPage.serverCount >= pageSize &&
+    !isFetchingNextPage &&
+    emptyPagePumpCountRef.current < EMPTY_PAGE_PUMP_LIMIT;
 
   React.useEffect(() => {
-    const lastPage = resultPages?.pages.at(-1);
     if (!lastPage) {
       emptyPagePumpCountRef.current = 0;
       return;
@@ -272,17 +279,11 @@ export function useSearch({
       return;
     }
 
-    if (
-      lastPage.serverCount < pageSize ||
-      isFetchingNextPage ||
-      emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT
-    ) {
-      return;
-    }
+    if (!shouldPumpEmptyPage) return;
 
     emptyPagePumpCountRef.current += 1;
     void fetchNextPage();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, pageSize, resultPages]);
+  }, [fetchNextPage, hasNextPage, lastPage, shouldPumpEmptyPage]);
 
   const results = React.useMemo(() => {
     const seen = new Set<string>();
@@ -309,14 +310,16 @@ export function useSearch({
 
   React.useEffect(() => {
     const attempt = analyticsAttemptRef.current;
-    const firstPage = resultPages?.pages[0];
+    const pages = resultPages?.pages;
     if (
       attempt.key !== analyticsSearchKey ||
       attempt.emitted ||
       cappedQuery.trim() === '' ||
       !shouldSearch ||
       isFetching ||
-      !firstPage?.succeeded
+      shouldPumpEmptyPage ||
+      !pages?.length ||
+      pages.some(page => !page.succeeded)
     ) {
       return;
     }
@@ -324,11 +327,21 @@ export function useSearch({
     attempt.emitted = true;
     searchSubmitted({
       queryText: cappedQuery,
-      resultCount: firstPage.total,
-      latencyMs: firstPage.latencyMs,
+      resultCount: results.length,
+      latencyMs: pages.reduce((total, page) => total + page.latencyMs, 0),
       surface: analyticsSurface ?? (filterBySpace ? 'space' : 'entity'),
     });
-  }, [analyticsSearchKey, analyticsSurface, cappedQuery, filterBySpace, isFetching, resultPages, shouldSearch]);
+  }, [
+    analyticsSearchKey,
+    analyticsSurface,
+    cappedQuery,
+    filterBySpace,
+    isFetching,
+    resultPages,
+    results.length,
+    shouldPumpEmptyPage,
+    shouldSearch,
+  ]);
 
   const isQuerySyncing = query !== debouncedQuery;
   const isWaitingForFilterTypes = shouldSearch === false && searchBlocked && (enabled ?? debouncedQuery !== '');
