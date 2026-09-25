@@ -39,6 +39,7 @@ import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ActivityPostsProvider } from './activity-posts';
 import {
   type CommentDensity,
   PAGE_DENSITY,
@@ -369,6 +370,12 @@ export function CommentSection({
     setSessionNewIds((prev: string[]) => (prev.includes(id) ? prev : [id, ...prev]));
   }, []);
 
+  // Comments published from anywhere in this section since it loaded. Only meaningful beside
+  // `totalOverride`: that number is a server aggregate over debates and extracted claims as well as
+  // comments, so nothing in the comment caches can move it. See `activity-posts.tsx`.
+  const [activityPosts, setActivityPosts] = useState(0);
+  const reportActivityPost = React.useCallback(() => setActivityPosts(posts => posts + 1), []);
+
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
   // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
   // is updated via the onOptimistic callback so the row pins to the top right away.
@@ -379,10 +386,13 @@ export function CommentSection({
       void publishComment({
         text,
         ancestorComments,
-        onOptimistic: markSessionNew,
+        onOptimistic: commentId => {
+          markSessionNew(commentId);
+          reportActivityPost();
+        },
       });
     },
-    [markSessionNew, publishComment, smartAccount]
+    [markSessionNew, publishComment, reportActivityPost, smartAccount]
   );
 
   const handleEditComment = React.useCallback(
@@ -432,75 +442,79 @@ export function CommentSection({
 
   return (
     <CommentDensityContext.Provider value={density}>
-      <CommentBranchHighlightProvider>
-        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
-          {!isPanel && (
-            <>
-              <div className="text-mediumTitle">
-                {title} ({totalOverride ?? totalCount + activityRows.length})
-              </div>
-              <Spacer height={16} />
-            </>
-          )}
-          <TopLevelCommentInput
-            onSubmit={handleCreateComment}
-            isLoggedIn={isLoggedIn}
-            onSignInRequired={requireSignInToComment}
-            expanded={composerExpanded}
-            onExpandedChange={setComposerExpanded}
-            variant={variant}
-            viewerAvatarUrl={viewerAvatarUrl}
-            viewerAvatarSeed={viewerAvatarSeed}
-          />
-          {totalCount + activityRows.length > 0 && (
-            <>
-              <Spacer height={16} />
-              <CommentFilters
-                sortOrder={sortOrder}
-                onSortChange={setSortOrder}
-                filter={filter}
-                onFilterChange={setFilter}
-              />
-            </>
-          )}
-          {isLoading ? (
-            <div className="py-4">
-              <Text variant="body" color="grey-04">
-                Loading comments...
-              </Text>
-            </div>
-          ) : (
-            (filteredComments.length > 0 || activityRows.length > 0) && (
+      {/* Every composer inside — the one below and the inline ones on the activity rows — reports a
+          publish here, because the heading's number is an aggregate none of them can otherwise move. */}
+      <ActivityPostsProvider onPost={reportActivityPost}>
+        <CommentBranchHighlightProvider>
+          <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
+            {!isPanel && (
+              <>
+                <div className="text-mediumTitle">
+                  {title} ({totalOverride == null ? totalCount + activityRows.length : totalOverride + activityPosts})
+                </div>
+                <Spacer height={16} />
+              </>
+            )}
+            <TopLevelCommentInput
+              onSubmit={handleCreateComment}
+              isLoggedIn={isLoggedIn}
+              onSignInRequired={requireSignInToComment}
+              expanded={composerExpanded}
+              onExpandedChange={setComposerExpanded}
+              variant={variant}
+              viewerAvatarUrl={viewerAvatarUrl}
+              viewerAvatarSeed={viewerAvatarSeed}
+            />
+            {totalCount + activityRows.length > 0 && (
               <>
                 <Spacer height={16} />
-                <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
-                  <ProposalAttributionContext.Provider value={proposalAttribution}>
-                    <CommentList
-                      comments={filteredComments}
-                      activityRows={activityRows}
-                      activityOrder={sortOrder}
-                      activityScoreFor={scoreFor}
-                      entityId={entityId}
-                      spaceId={spaceId}
-                      onReply={handleCreateComment}
-                      onEdit={handleEditComment}
-                      personalSpaceId={personalSpaceId}
-                      editorSpaceIds={editorSpaceIds}
-                      isThreadCollapsed={isThreadCollapsed}
-                      toggleThreadCollapsed={toggleThreadCollapsed}
-                      sortReplies={sortWithSessionPinned}
-                      isLoggedIn={isLoggedIn}
-                      onSignInRequired={requireSignInToComment}
-                      pendingReplyToId={pendingReplyToId}
-                      onPendingReplyConsumed={() => setPendingReplyToId(null)}
-                    />
-                  </ProposalAttributionContext.Provider>
-                </DebateVoteBadgeContext.Provider>
+                <CommentFilters
+                  sortOrder={sortOrder}
+                  onSortChange={setSortOrder}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                />
               </>
-            )
-          )}
-        </div>
-      </CommentBranchHighlightProvider>
+            )}
+            {isLoading ? (
+              <div className="py-4">
+                <Text variant="body" color="grey-04">
+                  Loading comments...
+                </Text>
+              </div>
+            ) : (
+              (filteredComments.length > 0 || activityRows.length > 0) && (
+                <>
+                  <Spacer height={16} />
+                  <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
+                    <ProposalAttributionContext.Provider value={proposalAttribution}>
+                      <CommentList
+                        comments={filteredComments}
+                        activityRows={activityRows}
+                        activityOrder={sortOrder}
+                        activityScoreFor={scoreFor}
+                        entityId={entityId}
+                        spaceId={spaceId}
+                        onReply={handleCreateComment}
+                        onEdit={handleEditComment}
+                        personalSpaceId={personalSpaceId}
+                        editorSpaceIds={editorSpaceIds}
+                        isThreadCollapsed={isThreadCollapsed}
+                        toggleThreadCollapsed={toggleThreadCollapsed}
+                        sortReplies={sortWithSessionPinned}
+                        isLoggedIn={isLoggedIn}
+                        onSignInRequired={requireSignInToComment}
+                        pendingReplyToId={pendingReplyToId}
+                        onPendingReplyConsumed={() => setPendingReplyToId(null)}
+                      />
+                    </ProposalAttributionContext.Provider>
+                  </DebateVoteBadgeContext.Provider>
+                </>
+              )
+            )}
+          </div>
+        </CommentBranchHighlightProvider>
+      </ActivityPostsProvider>
     </CommentDensityContext.Provider>
   );
 }

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
 import type { DebateResponseKind } from '~/core/debates/api';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -9,13 +10,14 @@ import {
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
 } from '~/core/debates/ontology';
+import { useDebateClaimCounts } from '~/core/debates/use-debate-claim-counts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { ID } from '~/core/id';
+import { uuidToHex } from '~/core/id/normalize';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import type { CommentActivityRow } from '~/partials/comments/types';
-
-import { ID } from '~/core/id';
 
 import { debateDate, relationTargets } from './claim-debates';
 import { DebateActivityRow } from './debate-activity-row';
@@ -95,6 +97,14 @@ export function useClaimActivityRows({
   const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
   const keyframeByDebateId = useDebateKeyframes(debates);
 
+  // Both counts for every debate on the page, in two requests rather than two per row. The rows used
+  // to ask for their own — the comment count through a batched hook handed a single id, which is a
+  // request each, and the claim count through the debate's transcript, which is the expensive read
+  // the collapse control exists to avoid and which ran whether or not the row was expanded.
+  const debateIds = React.useMemo(() => debates.map(debate => debate.id), [debates]);
+  const commentCountByDebateId = useEntityCommentCounts(debateIds);
+  const claimCountByDebateId = useDebateClaimCounts(debateIds);
+
   const rows = React.useMemo(() => {
     if (debates.length === 0) return NO_ROWS;
 
@@ -118,10 +128,21 @@ export function useClaimActivityRows({
           responseVocabulary={responseVocabulary}
           keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
           publishedAt={debateDate(debate)}
+          commentCount={commentCountByDebateId.get(uuidToHex(debate.id)) ?? 0}
+          claimCount={claimCountByDebateId.get(uuidToHex(debate.id)) ?? 0}
         />
       ),
     }));
-  }, [debates, keyframeByDebateId, profilesBySpaceId, responseVocabulary, sidesByDebateId, spaceId]);
+  }, [
+    claimCountByDebateId,
+    commentCountByDebateId,
+    debates,
+    keyframeByDebateId,
+    profilesBySpaceId,
+    responseVocabulary,
+    sidesByDebateId,
+    spaceId,
+  ]);
 
   return { rows, isLoading };
 }

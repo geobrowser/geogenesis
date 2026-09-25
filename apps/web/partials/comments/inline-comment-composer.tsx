@@ -6,6 +6,7 @@ import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
+import { useReportActivityPost } from './activity-posts';
 import { CommentInput } from './comments-section';
 
 /**
@@ -61,6 +62,7 @@ export function InlineCommentComposer({
   const { open: openSignInPrompt } = useSignInPrompt();
   const isSignedIn = !!smartAccount;
   const { isComposing, close, markPosted } = composer;
+  const reportActivityPost = useReportActivityPost();
 
   // Asked before the box opens, not after a draft is typed into it. The thread's own composer
   // checks at the same moment — on the press, not on the submit — because a signed-out reader who
@@ -85,7 +87,16 @@ export function InlineCommentComposer({
         onSubmit={text => {
           // Fire and forget, like every other composer: the box closes now and the optimistic row
           // carries the "Publishing…" state.
-          void publishComment({ text, ancestorComments: ancestors, onOptimistic: markPosted });
+          void publishComment({
+            text,
+            ancestorComments: ancestors,
+            onOptimistic: commentId => {
+              markPosted(commentId);
+              // The heading above counts things this section cannot see, so it cannot notice this on
+              // its own.
+              reportActivityPost();
+            },
+          });
           close();
         }}
       />

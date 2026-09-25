@@ -87,6 +87,11 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
       ),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
+    // The Activity heading treats this as a baseline and adds the comments published since it
+    // loaded (see `activity-posts.tsx`). A refetch on focus could land with those comments already
+    // indexed, and the delta would then count them a second time. Navigating away and back re-reads
+    // it and resets the delta together, which is the same answer without the window in between.
+    refetchOnWindowFocus: false,
   });
 
   return data ?? EMPTY_COUNTS;

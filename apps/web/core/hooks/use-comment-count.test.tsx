@@ -66,6 +66,46 @@ describe('useCommentCount', () => {
     expect(result.current).toBe(5);
   });
 
+  /**
+   * The claim card's pill is an activity total — debates, extracted claims, and every comment under
+   * them. The comment list for that claim is a strict subset, and the claim page fetches it on every
+   * visit, so without this a reader who opened a claim and went back to Explore found the card's 33
+   * had become 1.
+   */
+  it('keeps a broader seed when the comment list answers with its own smaller measurement', async () => {
+    // Both readings of the same cache, because asserting the broader one alone cannot fail: 33 is
+    // also its answer before the list arrives, so `waitFor` would pass on the first tick whatever
+    // the list went on to say. The plain count is the control — when it drops to 1 the list has
+    // definitely replaced, and only then does the broader one holding 33 mean anything.
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { broaderThanComments: true }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(1));
+    expect(result.current.broader).toBe(33);
+  });
+
+  it('still adds a row the viewer has only just posted to a broader seed', async () => {
+    const { result } = renderHook(() => useCommentCount(ENTITY_ID, 33, { broaderThanComments: true }), { wrapper });
+
+    // The list answers after the count was rendered, and the reader has a row in flight.
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2', { isPendingPublish: true } as Partial<CommentEntity>)]);
+    });
+
+    await waitFor(() => expect(result.current).toBe(34));
+  });
+
   it('follows the list once something has read it', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
 

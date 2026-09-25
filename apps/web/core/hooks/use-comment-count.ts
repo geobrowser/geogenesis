@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-
 import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 
 import type { CommentEntity } from '~/partials/comments/types';
@@ -50,7 +49,25 @@ export function resetCommentCountSeeds() {
   seeds.clear();
 }
 
-export function useCommentCount(entityId: string, serverCount: number): number {
+export function useCommentCount(
+  entityId: string,
+  serverCount: number,
+  {
+    broaderThanComments = false,
+  }: {
+    /**
+     * The seed counts something the comment list does not, so the list may not replace it.
+     *
+     * The claim card's pill shows an *activity* total — the claim's debates, the claims extracted
+     * from them, and every comment in that tree. The comment list for that claim is a strict subset
+     * of it, so the rule below ("once the list has answered it *is* the count") turns a pill reading
+     * 33 into one reading 1 the moment anything fetches that list — which the claim page itself does
+     * on every visit, so a reader who opens a claim and goes back to Explore finds the card's number
+     * collapsed. Optimistic rows still add to the seed; only the replacement is switched off.
+     */
+    broaderThanComments?: boolean;
+  } = {}
+): number {
   // Whether the list has ever been fetched, rather than merely written to. Same disabled-subscription
   // shape as the list below, for the same reason: this reads what another hook owns.
   const { data: hasFetchedList } = useQuery<boolean>({
@@ -82,7 +99,10 @@ export function useCommentCount(entityId: string, serverCount: number): number {
     // what keeps those two apart: a publish that fails before the list loads filters its own optimistic
     // row back out and leaves `[]` behind, which is not the list speaking — and a post on top of an
     // authoritatively empty list leaves only a pending row, which is.
-    if (hasFetchedList === true) return data.length;
+    if (hasFetchedList === true && !broaderThanComments) return data.length;
+    // A broader seed keeps counting from itself, with anything still only local added on: the list
+    // that just answered measured a subset, so its length cannot stand in for the whole.
+    if (hasFetchedList === true) return serverCount + data.filter(comment => comment.isPendingPublish === true).length;
 
     // Never fetched, so this entry holds only what was written into it: `useCreateComment` seeds it with
     // `(old = [])`. Its length would read 1 where the server knows 5, so the count is the base those

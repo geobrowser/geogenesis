@@ -153,7 +153,11 @@ describe('DebateCommentRow', () => {
 
     expect(screen.queryByText('a reply')).not.toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'Continue this thread — 1 more reply' });
-    expect(link).toHaveAttribute('href', expect.stringContaining('debate-1'));
+    // This comment, in the space it lives in — not the debate it hangs under. Its own page roots the
+    // branch the reader was reading; the debate's reopens the whole thread one level up.
+    expect(link).toHaveAttribute('href', expect.stringContaining('comment-1'));
+    expect(link).toHaveAttribute('href', expect.stringContaining('author-space'));
+    expect(link).not.toHaveAttribute('href', expect.stringContaining('debate-1'));
   });
 
   // The other overflow: siblings held back for length. Already loaded, so it reveals in place.

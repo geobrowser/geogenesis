@@ -40,12 +40,12 @@ import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
+import { useClaimActivityCounts } from './claim-activity-count';
 import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
-import { useClaimActivityCounts } from './claim-activity-count';
 import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
@@ -427,11 +427,12 @@ function ClaimTabPanel({
 /**
  * The claim's overview: the related-claims gallery, then everything that has happened to it.
  *
- * Debates used to have a gallery of their own beside Claims. They are rows in the activity feed
- * now, which is the whole point of GEO-3008 — a debate belongs in the account of what happened to
- * this claim rather than in a shelf above it, and two places showing the same debates left the
- * reader to work out whether they were the same debates. The Debates *tab* is still the complete
- * index; the gallery was the duplicate.
+ * Debates appear twice on purpose, and this comment used to say the opposite. An earlier cut did
+ * remove the gallery — a debate belongs in the account of what happened to this claim rather than in
+ * a shelf above it — and it went back in because the two are not the same offer: the gallery is the
+ * way through to the Debates tab, the complete filterable index, while the thread shows the few most
+ * recent in the order they happened, in among the comments. Two jobs. If that stops being true, the
+ * gallery is the one to drop.
  *
  * Its own component because the panel above returns early for every other tab, and a hook cannot
  * live behind an early return.

@@ -75,6 +75,15 @@ export type DebateActivityRowProps = {
   claimText: string | null;
   keyframeUrl: string | null;
   publishedAt: Date | null;
+  /**
+   * Counted once for every debate on the page rather than per row.
+   *
+   * Both used to be read here: the comments through a batched hook handed one id, which is a request
+   * each, and the claims through this debate's transcript — the expensive read the collapse control
+   * exists to avoid, running whether or not the row was expanded.
+   */
+  commentCount: number;
+  claimCount: number;
 };
 
 /**
@@ -97,17 +106,13 @@ export function DebateActivityRow({
   claimText,
   keyframeUrl,
   publishedAt,
+  commentCount,
+  claimCount,
 }: DebateActivityRowProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const composer = useInlineComposer();
-  // Same query key the branch below reads, so this costs nothing while the branch is open — which is
-  // its default — and keeps the number honest when it is closed. The transcript is also the only
-  // source that agrees with the rows: it is what the branch counts off, where the `Sources` backlink
-  // aggregate the feed's totals use is a different question asked from the other end.
-  const { claims: transcriptClaims } = useDebateTranscriptClaims(debate.id, spaceId);
   // One aggregate for this row's own comment count. Without it the button seeds itself at zero and
   // only ever corrects downward, so a debate with comments read "0" until the panel was opened.
-  const debateCommentCount = useEntityCommentCounts(React.useMemo(() => [debate.id], [debate.id]));
 
   const debaters = sides
     .map(side => profilesBySpaceId.get(side.spaceId)?.name?.trim())
@@ -219,18 +224,16 @@ export function DebateActivityRow({
                 you hide them. */}
             <span
               className={cx(PAGE_DENSITY.metaClass, 'inline-flex items-center gap-1.5 text-grey-04')}
-              aria-label={`${transcriptClaims.totalCount} extracted ${
-                transcriptClaims.totalCount === 1 ? 'claim' : 'claims'
-              }`}
+              aria-label={`${claimCount} extracted ${claimCount === 1 ? 'claim' : 'claims'}`}
             >
               <Warning size={12} />
-              <span className="text-[14px] font-normal tabular-nums">{transcriptClaims.totalCount}</span>
+              <span className="text-[14px] font-normal tabular-nums">{claimCount}</span>
             </span>
             <EntityCommentsButton
               entityId={debate.id}
               spaceId={spaceId}
               targetEntityType="debate"
-              count={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+              count={commentCount}
               // The only way into the composer now that Reply is gone: two controls opening one box
               // was one control too many, and the count already says what the box is for. A comment
               // here is filed against the debate, not against this claim, but it is written and read
@@ -264,7 +267,7 @@ export function DebateActivityRow({
                 responseVocabulary={responseVocabulary}
                 onCollapse={() => setCollapsed(true)}
                 branchLabel={branchLabel}
-                commentCount={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+                commentCount={commentCount}
                 hasPostedHere={composer.hasPosted}
               />
             </div>

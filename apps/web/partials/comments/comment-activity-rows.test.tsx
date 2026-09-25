@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,16 +8,22 @@ import type { CommentActivityRow, CommentWithReplies } from './types';
 
 const mocks = vi.hoisted(() => ({
   comments: [] as CommentWithReplies[],
+  smartAccount: null as unknown,
+  /** Stands in for the optimistic row a real publish writes, which is what tells the section. */
+  publishComment: vi.fn((input: { onOptimistic?: (id: string) => void }) => {
+    input.onOptimistic?.('new-comment');
+    return Promise.resolve(undefined);
+  }),
 }));
 
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: mocks.comments, totalCount: mocks.comments.length, isLoading: false }),
 }));
 vi.mock('~/core/hooks/use-publish-comment', () => ({
-  usePublishComment: () => ({ publishComment: vi.fn(), editComment: vi.fn() }),
+  usePublishComment: () => ({ publishComment: mocks.publishComment, editComment: vi.fn() }),
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
-vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
+vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: null }) }));
 vi.mock('~/core/hooks/use-space-editor-ids', () => ({
   useSpaceRoles: () => ({
@@ -80,6 +86,8 @@ describe('CommentSection activity rows', () => {
   afterEach(() => {
     cleanup();
     mocks.comments = [];
+    mocks.smartAccount = null;
+    mocks.publishComment.mockClear();
   });
 
   it('orders non-comment rows in among the comments rather than stacking them above', () => {
@@ -118,6 +126,30 @@ describe('CommentSection activity rows', () => {
     renderSection([{ id: 'd-1', entityId: 'd-1', spaceId: 'space-1', createdAt: '2026-09-21T10:00:00Z', content: <span>debate</span> }]);
 
     expect(screen.getByText('Activity (2)')).toBeInTheDocument();
+  });
+
+  /**
+   * The heading's number is a server aggregate over debates, extracted claims and every comment
+   * under them, so nothing in the comment caches can move it — publishing used to leave it standing
+   * still, including for the comment the reader had just written.
+   */
+  it('counts a comment published here on top of the aggregate it was given', async () => {
+    // Signed in, because the composer asks for a sign-in rather than opening otherwise.
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    render(
+      withClient(
+        <CommentSection entityId="entity-1" spaceId="space-1" title="Activity" totalOverride={33} activityRows={[]} />
+      )
+    );
+
+    expect(screen.getByText('Activity (33)')).toBeInTheDocument();
+
+    // What a composer does on publish: the section is told, whichever entity the comment landed on.
+    fireEvent.click(screen.getByText('Join the conversation...'));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'A new comment' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+    await waitFor(() => expect(screen.getByText('Activity (34)')).toBeInTheDocument());
   });
 
   it('renders the rows on a claim nobody has commented on yet', () => {

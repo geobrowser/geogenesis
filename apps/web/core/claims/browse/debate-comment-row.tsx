@@ -157,7 +157,13 @@ export function DebateCommentRow({
           >
             Reply
           </button>
-          <ThreadContinue href={NavUtils.toEntity(spaceId, targetEntityId)} count={belowFloor} />
+          {/* This comment's own page, not the debate's. A Comment is an entity like any other and its
+              page renders its own thread, so continuing lands on the branch the reader was reading
+              with a fresh depth budget — which is what the control promises. Pointing at the target
+              entity reopened the whole parent thread instead, and for a debate that is the video
+              page, where the thread is behind a button. Verified on the preview: a comment entity
+              page draws `Comments (11)` for a comment with eleven replies. */}
+          <ThreadContinue href={NavUtils.toEntity(comment.spaceId, comment.id)} count={belowFloor} />
         </div>
 
         <InlineCommentComposer
