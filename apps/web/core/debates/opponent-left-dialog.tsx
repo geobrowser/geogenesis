@@ -10,15 +10,7 @@ import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
 /** Explains that the opponent left; shown after the viewer has left the dead debate screen. */
-export function OpponentLeftDialog({
-  recordingDiscarded = false,
-  onClose,
-  onFindDebate,
-}: {
-  recordingDiscarded?: boolean;
-  onClose: () => void;
-  onFindDebate: () => void;
-}) {
+export function OpponentLeftDialog({ onClose, onFindDebate }: { onClose: () => void; onFindDebate: () => void }) {
   const dialogRef = useFocusTrap(true);
 
   return (
@@ -43,12 +35,7 @@ export function OpponentLeftDialog({
           Opponent left
         </Text>
         <Text as="p" variant="metadata" color="text" className="mt-2">
-          {recordingDiscarded
-            ? 'Your opponent left the debate. Your recording was discarded.'
-            : 'Your opponent left the debate.'}
-        </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
-          Find another match from Debates.
+          Your opponent left the debate. You can find another debate in the debate side panel!
         </Text>
         <div className="mt-5 flex justify-center">
           <button
