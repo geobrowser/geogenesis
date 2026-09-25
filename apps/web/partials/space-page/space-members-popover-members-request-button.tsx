@@ -4,12 +4,12 @@ import * as React from 'react';
 
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useDeferredJoin } from '~/core/state/pending-join-intents';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
 
@@ -27,7 +27,7 @@ export function SpaceMembersPopoverMemberRequestButton({
   const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const promptSignIn = usePrivySignIn();
   const enqueuePendingAction = useEnqueuePendingAction();
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
   // Durable + optimistic pending state so a request made anywhere (and surviving
@@ -59,7 +59,7 @@ export function SpaceMembersPopoverMemberRequestButton({
     }
     if (!smartAccount) {
       deferJoin();
-      openSignInPrompt('join');
+      promptSignIn();
       return;
     }
     queueJoinRequest();

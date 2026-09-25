@@ -3,12 +3,12 @@
 import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useDeferredJoin } from '~/core/state/pending-join-intents';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
 import {
@@ -51,7 +51,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
   });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const promptSignIn = usePrivySignIn();
   const enqueuePendingAction = useEnqueuePendingAction();
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
@@ -76,7 +76,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
     }
     if (!smartAccount) {
       deferJoin();
-      openSignInPrompt('join');
+      promptSignIn();
       return;
     }
     queueJoinRequest();
