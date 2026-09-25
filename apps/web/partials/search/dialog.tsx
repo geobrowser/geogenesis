@@ -65,7 +65,11 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   // Explicit `true` (not just omitted) when off — useSearch uses this to tell
   // "user asked for unrestricted search" apart from "caller has no opinion",
   // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
-  const autocomplete = useSearch({ enabled: open, includeNonCanonical: canonicalOnly ? false : true });
+  const autocomplete = useSearch({
+    enabled: open,
+    includeNonCanonical: canonicalOnly ? false : true,
+    analyticsSurface: 'global',
+  });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
 
   const toggleCanonicalOnly = useCallback(() => {
