@@ -81,6 +81,13 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+function expectInDocumentOrder(elements: HTMLElement[]) {
+  for (let index = 0; index < elements.length - 1; index++) {
+    const position = elements[index].compareDocumentPosition(elements[index + 1]);
+    expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  }
+}
+
 describe('EntityPageActions', () => {
   it('draws the context menu and history on every surface', () => {
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
@@ -97,10 +104,7 @@ describe('EntityPageActions', () => {
       id === 'Create new entity' ? screen.getByRole('link', { name: id }) : screen.getByTestId(id)
     );
 
-    for (let i = 0; i < order.length - 1; i++) {
-      // Node.DOCUMENT_POSITION_FOLLOWING === 4: the next control really is later in the document.
-      expect(order[i].compareDocumentPosition(order[i + 1]) & 4).toBe(4);
-    }
+    expectInDocumentOrder(order);
   });
 
   it('uses compact spacing when the action row shares a profile header', () => {
@@ -109,9 +113,7 @@ describe('EntityPageActions', () => {
     const order = ['vote-buttons', 'history', 'context-menu'].map(id => screen.getByTestId(id));
     expect(order[0].parentElement).toHaveClass('gap-4');
 
-    for (let i = 0; i < order.length - 1; i++) {
-      expect(order[i].compareDocumentPosition(order[i + 1]) & 4).toBe(4);
-    }
+    expectInDocumentOrder(order);
   });
 
   it('votes only where the caller asked for it', () => {

@@ -52,11 +52,9 @@ export function EntityPageActions({
     clearDiffSelection,
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
-  const voteButtons = isVoteable ? <EntityVoteButtons entityId={entityId} spaceId={spaceId} /> : null;
-
   return (
     <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
-      {voteButtons}
+      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
       {editable && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
