@@ -25,11 +25,14 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 export type SearchFilterTag = { id: string; name: string | null };
 
 type Props = {
+  canonicalOnly: boolean;
+  onToggleCanonicalOnly: () => void;
+  selectedSpaceIds: string[];
+  onToggleSpace: (id: string) => void;
+  onSelectAllSpaces: () => void;
   typeIds: string[];
   onToggleType: (id: string) => void;
   onClearTypes: () => void;
-  spaceId: string | null;
-  onSelectSpace: (id: string | null) => void;
   tags: SearchFilterTag[];
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
@@ -47,16 +50,20 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The type/space/tag filters shown under global search Advanced. Types and space are select-style
- * popovers that float over the results (see `portalContainer`); tags are a free entity search.
- * Selections feed `useSearch` (`filterByTypes` / `filterBySpace` / `filterByTags`).
+ * The space/type/tag filters shown under global search Advanced. Space (which folds in the
+ * canonical-only scope) and type are select-style popovers that float over the results (see
+ * `portalContainer`); tags are a free entity search. Selections feed `useSearch`
+ * (`filterBySpaceIds` + `includeNonCanonical` / `filterByTypes` / `filterByTags`).
  */
 export function AdvancedSearchFilters({
+  canonicalOnly,
+  onToggleCanonicalOnly,
+  selectedSpaceIds,
+  onToggleSpace,
+  onSelectAllSpaces,
   typeIds,
   onToggleType,
   onClearTypes,
-  spaceId,
-  onSelectSpace,
   tags,
   onAddTag,
   onRemoveTag,
@@ -65,13 +72,20 @@ export function AdvancedSearchFilters({
   return (
     <div className="flex flex-col gap-3" onKeyDown={shieldNavigationKeys}>
       <div className="flex items-start gap-2">
+        <SpaceFilter
+          canonicalOnly={canonicalOnly}
+          onToggleCanonicalOnly={onToggleCanonicalOnly}
+          selectedSpaceIds={selectedSpaceIds}
+          onToggleSpace={onToggleSpace}
+          onSelectAllSpaces={onSelectAllSpaces}
+          container={portalContainer}
+        />
         <TypeFilter
           typeIds={typeIds}
           onToggleType={onToggleType}
           onClearTypes={onClearTypes}
           container={portalContainer}
         />
-        <SpaceFilter spaceId={spaceId} onSelectSpace={onSelectSpace} container={portalContainer} />
       </div>
       <TagFilter tags={tags} onAddTag={onAddTag} onRemoveTag={onRemoveTag} />
     </div>
@@ -131,10 +145,12 @@ function FilterDropdown({
 function OptionRow({
   selected,
   onClick,
+  disabled = false,
   children,
 }: {
   selected: boolean;
   onClick: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -142,8 +158,10 @@ function OptionRow({
       <button
         type="button"
         onClick={onClick}
+        disabled={disabled}
         className={cx(
-          'flex w-full items-center gap-2 px-3 py-2 text-left text-footnoteMedium transition-colors hover:bg-grey-01',
+          'flex w-full items-center gap-2 px-3 py-2 text-left text-footnoteMedium transition-colors',
+          disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-grey-01',
           selected ? 'text-text' : 'text-grey-04'
         )}
       >
@@ -196,18 +214,26 @@ function TypeFilter({
 }
 
 function SpaceFilter({
-  spaceId,
-  onSelectSpace,
+  canonicalOnly,
+  onToggleCanonicalOnly,
+  selectedSpaceIds,
+  onToggleSpace,
+  onSelectAllSpaces,
   container,
 }: {
-  spaceId: string | null;
-  onSelectSpace: (id: string | null) => void;
+  canonicalOnly: boolean;
+  onToggleCanonicalOnly: () => void;
+  selectedSpaceIds: string[];
+  onToggleSpace: (id: string) => void;
+  onSelectAllSpaces: () => void;
   container: HTMLElement | null;
 }) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
   const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
 
+  // The viewer's own spaces — personal first, then member/editor — named only, mirroring the
+  // "create entity in space" list already in the dialog.
   const spaces = React.useMemo(() => {
     const list = [...memberSpaces];
     if (personalSpace && !list.some(space => space.id === personalSpace.id)) {
@@ -216,60 +242,55 @@ function SpaceFilter({
     return list.filter(space => hasName(space?.entity?.name));
   }, [personalSpace, memberSpaces]);
 
-  const selectedSpace = spaces.find(space => space.id === spaceId) ?? null;
-
+  // Drop selected spaces that have fallen out of the member list
   React.useEffect(() => {
-    if (spaceId !== null && !spaces.some(space => space.id === spaceId)) {
-      onSelectSpace(null);
-    }
-  }, [spaceId, spaces, onSelectSpace]);
+    if (spaces.length === 0) return;
+    const known = new Set(spaces.map(space => space.id));
+    const stale = selectedSpaceIds.filter(id => !known.has(id));
+    stale.forEach(onToggleSpace);
+  }, [spaces, selectedSpaceIds, onToggleSpace]);
 
-  if (spaces.length === 0) return null;
+  const selected = React.useMemo(() => new Set(selectedSpaceIds), [selectedSpaceIds]);
+  const label =
+    selectedSpaceIds.length === 0
+      ? 'All spaces'
+      : selectedSpaceIds.length === 1
+        ? (spaces.find(space => space.id === selectedSpaceIds[0])?.entity?.name ?? '1 space')
+        : `${selectedSpaceIds.length} spaces`;
 
   return (
-    <FilterDropdown
-      label="Space"
-      container={container}
-      trigger={
-        selectedSpace ? (
-          <>
-            <span className="relative size-3.5 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-              <NativeGeoImage value={selectedSpace.entity.image} alt="" className="h-full w-full object-cover" />
-            </span>
-            <span className="truncate">{selectedSpace.entity.name}</span>
-          </>
-        ) : (
-          <span className="truncate text-grey-04">Any space</span>
-        )
-      }
-    >
-      {close => (
+    <FilterDropdown label="Spaces" container={container} trigger={<span className="truncate">{label}</span>}>
+      {() => (
         <>
-          <OptionRow
-            selected={spaceId === null}
-            onClick={() => {
-              onSelectSpace(null);
-              close();
-            }}
-          >
-            Any space
+          <OptionRow selected={canonicalOnly} onClick={onToggleCanonicalOnly}>
+            <CheckboxVisual checked={canonicalOnly} />
+            <span className="min-w-0 flex-1 truncate text-text">Canonical only</span>
           </OptionRow>
-          {spaces.map(space => (
-            <OptionRow
-              key={space.id}
-              selected={space.id === spaceId}
-              onClick={() => {
-                onSelectSpace(space.id);
-                close();
-              }}
-            >
-              <span className="relative size-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-                <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-text">{space.entity.name}</span>
-              {space.id === spaceId ? <CheckboxVisual checked /> : null}
-            </OptionRow>
-          ))}
+          {!canonicalOnly ? (
+            <li className="border-b border-divider px-3 py-2 text-footnote text-grey-04 last:border-none">
+              Turn on Canonical only to filter by space.
+            </li>
+          ) : null}
+          <OptionRow selected={selectedSpaceIds.length === 0} onClick={onSelectAllSpaces} disabled={!canonicalOnly}>
+            All spaces
+          </OptionRow>
+          {spaces.map(space => {
+            const isSelected = selected.has(space.id);
+            return (
+              <OptionRow
+                key={space.id}
+                selected={isSelected}
+                onClick={() => onToggleSpace(space.id)}
+                disabled={!canonicalOnly}
+              >
+                <CheckboxVisual checked={isSelected} />
+                <span className="relative size-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
+                  <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-text">{space.entity.name}</span>
+              </OptionRow>
+            );
+          })}
         </>
       )}
     </FilterDropdown>
