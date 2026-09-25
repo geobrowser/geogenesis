@@ -35,6 +35,11 @@ export function useToast({ placement = 'bottom' }: { placement?: ToastPlacement 
   return [toast, setToast] as const;
 }
 
+/** Setter only, so callers don't re-render when the toast changes. */
+export function useSetToast({ placement = 'bottom' }: { placement?: ToastPlacement } = {}) {
+  return useSetAtom(toastAtoms[placement]);
+}
+
 export function Toast() {
   const toastState = useAtomValue(toastStateAtom);
   const clearToast = useSetAtom(toastAtoms.bottom);
