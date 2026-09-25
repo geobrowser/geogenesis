@@ -34,6 +34,13 @@ const textareaStyles = cva(
         smallTitle: 'text-smallTitle',
         // For a field inside a rail card, whose read-only text is `metadata` too — the card
         // must not resize when the edit toggle flips.
+        //
+        // No compensating margin, like `smallTitle` and `tableProperty` above. The numbers on
+        // the other three were each arrived at by eye and revised more than once (see the
+        // history of `tableCell`), and no font metric predicts them — `smallTitle` and
+        // `tableCell` share a size and a line-height and disagree. So this starts at none, and
+        // anyone who sees this field sitting off the browse-mode text it replaces should treat
+        // that as the measurement rather than a regression.
         metadata: 'text-metadata',
       },
     },

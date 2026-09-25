@@ -41,7 +41,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
-import { PersonalSpaceTagline } from '~/partials/profile/profile-tagline';
+import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
 
 type SharedProps = {
   entityId: string;

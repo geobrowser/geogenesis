@@ -4,9 +4,9 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
+import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY, taglineLengthHint } from '~/core/profile/profile-ontology';
 
-import { PersonalSpaceTagline } from './profile-tagline';
+import { PersonalSpaceTagline } from './personal-space-tagline';
 
 const SPACE_ID = '11111111111111111111111111111111';
 const PERSON_ID = '22222222222222222222222222222222';
@@ -38,6 +38,15 @@ describe('PersonalSpaceTagline', () => {
     render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} fallbackTagline="Engineer at Geo" />);
 
     expect(screen.getByText('Engineer at Geo')).toBeInTheDocument();
+  });
+
+  // A tagline of nothing but spaces is truthy, and rendering it opens an empty line between the
+  // name and the roles.
+  it('renders nothing for a tagline of only whitespace', () => {
+    mocks.stored = { id: 'v1', value: '   ' };
+    const { container } = render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing when there is no tagline', () => {
@@ -90,9 +99,7 @@ describe('PersonalSpaceTagline', () => {
     mocks.stored = { id: 'v1', value: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
     render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
 
-    expect(screen.getByText(/editing this will shorten it/)).toBeInTheDocument();
-    // Never a negative count.
-    expect(screen.queryByText(/-\d+ characters? left/)).toBeNull();
+    expect(screen.getByText(taglineLengthHint('y'.repeat(TAGLINE_MAX_LENGTH + 40)))).toBeInTheDocument();
   });
 
   it('caps the field at the tagline limit and counts against it', () => {
@@ -101,7 +108,7 @@ describe('PersonalSpaceTagline', () => {
     render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
 
     expect(screen.getByRole('textbox', { name: 'Tagline' })).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
-    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 10} characters left`)).toBeInTheDocument();
+    expect(screen.getByText(taglineLengthHint('x'.repeat(10)))).toBeInTheDocument();
   });
 
   it('deletes the row rather than storing an empty tagline', async () => {

@@ -9,7 +9,7 @@ import cx from 'classnames';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
-import { TAGLINE_MAX_LENGTH, normalizeTagline } from '~/core/profile/profile-ontology';
+import { TAGLINE_MAX_LENGTH, normalizeTagline, taglineLengthHint } from '~/core/profile/profile-ontology';
 import {
   type EducationDraft,
   type PositionDraft,
@@ -155,11 +155,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   React.useEffect(() => {
     if (!open) return;
     if (pristineRef.current.name) setName(current.name);
-    // Seeded already cut. A stored tagline can be longer than the limit — written before this
-    // field existed, or by another client — and `maxLength` does not touch a value set
-    // programmatically, so the raw one would sit in the field under a negative count while
-    // `publishTagline` quietly published something shorter.
-    if (pristineRef.current.tagline) setTagline(normalizeTagline(current.tagline));
+    // Seeded as stored, not cut. A tagline over the limit is somebody's real headline, and
+    // showing it short would be the modal lying about what it is about to leave alone —
+    // `taglineLengthHint` says what editing it would do instead.
+    if (pristineRef.current.tagline) setTagline(current.tagline);
     if (pristineRef.current.description) setDescription(current.description);
   }, [open, current.name, current.tagline, current.description]);
 
@@ -230,12 +229,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // an untrimmed original marked the form dirty the moment it opened, and let an
   // image-only edit quietly rewrite the name in trimmed form.
   const publishName = pristineRef.current.name ? current.name : name.trim();
-  // Cut as well as trimmed. A tagline already over the limit — written by another client, or
-  // before this field existed — must not be silently republished at its old length by an edit
-  // to some other field, and trimming can only ever shorten it.
-  const publishTagline = pristineRef.current.tagline
-    ? normalizeTagline(current.tagline)
-    : normalizeTagline(tagline.trim());
+  // Same rule as the name above, and for the same reason. Cutting a pristine tagline here
+  // would make `hasChanges` true the moment the modal opened on a stored one over the limit —
+  // Save live against an edit nobody made, and one click away from silently republishing
+  // somebody's headline 40 characters shorter. It is cut when they edit it, not before.
+  const publishTagline = pristineRef.current.tagline ? current.tagline : normalizeTagline(tagline.trim());
   const publishDescription = pristineRef.current.description ? current.description : description.trim();
 
   // Compared the way they are published — trimmed, and with a removal of an image
@@ -481,9 +479,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                     {/* What it is on the left, how much room is left on the right. There is no
                     error state to reach — the field cannot hold more than it allows — so the
                     count is guidance rather than validation. */}
-                    <span className="flex items-baseline justify-between gap-3 text-footnote text-grey-04">
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-footnote text-grey-04">
                       <span>One line under your name. The first thing people should know about you.</span>
-                      <span className="shrink-0 tabular-nums">{TAGLINE_MAX_LENGTH - tagline.length} left</span>
+                      {/* Wraps to a line of its own when it is the over-limit sentence rather
+                      than a count, which is the only time it is long. */}
+                      <span className="tabular-nums">{taglineLengthHint(tagline)}</span>
                     </span>
                   </label>
 

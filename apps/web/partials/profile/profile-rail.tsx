@@ -429,20 +429,18 @@ export function AboutSection({
    * The person's description, read *and written* here rather than under their name — this card
    * is the only place a profile shows a bio, so it has to be the place one is typed.
    *
-   * `undefined` from the hook means the store holds no opinion at all, which is every render
-   * before the entity hydrates; `null` means it has been cleared. Only the first falls back to
-   * what the server sent, or staging a deletion would bring the bio straight back.
+   * `serverDescription` is handed to the hook rather than resolved here; what an absent row
+   * means against a cleared one is the hook's to decide, and all three of its callers used to
+   * decide it separately.
    */
   const isEditing = useUserIsEditing(spaceId);
-  const { value: storedDescription, setValue: setDescription } = useEntityTextValue({
+  const { text: description, setValue: setDescription } = useEntityTextValue({
     entityId: personEntityId,
     spaceId,
     propertyId: SystemIds.DESCRIPTION_PROPERTY,
     propertyName: 'Description',
+    fallback: serverDescription,
   });
-
-  const description =
-    storedDescription === undefined ? (serverDescription ?? undefined) : (storedDescription ?? undefined);
   // An editor with no person entity has nothing to write onto — a personal space whose topic
   // never resolved. The card still shows the facts; it just offers no field.
   const canEditDescription = isEditing && personEntityId !== null;
@@ -470,7 +468,7 @@ export function AboutSection({
             // 280px rail would be cut off mid-sentence. The guidance goes below instead.
             placeholder="Add a description…"
             aria-label="Description"
-            value={description ?? ''}
+            value={description}
             onChange={setDescription}
           />
           {/* Says what belongs here rather than what the field is, because the tagline under
@@ -478,19 +476,17 @@ export function AboutSection({
               question is which one this is. */}
           <p className="mt-1 text-footnote text-grey-04">A few sentences on your background and what you work on.</p>
         </div>
-      ) : (
-        description && (
-          <div className="mb-2">
-            <ClampedText
-              text={description}
-              maxLines={6}
-              variant="metadata"
-              textClassName="wrap-break-word text-text"
-              togglePlacement="below"
-            />
-          </div>
-        )
-      )}
+      ) : description ? (
+        <div className="mb-2">
+          <ClampedText
+            text={description}
+            maxLines={6}
+            variant="metadata"
+            textClassName="wrap-break-word text-text"
+            togglePlacement="below"
+          />
+        </div>
+      ) : null}
 
       <dl className="flex flex-col">
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}

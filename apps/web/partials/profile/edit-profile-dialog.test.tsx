@@ -112,7 +112,7 @@ describe('EditProfileDialog', () => {
     await userEvent.click(saveButton());
 
     expect(taglineField()).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
-    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 'Building debates'.length} left`)).toBeInTheDocument();
+    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 'Building debates'.length} characters left`)).toBeInTheDocument();
     expect(mocks.publish).toHaveBeenCalledWith(
       expect.objectContaining({ tagline: 'Building debates' }),
       expect.anything()
@@ -121,17 +121,31 @@ describe('EditProfileDialog', () => {
   });
 
   // A tagline already over the limit — written before this field existed, or by another client —
-  // must not be quietly republished at its old length by an edit to some other field.
-  it('cuts an over-long stored tagline when something else is saved', async () => {
+  // is somebody's real headline. Cutting it on open would make Save live against an edit nobody
+  // made and republish it 40 characters shorter on one click. Same rule as the name field.
+  it('leaves an over-long tagline alone until it is edited', async () => {
+    const stored = 'y'.repeat(TAGLINE_MAX_LENGTH + 40);
+    mocks.current = { ...mocks.current, tagline: stored };
+    renderDialog();
+
+    expect(taglineField()).toHaveValue(stored);
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText(/Over the 220-character limit/)).toBeInTheDocument();
+
+    await userEvent.type(nameField(), '!');
+    await userEvent.click(saveButton());
+
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ tagline: stored }), expect.anything());
+  });
+
+  it('cuts the tagline once the field is actually edited', async () => {
     mocks.current = { ...mocks.current, tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
     renderDialog();
 
-    // Cut in the field too, not just on the way out: the count beside it and the value that
-    // publishes have to be the same thing, and a raw 260-character seed showed "-40 left".
-    expect(taglineField()).toHaveValue('y'.repeat(TAGLINE_MAX_LENGTH));
-    expect(screen.getByText('0 left')).toBeInTheDocument();
-
-    await userEvent.type(nameField(), '!');
+    // A deletion, because `maxLength` is what an over-long field allows: typing into one is
+    // refused outright, so the first edit anybody can make is taking a character out — and that
+    // is the keystroke that snaps the whole value down to the limit.
+    await userEvent.type(taglineField(), '{backspace}');
     await userEvent.click(saveButton());
 
     expect(mocks.publish).toHaveBeenCalledWith(

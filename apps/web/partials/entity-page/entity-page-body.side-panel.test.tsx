@@ -75,7 +75,7 @@ vi.mock('~/partials/profile/person-profile-view', () => ({
 vi.mock('~/partials/profile/personal-space-profile', () => ({
   PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
 }));
-vi.mock('~/partials/profile/profile-tagline', () => ({
+vi.mock('~/partials/profile/personal-space-tagline', () => ({
   PersonalSpaceTagline: () => <div data-testid="profile-tagline" />,
 }));
 

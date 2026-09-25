@@ -29,9 +29,9 @@ import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-pr
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
 import { ProfileActions } from '~/partials/profile/profile-actions';
 import { ProfileRail } from '~/partials/profile/profile-rail';
-import { PersonalSpaceTagline } from '~/partials/profile/profile-tagline';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';

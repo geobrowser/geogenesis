@@ -37,14 +37,13 @@ export function EntityPageInlineDescription({
   fallbackDescription?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
-  const { value, setValue } = useEntityTextValue({
+  const { text: description, setValue } = useEntityTextValue({
     entityId,
     spaceId,
     propertyId: SystemIds.DESCRIPTION_PROPERTY,
     propertyName: 'Description',
+    fallback: fallbackDescription,
   });
-
-  const description = value ?? fallbackDescription ?? '';
 
   if (isEditing) {
     return (

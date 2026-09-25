@@ -1,7 +1,12 @@
 'use client';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY, normalizeTagline } from '~/core/profile/profile-ontology';
+import {
+  TAGLINE_MAX_LENGTH,
+  TAGLINE_PROPERTY,
+  normalizeTagline,
+  taglineLengthHint,
+} from '~/core/profile/profile-ontology';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -33,22 +38,13 @@ export function PersonalSpaceTagline({
   fallbackTagline?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
-  const { value, setValue } = useEntityTextValue({
+  const { text: tagline, setValue } = useEntityTextValue({
     entityId: personEntityId,
     spaceId,
     propertyId: TAGLINE_PROPERTY,
     propertyName: 'Tagline',
+    fallback: fallbackTagline,
   });
-
-  /*
-   * `undefined` from the hook means the store holds no opinion — every render before the entity
-   * hydrates — and only that falls back to the server's copy. `null` means the tagline was
-   * cleared, and falling back there would put it straight back on screen.
-   */
-  const tagline = value === undefined ? (fallbackTagline ?? '') : (value ?? '');
-  // Counted down rather than up. `12/220` asks the reader to do the subtraction, and the number
-  // they actually want is how much room is left.
-  const remaining = TAGLINE_MAX_LENGTH - tagline.length;
 
   if (isEditing) {
     return (
@@ -68,20 +64,15 @@ export function PersonalSpaceTagline({
           // some browsers and which does nothing at all to a programmatic change.
           onChange={next => setValue(normalizeTagline(next))}
         />
-        <p className="mt-1 text-footnote text-grey-04">
-          {remaining >= 0
-            ? `${remaining} character${remaining === 1 ? '' : 's'} left`
-            : // Unreachable by typing, and reachable by opening a tagline written before this
-              // limit existed or by another client. Saying "0 left" over 260 characters of text
-              // would read as a broken counter. Editing is what shortens it — `onChange` cuts
-              // the value — so this does not promise anything a save will do.
-              `Over the ${TAGLINE_MAX_LENGTH}-character limit — editing this will shorten it`}
-        </p>
+        <p className="mt-1 text-footnote text-grey-04 tabular-nums">{taglineLengthHint(tagline)}</p>
       </div>
     );
   }
 
-  if (!tagline) return null;
+  // Trimmed for the question of whether there is one at all. A tagline of nothing but spaces
+  // is truthy, and rendering it puts an empty line between the name and the roles — which is
+  // also how `fetchProfileHistory` reads it, where it trims to null for the debate byline.
+  if (!tagline.trim()) return null;
 
   // One line. A tagline longer than the header is wide is truncated rather than wrapped —
   // there is a 220-character limit on what can be written here, and the roles under it are the
