@@ -1896,6 +1896,38 @@ describe('RematchVoiceHeader', () => {
     }
   });
 
+  /**
+   * The freeze is over the nudge's own lifecycle, not over the gate that renders it.
+   *
+   * A reconnect during the exit is the one state where the toast still goes, and deliberately: the
+   * header has already swapped the cards for `Reconnecting…` — the exception this exit path keeps
+   * on purpose, because live mute controls over a room with no connection are worse than the
+   * change — and `OpponentPresence` is dropped with it, which is what was sourcing "they are
+   * talking". Holding the bubble through that would keep a claim about the other person after the
+   * subscription behind it is gone, over a card that says the room is reconnecting, offering an
+   * Unmute that is the only mute affordance left and cannot work. The unmute notice stays, and the
+   * asymmetry is the point: "you are muted" survives a blip, "they are talking" does not.
+   */
+  it('lets a reconnect take the nudge down even while leaving', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    mocks.isSpeaking = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+    // What replaced it, and what did not: the room says what it is doing, and the notice — whose
+    // claim is about the viewer's own microphone — rides the blip out as it always has.
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
   // Letting that room go must not take the header's shape with it. The connection is held open for
   // a room that was up; the shape is held whatever was drawn — here the one line the room itself
   // draws while it connects, which is what was on screen a moment before the click.

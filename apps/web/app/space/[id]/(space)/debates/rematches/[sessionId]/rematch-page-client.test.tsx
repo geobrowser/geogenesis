@@ -1760,6 +1760,46 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getAllByRole('article')).toHaveLength(Number(badge));
     });
 
+    /**
+     * A lookup that failed is not an answer about the viewer either.
+     *
+     * react-query drops `isLoading` on failure, so an outage leaves every flag false and the list
+     * empty — which reads from the badge exactly like somebody who has answered nothing. The tab
+     * underneath says the lookup failed; the number beside it would be saying, confidently, that
+     * there is nothing to look at. `Counting your positions` is the honest thing to show over an
+     * error the viewer can retry.
+     */
+    it('counts nothing rather than zero when the lookup failed', async () => {
+      mocks.positions = [];
+      mocks.positionsError = new Error('positions exploded');
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(
+        within(screen.getByRole('button', { name: /^Positions/ })).getByLabelText('Counting your positions')
+      ).toBeInTheDocument();
+    });
+
+    // The other half of that, and the reason the failure sits inside the `length === 0` guard rather
+    // than in front of it: a refetch that failed has not invalidated the rows already drawn. Going
+    // to a skeleton over a list still on screen would be the flicker the guard exists to prevent.
+    it('keeps the count it has when a refetch fails under it', async () => {
+      viewerOnlyClaim();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      const badge = () =>
+        (screen.getByRole('button', { name: /^Positions/ }).textContent?.replace('Positions', '') ?? '').trim();
+      await waitFor(() => expect(badge()).toMatch(/^[1-9]\d*$/));
+      const settled = badge();
+
+      // react-query keeps the data it has and reports the failure alongside it.
+      mocks.positionsError = new Error('positions exploded');
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(badge()).toBe(settled);
+    });
+
     // The same window the opponent's tab waits out, on the other side of it: the ids here are the
     // viewer's own, so until their geo-chat id lands there are none, and "you haven't taken a
     // position" is a statement about them made before anyone knew who they were.

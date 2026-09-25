@@ -1329,8 +1329,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * what is under it. (Behind the `length === 0` guard the term did nothing either way: fail-open
    * means the provisional rows are already there, so the guard is false wherever it would matter.)
    */
+  /**
+   * The viewer's own two sources, as `opponentTabError` is the opponent's — and the same pair the
+   * tab below draws its error state from, so the number and the list are answering one question.
+   * Named up here because the badge is decided long before `tabError`, which is the composite.
+   */
+  const viewerTabError = sessionQuery.error ?? positions.error ?? viewerEntitiesQuery.error;
   const viewerCountPending =
-    viewerClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling);
+    viewerClaims.length === 0 &&
+    // The failure belongs with the loading flags rather than beside them: react-query drops
+    // `isLoading` on failure, so an outage leaves every flag false over an empty list and reads
+    // from here exactly like somebody who has answered nothing. Inside the `length === 0` guard,
+    // so a held list keeps its number through a refetch that failed — those rows are still right.
+    (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling || Boolean(viewerTabError));
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's
@@ -1822,8 +1833,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // still fail is turning those ids into rows.
           relatedRowsError
         : source === 'mine'
-          ? // The same two lookups the opponent's tab is built from, asked about the viewer.
-            (positions.error ?? viewerEntitiesQuery.error)
+          ? // The same two lookups the opponent's tab is built from, asked about the viewer. Shared
+            // with the Positions badge, which has to call an outage an outage rather than a zero.
+            viewerTabError
           : source === 'all'
             ? // The page is the list, and it carries everything a row is built from — so its failure
               // is the only one that leaves nothing to show. geo-chat's row lookup is metadata beside
