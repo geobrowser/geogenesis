@@ -40,8 +40,8 @@ const FADE_OUT_MS = 300;
  * label comes up over the card's own fade, which reads as the phrase travelling to the corner
  * instead of being replaced there.
  *
- * Only the turn that opens a round has a card to hand over from. On the reply the badge simply
- * arrives with the turn, over {@link FADE_IN_MS}.
+ * Both are measured from the round's start, so this is the whole of the badge's arrival — there is
+ * no second case for the reply, which simply finds the handover long finished.
  */
 const HANDOVER_MS = 300;
 
@@ -114,16 +114,37 @@ function currentSpan(spans: TurnSpan[], playheadSeconds: number) {
 }
 
 /**
- * Whether this turn is the one that opens its round.
- *
- * Rounds are pairs, so the openers are the even turns — the same arithmetic {@link roundLabel} and
- * `debateTurnRole` do, which is what keeps a card and the badge that follows it saying one thing.
- *
- * An odd turn count leaves a final unpaired turn, and it opens a round of its own: a debate that
- * ends on a single closing statement should announce it.
+ * Rounds are pairs of turns — the same arithmetic {@link roundLabel} and `debateTurnRole` do,
+ * which is what keeps the card and the badge that follows it saying one thing. An odd turn count
+ * leaves a final unpaired turn, and it is a round of its own.
  */
-function opensRound(span: TurnSpan) {
-  return span.index % 2 === 0;
+function roundOf(span: TurnSpan) {
+  return Math.floor(span.index / 2);
+}
+
+/**
+ * Where a round began on the rendered timeline, which is not always where its opening turn did.
+ *
+ * Both cue windows are measured from here rather than from the turn the playhead happens to be
+ * in, because the turn is the wrong unit for an announcement about the round. Two things go wrong
+ * when it is used:
+ *
+ * A debater who yields inside the card's 1.8s ends their turn under it. Anchored to the turn, the
+ * card vanishes at the boundary at whatever strength it had reached — a hard cut in the middle of
+ * a fade. Anchored to the round, it plays out across the reply, which is where it belongs anyway:
+ * the round is what it is naming, and the round has not ended.
+ *
+ * An instant yield renders a zero-length segment, which `sortTurnSegments` drops. A round whose
+ * opening turn is dropped has no even-indexed span at all, so a rule like "fire on the opener"
+ * skips that round in silence — the one round the viewer most needs named, because the debate has
+ * just done something unusual. Taking the earliest span still standing in the round announces it
+ * from the reply instead.
+ */
+function roundStartSeconds(spans: TurnSpan[], round: number) {
+  return spans.reduce(
+    (earliest, span) => (roundOf(span) === round ? Math.min(earliest, span.startSeconds) : earliest),
+    Number.POSITIVE_INFINITY
+  );
 }
 
 /**
@@ -135,13 +156,14 @@ function opensRound(span: TurnSpan) {
  * announcement landed on whoever had just started talking, which is the worst two seconds of the
  * video to cover someone's face.
  *
- * Nothing before the first turn and nothing on the reply: see {@link opensRound}.
+ * Once per round and not once per turn: the window is measured from the round's start, so by the
+ * time the reply begins it has long since closed. See {@link roundStartSeconds}.
  */
 export function roundCardAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
-  if (!current || !opensRound(current)) return null;
+  if (!current) return null;
 
-  const ageMs = (playheadSeconds - current.startSeconds) * 1_000;
+  const ageMs = (playheadSeconds - roundStartSeconds(spans, roundOf(current))) * 1_000;
   if (ageMs < 0 || ageMs >= ROUND_CARD_MS) return null;
 
   const untilEnd = ROUND_CARD_MS - ageMs;
@@ -159,17 +181,16 @@ export function roundCardAt(spans: TurnSpan[], turnCount: TurnCount, playheadSec
  * carrying the same words, which is what makes the round legible as something the two of them are
  * in together.
  *
- * Where a card opened the round it comes up over that card's fade. Where none did — the reply — it
- * arrives with the turn, because there is nothing for it to wait for.
+ * Measured from the round's start, like the card, so it comes up over that card's fade wherever
+ * the card was drawn. By the reply the handover is long past, so the badge is simply already up —
+ * which is what it was doing before, without needing a second case to say so.
  */
 export function roundBadgeAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current) return null;
 
-  const ageMs = (playheadSeconds - current.startSeconds) * 1_000;
-  const from = opensRound(current) ? ROUND_CARD_MS - HANDOVER_MS : 0;
-  const over = opensRound(current) ? HANDOVER_MS : FADE_IN_MS;
-  const opacity = Math.max(0, Math.min(1, (ageMs - from) / over));
+  const ageMs = (playheadSeconds - roundStartSeconds(spans, roundOf(current))) * 1_000;
+  const opacity = Math.max(0, Math.min(1, (ageMs - (ROUND_CARD_MS - HANDOVER_MS)) / HANDOVER_MS));
   if (opacity <= 0) return null;
 
   return cueFor(current, turnCount, opacity);

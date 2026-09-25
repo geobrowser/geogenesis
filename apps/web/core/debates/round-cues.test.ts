@@ -53,13 +53,15 @@ describe('roundCardAt', () => {
     expect(roundCardAt(spans, TURNS, 180.5)).toBeNull();
   });
 
-  it('announces a final unpaired turn, which opens a round of its own', () => {
-    // Three turns: the last is a lone closing statement, and it should be named.
+  it('announces a final unpaired turn, which is a round of its own', () => {
+    // Three turns, so the third stands alone as round 2. `debateTurnRole` deliberately calls the
+    // last round of a two-round format a rebuttal rather than a closing — a debate has to run to
+    // three rounds before it has closing arguments — so that is what the card says.
     const odd = turnSpansForDurations(1, [60_000, 60_000, 60_000]);
     expect(roundCardAt(odd, 3, 120.5)?.label).toBe('Round 2 · Rebuttal');
   });
 
-  it('is gone for the rest of the turn', () => {
+  it('is gone for the rest of the round', () => {
     expect(roundCardAt(spans, TURNS, ROUND_CARD_MS / 1_000 + 0.1)).toBeNull();
     expect(roundCardAt(spans, TURNS, 30)).toBeNull();
   });
@@ -96,9 +98,11 @@ describe('roundBadgeAt', () => {
     expect(roundBadgeAt(spans, TURNS, 210)?.label).toBe('Round 2 · Rebuttal');
   });
 
-  it('arrives with the reply, where there is no card to wait for', () => {
-    // Turn 2 starts at 60s: a quarter-second in, the badge is already most of the way up.
-    expect(roundBadgeAt(spans, TURNS, 60.25)?.opacity).toBeGreaterThan(0.9);
+  it('is already up when the reply begins, with no second arrival of its own', () => {
+    // Both windows run from the round's start, so by the time the other debater takes over the
+    // handover is a minute past. The badge does not re-enter; it was never away.
+    expect(roundBadgeAt(spans, TURNS, 60.25)?.opacity).toBe(1);
+    expect(roundBadgeAt(spans, TURNS, 59.9)?.opacity).toBe(1);
   });
 
   it('comes up over the card going down, so the two read as one movement', () => {
@@ -116,7 +120,7 @@ describe('roundBadgeAt', () => {
     expect(roundBadgeAt(spans, TURNS, 120.2)).toBeNull();
   });
 
-  it('is at full strength for the body of the turn', () => {
+  it('is at full strength for the body of the round', () => {
     expect(roundBadgeAt(spans, TURNS, 30)?.opacity).toBe(1);
   });
 });
@@ -133,6 +137,31 @@ describe('against the rendered segments', () => {
     ]);
 
     expect(roundCardAt(kept, 4, 60.5)?.label).toBe('Round 2 · Rebuttal');
+  });
+
+  it('announces a round whose opening turn was yielded away entirely', () => {
+    // An instant yield renders a zero-length segment and `sortTurnSegments` drops it, so round 2
+    // has no even-indexed span at all. Firing on "the opening turn" would skip the round in
+    // silence — and it is the round a viewer most needs named, because something unusual just
+    // happened. The reply announces it instead.
+    const lostOpener = turnSpansFromSegments([
+      segment(0, 1, 0, 60_000),
+      segment(1, 2, 60_000, 120_000),
+      // turn 2 yielded instantly and never made it through the filter.
+      segment(3, 2, 120_000, 180_000),
+    ]);
+
+    expect(roundCardAt(lostOpener, 4, 120.5)?.label).toBe('Round 2 · Rebuttal');
+  });
+
+  it('plays the card out across a turn that ends underneath it', () => {
+    // A debater who yields inside the 1.8s ends their turn under the card. Anchored to the turn it
+    // would cut out at the boundary at whatever strength it had reached; the round has not ended,
+    // so neither does the announcement.
+    const quickYield = turnSpansFromSegments([segment(0, 1, 0, 1_000), segment(1, 2, 1_000, 60_000)]);
+
+    expect(roundCardAt(quickYield, 4, 1.2)?.opacity).toBe(1);
+    expect(roundCardAt(quickYield, 4, ROUND_CARD_MS / 1_000 + 0.1)).toBeNull();
   });
 
   it('classifies the round off the format rather than off what the render kept', () => {
