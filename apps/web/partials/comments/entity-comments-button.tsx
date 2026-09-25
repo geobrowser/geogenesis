@@ -15,6 +15,11 @@ import { ExploreCommentsIcon } from '~/partials/explore/explore-comments-icon';
  * they're reading. Only an entity's own full page renders comments inline
  * instead. Rendered as a button rather than a link so nested row links (the
  * card title, the row itself) don't swallow the click.
+ *
+ * `onActivate` is for the surface that is *already* showing the thread. The claim page's activity
+ * feed draws a debate's comments under the debate, so sending the reader to the panel there swaps a
+ * thread they can see for a flat list of the same rows, minus the context. Those rows pass a
+ * handler and open a composer in place instead. Everywhere else is unchanged.
  */
 export function EntityCommentsButton({
   entityId,
@@ -22,6 +27,8 @@ export function EntityCommentsButton({
   targetEntityType = 'entity',
   count,
   className,
+  onActivate,
+  isActive,
 }: {
   entityId: string;
   spaceId: string;
@@ -29,9 +36,13 @@ export function EntityCommentsButton({
   /** A server-rendered count; the live one takes over as soon as the list has been read. */
   count: number;
   className?: string;
+  /** Replaces opening the global panel. The caller is then responsible for showing something. */
+  onActivate?: () => void;
+  /** What the button reports as expanded when the caller owns the disclosure. */
+  isActive?: boolean;
 }) {
   const { commentsTarget, openComments } = useEntityCommentsPanel();
-  const isOpen = commentsTarget?.entityId === entityId;
+  const isOpen = onActivate ? (isActive ?? false) : commentsTarget?.entityId === entityId;
   // Commenting from the panel this button opens used to leave the number beside it behind.
   const liveCount = useCommentCount(entityId, count);
 
@@ -40,15 +51,21 @@ export function EntityCommentsButton({
       type="button"
       // Marks this as an opener: clicking one while the panel is open switches
       // it to that entity rather than dismissing it as an outside click.
-      data-entity-comments-opener
-      data-geo-analytics-label={`Open ${targetEntityType} comments panel`}
-      data-geo-analytics-intent="open_comments_panel"
+      data-entity-comments-opener={onActivate ? undefined : true}
+      data-geo-analytics-label={
+        onActivate ? `Comment on ${targetEntityType}` : `Open ${targetEntityType} comments panel`
+      }
+      data-geo-analytics-intent={onActivate ? 'open_inline_composer' : 'open_comments_panel'}
       aria-label={`Comments (${liveCount})`}
       aria-expanded={isOpen}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.
         event.preventDefault();
         event.stopPropagation();
+        if (onActivate) {
+          onActivate();
+          return;
+        }
         openComments(entityId, spaceId, targetEntityType);
       }}
       className={className ?? 'inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text'}

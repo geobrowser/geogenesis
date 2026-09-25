@@ -10,6 +10,8 @@ import { ACTIVITY_MAX_DEPTH } from './claim-activity-depth';
 const mocks = vi.hoisted(() => ({
   /** Responder space id → the side they hold on the claim, as the provider would resolve it. */
   directions: new Map<string, 'positive' | 'negative'>(),
+  /** Personal-space ids whose profile the row asked to open, in order. */
+  openedProfiles: [] as string[],
 }));
 
 // The badge under test reads its own context, which the claim page supplies around the whole
@@ -22,8 +24,29 @@ vi.mock('~/core/claims/browse/claim-comment-position', () => ({
   },
 }));
 
-vi.mock('~/core/hooks/use-entity-comments-panel', () => ({
-  useEntityCommentsPanel: () => ({ commentsTarget: null, openComments: vi.fn() }),
+vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
+  useOpenDebaterProfile: (spaceId: string) => (event: React.MouseEvent) => {
+    event.preventDefault();
+    mocks.openedProfiles.push(spaceId);
+  },
+}));
+// The composer itself is covered where it lives; here the question is only whether the row opens
+// one, against the right entity, carrying the right ancestor chain.
+vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  InlineCommentComposer: ({
+    targetEntityId,
+    ancestors,
+  }: {
+    targetEntityId: string;
+    ancestors?: Array<{ id: string }>;
+  }) => (
+    <div
+      data-testid="inline-composer"
+      data-target={targetEntityId}
+      data-ancestors={(ancestors ?? []).map(ancestor => ancestor.id).join(',')}
+    />
+  ),
 }));
 vi.mock('~/core/state/editor/markdown-render', () => ({ renderMarkdownDocument: (text: string) => text }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));
@@ -152,5 +175,62 @@ describe('DebateCommentRow', () => {
     renderRow();
 
     expect(screen.queryByRole('button', { name: /repl(y|ies)$/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('DebateCommentRow, replying and naming', () => {
+  afterEach(() => {
+    cleanup();
+    mocks.openedProfiles.length = 0;
+  });
+
+  it('opens a composer against the entity the comment replies to, not against the comment', () => {
+    renderRow();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+
+    const composer = screen.getByTestId('inline-composer');
+    // The reply is filed against the debate — a reply to a comment on a debate is a comment on the
+    // debate — with the comment it answers as its nearest ancestor.
+    expect(composer).toHaveAttribute('data-target', 'debate-1');
+    expect(composer).toHaveAttribute('data-ancestors', 'comment-1');
+  });
+
+  it('carries the whole ancestor chain down a nested reply', () => {
+    renderRow({ replies: [comment({ id: 'reply-1', markdownContent: 'Second.' })] });
+
+    // The nested row's own Reply, not the parent's.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reply' })[1]!);
+
+    expect(screen.getByTestId('inline-composer')).toHaveAttribute('data-ancestors', 'reply-1,comment-1');
+  });
+
+  it('closes the composer when Reply is pressed again', () => {
+    renderRow();
+    const reply = screen.getByRole('button', { name: 'Reply' });
+
+    fireEvent.click(reply);
+    expect(screen.queryByTestId('inline-composer')).toBeInTheDocument();
+
+    fireEvent.click(reply);
+    expect(screen.queryByTestId('inline-composer')).not.toBeInTheDocument();
+  });
+
+  // A comment from someone holding no position and a claim with no assertable moment carry exactly
+  // the same furniture, so each row says which it is rather than leaving it to be inferred.
+  it('labels itself a comment', () => {
+    renderRow();
+
+    expect(screen.getByText('Comment')).toBeInTheDocument();
+  });
+
+  // The name keeps its href so middle-click still reaches the person's space; the plain click opens
+  // the profile beside the thread instead of navigating away from it.
+  it('opens the author profile from the name without leaving the page', () => {
+    renderRow();
+
+    fireEvent.click(screen.getByText('Preston Mantel'));
+
+    expect(mocks.openedProfiles).toEqual(['author-space']);
   });
 });

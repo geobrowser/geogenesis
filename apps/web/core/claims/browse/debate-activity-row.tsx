@@ -10,21 +10,22 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useComments } from '~/core/hooks/use-comments';
-import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { uuidToHex } from '~/core/id/normalize';
 import type { ResponseKind } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
+import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { type CommentDensity, PAGE_DENSITY } from '~/partials/comments/comment-density';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
+import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
 import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
+import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ACTIVITY_ROOT_DEPTH } from './claim-activity-depth';
@@ -97,7 +98,12 @@ export function DebateActivityRow({
   publishedAt,
 }: DebateActivityRowProps) {
   const [collapsed, setCollapsed] = React.useState(false);
-  const { openComments } = useEntityCommentsPanel();
+  const composer = useInlineComposer();
+  // Same query key the branch below reads, so this costs nothing while the branch is open — which is
+  // its default — and keeps the number honest when it is closed. The transcript is also the only
+  // source that agrees with the rows: it is what the branch counts off, where the `Sources` backlink
+  // aggregate the feed's totals use is a different question asked from the other end.
+  const { claims: transcriptClaims } = useDebateTranscriptClaims(debate.id, spaceId);
   // One aggregate for this row's own comment count. Without it the button seeds itself at zero and
   // only ever corrects downward, so a debate with comments read "0" until the panel was opened.
   const debateCommentCount = useEntityCommentCounts(React.useMemo(() => [debate.id], [debate.id]));
@@ -224,17 +230,34 @@ export function DebateActivityRow({
               />
             )}
             <EntityVoteButtons entityId={debate.id} spaceId={spaceId} responseKind="curation" />
+            {/* Claims before comments, because the claims are what the debate produced and the
+                comments are what happened afterwards — the same order the branch draws them in. Not
+                a control: the rows are already below, and the collapse toggle on the spine is how
+                you hide them. */}
+            <span
+              className={cx(PAGE_DENSITY.metaClass, 'inline-flex items-center gap-1.5 text-grey-04')}
+              aria-label={`${transcriptClaims.totalCount} extracted ${
+                transcriptClaims.totalCount === 1 ? 'claim' : 'claims'
+              }`}
+            >
+              <Warning size={12} />
+              <span className="text-[14px] font-normal tabular-nums">{transcriptClaims.totalCount}</span>
+            </span>
             <EntityCommentsButton
               entityId={debate.id}
               spaceId={spaceId}
+              targetEntityType="debate"
               count={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+              onActivate={composer.toggle}
+              isActive={composer.isComposing}
             />
-            {/* A reply to a debate is a comment on the debate, so it goes where that entity's
-                comments already live rather than into this claim's thread. */}
+            {/* A reply to a debate is a comment on the debate — it is filed against that entity, not
+                against this claim — but it is written and read right here, at the bottom of the
+                debate's own branch, rather than in a panel that hides the branch to collect it. */}
             <button
               type="button"
-              data-entity-comments-opener
-              onClick={() => openComments(debate.id, spaceId)}
+              aria-expanded={composer.isComposing}
+              onClick={composer.toggle}
               className={cx(PAGE_DENSITY.metaClass, 'text-grey-04 transition-colors hover:text-text')}
             >
               Reply
@@ -247,6 +270,19 @@ export function DebateActivityRow({
             </Link>
           </div>
 
+          {composer.isComposing && (
+            <div className="mt-2">
+              <InlineCommentComposer
+                targetEntityId={debate.id}
+                targetSpaceId={spaceId}
+                targetEntityType="debate"
+                placeholder="Comment on this debate..."
+                onCancel={composer.close}
+                onPosted={composer.markPosted}
+              />
+            </div>
+          )}
+
           {!collapsed && (
             <div ref={branchRef} className="mt-4">
               <DebateBranch
@@ -258,6 +294,7 @@ export function DebateActivityRow({
                 onCollapse={() => setCollapsed(true)}
                 branchLabel={branchLabel}
                 commentCount={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+                hasPostedHere={composer.hasPosted}
               />
             </div>
           )}
@@ -283,6 +320,7 @@ function DebateBranch({
   onCollapse,
   branchLabel,
   commentCount,
+  hasPostedHere,
 }: {
   debateId: string;
   spaceId: string;
@@ -294,6 +332,8 @@ function DebateBranch({
   branchLabel: { expand: string; collapse: string };
   /** From the feed's own aggregate. Zero means there is nothing here worth a request. */
   commentCount: number;
+  /** Someone has commented from this row since the page loaded, so the aggregate is behind. */
+  hasPostedHere: boolean;
 }) {
   const { claims, isLoading } = useDebateTranscriptClaims(debateId, spaceId);
   const { timings, isReady } = useClaimTimings(debateId, claims);
@@ -303,8 +343,10 @@ function DebateBranch({
     entityId: debateId,
     spaceId,
     // Most debates have no comments, and this feed already knows which. Fetching them anyway would
-    // be a backlink walk per debate row to discover a list we were told is empty.
-    enabled: commentCount > 0,
+    // be a backlink walk per debate row to discover a list we were told is empty. A comment made
+    // from this row makes that aggregate stale, so it also lifts the gate — otherwise the first
+    // comment on a silent debate would be written and never read back.
+    enabled: commentCount > 0 || hasPostedHere,
   });
 
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);

@@ -5,9 +5,10 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { DebateResponseKind } from '~/core/debates/api';
+import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { isAssertableMoment } from '~/core/debates/claim-timing';
-import { useComments } from '~/core/hooks/use-comments';
 import { debateSeekSeconds, formatTimecode, withDebateTimecode } from '~/core/debates/debate-timecode';
+import { useComments } from '~/core/hooks/use-comments';
 import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -15,14 +16,16 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { type CommentDensity, PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
-import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
+import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ActivityRowTag } from './activity-row-tag';
 import { canNestBelow } from './claim-activity-depth';
 import type { OrderedTranscriptClaim } from './claim-activity-order';
-import { DebateCommentRow } from './debate-comment-row';
 import { ResponsePositionTag } from './claim-comment-position';
+import { DebateCommentRow } from './debate-comment-row';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
 
@@ -91,6 +94,9 @@ export function ExtractedClaimRow({
   density?: CommentDensity;
   className?: string;
 }) {
+  const composer = useInlineComposer();
+  const openSpeakerProfile = useOpenDebaterProfile(speaker?.spaceId, { interactionSurface: 'extracted_claim_speaker' });
+
   // Null where the graph reports no home space. The claim is then unlinkable and unrespondable —
   // pointing a vote at this page's space instead would record it somewhere the claim does not live,
   // which reads back as a claim nobody answered. Read-only is the honest rendering.
@@ -114,18 +120,24 @@ export function ExtractedClaimRow({
         the generated fallback — so the frame is the caller's job. Same shape the comment rows in
         this thread use, off the same density, which is what keeps the two kinds of row aligned.
       */}
-      <span
-        className="relative shrink-0 overflow-hidden rounded-full"
-        style={{ width: density.avatarPx, height: density.avatarPx }}
-      >
-        <Avatar avatarUrl={speaker?.avatarUrl ?? null} value={speaker?.spaceId} size={density.avatarPx} />
-      </span>
+      <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile}>
+        <span
+          className="relative shrink-0 overflow-hidden rounded-full"
+          style={{ width: density.avatarPx, height: density.avatarPx }}
+        >
+          <Avatar avatarUrl={speaker?.avatarUrl ?? null} value={speaker?.spaceId} size={density.avatarPx} />
+        </span>
+      </SpeakerLink>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className={cx(density.nameClass, 'truncate text-text')}>
-            {speaker?.name?.trim() || 'Unnamed debater'}
-          </span>
+          <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile} className="min-w-0">
+            <span className={cx(density.nameClass, 'truncate text-text')}>
+              {speaker?.name?.trim() || 'Unnamed debater'}
+            </span>
+          </SpeakerLink>
+
+          <ActivityRowTag kind="claim" />
 
           {speakerPosition !== null && (
             <ResponsePositionTag responseKind={responseVocabulary} position={speakerPosition} />
@@ -174,11 +186,37 @@ export function ExtractedClaimRow({
               // read as one group.
               claimResponderAvatarsPosition="trailing"
             />
-            <EntityCommentsButton entityId={claim.id} spaceId={claimSpaceId} count={commentCount} />
+            <EntityCommentsButton
+              entityId={claim.id}
+              spaceId={claimSpaceId}
+              targetEntityType="claim"
+              count={commentCount}
+              // In place rather than in the panel: the claim's comments are already drawn below this
+              // row, so the panel would replace a thread the reader can see with the same rows minus
+              // the debate they came out of.
+              onActivate={composer.toggle}
+              isActive={composer.isComposing}
+            />
           </div>
         ) : null}
 
-        {claimSpaceId && commentCount > 0 && canNestBelow(depth) && (
+        {claimSpaceId && composer.isComposing && (
+          <div className="mt-2">
+            <InlineCommentComposer
+              targetEntityId={claim.id}
+              targetSpaceId={claimSpaceId}
+              targetEntityType="claim"
+              placeholder="Comment on this claim..."
+              onCancel={composer.close}
+              onPosted={composer.markPosted}
+            />
+          </div>
+        )}
+
+        {/* `composer.hasPosted` as well as the server count: the aggregate that gates this is from
+            the page load, so a reader's first comment on a silent claim would otherwise be written
+            and then not drawn. */}
+        {claimSpaceId && (commentCount > 0 || composer.hasPosted) && canNestBelow(depth) && (
           <ClaimComments claimId={claim.id} spaceId={claimSpaceId} depth={depth + 1} />
         )}
       </div>
@@ -207,6 +245,38 @@ function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: 
         ))}
       </ThreadBranch>
     </div>
+  );
+}
+
+/**
+ * The speaker's name and face, opening their profile beside the thread.
+ *
+ * An anchor rather than a button so middle-click and "copy link" still reach their space; the click
+ * itself is intercepted, because navigating away from a claim to read who said something is exactly
+ * the context loss the side panel exists to avoid. Unattributed turns get no link — there is no
+ * person to open.
+ */
+function SpeakerLink({
+  speaker,
+  onOpenProfile,
+  className,
+  children,
+}: {
+  speaker: (SpeakerProfile & { spaceId: string }) | null;
+  onOpenProfile: (event: React.MouseEvent) => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (!speaker) return <>{children}</>;
+
+  return (
+    <a
+      href={NavUtils.toSpace(speaker.spaceId)}
+      onClick={onOpenProfile}
+      className={cx('shrink-0 no-underline hover:underline', className)}
+    >
+      {children}
+    </a>
   );
 }
 

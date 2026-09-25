@@ -30,7 +30,10 @@ const OTHER_PERSONAL_SPACE_ID = '44444444444444444444444444444444';
 
 function click(result: { current: (event: React.MouseEvent) => void }) {
   const stopPropagation = vi.fn();
-  act(() => result.current({ stopPropagation } as unknown as React.MouseEvent));
+  // Both, because the name surfaces are anchors now: the profile opens beside the thread, and the
+  // href is what makes middle-click and "copy link address" still work.
+  const preventDefault = vi.fn();
+  act(() => result.current({ stopPropagation, preventDefault } as unknown as React.MouseEvent));
   return stopPropagation;
 }
 

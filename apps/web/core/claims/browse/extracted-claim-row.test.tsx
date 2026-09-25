@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,8 +33,36 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/comments/entity-comments-button', () => ({
-  EntityCommentsButton: ({ entityId, count }: { entityId: string; count: number }) => (
-    <div data-testid="comments-button" data-entity={entityId} data-count={String(count)} />
+  EntityCommentsButton: ({
+    entityId,
+    count,
+    onActivate,
+  }: {
+    entityId: string;
+    count: number;
+    onActivate?: () => void;
+  }) => (
+    <button type="button" data-testid="comments-button" data-entity={entityId} data-count={String(count)} onClick={onActivate}>
+      comments
+    </button>
+  ),
+}));
+
+const mocks = vi.hoisted(() => ({ openedProfiles: [] as string[] }));
+
+vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
+  useOpenDebaterProfile: (spaceId: string | undefined) => (event: React.MouseEvent) => {
+    event.preventDefault();
+    if (spaceId) mocks.openedProfiles.push(spaceId);
+  },
+}));
+
+// Covered where it lives; here the question is only whether pressing comment opens one in place
+// rather than sending the reader to the panel.
+vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  InlineCommentComposer: ({ targetEntityId }: { targetEntityId: string }) => (
+    <div data-testid="inline-composer" data-target={targetEntityId} />
   ),
 }));
 
@@ -185,5 +213,46 @@ describe('ExtractedClaimRow', () => {
 
     const link = screen.getByRole('link', { name: 'Practical effects age better than CGI.' });
     expect(link).toHaveAttribute('href', expect.stringContaining('claim-space'));
+  });
+});
+
+describe('ExtractedClaimRow, saying what it is and answering in place', () => {
+  afterEach(() => {
+    cleanup();
+    mocks.openedProfiles.length = 0;
+  });
+
+  // A claim with no assertable moment and a comment from someone holding no position carry the same
+  // furniture, so the row says which it is rather than leaving it to be inferred.
+  it('labels itself a claim', () => {
+    renderRow();
+
+    expect(screen.getByText('Claim')).toBeInTheDocument();
+  });
+
+  it('opens the speaker profile beside the thread instead of navigating to their space', () => {
+    renderRow();
+
+    fireEvent.click(screen.getByText('Ada Reyes'));
+
+    expect(mocks.openedProfiles).toEqual(['speaker-space']);
+  });
+
+  it('opens a composer against the claim rather than the comments panel', () => {
+    renderRow();
+
+    fireEvent.click(screen.getByTestId('comments-button'));
+
+    expect(screen.getByTestId('inline-composer')).toHaveAttribute('data-target', 'claim-1');
+  });
+
+  it('closes it again when the same control is pressed twice', () => {
+    renderRow();
+    const button = screen.getByTestId('comments-button');
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(screen.queryByTestId('inline-composer')).not.toBeInTheDocument();
   });
 });
