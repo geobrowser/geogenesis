@@ -284,7 +284,7 @@ export function ExtractedClaimRow({
             the page load, so a reader's first comment on a silent claim would otherwise be written
             and then not drawn. */}
         {hasComments && !commentsCollapsed && (
-          <div ref={branchRef}>
+          <div ref={branchRef} className="mt-3">
             <ClaimComments
               claimId={claim.id}
               spaceId={claimSpaceId!}
@@ -334,22 +334,24 @@ function ClaimComments({
   if (comments.length === 0) return null;
 
   return (
-    <div className="mt-3">
-      <ClaimCommentPositionBoundary entityId={claimId} spaceId={spaceId}>
-        <ThreadBranch
-          rowDensity={PAGE_DENSITY}
-          reachPx={threadSpineOffsetPx(PAGE_DENSITY)}
-          onCollapse={onCollapse}
-          label={label}
-        >
-          {comments.map((comment, index) => (
-            <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
-              <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
-            </ThreadBranchRow>
-          ))}
-        </ThreadBranch>
-      </ClaimCommentPositionBoundary>
-    </div>
+    // No wrapper of its own. The caller measures where this branch begins in order to stop the spine
+    // coming down from the avatar exactly there, and a margin *inside* the measured element is 12px
+    // the spine never covers — the break a reader sees between the control and the first elbow.
+    // One element, carrying the margin, measured by the caller.
+    <ClaimCommentPositionBoundary entityId={claimId} spaceId={spaceId}>
+      <ThreadBranch
+        rowDensity={PAGE_DENSITY}
+        reachPx={threadSpineOffsetPx(PAGE_DENSITY)}
+        onCollapse={onCollapse}
+        label={label}
+      >
+        {comments.map((comment, index) => (
+          <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
+            <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
+          </ThreadBranchRow>
+        ))}
+      </ThreadBranch>
+    </ClaimCommentPositionBoundary>
   );
 }
 
