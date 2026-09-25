@@ -24,6 +24,7 @@ import { ID } from '~/core/id';
 import {
   CLAIM_RESPONSE_COPY,
   CLAIM_RESPONSE_KIND,
+  RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
@@ -464,6 +465,9 @@ export function useClaimPositionControl({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
+  // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
+  const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
 
   // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
   // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
@@ -519,6 +523,11 @@ export function useClaimPositionControl({
       return;
     }
     if (isAccountSetupPending) return;
+    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
+    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
+    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
+    // "respond to this claim first" beside a pill that still looked held.
+    if (isResponsePending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -537,6 +546,7 @@ export function useClaimPositionControl({
     if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
+    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -548,6 +558,8 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     isConnected,
+    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    isResponsePending,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -714,7 +726,7 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
     useClaimPositionControl({
       claim,
       positions,
@@ -758,10 +770,12 @@ function RespondableControls({
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
-        // overlapping submissions, so there is nothing to protect against — and dimming the pills
-        // for the length of an indexing round trip read as the response not having landed.
+        // Not disabled while the response publishes: dimming the pills for the length of an indexing
+        // round trip read as the response not having landed. Pending instead — presses are ignored,
+        // because nothing serializes overlapping submissions and a second press on the held side is
+        // a retraction.
         disabled={!canRespond}
+        pending={isResponsePending}
         titleFor={actionTitle}
         noteFor={noteFor}
       />
@@ -991,12 +1005,24 @@ function UnresolvableControls({
   );
 }
 
+/** Said under the pills while the viewer's response is confirming, in the vote arrows' words. */
+export function ResponseConfirmingNote() {
+  return (
+    <div role="status" className="mt-2">
+      <Text as="p" variant="footnote" color="grey-04">
+        {RESPONSE_CONFIRMING_COPY}
+      </Text>
+    </div>
+  );
+}
+
 export function PositionRow({
   positions,
   responseKind,
   viewerPosition,
   onRespond,
   disabled,
+  pending,
   titleFor,
   noteFor,
   endSlot,
@@ -1006,6 +1032,11 @@ export function PositionRow({
   viewerPosition: boolean | null;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
+  /**
+   * The viewer's response is still confirming. The pills stay at full strength — the side is drawn
+   * as taken — but presses are dropped, and the buttons say so to assistive technology.
+   */
+  pending?: boolean;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1068,6 +1099,7 @@ export function PositionRow({
             selected={viewerPosition === true}
             onRespond={onRespond}
             disabled={disabled}
+            pending={pending}
             title={titleFor?.(true)}
           />
           {noteFor?.(true)}
@@ -1081,6 +1113,7 @@ export function PositionRow({
             selected={viewerPosition === false}
             onRespond={onRespond}
             disabled={disabled}
+            pending={pending}
             title={titleFor?.(false)}
           />
           {noteFor?.(false)}
@@ -1131,6 +1164,7 @@ function PositionButton({
   selected,
   onRespond,
   disabled,
+  pending,
   title,
 }: {
   label: string;
@@ -1140,6 +1174,7 @@ function PositionButton({
   selected: boolean;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
+  pending?: boolean;
   title?: string;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
@@ -1188,10 +1223,18 @@ function PositionButton({
     <button
       type="button"
       aria-pressed={selected}
+      aria-disabled={pending || undefined}
       disabled={disabled}
       title={title}
-      onClick={() => onRespond(position)}
-      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:border-text')}
+      onClick={() => {
+        if (!pending) onRespond(position);
+      }}
+      className={cx(
+        className,
+        'transition-colors disabled:opacity-60',
+        pending && 'cursor-progress',
+        !selected && !disabled && !pending && 'hover:border-text'
+      )}
     >
       {content}
     </button>

@@ -40,6 +40,7 @@ export function ClaimPositionCommentControl({
   onRespond,
   promptForComment,
   disabled,
+  pending,
   titleFor,
   noteFor,
   positionRowClassName,
@@ -54,6 +55,8 @@ export function ClaimPositionCommentControl({
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
   promptForComment: boolean;
   disabled?: boolean;
+  /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
+  pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
@@ -152,6 +155,7 @@ export function ClaimPositionCommentControl({
           viewerPosition={viewerPosition}
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
+          pending={pending}
           titleFor={titleFor}
           noteFor={noteFor}
           endSlot={positionRowEndSlot}

@@ -1277,15 +1277,46 @@ describe('MatchmakingClaimCard', () => {
     expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
   });
 
-  it('keeps the response pills live while the response is publishing', () => {
-    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
-    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+  /**
+   * Not dimmed, because dead pills for the length of an indexing round trip read as a stuck
+   * response — but not live either. Nothing serializes overlapping submissions, and pressing the
+   * held side means "remove": a double-click, or a press on an Agree still confirming, published a
+   * retraction behind a pill that still looked held, and Request debate then failed on it.
+   */
+  describe('while the viewer’s response is confirming', () => {
+    it.each(['reconciling', 'delayed'] as const)('ignores presses on either pill while %s', status => {
+      mocks.indexing = { status, pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    // Dimmed, dead pills for the length of an indexing round trip read as a stuck response.
-    expect(screen.getByRole('button', { name: /^Agree/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(agree).toBeEnabled();
+      expect(agree).toHaveAttribute('aria-disabled', 'true');
+      expect(disagree).toHaveAttribute('aria-disabled', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
-    expect(mocks.submitResponse).toHaveBeenCalled();
+      fireEvent.click(agree);
+      fireEvent.click(agree);
+      fireEvent.click(disagree);
+      expect(mocks.submitResponse).not.toHaveBeenCalled();
+    });
+
+    it('removes the position once the chain has confirmed it', () => {
+      // `indexed` holds the snapshot until geo-chat agrees, but the side it draws is now a fact.
+      mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).not.toHaveAttribute('aria-disabled');
+
+      fireEvent.click(agree);
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
+
+    it('removes a settled position when its pill is pressed', () => {
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
   });
 });

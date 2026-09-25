@@ -33,7 +33,7 @@ const MAX_RATE_LIMITED_RETRIES = 3;
  * `matches` is included because a new position can create or dissolve a match outright, not merely
  * change how one renders.
  */
-function readinessQueryPrefixes(accountKey: string, spaceId: string) {
+export function readinessQueryPrefixes(accountKey: string, spaceId: string) {
   return [
     // Explore cards and the claim page: ['debates', 'claims', spaceId, claimIds, accountKey]
     ['debates', 'claims', spaceId],

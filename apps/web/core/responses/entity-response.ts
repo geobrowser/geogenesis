@@ -82,6 +82,14 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
 };
 
 /**
+ * What to say while a response has been sent and the chain has not confirmed it yet.
+ *
+ * One sentence for every surface that shows the wait, so the vote arrows and the claim's pills do
+ * not describe the same state in two different words.
+ */
+export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
+
+/**
  * The one kind a claim is answered with.
  *
  * The authority on this, so that no surface has to read it off geo-chat's row. That field can
