@@ -157,7 +157,7 @@ function renderPlayer(
 }
 
 beforeEach(() => {
-  mocks.controller = null;
+  mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
   mocks.ticker = emptyTicker();
   mocks.affiliations = new Map();
   mocks.stackOpens = [];
@@ -539,7 +539,10 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   const controller = () => mocks.controller as ReturnType<typeof controllerFixture>;
 
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
 
   function renderPair() {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
