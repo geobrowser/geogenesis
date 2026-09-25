@@ -583,6 +583,14 @@ describe('toRfc3339Date', () => {
   it('should extract date from a time-only string (epoch date)', () => {
     expect(toRfc3339Date('14:30:00Z')).toBe('1970-01-01');
   });
+
+  it('should convert the profile sheets\' YYYY-MM-01Z form', () => {
+    expect(toRfc3339Date('2010-09-01Z')).toBe('2010-09-01');
+  });
+
+  it('should refuse an unreadable value instead of publishing NaN-NaN-NaN', () => {
+    expect(() => toRfc3339Date('not a date')).toThrow('unreadable date value');
+  });
 });
 
 describe('toRfc3339Time', () => {
