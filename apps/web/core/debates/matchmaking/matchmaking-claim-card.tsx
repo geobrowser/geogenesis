@@ -1005,17 +1005,6 @@ function UnresolvableControls({
   );
 }
 
-/** Said under the pills while the viewer's response is confirming, in the vote arrows' words. */
-export function ResponseConfirmingNote() {
-  return (
-    <div role="status" className="mt-2">
-      <Text as="p" variant="footnote" color="grey-04">
-        {RESPONSE_CONFIRMING_COPY}
-      </Text>
-    </div>
-  );
-}
-
 export function PositionRow({
   positions,
   responseKind,
@@ -1232,7 +1221,6 @@ function PositionButton({
       className={cx(
         className,
         'transition-colors disabled:opacity-60',
-        pending && 'cursor-progress',
         !selected && !disabled && !pending && 'hover:border-text'
       )}
     >
