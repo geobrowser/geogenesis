@@ -211,9 +211,12 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     const account = readCachedSmartAccount(queryClient, null);
     return readCachedPersonalSpace(queryClient, account?.account.address);
   }, [personalSpaceId, isRegistered, queryClient]);
-  // A failed-vote retry can run from an older render; it must see the current account.
-  const readRegisteredSpaceRef = useRef(readRegisteredSpace);
-  readRegisteredSpaceRef.current = readRegisteredSpace;
+  // The retry key for the current account and args. Retry replays through the latest mutation
+  // options, so it must only run while they still target the vote that failed.
+  const currentRetryKey = () =>
+    hashKey(entityResponseIndexingQueryKey(readRegisteredSpace().personalSpaceId, entityId, spaceId, responseKind));
+  const currentRetryKeyRef = useRef(currentRetryKey);
+  currentRetryKeyRef.current = currentRetryKey;
   const setToast = useSetToast();
 
   const indexingQueryKey = useMemo(
@@ -579,10 +582,11 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       const isLatestVote =
         context !== undefined && responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
       if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
-        const failedPersonalSpaceId = context.personalSpaceId;
-        recordFailedResponse(context.retryKey, {
+        const { retryKey } = context;
+        recordFailedResponse(retryKey, {
           retry: async () => {
-            if (readRegisteredSpaceRef.current().personalSpaceId !== failedPersonalSpaceId) return;
+            // Account, entity, space or response kind changed since the failure.
+            if (currentRetryKeyRef.current() !== retryKey) return;
             await responseMutation.mutateAsync(direction);
           },
         });
