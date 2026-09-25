@@ -184,7 +184,13 @@ export function TopicPageView({
           {isEditing ? (
             <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
           ) : (
-            <Text as="h1" variant="entityTitle" color="text" className="block text-pretty wrap-break-word">
+            <Text
+              as="h1"
+              variant="entityTitle"
+              color="text"
+              className="block text-pretty wrap-break-word"
+              data-entity-page-title={entityId}
+            >
               {entity.name ?? entity.id}
             </Text>
           )}
