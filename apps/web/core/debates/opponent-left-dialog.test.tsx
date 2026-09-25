@@ -17,8 +17,9 @@ describe('OpponentLeftDialog', () => {
     render(<OpponentLeftDialog onClose={onClose} onFindDebate={onFindDebate} />);
 
     expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
-    expect(screen.getByText('Your opponent left the debate.')).toBeInTheDocument();
-    expect(screen.getByText('Find another match from Debates.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Your opponent left the debate. You can find another debate in the debate side panel!')
+    ).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     expect(onFindDebate).not.toHaveBeenCalled();
 
@@ -27,11 +28,5 @@ describe('OpponentLeftDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('says when a mid-recording capture was discarded', () => {
-    render(<OpponentLeftDialog recordingDiscarded onClose={() => undefined} onFindDebate={() => undefined} />);
-
-    expect(screen.getByText('Your opponent left the debate. Your recording was discarded.')).toBeInTheDocument();
   });
 });

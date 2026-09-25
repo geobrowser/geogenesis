@@ -414,7 +414,6 @@ export function DebateCoordinator() {
     <>
       {opponentLeftNotice && (
         <OpponentLeftDialog
-          recordingDiscarded={opponentLeftNotice.recordingDiscarded}
           onClose={() => setOpponentLeftNotice(null)}
           onFindDebate={() => {
             setOpponentLeftNotice(null);
