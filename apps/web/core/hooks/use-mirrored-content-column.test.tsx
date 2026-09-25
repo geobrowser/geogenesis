@@ -1,4 +1,6 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
+
+import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -235,5 +237,72 @@ describe('useMirroredContentColumn', () => {
     const { result } = renderHook(() => useMirroredContentColumn(anchor, host, ATTRIBUTE));
 
     expect(result.current).toEqual({ left: 220, width: 800 });
+  });
+});
+
+/**
+ * *When* the measurement lands, not just what it says.
+ *
+ * A passive effect runs after the browser paints, so the commit that first sees a new anchor would
+ * paint with the previous column's geometry — or, on a title mounting late, with the caller's
+ * fallback width. That is the wrong width on screen for a frame, which is a different thing from a
+ * decoration arriving a frame late.
+ *
+ * Phase is asserted by ordering rather than by reading React internals: a parent's layout effect
+ * runs *after* its children's, so a measurement taken in the hook's layout effect is recorded before
+ * the parent's marker, and one taken in a passive effect after it.
+ */
+describe('when the column is measured', () => {
+  function renderWithPhaseProbe() {
+    const log: string[] = [];
+
+    const host = withBox(document.createElement('div'), { left: 200, width: 1240 });
+    const column = document.createElement('div');
+    column.setAttribute(ATTRIBUTE, '');
+    column.getBoundingClientRect = () => {
+      log.push('measure');
+      return {
+        x: 400,
+        y: 0,
+        left: 400,
+        right: 1240,
+        top: 0,
+        bottom: 40,
+        width: 840,
+        height: 40,
+        toJSON: () => ({}),
+      } as DOMRect;
+    };
+    const anchor = document.createElement('h1');
+    column.append(anchor);
+    document.body.append(host, column);
+
+    function Child() {
+      useMirroredContentColumn(anchor, host, ATTRIBUTE);
+      return null;
+    }
+
+    function Parent() {
+      React.useLayoutEffect(() => {
+        log.push('parent-layout');
+      });
+      React.useEffect(() => {
+        log.push('parent-passive');
+      });
+      return <Child />;
+    }
+
+    render(<Parent />);
+    return log;
+  }
+
+  it('is measured before paint, not after it', () => {
+    const log = renderWithPhaseProbe();
+
+    expect(log).toContain('measure');
+    expect(log).toContain('parent-layout');
+    // Ahead of the parent's layout marker means it happened in the layout phase — before the browser
+    // is given a chance to paint the frame that commit belongs to.
+    expect(log.indexOf('measure')).toBeLessThan(log.indexOf('parent-layout'));
   });
 });

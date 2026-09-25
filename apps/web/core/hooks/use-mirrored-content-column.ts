@@ -45,6 +45,14 @@ function measure(content: Element, host: Element): ContentColumnBox | null {
  *
  * Returns null when there is nothing to mirror, which is the caller's cue to fall back to a width of
  * its own rather than collapse to zero.
+ *
+ * Measured in a layout effect, which is the one place it can be measured. It cannot be derived during
+ * render — the DOM this reads is the DOM being rendered, so the element is not committed yet and
+ * `closest` would walk the previous tree. A passive effect is the other way to get it wrong: it runs
+ * after the browser paints, so the commit that first sees a new anchor paints with the *previous*
+ * column's geometry, or with the caller's fallback width when a title mounts late. That is the wrong
+ * width on screen for a frame — a different and worse thing than a decoration arriving a frame late,
+ * which is why `useScrolledPastElement` is content to stay passive and this is not.
  */
 export function useMirroredContentColumn(
   anchor: Element | null,
@@ -53,7 +61,7 @@ export function useMirroredContentColumn(
 ): ContentColumnBox | null {
   const [box, setBox] = React.useState<ContentColumnBox | null>(null);
 
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!anchor || !host) {
       setBox(null);
       return;
