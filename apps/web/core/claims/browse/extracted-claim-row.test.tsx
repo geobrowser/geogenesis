@@ -219,6 +219,21 @@ describe('ExtractedClaimRow', () => {
     expect(screen.getByTestId('comments-button')).toHaveAttribute('data-count', '4');
   });
 
+  /**
+   * The count is a separate aggregate from the claims themselves, so it can fail on its own. When it
+   * did, a zero meant "no comments" and the row folded its branch away — the replies unreachable for
+   * as long as the page stayed open. `null` says the request could not answer, and the row keeps the
+   * thread open on it.
+   */
+  it('keeps its comments reachable when the count aggregate could not answer', () => {
+    const { unmount } = renderRow({ commentCount: 0 });
+    expect(screen.queryByLabelText('Hide comments on this claim')).not.toBeInTheDocument();
+    unmount();
+
+    renderRow({ commentCount: null });
+    expect(screen.getAllByLabelText('Hide comments on this claim').length).toBeGreaterThan(0);
+  });
+
   it('links the sentence to the claim in its own space', () => {
     renderRow();
 

@@ -92,8 +92,11 @@ export function ExtractedClaimRow({
    * Passed rather than left to the button's own seed: that seed only ever corrects *downward*, from
    * a list somebody has opened, so a row with no count to give reads "0" on a claim that has
    * comments — a number wrong in the one direction that tells the reader not to look.
+   *
+   * `null` means the aggregate could not answer. The row then keeps its comments reachable instead
+   * of reading a failed request as silence.
    */
-  commentCount?: number;
+  commentCount?: number | null;
   /** This row's depth, counted from the claim. Its comments sit one below it. */
   depth: number;
   /** The surrounding thread's metrics, so these rows sit on the same ramp as the comments. */
@@ -122,7 +125,10 @@ export function ExtractedClaimRow({
     ? withDebateTimecode(NavUtils.toEntity(debateSpaceId, debateId), debateSeekSeconds(moment.startMs))
     : null;
 
-  const hasComments = Boolean(claimSpaceId) && (commentCount > 0 || composer.hasPosted) && canNestBelow(depth);
+  // `commentCount == null` is an aggregate that could not answer, not a claim with no comments: the
+  // branch opens so the replies stay reachable. See `batched-counts.ts`.
+  const hasComments =
+    Boolean(claimSpaceId) && (commentCount == null || commentCount > 0 || composer.hasPosted) && canNestBelow(depth);
   const branchLabel = { expand: 'Show comments on this claim', collapse: 'Hide comments on this claim' };
 
   return (
@@ -233,7 +239,9 @@ export function ExtractedClaimRow({
               entityId={claim.id}
               spaceId={claimSpaceId}
               targetEntityType="claim"
-              count={commentCount}
+              // Understated rather than absent when unknown: the button corrects upward from the
+              // list it opens.
+              count={commentCount ?? 0}
               // In place rather than in the panel: the claim's comments are already drawn below this
               // row, so the panel would replace a thread the reader can see with the same rows minus
               // the debate they came out of.

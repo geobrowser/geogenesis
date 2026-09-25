@@ -9,6 +9,7 @@ import type { DebateResponseKind } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import { countFor } from '~/core/hooks/batched-counts';
 import { useComments } from '~/core/hooks/use-comments';
 import { uuidToHex } from '~/core/id/normalize';
 import type { ResponseKind } from '~/core/responses/entity-response';
@@ -81,9 +82,12 @@ export type DebateActivityRowProps = {
    * Both used to be read here: the comments through a batched hook handed one id, which is a request
    * each, and the claims through this debate's transcript — the expensive read the collapse control
    * exists to avoid, running whether or not the row was expanded.
+   *
+   * `null` means the aggregate could not answer, and the row then assumes there is something here —
+   * otherwise one failed request turns every debate on the page into a dead end.
    */
-  commentCount: number;
-  claimCount: number;
+  commentCount: number | null;
+  claimCount: number | null;
 };
 
 /**
@@ -140,7 +144,12 @@ export function DebateActivityRow({
   // collapse control was drawn anyway, so pressing it on a transcript-less debate collapsed nothing
   // and merely swapped the keyframe for a plus. `composer.hasPosted` as well as the two counts,
   // because a comment written here is a branch the server aggregate has not heard about yet.
-  const hasBranch = claimCount + commentCount > 0 || composer.hasPosted;
+  //
+  // A count of `null` is an aggregate that failed, not an empty debate, so it opens the branch: the
+  // worst case is that toggle with nothing under it again, against losing every extracted claim and
+  // every comment on the page with no way to ask for them.
+  const countsUnknown = claimCount == null || commentCount == null;
+  const hasBranch = countsUnknown || claimCount + commentCount > 0 || composer.hasPosted;
 
   return (
     <div ref={spine.rowRef} className="thread-branch-hover-root relative">
@@ -228,18 +237,25 @@ export function DebateActivityRow({
                 comments are what happened afterwards — the same order the branch draws them in. Not
                 a control: the rows are already below, and the collapse toggle on the spine is how
                 you hide them. */}
-            <span
-              className={cx(PAGE_DENSITY.metaClass, 'inline-flex items-center gap-1.5 text-grey-04')}
-              aria-label={`${claimCount} extracted ${claimCount === 1 ? 'claim' : 'claims'}`}
-            >
-              <Warning size={12} />
-              <span className="text-[14px] font-normal tabular-nums">{claimCount}</span>
-            </span>
+            {/* Omitted rather than shown as "0" when the aggregate could not answer: the branch below
+                is drawing whatever is actually there, and a zero beside it would contradict it. */}
+            {claimCount != null && (
+              <span
+                className={cx(PAGE_DENSITY.metaClass, 'inline-flex items-center gap-1.5 text-grey-04')}
+                aria-label={`${claimCount} extracted ${claimCount === 1 ? 'claim' : 'claims'}`}
+              >
+                <Warning size={12} />
+                <span className="text-[14px] font-normal tabular-nums">{claimCount}</span>
+              </span>
+            )}
             <EntityCommentsButton
               entityId={debate.id}
               spaceId={spaceId}
               targetEntityType="debate"
-              count={commentCount}
+              // Zero when unknown, which is what every other host of this button passes when it has
+              // no count to give: the button corrects upward from its own list, so it understates
+              // rather than hiding anything.
+              count={commentCount ?? 0}
               // The only way into the composer now that Reply is gone: two controls opening one box
               // was one control too many, and the count already says what the box is for. A comment
               // here is filed against the debate, not against this claim, but it is written and read
@@ -310,8 +326,8 @@ function DebateBranch({
   responseVocabulary: DebateResponseKind;
   onCollapse: () => void;
   branchLabel: { expand: string; collapse: string };
-  /** From the feed's own aggregate. Zero means there is nothing here worth a request. */
-  commentCount: number;
+  /** From the feed's own aggregate. Zero means nothing here is worth a request; `null` means it could not say. */
+  commentCount: number | null;
   /** Someone has commented from this row since the page loaded, so the aggregate is behind. */
   hasPostedHere: boolean;
 }) {
@@ -325,8 +341,9 @@ function DebateBranch({
     // Most debates have no comments, and this feed already knows which. Fetching them anyway would
     // be a backlink walk per debate row to discover a list we were told is empty. A comment made
     // from this row makes that aggregate stale, so it also lifts the gate — otherwise the first
-    // comment on a silent debate would be written and never read back.
-    enabled: commentCount > 0 || hasPostedHere,
+    // comment on a silent debate would be written and never read back. So does an aggregate that
+    // failed (`null`): "we could not ask" is not "there is nothing to fetch".
+    enabled: commentCount == null || commentCount > 0 || hasPostedHere,
   });
 
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
@@ -378,7 +395,9 @@ function DebateBranch({
               claim={claim}
               debateId={debateId}
               debateSpaceId={spaceId}
-              commentCount={commentCounts.get(uuidToHex(claim.id)) ?? 0}
+              // Null when this aggregate failed, so the claim still offers its comments — the same
+              // rule the debate row above follows for its own counts.
+              commentCount={countFor(commentCounts, claim.id)}
               // A debate is the root of this branch, so everything hanging off it is one below.
               depth={ACTIVITY_ROOT_DEPTH + 1}
               // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,

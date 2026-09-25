@@ -10,6 +10,8 @@ import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
+import type { BatchedCounts } from '~/core/hooks/batched-counts';
+import { batchedCounts } from '~/core/hooks/batched-counts';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -45,8 +47,6 @@ type CountsResponse = {
   entities?: Array<{ id?: string | null; extracted?: { totalCount?: number | null } | null } | null> | null;
 };
 
-const NO_COUNTS = new Map<string, number>();
-
 export function decodeDebateClaimCounts(data: CountsResponse): Map<string, number> {
   const counts = new Map<string, number>();
   for (const entity of data.entities ?? []) {
@@ -58,12 +58,18 @@ export function decodeDebateClaimCounts(data: CountsResponse): Map<string, numbe
 
 export const debateClaimCountsQueryKey = (ids: string[]) => ['debate-claim-counts', ids] as const;
 
-/** Extracted-claim counts keyed by canonical debate id. Absent means "not answered yet", not zero. */
-export function useDebateClaimCounts(debateIds: string[], enabled = true): Map<string, number> {
+/**
+ * Extracted-claim counts for a set of debates, read through {@link countFor}.
+ *
+ * Absent means "not answered yet", not zero, and a failed request says so — see
+ * {@link BatchedCounts}. A row that hides its branch on a zero would otherwise lose every claim the
+ * debate produced whenever this one request failed.
+ */
+export function useDebateClaimCounts(debateIds: string[], enabled = true): BatchedCounts {
   // Sorted and deduped, so the same debates in a different order are the same query.
   const ids = React.useMemo(() => [...new Set(debateIds.filter(Boolean).map(uuidToHex))].sort(), [debateIds]);
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: debateClaimCountsQueryKey(ids),
     queryFn: ({ signal }) =>
       Effect.runPromise(
@@ -78,5 +84,6 @@ export function useDebateClaimCounts(debateIds: string[], enabled = true): Map<s
     staleTime: 60_000,
   });
 
-  return data ?? NO_COUNTS;
+  // Memoized for the same reason the comment counts are: this lands in a `useMemo` dependency list.
+  return React.useMemo(() => batchedCounts(data, isError), [data, isError]);
 }

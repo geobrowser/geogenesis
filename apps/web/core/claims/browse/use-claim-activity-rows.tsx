@@ -12,9 +12,9 @@ import {
 } from '~/core/debates/ontology';
 import { useDebateClaimCounts } from '~/core/debates/use-debate-claim-counts';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
+import { countFor } from '~/core/hooks/batched-counts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
-import { uuidToHex } from '~/core/id/normalize';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -135,8 +135,10 @@ export function useClaimActivityRows({
           responseVocabulary={responseVocabulary}
           keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
           publishedAt={debateDate(debate)}
-          commentCount={commentCountByDebateId.get(uuidToHex(debate.id)) ?? 0}
-          claimCount={claimCountByDebateId.get(uuidToHex(debate.id)) ?? 0}
+          // `countFor`, not `?? 0`: a failed aggregate answers `null`, and the row draws its branch
+          // on a null rather than reporting the debate as empty. See `batched-counts.ts`.
+          commentCount={countFor(commentCountByDebateId, debate.id)}
+          claimCount={countFor(claimCountByDebateId, debate.id)}
         />
       ),
     }));

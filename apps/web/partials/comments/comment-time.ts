@@ -20,7 +20,7 @@ export function getRelativeTime(dateString: string): string {
   const diffDays = Math.floor(diffHours / 24);
 
   if (diffSeconds < 60) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes} mins`;
+  if (diffMinutes < 60) return `${diffMinutes} min${diffMinutes > 1 ? 's' : ''}`;
   if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
   if (diffDays < 7) return `${diffDays}d ago`;
   if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;

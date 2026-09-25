@@ -9,6 +9,8 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { COMMENT_REPLY_TO_ID } from '~/core/comment-ids';
+import type { BatchedCounts } from '~/core/hooks/batched-counts';
+import { batchedCounts } from '~/core/hooks/batched-counts';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -50,8 +52,6 @@ type CountsResponse = {
   entities?: Array<{ id?: string | null; backlinks?: { totalCount?: number | null } | null } | null> | null;
 };
 
-const NO_COUNTS = new Map<string, number>();
-
 export function decodeEntityCommentCounts(data: CountsResponse): Map<string, number> {
   const counts = new Map<string, number>();
   for (const entity of data.entities ?? []) {
@@ -64,17 +64,17 @@ export function decodeEntityCommentCounts(data: CountsResponse): Map<string, num
 export const entityCommentCountsQueryKey = (ids: string[]) => ['entity-comment-counts', ids] as const;
 
 /**
- * Comment counts keyed by canonical entity id. Absent means "not answered yet", not "none" —
- * callers should hold the button's own live count rather than rendering a zero they invented.
+ * Comment counts for a set of entities, read through {@link countFor}.
+ *
+ * Absent means "not answered yet", not "none", and a failed request says so rather than reporting
+ * every row as silent — see {@link BatchedCounts}, which exists because reading this map with
+ * `?? 0` hid real comments behind a permanent zero.
  */
-export function useEntityCommentCounts(entityIds: string[], enabled = true): Map<string, number> {
+export function useEntityCommentCounts(entityIds: string[], enabled = true): BatchedCounts {
   // Sorted and deduped so the same set of rows in a different order is the same query.
-  const ids = React.useMemo(
-    () => [...new Set(entityIds.filter(Boolean).map(uuidToHex))].sort(),
-    [entityIds]
-  );
+  const ids = React.useMemo(() => [...new Set(entityIds.filter(Boolean).map(uuidToHex))].sort(), [entityIds]);
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: entityCommentCountsQueryKey(ids),
     queryFn: ({ signal }) =>
       Effect.runPromise(
@@ -89,5 +89,7 @@ export function useEntityCommentCounts(entityIds: string[], enabled = true): Map
     staleTime: 60_000,
   });
 
-  return data ?? NO_COUNTS;
+  // Memoized because callers hold this in `useMemo` dependency lists to build their rows; a fresh
+  // object every render would rebuild every row every render.
+  return React.useMemo(() => batchedCounts(data, isError), [data, isError]);
 }
