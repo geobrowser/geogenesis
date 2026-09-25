@@ -637,7 +637,7 @@ function useVoiceAnalytics(sessionId: string, micIntent: boolean) {
     joinedRef.current = true;
     joinedAtRef.current = Date.now();
     capture('debate_rematch_voice_joined', {
-      session_id: sessionId,
+      rematch_session_id: sessionId,
       surface: 'pair_header',
       joined_muted: joinedMutedRef.current,
     });
@@ -648,7 +648,7 @@ function useVoiceAnalytics(sessionId: string, micIntent: boolean) {
     unmutedRef.current = true;
     const joinedAt = joinedAtRef.current;
     capture('debate_rematch_voice_unmuted', {
-      session_id: sessionId,
+      rematch_session_id: sessionId,
       surface: 'pair_header',
       seconds_to_first_unmute: joinedAt === null ? null : Math.round((Date.now() - joinedAt) / 1000),
     });
@@ -656,7 +656,7 @@ function useVoiceAnalytics(sessionId: string, micIntent: boolean) {
 
   const recordNudge = React.useCallback(
     (kind: 'opponent_talking' | 'talking_while_muted') => {
-      capture('debate_rematch_voice_nudge', { session_id: sessionId, surface: 'pair_header', kind });
+      capture('debate_rematch_voice_nudge', { rematch_session_id: sessionId, surface: 'pair_header', kind });
     },
     [sessionId]
   );

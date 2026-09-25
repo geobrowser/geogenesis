@@ -2102,7 +2102,7 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
 
     expect(mocks.capture).toHaveBeenCalledWith('debate_rematch_voice_joined', {
-      session_id: 'session-1',
+      rematch_session_id: 'session-1',
       surface: 'pair_header',
       joined_muted: true,
     });
@@ -2118,7 +2118,7 @@ describe('RematchVoiceHeader', () => {
 
     const unmuted = mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_unmuted');
     expect(unmuted).toHaveLength(1);
-    expect(unmuted[0][1]).toMatchObject({ session_id: 'session-1', surface: 'pair_header' });
+    expect(unmuted[0][1]).toMatchObject({ rematch_session_id: 'session-1', surface: 'pair_header' });
     expect(typeof unmuted[0][1].seconds_to_first_unmute).toBe('number');
   });
 
