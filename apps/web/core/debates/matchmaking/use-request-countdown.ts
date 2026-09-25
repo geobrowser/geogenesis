@@ -63,14 +63,23 @@ export function useRequestCountdown(expiresAt: string): RequestCountdown {
   const expiresAtMs = React.useMemo(() => new Date(expiresAt).getTime(), [expiresAt]);
   const [now, setNow] = React.useState(() => Date.now());
 
-  const remainingMs = Math.max(0, expiresAtMs - now);
+  // A server expiry cannot be judged against the device clock while synchronization is pending.
+  // Keep the useful local countdown when it is plausible, but never call a server-live request
+  // expired solely because a fast device clock says its timestamp has passed.
+  const localRemainingMs = Math.max(0, expiresAtMs - now);
+  const remainingMs = clock
+    ? Math.max(0, expiresAtMs - clock.now())
+    : localRemainingMs > 0
+      ? localRemainingMs
+      : Number.NaN;
   // The tick rate only changes when we cross the final minute, so the effect re-arms then — and
   // once more at expiry, where it clears the interval for good.
-  const isFinalMinute = remainingMs <= MINUTE_MS;
-  const expired = Number.isFinite(expiresAtMs) && remainingMs <= 0;
+  const isFinalMinute = Number.isFinite(remainingMs) && remainingMs <= MINUTE_MS;
+  const expired = Boolean(clock) && Number.isFinite(expiresAtMs) && remainingMs <= 0;
 
   React.useEffect(() => {
-    const read = () => (clock ? clock.now() : Date.now());
+    if (!clock) return;
+    const read = () => clock.now();
     setNow(read());
 
     if (expired || !Number.isFinite(expiresAtMs) || expiresAtMs - read() <= 0) return;
@@ -96,19 +105,22 @@ export function useUnexpiredRequests<T extends { expires_at: string }>(requests:
   // An empty list is the common case on the surfaces that mount globally, and it has no expiry to
   // get wrong — so it doesn't pay for the clock. The sync starts when the first request lands.
   const clock = useServerClock(requests.length > 0);
-  const [now, setNow] = React.useState(() => Date.now());
+  const [, setNow] = React.useState(() => Date.now());
+  const serverNow = clock?.now();
 
   const nextExpiryMs = React.useMemo(() => {
+    if (serverNow === undefined) return Infinity;
     let next = Infinity;
     for (const request of requests) {
       const expires = new Date(request.expires_at).getTime();
-      if (Number.isFinite(expires) && expires > now && expires < next) next = expires;
+      if (Number.isFinite(expires) && expires > serverNow && expires < next) next = expires;
     }
     return next;
-  }, [now, requests]);
+  }, [requests, serverNow]);
 
   React.useEffect(() => {
-    const read = () => (clock ? clock.now() : Date.now());
+    if (!clock) return;
+    const read = () => clock.now();
     setNow(read());
     if (!Number.isFinite(nextExpiryMs)) return;
 
@@ -116,15 +128,16 @@ export function useUnexpiredRequests<T extends { expires_at: string }>(requests:
     return () => clearTimeout(timeout);
   }, [clock, nextExpiryMs]);
 
-  return React.useMemo(
-    () =>
-      requests.filter(request => {
-        const expires = new Date(request.expires_at).getTime();
-        // Unparseable expiries stay visible — matching the card, which only hides a finite past.
-        return !Number.isFinite(expires) || expires > now;
-      }),
-    [now, requests]
-  );
+  return React.useMemo(() => {
+    // Until synchronization resolves there is no trustworthy basis for declaring a server
+    // timestamp expired. Keeping the raw pending rows is the safe side of the one-request gate.
+    if (serverNow === undefined) return requests;
+    return requests.filter(request => {
+      const expires = new Date(request.expires_at).getTime();
+      // Unparseable expiries stay visible — matching the card, which only hides a finite past.
+      return !Number.isFinite(expires) || expires > serverNow;
+    });
+  }, [requests, serverNow]);
 }
 
 export function formatCountdown(remainingMs: number) {
