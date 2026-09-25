@@ -214,6 +214,11 @@ type Reference = {
   namespace?: boolean;
   /** `export * from`: the target's named bindings, each classified on its own. */
   starReexport?: boolean;
+  /**
+   * With `starReexport`: the names this module exports itself, which a star never gets to supply.
+   * Without them the walk reported bindings the barrel does not have.
+   */
+  claimed?: ReadonlySet<string>;
   reexported?: boolean;
 };
 
@@ -230,8 +235,60 @@ type Reference = {
  * left the corpus green and reopened the gap it was added to close, which is the same hole the
  * `callReferences` fixtures were written for.
  */
+/**
+ * Every export name a module states for itself, which is every name a star cannot supply.
+ *
+ * An explicit export shadows `export * from` whatever order the two are written in, so a barrel
+ * doing `export { restFetch } from './client'` beside `export * from './schemas'` does not re-export
+ * a `restFetch` from `./schemas` even if one is there. `core/io/rest/index.ts` and `atoms/index.ts`
+ * are both written that way.
+ *
+ * `exportKindsOf` needs the same fact and does not call this: by the time its star pass runs, the
+ * keys of its own map *are* the claimed names, so asking twice would be two ways to be wrong.
+ */
+function claimedExportNames(sourceFile: ts.SourceFile): Set<string> {
+  const claimed = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      // A bare star claims nothing of its own; that is the whole point of it.
+      if (!statement.exportClause) continue;
+      if (ts.isNamespaceExport(statement.exportClause)) claimed.add(statement.exportClause.name.text);
+      else for (const element of statement.exportClause.elements) claimed.add(element.name.text);
+      continue;
+    }
+
+    // A type or an interface claims the name as firmly as a value does: the star still cannot fill it.
+    if (!isExported(statement)) continue;
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) claimed.add(declaration.name.text);
+      }
+      continue;
+    }
+
+    const named = (statement as ts.DeclarationStatement).name;
+    if (named && ts.isIdentifier(named)) claimed.add(named.text);
+  }
+
+  return claimed;
+}
+
+/**
+ * What a barrel actually hands on through `export * from './x'`.
+ *
+ * The target's named exports, minus its default — which a star does not carry, so reading one here
+ * invents an offence — and minus every name the barrel claims itself.
+ */
+function starReexports(targetKinds: Map<string, ExportKind>, claimed: ReadonlySet<string>): [string, ExportKind][] {
+  return [...targetKinds].filter(([name]) => name !== 'default' && !claimed.has(name));
+}
+
 function staticReferences(sourceFile: ts.SourceFile): Reference[] {
   const found: Reference[] = [];
+  // Computed at most once, and only for a module that actually has a star to shadow.
+  let claimed: Set<string> | null = null;
 
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -287,7 +344,8 @@ function staticReferences(sourceFile: ts.SourceFile): Reference[] {
         // Not a namespace value: this hands on the target's named bindings one by one, so a
         // barrel star-re-exporting nothing but components is not an offence. `export * as Ns` is
         // a namespace object and stays one, below.
-        found.push({ specifier, local: 're-exports *', starReexport: true, reexported: true });
+        claimed ??= claimedExportNames(sourceFile);
+        found.push({ specifier, local: 're-exports *', starReexport: true, reexported: true, claimed });
       } else if (ts.isNamespaceExport(statement.exportClause)) {
         found.push({
           specifier,
@@ -1035,10 +1093,7 @@ describe('server components take only components from client modules', () => {
 
         // `export * from` is every named binding the target has, so each is judged on its own.
         if (reference.starReexport) {
-          for (const [exported, kind] of kindsFor(target)) {
-            // `export *` does not carry the default export, so reading one here invents an offence.
-            if (exported === 'default') continue;
-
+          for (const [exported, kind] of starReexports(kindsFor(target), reference.claimed ?? new Set())) {
             // One name here: a re-export has no local binding in this file to read.
             const verdict = verdictFor([exported], kind);
 
@@ -1240,6 +1295,73 @@ describe('SERVER_ENTRY', () => {
   });
 });
 
+describe('claimedExportNames', () => {
+  const claimed = (source: string) => [...claimedExportNames(parse('barrel.tsx', source))].sort();
+
+  it.each([
+    ['a named re-export', "export { Foo } from './x';"],
+    ['a named re-export under an alias', "export { Inner as Foo } from './x';"],
+    ['a local re-export', 'const Foo = 1;\nexport { Foo };'],
+    ['a namespace re-export', "export * as Foo from './x';"],
+    ['a const', 'export const Foo = { a: 1 };'],
+    ['a function', 'export function Foo() { return {}; }'],
+    ['a class', 'export class Foo {}'],
+    ['an enum', 'export enum Foo { A }'],
+    ['a namespace', 'export namespace Foo { export const a = 1; }'],
+    // A type claims the name as firmly as a value: a star still cannot fill it.
+    ['a type alias', 'export type Foo = { a: 1 };'],
+    ['an interface', 'export interface Foo { a: 1 }'],
+    ['a type-only re-export', "export type { Foo } from './x';"],
+  ])('counts %s', (_label, source) => {
+    expect(claimed(source)).toEqual(['Foo']);
+  });
+
+  it.each([
+    // The point of a bare star is that it claims nothing of its own.
+    ['a bare star', "export * from './x';"],
+    ['a declaration that is not exported', 'const Foo = 1;'],
+    ['an import', "import { Foo } from './x';"],
+  ])('does not count %s', (_label, source) => {
+    expect(claimed(source)).toEqual([]);
+  });
+
+  it('reads the aliased name, not the origin one', () => {
+    // `export { Inner as Foo }` claims `Foo`. Claiming `Inner` would leave `Foo` open to a star and
+    // shadow a name the barrel never mentions.
+    expect(claimed("export { Inner as Foo } from './x';")).toEqual(['Foo']);
+  });
+});
+
+describe('starReexports', () => {
+  const kinds = new Map<string, ExportKind>([
+    ['Button', 'component'],
+    ['BUTTON_CLASS', 'value'],
+    ['default', 'value'],
+  ]);
+
+  it('hands on the target named exports', () => {
+    expect(starReexports(kinds, new Set())).toEqual([
+      ['Button', 'component'],
+      ['BUTTON_CLASS', 'value'],
+    ]);
+  });
+
+  it('never hands on a default, which a star does not carry', () => {
+    // Reading one here invents an offence against a binding nothing can import.
+    expect(starReexports(kinds, new Set()).map(([name]) => name)).not.toContain('default');
+  });
+
+  it('leaves out a name the barrel claims itself', () => {
+    // An explicit export shadows a star whichever order the two are written in, so the star is not
+    // where this name comes from and an offence against it is against a binding that does not exist.
+    expect(starReexports(kinds, new Set(['BUTTON_CLASS']))).toEqual([['Button', 'component']]);
+  });
+
+  it('hands on nothing when the barrel claims everything', () => {
+    expect(starReexports(kinds, new Set(['Button', 'BUTTON_CLASS']))).toEqual([]);
+  });
+});
+
 describe('staticReferences', () => {
   const refs = (source: string) => staticReferences(parse('fixture.tsx', source));
 
@@ -1282,10 +1404,25 @@ describe('staticReferences', () => {
     // `export *` hands on named bindings one by one, so a barrel of components is not an offence.
     // `export * as Ns` is a namespace object, and every property read off one is a client reference.
     expect(refs("export * from './x';")).toEqual([
-      { specifier: './x', local: 're-exports *', starReexport: true, reexported: true },
+      { specifier: './x', local: 're-exports *', starReexport: true, reexported: true, claimed: new Set() },
     ]);
     expect(refs("export * as Ns from './x';")).toEqual([
       { specifier: './x', local: 're-exports * as Ns', namespace: true, reexported: true },
+    ]);
+  });
+
+  it('tells a star what the barrel around it already exports', () => {
+    // `core/io/rest/index.ts` is written this way. Without the claimed set the walk reported a
+    // `restFetch` coming from `./schemas`, which this module does not re-export from there.
+    expect(refs("export { restFetch } from './client';\nexport * from './schemas';")).toEqual([
+      { specifier: './client', exported: 'restFetch', local: 'restFetch', reexported: true },
+      {
+        specifier: './schemas',
+        local: 're-exports *',
+        starReexport: true,
+        reexported: true,
+        claimed: new Set(['restFetch']),
+      },
     ]);
   });
 
