@@ -1,9 +1,12 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 
 import { TopicPageView, resolveTopicTab } from './topic-page-view';
 
@@ -27,6 +30,8 @@ const mocks = vi.hoisted(() => ({
    */
   maxLines: 5,
   topicSpaceIds: ['11111111111111111111111111111111'],
+  /** Props the editable Types group received, or null if the page rendered none. */
+  typesEditor: null as Record<string, unknown> | null,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -35,6 +40,12 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 }));
 vi.mock('~/partials/entity-page/editable-entity-header', () => ({
   EditableHeading: () => <div data-testid="editable-heading" />,
+}));
+vi.mock('~/partials/entity-page/editable-entity-page', () => ({
+  RelationsGroup: (props: Record<string, unknown>) => {
+    mocks.typesEditor = props;
+    return <div data-testid="types-editor" />;
+  },
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => mocks.pathname,
@@ -114,6 +125,7 @@ beforeEach(() => {
   mocks.tabs = null;
   mocks.pathname = '/space/space-1/topic-1';
   mocks.topicSpaceIds = ['11111111111111111111111111111111'];
+  mocks.typesEditor = null;
 });
 
 afterEach(cleanup);
@@ -235,6 +247,61 @@ describe('TopicPageView composition', () => {
       spaceId: 'space-1',
       spaceIds: ['11111111111111111111111111111111'],
     });
+  });
+});
+
+/**
+ * A topic's types used to be a literal `<span>Topic</span>` in both modes, so there was no way to
+ * add a type to a topic or take one off it — not on this page, and not in the edit-mode property
+ * sheet either, which drops `Types` as a system property "editable elsewhere". Edit mode now hands
+ * the row to the same `RelationsGroup` the generic metadata header uses, chips, X and all.
+ */
+describe('TopicPageView types', () => {
+  it('prints the type as a plain chip while browsing', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByText('Topic')).toBeInTheDocument();
+    expect(screen.queryByTestId('types-editor')).toBeNull();
+  });
+
+  it('swaps that chip for the editable Types relations in edit mode', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
+    // The literal is gone, not merely joined: leaving it in would draw an undeletable "Topic"
+    // beside the real, deletable one.
+    expect(screen.queryByText('Topic')).toBeNull();
+  });
+
+  // The same property the generic header edits, on the entity the page is actually showing — a
+  // group pointed at the wrong id or property would render an empty picker that silently writes
+  // relations somewhere else.
+  it("points that editor at this entity's Types property", () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(mocks.typesEditor).toEqual({
+      id: 'topic-1',
+      spaceId: 'space-1',
+      propertyId: SystemIds.TYPES_PROPERTY,
+    });
+  });
+
+  it('keeps the curated chip alongside the editor', () => {
+    mocks.entity = {
+      ...topicEntity('A description.'),
+      relations: [
+        {
+          isDeleted: false,
+          type: { id: TAG_PROPERTY_ID },
+          toEntity: { id: CURATED_TOPIC_TAG_ID },
+        },
+      ],
+    };
+
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
+    expect(screen.getByText('Curated')).toBeInTheDocument();
   });
 });
 

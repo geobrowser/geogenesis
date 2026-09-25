@@ -1,5 +1,7 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
@@ -22,6 +24,7 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
@@ -217,8 +220,21 @@ export function TopicPageView({
             )
           )}
 
+          {/* Browse shows the one word that says what this page is. Edit shows the entity's real
+              Types relations, with the same chips, the same X and the same `Find or create type...`
+              picker every other entity gets.
+
+              A topic's types were previously uneditable *anywhere*: this row was a literal, and the
+              edit-mode property sheet drops `Types` as a system property "editable elsewhere" —
+              elsewhere being the generic metadata header, which the topic view replaces. Dropping
+              Topic here is allowed: the page re-routes to the generic editor on the next render,
+              which is what an entity that is no longer a topic should look like. */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+            {isEditing ? (
+              <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+            ) : (
+              <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+            )}
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
           </div>
 
