@@ -218,7 +218,7 @@ describe('EntityPageBody relation side panel', () => {
       4
     );
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
-    expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
+    expect(mocks.actions).toMatchObject({ isVoteable: true, compact: true });
   });
 
   it('withholds generic-only chrome while the Person space lookup is pending', () => {
