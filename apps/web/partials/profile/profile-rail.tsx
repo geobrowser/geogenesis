@@ -79,6 +79,7 @@ export function ProfileRailSections({
   systemEntityId,
   address,
   spaceType,
+  description,
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
@@ -102,6 +103,7 @@ export function ProfileRailSections({
         systemEntityId={systemEntityId}
         address={address}
         spaceType={spaceType}
+        serverDescription={description}
       />
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
@@ -396,6 +398,7 @@ function AboutSection({
   systemEntityId,
   address,
   spaceType,
+  serverDescription,
 }: {
   facts: ReturnType<typeof useProfileFacts>['facts'];
   isLoading: boolean;
@@ -408,16 +411,29 @@ function AboutSection({
   systemEntityId: string;
   address: string | null;
   spaceType: ProfileRailProps['spaceType'];
+  /** The bio the server already read, shown until the store has the entity. */
+  serverDescription: string | null;
 }) {
   const joined = formatJoined(facts.joinedAt);
 
-  // The person's description, read here rather than under their name. It is still edited in the
-  // header, which is where its edit field is; the header shows it only while editing
-  // (`hideWhenReading`).
-  const description = useValue({
+  /*
+   * The person's description, read here rather than under their name. It is still edited in the
+   * header, which is where its edit field is; the header shows it only while editing
+   * (`hideWhenReading`).
+   *
+   * Tombstones included, so the one question this asks is whether the store has an opinion at
+   * all — clearing a bio replaces the row with an `isDeleted` one rather than removing it
+   * (`use-edit-profile`), and a lookup that hid those could not tell "not hydrated yet" from
+   * "just cleared". Read as a live value it brought `serverDescription` back the moment a
+   * deletion was staged.
+   */
+  const stored = useValue({
+    includeDeleted: true,
     selector: v =>
       v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
-  })?.value;
+  });
+
+  const description = stored ? (stored.isDeleted ? undefined : stored.value) : (serverDescription ?? undefined);
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
