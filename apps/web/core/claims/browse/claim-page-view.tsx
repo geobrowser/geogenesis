@@ -258,7 +258,10 @@ export function ClaimPageView({
                 {isEditing ? (
                   <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
                 ) : (
-                  <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+                  <h1
+                    data-entity-page-title={entityId}
+                    className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]"
+                  >
                     {entity.name ?? entity.id}
                   </h1>
                 )}

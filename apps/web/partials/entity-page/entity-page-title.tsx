@@ -20,6 +20,15 @@ type EntityPageTitleProps = {
   className?: string;
   /** Rendered inline directly after the title in browse mode, e.g. a verification badge. */
   accessory?: React.ReactNode;
+  /**
+   * The entity this title names, published to the DOM as `data-entity-page-title`.
+   *
+   * The sticky entity header watches for it to leave the viewport. An attribute rather than a ref
+   * because the watcher is mounted above every branch that draws a title — see
+   * `useScrolledPastElement`. Scoped by id so a side panel open on some *other* entity cannot be
+   * mistaken for the page's own title.
+   */
+  entityId?: string;
 };
 
 /**
@@ -42,10 +51,11 @@ export function EntityPageTitle({
   placeholder = 'Entity name...',
   className,
   accessory,
+  entityId,
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
-      <div className={cx('text-text', className)}>
+      <div className={cx('text-text', className)} data-entity-page-title={entityId}>
         <Textarea
           value={value}
           onChange={event => onChange(event.currentTarget.value)}
@@ -61,7 +71,7 @@ export function EntityPageTitle({
   }
 
   return (
-    <div className={className}>
+    <div className={className} data-entity-page-title={entityId}>
       {accessory ? (
         <div className="flex min-w-0 items-center gap-2">
           <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>
