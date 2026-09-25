@@ -498,7 +498,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancelled', {
       debate_id: 'debate-1',
-      source: 'upload_banner',
+      cancel_source: 'upload_banner',
       upload_finished: false,
       already_cancelled: false,
     });
@@ -518,7 +518,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() =>
       expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancel_dismissed', {
         debate_id: 'debate-1',
-        source: 'upload_banner',
+        cancel_source: 'upload_banner',
       })
     );
     expect(mocks.cancelRecording).not.toHaveBeenCalled();
@@ -770,7 +770,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_recording_upload_cancelled',
-      expect.objectContaining({ debate_id: 'debate-1', source: 'thanking_toggle' })
+      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'thanking_toggle' })
     );
   });
 
