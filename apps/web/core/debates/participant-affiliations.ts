@@ -18,11 +18,12 @@ import { currentAffiliation } from '~/core/profile/profile-summary';
 type ParticipantLike = Pick<DebateParticipant, 'profile_space_id'>;
 
 /**
- * Resolve the one-line affiliation shown beneath each recorded-debate participant's name.
+ * Resolve the one-line context shown beneath each recorded-debate participant's name.
  *
  * Debate rows carry a personal-space id, while profile history hangs off the person's entity. The
  * profile batch is therefore the necessary first hop. The history queries keep their profile-page
- * cache keys, so opening a participant's profile after watching them reuses the same response.
+ * cache keys, so opening a participant's profile after watching them reuses the same response. A
+ * current affiliation is preferred; the person's description fills the line when they have none.
  */
 export function useParticipantAffiliations(
   participants: readonly (ParticipantLike | null | undefined)[],
@@ -53,7 +54,7 @@ export function useParticipantAffiliations(
         const spaceId = spaceIds[index];
         if (!spaceId || !history.data) return;
 
-        const line = currentAffiliation(history.data.employment, history.data.education);
+        const line = currentAffiliation(history.data.employment, history.data.education) ?? history.data.description;
         if (line) bySpaceId.set(spaceId, line);
       });
 
@@ -65,7 +66,8 @@ export function useParticipantAffiliations(
   return useQueries({
     queries: spaceIds.map(spaceId => {
       const profile = profilesBySpaceId.get(spaceId);
-      const personEntityId = profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
+      const personEntityId =
+        profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
 
       return {
         queryKey: profileHistoryQueryKey(personEntityId ?? undefined, spaceId),

@@ -209,7 +209,6 @@ describe('player layout', () => {
       expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
       expect(nameNode.closest('button')?.className).toContain('items-center');
     }
-
   });
 
   it('keeps the position chip in the video playback surface', () => {
@@ -245,6 +244,17 @@ describe('player layout', () => {
 
     expect(getByText('Head of Product at Geo').className).toContain('truncate');
     expect(getByTitle('PhD student, Economics at Stanford')).not.toBeNull();
+  });
+
+  it('clamps a participant description fallback to the same single line', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
+    mocks.affiliations = new Map([[SPACE_1, description]]);
+
+    const { getByText, getByTitle } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(getByText(description).className).toContain('truncate');
+    expect(getByTitle(description)).not.toBeNull();
   });
 
   it('leaves no affiliation row when a participant has none', () => {
