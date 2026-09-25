@@ -200,7 +200,17 @@ export function DebateActivityRow({
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             {debaterLine && (
-              <span className={cx(PAGE_DENSITY.nameClass, 'min-w-0 truncate text-text')}>{debaterLine}</span>
+              // The byline is the link, the way a commenter's name is. What the debate argued is
+              // this row's text, and text that navigates when you touch it is a trap in a thread
+              // where every neighbouring sentence is inert — a reader selecting a phrase to quote
+              // from a claim row does not expect the one below it to leave the page.
+              <Link
+                href={debateHref}
+                aria-label={`Watch ${debaterLine}`}
+                className={cx(PAGE_DENSITY.nameClass, 'min-w-0 truncate text-text no-underline hover:underline')}
+              >
+                {debaterLine}
+              </Link>
             )}
             <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
               Debate
@@ -214,11 +224,7 @@ export function DebateActivityRow({
             )}
           </div>
 
-          <Link href={debateHref} className="group/debate min-w-0 no-underline">
-            <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text group-hover/debate:underline')}>
-              {headline}
-            </span>
-          </Link>
+          <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text')}>{headline}</span>
 
           <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
             {!collapsed && (
