@@ -251,11 +251,22 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
     const banner = screen.getByRole('status');
     const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
-    expect(banner).toHaveClass('h-10', 'items-center', 'justify-center');
-    // The bar sits in the middle column of three, so it stays centred on the viewport.
-    expect(content).toHaveClass('grid', 'w-full', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'md:gap-[50px]');
-    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('justify-self-end', 'truncate');
+    // Figma's 40px, written out rather than read from the exported constant: the inset claim reads
+    // that constant too, so comparing the two would pass however far they both drifted.
+    expect(banner).toHaveStyle({ height: '40px' });
+    expect(banner).toHaveClass('items-center', 'justify-center');
+    // On desktop the bar sits in the middle column of three, so it stays centred on the viewport,
+    // with Figma's 50px either side. `md` is max-width here (767px and below): the two side columns
+    // are narrower than the labels they hold (112px each at 320px), so a phone gets a plain row
+    // where only the message gives way.
+    expect(content).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'gap-[50px]');
+    expect(content).toHaveClass('md:flex', 'md:gap-2');
     expect(content?.children[1]).toHaveAttribute('role', 'progressbar');
+    // A grid item sizes to its content and spills out of its track unless capped, so both sides
+    // are held to their column and truncate inside it.
+    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('min-w-0', 'max-w-full', 'truncate');
+    expect(content?.children[2]).toHaveClass('min-w-0', 'max-w-full');
+    expect(screen.getByText('Keep browser open')).toHaveClass('min-w-0', 'truncate');
     const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
     expect(progress).toHaveAttribute('aria-valuemin', '0');
     expect(progress).toHaveAttribute('aria-valuemax', '100');

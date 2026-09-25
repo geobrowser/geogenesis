@@ -753,8 +753,7 @@ export function DebateRecordingUploadCoordinator() {
   const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
   // The banner sits on the bottom edge of the viewport across its full width, so anything else
   // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
-  // clear it. `DEBATE_UPLOAD_BANNER_HEIGHT_PX` is the banner's `h-10`; the two have to be changed
-  // together.
+  // clear it by exactly the banner's height, which both read from `DEBATE_UPLOAD_BANNER_HEIGHT_PX`.
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
@@ -793,7 +792,7 @@ export function DebateRecordingUploadCoordinator() {
   );
 }
 
-/** The upload banner's `h-10`, claimed from the bottom of the viewport while it shows. */
+/** The upload banner's height, and what it claims from the bottom of the viewport while it shows. */
 export const DEBATE_UPLOAD_BANNER_HEIGHT_PX = 40;
 
 export function DebateRecordingUploadBanner({
@@ -855,19 +854,25 @@ export function DebateRecordingUploadBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex h-10 min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
+      style={{ height: DEBATE_UPLOAD_BANNER_HEIGHT_PX }}
     >
       {/* Figma centers the progress bar on the viewport with the message and the warning 50px either
           side of it. Equal `1fr` side columns keep the bar dead centre whatever the two labels
-          measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". With no
-          bar there is nothing to centre on, so the line and its actions just sit together. */}
+          measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". A phone
+          can't afford that: at 320px each side column is 112px, narrower than either label, so at
+          `md` (this app's breakpoints are max-width: 767px and below) it drops to a plain row where
+          the message truncates and the warning and Cancel stay whole. With no bar there is nothing
+          to centre on, so the line and its actions just sit together. */}
       <div
         className={cx(
-          'min-w-0 items-center gap-3 md:gap-[50px]',
-          showProgress ? 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]' : 'flex max-w-full justify-center'
+          'max-w-full min-w-0 items-center justify-center gap-[50px] md:gap-2',
+          showProgress ? 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:flex md:w-auto' : 'flex'
         )}
       >
-        <span className={cx('min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
+        {/* A grid item sizes to its content and spills out of its track, so `max-w-full` holds each
+            side to its column for `truncate` to act on. */}
+        <span className={cx('max-w-full min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
         {showProgress && (
           <div
             role="progressbar"
@@ -884,8 +889,10 @@ export function DebateRecordingUploadBanner({
           </div>
         )}
         {(showKeepBrowserOpen || canCancel) && (
-          <div className={cx('flex shrink-0 items-center gap-2', showProgress && 'justify-self-start')}>
-            {showKeepBrowserOpen && <span className="shrink-0">Keep browser open</span>}
+          <div
+            className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}
+          >
+            {showKeepBrowserOpen && <span className="min-w-0 truncate">Keep browser open</span>}
             {canCancel && (
               <SmallButton
                 type="button"
