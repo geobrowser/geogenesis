@@ -41,8 +41,6 @@ const booking = (overrides: Partial<PeerAvailabilityBooking> = {}): PeerAvailabi
   pending: false,
   error: null,
   requestedStart: null,
-  replacesStart: null,
-  replacementUnknown: false,
   ...overrides,
 });
 
@@ -359,27 +357,6 @@ describe('booking a slot', () => {
     setupBooking(booking({ requestedStart: '2026-09-21T14:00:00Z' }));
     expect(screen.getByText(/Ada has to accept/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
-  });
-
-  // geo-chat keeps one open invitation per pair, so sending supersedes the one already out.
-  it('says sending replaces an invitation already out to this person', () => {
-    setupBooking(booking({ replacesStart: '2026-09-22T14:00:00Z' }));
-    expect(screen.getByRole('button', { name: 'Replace request' })).toBeInTheDocument();
-    expect(screen.getByText(/This replaces your request for/)).toBeInTheDocument();
-  });
-
-  it('says sending may replace one while the invitations are unknown, with a time picked', async () => {
-    const { user } = setupBooking(booking({ replacementUnknown: true }), { slots: [slot(16)] });
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
-
-    expect(screen.getByRole('button', { name: 'Send request' })).toBeEnabled();
-    expect(screen.getByText('Sending replaces any pending request you already sent Ada.')).toBeInTheDocument();
-  });
-
-  it('sends plainly when nothing is out to this person', () => {
-    setupBooking(booking());
-    expect(screen.getByRole('button', { name: 'Send request' })).toBeInTheDocument();
-    expect(screen.queryByText(/This replaces your request/)).not.toBeInTheDocument();
   });
 });
 

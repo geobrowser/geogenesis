@@ -1580,7 +1580,7 @@ export type ScheduledDebateStatus =
   | 'declined'
   | 'expired'
   | 'cancelled'
-  /** Settled without an answer: an overlapping acceptance, or the inviter's newer invitation. */
+  /** Auto-declined because this person accepted something overlapping. Nobody turned them down. */
   | 'superseded';
 
 /** `accepted: null` means they have not answered. */
