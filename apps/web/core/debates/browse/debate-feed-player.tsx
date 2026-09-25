@@ -809,6 +809,19 @@ function DebaterVideo({
 
   const openProfile = useOpenDebaterProfile(participant);
 
+  /**
+   * Whether the keyboard is on this tile's name, which overrides the round card's crossfade.
+   *
+   * The same answer the scrubber gives a few hundred lines up, and for the same reason: fading a
+   * control out does not take it out of the tab order, so a viewer tabbing during the card would
+   * otherwise land on an invisible button and open a profile they could not see themselves
+   * choosing. Making it `inert` or `disabled` for the card's 1.8s closes that, but at a worse
+   * price — it blurs anyone already standing there, dumping them on `document.body` and losing
+   * their place in the middle of a video. Bringing it back into view instead keeps the control
+   * visible exactly for the person who needs to see it.
+   */
+  const [nameFocused, setNameFocused] = React.useState(false);
+
   return (
     <div
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
@@ -1005,11 +1018,19 @@ function DebaterVideo({
 
           It crossfades against the card's own opacity rather than running a timer, so the name
           leaves as the card arrives and is back as it goes: one movement, and nothing to fall out
-          of step with a scrub. Its link goes with it while it is under — an invisible profile
-          button in the middle of the pause surface is a misclick waiting to happen. */}
+          of step with a scrub.
+
+          Its link goes with it for the pointer — an invisible profile button in the middle of the
+          pause surface is a misclick waiting to happen — but not for the keyboard, which keeps the
+          row in the tab order and brings it back into view on focus. `pointer-events-none` does
+          not touch focusability, which is what makes those two separable. */}
       <div
         data-debater-row
-        style={{ opacity: 1 - cardYield }}
+        onFocus={() => setNameFocused(true)}
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNameFocused(false);
+        }}
+        style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
           'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom] duration-150',
           cardYield > 0.5 && '[&_button]:pointer-events-none',

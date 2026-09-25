@@ -796,6 +796,25 @@ describe('the round it is playing', () => {
     expect((after.querySelector('[data-debater-row]') as HTMLElement).style.opacity).toBe('1');
   });
 
+  it('brings the name back for a viewer who tabs to it under the card', () => {
+    // Fading a control out does not take it out of the tab order. Rather than make it `inert` for
+    // the card's 1.8s — which would blur anyone already standing there — the row comes back into
+    // view when the keyboard reaches it, the same answer the scrubber gives.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+    expect(row.style.opacity).toBe('0');
+
+    fireEvent.focus(row.querySelector('button') as HTMLElement);
+    expect(row.style.opacity).toBe('1');
+
+    // And leaves again once focus goes somewhere outside the row.
+    fireEvent.blur(row.querySelector('button') as HTMLElement, { relatedTarget: container });
+    expect(row.style.opacity).toBe('0');
+  });
+
   it('does not leave an invisible profile link on the pause surface', () => {
     mocks.controller = at(0.5);
     mocks.ticker = emptyTicker();
