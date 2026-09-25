@@ -5,6 +5,14 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 
+/** What `roundCardAt` hands over: one line for the badge, the same fact in halves for the card. */
+const cue = (round: string, role: string | null, opacity = 1) => ({
+  label: role ? `${round} · ${role}` : round,
+  round,
+  role,
+  opacity,
+});
+
 afterEach(cleanup);
 
 describe('DebateRoundCard', () => {
@@ -13,15 +21,33 @@ describe('DebateRoundCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('announces the round', () => {
-    render(<DebateRoundCard cue={{ label: 'Round 2 · Rebuttal', opacity: 1 }} />);
-    expect(screen.getByText('Round 2 · Rebuttal')).toBeInTheDocument();
+  it('announces the round on two lines, the name of it largest', () => {
+    // A title card rather than a caption: read from across a room and out of the corner of an eye,
+    // where two short lines carry at a size one long line cannot. The name is the informative
+    // half — "Rebuttal" says why this stretch is worth watching, the number only says how far in.
+    const { container } = render(<DebateRoundCard cue={cue('Round 2', 'Rebuttal')} />);
+    const [round, role] = [...container.querySelectorAll('span')] as HTMLElement[];
+
+    expect(round).toHaveTextContent('Round 2');
+    expect(role).toHaveTextContent('Rebuttal');
+    expect([...role.classList]).toContain('text-[clamp(1.75rem,7.5cqw,3rem)]');
+  });
+
+  it('gives the round the headline to itself where the format names no role', () => {
+    // A middle round of a long format is a round and nothing more, and a lone small line over the
+    // seam would read as a stray caption instead of a card.
+    const { container } = render(<DebateRoundCard cue={cue('Round 3', null)} />);
+    const lines = [...container.querySelectorAll('span')] as HTMLElement[];
+
+    expect(lines).toHaveLength(1);
+    expect(screen.getByText('Round 3')).toBeInTheDocument();
+    expect([...lines[0].classList]).toContain('text-[clamp(1.75rem,7.5cqw,3rem)]');
   });
 
   it('sits on the seam between the tiles, where the subtitle sits', () => {
     // The one band of the player that is never a face — and a round belongs to both debaters, so
     // its name goes between them rather than over whoever is talking.
-    const { container } = render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 1 }} />);
+    const { container } = render(<DebateRoundCard cue={cue('Round 1', 'Opening')} />);
     const classes = [...(container.firstElementChild as HTMLElement).classList];
 
     expect(classes).toContain('top-1/2');
@@ -32,9 +58,7 @@ describe('DebateRoundCard', () => {
     // The top tile's scrim has run all the way to black by the seam. The debaters' own phrase
     // treatment — dark type in a white outline — would leave the outline holding an empty shape.
     const outline = (
-      render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 1 }} />).container.querySelector(
-        'span'
-      ) as HTMLElement
+      render(<DebateRoundCard cue={cue('Round 1', 'Opening')} />).container.querySelector('span') as HTMLElement
     ).style.textShadow;
 
     expect(outline).toContain('#000');
@@ -42,13 +66,13 @@ describe('DebateRoundCard', () => {
   });
 
   it('draws at the strength the playhead gave it', () => {
-    const { container } = render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 0.4 }} />);
+    const { container } = render(<DebateRoundCard cue={cue('Round 1', 'Opening', 0.4)} />);
     expect((container.firstElementChild as HTMLElement).style.opacity).toBe('0.4');
   });
 
   it("stays out of the accessibility tree and out of the pointer's way", () => {
     // The player already names the speaker; the whole tile behind this is a play/pause button.
-    const { container } = render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 1 }} />);
+    const { container } = render(<DebateRoundCard cue={cue('Round 1', 'Opening')} />);
     const card = container.firstElementChild as HTMLElement;
 
     expect(card).toHaveAttribute('aria-hidden');
@@ -62,8 +86,8 @@ describe('DebateRoundBadge', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('parks the round beside the timer', () => {
-    const { container } = render(<DebateRoundBadge cue={{ label: 'Round 2 · Rebuttal', opacity: 1 }} />);
+  it('parks the round beside the timer, on the one line a 32px pill allows', () => {
+    const { container } = render(<DebateRoundBadge cue={cue('Round 2', 'Rebuttal')} />);
     expect(screen.getByText('Round 2 · Rebuttal')).toBeInTheDocument();
     // Left of the timer, which keeps the corner it has always had.
     expect([...(container.firstElementChild as HTMLElement).classList]).toContain('right-13');
@@ -72,7 +96,7 @@ describe('DebateRoundBadge', () => {
   it('sits on a surface rather than being outlined over the picture', () => {
     // The rule the whole layer follows: transient things are outlined type, persistent things sit
     // on a surface — and this one belongs to the timer beside it.
-    const { container } = render(<DebateRoundBadge cue={{ label: 'Round 1 · Opening', opacity: 1 }} />);
+    const { container } = render(<DebateRoundBadge cue={cue('Round 1', 'Opening')} />);
     const badge = container.firstElementChild as HTMLElement;
 
     expect(badge.style.textShadow).toBe('');
@@ -80,7 +104,7 @@ describe('DebateRoundBadge', () => {
   });
 
   it('ramps in at the strength the handover gave it', () => {
-    const { container } = render(<DebateRoundBadge cue={{ label: 'Round 1 · Opening', opacity: 0.5 }} />);
+    const { container } = render(<DebateRoundBadge cue={cue('Round 1', 'Opening', 0.5)} />);
     expect((container.firstElementChild as HTMLElement).style.opacity).toBe('0.5');
   });
 });

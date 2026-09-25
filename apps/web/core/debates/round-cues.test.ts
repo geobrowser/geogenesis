@@ -24,6 +24,18 @@ describe('roundLabel', () => {
 });
 
 describe('roundCardAt', () => {
+  it('hands the card the round and its name apart, and the badge the single line', () => {
+    // Two surfaces with different room for the same fact: the card stacks them large, the badge
+    // has one line beside a timer.
+    expect(roundCardAt(spans, 0.5)).toMatchObject({ round: 'Round 1', role: 'Opening', label: 'Round 1 · Opening' });
+  });
+
+  it('leaves the name off a middle round the format does not name', () => {
+    // Eight turns: the second round is neither an opening, a rebuttal nor a closing.
+    const long = turnSpansForDurations(1, Array(8).fill(60_000));
+    expect(roundCardAt(long, 120.5)).toMatchObject({ round: 'Round 2', role: null, label: 'Round 2' });
+  });
+
   it('announces the round as it opens', () => {
     expect(roundCardAt(spans, 0.5)?.label).toBe('Round 1 · Opening');
     expect(roundCardAt(spans, 120.5)?.label).toBe('Round 2 · Rebuttal');

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { RoundCue } from '~/core/debates/round-cues';
 
 /**
@@ -33,6 +35,15 @@ const roundCardTextShadow = {
  * things in one place is one thing nobody reads. It is a fair trade for under two seconds at the
  * top of a round, which is a beat before anyone has said anything worth captioning.
  *
+ * Stacked rather than run together on one line, and large. This is a title card, not a caption:
+ * it is read from across a room and from the corner of the eye, on a phone in a feed as often as
+ * on a laptop. Two short lines centred on the seam carry at a size one long line cannot — the
+ * single line had to stay narrow enough not to reach the edges of a 355px tile, which held it to
+ * about the size of the subtitle it was replacing.
+ *
+ * The round on top and its name beneath, largest: the name is the informative half. "Rebuttal" is
+ * what tells a viewer why this stretch is worth watching; the number only says how far in they are.
+ *
  * Sized against the player rather than the viewport. The same component is a feed card, an explore
  * card and a fullscreen player; a breakpoint would get two of the three wrong.
  *
@@ -58,12 +69,27 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       // part-way through an animation that started when the element mounted.
       style={{ opacity: cue.opacity }}
     >
+      {/* The round alone where the format names no role, at the headline size — a lone small line
+          over the seam would read as a stray caption rather than as a card. */}
       <span
-        className="text-[clamp(1.125rem,5.5cqw,1.875rem)] leading-tight font-semibold text-balance text-white"
+        className={cx(
+          'block leading-[1.1]',
+          cue.role
+            ? 'text-[clamp(1.125rem,4.5cqw,1.75rem)] font-semibold text-white/85'
+            : 'text-[clamp(1.75rem,7.5cqw,3rem)] font-bold text-white'
+        )}
         style={roundCardTextShadow}
       >
-        {cue.label}
+        {cue.round}
       </span>
+      {cue.role && (
+        <span
+          className="block text-[clamp(1.75rem,7.5cqw,3rem)] leading-[1.05] font-bold text-white"
+          style={roundCardTextShadow}
+        >
+          {cue.role}
+        </span>
+      )}
     </div>
   );
 }

@@ -55,25 +55,48 @@ const HANDOVER_MS = 300;
  * `debateTurnRole` is the same function the room's countdown and the format details read, so a
  * debate recorded under the old four-turn format labels its rounds the way it always has.
  */
-export function roundLabel(turnIndex: number, turnCount: number): string {
-  const round = Math.floor(turnIndex / 2) + 1;
+export function roundParts(turnIndex: number, turnCount: number): { round: string; role: string | null } {
+  const round = `Round ${Math.floor(turnIndex / 2) + 1}`;
   switch (debateTurnRole(turnIndex, turnCount)) {
     case 'opening':
-      return `Round ${round} · Opening`;
+      return { round, role: 'Opening' };
     case 'rebuttal':
-      return `Round ${round} · Rebuttal`;
+      return { round, role: 'Rebuttal' };
     case 'closing':
-      return `Round ${round} · Closing`;
+      return { round, role: 'Closing' };
     default:
-      return `Round ${round}`;
+      // A middle round of a long format is a round and nothing more; the format has no name for it.
+      return { round, role: null };
   }
 }
 
+/** The same fact on one line, which is the shape the badge beside the timer needs. */
+export function roundLabel(turnIndex: number, turnCount: number): string {
+  const { round, role } = roundParts(turnIndex, turnCount);
+  return role ? `${round} · ${role}` : round;
+}
+
 export type RoundCue = {
+  /** One line — "Round 2 · Rebuttal" — which is what the badge wears. */
   label: string;
+  /**
+   * The same two words apart, which is what the card wears.
+   *
+   * The card is read across a room's worth of distance at the top of a round and the badge is read
+   * at arm's length beside a timer, so one string cannot serve both: the card wants the round and
+   * its name stacked and large, the badge wants them on the single line a 32px pill allows.
+   */
+  round: string;
+  /** Null in a middle round the format gives no name to — then the card is the round alone. */
+  role: string | null;
   /** 0–1, from the playhead. */
   opacity: number;
 };
+
+function cueFor(span: TurnSpan, turnCount: number, opacity: number): RoundCue {
+  const { round, role } = roundParts(span.index, turnCount);
+  return { label: role ? `${round} · ${role}` : round, round, role, opacity };
+}
 
 /** The turn the playhead is inside, or nothing before the first and after the last. */
 function currentSpan(spans: TurnSpan[], playheadSeconds: number) {
@@ -115,7 +138,7 @@ export function roundCardAt(spans: TurnSpan[], playheadSeconds: number): RoundCu
   const opacity = ageMs < FADE_IN_MS ? ageMs / FADE_IN_MS : untilEnd < FADE_OUT_MS ? untilEnd / FADE_OUT_MS : 1;
   if (opacity <= 0) return null;
 
-  return { label: roundLabel(current.index, spans.length), opacity };
+  return cueFor(current, spans.length, opacity);
 }
 
 /**
@@ -139,5 +162,5 @@ export function roundBadgeAt(spans: TurnSpan[], playheadSeconds: number): RoundC
   const opacity = Math.max(0, Math.min(1, (ageMs - from) / over));
   if (opacity <= 0) return null;
 
-  return { label: roundLabel(current.index, spans.length), opacity };
+  return cueFor(current, spans.length, opacity);
 }
