@@ -100,15 +100,17 @@ export function DebateCommentRow({
           >
             <span className={cx(PAGE_DENSITY.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
           </a>
-          <ActivityRowTag kind="comment" />
           {/*
-            Where this person stands on the *claim*, not on the debate — the same badge, from the
-            same provider, that a commenter on the claim gets. Someone who argues under a debate and
-            holds a position on the claim it argued is the same person making the same commitment,
-            and the thread should say so in one place rather than only where the comment happened to
-            be filed. Renders nothing for a commenter who holds no position.
+            Where this person stands on the claim this comment hangs under — the extracted claim when
+            there is one, the page's claim otherwise. Same badge, same provider a commenter on the
+            claim gets; which claim it reports is decided by whichever provider is nearest, so a
+            comment under an extracted claim badges against that claim rather than against something
+            several screens up. Renders nothing for someone who holds no position on it.
+
+            Before the row's own tag: the side is a fact about the person whose name it follows.
           */}
           <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
+          <ActivityRowTag kind="comment" />
           <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
             {comment.isPublishing ? 'Publishing…' : getRelativeTime(comment.createdAt)}
           </span>

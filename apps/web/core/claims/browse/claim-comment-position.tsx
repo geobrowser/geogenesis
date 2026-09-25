@@ -19,6 +19,13 @@ import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from './claim-res
 type ClaimCommentPositionContextValue = {
   directions: Map<string, ActiveResponseDirection>;
   responseKind: DebateResponseKind;
+  /**
+   * What the badge is a position *on*, for the hover title.
+   *
+   * A bare "Agree" beside a name answers a question the reader has to guess at, and the guess is
+   * whatever claim is nearest on screen. Naming it removes the guess.
+   */
+  claimName: string | null;
 };
 
 const ClaimCommentPositionContext = React.createContext<ClaimCommentPositionContextValue | null>(null);
@@ -52,6 +59,7 @@ export function ClaimCommentPositionBoundary({
       entityId={entityId}
       spaceId={spaceId}
       responseKind={responseKind}
+      claimName={entity?.name ?? null}
       viewerDirection={summary.viewerDirection}
       viewerSpaceId={summary.viewerSpaceId}
       isViewerResponseLoading={summary.isViewerResponseLoading}
@@ -72,6 +80,7 @@ export function ClaimCommentPositionProvider({
   entityId,
   spaceId,
   responseKind,
+  claimName = null,
   viewerDirection,
   viewerSpaceId,
   isViewerResponseLoading,
@@ -80,6 +89,8 @@ export function ClaimCommentPositionProvider({
   entityId: string;
   spaceId: string;
   responseKind: DebateResponseKind;
+  /** The claim these positions are about, named for the badge's hover title. */
+  claimName?: string | null;
   viewerDirection: ActiveResponseDirection | null;
   viewerSpaceId: string | null;
   /** True until the viewer read succeeds; failures stay unresolved rather than becoming a clear. */
@@ -90,8 +101,7 @@ export function ClaimCommentPositionProvider({
   // the indexed viewer query is unresolved. Null needs the extra state: after a successful read it
   // means an explicit clear, but while loading (or after failure) it means "unknown" and must not
   // remove the viewer from the independently indexed responder list.
-  const viewerResponseOverlay =
-    viewerDirection ?? (isViewerResponseLoading ? undefined : null);
+  const viewerResponseOverlay = viewerDirection ?? (isViewerResponseLoading ? undefined : null);
   const { responders } = useEntityResponders({
     entityId,
     spaceId,
@@ -109,7 +119,7 @@ export function ClaimCommentPositionProvider({
     return result;
   }, [responders]);
 
-  const value = React.useMemo(() => ({ directions, responseKind }), [directions, responseKind]);
+  const value = React.useMemo(() => ({ directions, responseKind, claimName }), [claimName, directions, responseKind]);
 
   return <ClaimCommentPositionContext.Provider value={value}>{children}</ClaimCommentPositionContext.Provider>;
 }
@@ -125,12 +135,16 @@ export function ClaimCommentPositionProvider({
 export function ResponsePositionTag({
   responseKind,
   position,
+  title,
 }: {
   responseKind: DebateResponseKind;
   position: boolean;
+  /** Says what the position is *on*, which the word alone cannot. */
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cx(
         'inline-flex shrink-0 items-center rounded-xs px-1 py-px text-[0.6875rem] font-medium text-text',
         position ? 'bg-successTertiary' : 'bg-errorTertiary'
@@ -141,11 +155,36 @@ export function ResponsePositionTag({
   );
 }
 
-/** Current Agree/Disagree or Verify/Dispute state, rendered only inside a claim comment thread. */
+/**
+ * Where this person stands on the claim their comment hangs under.
+ *
+ * "The claim their comment hangs under" rather than "the claim at the top of the page", and the
+ * difference is not pedantic. A comment on an extracted claim sits directly below that claim's
+ * sentence, so a bare "Agree" beside the author's name reads as agreement with *that* — and the page
+ * claim it actually reported can be the opposite side, several screens up. Observed on testnet: a
+ * comment arguing against an extracted claim, badged "Agree", because its author agrees with the
+ * page claim the debate was about.
+ *
+ * The rule is now one sentence with no special cases: the badge reports the nearest claim above the
+ * comment. Under an extracted claim that is the extracted claim; under a debate, or at the top of
+ * the thread, there is no nearer claim and it stays the page's. Nesting the provider is all it takes,
+ * because the badge reads whichever one is closest.
+ *
+ * Nothing is borrowed from further away when the person holds no position on the nearer claim: an
+ * absent badge says less than a wrong one.
+ */
 export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: string }) {
   const context = React.useContext(ClaimCommentPositionContext);
   const direction = context?.directions.get(uuidToHex(authorSpaceId));
   if (!context || !direction) return null;
 
-  return <ResponsePositionTag responseKind={context.responseKind} position={direction === 'positive'} />;
+  const label = responsePositionLabel(context.responseKind, direction === 'positive');
+
+  return (
+    <ResponsePositionTag
+      responseKind={context.responseKind}
+      position={direction === 'positive'}
+      title={context.claimName ? `${label}: ${context.claimName}` : undefined}
+    />
+  );
 }

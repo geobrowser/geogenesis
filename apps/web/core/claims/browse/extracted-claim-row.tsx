@@ -24,7 +24,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 import { ActivityRowTag } from './activity-row-tag';
 import { canNestBelow } from './claim-activity-depth';
 import type { OrderedTranscriptClaim } from './claim-activity-order';
-import { ResponsePositionTag } from './claim-comment-position';
+import { ClaimCommentPositionBoundary, ResponsePositionTag } from './claim-comment-position';
 import { DebateCommentRow } from './debate-comment-row';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
@@ -137,11 +137,18 @@ export function ExtractedClaimRow({
             </span>
           </SpeakerLink>
 
-          <ActivityRowTag kind="claim" />
-
+          {/* The side first, then what kind of row this is. The side belongs to the person whose
+              name it follows; the kind belongs to the row. Reading them the other way round put a
+              label about the row between a name and the fact about that name. */}
           {speakerPosition !== null && (
-            <ResponsePositionTag responseKind={responseVocabulary} position={speakerPosition} />
+            <ResponsePositionTag
+              responseKind={responseVocabulary}
+              position={speakerPosition}
+              title={`Argued this side in the debate: ${claim.text}`}
+            />
           )}
+
+          <ActivityRowTag kind="claim" />
 
           {timecodeHref ? (
             <Link
@@ -230,6 +237,11 @@ export function ExtractedClaimRow({
  * Only mounted where the feed's own aggregate already said there are some, so a debate's ten silent
  * claims cost ten fetches of nothing. That gate is why this can be eager at all: in the corpus today
  * almost every extracted claim has no comments, and the few that do are worth a request.
+ *
+ * The boundary re-roots the position badge on *this* claim. A comment here sits under this claim's
+ * sentence, so the badge beside its author has to be about this claim — otherwise it reports the
+ * page's claim, several screens up, and can say "Agree" over a comment arguing the opposite. It is
+ * inside the same gate, so it costs a responder read only where there is a comment to badge.
  */
 function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: string; depth: number }) {
   const { comments } = useComments({ entityId: claimId, spaceId });
@@ -237,13 +249,15 @@ function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: 
 
   return (
     <div className="mt-3">
-      <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
-        {comments.map((comment, index) => (
-          <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
-            <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
-          </ThreadBranchRow>
-        ))}
-      </ThreadBranch>
+      <ClaimCommentPositionBoundary entityId={claimId} spaceId={spaceId}>
+        <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
+          {comments.map((comment, index) => (
+            <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
+              <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
+            </ThreadBranchRow>
+          ))}
+        </ThreadBranch>
+      </ClaimCommentPositionBoundary>
     </div>
   );
 }
