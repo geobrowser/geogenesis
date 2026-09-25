@@ -41,6 +41,7 @@ const booking = (overrides: Partial<PeerAvailabilityBooking> = {}): PeerAvailabi
   pending: false,
   error: null,
   requestedStart: null,
+  replacesStart: null,
   ...overrides,
 });
 
@@ -357,6 +358,19 @@ describe('booking a slot', () => {
     setupBooking(booking({ requestedStart: '2026-09-21T14:00:00Z' }));
     expect(screen.getByText(/Ada has to accept/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
+  });
+
+  // geo-chat keeps one open invitation per pair, so sending supersedes the one already out.
+  it('says sending replaces an invitation already out to this person', () => {
+    setupBooking(booking({ replacesStart: '2026-09-22T14:00:00Z' }));
+    expect(screen.getByRole('button', { name: 'Replace request' })).toBeInTheDocument();
+    expect(screen.getByText(/This replaces your request for/)).toBeInTheDocument();
+  });
+
+  it('sends plainly when nothing is out to this person', () => {
+    setupBooking(booking());
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeInTheDocument();
+    expect(screen.queryByText(/This replaces your request/)).not.toBeInTheDocument();
   });
 });
 

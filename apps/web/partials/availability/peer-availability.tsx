@@ -36,6 +36,8 @@ export type PeerAvailabilityBooking = {
   error: string | null;
   /** The instant the server accepted, which swaps the footer for a confirmation. */
   requestedStart: string | null;
+  /** Start of the viewer's open invitation to this person. geo-chat replaces it on send. */
+  replacesStart: string | null;
 };
 
 /**
@@ -236,6 +238,8 @@ function BookingFooter({
         </Text>
       )}
 
+      <ReplacesNote booking={booking} />
+
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
@@ -276,7 +280,7 @@ function SendRequest({
         }}
         className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
       >
-        {booking.pending ? 'Sending…' : 'Send request'}
+        {booking.pending ? 'Sending…' : booking.replacesStart ? 'Replace request' : 'Send request'}
       </button>
       {passed && (
         <Text as="p" variant="footnote" color="red-01">
@@ -338,12 +342,22 @@ function RequestAnyway({
           {peerName}&rsquo;s time: {formatIn(startsAt, peerTimezone)}
         </Text>
       )}
+      <ReplacesNote booking={booking} />
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
         </Text>
       )}
     </div>
+  );
+}
+
+function ReplacesNote({ booking }: { booking: PeerAvailabilityBooking }) {
+  if (!booking.replacesStart) return null;
+  return (
+    <Text as="p" variant="footnote" color="grey-04">
+      This replaces your request for {formatIn(booking.replacesStart)}.
+    </Text>
   );
 }
 

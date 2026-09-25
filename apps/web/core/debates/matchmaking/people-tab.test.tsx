@@ -150,6 +150,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
+  useScheduledDebates: () => ({ data: undefined }),
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
