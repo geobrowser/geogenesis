@@ -21,8 +21,9 @@ import { graphql } from './graphql';
 
 interface NetworkResult {
   entity: {
-    tagline: Array<{ text: string | null }>;
-    description: Array<{ text: string | null }>;
+    /** Optional because a partial answer can drop a selection rather than return it empty. */
+    tagline?: Array<{ text: string | null }>;
+    description?: Array<{ text: string | null }>;
     employment: HistoryEdgeNode[];
     education: HistoryEdgeNode[];
   } | null;
@@ -200,8 +201,10 @@ export async function fetchProfileHistory(entityId: string, spaceId: string): Pr
   const entity = result.right.entity;
 
   return {
-    tagline: entity?.tagline[0]?.text?.trim() || null,
-    description: entity?.description[0]?.text?.trim() || null,
+    // Indexed through `?.`: a partial answer that drops a selection entirely is a missing
+    // field here, not an empty list, and reading `[0]` off it threw the whole request away.
+    tagline: entity?.tagline?.[0]?.text?.trim() || null,
+    description: entity?.description?.[0]?.text?.trim() || null,
     employment: normalizeEmployment(entity?.employment ?? []),
     education: normalizeEducation(entity?.education ?? []),
   };
