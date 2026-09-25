@@ -60,6 +60,10 @@ interface SearchOptions {
   alsoSearchSpaceIds?: string[];
   /** Stable analytics classification for the surface. Inferred for shared entity pickers; false disables tracking. */
   analyticsSurface?: SearchAnalyticsSurface | false;
+  /**
+   * Restrict the `additional_space_ids` widening to this exact set instead of the default.
+   */
+  filterBySpaceIds?: string[];
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -117,6 +121,7 @@ export function useSearch({
   includeNonCanonical,
   alsoSearchSpaceIds,
   analyticsSurface,
+  filterBySpaceIds,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -124,12 +129,21 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+  const baseAdditionalSpaceIds = selectSearchAdditionalSpaceIds({
     filterBySpace,
     includeNonCanonical,
     alsoSearchSpaceIds,
     globalAdditionalSpaceIds,
   });
+  const filterSpaceKey = React.useMemo(
+    () => (filterBySpaceIds?.length ? [...filterBySpaceIds].sort() : undefined),
+    [filterBySpaceIds]
+  );
+  // Narrow the widening set to the viewer's chosen subset by replacing it outright.
+  const additionalSpaceIds = React.useMemo(() => {
+    if (!baseAdditionalSpaceIds || !filterSpaceKey?.length) return baseAdditionalSpaceIds;
+    return filterSpaceKey;
+  }, [baseAdditionalSpaceIds, filterSpaceKey]);
 
   const maybeEntityId = debouncedQuery.trim();
   const cappedQuery = capSearchQuery(debouncedQuery);

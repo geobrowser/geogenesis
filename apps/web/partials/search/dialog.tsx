@@ -27,7 +27,6 @@ import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
-import { Toggle } from '~/design-system/toggle';
 
 import { AdvancedSearchFilters, type SearchFilterTag } from './advanced-search-filters';
 
@@ -66,7 +65,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
 
   const [filterTypeIds, setFilterTypeIds] = useState<string[]>([]);
-  const [filterSpaceId, setFilterSpaceId] = useState<string | null>(null);
+
+  const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
   const [filterPopoverHost, setFilterPopoverHost] = useState<HTMLDivElement | null>(null);
 
@@ -75,7 +75,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     includeNonCanonical: canonicalOnly ? false : true,
     analyticsSurface: 'global',
     filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
-    filterBySpace: filterSpaceId ?? undefined,
+    filterBySpaceIds: selectedSpaceIds.length > 0 ? selectedSpaceIds : undefined,
     filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
   });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
@@ -84,6 +84,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
   }, []);
   const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
+  const toggleSpaceSelected = useCallback((id: string) => {
+    setSelectedSpaceIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
+  }, []);
+  const selectAllSpaces = useCallback(() => setSelectedSpaceIds([]), []);
   const addFilterTag = useCallback((tag: SearchFilterTag) => {
     setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
   }, []);
@@ -104,6 +108,11 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    if (!canonicalOnly) setSelectedSpaceIds([]);
+  }, [canonicalOnly]);
+
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -116,7 +125,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
     setFilterTypeIds([]);
-    setFilterSpaceId(null);
+    setSelectedSpaceIds([]);
     setFilterTags([]);
     onDone();
   }, [autocomplete, onDone]);
@@ -250,26 +259,19 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                     {isShowingAdvanced && (
                       <div className="flex flex-col gap-3 border-b border-grey-02 px-4 py-3">
                         <AdvancedSearchFilters
+                          canonicalOnly={canonicalOnly}
+                          onToggleCanonicalOnly={toggleCanonicalOnly}
+                          selectedSpaceIds={selectedSpaceIds}
+                          onToggleSpace={toggleSpaceSelected}
+                          onSelectAllSpaces={selectAllSpaces}
                           typeIds={filterTypeIds}
                           onToggleType={toggleFilterType}
                           onClearTypes={clearFilterTypes}
-                          spaceId={filterSpaceId}
-                          onSelectSpace={setFilterSpaceId}
                           tags={filterTags}
                           onAddTag={addFilterTag}
                           onRemoveTag={removeFilterTag}
                           portalContainer={filterPopoverHost}
                         />
-                        <button
-                          type="button"
-                          onClick={toggleCanonicalOnly}
-                          aria-pressed={canonicalOnly}
-                          title="Limit results to the canonical graph plus your spaces. Turn off to search all entities."
-                          className="flex w-full items-center justify-between text-footnoteMedium text-grey-04 transition-colors hover:text-text"
-                        >
-                          <span className="whitespace-nowrap">Canonical only</span>
-                          <Toggle checked={canonicalOnly} />
-                        </button>
                       </div>
                     )}
                   </ResizableContainer>
