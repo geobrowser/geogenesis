@@ -70,9 +70,15 @@ const SOURCE_DIRS = ['app', 'atoms', 'core', 'design-system', 'partials'];
  * The metadata routes belong here as much as the pages do — they are modules Next executes — and
  * `app/robots.ts` is already in this tree, so a client value reachable only through it was outside
  * the walk entirely.
+ *
+ * The list is Next's, read off `FILE_TYPES` and `HTTP_ACCESS_FALLBACKS` in the installed 16.2.0
+ * rather than from memory. It was short by four: `global-error`, `global-not-found`, `forbidden` and
+ * `unauthorized`. Next loads all four by convention, so none of them is necessarily imported from a
+ * layout or a page, and a missing convention is a subtree the walk never visits — the quiet kind of
+ * gap. `app/global-error.tsx` is in this tree right now.
  */
 const SERVER_ENTRY =
-  /^app\/(?:.*\/)?(layout|page|template|default|loading|error|not-found|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
+  /^app\/(?:.*\/)?(layout|page|template|default|loading|error|global-error|not-found|global-not-found|forbidden|unauthorized|route|opengraph-image|robots|sitemap|manifest|icon|apple-icon|twitter-image)\.tsx?$/;
 
 /**
  * What a module pulls in through a call rather than a declaration: `import('…')` and `require('…')`.
@@ -635,6 +641,8 @@ function exportKindsOf(
   const recordErased = (name: string) => {
     if (!kinds.has(name)) kinds.set(name, 'erased');
   };
+  /** `export * from` specifiers, applied after every other export has had its say. */
+  const stars: ts.StringLiteral[] = [];
   const react = reactBindingsOf(sourceFile);
   /** Local declarations, so an export by identifier has something to resolve against. */
   const locals = new Map<string, ts.Node>();
@@ -769,30 +777,10 @@ function exportKindsOf(
       continue;
     }
 
-    /*
-     * `export * from './x'` hands on every named export of `./x` — but never its default, which is
-     * the one binding `export *` does not carry. Without this a client barrel written that way had
-     * no exports at all as far as this was concerned, so everything taken from it came back
-     * unclassifiable.
-     */
+    // `export * from './x'` is held back to a second pass below, because every other kind of export
+    // outranks it whatever order they are written in.
     if (ts.isExportDeclaration(statement) && !statement.exportClause && statement.moduleSpecifier) {
-      if (statement.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
-      const origin = resolveOrigin(statement.moduleSpecifier.text);
-
-      /*
-       * An unresolved target is not an empty one. Dropping it left the map with no bindings at all,
-       * so a server barrel star-re-exporting this one checked nothing and passed in silence — the
-       * worst shape of answer this guard can give. `*` is recorded instead, which reads as
-       * `re-exports *` and is reported.
-       */
-      if (!origin) {
-        kinds.set('*', 'unknown');
-        continue;
-      }
-
-      for (const [name, kind] of origin) {
-        if (name !== 'default') kinds.set(name, kind);
-      }
+      if (!statement.isTypeOnly && ts.isStringLiteral(statement.moduleSpecifier)) stars.push(statement.moduleSpecifier);
       continue;
     }
 
@@ -822,11 +810,11 @@ function exportKindsOf(
 
       for (const element of statement.exportClause.elements) {
         if (statement.isTypeOnly || element.isTypeOnly) {
-          // A plain `set`, not `recordErased`: an explicit clause outranks an `export *`, and
-          // `export * from './x'` beside `export type { Foo } from './x'` is legal, so this has to
-          // be able to overwrite what the star recorded. It cannot collide with a declaration in
-          // this module the way the two branches above can — `export const Foo` next to
-          // `export type { Foo }` is a duplicate export and does not compile.
+          // A plain `set`, not `recordErased`. This is an explicit claim on the name, and a claim is
+          // what the star pass below looks for — it has to land whether or not a star mentions the
+          // same name. It cannot collide with a declaration in this module the way the two branches
+          // above can: `export const Foo` next to `export type { Foo }` is a duplicate export and
+          // does not compile.
           kinds.set(element.name.text, 'erased');
           continue;
         }
@@ -852,6 +840,39 @@ function exportKindsOf(
 
         kinds.set(element.name.text, origin.get(sourceName) ?? 'unknown');
       }
+    }
+  }
+
+  /*
+   * `export * from './x'` hands on every named export of `./x` — but never its default, which is the
+   * one binding `export *` does not carry. Without this a client barrel written that way had no
+   * exports at all as far as this was concerned, so everything taken from it came back
+   * unclassifiable.
+   *
+   * Applied last, and only to names nothing else claimed. Every other form of export outranks a
+   * star — a declaration here, a named re-export, a namespace re-export, a type-only clause — and
+   * that is the language's rule, not a preference: in `export { Foo } from './values'` beside
+   * `export * from './components'`, `Foo` is the one from `./values` however the two are ordered.
+   * Applying stars in source order made the answer depend on which came last, so an explicit value
+   * written above a star read as whatever the star happened to hold — a component, and waved
+   * through.
+   */
+  for (const star of stars) {
+    const origin = resolveOrigin(star.text);
+
+    /*
+     * An unresolved target is not an empty one. Dropping it left the map with no bindings at all, so
+     * a server barrel star-re-exporting this one checked nothing and passed in silence — the worst
+     * shape of answer this guard can give. `*` is recorded instead, which reads as `re-exports *`
+     * and is reported. No export clause can claim that name, so nothing here can have taken it.
+     */
+    if (!origin) {
+      kinds.set('*', 'unknown');
+      continue;
+    }
+
+    for (const [name, kind] of origin) {
+      if (name !== 'default' && !kinds.has(name)) kinds.set(name, kind);
     }
   }
 
@@ -1162,16 +1183,26 @@ describe('SERVER_ENTRY', () => {
     'app/bounties/loading.tsx',
     'app/robots.ts',
     'app/api/chat/route.ts',
+    // Next loads these four by convention, so nothing has to import them. This one is in the tree.
+    'app/global-error.tsx',
+    'app/global-not-found.tsx',
+    'app/space/[id]/forbidden.tsx',
+    'app/space/[id]/unauthorized.tsx',
   ])('seeds %s', file => {
     expect(SERVER_ENTRY.test(file)).toBe(true);
   });
 
-  it.each(['core/error.ts', 'partials/loading.tsx', 'design-system/page.tsx', 'atoms/route.ts'])(
-    'does not seed %s',
-    file => {
-      expect(SERVER_ENTRY.test(file)).toBe(false);
-    }
-  );
+  it.each([
+    'core/error.ts',
+    'partials/loading.tsx',
+    'design-system/page.tsx',
+    'atoms/route.ts',
+    // The basename has to *be* the convention, not contain it.
+    'app/lib/global-error-boundary.tsx',
+    'app/lib/unauthorized-banner.tsx',
+  ])('does not seed %s', file => {
+    expect(SERVER_ENTRY.test(file)).toBe(false);
+  });
 });
 
 describe('staticReferences', () => {
@@ -1572,16 +1603,53 @@ describe('exportKindsOf', () => {
     expect(kindOf('export type Subject = { a: 1 };\nexport const Subject = { a: 1 } as const;')).toBe('value');
   });
 
-  it('lets an explicit type-only re-export outrank a star', () => {
-    // Not `recordErased`: `export * from './x'` beside `export type { Foo } from './x'` is legal,
-    // and the explicit clause is the one TypeScript honours.
+  it.each([
+    ['above', "export type { Foo } from './x';\nexport * from './x';"],
+    ['below', "export * from './x';\nexport type { Foo } from './x';"],
+  ])('lets an explicit type-only re-export written %s a star outrank it', (_label, source) => {
+    // Both orders compile, and the explicit clause is the one TypeScript honours in each.
     const origin = new Map<string, ExportKind>([['Foo', 'component']]);
-    const kinds = exportKindsOf(
-      parse('barrel.tsx', "export * from './x';\nexport type { Foo } from './x';"),
-      () => origin
-    );
+    const kinds = exportKindsOf(parse('barrel.tsx', source), () => origin);
 
     expect(kinds.get('Foo')).toBe('erased');
+  });
+
+  it.each([
+    ['above', "export { Foo } from './values';\nexport * from './components';"],
+    ['below', "export * from './components';\nexport { Foo } from './values';"],
+  ])('lets an explicit re-export written %s a star win', (_label, source) => {
+    // The language's rule, not a preference: `Foo` is the one from `./values` either way. Applying
+    // stars in source order meant an explicit value above a star read as the star's component and
+    // was waved through.
+    const origins = new Map([
+      ['./values', new Map<string, ExportKind>([['Foo', 'value']])],
+      ['./components', new Map<string, ExportKind>([['Foo', 'component']])],
+    ]);
+    const kinds = exportKindsOf(parse('barrel.tsx', source), specifier => origins.get(specifier) ?? null);
+
+    expect(kinds.get('Foo')).toBe('value');
+  });
+
+  it.each([
+    ['above', "export const Foo = { a: 1 };\nexport * from './components';"],
+    ['below', "export * from './components';\nexport const Foo = { a: 1 };"],
+  ])('lets a declaration written %s a star win', (_label, source) => {
+    const origin = new Map<string, ExportKind>([['Foo', 'component']]);
+    const kinds = exportKindsOf(parse('barrel.tsx', source), () => origin);
+
+    expect(kinds.get('Foo')).toBe('value');
+  });
+
+  it('still takes a name only a star supplies', () => {
+    // The guard fills gaps; it must not stop a star being the source of a binding.
+    const origin = new Map<string, ExportKind>([
+      ['Foo', 'component'],
+      ['BAR', 'value'],
+    ]);
+    const kinds = exportKindsOf(parse('barrel.tsx', "export * from './x';"), () => origin);
+
+    expect(kinds.get('Foo')).toBe('component');
+    expect(kinds.get('BAR')).toBe('value');
   });
 
   it("does not attribute a nested scope's return to the component containing it", () => {
