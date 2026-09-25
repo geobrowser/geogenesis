@@ -74,9 +74,15 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 /** Inline draws up, the score, then down. The score is a popover trigger, hence the gap. */
+/**
+ * The two direction buttons, picked out by the `group/vote` marker they share rather than by
+ * position. The row's button order is not this file's subject and has already changed once — the
+ * responder faces became a popover trigger ahead of the up arrow, which silently shifted every
+ * index by one.
+ */
 function inlineButtons() {
-  const buttons = screen.getAllByRole('button');
-  return { up: buttons[0]!, down: buttons[2]! };
+  const [up, down] = screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  return { up: up!, down: down! };
 }
 
 beforeEach(() => {
