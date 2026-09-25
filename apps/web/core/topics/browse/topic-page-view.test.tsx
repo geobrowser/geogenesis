@@ -508,7 +508,7 @@ describe('TopicPageView Overview tab', () => {
    *
    * Resolved by keeping the tab for whoever is on it, rather than by redirecting them off it.
    * `hasBlocks` reads false for a frame before the entity hydrates, so a redirect would fire on a
-   * legitimate `/overview` visit and bounce the reader to the feed before the blocks arrived.
+   * legitimate visit and bounce the reader to the feed before the blocks arrived.
    */
   it('keeps the tab for a reader who is on it while it holds nothing', () => {
     mocks.authoredTabId = 'topic-1';

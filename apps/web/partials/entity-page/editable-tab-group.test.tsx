@@ -144,7 +144,7 @@ describe('EditableTabGroup divider', () => {
         editableTabs={[]}
         systemTabsBefore={[
           { label: 'Explore', href: '/topic' },
-          { label: 'Overview', href: '/topic/overview', dividerBefore: true },
+          { label: 'Overview', href: '/topic?tabId=topic-1', dividerBefore: true },
         ]}
         overviewHref="/topic"
       />

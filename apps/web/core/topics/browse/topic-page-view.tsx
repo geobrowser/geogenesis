@@ -70,7 +70,7 @@ const TOPIC_META_CHIP_CLASS = `${META_CHIP_CLASS} text-grey-04`;
  * every other tab in the app is addressed: `?tabId=`, pointing at the entity itself.
  *
  * That is not a trick. `EditorBlocksProvider` already reads a tab id equal to the entity id as
- * "this entity's own blocks" — its `isTab` test is `tabId !== entityId` — so the editor resolves
+ * "this entity's own blocks" — `isTab` requires `tabId !== entityId` — so the editor resolves
  * this URL to the root blocks, with the route's server snapshot, through the path it already had.
  *
  * It is also the only form that survives the entity ceasing to be a topic. A path segment needs a
@@ -221,11 +221,11 @@ export function TopicPageView({
    * intent alone would put an Overview tab for an empty topic into it.
    *
    * And the tab stays for whoever is already on it. Both conditions above can go false underneath
-   * a reader — an editor opens an empty Overview and leaves edit mode, or a link points at
-   * `/overview` on a topic that never had a body — and hiding it there left `TopicTabPanel` still
-   * drawing the editor under a row with nothing selected. Redirecting them to Explore instead
-   * would be worse: `hasBlocks` reads false for a frame before the entity hydrates, so it would
-   * fire on a legitimate visit and bounce the reader off the URL they asked for.
+   * a reader — an editor opens an empty Overview and leaves edit mode, or a link selects this
+   * tab on a topic that never had a body — and hiding it there left `TopicTabPanel` still drawing
+   * the editor under a row with nothing selected. Redirecting them to Explore instead would be
+   * worse: `hasBlocks` reads false for a frame before the entity hydrates, so it would fire on a
+   * legitimate visit and bounce the reader off the URL they asked for.
    */
   const canEdit = useCanUserEdit(spaceId);
   const showBlocksTab = hasBlocks || (isEditing && canEdit) || activeTab === 'blocks';
@@ -404,9 +404,10 @@ function TopicTabPanel({
   spaceId: string;
   topicSpaceIds: string[] | undefined;
 }) {
-  // An authored tab and the topic's own Overview are the same editor; which entity's blocks it
-  // draws is the editor provider's call, from the active tab id — null on `/overview`, so the
-  // topic's own.
+  // An authored tab and the topic's own Overview are the same editor. Which entity's blocks it
+  // draws is the editor provider's call, from the active tab id: `EditorBlocksProvider` treats a
+  // tab id equal to its own entity id as *not a tab* — `isTab` requires `tabId !== entityId` — so
+  // the Overview URL lands on the root blocks and an authored tab id lands on that tab's.
   if (activeTab === 'custom' || activeTab === 'blocks') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
   if (activeTab === 'comments') {
     return <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="topic" variant="tab" />;
