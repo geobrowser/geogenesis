@@ -347,7 +347,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         entityId={entityId}
         spaceId={spaceId}
         isVoteable={!isRelationPage}
-        votesFirst={isPersonProfile}
+        compact={isPersonProfile}
       />
     );
 
