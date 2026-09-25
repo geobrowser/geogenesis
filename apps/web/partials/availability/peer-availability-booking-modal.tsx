@@ -49,6 +49,8 @@ export function PeerAvailabilityBookingModal({ userId, onClose, ...props }: Prop
         error: propose.error?.message ?? null,
         requestedStart: propose.data?.scheduled_start_at ?? null,
         replacesStart: replaces?.scheduled_start_at ?? null,
+        // Loading, or failed with nothing cached: say what sending may replace rather than nothing.
+        replacementUnknown: !scheduled,
       }}
     />
   );

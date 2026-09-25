@@ -38,6 +38,8 @@ export type PeerAvailabilityBooking = {
   requestedStart: string | null;
   /** Start of the viewer's open invitation to this person. geo-chat replaces it on send. */
   replacesStart: string | null;
+  /** The viewer's invitations could not be read, so one may exist that sending would replace. */
+  replacementUnknown: boolean;
 };
 
 /**
@@ -238,7 +240,7 @@ function BookingFooter({
         </Text>
       )}
 
-      <ReplacesNote booking={booking} />
+      <ReplacesNote booking={booking} peerName={peerName} />
 
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
@@ -342,7 +344,7 @@ function RequestAnyway({
           {peerName}&rsquo;s time: {formatIn(startsAt, peerTimezone)}
         </Text>
       )}
-      <ReplacesNote booking={booking} />
+      <ReplacesNote booking={booking} peerName={peerName} />
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
@@ -352,11 +354,18 @@ function RequestAnyway({
   );
 }
 
-function ReplacesNote({ booking }: { booking: PeerAvailabilityBooking }) {
-  if (!booking.replacesStart) return null;
+function ReplacesNote({ booking, peerName }: { booking: PeerAvailabilityBooking; peerName: string }) {
+  if (booking.replacesStart) {
+    return (
+      <Text as="p" variant="footnote" color="grey-04">
+        This replaces your request for {formatIn(booking.replacesStart)}.
+      </Text>
+    );
+  }
+  if (!booking.replacementUnknown) return null;
   return (
     <Text as="p" variant="footnote" color="grey-04">
-      This replaces your request for {formatIn(booking.replacesStart)}.
+      Sending replaces any pending request you already sent {peerName}.
     </Text>
   );
 }

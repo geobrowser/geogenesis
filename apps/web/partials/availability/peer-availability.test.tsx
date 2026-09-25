@@ -42,6 +42,7 @@ const booking = (overrides: Partial<PeerAvailabilityBooking> = {}): PeerAvailabi
   error: null,
   requestedStart: null,
   replacesStart: null,
+  replacementUnknown: false,
   ...overrides,
 });
 
@@ -365,6 +366,14 @@ describe('booking a slot', () => {
     setupBooking(booking({ replacesStart: '2026-09-22T14:00:00Z' }));
     expect(screen.getByRole('button', { name: 'Replace request' })).toBeInTheDocument();
     expect(screen.getByText(/This replaces your request for/)).toBeInTheDocument();
+  });
+
+  it('says sending may replace one while the invitations are unknown, with a time picked', async () => {
+    const { user } = setupBooking(booking({ replacementUnknown: true }), { slots: [slot(16)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeEnabled();
+    expect(screen.getByText('Sending replaces any pending request you already sent Ada.')).toBeInTheDocument();
   });
 
   it('sends plainly when nothing is out to this person', () => {

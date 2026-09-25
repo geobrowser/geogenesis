@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   pending: false,
   error: null as Error | null,
   data: undefined as { scheduled_start_at: string } | undefined,
-  scheduled: [] as unknown[],
+  scheduled: [] as unknown[] | undefined,
+  scheduledStatus: 'success' as 'pending' | 'error' | 'success',
 }));
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
@@ -23,7 +24,10 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     error: mocks.error,
     data: mocks.data,
   }),
-  useScheduledDebates: () => ({ data: { requests: mocks.scheduled } }),
+  useScheduledDebates: () => ({
+    data: mocks.scheduled && { requests: mocks.scheduled },
+    status: mocks.scheduledStatus,
+  }),
 }));
 
 // The week itself is covered by peer-availability.test.tsx; this suite is about what the modal
@@ -32,13 +36,14 @@ vi.mock('./peer-availability', () => ({
   PeerAvailability: ({
     booking,
   }: {
-    booking?: { onRequest: (startsAt: string) => void; replacesStart: string | null };
+    booking?: { onRequest: (startsAt: string) => void; replacesStart: string | null; replacementUnknown: boolean };
   }) => (
     <>
       <button type="button" onClick={() => booking?.onRequest('2026-09-24T13:00:00.000Z')}>
         pick
       </button>
       <output aria-label="replaces">{booking?.replacesStart ?? 'nothing'}</output>
+      <output aria-label="unknown">{String(booking?.replacementUnknown)}</output>
     </>
   ),
 }));
@@ -53,6 +58,7 @@ afterEach(() => {
   mocks.error = null;
   mocks.data = undefined;
   mocks.scheduled = [];
+  mocks.scheduledStatus = 'success';
 });
 
 const setup = (userId = 'user-them', onClose = vi.fn()) => ({
@@ -135,4 +141,23 @@ describe('an invitation this would replace', () => {
     setup(THEM);
     expect(replaces()).toBe('nothing');
   });
+
+  it('knows there is nothing to replace once the list has loaded empty', () => {
+    setup(THEM);
+    expect(replaces()).toBe('nothing');
+    expect(screen.getByLabelText('unknown').textContent).toBe('false');
+  });
+
+  // The week can load before the list does, or without it. A time is still pickable, so what
+  // sending may replace has to be said rather than read as nothing.
+  it.each([['loading', 'pending'] as const, ['failed with nothing cached', 'error'] as const])(
+    'treats a list that is %s as unknown',
+    (_label, status) => {
+      mocks.scheduled = undefined;
+      mocks.scheduledStatus = status;
+      setup(THEM);
+      expect(replaces()).toBe('nothing');
+      expect(screen.getByLabelText('unknown').textContent).toBe('true');
+    }
+  );
 });
