@@ -73,6 +73,7 @@ export interface TextBlockChange {
   before: string | null;
   after: string | null;
   diff: DiffChunk[];
+  moved?: boolean;
 }
 
 export interface ImageBlockChange {
@@ -80,6 +81,7 @@ export interface ImageBlockChange {
   type: 'imageBlock';
   before: string | null;
   after: string | null;
+  moved?: boolean;
 }
 
 export interface VideoBlockChange {
@@ -87,6 +89,7 @@ export interface VideoBlockChange {
   type: 'videoBlock';
   before: string | null;
   after: string | null;
+  moved?: boolean;
 }
 
 export interface DataBlockChange {
@@ -97,6 +100,7 @@ export interface DataBlockChange {
   blockName?: string | null;
   values?: ValueChange[];
   relations?: RelationChange[];
+  moved?: boolean;
 }
 
 export type BlockChange = TextBlockChange | ImageBlockChange | VideoBlockChange | DataBlockChange;
@@ -107,4 +111,5 @@ export interface EntityDiff {
   values: ValueChange[];
   relations: RelationChange[];
   blocks: BlockChange[];
+  movedBlock?: boolean;
 }
