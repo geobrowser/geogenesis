@@ -43,9 +43,17 @@ export function ThreadBranch({
   rowDensity: CommentDensity;
   /** How far left of this branch's edge the parent's spine sits — the parent's geometry, not ours. */
   reachPx: number;
-  /** Omitted where the branch has no collapse of its own; the spine is then inert. */
-  onCollapse?: () => void;
-  label?: { expand: string; collapse: string };
+  /**
+   * Collapses the branch — and, less obviously, is what makes it draw a spine at all.
+   *
+   * Required, and that is the point. These used to be optional, so a branch could be created with
+   * neither: the rows still drew their arms and their elbow, reaching back to a line that was never
+   * rendered. On screen that is an arm pointing at nothing, which reads as a broken connector rather
+   * than as a missing control, and it shipped on two of the three branches in the claim feed.
+   * Making them required means a spineless branch cannot be written.
+   */
+  onCollapse: () => void;
+  label: { expand: string; collapse: string };
   children: React.ReactNode;
 }) {
   const arm = threadArmCenterPx(rowDensity);
@@ -83,16 +91,14 @@ export function ThreadBranch({
   return (
     <ThreadBranchContext.Provider value={geometry}>
       <div className="comment-branch-list-root relative flex flex-col gap-4" ref={listRef}>
-        {onCollapse && label && (
-          <ThreadListSpine
-            reachPx={reachPx}
-            heightPx={spineHeightPx}
-            lit={false}
-            collapsed={false}
-            onToggle={onCollapse}
-            label={label}
-          />
-        )}
+        <ThreadListSpine
+          reachPx={reachPx}
+          heightPx={spineHeightPx}
+          lit={false}
+          collapsed={false}
+          onToggle={onCollapse}
+          label={label}
+        />
         {children}
       </div>
     </ThreadBranchContext.Provider>

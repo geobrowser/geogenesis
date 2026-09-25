@@ -14,6 +14,7 @@ import { Avatar } from '~/design-system/avatar';
 import { PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
 import { getRelativeTime } from '~/partials/comments/comment-time';
 import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
+import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { ThreadContinue, ThreadShowMore } from '~/partials/comments/thread-overflow';
 import type { CommentWithReplies } from '~/partials/comments/types';
@@ -40,6 +41,9 @@ const REPLY_PAGE_SIZE = 3;
 /** Stable identity for a row directly under the entity, so the default doesn't rebuild each render. */
 const NO_ANCESTORS: Array<{ id: string; spaceId: string }> = [];
 
+/** Gap between the avatar's bottom edge and where its spine starts, as on every other row here. */
+const SPINE_START_GAP_PX = 4;
+
 export function DebateCommentRow({
   comment,
   targetEntityId,
@@ -64,6 +68,34 @@ export function DebateCommentRow({
   const composer = useInlineComposer();
   const openAuthorProfile = useOpenDebaterProfile(comment.author.spaceId, { interactionSurface: 'comment_author' });
   const [visibleReplies, setVisibleReplies] = React.useState(REPLY_PAGE_SIZE);
+  const [repliesCollapsed, setRepliesCollapsed] = React.useState(false);
+
+  // Measured rather than computed: a comment body wraps to any number of lines, and the spine has to
+  // stop at the first reply's elbow.
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  const branchRef = React.useRef<HTMLDivElement>(null);
+  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
+
+  const measureSpine = React.useCallback(() => {
+    const row = rowRef.current;
+    const branch = branchRef.current;
+    if (!row || !branch) {
+      setSpineHeightPx(null);
+      return;
+    }
+    setSpineHeightPx(
+      branch.getBoundingClientRect().top - row.getBoundingClientRect().top - PAGE_DENSITY.avatarPx - SPINE_START_GAP_PX
+    );
+  }, []);
+
+  React.useLayoutEffect(() => {
+    measureSpine();
+    const row = rowRef.current;
+    if (row == null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureSpine());
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
   const body = React.useMemo(() => renderMarkdownDocument(comment.markdownContent), [comment.markdownContent]);
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
 
@@ -76,8 +108,23 @@ export function DebateCommentRow({
   const hiddenHere = canNest ? replies.length - shown.length : 0;
   const belowFloor = canNest ? 0 : replies.length;
 
+  const branchLabel = { expand: 'Show replies', collapse: 'Hide replies' };
+  const drawnReplies = repliesCollapsed ? [] : shown;
+
   return (
-    <div className="flex min-w-0 gap-3">
+    <div ref={rowRef} className="thread-branch-hover-root relative flex min-w-0 gap-3">
+      {/* The line from this comment's face down to its replies. Without it the branch below reaches
+          an elbow back to a spine that was never drawn. */}
+      {drawnReplies.length > 0 && (
+        <ThreadParentSpine
+          leftPx={PAGE_DENSITY.avatarCenterPx}
+          topPx={PAGE_DENSITY.avatarPx + SPINE_START_GAP_PX}
+          heightPx={spineHeightPx}
+          lit={false}
+          label={branchLabel.collapse}
+          onToggle={() => setRepliesCollapsed(true)}
+        />
+      )}
       {/* `Avatar` fills its container whenever it has a real `avatarUrl` — `size` only sizes the
           generated fallback — so the frame is the caller's job, exactly as in the comment rows. */}
       {/* A link, so middle-click and copy-address still reach the person's space, with the click
@@ -122,7 +169,15 @@ export function DebateCommentRow({
           {body}
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+        <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+          {shown.length > 0 && (
+            <ThreadCollapseToggle
+              collapsed={repliesCollapsed}
+              leftPx={PAGE_DENSITY.avatarCenterPx - PAGE_DENSITY.bodyInsetPx}
+              label={branchLabel}
+              onToggle={() => setRepliesCollapsed(collapsed => !collapsed)}
+            />
+          )}
           <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
           <button
             type="button"
@@ -153,11 +208,16 @@ export function DebateCommentRow({
           drawing them costs nothing but space, and the cap below is about legibility rather than
           fetching.
         */}
-        {shown.length > 0 && (
-          <div className="mt-3">
-            <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
-              {shown.map((reply, index) => (
-                <ThreadBranchRow key={reply.id} isLast={index === shown.length - 1}>
+        {drawnReplies.length > 0 && (
+          <div ref={branchRef} className="mt-3">
+            <ThreadBranch
+              rowDensity={PAGE_DENSITY}
+              reachPx={threadSpineOffsetPx(PAGE_DENSITY)}
+              onCollapse={() => setRepliesCollapsed(true)}
+              label={branchLabel}
+            >
+              {drawnReplies.map((reply, index) => (
+                <ThreadBranchRow key={reply.id} isLast={index === drawnReplies.length - 1}>
                   <DebateCommentRow
                     comment={reply}
                     targetEntityId={targetEntityId}

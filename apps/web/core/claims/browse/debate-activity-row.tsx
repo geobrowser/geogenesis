@@ -189,26 +189,22 @@ export function DebateActivityRow({
 
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           {/*
-            The claim leads and the debaters follow, the other way round from the first cut.
-            A comment row's strong first line is what was said, and its byline is who said it; a
-            debate row reads as a peer of those rows only if it is built the same way. What the
-            debate argued is the row's substance — "Ada vs. Tomas" is its byline.
+            Built like every other row in the thread: who, then what, then what you can do about it.
+            The debaters are this row's byline the way a commenter's name is theirs, and the claim
+            the debate argued is its body — so the header carries the names, the kind tag and the
+            age, and the sentence sits underneath on its own line.
+
+            An earlier cut led with the claim and dropped the debaters to a second line. It read as a
+            headline with a credit under it, which is a different shape from the rows above and below
+            it, and the eye had to find a new place to look for "who" on every other row.
           */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <Link href={debateHref} className="group/debate min-w-0 no-underline">
-              <span className={cx(PAGE_DENSITY.nameClass, 'wrap-break-word text-text group-hover/debate:underline')}>
-                {headline}
-              </span>
-            </Link>
+            {debaterLine && (
+              <span className={cx(PAGE_DENSITY.nameClass, 'min-w-0 truncate text-text')}>{debaterLine}</span>
+            )}
             <span className={cx(PAGE_DENSITY.metaClass, 'shrink-0 rounded-xs bg-grey-01 px-1.5 py-px text-grey-04')}>
               Debate
             </span>
-          </div>
-
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {debaterLine && (
-              <span className={cx(PAGE_DENSITY.metaClass, 'min-w-0 truncate text-grey-04')}>{debaterLine}</span>
-            )}
             {publishedAt && (
               // Same helper and classes the comment rows use, so a debate and a comment in one
               // thread age identically rather than reading as two lists side by side.
@@ -217,6 +213,12 @@ export function DebateActivityRow({
               </span>
             )}
           </div>
+
+          <Link href={debateHref} className="group/debate min-w-0 no-underline">
+            <span className={cx(PAGE_DENSITY.bodyClass, 'wrap-break-word text-text group-hover/debate:underline')}>
+              {headline}
+            </span>
+          </Link>
 
           <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
             {!collapsed && (
@@ -248,20 +250,13 @@ export function DebateActivityRow({
               spaceId={spaceId}
               targetEntityType="debate"
               count={debateCommentCount.get(uuidToHex(debate.id)) ?? 0}
+              // The only way into the composer now that Reply is gone: two controls opening one box
+              // was one control too many, and the count already says what the box is for. A comment
+              // here is filed against the debate, not against this claim, but it is written and read
+              // in place rather than in a panel that hides the branch to collect it.
               onActivate={composer.toggle}
               isActive={composer.isComposing}
             />
-            {/* A reply to a debate is a comment on the debate — it is filed against that entity, not
-                against this claim — but it is written and read right here, at the bottom of the
-                debate's own branch, rather than in a panel that hides the branch to collect it. */}
-            <button
-              type="button"
-              aria-expanded={composer.isComposing}
-              onClick={composer.toggle}
-              className={cx(PAGE_DENSITY.metaClass, 'text-grey-04 transition-colors hover:text-text')}
-            >
-              Reply
-            </button>
             <Link
               href={debateHref}
               className={cx(PAGE_DENSITY.metaClass, 'text-ctaPrimary no-underline hover:underline')}

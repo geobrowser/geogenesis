@@ -18,6 +18,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { type CommentDensity, PAGE_DENSITY, threadSpineOffsetPx } from '~/partials/comments/comment-density';
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
+import { ThreadCollapseToggle, ThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -28,6 +29,9 @@ import { ClaimCommentPositionBoundary, ResponsePositionTag } from './claim-comme
 import { DebateCommentRow } from './debate-comment-row';
 
 export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null };
+
+/** Gap between the avatar's bottom edge and where its spine starts, as on the debate row. */
+const SPINE_START_GAP_PX = 4;
 
 /**
  * One claim a debater made, as a row under the debate it was extracted from.
@@ -96,6 +100,36 @@ export function ExtractedClaimRow({
 }) {
   const composer = useInlineComposer();
   const openSpeakerProfile = useOpenDebaterProfile(speaker?.spaceId, { interactionSurface: 'extracted_claim_speaker' });
+  const [commentsCollapsed, setCommentsCollapsed] = React.useState(false);
+
+  // Measured from this row's top down to where its comments begin, so the spine ends exactly at the
+  // first elbow rather than guessing at a body whose height depends on how the sentence wraps. The
+  // same approach, for the same reason, as `CommentItem` and the debate row.
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  const branchRef = React.useRef<HTMLDivElement>(null);
+  const [spineHeightPx, setSpineHeightPx] = React.useState<number | null>(null);
+
+  const measureSpine = React.useCallback(() => {
+    const row = rowRef.current;
+    const branch = branchRef.current;
+    if (!row || !branch) {
+      setSpineHeightPx(null);
+      return;
+    }
+    // Starts below the avatar, so drop that much off its length.
+    setSpineHeightPx(
+      branch.getBoundingClientRect().top - row.getBoundingClientRect().top - density.avatarPx - SPINE_START_GAP_PX
+    );
+  }, [density.avatarPx]);
+
+  React.useLayoutEffect(() => {
+    measureSpine();
+    const row = rowRef.current;
+    if (row == null || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => measureSpine());
+    observer.observe(row);
+    return () => observer.disconnect();
+  });
 
   // Null where the graph reports no home space. The claim is then unlinkable and unrespondable —
   // pointing a vote at this page's space instead would record it somewhere the claim does not live,
@@ -111,10 +145,26 @@ export function ExtractedClaimRow({
     ? withDebateTimecode(NavUtils.toEntity(debateSpaceId, debateId), debateSeekSeconds(moment.startMs))
     : null;
 
+  const hasComments = Boolean(claimSpaceId) && (commentCount > 0 || composer.hasPosted) && canNestBelow(depth);
+  const branchLabel = { expand: 'Show comments on this claim', collapse: 'Hide comments on this claim' };
+
   return (
     // `gap-3` is the comment header's own 12px avatar gap, so a claim row and a comment row put
     // their text on the same left edge.
-    <div className={cx('flex min-w-0 gap-3', className)}>
+    <div ref={rowRef} className={cx('thread-branch-hover-root relative flex min-w-0 gap-3', className)}>
+      {/* The line from this claim's face down to the comments hanging off it. Without it the branch
+          below draws an elbow reaching back to a spine that was never there — an arm pointing at
+          nothing, which is what a reader sees as a broken connector. */}
+      {hasComments && !commentsCollapsed && (
+        <ThreadParentSpine
+          leftPx={density.avatarCenterPx}
+          topPx={density.avatarPx + SPINE_START_GAP_PX}
+          heightPx={spineHeightPx}
+          lit={false}
+          label={branchLabel.collapse}
+          onToggle={() => setCommentsCollapsed(true)}
+        />
+      )}
       {/*
         `Avatar` fills its container whenever it has a real `avatarUrl` to draw — `size` only sizes
         the generated fallback — so the frame is the caller's job. Same shape the comment rows in
@@ -182,7 +232,17 @@ export function ExtractedClaimRow({
         )}
 
         {claimSpaceId ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="relative flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
+            {hasComments && (
+              <ThreadCollapseToggle
+                collapsed={commentsCollapsed}
+                // Back out of the body box onto the spine, so the control sits on the line rather
+                // than beside it.
+                leftPx={density.avatarCenterPx - density.bodyInsetPx}
+                label={branchLabel}
+                onToggle={() => setCommentsCollapsed(collapsed => !collapsed)}
+              />
+            )}
             <EntityVoteButtons
               entityId={claim.id}
               spaceId={claimSpaceId}
@@ -223,8 +283,16 @@ export function ExtractedClaimRow({
         {/* `composer.hasPosted` as well as the server count: the aggregate that gates this is from
             the page load, so a reader's first comment on a silent claim would otherwise be written
             and then not drawn. */}
-        {claimSpaceId && (commentCount > 0 || composer.hasPosted) && canNestBelow(depth) && (
-          <ClaimComments claimId={claim.id} spaceId={claimSpaceId} depth={depth + 1} />
+        {hasComments && !commentsCollapsed && (
+          <div ref={branchRef}>
+            <ClaimComments
+              claimId={claim.id}
+              spaceId={claimSpaceId!}
+              depth={depth + 1}
+              onCollapse={() => setCommentsCollapsed(true)}
+              label={branchLabel}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -243,14 +311,37 @@ export function ExtractedClaimRow({
  * page's claim, several screens up, and can say "Agree" over a comment arguing the opposite. It is
  * inside the same gate, so it costs a responder read only where there is a comment to badge.
  */
-function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: string; depth: number }) {
+function ClaimComments({
+  claimId,
+  spaceId,
+  depth,
+  onCollapse,
+  label,
+}: {
+  claimId: string;
+  spaceId: string;
+  depth: number;
+  /**
+   * Collapses the branch, and — separately from that — is what makes the branch draw its spine.
+   *
+   * `ThreadBranch` gates the spine on having something to collapse, so a branch passed neither drew
+   * arms reaching back to a line that did not exist. Every other branch in this feed supplies both.
+   */
+  onCollapse: () => void;
+  label: { expand: string; collapse: string };
+}) {
   const { comments } = useComments({ entityId: claimId, spaceId });
   if (comments.length === 0) return null;
 
   return (
     <div className="mt-3">
       <ClaimCommentPositionBoundary entityId={claimId} spaceId={spaceId}>
-        <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={threadSpineOffsetPx(PAGE_DENSITY)}>
+        <ThreadBranch
+          rowDensity={PAGE_DENSITY}
+          reachPx={threadSpineOffsetPx(PAGE_DENSITY)}
+          onCollapse={onCollapse}
+          label={label}
+        >
           {comments.map((comment, index) => (
             <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
               <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />
