@@ -47,4 +47,32 @@ describe('EntityStickyHeaderHost', () => {
     expect(host).toHaveClass('z-40');
     expect(host).not.toHaveClass('z-50');
   });
+
+  /**
+   * The collapsed sidebar keeps a vertical rail 24px into this column and nothing holding the space,
+   * so a full-width bar ran its background and bottom border out past the rail and cut the one line
+   * saying where the sidebar still is.
+   */
+  it('starts at the collapsed sidebar rail rather than running through it', () => {
+    render(
+      <Provider store={createStore()}>
+        <EntityStickyHeaderHost railInset />
+      </Provider>
+    );
+
+    const host = screen.getByTestId('entity-sticky-header-host');
+    expect(host).toHaveClass('ml-6');
+    // No sidebar at all below `mobile`, so no rail to clear.
+    expect(host).toHaveClass('mobile:ml-0');
+  });
+
+  it('runs the full width once the sidebar has its own border to sit against', () => {
+    render(
+      <Provider store={createStore()}>
+        <EntityStickyHeaderHost />
+      </Provider>
+    );
+
+    expect(screen.getByTestId('entity-sticky-header-host')).not.toHaveClass('ml-6');
+  });
 });

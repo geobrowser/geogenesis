@@ -78,7 +78,11 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
                 lines would take back most of the room it exists to give. */}
             <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
             <span className="flex shrink-0 items-center">
-              <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+              {/* Faces after the thumbs, not before them. Everywhere else the cluster leads because
+                  it sits inside a card with the claim's text above it; here the bar's own text runs
+                  right up to it, and a stack of faces between the name and the control it belongs to
+                  reads as part of the name. */}
+              <EntityVoteButtons entityId={entityId} spaceId={spaceId} claimResponderAvatarsPosition="trailing" />
             </span>
           </div>
         </motion.div>

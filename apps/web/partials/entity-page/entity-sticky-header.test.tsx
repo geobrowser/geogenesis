@@ -83,6 +83,17 @@ describe('EntityStickyHeader', () => {
     expect(mocks.voteProps).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1' });
   });
 
+  /**
+   * Everywhere else the faces lead, because they sit inside a card with the claim's text above them.
+   * In the bar the name runs right up to the control, and faces between the two read as part of the
+   * name rather than as part of the tally they belong to.
+   */
+  it('puts a claim’s responder faces after the thumbs, not before them', () => {
+    renderBar();
+
+    expect(mocks.voteProps).toMatchObject({ claimResponderAvatarsPosition: 'trailing' });
+  });
+
   it('draws nothing until the title has scrolled away', () => {
     mocks.scrolledPast = false;
     renderBar();
