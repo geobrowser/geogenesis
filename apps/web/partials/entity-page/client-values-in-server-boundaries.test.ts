@@ -1,6 +1,6 @@
 // This walks the source tree with `fs` and never touches the DOM.
 // @vitest-environment node
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -97,7 +97,8 @@ function callReferences(sourceFile: ts.SourceFile): CallReference[] {
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
       const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      const isRequire =
+        ts.isIdentifier(node.expression) && node.expression.text === 'require' && !isShadowed(node.expression);
       const [specifier] = node.arguments;
 
       if ((isDynamicImport || isRequire) && specifier && ts.isStringLiteralLike(specifier)) {
@@ -111,6 +112,60 @@ function callReferences(sourceFile: ts.SourceFile): CallReference[] {
   ts.forEachChild(sourceFile, visit);
 
   return found;
+}
+
+/**
+ * Whether an identifier refers to something declared in scope rather than to the ambient global.
+ *
+ * `function load(require) { return require('./client'); }` calls its own parameter, and reading
+ * every `require` by spelling invented an edge to `./client` — and an offence, if that file says
+ * `use client`. This walks outward through the scopes that can bind a name: parameters, a function
+ * expression's own name, a `catch` variable, a `for` initialiser, and the declarations directly in
+ * a block, module or source file. It reads the tree, not a type checker, so it does not model
+ * `with` or `eval`, neither of which a module can use.
+ */
+function isShadowed(identifier: ts.Identifier): boolean {
+  const name = identifier.text;
+  const declaresIn = (statements: ts.NodeArray<ts.Statement>) =>
+    statements.some(statement => {
+      if (ts.isVariableStatement(statement)) {
+        return statement.declarationList.declarations.some(d => bindingNames(d.name).includes(name));
+      }
+      if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+        return statement.name.text === name;
+      }
+      if (ts.isImportDeclaration(statement) && statement.importClause) {
+        const clause = statement.importClause;
+        if (clause.name?.text === name) return true;
+        const bindings = clause.namedBindings;
+        if (bindings && ts.isNamespaceImport(bindings)) return bindings.name.text === name;
+        return Boolean(bindings?.elements.some(element => element.name.text === name));
+      }
+      return false;
+    });
+
+  for (let scope: ts.Node | undefined = identifier.parent; scope; scope = scope.parent) {
+    if (ts.isFunctionLike(scope)) {
+      if (scope.parameters.some(parameter => bindingNames(parameter.name).includes(name))) return true;
+      // `const load = function require() {…}` binds its own name inside itself only.
+      if (ts.isFunctionExpression(scope) && scope.name?.text === name) return true;
+    }
+    if (ts.isCatchClause(scope) && scope.variableDeclaration) {
+      if (bindingNames(scope.variableDeclaration.name).includes(name)) return true;
+    }
+    if (
+      (ts.isForStatement(scope) || ts.isForInStatement(scope) || ts.isForOfStatement(scope)) &&
+      scope.initializer &&
+      ts.isVariableDeclarationList(scope.initializer) &&
+      scope.initializer.declarations.some(d => bindingNames(d.name).includes(name))
+    ) {
+      return true;
+    }
+    if ((ts.isBlock(scope) || ts.isModuleBlock(scope) || ts.isSourceFile(scope)) && declaresIn(scope.statements)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** What a `require()` call's surroundings say is being taken from it. */
@@ -458,6 +513,19 @@ const KNOWN = new Set([
   'core/responses/entity-response.ts -> getChecked (from design-system/checkbox.tsx)',
   'core/bounties/config.ts -> useFeatureFlag (from core/state/feature-flags.ts)',
 ]);
+
+/**
+ * Where a local specifier points, relative to the app root, before extensions are tried. `null` for
+ * a package, which is not this walk's to follow.
+ */
+function localPath(specifier: string, importingFile: string): string | null {
+  if (specifier.startsWith('~/')) return path.normalize(specifier.slice(2));
+  if (specifier.startsWith('.')) return path.join(path.dirname(importingFile), specifier);
+  return null;
+}
+
+/** A file an import can load that is not source: a stylesheet, an image, a font. */
+const SOURCE_EXTENSION = /\.[cm]?[jt]sx?$/;
 
 function sourceFiles(): string[] {
   const found: string[] = [];
@@ -1067,17 +1135,9 @@ describe('server components take only components from client modules', () => {
   }
 
   function resolveImport(specifier: string, importingFile: string): string | null {
-    let absolute: string;
+    const relative = localPath(specifier, importingFile);
+    if (relative === null) return null;
 
-    if (specifier.startsWith('~/')) {
-      absolute = path.join(ROOT, specifier.slice(2));
-    } else if (specifier.startsWith('.')) {
-      absolute = path.resolve(ROOT, path.dirname(importingFile), specifier);
-    } else {
-      return null;
-    }
-
-    const relative = path.relative(ROOT, absolute);
     for (const candidate of [
       `${relative}.tsx`,
       `${relative}.ts`,
@@ -1129,6 +1189,34 @@ describe('server components take only components from client modules', () => {
       if (target && !clientFiles.has(target) && !serverGraph.has(target)) queue.push(target);
     }
   }
+
+  /*
+   * A local import that resolves to nothing is an edge the walk drops, and everything behind it with
+   * it — silently, because a missing edge looks exactly like a module that imports less. Review
+   * found one way in: `~` maps to the app root, and a root-level file such as `proxy.ts` is outside
+   * every walked directory. `prebundled/`, the deliberately excluded `scripts/`, and any directory
+   * added later are the same hole. So rather than walking one more place, this fails when a server
+   * module reaches *any* place the walk does not cover, and says which.
+   */
+  it('drops no local import from the server graph', () => {
+    const dropped: string[] = [];
+
+    for (const file of serverGraph) {
+      for (const { specifier } of references(file)) {
+        const target = localPath(specifier, file);
+        if (target === null || resolveImport(specifier, file)) continue;
+        // A stylesheet or an image resolves to a real file this walk has no reason to read.
+        if (path.extname(target) && !SOURCE_EXTENSION.test(target) && existsSync(path.join(ROOT, target))) continue;
+        dropped.push(`${file} -> ${specifier}`);
+      }
+    }
+
+    expect(
+      dropped,
+      'These imports point at source this walk does not load, so everything behind them is unchecked. ' +
+        'Add the directory to SOURCE_DIRS (or the file, if it is at the app root).'
+    ).toEqual([]);
+  });
 
   it('reaches a server graph worth checking', () => {
     expect(serverGraph.size).toBeGreaterThan(100);
@@ -1331,6 +1419,23 @@ function verdictFor(names: string[], kind: ExportKind): { label: string; capital
  * a route nothing imports, and offences found through it would be against code the server never
  * renders.
  */
+describe('localPath', () => {
+  it.each([
+    ['~/core/io/rest', 'app/layout.tsx', 'core/io/rest'],
+    ['./tabs', 'app/space/[id]/layout.tsx', 'app/space/[id]/tabs'],
+    // The root-level case review raised: outside every walked directory, and still a local path.
+    ['../proxy', 'app/layout.tsx', 'proxy'],
+    ['~/proxy', 'app/layout.tsx', 'proxy'],
+    ['../styles/styles.css', 'app/layout.tsx', 'styles/styles.css'],
+  ])('points %s from %s at %s', (specifier, from, expected) => {
+    expect(localPath(specifier, from)).toBe(expected);
+  });
+
+  it.each(['react', 'next/navigation', '@geogenesis/auth'])('leaves the package %s alone', specifier => {
+    expect(localPath(specifier, 'app/layout.tsx')).toBeNull();
+  });
+});
+
 describe('SERVER_ENTRY', () => {
   it.each([
     'app/layout.tsx',
@@ -1552,6 +1657,29 @@ describe('callReferences', () => {
     ['a spelling inside a string', 'const source = "import(\'./panel\')";'],
   ])('does not follow %s', (_label, source) => {
     expect(refs(source)).toEqual([]);
+  });
+
+  it.each([
+    ['a parameter', "function load(require) { return require('./x'); }"],
+    ['a destructured parameter', "const load = ({ require }) => require('./x');"],
+    ['a local in the enclosing function', "function load() { const require = pick(); return require('./x'); }"],
+    ['a function declared in the enclosing block', "{ function require(p) { return p; } require('./x'); }"],
+    ["a function expression's own name", "const load = function require() { return require('./x'); };"],
+    ['a catch variable', "try { go(); } catch (require) { require('./x'); }"],
+    ['a for-of variable', "for (const require of loaders) require('./x');"],
+    ['an import', "import { require } from './loader';\nrequire('./x');"],
+  ])('does not take a require declared as %s for the CommonJS one', (_label, source) => {
+    // Every `require` was read by its spelling, so each of these invented an edge to `./x` — and an
+    // offence, had `./x` said `use client`.
+    expect(refs(source).map(({ specifier }) => specifier)).not.toContain('./x');
+  });
+
+  it.each([
+    ['beside a function whose parameter is called require', "function other(require) {}\nrequire('./x');"],
+    ['after a block that declared its own', "{ const require = pick(); }\nrequire('./x');"],
+  ])('still follows the ambient require %s', (_label, source) => {
+    // A declaration shadows only inside its own scope. Looking too widely would hide real edges.
+    expect(refs(source)).toContainEqual({ specifier: './x', local: '' });
   });
 
   it('reads both the export a require names and the name it is bound to', () => {
