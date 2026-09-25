@@ -278,7 +278,19 @@
   }
 }
 
-/* Desktop-first breakpoints (max-width) */
+/* Desktop-first breakpoints (max-width).
+
+   These invert stock Tailwind. `md:` here means "at most 767px", not "768px and up", so
+   `grid-cols-1 md:grid-cols-2` gives you two columns on a phone and one on a desktop — the reverse
+   of what it reads like. Write the DESKTOP layout in the base classes and use the variant for the
+   narrow override: `grid-cols-2 md:grid-cols-1`.
+
+   `mobile:` is the one name that reads the way it behaves, which is what GEO-2973 renamed it for.
+   Every variant below it still carries the trap.
+
+   `--breakpoint-*: initial` above also means the built-in `max-*` modifier has no breakpoint left
+   to resolve against, so `max-md:pt-2` and friends silently compile to nothing. Use the variants
+   below instead; there is no working `max-md:`. */
 @custom-variant mobile (@media (max-width: 639px));
 @custom-variant md (@media (max-width: 767px));
 @custom-variant lg (@media (max-width: 1023px));
