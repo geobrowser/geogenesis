@@ -255,6 +255,13 @@ function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: 
  * itself is intercepted, because navigating away from a claim to read who said something is exactly
  * the context loss the side panel exists to avoid. Unattributed turns get no link — there is no
  * person to open.
+ *
+ * `inline-flex`, and this is load-bearing rather than tidiness. The avatar's frame is a `span` sized
+ * by inline width and height, and it used to be a direct child of the row's flex container, where
+ * being a flex item blockified it and those dimensions applied. Wrapping it in an anchor made the
+ * anchor the flex item and left the span `display: inline`, which ignores both — so the `h-full
+ * w-full` image inside resolved against nothing and rendered at its natural size, a 987px face in a
+ * 32px row. Making this a flex container puts the span back to being a flex item.
  */
 function SpeakerLink({
   speaker,
@@ -273,7 +280,7 @@ function SpeakerLink({
     <a
       href={NavUtils.toSpace(speaker.spaceId)}
       onClick={onOpenProfile}
-      className={cx('shrink-0 no-underline hover:underline', className)}
+      className={cx('inline-flex shrink-0 items-center overflow-hidden no-underline hover:underline', className)}
     >
       {children}
     </a>

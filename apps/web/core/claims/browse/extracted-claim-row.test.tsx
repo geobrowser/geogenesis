@@ -238,6 +238,24 @@ describe('ExtractedClaimRow, saying what it is and answering in place', () => {
     expect(mocks.openedProfiles).toEqual(['speaker-space']);
   });
 
+  /**
+   * jsdom computes no layout, so this asserts the structural condition rather than the pixels.
+   *
+   * The avatar's frame is a span sized by inline width and height, which only apply because the span
+   * is blockified as a flex item. Wrapping it in an anchor made the *anchor* the flex item and left
+   * the span inline, so both dimensions were ignored and the `h-full w-full` image inside rendered
+   * at its natural size — measured on the preview at 987px across, in a 32px row.
+   */
+  it('keeps the avatar frame a flex item of the link that wraps it', () => {
+    const { container } = renderRow();
+
+    const frame = container.querySelector<HTMLElement>('span[style*="width"]');
+    expect(frame).not.toBeNull();
+    const wrapper = frame!.parentElement!;
+    expect(wrapper.tagName).toBe('A');
+    expect(wrapper.className).toMatch(/\b(inline-)?flex\b/);
+  });
+
   it('opens a composer against the claim rather than the comments panel', () => {
     renderRow();
 
