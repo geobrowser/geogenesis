@@ -120,7 +120,7 @@ export function ExtractedClaimRow({
         the generated fallback — so the frame is the caller's job. Same shape the comment rows in
         this thread use, off the same density, which is what keeps the two kinds of row aligned.
       */}
-      <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile}>
+      <SpeakerLink speaker={speaker} onOpenProfile={openSpeakerProfile} className="self-start">
         <span
           className="relative shrink-0 overflow-hidden rounded-full"
           style={{ width: density.avatarPx, height: density.avatarPx }}
@@ -262,6 +262,12 @@ function ClaimComments({ claimId, spaceId, depth }: { claimId: string; spaceId: 
  * anchor the flex item and left the span `display: inline`, which ignores both — so the `h-full
  * w-full` image inside resolved against nothing and rendered at its natural size, a 987px face in a
  * 32px row. Making this a flex container puts the span back to being a flex item.
+ *
+ * The caller supplies the cross-axis alignment, because the two uses want opposite things and the
+ * wrapper cannot know which it is. The face needs `self-start`: it is a flex item of the row, which
+ * stretches its items, and a stretched anchor centres the 32px frame against the row's full height —
+ * dropping the avatar off the name line and down beside the claim text. The name is inside an
+ * already-centred header, so it wants no alignment of its own.
  */
 function SpeakerLink({
   speaker,
@@ -280,7 +286,7 @@ function SpeakerLink({
     <a
       href={NavUtils.toSpace(speaker.spaceId)}
       onClick={onOpenProfile}
-      className={cx('inline-flex shrink-0 items-center overflow-hidden no-underline hover:underline', className)}
+      className={cx('inline-flex shrink-0 overflow-hidden no-underline hover:underline', className)}
     >
       {children}
     </a>

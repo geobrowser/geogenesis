@@ -42,7 +42,13 @@ vi.mock('~/partials/comments/entity-comments-button', () => ({
     count: number;
     onActivate?: () => void;
   }) => (
-    <button type="button" data-testid="comments-button" data-entity={entityId} data-count={String(count)} onClick={onActivate}>
+    <button
+      type="button"
+      data-testid="comments-button"
+      data-entity={entityId}
+      data-count={String(count)}
+      onClick={onActivate}
+    >
       comments
     </button>
   ),
@@ -254,6 +260,9 @@ describe('ExtractedClaimRow, saying what it is and answering in place', () => {
     const wrapper = frame!.parentElement!;
     expect(wrapper.tagName).toBe('A');
     expect(wrapper.className).toMatch(/\b(inline-)?flex\b/);
+    // And it must not stretch: a stretched link centres the 32px frame against the row's whole
+    // height, which puts the face beside the claim text instead of on the name line.
+    expect(wrapper.className).toMatch(/\bself-start\b/);
   });
 
   it('opens a composer against the claim rather than the comments panel', () => {
