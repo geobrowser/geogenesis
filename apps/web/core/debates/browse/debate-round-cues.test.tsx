@@ -8,7 +8,7 @@ import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 afterEach(cleanup);
 
 describe('DebateRoundCard', () => {
-  it('draws nothing outside the opening seconds of a turn', () => {
+  it('draws nothing outside the opening seconds of a round', () => {
     const { container } = render(<DebateRoundCard cue={null} />);
     expect(container).toBeEmptyDOMElement();
   });
@@ -18,11 +18,27 @@ describe('DebateRoundCard', () => {
     expect(screen.getByText('Round 2 · Rebuttal')).toBeInTheDocument();
   });
 
-  it("wears the room's own phrase treatment, not one of its own", () => {
-    // Dark type in a white outline — what `debate-video-tile.tsx` gives every phrase the debaters
-    // themselves see. A second visual language for the same debate reads as a second product.
+  it('sits on the seam between the tiles, where the subtitle sits', () => {
+    // The one band of the player that is never a face — and a round belongs to both debaters, so
+    // its name goes between them rather than over whoever is talking.
     const { container } = render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 1 }} />);
-    expect((container.querySelector('span') as HTMLElement).style.textShadow).toContain('#fff');
+    const classes = [...(container.firstElementChild as HTMLElement).classList];
+
+    expect(classes).toContain('top-1/2');
+    expect(classes).toContain('-translate-y-1/2');
+  });
+
+  it('is white type in a black outline, because the seam is the darkest strip there is', () => {
+    // The top tile's scrim has run all the way to black by the seam. The debaters' own phrase
+    // treatment — dark type in a white outline — would leave the outline holding an empty shape.
+    const outline = (
+      render(<DebateRoundCard cue={{ label: 'Round 1 · Opening', opacity: 1 }} />).container.querySelector(
+        'span'
+      ) as HTMLElement
+    ).style.textShadow;
+
+    expect(outline).toContain('#000');
+    expect(outline).not.toContain('#fff');
   });
 
   it('draws at the strength the playhead gave it', () => {

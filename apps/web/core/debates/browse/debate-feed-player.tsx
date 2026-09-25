@@ -367,9 +367,17 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       data-debate-playing={playing ? 'true' : 'false'}
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
-      // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
+      // frame, which is what lets the subtitle and the round card straddle the seam rather than
+      // sit inside one tile.
       // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
-      className={cx('group relative flex flex-col overflow-hidden', reducedOverlays ? 'rounded-lg' : 'rounded-xl')}
+      //
+      // `@container` so the round card sizes against the player rather than the viewport: this
+      // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
+      // would get two of the three wrong.
+      className={cx(
+        'group @container relative flex flex-col overflow-hidden',
+        reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+      )}
     >
       <DebaterVideo
         participant={slot1Participant}
@@ -377,7 +385,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
-        roundCard={turnState?.slot === 1 ? roundCard : null}
         roundBadge={turnState?.slot === 1 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
@@ -433,7 +440,6 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
-        roundCard={turnState?.slot === 2 ? roundCard : null}
         roundBadge={turnState?.slot === 2 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
@@ -512,12 +518,18 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           the longest segment measures 284, so on a desktop they already never wrap and widening
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
-          seam. */}
-      {subtitle && (!reducedOverlays || (active && playing && mutedByUser)) && (
+          seam.
+
+          Stood down while the round card has the seam — the two are given the same 20 pixels and
+          would otherwise be printed over each other. The card is at most 1.8s at the top of a
+          round, which is a beat before anyone has said anything worth captioning. */}
+      {subtitle && !roundCard && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
       )}
+
+      <DebateRoundCard cue={roundCard} />
 
       {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
@@ -564,7 +576,6 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
-  roundCard,
   roundBadge,
   mutedByUser,
   isResuming,
@@ -585,9 +596,7 @@ function DebaterVideo({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
-  /** The round announced across this tile as its turn opens. Only the speaker's tile has one. */
-  roundCard?: RoundCue | null;
-  /** The same round, parked beside this tile's timer for the rest of the turn. */
+  /** The round, beside this tile's timer for as long as this tile's turn runs. */
   roundBadge?: RoundCue | null;
   mutedByUser: boolean;
   isResuming: boolean;
@@ -791,10 +800,7 @@ function DebaterVideo({
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
-      // `@container` so the round card sizes against the tile rather than the viewport: this same
-      // component is a feed card, an explore card and a fullscreen player, and a breakpoint would
-      // get two of the three wrong.
-      className="@container relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
@@ -869,8 +875,6 @@ function DebaterVideo({
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
       {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
-
-      <DebateRoundCard cue={roundCard ?? null} />
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks

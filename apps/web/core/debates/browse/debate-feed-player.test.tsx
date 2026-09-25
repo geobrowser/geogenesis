@@ -108,8 +108,9 @@ function controllerFixture(overrides: {
     playheadSeconds: overrides.playheadSeconds ?? 5,
     timelineSeconds: 60,
     turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
-    // Two 30s turns, the speaking one first, so there is a round to name.
-    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000]),
+    // Four 30s turns, the speaking one first — two rounds, so a card firing on the second can be
+    // told apart from one firing on every turn.
+    turnSpans: turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]),
     activeSlot: overrides.turnSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -752,12 +753,26 @@ describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
 
-  it('announces the round as the turn opens', () => {
+  it('announces the round once, on the seam between the tiles', () => {
     mocks.controller = at(0.5);
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 1 · Opening');
+    const cards = [...container.querySelectorAll('[data-round-card]')];
+
+    // One card for the player, not one per tile: the round is about both of them.
+    expect(cards).toHaveLength(1);
+    expect(cards[0].getAttribute('data-round-card')).toBe('Round 1 · Opening');
+  });
+
+  it('keeps the seam to itself while it is up', () => {
+    const subtitle = 'The line under the round card';
+    mocks.controller = { ...at(0.5), subtitle };
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).not.toBeNull();
+    expect(container.textContent).not.toContain(subtitle);
   });
 
   it('parks it beside the timer for the rest of the turn', () => {
@@ -772,12 +787,23 @@ describe('the round it is playing', () => {
     expect(badges[0].getAttribute('data-round-badge')).toBe('Round 1 · Opening');
   });
 
-  it('names the round the playhead is actually in', () => {
+  it('does not announce the round again when the other debater replies', () => {
+    // Turn 2 of 4 starts at 30s. The badge is already carrying the round; a second card would be
+    // the same announcement made twice.
     mocks.controller = at(30.5);
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 1 · Opening');
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')?.getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('names the round the playhead is actually in', () => {
+    mocks.controller = at(60.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 2 · Rebuttal');
   });
 
   it('stands down while the viewer has the debate paused', () => {
