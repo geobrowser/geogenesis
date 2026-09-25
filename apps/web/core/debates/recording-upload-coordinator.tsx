@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { capture } from '~/core/analytics';
 import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -751,11 +753,12 @@ export function DebateRecordingUploadCoordinator() {
   const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
   // The banner sits on the bottom edge of the viewport across its full width, so anything else
   // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
-  // clear it. `h-10` is 40px; the two have to be changed together.
+  // clear it. `DEBATE_UPLOAD_BANNER_HEIGHT_PX` is the banner's `h-10`; the two have to be changed
+  // together.
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
-  useAppBottomInset('debate-upload-banner', 40, bannerVisible && !inLiveDebate);
+  useAppBottomInset('debate-upload-banner', DEBATE_UPLOAD_BANNER_HEIGHT_PX, bannerVisible && !inLiveDebate);
 
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
@@ -789,6 +792,9 @@ export function DebateRecordingUploadCoordinator() {
     </>
   );
 }
+
+/** The upload banner's `h-10`, claimed from the bottom of the viewport while it shows. */
+export const DEBATE_UPLOAD_BANNER_HEIGHT_PX = 40;
 
 export function DebateRecordingUploadBanner({
   count,
@@ -856,13 +862,12 @@ export function DebateRecordingUploadBanner({
           measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". With no
           bar there is nothing to centre on, so the line and its actions just sit together. */}
       <div
-        className={
-          showProgress
-            ? 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 md:gap-x-[50px]'
-            : 'flex max-w-full min-w-0 items-center justify-center gap-3 md:gap-[50px]'
-        }
+        className={cx(
+          'min-w-0 items-center gap-3 md:gap-[50px]',
+          showProgress ? 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]' : 'flex max-w-full justify-center'
+        )}
       >
-        <span className={`min-w-0 truncate ${showProgress ? 'justify-self-end' : ''}`}>{message}</span>
+        <span className={cx('min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
         {showProgress && (
           <div
             role="progressbar"
@@ -879,14 +884,14 @@ export function DebateRecordingUploadBanner({
           </div>
         )}
         {(showKeepBrowserOpen || canCancel) && (
-          <div className={`flex min-w-0 shrink-0 items-center gap-2 ${showProgress ? 'justify-self-start' : ''}`}>
+          <div className={cx('flex shrink-0 items-center gap-2', showProgress && 'justify-self-start')}>
             {showKeepBrowserOpen && <span className="shrink-0">Keep browser open</span>}
             {canCancel && (
               <SmallButton
                 type="button"
                 variant="ghost"
                 onClick={onCancel}
-                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none"
+                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none focus-visible:border-white focus-visible:shadow-none"
               >
                 Cancel
               </SmallButton>

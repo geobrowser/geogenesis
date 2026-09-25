@@ -253,7 +253,7 @@ describe('DebateRecordingUploadBanner', () => {
     const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
     expect(banner).toHaveClass('h-10', 'items-center', 'justify-center');
     // The bar sits in the middle column of three, so it stays centred on the viewport.
-    expect(content).toHaveClass('grid', 'w-full', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'md:gap-x-[50px]');
+    expect(content).toHaveClass('grid', 'w-full', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'md:gap-[50px]');
     expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('justify-self-end', 'truncate');
     expect(content?.children[1]).toHaveAttribute('role', 'progressbar');
     const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
@@ -416,6 +416,9 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByText('Debate uploaded')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    // No bar to centre on, so the line and its action sit together instead of in the three columns.
+    expect(screen.getByText('Debate uploaded').parentElement).toHaveClass('flex', 'justify-center');
+    expect(screen.getByText('Debate uploaded').parentElement).not.toHaveClass('grid');
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     // Nothing is on the wire any more — this line is waiting on the opt-out window.
     expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
