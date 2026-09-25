@@ -89,19 +89,11 @@ describe('EntityPageActions', () => {
     expect(screen.getByTestId('history')).toBeInTheDocument();
   });
 
-  /**
-   * Create, then history, then the menu. Master's order, and still the space header's — these
-   * controls moved into a new row in this PR, and an intermediate state reversed them, putting the
-   * menu that holds "Delete entity" where the reader's muscle memory expects version history.
-   *
-   * Asserted by document position rather than by markup shape, so it survives the row being
-   * restyled and fails only if the order actually changes.
-   */
-  it('orders the controls create, history, menu — the same way the space header does', () => {
+  it('orders the controls votes, create, history, menu', () => {
     mocks.isEditing = true;
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" isVoteable />);
 
-    const order = ['Create new entity', 'history', 'context-menu', 'vote-buttons'].map(id =>
+    const order = ['vote-buttons', 'Create new entity', 'history', 'context-menu'].map(id =>
       id === 'Create new entity' ? screen.getByRole('link', { name: id }) : screen.getByTestId(id)
     );
 
@@ -111,8 +103,8 @@ describe('EntityPageActions', () => {
     }
   });
 
-  it('puts voting before history and the menu for a profile header', () => {
-    render(<EntityPageActions entityId="entity-1" spaceId="space-1" isVoteable votesFirst />);
+  it('uses compact spacing when the action row shares a profile header', () => {
+    render(<EntityPageActions entityId="entity-1" spaceId="space-1" isVoteable compact />);
 
     const order = ['vote-buttons', 'history', 'context-menu'].map(id => screen.getByTestId(id));
     expect(order[0].parentElement).toHaveClass('gap-4');
