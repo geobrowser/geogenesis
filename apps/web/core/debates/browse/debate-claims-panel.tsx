@@ -381,6 +381,7 @@ function PanelClaimControls({
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         disabled={!control.canRespond}
+        pending={control.isResponsePending}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (
