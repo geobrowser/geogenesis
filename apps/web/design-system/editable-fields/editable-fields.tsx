@@ -32,6 +32,9 @@ const textareaStyles = cva(
         tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
         tableProperty: 'text-tableProperty! text-grey-04!',
         smallTitle: 'text-smallTitle',
+        // For a field inside a rail card, whose read-only text is `metadata` too — the card
+        // must not resize when the edit toggle flips.
+        metadata: 'text-metadata',
       },
     },
     defaultVariants: {
@@ -92,10 +95,16 @@ export function TableStringField({ variant = 'tableCell', truncateOverflow = fal
 type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell' | 'metadata';
   value?: string;
   autoFocus?: boolean;
   onEnterKey?: () => void;
+  /**
+   * Passed straight to the textarea, which stops typing past it. It does not stop a paste in
+   * every browser and does nothing to a programmatic change, so a caller that needs the limit
+   * held also has to cut the value in `onChange` — see `PersonalSpaceTagline`.
+   */
+  maxLength?: number;
 };
 
 export function PageStringField({ onChange, onEnterKey, ...props }: PageStringFieldProps) {

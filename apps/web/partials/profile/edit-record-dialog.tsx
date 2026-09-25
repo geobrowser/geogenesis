@@ -130,7 +130,13 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
     // effect below — because a failure has to leave the rows where they are so
     // the dialog can come back with the work intact.
     void publish(
-      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      {
+        name: current.name,
+        tagline: current.tagline,
+        description: current.description,
+        banner: UNCHANGED,
+        avatar: UNCHANGED,
+      },
       history.stagePending()
     );
 

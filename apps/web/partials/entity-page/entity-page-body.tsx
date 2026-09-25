@@ -41,6 +41,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { PersonalSpaceTagline } from '~/partials/profile/profile-tagline';
 
 type SharedProps = {
   entityId: string;
@@ -343,12 +344,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
     const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
     const actions = (
-      <EntityPageActions
-        entityId={entityId}
-        spaceId={spaceId}
-        isVoteable={!isRelationPage}
-        compact={isPersonProfile}
-      />
+      <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} compact={isPersonProfile} />
     );
 
     return (
@@ -377,8 +373,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               ) : (
                 heading
               )}
+              {isPersonProfile && <PersonalSpaceTagline spaceId={spaceId} personEntityId={entityId} />}
               {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
-              {!isRelationPage && (
+              {/*
+               * A person's description lives in their About tab here too, not
+               * under their name — the panel renders the same About card the
+               * space route puts in its rail, and showing the bio in both left
+               * it on screen twice.
+               */}
+              {!isRelationPage && !isPersonProfile && (
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}

@@ -38,7 +38,7 @@ vi.mock('~/core/state/entity-page-store/entity-store', () => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: true,
-    current: { name: 'Preston', description: '' },
+    current: { name: 'Preston', tagline: '', description: '' },
     publish: mocks.publish,
     reset: mocks.reset,
     status: mocks.status,

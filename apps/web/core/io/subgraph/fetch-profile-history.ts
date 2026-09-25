@@ -15,11 +15,13 @@ import {
   normalizeEducation,
   normalizeEmployment,
 } from '~/core/profile/normalize-history';
+import { TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 
 import { graphql } from './graphql';
 
 interface NetworkResult {
   entity: {
+    tagline: Array<{ text: string | null }>;
     description: Array<{ text: string | null }>;
     employment: HistoryEdgeNode[];
     education: HistoryEdgeNode[];
@@ -27,6 +29,8 @@ interface NetworkResult {
 }
 
 export interface ProfileHistory {
+  /** The line the person wrote about themselves; preferred over everything derived from it. */
+  tagline: string | null;
   description: string | null;
   employment: EmploymentCard[];
   education: EducationCard[];
@@ -133,6 +137,10 @@ const orgAvatar = `
 const profileHistoryQuery = (entityId: string, spaceId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
+      tagline: valuesList(first: 1, filter: {
+        propertyId: { is: ${JSON.stringify(TAGLINE_PROPERTY)} }
+        spaceId: { is: ${JSON.stringify(spaceId)} }
+      }) { text }
       description: valuesList(first: 1, filter: {
         propertyId: { is: ${JSON.stringify(DESCRIPTION_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
@@ -192,6 +200,7 @@ export async function fetchProfileHistory(entityId: string, spaceId: string): Pr
   const entity = result.right.entity;
 
   return {
+    tagline: entity?.tagline[0]?.text?.trim() || null,
     description: entity?.description[0]?.text?.trim() || null,
     employment: normalizeEmployment(entity?.employment ?? []),
     education: normalizeEducation(entity?.education ?? []),

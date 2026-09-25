@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ID } from '~/core/id';
+import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 import type { Relation, Value } from '~/core/types';
 
 import { useEditProfile } from './use-edit-profile';
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   coverUrl: 'ipfs://old-banner' as string | undefined,
   avatarUrl: 'ipfs://old-avatar' as string | undefined,
   entityDescription: 'Working on debates.' as string | null,
+  entityValues: [] as Value[],
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
   profile: {
@@ -86,6 +88,8 @@ vi.mock('~/core/database/entities', () => ({
   useEntity: () => ({
     name: mocks.entityName,
     description: mocks.entityDescription,
+    // The tagline has no field of its own on the entity, so the hook reads it off here.
+    values: mocks.entityValues,
     relations: [],
     isLoading: false,
   }),
@@ -151,6 +155,7 @@ const stagedValue = (propertyId: string) =>
 
 const draft = (overrides: Partial<Parameters<ReturnType<typeof useEditProfile>['publish']>[0]> = {}) => ({
   name: 'Preston',
+  tagline: '',
   description: 'Working on debates.',
   banner: UNCHANGED,
   avatar: UNCHANGED,
@@ -164,6 +169,7 @@ beforeEach(() => {
   mocks.reviewState = 'idle';
   mocks.entityName = 'Preston';
   mocks.entityDescription = 'Working on debates.';
+  mocks.entityValues = [];
   mocks.personalEntityId = ENTITY_ID;
   mocks.hydrationStatus = 'success';
   mocks.coverUrl = 'ipfs://old-banner';
@@ -311,6 +317,41 @@ describe('useEditProfile', () => {
         value: 'Preston M',
       })
     );
+  });
+
+  it('writes a changed tagline against the Tagline property, cut to the limit', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) }));
+    });
+
+    expect(mocks.setValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        property: expect.objectContaining({ id: TAGLINE_PROPERTY, name: 'Tagline' }),
+        value: 'y'.repeat(TAGLINE_MAX_LENGTH),
+      })
+    );
+  });
+
+  it('deletes the tagline value when the field is cleared', async () => {
+    const existing = {
+      id: 'tagline-value',
+      entity: { id: ENTITY_ID },
+      property: { id: TAGLINE_PROPERTY },
+      spaceId: SPACE_ID,
+      value: 'Engineer at Geo',
+    } as unknown as Value;
+    mocks.entityValues = [existing];
+    mocks.storeValues = [existing];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ tagline: '' }));
+    });
+
+    expect(mocks.deleteValues).toHaveBeenCalledWith([existing]);
   });
 
   it('deletes the description value when the field is cleared', async () => {

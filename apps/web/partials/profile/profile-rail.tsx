@@ -16,6 +16,7 @@ import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
@@ -23,11 +24,12 @@ import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
-import { useValue } from '~/core/sync/use-store';
+import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { EditSmall } from '~/design-system/icons/edit-small';
@@ -313,7 +315,13 @@ export function LinksSection({
     // everything else on this page writes through — one status bar, one proposal
     // shape, and the name and description carried untouched.
     void publish(
-      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      {
+        name: current.name,
+        tagline: current.tagline,
+        description: current.description,
+        banner: UNCHANGED,
+        avatar: UNCHANGED,
+      },
       {
         values: linkValueRows({
           fields: activeFields,
@@ -388,7 +396,8 @@ export function LinksSection({
   );
 }
 
-function AboutSection({
+/** Exported for its tests, as `LinksSection` above is; the rail is its only caller. */
+export function AboutSection({
   facts,
   isLoading,
   isError,
@@ -417,23 +426,26 @@ function AboutSection({
   const joined = formatJoined(facts.joinedAt);
 
   /*
-   * The person's description, read here rather than under their name. It is still edited in the
-   * header, which is where its edit field is; the header shows it only while editing
-   * (`hideWhenReading`).
+   * The person's description, read *and written* here rather than under their name — this card
+   * is the only place a profile shows a bio, so it has to be the place one is typed.
    *
-   * Tombstones included, so the one question this asks is whether the store has an opinion at
-   * all — clearing a bio replaces the row with an `isDeleted` one rather than removing it
-   * (`use-edit-profile`), and a lookup that hid those could not tell "not hydrated yet" from
-   * "just cleared". Read as a live value it brought `serverDescription` back the moment a
-   * deletion was staged.
+   * `undefined` from the hook means the store holds no opinion at all, which is every render
+   * before the entity hydrates; `null` means it has been cleared. Only the first falls back to
+   * what the server sent, or staging a deletion would bring the bio straight back.
    */
-  const stored = useValue({
-    includeDeleted: true,
-    selector: v =>
-      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  const isEditing = useUserIsEditing(spaceId);
+  const { value: storedDescription, setValue: setDescription } = useEntityTextValue({
+    entityId: personEntityId,
+    spaceId,
+    propertyId: SystemIds.DESCRIPTION_PROPERTY,
+    propertyName: 'Description',
   });
 
-  const description = stored ? (stored.isDeleted ? undefined : stored.value) : (serverDescription ?? undefined);
+  const description =
+    storedDescription === undefined ? (serverDescription ?? undefined) : (storedDescription ?? undefined);
+  // An editor with no person entity has nothing to write onto — a personal space whose topic
+  // never resolved. The card still shows the facts; it just offers no field.
+  const canEditDescription = isEditing && personEntityId !== null;
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
@@ -449,16 +461,28 @@ function AboutSection({
        * and are the rows a returning reader scans for, so they sit last, next to
        * each other, where a set of numbers reads as a set.
        */}
-      {description && (
-        <div className="mb-2">
-          <ClampedText
-            text={description}
-            maxLines={6}
+      {canEditDescription ? (
+        <div className="mb-2 text-metadata text-text">
+          <PageStringField
             variant="metadata"
-            textClassName="wrap-break-word text-text"
-            togglePlacement="below"
+            placeholder="Add a description..."
+            aria-label="Description"
+            value={description ?? ''}
+            onChange={setDescription}
           />
         </div>
+      ) : (
+        description && (
+          <div className="mb-2">
+            <ClampedText
+              text={description}
+              maxLines={6}
+              variant="metadata"
+              textClassName="wrap-break-word text-text"
+              togglePlacement="below"
+            />
+          </div>
+        )
       )}
 
       <dl className="flex flex-col">
