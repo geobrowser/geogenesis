@@ -462,6 +462,26 @@ describe('DebateCoordinator', () => {
     expect(mocks.acceptRequestMutate).not.toHaveBeenCalled();
   });
 
+  it('does not forget "Not now" when the request list disappears during an outbound transition', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    const request = incomingRequest();
+    mocks.requests = { outbound: null, incoming: [request] };
+
+    const view = render(<DebateCoordinator />);
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+
+    // Creating an outbound challenge can disable/refetch this list for a render. The original
+    // inbound request is still pending when the list comes back and must remain snoozed.
+    mocks.requests = { outbound: null, incoming: [] };
+    view.rerender(<DebateCoordinator />);
+    mocks.requests = { outbound: null, incoming: [request] };
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
   // A claimless challenge interrupts the person who has to answer it, and nobody else. The sender
   // has no decision to make, so their copy lives under Sent in the hub's Requests tab.
   it('prompts the recipient of a claimless challenge', async () => {
@@ -474,6 +494,54 @@ describe('DebateCoordinator', () => {
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
+  it('prompts an inbound person request while retaining a separate outbound person request', async () => {
+    mocks.currentUserId = 'user-recipient';
+    const inbound = pendingChallenge();
+    mocks.activity = {
+      ...idleActivity(),
+      challenge: inbound,
+      outbound_challenge: {
+        ...inbound,
+        id: 'challenge-outbound',
+        requester: inbound.recipient,
+        recipient: inbound.requester,
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('does not reopen a snoozed challenge when activity switches between inbound and outbound', async () => {
+    mocks.currentUserId = 'user-recipient';
+    const inbound = pendingChallenge();
+    mocks.activity = { ...idleActivity(), challenge: inbound };
+
+    const view = render(<DebateCoordinator />);
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+
+    // The activity endpoint can expose only one of two simultaneous challenges. Cycling through
+    // the outbound one must not forget that this inbound id was already snoozed.
+    mocks.activity = {
+      ...idleActivity(),
+      challenge: {
+        ...inbound,
+        id: 'challenge-outbound',
+        requester: inbound.recipient,
+        recipient: inbound.requester,
+      },
+    };
+    view.rerender(<DebateCoordinator />);
+    mocks.activity = { ...idleActivity(), challenge: inbound };
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
   it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
@@ -482,6 +550,24 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
     expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
+  });
+
+  it('still prompts for an incoming claim request while an outbound person request is pending', async () => {
+    mocks.currentUserId = 'user-requester';
+    const outboundChallenge = pendingChallenge();
+    mocks.activity = {
+      ...idleActivity(),
+      challenge: outboundChallenge,
+      outbound_challenge: outboundChallenge,
+      incoming_request_count: 1,
+    };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByText('Debates should hand off without flashing the page')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
   });
 
   // The stored geo-chat session is what names the viewer, and it isn't always written yet. An

@@ -8,6 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { DebateChallengeStateProvider } from '~/core/debates/matchmaking/debate-challenge-state-provider';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
@@ -132,72 +133,74 @@ export function App({ children }: { children: React.ReactNode }) {
   }, [fullscreenActive]);
 
   return (
-    <DebateMediaSessionProvider>
-      <div className="flex min-h-[100dvh] items-stretch">
-        <React.Suspense fallback={null}>
-          <PageViewTracker />
-        </React.Suspense>
-        <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar
-            browseOpen={mobileBrowseOpen && !fullscreenActive}
-            browseButtonRef={mobileBrowseButtonRef}
-            navbarRef={navbarRef}
-            onBrowseClick={() => setMobileBrowseOpen(true)}
-            onSearchClick={() => setOpen(true)}
-            hideLogo={sidebarOpen && !fullscreenActive}
-            showBrowseButton={!fullscreenActive}
-          />
-          <MobileBrowseDrawer
-            open={mobileBrowseOpen && !fullscreenActive}
-            fallbackFocusRef={navbarRef}
-            fullscreenFocusTarget={rankingFullscreenFocusTarget}
-            onOpenChange={setMobileBrowseOpen}
-            triggerRef={mobileBrowseButtonRef}
-          />
-          <SearchDialog open={open} onDone={() => setOpen(false)} />
-          <div className="min-w-0 flex-1 2xl:px-[2ch]">
-            <Main>{children}</Main>
+    <DebateChallengeStateProvider>
+      <DebateMediaSessionProvider>
+        <div className="flex min-h-[100dvh] items-stretch">
+          <React.Suspense fallback={null}>
+            <PageViewTracker />
+          </React.Suspense>
+          <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <Navbar
+              browseOpen={mobileBrowseOpen && !fullscreenActive}
+              browseButtonRef={mobileBrowseButtonRef}
+              navbarRef={navbarRef}
+              onBrowseClick={() => setMobileBrowseOpen(true)}
+              onSearchClick={() => setOpen(true)}
+              hideLogo={sidebarOpen && !fullscreenActive}
+              showBrowseButton={!fullscreenActive}
+            />
+            <MobileBrowseDrawer
+              open={mobileBrowseOpen && !fullscreenActive}
+              fallbackFocusRef={navbarRef}
+              fullscreenFocusTarget={rankingFullscreenFocusTarget}
+              onOpenChange={setMobileBrowseOpen}
+              triggerRef={mobileBrowseButtonRef}
+            />
+            <SearchDialog open={open} onDone={() => setOpen(false)} />
+            <div className="min-w-0 flex-1 2xl:px-[2ch]">
+              <Main>{children}</Main>
+            </div>
           </div>
-        </div>
-        <SlideUpBodyState />
-        <EntitySidePanel />
-        <PlaybackDiagnostics />
-        <EntityCommentsPanelHost />
-        {/* Client-side rendered due to `window.localStorage` usage */}
-        <ClientOnly>
-          <OnboardingDialog />
-          <PendingPersonalSpaceRunner />
-          <PendingActionsRunner />
-          <CreateSpaceDialog />
-          <PendingCreatedSpaceRunner />
-          <PendingCreatedSpaceStatus />
-          <SignInPrompt />
-          <PostAuthRedirect />
-          <React.Suspense fallback={null}>
-            <DeepLinkHandler />
-          </React.Suspense>
-          <Toast />
-          <GovernanceReopenEditLoadingBar />
-          <FlowBar />
-          <StatusBar />
-          <ReviewChanges />
-          <ChatWidget />
-          <FeatureFlagsDialog />
-          <DebateCoordinator />
-          {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
+          <SlideUpBodyState />
+          <EntitySidePanel />
+          <PlaybackDiagnostics />
+          <EntityCommentsPanelHost />
+          {/* Client-side rendered due to `window.localStorage` usage */}
+          <ClientOnly>
+            <OnboardingDialog />
+            <PendingPersonalSpaceRunner />
+            <PendingActionsRunner />
+            <CreateSpaceDialog />
+            <PendingCreatedSpaceRunner />
+            <PendingCreatedSpaceStatus />
+            <SignInPrompt />
+            <PostAuthRedirect />
+            <React.Suspense fallback={null}>
+              <DeepLinkHandler />
+            </React.Suspense>
+            <Toast />
+            <GovernanceReopenEditLoadingBar />
+            <FlowBar />
+            <StatusBar />
+            <ReviewChanges />
+            <ChatWidget />
+            <FeatureFlagsDialog />
+            <DebateCoordinator />
+            {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
               an ordinary navigation. */}
-          <React.Suspense fallback={null}>
-            <DebatesHubPanel />
-          </React.Suspense>
-          <DebateRecordingUploadCoordinator />
-          <Persistence />
-        </ClientOnly>
-        {process.env.NODE_ENV === 'production' && <Analytics />}
-      </div>
-      <React.Suspense fallback={null}>
-        <PersonalProfileCreatePostSidePanelSync />
-      </React.Suspense>
-    </DebateMediaSessionProvider>
+            <React.Suspense fallback={null}>
+              <DebatesHubPanel />
+            </React.Suspense>
+            <DebateRecordingUploadCoordinator />
+            <Persistence />
+          </ClientOnly>
+          {process.env.NODE_ENV === 'production' && <Analytics />}
+        </div>
+        <React.Suspense fallback={null}>
+          <PersonalProfileCreatePostSidePanelSync />
+        </React.Suspense>
+      </DebateMediaSessionProvider>
+    </DebateChallengeStateProvider>
   );
 }

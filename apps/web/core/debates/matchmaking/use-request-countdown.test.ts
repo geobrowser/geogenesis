@@ -6,6 +6,7 @@ import { formatCountdown } from './use-request-countdown';
 
 const mocks = vi.hoisted(() => ({
   serverTimeMs: 0,
+  clockBarrier: null as Promise<void> | null,
 }));
 
 // The clock is synchronized against the server so a skewed client still counts down correctly.
@@ -17,6 +18,7 @@ vi.mock('../server-clock', () => ({
   createLocalServerClock: () => ({ now: () => Date.now(), roundTripMs: null }),
   // The synchronized clock keeps advancing with (fake) time; only its offset comes from the server.
   synchronizeServerClock: vi.fn(async () => {
+    await mocks.clockBarrier;
     const offsetMs = mocks.serverTimeMs - Date.now();
     return { now: () => Date.now() + offsetMs, roundTripMs: 0 };
   }),
@@ -42,6 +44,7 @@ describe('useRequestCountdown', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.serverTimeMs = new Date('2026-08-05T12:00:00.000Z').getTime();
+    mocks.clockBarrier = null;
   });
 
   afterEach(() => {
@@ -60,6 +63,27 @@ describe('useRequestCountdown', () => {
       await vi.advanceTimersByTimeAsync(0);
     });
 
+    expect(result.current.expired).toBe(false);
+    expect(result.current.label).toBe('Expires in 25m');
+  });
+
+  it('does not report expiry from a skewed device clock while server time is resolving', async () => {
+    vi.setSystemTime(new Date('2026-08-05T13:00:00.000Z'));
+    let releaseClock!: () => void;
+    mocks.clockBarrier = new Promise<void>(resolve => {
+      releaseClock = resolve;
+    });
+    const { useRequestCountdown } = await import('./use-request-countdown');
+
+    const { result } = renderHook(() => useRequestCountdown('2026-08-05T12:25:00.000Z'));
+
+    expect(result.current.expired).toBe(false);
+    expect(result.current.label).toBe('Expires later');
+
+    releaseClock();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
     expect(result.current.expired).toBe(false);
     expect(result.current.label).toBe('Expires in 25m');
   });
@@ -111,6 +135,7 @@ describe('useUnexpiredRequests', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mocks.serverTimeMs = new Date('2026-08-05T12:00:00.000Z').getTime();
+    mocks.clockBarrier = null;
   });
 
   afterEach(() => {
@@ -140,6 +165,26 @@ describe('useUnexpiredRequests', () => {
 
     expect(result.current.map(request => request.id)).toEqual(['later']);
     expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('keeps a server-live request while the skewed device clock is being corrected', async () => {
+    vi.setSystemTime(new Date('2026-08-05T13:00:00.000Z'));
+    let releaseClock!: () => void;
+    mocks.clockBarrier = new Promise<void>(resolve => {
+      releaseClock = resolve;
+    });
+    const { useUnexpiredRequests } = await import('./use-request-countdown');
+    const requests = [{ id: 'live', expires_at: '2026-08-05T12:25:00.000Z' }];
+
+    const { result } = renderHook(() => useUnexpiredRequests(requests));
+
+    expect(result.current).toEqual(requests);
+
+    releaseClock();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current).toEqual(requests);
   });
 
   it('filters requests that are already expired on mount and keeps unparseable ones', async () => {

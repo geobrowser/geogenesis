@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
-import type { MatchmakingMatch } from '../api';
+import type { DebateChallenge, MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
 import {
   debatesHubLobbySearchAtom,
@@ -22,6 +22,7 @@ import {
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
   outbound: null as unknown,
+  outboundChallenge: null as DebateChallenge | null,
   createRequestMutate: vi.fn(),
   submitResponse: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
@@ -69,7 +70,12 @@ vi.mock('../hooks', () => ({
     data:
       mocks.activityLoading || mocks.activityErrored
         ? undefined
-        : { outbound_request: null, available_to_debate: mocks.availableToDebate },
+        : {
+            challenge: null,
+            outbound_challenge: mocks.outboundChallenge,
+            outbound_request: null,
+            available_to_debate: mocks.availableToDebate,
+          },
     isLoading: mocks.activityLoading,
   }),
   // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
@@ -81,6 +87,12 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+vi.mock('../use-current-geo-chat-user-id', () => ({
+  useCurrentGeoChatUserId: () => 'user-me',
 }));
 
 vi.mock('./hooks', () => ({
@@ -88,6 +100,14 @@ vi.mock('./hooks', () => ({
   useDebateRequests: () => ({ data: { outbound: mocks.outbound, incoming: [] }, isLoading: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: mocks.createRequestMutate, isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+vi.mock('./debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => ({
+    outboundChallenge: mocks.outboundChallenge,
+    outboundChallengeDirectionUnknown: false,
+    outboundRequestCreationPending: false,
+  }),
 }));
 
 // The publish path itself is covered by the entity-response tests; here it only needs to record
@@ -178,6 +198,24 @@ function party(userId: string, displayName: string, position: boolean, positionL
   };
 }
 
+function challenge(): DebateChallenge {
+  return {
+    id: 'challenge-1',
+    status: 'pending',
+    source_space_id: SPACE_ID,
+    requester: { user_id: 'user-me', profile_space_id: 'profile-user-me', display_name: 'You', avatar_cid: null },
+    recipient: {
+      user_id: 'user-them',
+      profile_space_id: 'profile-user-them',
+      display_name: 'Arturas',
+      avatar_cid: null,
+    },
+    rematch_session_id: null,
+    created_at: '2026-08-05T11:00:00.000Z',
+    expires_at: '2099-01-01T00:00:00.000Z',
+  };
+}
+
 function topicRelation(id: string, name: string) {
   return { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id, name } };
 }
@@ -208,6 +246,7 @@ function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
 beforeEach(() => {
   mocks.matches = [match()];
   mocks.outbound = null;
+  mocks.outboundChallenge = null;
   mocks.createRequestMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
@@ -370,6 +409,23 @@ describe('MatchesList', () => {
     rerender(<MatchesList onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+  });
+
+  it('shows a sent person request in Lobby and explains why claim requests are blocked', async () => {
+    mocks.outboundChallenge = challenge();
+    render(<MatchesList onTabChange={vi.fn()} />);
+
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+    expect(request.parentElement).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
+
+    await userEvent.hover(request.parentElement!);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'You can only have one pending outbound request at a time.'
+    );
   });
 
   // GEO-2684. The outbound card was already pinned; the filters joined it rather than becoming a

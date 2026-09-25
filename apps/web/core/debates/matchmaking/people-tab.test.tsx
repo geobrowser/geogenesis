@@ -25,7 +25,9 @@ const mocks = vi.hoisted(() => ({
   peopleError: null as Error | null,
   peopleRefetch: vi.fn(),
   challenge: null as DebateChallenge | null,
+  outboundChallenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
+  requestsDataAvailable: true,
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
@@ -37,6 +39,9 @@ const mocks = vi.hoisted(() => ({
   claimEntitiesLoading: false,
   claimEntitiesError: null as Error | null,
   createChallenge: vi.fn(),
+  createPending: false,
+  createRecipientProfileSpaceId: null as string | null,
+  outboundRequestCreationPending: false,
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
   cancelPending: false,
@@ -94,9 +99,21 @@ vi.mock('../hooks', () => ({
   usePeerSchedule: (peerUserId: string | null) => mocks.usePeerSchedule(peerUserId),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
-    data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
+    data: {
+      challenge: mocks.challenge,
+      outbound_challenge: mocks.outboundChallenge,
+      outbound_request: mocks.outboundRequest,
+      debate: mocks.activeDebate,
+    },
   }),
-  useCreateDebateChallenge: () => ({ mutate: mocks.createChallenge, isPending: false, error: null }),
+  useCreateDebateChallenge: () => ({
+    mutate: mocks.createChallenge,
+    isPending: mocks.createPending,
+    variables: mocks.createRecipientProfileSpaceId
+      ? { recipient_profile_space_id: mocks.createRecipientProfileSpaceId }
+      : undefined,
+    error: null,
+  }),
   useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRejectDebateChallenge: () => ({
     mutate: mocks.cancelChallenge,
@@ -113,7 +130,11 @@ vi.mock('./hooks', () => ({
     failureReason: mocks.peopleError,
     refetch: mocks.peopleRefetch,
   }),
-  useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+  useDebateRequests: () => ({
+    data: mocks.requestsDataAvailable ? { incoming: [], outbound: null } : undefined,
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -154,6 +175,23 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
+}));
+
+vi.mock('./debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => {
+    const challenge =
+      mocks.outboundChallenge ?? (mocks.challenge?.requester.user_id === mocks.currentUserId ? mocks.challenge : null);
+    const expiresAt = challenge ? new Date(challenge.expires_at).getTime() : Number.NaN;
+    const isUnexpired = !Number.isFinite(expiresAt) || expiresAt > Date.now();
+
+    return {
+      outboundChallenge: challenge && isUnexpired ? challenge : null,
+      outboundChallengeDirectionUnknown: Boolean(
+        mocks.challenge && isUnexpired && !mocks.outboundChallenge && !mocks.currentUserId
+      ),
+      outboundRequestCreationPending: mocks.outboundRequestCreationPending,
+    };
+  },
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -284,7 +322,9 @@ beforeEach(() => {
   mocks.peopleError = null;
   mocks.peopleRefetch.mockReset();
   mocks.challenge = null;
+  mocks.outboundChallenge = null;
   mocks.outboundRequest = null;
+  mocks.requestsDataAvailable = true;
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
   mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
@@ -296,6 +336,9 @@ beforeEach(() => {
   mocks.claimEntitiesLoading = false;
   mocks.claimEntitiesError = null;
   mocks.createChallenge.mockReset();
+  mocks.createPending = false;
+  mocks.createRecipientProfileSpaceId = null;
+  mocks.outboundRequestCreationPending = false;
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
   mocks.cancelPending = false;
@@ -704,17 +747,58 @@ describe('PeopleTab', () => {
 
     for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
       expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
     }
   });
 
-  // `activity.challenge` is whichever challenge involves the viewer. Being challenged is not a
-  // request you sent, so it keeps the sentence rather than claiming you're waiting on a reply.
-  it('keeps the sentence when the challenge is one you received', () => {
+  // GEO-3027. An inbound request remains available in Requests, but it is outside the viewer's
+  // control and must not take away their ability to send one of their own.
+  it('allows a new request while an inbound challenge is pending', () => {
     mocks.challenge = challenge('recipient');
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(screen.getByText(awaitingText)).toBeInTheDocument();
+    expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
+
+    const button = screen.getAllByRole('button', { name: 'Request debate' })[0];
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+
+    expect(mocks.createChallenge).toHaveBeenCalledWith({
+      recipient_profile_space_id: PROFILE_SPACE_IDS['user-them'],
+    });
+  });
+
+  it('disables every request while the shared outbound mutation is in flight', () => {
+    mocks.createPending = true;
+    mocks.createRecipientProfileSpaceId = PROFILE_SPACE_IDS['user-them'];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'Requesting…' })).toBeDisabled();
+    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+      expect(button).toBeDisabled();
+    }
+  });
+
+  it('disables every person request while another control creates an outbound request', () => {
+    mocks.outboundRequestCreationPending = true;
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'You can only have one pending outbound request at a time.');
+    }
+  });
+
+  it('shows and gates on the retained outbound challenge while an inbound one remains pending', () => {
+    mocks.challenge = challenge('recipient');
+    mocks.outboundChallenge = { ...challenge('requester'), id: 'challenge-outbound' };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(within(card()!).getByText('Awaiting response')).toBeInTheDocument();
+    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+      expect(button).toBeDisabled();
+    }
   });
 
   // Without an id there is no way to tell the two directions apart, and showing a "you sent this"
@@ -796,12 +880,11 @@ describe('PeopleTab', () => {
 
   it('leaves the other blocked reasons alone', () => {
     mocks.outboundRequest = { id: 'request-1' };
+    mocks.requestsDataAvailable = false;
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(
-      screen.getByText('You already have an open request — withdraw it to challenge someone else.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('You can only have one pending outbound request at a time.')).toBeInTheDocument();
   });
 
   // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy

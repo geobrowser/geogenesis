@@ -9,7 +9,12 @@ import { RequestsTab } from './requests-tab';
 const mocks = vi.hoisted(() => ({
   incoming: [] as DebateRequest[],
   outbound: null as DebateRequest | null,
+  activityOutbound: null as DebateRequest | null,
   challenge: null as DebateChallenge | null,
+  outboundChallenge: null as DebateChallenge | null,
+  requestsLoading: false,
+  requestsError: null as Error | null,
+  requestsFailureReason: null as Error | null,
   accept: vi.fn(),
   dismiss: vi.fn(),
   withdraw: vi.fn(),
@@ -27,7 +32,13 @@ vi.mock('../hooks', async importOriginal => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
-  useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
+  useDebateActivity: () => ({
+    data: {
+      challenge: mocks.challenge,
+      outbound_challenge: mocks.outboundChallenge,
+      outbound_request: mocks.activityOutbound,
+    },
+  }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
@@ -36,8 +47,9 @@ vi.mock('../hooks', async importOriginal => ({
 vi.mock('./hooks', () => ({
   useDebateRequests: () => ({
     data: { incoming: mocks.incoming, outbound: mocks.outbound },
-    isLoading: false,
-    error: null,
+    isLoading: mocks.requestsLoading,
+    error: mocks.requestsError,
+    failureReason: mocks.requestsFailureReason,
     refetch: vi.fn(),
   }),
   useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, error: null }),
@@ -55,7 +67,14 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
     keyInput: null,
     isLoading: false,
   }),
-  useCachedBrowseSidebarData: () => null,
+  useCachedBrowseSidebarData: () => ({
+    featured: [
+      { id: '019fedae-72b6-7ab2-927a-df044d57c566', name: 'Crypto', image: null },
+      { id: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419', name: 'Science', image: null },
+    ],
+    editorOf: [],
+    memberOf: [],
+  }),
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -119,7 +138,12 @@ function challenge(role: 'recipient' | 'requester'): DebateChallenge {
 beforeEach(() => {
   mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
   mocks.outbound = null;
+  mocks.activityOutbound = null;
   mocks.challenge = null;
+  mocks.outboundChallenge = null;
+  mocks.requestsLoading = false;
+  mocks.requestsError = null;
+  mocks.requestsFailureReason = null;
   mocks.currentUserId = 'user-me';
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
@@ -141,6 +165,16 @@ afterEach(cleanup);
 const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
 
 describe('RequestsTab', () => {
+  it('does not show stale activity after the authoritative request list clears', () => {
+    mocks.incoming = [];
+    mocks.activityOutbound = request('stale-outbound', SPACE_A, 'A stale claim request');
+
+    render(<RequestsTab />);
+
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).not.toBeInTheDocument();
+    expect(screen.getByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
+  });
+
   it('gives plain request and filter controls stable analytics metadata', () => {
     mocks.outbound = request('request-outbound', SPACE_B, 'A second claim');
     mocks.challenge = challenge('requester');
@@ -290,6 +324,57 @@ describe('RequestsTab', () => {
     // Both sides run down the same 25-minute clock, so both say so — the sent one used to show
     // only "Awaiting response", with no hint of how long it had left.
     expect(screen.getAllByText(/^Expires in/)).toHaveLength(2);
+  });
+
+  it('keeps simultaneous inbound and outbound person requests in their respective sections', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('recipient');
+    mocks.outboundChallenge = { ...challenge('requester'), id: 'challenge-outbound' };
+
+    render(<RequestsTab />);
+
+    const sent = screen.getByRole('heading', { name: 'Sent' });
+    const received = screen.getByRole('heading', { name: 'Received' });
+    expect(sent.compareDocumentPosition(received) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('keeps an outbound person request cancellable while claim requests load', () => {
+    mocks.incoming = [];
+    mocks.outboundChallenge = challenge('requester');
+    mocks.requestsLoading = true;
+
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toBeInTheDocument();
+  });
+
+  it('keeps an inbound person request actionable when claim requests fail', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('recipient');
+    mocks.requestsError = new Error('nope');
+
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+
+  it('hides claimless inbound and retained outbound requests behind a space filter', () => {
+    mocks.challenge = challenge('recipient');
+    mocks.outboundChallenge = { ...challenge('requester'), id: 'challenge-outbound' };
+    render(<RequestsTab />);
+
+    openFilter('Any space');
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+    expect(screen.getByText('Bitcoin will never go above $250K')).toBeInTheDocument();
   });
 
   it('narrows to one side with the status filter', () => {

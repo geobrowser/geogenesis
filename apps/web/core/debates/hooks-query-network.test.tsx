@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
@@ -16,6 +16,7 @@ import {
   useDebateTranscript,
   useRematchLiveKitJoin,
   useSpaceDebates,
+  useUpdateDebateAvailability,
 } from './hooks';
 
 type QueryOptions = { queryKey: readonly unknown[] };
@@ -29,13 +30,20 @@ const mocks = vi.hoisted(() => ({
   queryCache: { subscribe: vi.fn(() => vi.fn()) },
   queryClient: {
     getQueryCache: vi.fn(() => mocks.queryCache),
+    getQueryData: vi.fn(),
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
   },
+  getDebateActivity: vi.fn(),
   queryRefetch: vi.fn(),
   useMutation: vi.fn((options: unknown) => options),
   useQuery: vi.fn((options: unknown) => ({ options, refetch: mocks.queryRefetch })),
   useScope: vi.fn(),
+}));
+
+vi.mock('./api', async importOriginal => ({
+  ...(await importOriginal<typeof import('./api')>()),
+  getDebateActivity: mocks.getDebateActivity,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -91,6 +99,7 @@ beforeEach(() => {
   mocks.present = true;
   mocks.gatewayPaused = false;
   mocks.queryClient.invalidateQueries.mockClear();
+  mocks.queryClient.getQueryData.mockReset();
   mocks.queryClient.getQueryCache.mockClear();
   mocks.queryCache.subscribe.mockClear();
   mocks.queryClient.setQueryData.mockClear();
@@ -98,6 +107,12 @@ beforeEach(() => {
   mocks.useMutation.mockClear();
   mocks.useQuery.mockClear();
   mocks.useScope.mockClear();
+  mocks.getDebateActivity.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe('debate query network ownership', () => {
@@ -207,6 +222,52 @@ describe('debate query network ownership', () => {
     expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves a retained outbound challenge when availability success replaces wire activity', () => {
+    const { result } = renderHook(() => useUpdateDebateAvailability());
+    const mutation = result.current as unknown as {
+      onSuccess(activity: Record<string, unknown>): void;
+    };
+    const outbound = { id: 'challenge-outbound' };
+    const wireActivity = { online: true, available_to_debate: false, challenge: null };
+    const current = {
+      ...wireActivity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    };
+
+    mutation.onSuccess(wireActivity);
+
+    const write = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as
+      Record<string, unknown> | ((cached: Record<string, unknown>) => Record<string, unknown>);
+    const next = typeof write === 'function' ? write(current) : write;
+    expect(next).toEqual(current);
+  });
+
+  it('preserves a challenge created while a failed availability update was in flight', () => {
+    const { result } = renderHook(() => useUpdateDebateAvailability());
+    const mutation = result.current as unknown as {
+      onError(error: Error, availableToDebate: boolean, context: { previous: Record<string, unknown> }): void;
+    };
+    const previous = { online: true, available_to_debate: true, challenge: null };
+    const current = {
+      ...previous,
+      available_to_debate: false,
+      outbound_challenge: { id: 'challenge-outbound' },
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    };
+
+    mutation.onError(new Error('nope'), false, { previous });
+
+    const write = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as
+      Record<string, unknown> | ((cached: Record<string, unknown>) => Record<string, unknown>);
+    const next = typeof write === 'function' ? write(current) : write;
+    expect(next).toEqual({
+      ...previous,
+      outbound_challenge: current.outbound_challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    });
+  });
+
   it('invalidates the challenged profile after an availability rejection', () => {
     const { result } = renderHook(() => useCreateDebateChallenge());
     const mutation = result.current as unknown as {
@@ -219,6 +280,212 @@ describe('debate query network ownership', () => {
 
     expect(mocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['debates', 'account', 'user-a', 'profile', 'profile-b'],
+    });
+  });
+
+  it('registers person challenge creation in the account outbound-request gate', () => {
+    const { result } = renderHook(() => useCreateDebateChallenge());
+
+    expect(result.current).toMatchObject({
+      mutationKey: ['debates', 'account', 'user-a', 'create-outbound-request'],
+    });
+  });
+
+  it('keeps a newly created outbound challenge cached instead of refetching stale activity over it', () => {
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(12_345);
+    const { result } = renderHook(() => useCreateDebateChallenge());
+    const mutation = result.current as unknown as {
+      onSuccess(challenge: { id: string }): void;
+    };
+    const challenge = { id: 'challenge-1' };
+
+    mutation.onSuccess(challenge);
+
+    expect(mocks.queryClient.setQueryData).toHaveBeenCalledWith(
+      ['debates', 'account', 'user-a', 'activity'],
+      expect.any(Function)
+    );
+    const update = mocks.queryClient.setQueryData.mock.calls.at(-1)?.[1] as (
+      current: Record<string, unknown> | undefined
+    ) => unknown;
+    const warmActivity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+      challenge: null,
+      incoming_request_count: 2,
+    };
+    expect(update(warmActivity)).toEqual({
+      ...warmActivity,
+      challenge,
+      outbound_challenge: challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    });
+    expect(update(undefined)).toEqual({
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+      challenge,
+      outbound_challenge: challenge,
+      outbound_challenge_cached_at_monotonic_ms: 12_345,
+    });
+    expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+  });
+
+  it('reconciles activity when the outbound propagation grace expires', async () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useCreateDebateChallenge());
+    const mutation = result.current as unknown as {
+      onSuccess(challenge: { id: string }): void;
+    };
+
+    mutation.onSuccess({ id: 'challenge-1' });
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(mocks.queryClient.invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(mocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'activity'],
+    });
+  });
+
+  it('retains an outbound challenge while activity reports a simultaneous inbound challenge', async () => {
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const inbound = { id: 'challenge-inbound', status: 'pending', expires_at: '2099-01-01T00:00:00.000Z' };
+    const activity = { challenge: inbound, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({ ...activity, outbound_challenge: outbound });
+  });
+
+  it('drops a retained outbound challenge once activity reports no live challenge', async () => {
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({ outbound_challenge: outbound });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual(activity);
+  });
+
+  it('briefly retains a newly created outbound challenge while activity propagation catches up', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(9_999);
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({
+      ...activity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
+  });
+
+  it('ends the propagation grace on monotonic time when the device clock trails the server', async () => {
+    vi.spyOn(performance, 'now').mockReturnValue(20_001);
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      // Five minutes ahead of this device. Wall-clock subtraction would keep the ten-second grace
+      // open for more than five minutes even though eleven monotonic seconds have elapsed.
+      created_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+      expires_at: '2099-01-01T00:00:00.000Z',
+    };
+    const activity = { challenge: null, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 10_000,
+    });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual(activity);
+  });
+
+  it('leaves server-timestamp expiry to the synchronized request filter', async () => {
+    const serverNow = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(serverNow + 60 * 60_000);
+    vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    const outbound = {
+      id: 'challenge-outbound',
+      status: 'pending',
+      created_at: new Date(serverNow).toISOString(),
+      expires_at: new Date(serverNow + 60_000).toISOString(),
+    };
+    const inbound = {
+      id: 'challenge-inbound',
+      status: 'pending',
+      expires_at: new Date(serverNow + 60_000).toISOString(),
+    };
+    const activity = { challenge: inbound, debate: null, rematch: null };
+    mocks.queryClient.getQueryData.mockReturnValue({
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
+    });
+    mocks.getDebateActivity.mockResolvedValue(activity);
+    renderHook(() => useDebateActivity());
+
+    const query = mocks.useQuery.mock.calls.at(-1)?.[0] as {
+      queryFn: (context: { signal: AbortSignal }) => Promise<Record<string, unknown>>;
+    };
+    const result = await query.queryFn({ signal: new AbortController().signal });
+
+    expect(result).toEqual({
+      ...activity,
+      outbound_challenge: outbound,
+      outbound_challenge_cached_at_monotonic_ms: 0,
     });
   });
 

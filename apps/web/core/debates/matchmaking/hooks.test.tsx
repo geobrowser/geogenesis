@@ -7,11 +7,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
+import { useAcceptDebateRequest, useCreateDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
+  createDebateRequest: vi.fn(),
   listMatchmakingMatches: vi.fn(),
   listDebatePeople: vi.fn(),
   accountKey: 'user-a' as string | null,
@@ -26,6 +27,7 @@ vi.mock('../api', async importOriginal => {
   return {
     ...actual,
     acceptDebateRequest: mocks.acceptDebateRequest,
+    createDebateRequest: mocks.createDebateRequest,
     listMatchmakingMatches: mocks.listMatchmakingMatches,
     listDebatePeople: mocks.listDebatePeople,
   };
@@ -60,6 +62,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
+  mocks.createDebateRequest.mockReset();
   mocks.listMatchmakingMatches.mockReset();
   mocks.listDebatePeople.mockReset();
   mocks.accountKey = 'user-a';
@@ -98,6 +101,51 @@ describe('useAcceptDebateRequest', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+});
+
+describe('outbound request creation gate', () => {
+  it('registers claim request creation in the same account-scoped gate', async () => {
+    mocks.createDebateRequest.mockReturnValue(new Promise(() => undefined));
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const gateWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useCreateDebateRequest(), { wrapper: gateWrapper });
+
+    result.current.mutate({ space_id: 'space-1', claim_entity_id: 'claim-1' });
+
+    await waitFor(() =>
+      expect(
+        queryClient.isMutating({
+          mutationKey: ['debates', 'account', 'user-a', 'create-outbound-request'],
+          exact: true,
+        })
+      ).toBe(1)
+    );
+  });
+
+  it('keeps the shared gate closed until a successful claim request has reconciled', async () => {
+    mocks.createDebateRequest.mockResolvedValue({ id: 'request-1' });
+    let finishReconciliation!: () => void;
+    const reconciliation = new Promise<void>(resolve => {
+      finishReconciliation = resolve;
+    });
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockReturnValue(reconciliation);
+    const gateWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useCreateDebateRequest(), { wrapper: gateWrapper });
+    const mutationKey = ['debates', 'account', 'user-a', 'create-outbound-request'] as const;
+
+    result.current.mutate({ space_id: 'space-1', claim_entity_id: 'claim-1' });
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalled());
+    expect(queryClient.isMutating({ mutationKey, exact: true })).toBe(1);
+
+    finishReconciliation();
+    await waitFor(() => expect(queryClient.isMutating({ mutationKey, exact: true })).toBe(0));
   });
 });
 

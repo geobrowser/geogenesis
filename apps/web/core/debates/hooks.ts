@@ -90,6 +90,7 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { outboundRequestCreationMutationKey } from './request-gate';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 import { withQueryData } from './with-query-data';
 
@@ -469,6 +470,31 @@ const REMATCH_POLL_MS = 5_000;
 const ACTIVITY_POLL_MS = 30_000;
 /** And while the gateway is paused, when this is the only thing still asking. */
 const ACTIVITY_DEGRADED_POLL_MS = 10_000;
+/** Let an immediate push-triggered refetch observe the create response before treating null as final. */
+const OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS = 10_000;
+/** Complete, conservative shape for successful mutations that land before the initial activity read. */
+const ACTIVITY_CACHE_FALLBACK = {
+  online: true,
+  available_to_debate: true,
+  cooldown_until: null,
+  match: null,
+  debate: null,
+  rematch: null,
+  challenge: null,
+} satisfies DebateActivity;
+
+/** Overlay client-only activity state onto a wire result or mutation rollback. */
+function preserveClientActivityState(
+  activity: DebateActivity | undefined,
+  current: DebateActivity | undefined
+): DebateActivity | undefined {
+  if (!activity || !current) return activity;
+  return {
+    ...activity,
+    outbound_challenge: current.outbound_challenge,
+    outbound_challenge_cached_at_monotonic_ms: current.outbound_challenge_cached_at_monotonic_ms,
+  };
+}
 
 /**
  * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
@@ -502,6 +528,7 @@ const ACTIVITY_DEGRADED_POLL_MS = 10_000;
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const activityKey = debateQueryKeys.activity(accountKey);
   const attentive = useDebateAttention();
   const present = useDebateVisibility();
   const { paused } = useDebateGatewaySnapshot();
@@ -511,7 +538,7 @@ export function useDebateActivity(enabled = true) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.activity(accountKey),
+    queryKey: activityKey,
     queryFn: async ({ signal }) => {
       const activity = await getDebateActivity(getPrivyIdentityToken, accountKey, signal);
       if (activity.debate) {
@@ -520,7 +547,42 @@ export function useDebateActivity(enabled = true) {
       if (activity.rematch) {
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, activity.rematch.id), activity.rematch);
       }
-      return activity;
+      // The wire shape can name only one challenge. After an inbound challenge and an outbound one
+      // coexist, it keeps returning the inbound row until that row expires; without this overlay a
+      // refetch hides the outbound card and makes the People tab offer another request. Retain the
+      // create response until it expires or activity advances into a debate/rematch.
+      const cachedActivity = queryClient.getQueryData<DebateActivity>(activityKey);
+      const retainedOutbound = cachedActivity?.outbound_challenge;
+      const retainedOutboundCachedAt = cachedActivity?.outbound_challenge_cached_at_monotonic_ms;
+      const outboundIsPending = retainedOutbound?.status === 'pending';
+      // The create response can beat the activity read triggered by the gateway event. Keep its
+      // outbound row through that brief local propagation window, then treat a null/non-pending
+      // server challenge as authoritative. Request expiry stays in `useUnexpiredRequests`, whose
+      // synchronized server clock avoids comparing server timestamps against a skewed device.
+      // A different pending inbound challenge must keep the overlay: the wire shape has no outbound
+      // id/status with which to distinguish a still-pending request from one rejected remotely, and
+      // dropping it would erase valid simultaneous outbound requests.
+      const serverChallengeIsPending = activity.challenge?.status === 'pending';
+      const hasRetainedOutboundCachedAt =
+        typeof retainedOutboundCachedAt === 'number' && Number.isFinite(retainedOutboundCachedAt);
+      const outboundPropagationElapsed = hasRetainedOutboundCachedAt
+        ? performance.now() - retainedOutboundCachedAt
+        : Number.POSITIVE_INFINITY;
+      const outboundIsPropagating =
+        outboundPropagationElapsed >= 0 && outboundPropagationElapsed < OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS;
+      if (
+        !outboundIsPending ||
+        (!serverChallengeIsPending && !outboundIsPropagating) ||
+        activity.debate ||
+        activity.rematch
+      ) {
+        return activity;
+      }
+      return {
+        ...activity,
+        outbound_challenge: retainedOutbound,
+        ...(hasRetainedOutboundCachedAt ? { outbound_challenge_cached_at_monotonic_ms: retainedOutboundCachedAt } : {}),
+      };
     },
     enabled: queryEnabled,
     // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
@@ -548,10 +610,19 @@ export function useDebateActivity(enabled = true) {
   // the usual case, so this costs nothing until there is something to draw. See
   // `participant-avatars`.
   const activityPeople = React.useMemo(() => {
-    const { challenge, outbound_request: outbound, debate, rematch } = query.data ?? {};
+    const {
+      challenge,
+      outbound_challenge: outboundChallenge,
+      outbound_request: outbound,
+      debate,
+      rematch,
+    } = query.data ?? {};
 
     return [
       ...(challenge ? [challenge.requester, challenge.recipient] : []),
+      ...(outboundChallenge && outboundChallenge.id !== challenge?.id
+        ? [outboundChallenge.requester, outboundChallenge.recipient]
+        : []),
       // The tabs fall back to `outbound_request` while `useDebateRequests` is still loading, and
       // draw both parties from it in `OutboundRequestCard`.
       ...(outbound ? [outbound.requester, outbound.recipient] : []),
@@ -568,14 +639,21 @@ export function useDebateActivity(enabled = true) {
 
   const data = React.useMemo(() => {
     if (!query.data) return query.data;
-    const { challenge, outbound_request: outbound, debate, rematch } = query.data;
-    if (!challenge && !outbound && !debate && !rematch) return query.data;
+    const {
+      challenge,
+      outbound_challenge: outboundChallenge,
+      outbound_request: outbound,
+      debate,
+      rematch,
+    } = query.data;
+    if (!challenge && !outboundChallenge && !outbound && !debate && !rematch) return query.data;
 
     // `match` is deliberately left alone: nothing has populated it since GEO-2514 and nothing here
     // reads it, so resolving faces for it would be work for a field that is always null.
     return {
       ...query.data,
       challenge: challenge ? withParties(challenge, withAvatar) : challenge,
+      outbound_challenge: outboundChallenge ? withParties(outboundChallenge, withAvatar) : outboundChallenge,
       outbound_request: outbound ? withParties(outbound, withAvatar) : outbound,
       debate: debate ? withRowParticipantAvatars(debate, withAvatar) : debate,
       rematch: rematch ? withRowParticipantAvatars(rematch, withAvatar) : rematch,
@@ -684,10 +762,12 @@ export function useUpdateDebateAvailability() {
       return { previous };
     },
     onError: (_error, _availableToDebate, context) => {
-      queryClient.setQueryData(activityKey, context?.previous);
+      queryClient.setQueryData<DebateActivity>(activityKey, current =>
+        preserveClientActivityState(context?.previous, current)
+      );
     },
     onSuccess: activity => {
-      queryClient.setQueryData(activityKey, activity);
+      queryClient.setQueryData<DebateActivity>(activityKey, current => preserveClientActivityState(activity, current));
     },
     onSettled: () => {
       void invalidateDebatesOutsideRematchClaims(queryClient);
@@ -931,9 +1011,8 @@ export function useConsentToDebateRematch(debateId: string) {
       // `incoming_request_count` and `outbound_request`, which zeroed the navbar badge and stopped
       // the coordinator fetching requests until the invalidation below landed.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        ...ACTIVITY_CACHE_FALLBACK,
         ...current,
-        online: current?.online ?? true,
-        available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,
         match: null,
         debate: null,
@@ -1214,13 +1293,30 @@ export function useCreateDebateChallenge() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
+    mutationKey: outboundRequestCreationMutationKey(accountKey),
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
-      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current ? { ...current, challenge } : current
-      );
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      const cachedAtMonotonicMs = performance.now();
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        // A successful create is enough to seed the activity cache when its initial read has not
+        // landed yet. These are the same safe idle defaults used by the rematch transition above;
+        // spreading a warm cache keeps every viewer-relative field the endpoint already supplied.
+        ...ACTIVITY_CACHE_FALLBACK,
+        ...current,
+        // Keep an inbound challenge in the wire field so its popup and Received card survive.
+        challenge: current?.challenge ?? challenge,
+        outbound_challenge: challenge,
+        outbound_challenge_cached_at_monotonic_ms: cachedAtMonotonicMs,
+      }));
+      // The create response is the newest authoritative copy of this challenge. Refetching activity
+      // immediately can still return the pre-create row and erase it from the cache, which removes
+      // the outbound card and re-enables every request button until geo-chat catches up. Keep this
+      // response through that window, then force one reconciliation at the boundary; the gateway
+      // and normal activity poll own subsequent changes.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      }, OUTBOUND_CHALLENGE_PROPAGATION_GRACE_MS);
     },
     onError: (error, request) => {
       if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
@@ -1241,6 +1337,16 @@ export function useAcceptDebateChallenge() {
       if (result.session) {
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
+      // Accepting an inbound challenge cancels the viewer's outbound one on the server.
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current
+          ? {
+              ...current,
+              outbound_challenge: null,
+              outbound_challenge_cached_at_monotonic_ms: null,
+            }
+          : current
+      );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
@@ -1252,9 +1358,19 @@ export function useRejectDebateChallenge() {
 
   return useMutation({
     mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
+    onSuccess: (_result, challengeId) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
-        current ? { ...current, challenge: null } : current
+        current
+          ? {
+              ...current,
+              challenge: current.challenge?.id === challengeId ? null : current.challenge,
+              outbound_challenge: current.outbound_challenge?.id === challengeId ? null : current.outbound_challenge,
+              outbound_challenge_cached_at_monotonic_ms:
+                current.outbound_challenge?.id === challengeId
+                  ? null
+                  : current.outbound_challenge_cached_at_monotonic_ms,
+            }
+          : current
       );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },

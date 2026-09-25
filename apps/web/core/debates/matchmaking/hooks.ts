@@ -40,6 +40,7 @@ import {
   invalidateDebatesOutsideRematchClaims,
   useGeoChatAuth,
 } from '../hooks';
+import { outboundRequestCreationMutationKey } from '../request-gate';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -331,8 +332,9 @@ export function useCreateDebateRequest() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
+    mutationKey: outboundRequestCreationMutationKey(accountKey),
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    onSuccess: () => invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 

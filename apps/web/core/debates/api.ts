@@ -236,6 +236,13 @@ export type DebateActivity = {
   rematch: DebateRematchSession | null;
   challenge: DebateChallenge | null;
   /**
+   * Client-retained copy of a challenge the viewer sent while `challenge` still reports an inbound
+   * one. The activity endpoint currently exposes only one challenge even though both can coexist.
+   */
+  outbound_challenge?: DebateChallenge | null;
+  /** Local monotonic instant when `outbound_challenge` was cached; never supplied by geo-chat. */
+  outbound_challenge_cached_at_monotonic_ms?: number | null;
+  /**
    * The single debate request the viewer currently has awaiting a response. Optional until
    * geo-chat ships `debate_matchmaking_v1`.
    */

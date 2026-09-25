@@ -28,10 +28,12 @@ import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
+import { PENDING_OUTBOUND_REQUEST_REASON, resolveOutboundRequest } from '../request-gate';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { useSharedOutboundRequestState } from './debate-challenge-state-provider';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests } from './hooks';
@@ -43,7 +45,6 @@ import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
 import { usePersonRecords } from './use-person-records';
-import { useUnexpiredRequests } from './use-request-countdown';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
@@ -77,8 +78,17 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // `authenticated` rather than `true` keeps them from firing a request that can only 401.
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
+  const outboundRequest = resolveOutboundRequest(requests, activity);
   const currentUserId = useCurrentGeoChatUserId();
   const { personalSpaceId } = usePersonalSpaceId();
+  // One mutation for the whole list. A mutation per row only disables the row that was clicked,
+  // leaving every other person requestable while the same outbound request is still in flight.
+  const createChallenge = useCreateDebateChallenge();
+  const {
+    outboundChallenge,
+    outboundChallengeDirectionUnknown: challengeDirectionUnknown,
+    outboundRequestCreationPending,
+  } = useSharedOutboundRequestState();
   // One elevated portal for every row's menu. A portal per person would append a matching number
   // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const popoverPortal = useElevatedPopoverPortal();
@@ -281,38 +291,25 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // one of the two things holding the list down.
   const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
-  // expiry has to be applied here — the same filter every other request surface derives from, so
-  // none of them disagree about a dead request while waiting for `debate.requests_changed`. Without
-  // it this tab would sit on an "Expired" card with every Debate button still dead underneath it.
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const pendingChallenge = liveChallenges[0] ?? null;
-  // `activity.challenge` is whichever challenge involves the viewer, in either direction. The card
-  // is about a request you sent, so it only stands in for the message when you are the one waiting
-  // on a reply — being challenged blocks the buttons just the same, but the sentence is what
-  // explains that.
-  const outboundChallenge =
-    pendingChallenge && currentUserId && pendingChallenge.requester.user_id === currentUserId ? pendingChallenge : null;
-
+  // `activity.challenge` is whichever challenge involves the viewer, in either direction. The
+  // shared resolver keeps every matchmaking surface on the same outbound gate and applies expiry
+  // even while the activity payload still reports the challenge as pending.
   // Every Debate button greys out at once when the viewer already has something open, so say why
   // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
   // sentence would only repeat it.
-  const blockedReason = pendingChallenge
-    ? outboundChallenge
-      ? null
-      : 'You have a debate request awaiting a reply.'
+  const blockedReason = challengeDirectionUnknown
+    ? 'You have a debate request awaiting a reply.'
     : activeDebate(activity)
       ? "You're already in a debate."
-      : activity?.outbound_request || requests?.outbound
-        ? 'You already have an open request — withdraw it to challenge someone else.'
+      : outboundRequest || outboundRequestCreationPending
+        ? PENDING_OUTBOUND_REQUEST_REASON
         : null;
 
   // Kept separate from `blockedReason`: the card replaces the sentence but not the reason every
   // button below is disabled.
-  const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge);
+  const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge) || createChallenge.isPending;
+  const disabledReason =
+    blockedReason ?? (createChallenge.isPending ? 'Sending your debate request…' : PENDING_OUTBOUND_REQUEST_REASON);
 
   return (
     <div className="flex flex-col">
@@ -428,7 +425,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                     labelsById={labelsById}
                     popoverPortal={popoverPortal}
                     disabled={buttonsDisabled}
-                    disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                    disabledReason={disabledReason}
+                    onRequest={() => createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })}
+                    requestPending={
+                      createChallenge.isPending &&
+                      createChallenge.variables?.recipient_profile_space_id === person.profile_space_id
+                    }
                     onRequireSignIn={onRequireSignIn}
                     onSeeTimes={
                       bookingEnabled
@@ -480,6 +482,8 @@ function PersonRow({
   popoverPortal,
   disabled,
   disabledReason,
+  onRequest,
+  requestPending,
   onRequireSignIn,
   onSeeTimes,
 }: {
@@ -501,6 +505,9 @@ function PersonRow({
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
+  onRequest: () => void;
+  /** Only the row whose shared mutation is running carries the progress label. */
+  requestPending: boolean;
   /**
    * Set only when signed out. Pressing Debate then opens Privy instead of sending a request, which
    * would fail at the token exchange with an error the viewer can do nothing about.
@@ -509,7 +516,6 @@ function PersonRow({
   /** Absent while the feature flag is off, which is what hides "See times". */
   onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null) => void;
 }) {
-  const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -609,17 +615,13 @@ function PersonRow({
           </button>
         )}
         <HubPillButton
-          onClick={() =>
-            onRequireSignIn
-              ? onRequireSignIn()
-              : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
-          }
+          onClick={() => (onRequireSignIn ? onRequireSignIn() : onRequest())}
           // `in_debate` holds signed out too: it means this person is in an active debate right now,
           // which is true of them rather than of any viewer, so signing in would not make them
           // available. `can_challenge` and the viewer's own pending request are the viewer-relative
           // ones, and those are what the press bypasses on its way to the sign-in.
           disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
-          pending={createChallenge.isPending}
+          pending={requestPending}
           pendingLabel="Requesting…"
           title={disabled ? disabledReason : undefined}
         >

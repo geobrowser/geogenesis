@@ -6,7 +6,9 @@ import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
+import type { DebateChallenge, DebateRequest } from '../api';
 import { useDebateActivity } from '../hooks';
+import { resolveOutboundRequest } from '../request-gate';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -18,6 +20,7 @@ import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
+import { useDebateChallengeState } from './use-outbound-debate-challenge';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
@@ -68,7 +71,7 @@ function RequestsTabBody({
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const outbound = resolveOutboundRequest(requestsQuery.data, activity);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),
@@ -95,25 +98,15 @@ function RequestsTabBody({
     return orderFacetOptions(countBy(spaces.map(id => ({ id, name: null }))), spaceIds);
   }, [incoming, outbound, spaceIds, status]);
 
-  // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
-  // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
   const currentUserId = useCurrentGeoChatUserId();
+  const { challenge, challengeRole, outboundChallenge } = useDebateChallengeState(activity, currentUserId);
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
   // where it reads as something the viewer sent and offers them "Cancel request" for it.
-  const challengeRole =
-    !challenge || spaceIds.length > 0 || !currentUserId
-      ? null
-      : challenge.recipient.user_id === currentUserId
-        ? 'recipient'
-        : 'requester';
-  const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
-  const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
+  const challengeHiddenBySpace = spaceIds.length > 0;
+  const incomingChallenge =
+    !challengeHiddenBySpace && challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
+  const outgoingChallenge = challengeHiddenBySpace || status === 'received' ? null : outboundChallenge;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
   const hasScheduled =
@@ -122,6 +115,15 @@ function RequestsTabBody({
     scheduled.requestsError !== null ||
     scheduled.roomsError !== null;
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
+  const challengeSections =
+    outgoingChallenge || incomingChallenge ? (
+      <RequestSections
+        sent={null}
+        outgoingChallenge={outgoingChallenge}
+        received={[]}
+        incomingChallenge={incomingChallenge}
+      />
+    ) : null;
 
   return (
     <div className="flex flex-col">
@@ -170,32 +172,54 @@ function RequestsTabBody({
                 }
               : undefined
           }
+          fallbackContent={challengeSections}
         >
-          <div className="flex flex-col gap-4">
-            {sent || outgoingChallenge ? (
-              <RequestSection label="Sent">
-                <div className="flex flex-col gap-2">
-                  {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
-                  <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-
-            {incomingChallenge || received.length > 0 ? (
-              <RequestSection label="Received">
-                <div className="flex flex-col gap-2">
-                  {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
-                  <HubCardList>
-                    {received.map(request => (
-                      <IncomingRequestCard key={request.id} request={request} />
-                    ))}
-                  </HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-          </div>
+          <RequestSections
+            sent={sent}
+            outgoingChallenge={outgoingChallenge}
+            received={received}
+            incomingChallenge={incomingChallenge}
+          />
         </HubQueryState>
       </div>
+    </div>
+  );
+}
+
+function RequestSections({
+  sent,
+  outgoingChallenge,
+  received,
+  incomingChallenge,
+}: {
+  sent: DebateRequest | null;
+  outgoingChallenge: DebateChallenge | null;
+  received: DebateRequest[];
+  incomingChallenge: DebateChallenge | null;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      {sent || outgoingChallenge ? (
+        <RequestSection label="Sent">
+          <div className="flex flex-col gap-2">
+            {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+            <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+          </div>
+        </RequestSection>
+      ) : null}
+
+      {incomingChallenge || received.length > 0 ? (
+        <RequestSection label="Received">
+          <div className="flex flex-col gap-2">
+            {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+            <HubCardList>
+              {received.map(request => (
+                <IncomingRequestCard key={request.id} request={request} />
+              ))}
+            </HubCardList>
+          </div>
+        </RequestSection>
+      ) : null}
     </div>
   );
 }

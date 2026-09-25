@@ -7,14 +7,37 @@ const mocks = vi.hoisted(() => ({
   canChallenge: true,
   createChallenge: vi.fn(),
   isPending: false,
+  activityOutboundRequest: null as { id: string } | null,
+  requestsOutboundRequest: null as { id: string } | null,
+  disabledRequestsOutboundRequest: null as { id: string } | null,
+  outboundChallenge: null as { id: string } | null,
+  outboundChallengeDirectionUnknown: false,
+  outboundRequestCreationPending: false,
 }));
 
 vi.mock('./hooks', () => ({
   useDebateProfile: () => ({ data: { can_challenge: mocks.canChallenge } }),
+  useDebateActivity: () => ({ data: { outbound_request: mocks.activityOutboundRequest } }),
   useCreateDebateChallenge: () => ({
     mutate: mocks.createChallenge,
     isPending: mocks.isPending,
     error: null,
+  }),
+}));
+
+vi.mock('./matchmaking/hooks', () => ({
+  useDebateRequests: (enabled: boolean) => ({
+    data: {
+      outbound: enabled ? mocks.requestsOutboundRequest : mocks.disabledRequestsOutboundRequest,
+    },
+  }),
+}));
+
+vi.mock('./matchmaking/debate-challenge-state-provider', () => ({
+  useSharedOutboundRequestState: () => ({
+    outboundChallenge: mocks.outboundChallenge,
+    outboundChallengeDirectionUnknown: mocks.outboundChallengeDirectionUnknown,
+    outboundRequestCreationPending: mocks.outboundRequestCreationPending,
   }),
 }));
 
@@ -23,6 +46,12 @@ const { ProfileDebateButton } = await import('./profile-debate-button');
 beforeEach(() => {
   mocks.canChallenge = true;
   mocks.isPending = false;
+  mocks.activityOutboundRequest = null;
+  mocks.requestsOutboundRequest = null;
+  mocks.disabledRequestsOutboundRequest = null;
+  mocks.outboundChallenge = null;
+  mocks.outboundChallengeDirectionUnknown = false;
+  mocks.outboundRequestCreationPending = false;
   mocks.createChallenge.mockReset();
 });
 
@@ -58,6 +87,51 @@ describe('ProfileDebateButton', () => {
     render(<ProfileDebateButton spaceId="profile-them" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
+  });
+
+  it('blocks while a request is being created by another control', () => {
+    mocks.outboundRequestCreationPending = true;
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeDisabled();
+    expect(screen.getByTitle('You can only have one pending outbound request at a time.')).toContainElement(button);
+  });
+
+  it('blocks another person request while an outbound person challenge is pending', () => {
+    mocks.outboundChallenge = { id: 'challenge-outbound' };
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeDisabled();
+    expect(screen.getByTitle('You can only have one pending outbound request at a time.')).toContainElement(button);
+
+    fireEvent.click(button);
+    expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  it('blocks another person request while an outbound claim request is pending', () => {
+    mocks.requestsOutboundRequest = { id: 'claim-request-outbound' };
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeDisabled();
+    expect(screen.getByTitle('You can only have one pending outbound request at a time.')).toContainElement(button);
+
+    fireEvent.click(button);
+    expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  it('stops blocking after the authoritative request list clears a stale cached outbound request', () => {
+    mocks.disabledRequestsOutboundRequest = { id: 'stale-claim-request' };
+    mocks.activityOutboundRequest = { id: 'stale-activity-request' };
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeEnabled();
+
+    fireEvent.click(button);
+    expect(mocks.createChallenge).toHaveBeenCalledWith({ recipient_profile_space_id: 'profile-them' });
   });
 
   it('stays hidden when the server says this person cannot be challenged', () => {
