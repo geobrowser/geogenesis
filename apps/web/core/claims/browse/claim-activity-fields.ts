@@ -45,6 +45,26 @@ import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '
  */
 
 /**
+ * ## Two ways this can disagree with the rows, both latent
+ *
+ * The feed draws debates scoped to the space the claim is being read through, and at most
+ * `ACTIVITY_DEBATE_LIMIT` of them. This counts every debate on the claim, in any space. So a claim
+ * with a debate published into another space, or with more than ten of them, would print a heading
+ * larger than the rows below it.
+ *
+ * Measured rather than assumed, on testnet 2026-09-25: across the 25 busiest claims, **no** debate
+ * sits outside its claim's display space, and the most debates on any one claim is five. Neither
+ * case exists yet.
+ *
+ * Left unscoped on purpose. The number's job is that the claim card in Explore and the claim page
+ * agree, and the card's selection is one string applied to a page of cards from many spaces — there
+ * is no space id to interpolate. Scoping this would fix the page and leave the card wrong, so the
+ * two would disagree precisely when the count is wrong today. Fixing it properly means either a
+ * per-space card query or moving the count server-side; both are their own change, and both need a
+ * decision about whether a claim's activity is a per-space or a global number.
+ */
+
+/**
  * Bounds for the nested lists.
  *
  * Generous against the corpus rather than tight: the most debates on one claim is five and the most
