@@ -69,7 +69,7 @@ function renderDialog(onOpenChange = vi.fn()) {
 }
 
 const nameField = () => screen.getByPlaceholderText('Your name');
-const taglineField = () => screen.getByPlaceholderText('Head of Product at Geo');
+const taglineField = () => screen.getByPlaceholderText('Your role, or what you’re working on now.');
 const descriptionField = () => screen.getByPlaceholderText(/A few sentences on your background/);
 const saveButton = () => screen.getByRole('button', { name: /Save profile|Publishing|Retry/ });
 

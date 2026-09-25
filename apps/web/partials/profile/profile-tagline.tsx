@@ -55,11 +55,12 @@ export function PersonalSpaceTagline({
       <div className="text-text">
         <PageStringField
           variant="body"
-          // The guidance rides in the placeholder rather than a hint line below, because the
-          // header is wide enough to hold it on one line and a permanent second line of chrome
-          // directly under someone's name is not. It is only needed while the field is empty,
-          // which is exactly as long as a placeholder lasts.
-          placeholder="Add a tagline — your role, or what you’re working on"
+          // The same words the modal's field asks for, so the two places a tagline is written
+          // ask for the same thing. It rides in the placeholder rather than a hint line below,
+          // because the header is wide enough to hold it on one line and a permanent second
+          // line of chrome directly under someone's name is not — and it is only needed while
+          // the field is empty, which is exactly as long as a placeholder lasts.
+          placeholder="Your role, or what you’re working on now."
           aria-label="Tagline"
           maxLength={TAGLINE_MAX_LENGTH}
           value={tagline}

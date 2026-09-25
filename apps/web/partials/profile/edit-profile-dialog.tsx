@@ -476,16 +476,13 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       maxLength={TAGLINE_MAX_LENGTH}
-                      // An example rather than an instruction. The two fields here are both
-                      // "about you", and one filled-in tagline says which is which faster than
-                      // a sentence describing it.
-                      placeholder="Head of Product at Geo"
+                      placeholder="Your role, or what you’re working on now."
                     />
                     {/* What it is on the left, how much room is left on the right. There is no
                     error state to reach — the field cannot hold more than it allows — so the
                     count is guidance rather than validation. */}
                     <span className="flex items-baseline justify-between gap-3 text-footnote text-grey-04">
-                      <span>One line under your name. Your role, or what you’re working on now.</span>
+                      <span>One line under your name. The first thing people should know about you.</span>
                       <span className="shrink-0 tabular-nums">{TAGLINE_MAX_LENGTH - tagline.length} left</span>
                     </span>
                   </label>
