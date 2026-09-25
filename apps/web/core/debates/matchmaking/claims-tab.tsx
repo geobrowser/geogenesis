@@ -26,6 +26,7 @@ import type {
 } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { resolveOutboundRequest } from '../request-gate';
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
@@ -219,7 +220,7 @@ export function ClaimsTab({
   // a signed-out visitor has no request to have sent.
   const requestsQuery = useDebateRequests(authenticated);
   const { data: activity } = useDebateActivity(authenticated);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const outbound = resolveOutboundRequest(requestsQuery.data, activity);
   const currentUserId = useCurrentGeoChatUserId();
   const { outboundChallenge } = useOutboundDebateChallenge(activity, currentUserId);
 

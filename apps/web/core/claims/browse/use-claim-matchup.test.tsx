@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENDING_OUTBOUND_REQUEST_REASON } from '~/core/debates/request-gate';
 
 const mocks = vi.hoisted(() => ({
+  activityOutboundRequest: null as { id: string } | null,
   outboundRequestCreationPending: false,
   resolveOutboundChallenge: vi.fn(() => ({
     outboundChallenge: null,
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateActivity: () => ({ data: { available_to_debate: true, outbound_request: null } }),
+  useDebateActivity: () => ({ data: { available_to_debate: true, outbound_request: mocks.activityOutboundRequest } }),
 }));
 
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
@@ -41,11 +42,20 @@ vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
 const { useClaimMatchup } = await import('./use-claim-matchup');
 
 beforeEach(() => {
+  mocks.activityOutboundRequest = null;
   mocks.outboundRequestCreationPending = false;
   mocks.resolveOutboundChallenge.mockClear();
 });
 
 describe('useClaimMatchup', () => {
+  it('trusts an authoritative empty request list over stale activity', () => {
+    mocks.activityOutboundRequest = { id: 'stale-activity-request' };
+
+    const { result } = renderHook(() => useClaimMatchup({ claimId: 'claim-1', spaceId: 'space-1' }));
+
+    expect(result.current.blockedReason).toBeUndefined();
+  });
+
   it('blocks while another control is creating an outbound request', () => {
     mocks.outboundRequestCreationPending = true;
 

@@ -124,6 +124,7 @@ describe('ProfileDebateButton', () => {
 
   it('stops blocking after the authoritative request list clears a stale cached outbound request', () => {
     mocks.disabledRequestsOutboundRequest = { id: 'stale-claim-request' };
+    mocks.activityOutboundRequest = { id: 'stale-activity-request' };
     render(<ProfileDebateButton spaceId="profile-them" />);
 
     const button = screen.getByRole('button', { name: 'Request debate' });

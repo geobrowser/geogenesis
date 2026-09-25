@@ -9,6 +9,7 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
+import { resolveOutboundRequest } from '../request-gate';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { claimRowKey } from './claim-row-key';
@@ -88,7 +89,7 @@ export function MatchesList({
   const activity = activityQuery.data;
 
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const outbound = resolveOutboundRequest(requestsQuery.data, activity);
   const currentUserId = useCurrentGeoChatUserId();
   const { outboundChallenge } = useOutboundDebateChallenge(activity, currentUserId);
 

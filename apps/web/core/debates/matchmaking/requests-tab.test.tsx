@@ -9,6 +9,7 @@ import { RequestsTab } from './requests-tab';
 const mocks = vi.hoisted(() => ({
   incoming: [] as DebateRequest[],
   outbound: null as DebateRequest | null,
+  activityOutbound: null as DebateRequest | null,
   challenge: null as DebateChallenge | null,
   outboundChallenge: null as DebateChallenge | null,
   requestsLoading: false,
@@ -32,7 +33,11 @@ vi.mock('../hooks', async importOriginal => ({
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useDebateActivity: () => ({
-    data: { challenge: mocks.challenge, outbound_challenge: mocks.outboundChallenge, outbound_request: null },
+    data: {
+      challenge: mocks.challenge,
+      outbound_challenge: mocks.outboundChallenge,
+      outbound_request: mocks.activityOutbound,
+    },
   }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
@@ -133,6 +138,7 @@ function challenge(role: 'recipient' | 'requester'): DebateChallenge {
 beforeEach(() => {
   mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
   mocks.outbound = null;
+  mocks.activityOutbound = null;
   mocks.challenge = null;
   mocks.outboundChallenge = null;
   mocks.requestsLoading = false;
@@ -159,6 +165,16 @@ afterEach(cleanup);
 const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
 
 describe('RequestsTab', () => {
+  it('does not show stale activity after the authoritative request list clears', () => {
+    mocks.incoming = [];
+    mocks.activityOutbound = request('stale-outbound', SPACE_A, 'A stale claim request');
+
+    render(<RequestsTab />);
+
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).not.toBeInTheDocument();
+    expect(screen.getByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
+  });
+
   it('gives plain request and filter controls stable analytics metadata', () => {
     mocks.outbound = request('request-outbound', SPACE_B, 'A second claim');
     mocks.challenge = challenge('requester');

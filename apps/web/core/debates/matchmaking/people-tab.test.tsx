@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   challenge: null as DebateChallenge | null,
   outboundChallenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
+  requestsDataAvailable: true,
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
@@ -129,7 +130,11 @@ vi.mock('./hooks', () => ({
     failureReason: mocks.peopleError,
     refetch: mocks.peopleRefetch,
   }),
-  useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+  useDebateRequests: () => ({
+    data: mocks.requestsDataAvailable ? { incoming: [], outbound: null } : undefined,
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -319,6 +324,7 @@ beforeEach(() => {
   mocks.challenge = null;
   mocks.outboundChallenge = null;
   mocks.outboundRequest = null;
+  mocks.requestsDataAvailable = true;
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
   mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
@@ -874,6 +880,7 @@ describe('PeopleTab', () => {
 
   it('leaves the other blocked reasons alone', () => {
     mocks.outboundRequest = { id: 'request-1' };
+    mocks.requestsDataAvailable = false;
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();

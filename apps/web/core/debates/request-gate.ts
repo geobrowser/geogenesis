@@ -1,3 +1,5 @@
+import type { DebateActivity, DebateRequest, DebateRequestsResponse } from './api';
+
 /**
  * Determines whether a debate request can be created for a claim.
  *
@@ -68,6 +70,17 @@ export const PENDING_OUTBOUND_REQUEST_REASON = 'You can only have one pending ou
 /** Both create APIs share one account-scoped key so every request control sees either one in flight. */
 export const outboundRequestCreationMutationKey = (accountKey: string | null) =>
   ['debates', 'account', accountKey, 'create-outbound-request'] as const;
+
+/**
+ * The request list is authoritative once it has loaded, including when it explicitly says there
+ * is no outbound request. Activity is only the cold-load fallback while that list is unavailable.
+ */
+export function resolveOutboundRequest(
+  requests: DebateRequestsResponse | undefined,
+  activity: DebateActivity | undefined
+): DebateRequest | null {
+  return requests === undefined ? (activity?.outbound_request ?? null) : requests.outbound;
+}
 
 export function debateRequestGate({
   chatPosition,

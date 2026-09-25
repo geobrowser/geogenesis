@@ -8,6 +8,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateRequest } from '../api';
 import { useDebateActivity } from '../hooks';
+import { resolveOutboundRequest } from '../request-gate';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -70,7 +71,7 @@ function RequestsTabBody({
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const outbound = resolveOutboundRequest(requestsQuery.data, activity);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),

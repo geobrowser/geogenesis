@@ -4,7 +4,7 @@ import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { useDebateActivity } from '~/core/debates/hooks';
 import { useSharedOutboundRequestState } from '~/core/debates/matchmaking/debate-challenge-state-provider';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
-import { PENDING_OUTBOUND_REQUEST_REASON } from '~/core/debates/request-gate';
+import { PENDING_OUTBOUND_REQUEST_REASON, resolveOutboundRequest } from '~/core/debates/request-gate';
 import { ID } from '~/core/id';
 
 /**
@@ -45,7 +45,7 @@ export function useClaimMatchup({
         candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
       ) ?? null);
 
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  const outbound = resolveOutboundRequest(requestsQuery.data, activity);
   // Only when the server actually says so — a missing field must not block requesting.
   const unavailable = activity?.available_to_debate === false;
   const blockedReason = unavailable

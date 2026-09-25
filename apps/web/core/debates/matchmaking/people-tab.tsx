@@ -28,7 +28,7 @@ import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
-import { PENDING_OUTBOUND_REQUEST_REASON } from '../request-gate';
+import { PENDING_OUTBOUND_REQUEST_REASON, resolveOutboundRequest } from '../request-gate';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
@@ -78,6 +78,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // `authenticated` rather than `true` keeps them from firing a request that can only 401.
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
+  const outboundRequest = resolveOutboundRequest(requests, activity);
   const currentUserId = useCurrentGeoChatUserId();
   const { personalSpaceId } = usePersonalSpaceId();
   // One mutation for the whole list. A mutation per row only disables the row that was clicked,
@@ -300,7 +301,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     ? 'You have a debate request awaiting a reply.'
     : activeDebate(activity)
       ? "You're already in a debate."
-      : activity?.outbound_request || requests?.outbound || outboundRequestCreationPending
+      : outboundRequest || outboundRequestCreationPending
         ? PENDING_OUTBOUND_REQUEST_REASON
         : null;
 

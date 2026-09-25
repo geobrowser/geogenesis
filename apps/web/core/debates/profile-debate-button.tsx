@@ -8,7 +8,7 @@ import { useCreateDebateChallenge, useDebateActivity, useDebateProfile } from '.
 import { useSharedOutboundRequestState } from './matchmaking/debate-challenge-state-provider';
 import { useDebateRequests } from './matchmaking/hooks';
 import { RequestBlockedReasonTooltip } from './request-blocked-reason-tooltip';
-import { PENDING_OUTBOUND_REQUEST_REASON } from './request-gate';
+import { PENDING_OUTBOUND_REQUEST_REASON, resolveOutboundRequest } from './request-gate';
 
 /**
  * Challenges the owner of a personal space to a debate with no claim attached.
@@ -29,12 +29,9 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
   if (!profileQuery.data?.can_challenge) return null;
 
   const error = createChallenge.error instanceof Error ? createChallenge.error.message : null;
+  const outboundRequest = resolveOutboundRequest(requests, activity);
   const blockedReason =
-    requests?.outbound ||
-    activity?.outbound_request ||
-    outboundChallenge ||
-    outboundChallengeDirectionUnknown ||
-    outboundRequestCreationPending
+    outboundRequest || outboundChallenge || outboundChallengeDirectionUnknown || outboundRequestCreationPending
       ? PENDING_OUTBOUND_REQUEST_REASON
       : null;
 
