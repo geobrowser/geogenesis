@@ -1,14 +1,7 @@
 'use client';
 
-import * as React from 'react';
-
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useJoinSpace } from '~/core/hooks/use-join-space';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
-import { useDeferredJoin } from '~/core/state/pending-join-intents';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
 import {
@@ -45,42 +38,10 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
   // invalidates the durable pending sources, so the pill drops out of this list
   // — the side panel re-filters off the same state — and the space surfaces as
   // "Membership pending" in the browse sidebar.
-  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({
+  const { join, status, optimisticRequested } = useJoinSpace({
     spaceId: space.spaceId,
     space: { name: space.name, image: space.image },
   });
-  const { smartAccount } = useSmartAccount();
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { open: openSignInPrompt } = useSignInPrompt();
-  const enqueuePendingAction = useEnqueuePendingAction();
-  const [optimisticRequested, setOptimisticRequested] = React.useState(false);
-
-  const queueJoinRequest = React.useCallback(() => {
-    setOptimisticRequested(true);
-    enqueuePendingAction({
-      id: `join:${space.spaceId}`,
-      label: 'your membership request',
-      requires: 'personalSpace',
-      run: () => requestToBeMemberAsync(),
-    });
-  }, [enqueuePendingAction, space.spaceId, requestToBeMemberAsync]);
-
-  const deferJoin = useDeferredJoin(space.spaceId, Boolean(smartAccount), queueJoinRequest);
-
-  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
-
-  const handleClick = () => {
-    if (canRequestLive) {
-      requestToBeMember();
-      return;
-    }
-    if (!smartAccount) {
-      deferJoin();
-      openSignInPrompt('join');
-      return;
-    }
-    queueJoinRequest();
-  };
 
   const isPending = status === 'pending' || optimisticRequested;
 
@@ -91,7 +52,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
       type="button"
       aria-label={`Join ${space.name}`}
       disabled={status !== 'idle' || optimisticRequested}
-      onClick={handleClick}
+      onClick={join}
       className={SPACE_PILL_CLASS}
     >
       <SpacePillAvatar value={space.image} />
