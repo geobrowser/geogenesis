@@ -388,6 +388,28 @@ describe('what the footer has to say', () => {
   });
 });
 
+describe('a refused invitation', () => {
+  const LIMIT =
+    'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more';
+
+  it('shows the refusal under an outside-your-week slot, and Send stays usable', async () => {
+    const { user } = setupBooking(booking({ error: LIMIT }), { slots: [slot(16, false)] });
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+
+    expect(screen.getByText(LIMIT)).toBeInTheDocument();
+    expect(screen.getByText(/doesn.t change your availability/)).toBeInTheDocument();
+    expect(screen.queryByText(/has to accept/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send request' })).toBeEnabled();
+  });
+
+  it('shows the refusal in the free-time footer of an empty week', () => {
+    setupBooking(booking({ error: LIMIT }), { peerHasSchedule: false, slots: [] });
+
+    expect(screen.getByText(LIMIT)).toBeInTheDocument();
+    expect(screen.queryByText(/has to accept/)).not.toBeInTheDocument();
+  });
+});
+
 describe('a week with nothing in it', () => {
   it('offers a time anyway rather than walling the viewer off', async () => {
     const book = booking();
