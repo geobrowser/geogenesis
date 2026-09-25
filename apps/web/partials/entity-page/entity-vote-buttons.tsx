@@ -67,12 +67,6 @@ export function EntityVoteButtons({
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const prepareOnboarding = usePrepareOnboarding();
-  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
-  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
-  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
-  // anyway, so reading the store at that moment is current enough.
-  const store = useStore();
-  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -324,7 +318,6 @@ export function EntityVoteButtons({
         entityId={entityId}
         spaceId={spaceId}
         responseKind={queryResponseKind}
-        container={slideUpPopoverContainer}
         align={position === 'leading' ? 'start' : 'end'}
       >
         <button
@@ -390,12 +383,7 @@ export function EntityVoteButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
-      <RespondersPopover
-        entityId={entityId}
-        spaceId={spaceId}
-        responseKind={queryResponseKind}
-        container={slideUpPopoverContainer}
-      >
+      <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
         <button
           className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
           title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
@@ -443,19 +431,28 @@ function RespondersPopover({
   entityId,
   spaceId,
   responseKind,
-  container,
   align = 'center',
   children,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
-  /** The open sheet's own container, so the list escapes the sheet's scroll lock; body otherwise. */
-  container: HTMLElement | null;
   align?: 'start' | 'center' | 'end';
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
+
+  // Read rather than subscribed: this renders twice per claim on a list, and a subscription would
+  // re-render every one of them whenever a sheet opens or closes — which the batching tests rightly
+  // count as work. What keeps a bare read current is that `Popover.Portal` only mounts when the
+  // popover opens and opening re-renders whatever holds `open` — so the read has to live *with*
+  // that state. It used to sit in `EntityVoteButtons`, which was correct while the open state did
+  // too; splitting the tally and the faces into a root each moved the render down here and left the
+  // read behind, capturing whatever the container was when the row first drew. A sheet registers its
+  // host after the rows inside it mount, so that capture was `null` and the list portalled to
+  // `body` — outside the sheet's `RemoveScroll` shard, visible but unscrollable.
+  const store = useStore();
+  const container = store.get(slideUpPopoverContainerAtom);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>

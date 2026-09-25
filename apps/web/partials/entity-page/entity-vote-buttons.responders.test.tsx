@@ -6,9 +6,11 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 
 import { Effect } from 'effect';
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
+import { slideUpPopoverContainersAtom } from '~/atoms';
 
 /**
  * The responder faces are a handle, not a decoration.
@@ -69,19 +71,43 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   ClaimResponderAvatars: () => <span data-testid="responder-faces" />,
 }));
 
+const jotaiStore = { current: createStore() };
+
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <Provider store={jotaiStore.current}>{children}</Provider>
+    </QueryClientProvider>
+  );
+}
+
+/** A slide-up registering its popover host, the way an open sheet does. */
+function openSheetWithHost() {
+  const container = document.createElement('div');
+  container.setAttribute('data-sheet-popover-host', '');
+  document.body.append(container);
+  jotaiStore.current.set(slideUpPopoverContainersAtom, [{ token: Symbol('sheet'), container }]);
+  return container;
 }
 
 function facesTrigger() {
   return screen.getByTestId('responder-faces').closest('button');
 }
 
+/**
+ * The tally, by the percentage it shows. Not `getByTitle` — both triggers carry the same
+ * `View stances`, which is the point of them, so a title lookup is ambiguous by design.
+ */
+function tallyTrigger() {
+  return screen.getByRole('button', { name: '67%' });
+}
+
 beforeEach(() => {
   mocks.positive = 2;
   mocks.negative = 1;
   mocks.optimistic = undefined;
+  jotaiStore.current = createStore();
 });
 
 afterEach(cleanup);
@@ -141,6 +167,40 @@ describe('the responder faces on a claim', () => {
     // The tally shows the viewer's own vote but stays disabled — it carries no `title` either, since
     // there is nothing served to view.
     expect(screen.getByRole('button', { name: '100%' })).toBeDisabled();
+  });
+
+  /**
+   * The container is read from the store without subscribing, which is deliberate — a subscription
+   * would re-render every claim on a list whenever any sheet opened. What made that safe was that
+   * opening the popover re-rendered the component doing the reading, so the read was current at the
+   * only moment it mattered. Moving the open state into `RespondersPopover` moved that render with
+   * it, so the read has to live there too — otherwise a list opened inside a sheet portals to
+   * `body`, outside the sheet's `RemoveScroll` shard, and can be seen but not scrolled.
+   */
+  it('portals into the sheet’s container when opened from inside one', async () => {
+    const user = userEvent.setup();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+
+    // Settled first, so the sheet registers *after* the last render the buttons do on their own —
+    // which is the case that catches a stale capture rather than one a later re-render would mask.
+    await waitFor(() => expect(tallyTrigger()).toBeEnabled());
+    const container = openSheetWithHost();
+
+    await user.click(tallyTrigger());
+
+    await waitFor(() => expect(container.querySelector('[data-radix-popper-content-wrapper]')).not.toBeNull());
+  });
+
+  it('opens the faces’ list into that container too', async () => {
+    const user = userEvent.setup();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+
+    await waitFor(() => expect(facesTrigger()).not.toBeNull());
+    const container = openSheetWithHost();
+
+    await user.click(facesTrigger()!);
+
+    await waitFor(() => expect(container.querySelector('[data-radix-popper-content-wrapper]')).not.toBeNull());
   });
 
   it('are not drawn at all for a plain entity, which has no responder faces', async () => {
