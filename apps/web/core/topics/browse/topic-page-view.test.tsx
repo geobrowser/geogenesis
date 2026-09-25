@@ -6,9 +6,9 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 
-import { TopicPageView, resolveTopicTab } from './topic-page-view';
+import { TOPIC_BLOCKS_PANEL_KEY, TOPIC_BLOCKS_PATH_SEGMENT, TopicPageView, resolveTopicTab } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
   topicSpaceIds: ['11111111111111111111111111111111'],
   /** Props the editable Types group received, or null if the page rendered none. */
   typesEditor: null as Record<string, unknown> | null,
+  /** The topic's own block relations — what the Overview tab would have to draw. */
+  blocks: [] as unknown[],
+  canEdit: true,
 }));
 
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
@@ -86,6 +89,15 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
 }));
 
+// The page asks the same question the editor does — "would this draw anything?" — through the same
+// hook, so the tests drive the answer rather than the sync store behind it.
+vi.mock('~/core/state/editor/use-blocks', () => ({
+  useBlocks: () => mocks.blocks,
+}));
+vi.mock('~/core/hooks/use-user-is-editing', () => ({
+  useCanUserEdit: () => mocks.canEdit,
+}));
+
 // The page's modules each reach for the sync engine or geo-chat. None is what this file asserts,
 // and the header renders above all of them.
 vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
@@ -126,6 +138,8 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/topic-1';
   mocks.topicSpaceIds = ['11111111111111111111111111111111'];
   mocks.typesEditor = null;
+  mocks.blocks = [];
+  mocks.canEdit = true;
 });
 
 afterEach(cleanup);
@@ -286,6 +300,33 @@ describe('TopicPageView types', () => {
     });
   });
 
+  // A topic typed as something else too read as a plain Topic, because the row was one literal.
+  // Edit mode showed those types and browse mode did not, which is the drift this closes.
+  it("lists the topic's other types beside the Topic chip while browsing", () => {
+    mocks.entity = {
+      ...topicEntity('A description.'),
+      types: [
+        { id: TOPIC_TYPE_ID, name: 'Topic' },
+        { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', name: 'Project' },
+      ],
+    };
+
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByText('Topic')).toBeInTheDocument();
+    expect(screen.getByText('Project')).toBeInTheDocument();
+  });
+
+  // Drawn from the literal, not from the list, so the word the page is named for is there before
+  // the type entity's own name resolves — and is never doubled when it does.
+  it('draws Topic once even though the type list also holds it', () => {
+    mocks.entity = { ...topicEntity('A description.'), types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }] };
+
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getAllByText('Topic')).toHaveLength(1);
+  });
+
   it('keeps the curated chip alongside the editor', () => {
     mocks.entity = {
       ...topicEntity('A description.'),
@@ -305,14 +346,95 @@ describe('TopicPageView types', () => {
   });
 });
 
+/**
+ * A topic page draws the explore feed at its bare URL, so the entity's own block content — the
+ * thing every other entity calls Overview — had no tab and no route. Anything written into a
+ * topic's body was invisible from the topic view, and there was no way to start one.
+ */
+describe('TopicPageView Overview tab', () => {
+  const overviewTab = {
+    label: 'Overview',
+    href: `/space/space-1/topic-1/${TOPIC_BLOCKS_PATH_SEGMENT}`,
+    sidePanelKey: TOPIC_BLOCKS_PANEL_KEY,
+    dividerBefore: true,
+  };
+
+  it('hides it from a reader when the topic has no body', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
+    // With nothing after the rule but authored tabs, the rule goes back to leading them.
+    expect(mocks.tabs?.divideBeforeAuthored).toBe(true);
+  });
+
+  it('shows it to a reader once the topic has a body', () => {
+    mocks.blocks = [{ id: 'block-1' }];
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
+    // The rule rides Overview instead. Two would claim the row splits in two places.
+    expect(mocks.tabs?.divideBeforeAuthored).toBe(false);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments', 'Overview']);
+  });
+
+  it('shows it to an editor with an empty body, since that is the only way to start one', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
+  });
+
+  // Edit *intent* survives the access check to keep the page from flickering on hydration; a
+  // control that writes must not. Same line `EntityTabs` draws for the Add tab button.
+  it('withholds it from someone with edit intent but no write access and no body', () => {
+    mocks.canEdit = false;
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
+  });
+
+  it('renders the block editor on that route instead of the feed', () => {
+    mocks.blocks = [{ id: 'block-1' }];
+    mocks.pathname = `/space/space-1/topic-1/${TOPIC_BLOCKS_PATH_SEGMENT}`;
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('editor')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-feed')).toBeNull();
+  });
+});
+
 describe('resolveTopicTab', () => {
   it('resolves the Comments route', () => {
     expect(resolveTopicTab({ pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe('comments');
   });
 
-  it('resolves legacy system routes to the single overview', () => {
-    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('overview');
-    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('overview');
+  it('resolves legacy system routes to the explore feed', () => {
+    expect(resolveTopicTab({ pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe('explore');
+    expect(resolveTopicTab({ pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe('explore');
+  });
+
+  // A generic entity's blocks live at its bare URL; a topic's bare URL is the explore feed, so the
+  // blocks get a segment of their own. Two names for one thing, which is why both live in this
+  // module as constants rather than as literals on either side.
+  it('resolves the blocks route a topic keeps its Overview tab at', () => {
+    expect(
+      resolveTopicTab({ pathname: `/space/a/b/${TOPIC_BLOCKS_PATH_SEGMENT}`, authoredTabId: null, panel: null })
+    ).toBe('blocks');
+  });
+
+  it('still lets an authored tab win over the blocks route', () => {
+    expect(
+      resolveTopicTab({ pathname: `/space/a/b/${TOPIC_BLOCKS_PATH_SEGMENT}`, authoredTabId: 'tab-1', panel: null })
+    ).toBe('custom');
+  });
+
+  it('resolves the side-panel blocks selection independently of the route behind it', () => {
+    expect(
+      resolveTopicTab({
+        pathname: '/space/a/b/comments',
+        authoredTabId: null,
+        panel: { activeTabId: null, activeSystemTab: TOPIC_BLOCKS_PANEL_KEY },
+      })
+    ).toBe('blocks');
   });
 
   it('lets an authored tab take precedence over the route', () => {
@@ -326,7 +448,7 @@ describe('resolveTopicTab', () => {
         authoredTabId: 'page-tab',
         panel: { activeTabId: null, activeSystemTab: 'debates' },
       })
-    ).toBe('overview');
+    ).toBe('explore');
   });
 
   it('resolves the side-panel Comments selection independently of the route behind it', () => {

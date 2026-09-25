@@ -6,10 +6,12 @@ import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
+import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useBlocks } from '~/core/state/editor/use-blocks';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation, TabEntity } from '~/core/types';
@@ -43,7 +45,21 @@ import { useTopicAncestors } from './use-topic-ancestors';
 export const TOPIC_PAGE_CONTENT_MAX_WIDTH = 720;
 export const TOPIC_PAGE_CONTENT_INSET_CLASS = 'px-4 @[560px]:px-5';
 
-type TopicTab = 'overview' | 'comments' | 'custom';
+/**
+ * `explore` is the landing tab — the topic feed — and is what an unqualified topic URL means.
+ * `blocks` is the entity's own block content, which a generic entity calls Overview and reaches at
+ * its bare URL; a topic's bare URL is already spoken for, so it gets the `/overview` segment and
+ * the `blocks` panel key instead. `explore` keeps the `overview` panel key because that is the key
+ * `EntityTabs` falls back to when a selected product tab disappears, and falling back to Explore is
+ * right — falling back to a blocks tab that may not even be rendered is not.
+ */
+type TopicTab = 'explore' | 'blocks' | 'comments' | 'custom';
+
+/** The path segment a topic's own block content lives under, relative to the topic's entity URL. */
+export const TOPIC_BLOCKS_PATH_SEGMENT = 'overview';
+
+/** The side-panel system-tab key for that same content. */
+export const TOPIC_BLOCKS_PANEL_KEY = 'blocks';
 
 export function resolveTopicTab({
   pathname,
@@ -57,12 +73,14 @@ export function resolveTopicTab({
   if (panel) {
     if (panel.activeTabId) return 'custom';
     if (panel.activeSystemTab === 'comments') return 'comments';
-    return 'overview';
+    if (panel.activeSystemTab === TOPIC_BLOCKS_PANEL_KEY) return 'blocks';
+    return 'explore';
   }
 
   if (authoredTabId) return 'custom';
   if (pathname.endsWith('/comments')) return 'comments';
-  return 'overview';
+  if (pathname.endsWith(`/${TOPIC_BLOCKS_PATH_SEGMENT}`)) return 'blocks';
+  return 'explore';
 }
 
 /**
@@ -121,11 +139,40 @@ export function TopicPageView({
     [entity?.relations]
   );
 
+  /*
+   * Topic is drawn from the literal rather than from this list, so the word the page is named for
+   * is there even before the type entity's name resolves. Everything else the entity is typed as
+   * follows it — a topic that is also, say, a Project used to read as a plain Topic, and edit mode
+   * showed types browse mode had no room for.
+   */
+  const additionalTypes = React.useMemo(
+    () => (entity?.types ?? []).filter(type => !ID.equals(type.id, TOPIC_TYPE_ID)),
+    [entity?.types]
+  );
+
   // The whole path down to this topic, not just the rung above it — a topic can sit several levels
   // deep, and showing one parent reads as though the hierarchy is flat.
   const ancestors = useTopicAncestors(entityId, spaceId);
   const activeTab = resolveTopicTab({ pathname, authoredTabId: activeAuthoredTabId, panel: sidePanelTab });
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
+
+  /*
+   * Whether the topic has block content of its own — the thing a generic entity shows on its
+   * Overview tab, and which a topic page had no tab for at all, so anything written into a topic's
+   * body was unreachable (and unwritable) from the topic view.
+   *
+   * Same selector the editor itself runs, so the tab appears exactly when the editor would have
+   * something to draw rather than on a second, drifting definition of "empty".
+   */
+  const hasBlocks = useBlocks(entityId, spaceId).length > 0;
+
+  // An editor gets the tab whether or not it has content yet — it is the only way to start a body —
+  // and a reader only when there is a body to read. `isEditing` is edit *intent*, which is held
+  // through the access check to avoid hydration flicker; the tab is a mutation surface, so it waits
+  // for access to resolve, matching what `EntityTabs` does with the Add tab control.
+  const canEdit = useCanUserEdit(spaceId);
+  const showBlocksTab = hasBlocks || (isEditing && canEdit);
+
   const systemTabs = [
     { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },
     {
@@ -134,6 +181,18 @@ export function TopicPageView({
       sidePanelKey: 'comments',
       badge: commentCountLoading ? undefined : String(commentCount),
     },
+    // Sits on the authored side of the rule, at the head of the tabs this topic wrote for itself —
+    // it is one of them, not one of the product's record tabs.
+    ...(showBlocksTab
+      ? [
+          {
+            label: 'Overview',
+            href: `${overviewHref}/${TOPIC_BLOCKS_PATH_SEGMENT}`,
+            sidePanelKey: TOPIC_BLOCKS_PANEL_KEY,
+            dividerBefore: true,
+          },
+        ]
+      : []),
   ];
 
   if (isLoading && !entity) {
@@ -233,7 +292,14 @@ export function TopicPageView({
             {isEditing ? (
               <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
             ) : (
-              <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+              <>
+                <span className={`${META_CHIP_CLASS} text-grey-04`}>Topic</span>
+                {additionalTypes.map(type => (
+                  <span key={type.id} className={`${META_CHIP_CLASS} text-grey-04`}>
+                    {type.name ?? type.id}
+                  </span>
+                ))}
+              </>
             )}
             {isCurated && <span className={`${META_CHIP_CLASS} text-grey-04`}>Curated</span>}
           </div>
@@ -249,7 +315,9 @@ export function TopicPageView({
             tabEntities={tabEntities}
             systemTabsBefore={systemTabs}
             reservedSystemLabels={systemTabs.map(tab => tab.label)}
-            divideBeforeAuthored
+            // Overview already carries the rule when it is there. Two dividers, or one in front of
+            // a tab that is on the same side of it, would say the row splits somewhere it does not.
+            divideBeforeAuthored={!showBlocksTab}
           />
         </div>
 
@@ -271,7 +339,10 @@ function TopicTabPanel({
   spaceId: string;
   topicSpaceIds: string[] | undefined;
 }) {
-  if (activeTab === 'custom') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
+  // An authored tab and the topic's own Overview are the same editor; which entity's blocks it
+  // draws is the editor provider's call, from the active tab id — null on `/overview`, so the
+  // topic's own.
+  if (activeTab === 'custom' || activeTab === 'blocks') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
   if (activeTab === 'comments') {
     return <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="topic" variant="tab" />;
   }
