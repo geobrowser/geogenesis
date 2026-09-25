@@ -98,7 +98,12 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
                   it sits inside a card with the claim's text above it; here the bar's own text runs
                   right up to it, and a stack of faces between the name and the control it belongs to
                   reads as part of the name. */}
-              <EntityVoteButtons entityId={entityId} spaceId={spaceId} claimResponderAvatarsPosition="trailing" />
+              <EntityVoteButtons
+                entityId={entityId}
+                spaceId={spaceId}
+                claimResponderAvatarsPosition="trailing"
+                compact
+              />
             </span>
           </div>
         </motion.div>

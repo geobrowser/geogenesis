@@ -57,6 +57,20 @@ type EntityVoteButtonsProps = {
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
   presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
+  /**
+   * A surface with no room for prose: the sticky entity header's 48px row.
+   *
+   * Three of this control's states are sentences rather than controls — the indexing notice beside
+   * the buttons, and the two that stand in for the control entirely. Each is wider than a phone can
+   * spare next to a name and a set of thumbs: measured at 390px, the indexing notice alone pushed
+   * the row 94px past its own width and gave the document a horizontal scrollbar.
+   *
+   * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
+   * and dropped rather than wrapped, because the bar is one fixed-height line by design. Nothing is
+   * lost: the page's own copy of this control is still mounted below — merely scrolled out of view —
+   * so it carries the same text and the same `aria-live` announcement.
+   */
+  compact?: boolean;
 };
 
 export function EntityVoteButtons({
@@ -65,6 +79,7 @@ export function EntityVoteButtons({
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
+  compact = false,
 }: EntityVoteButtonsProps) {
   const prepareOnboarding = usePrepareOnboarding();
   const responseBatch = useClaimResponseBatchState();
@@ -337,6 +352,7 @@ export function EntityVoteButtons({
   }
 
   if (hasUnpublishedResponseKindEdit) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
         Publish changes before responding
@@ -345,6 +361,7 @@ export function EntityVoteButtons({
   }
 
   if (responseKind === null) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="The response type is unavailable">
         Response unavailable
@@ -405,7 +422,7 @@ export function EntityVoteButtons({
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {isResponseIndexingDelayed ? (
+      {isResponseIndexingDelayed && !compact ? (
         <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
           Response submitted. Waiting for confirmation.
         </span>

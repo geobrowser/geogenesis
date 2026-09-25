@@ -1,4 +1,6 @@
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, render as renderComponent, renderHook, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
 
 import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -227,6 +229,53 @@ describe('useScrolledPastElement', () => {
     // One frame's worth, not one per mutation batch.
     expect(querySelector.mock.calls.length - initialLookups).toBeLessThanOrEqual(2);
     querySelector.mockRestore();
+  });
+
+  /**
+   * What each *commit* carried, not what settled afterwards and not every render call.
+   *
+   * Recorded in a layout effect on purpose. Reading `result.current` after `rerender` cannot see a
+   * value that was painted and then corrected, which is the value in question — but recording during
+   * render would over-report the other way, since a state adjustment made during render makes React
+   * re-run the component and throw the first pass away without ever committing it. A layout effect
+   * runs once per commit, before the browser paints, so this is exactly the set of values a reader
+   * could have seen.
+   */
+  function captureCommits() {
+    const commits: { selector: string; scrolledPast: boolean; hasTarget: boolean }[] = [];
+
+    function Probe({ selector }: { selector: string }) {
+      const { scrolledPast, target } = useScrolledPastElement({ selector, topOffset: TOP_OFFSET });
+      React.useLayoutEffect(() => {
+        commits.push({ selector, scrolledPast, hasTarget: target !== null });
+      });
+      return null;
+    }
+
+    return { commits, Probe };
+  }
+
+  /**
+   * A reset in a passive effect runs *after* the browser has painted, so the render that first sees
+   * the new selector still returns the previous entity's answer. On a client-side navigation to an
+   * already-hydrated entity that paints its bar for a frame, over a page whose title has never been
+   * observed. Derived during render instead, so there is no frame to paint.
+   */
+  it('never returns the previous entity’s answer under the new selector', async () => {
+    const title = addTitle('entity-1');
+    const { commits, Probe } = captureCommits();
+    const view = renderComponent(<Probe selector='[data-entity-page-title="entity-1"]' />);
+
+    notify(latestObserver(), title, { isIntersecting: false, bottom: -120 });
+    expect(commits.at(-1)).toMatchObject({ scrolledPast: true });
+
+    act(() => title.remove());
+    view.rerender(<Probe selector='[data-entity-page-title="entity-2"]' />);
+
+    const underNewSelector = commits.filter(entry => entry.selector === '[data-entity-page-title="entity-2"]');
+    expect(underNewSelector.length).toBeGreaterThan(0);
+    expect(underNewSelector.every(entry => entry.scrolledPast === false)).toBe(true);
+    expect(underNewSelector.every(entry => entry.hasTarget === false)).toBe(true);
   });
 
   it('stays false when IntersectionObserver is unavailable', () => {

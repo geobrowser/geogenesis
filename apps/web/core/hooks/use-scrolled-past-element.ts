@@ -42,6 +42,29 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
   // the only handle a caller has on the page it belongs to — the sticky header measures the content
   // column around it — and finding it twice would mean a second `MutationObserver` over the body.
   const [target, setTarget] = React.useState<Element | null>(null);
+  const [trackedSelector, setTrackedSelector] = React.useState(selector);
+
+  /*
+   * A new selector is a new entity, and its title is not in the document yet — so neither of these
+   * answers is about the page now being asked for.
+   *
+   * Adjusted during render rather than in an effect. `sync`'s early return — `next === watched` is
+   * true when both are null — used to leave the previous entity's answer standing until an effect
+   * cleared it, and a passive effect runs *after* the browser paints: on a client-side navigation to
+   * an entity that is already hydrated, the render that first saw the new selector handed back
+   * `scrolledPast: true` and the old, detached title, and the bar painted for a frame over a page
+   * whose own title had never been observed.
+   *
+   * This is React's documented way to reset state when a prop changes: setting state during render
+   * of the same component makes React re-run it immediately, before committing or painting, so there
+   * is no intervening frame to get wrong. `useLayoutEffect` would also beat the paint, but only by
+   * committing once and correcting itself — this never emits the wrong value at all.
+   */
+  if (trackedSelector !== selector) {
+    setTrackedSelector(selector);
+    setScrolledPast(false);
+    setTarget(null);
+  }
 
   React.useEffect(() => {
     if (!enabled) {
@@ -51,13 +74,6 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     }
 
     if (typeof document === 'undefined' || typeof IntersectionObserver === 'undefined') return;
-
-    // A new selector is a new entity, and its title may not be in the document yet. Without this the
-    // early return in `sync` — `next === watched` is true when both are null — leaves the previous
-    // entity's answer standing, so moving between two entities opened the next one with the bar
-    // already up and the last one's detached title still being measured.
-    setScrolledPast(false);
-    setTarget(null);
 
     let watched: Element | null = null;
 
@@ -121,5 +137,9 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     };
   }, [selector, topOffset, enabled]);
 
-  return { scrolledPast, target };
+  // `enabled` gets the same treatment for the same reason: its effect branch clears these, and that
+  // clearing is a paint too late.
+  return enabled ? { scrolledPast, target } : DISABLED;
 }
+
+const DISABLED: Result = { scrolledPast: false, target: null };

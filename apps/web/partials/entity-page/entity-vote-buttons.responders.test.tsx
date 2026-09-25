@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   negative: 1,
   /** The viewer's own vote, before it has been served back. */
   optimistic: undefined as 'positive' | 'negative' | undefined,
+  indexingDelayed: false,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -45,7 +46,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     submitResponse: vi.fn(),
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimistic,
-    isResponseIndexingDelayed: false,
+    isResponseIndexingDelayed: mocks.indexingDelayed,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),
@@ -107,6 +108,7 @@ beforeEach(() => {
   mocks.positive = 2;
   mocks.negative = 1;
   mocks.optimistic = undefined;
+  mocks.indexingDelayed = false;
   jotaiStore.current = createStore();
 });
 
@@ -208,5 +210,55 @@ describe('the responder faces on a claim', () => {
 
     await waitFor(() => expect(screen.getAllByRole('button').length).toBeGreaterThan(0));
     expect(screen.queryByTestId('responder-faces')).toBeNull();
+  });
+});
+
+/**
+ * The sticky entity header is one fixed-height line beside a name. Three of this control's states
+ * are sentences rather than controls, and each is wider than a phone can spare: measured in a
+ * browser at 390px, the indexing notice alone pushed the row 94px past its own width and gave the
+ * document a horizontal scrollbar.
+ *
+ * Nothing is lost by dropping them — the page's own copy of this control stays mounted below, merely
+ * scrolled out of view, so it keeps the text and the `aria-live` announcement. Verified in the
+ * browser too: with the notice forced on, one lives on the page and none in the bar.
+ */
+describe('compact, for the sticky header', () => {
+  const INDEXING = 'Response submitted. Waiting for confirmation.';
+  const UNPUBLISHED = 'Publish changes before responding';
+  const UNAVAILABLE = 'Response unavailable';
+
+  it('drops the indexing notice but keeps the control', async () => {
+    mocks.indexingDelayed = true;
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
+
+    await waitFor(() => expect(tallyTrigger()).toBeInTheDocument());
+    expect(screen.queryByText(INDEXING)).toBeNull();
+  });
+
+  it('still shows the indexing notice everywhere else', async () => {
+    mocks.indexingDelayed = true;
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+
+    expect(await screen.findByText(INDEXING)).toBeInTheDocument();
+  });
+
+  /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */
+  it('draws nothing for the states that are prose instead of a control', () => {
+    const { container, rerender } = render(
+      <EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={null} compact />,
+      { wrapper }
+    );
+    expect(container).toBeEmptyDOMElement();
+
+    rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={null} />);
+    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+  });
+
+  it('keeps those sentences on every other surface', () => {
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={null} />, { wrapper });
+
+    expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
+    expect(screen.queryByText(UNPUBLISHED)).toBeNull();
   });
 });
