@@ -7,6 +7,7 @@ import * as React from 'react';
 import { usePathname } from 'next/navigation';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { readTypes } from '~/core/database/entities';
 import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -159,10 +160,20 @@ export function TopicPageView({
    * is there even before the type entity's name resolves. Everything else the entity is typed as
    * follows it — a topic that is also, say, a Project used to read as a plain Topic, and edit mode
    * showed types browse mode had no room for.
+   *
+   * Read off `relations`, not `entity.types`. `getEntity` derives `types` from every space's
+   * relations and only afterwards narrows `relations` to the space being read, so `types` would
+   * advertise a type some other space contributed — one the edit control, scoped like every other
+   * types control in the app, can neither show nor take off. Same array and the same deleted guard
+   * as `isCurated` above, through the same `readTypes` the store itself uses, so a chip means what
+   * a chip means everywhere else.
    */
   const additionalTypes = React.useMemo(
-    () => (entity?.types ?? []).filter(type => !ID.equals(type.id, TOPIC_TYPE_ID)),
-    [entity?.types]
+    () =>
+      readTypes((entity?.relations ?? []).filter(relation => relation.isDeleted !== true)).filter(
+        type => !ID.equals(type.id, TOPIC_TYPE_ID)
+      ),
+    [entity?.relations]
   );
 
   // The whole path down to this topic, not just the rung above it — a topic can sit several levels

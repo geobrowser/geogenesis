@@ -158,6 +158,15 @@ function topicEntity(description: string | null) {
   };
 }
 
+/** A Types relation in the space being read — the space-scoped source the chips come from. */
+function typeRelation(name: string, id = `type-${name}`) {
+  return {
+    isDeleted: false,
+    type: { id: SystemIds.TYPES_PROPERTY },
+    toEntity: { id, name },
+  };
+}
+
 beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
@@ -336,13 +345,7 @@ describe('TopicPageView types', () => {
   // A topic typed as something else too read as a plain Topic, because the row was one literal.
   // Edit mode showed those types and browse mode did not, which is the drift this closes.
   it("lists the topic's other types beside the Topic chip while browsing", () => {
-    mocks.entity = {
-      ...topicEntity('A description.'),
-      types: [
-        { id: TOPIC_TYPE_ID, name: 'Topic' },
-        { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', name: 'Project' },
-      ],
-    };
+    mocks.entity = { ...topicEntity('A description.'), relations: [typeRelation('Project')] };
 
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
@@ -350,10 +353,43 @@ describe('TopicPageView types', () => {
     expect(screen.getByText('Project')).toBeInTheDocument();
   });
 
-  // Drawn from the literal, not from the list, so the word the page is named for is there before
+  /*
+   * `entity.types` is not space-scoped: `GeoStore.getEntity` derives it from every space's
+   * relations and only then filters `entity.relations` down to the one being read. Reading it left
+   * browse mode advertising a type another space contributed — which edit mode, scoped like every
+   * other types control in the app, could neither show nor take off.
+   */
+  it('leaves out a type only another space contributed', () => {
+    mocks.entity = {
+      ...topicEntity('A description.'),
+      types: [
+        { id: TOPIC_TYPE_ID, name: 'Topic' },
+        { id: 'cccccccccccccccccccccccccccccccc', name: 'Elsewhere' },
+      ],
+      relations: [typeRelation('Project')],
+    };
+
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByText('Project')).toBeInTheDocument();
+    expect(screen.queryByText('Elsewhere')).toBeNull();
+  });
+
+  it('drops a chip whose type relation was deleted locally', () => {
+    mocks.entity = {
+      ...topicEntity('A description.'),
+      relations: [{ ...typeRelation('Project'), isDeleted: true }],
+    };
+
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.queryByText('Project')).toBeNull();
+  });
+
+  // Drawn from the literal, not from the relations, so the word the page is named for is there
   // the type entity's own name resolves — and is never doubled when it does.
-  it('draws Topic once even though the type list also holds it', () => {
-    mocks.entity = { ...topicEntity('A description.'), types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }] };
+  it('draws Topic once even though its own type relation is in the list', () => {
+    mocks.entity = { ...topicEntity('A description.'), relations: [typeRelation('Topic', TOPIC_TYPE_ID)] };
 
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
