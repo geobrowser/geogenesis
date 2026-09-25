@@ -136,8 +136,11 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
     (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
     parent.expression === call
   ) {
+    // `require('./x')[key]` definitely reads an export and cannot say which, which is the position a
+    // namespace binding is in — so it is reported the same way rather than dropped. As a bare edge it
+    // was invisible: `clientBindings` skips a reference with neither a name nor `namespace`.
     const exported = accessedName(parent);
-    if (!exported) return [{ specifier, local: '' }];
+    if (!exported) return [{ specifier, local: '[computed]', namespace: true }];
 
     const assignedTo = parent.parent;
     const local =
@@ -154,13 +157,28 @@ function requireBindings(call: ts.CallExpression, specifier: string): CallRefere
       const bindings: CallReference[] = [];
 
       for (const element of parent.name.elements) {
+        // `{ ...rest }` takes every export not named above it, and `{ [key]: v }` takes one nobody
+        // can name here. Both are the computed case in destructuring form.
+        if (element.dotDotDotToken) {
+          bindings.push({ specifier, local: '{ ...rest }', namespace: true });
+          continue;
+        }
+
         const key = element.propertyName ?? element.name;
         const exported = ts.isIdentifier(key) || ts.isStringLiteralLike(key) ? key.text : null;
         const local = ts.isIdentifier(element.name) ? element.name.text : exported;
-        if (exported && local) bindings.push({ specifier, exported, local });
+
+        if (!exported || !local) {
+          bindings.push({ specifier, local: '{ [computed] }', namespace: true });
+          continue;
+        }
+
+        bindings.push({ specifier, exported, local });
       }
 
-      return bindings;
+      // `const {} = require('./x')` binds nothing and still loads the module, the same way
+      // `import {} from './x'` does. Returning no reference at all dropped the edge with it.
+      return bindings.length > 0 ? bindings : [{ specifier, local: '' }];
     }
 
     // `const ns = require('./x')` keeps the whole module object.
@@ -188,7 +206,11 @@ type Reference = {
   specifier: string;
   exported?: string;
   local: string;
-  /** `import * as X` / `export * as X`: an object whose every property is a client reference. */
+  /**
+   * A binding this cannot pin to one export, so every export is in play: `import * as X`,
+   * `export * as X`, and a `require` read under a name only known at runtime. Each is reported,
+   * because any property of one belonging to a client module is a client reference.
+   */
   namespace?: boolean;
   /** `export * from`: the target's named bindings, each classified on its own. */
   starReexport?: boolean;
@@ -642,7 +664,7 @@ function exportKindsOf(
     if (!kinds.has(name)) kinds.set(name, 'erased');
   };
   /** `export * from` specifiers, applied after every other export has had its say. */
-  const stars: ts.StringLiteral[] = [];
+  const stars: { specifier: ts.StringLiteral; typeOnly: boolean }[] = [];
   const react = reactBindingsOf(sourceFile);
   /** Local declarations, so an export by identifier has something to resolve against. */
   const locals = new Map<string, ts.Node>();
@@ -780,7 +802,9 @@ function exportKindsOf(
     // `export * from './x'` is held back to a second pass below, because every other kind of export
     // outranks it whatever order they are written in.
     if (ts.isExportDeclaration(statement) && !statement.exportClause && statement.moduleSpecifier) {
-      if (!statement.isTypeOnly && ts.isStringLiteral(statement.moduleSpecifier)) stars.push(statement.moduleSpecifier);
+      if (ts.isStringLiteral(statement.moduleSpecifier)) {
+        stars.push({ specifier: statement.moduleSpecifier, typeOnly: statement.isTypeOnly });
+      }
       continue;
     }
 
@@ -788,7 +812,10 @@ function exportKindsOf(
     // property read off one belonging to a client module is a client reference — and recorded at all,
     // because a barrel over this barrel would otherwise lose the binding entirely.
     if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamespaceExport(statement.exportClause)) {
-      if (!statement.isTypeOnly) kinds.set(statement.exportClause.name.text, 'value');
+      // `export type * as Ns` is the same object with nothing of it left at runtime. Skipping it
+      // left the name out of the map entirely, and a name this cannot find reads as `unknown` —
+      // which is an offence, so an erased binding was accused of being a client value.
+      kinds.set(statement.exportClause.name.text, statement.isTypeOnly ? 'erased' : 'value');
       continue;
     }
 
@@ -857,8 +884,8 @@ function exportKindsOf(
    * written above a star read as whatever the star happened to hold — a component, and waved
    * through.
    */
-  for (const star of stars) {
-    const origin = resolveOrigin(star.text);
+  for (const { specifier, typeOnly } of stars) {
+    const origin = resolveOrigin(specifier.text);
 
     /*
      * An unresolved target is not an empty one. Dropping it left the map with no bindings at all, so
@@ -867,12 +894,20 @@ function exportKindsOf(
      * and is reported. No export clause can claim that name, so nothing here can have taken it.
      */
     if (!origin) {
-      kinds.set('*', 'unknown');
+      // A type-only star carries nothing at runtime, so an unresolved one hides no client value and
+      // the sentinel would be an offence invented out of a type import.
+      if (!typeOnly) kinds.set('*', 'unknown');
       continue;
     }
 
+    /*
+     * `export type * from './x'` re-exports the same names with nothing of them left at runtime, and
+     * this tree has one — `core/utils/diff/index.ts`. Skipping the statement left every name it
+     * carries out of the map, and a name this cannot find reads as `unknown`, which is reported. So
+     * a client barrel written that way had its erased bindings accused of being client values.
+     */
     for (const [name, kind] of origin) {
-      if (name !== 'default' && !kinds.has(name)) kinds.set(name, kind);
+      if (name !== 'default' && !kinds.has(name)) kinds.set(name, typeOnly ? 'erased' : kind);
     }
   }
 
@@ -1335,9 +1370,31 @@ describe('callReferences', () => {
 
   it.each([
     ['a call for its side effects', "require('./x');"],
-    ['a computed property read', "const thing = require('./x')[key];"],
+    // Binds nothing and still loads the module, the same way `import {} from './x'` does.
+    ['a destructure that binds nothing', "const {} = require('./x');"],
+    // Reads `x[0]`, which is not a named export of anything.
+    ['an array destructure', "const [first] = require('./x');"],
   ])('takes no binding from %s, but still walks the module', (_label, source) => {
     expect(refs(source)).toEqual([{ specifier: './x', local: '' }]);
+  });
+
+  it.each([
+    ['a computed property read', "const thing = require('./x')[key];", '[computed]'],
+    ['a computed key in a destructure', "const { [key]: thing } = require('./x');", '{ [computed] }'],
+  ])('reports %s, which it cannot pin to one export', (_label, source, local) => {
+    // Each of these definitely reads an export and cannot say which — the position a namespace
+    // binding is in, so reported the same way. As bare edges they were invisible: `clientBindings`
+    // skips a reference with neither a name nor `namespace`.
+    expect(refs(source)).toEqual([{ specifier: './x', local, namespace: true }]);
+  });
+
+  it('reports a rest element alongside the names taken above it', () => {
+    // `...rest` takes every export not named before it, so the named ones stay resolved and the rest
+    // is the unpinnable read.
+    expect(refs("const { A, ...rest } = require('./x');")).toEqual([
+      { specifier: './x', exported: 'A', local: 'A' },
+      { specifier: './x', local: '{ ...rest }', namespace: true },
+    ]);
   });
 
   it.each([
@@ -1650,6 +1707,44 @@ describe('exportKindsOf', () => {
 
     expect(kinds.get('Foo')).toBe('component');
     expect(kinds.get('BAR')).toBe('value');
+  });
+
+  it('keeps the names a type-only star carries, as erased', () => {
+    // `export type * from './types'` is in this tree at `core/utils/diff/index.ts`. Skipping the
+    // statement left its names out of the map, and a name this cannot find reads as `unknown`,
+    // which is an offence — so a client barrel written that way was accused over a type import.
+    const origin = new Map<string, ExportKind>([
+      ['Change', 'value'],
+      ['ChangeKind', 'erased'],
+    ]);
+    const kinds = exportKindsOf(parse('barrel.tsx', "export type * from './types';"), () => origin);
+
+    expect(kinds.get('Change')).toBe('erased');
+    expect(kinds.get('ChangeKind')).toBe('erased');
+  });
+
+  it('lets a declaration outrank a type-only star, like any other', () => {
+    const origin = new Map<string, ExportKind>([['Change', 'value']]);
+    const kinds = exportKindsOf(
+      parse('barrel.tsx', "export const Change = { a: 1 };\nexport type * from './types';"),
+      () => origin
+    );
+
+    expect(kinds.get('Change')).toBe('value');
+  });
+
+  it('records a type-only namespace re-export as erased rather than dropping it', () => {
+    const kinds = exportKindsOf(parse('barrel.tsx', "export type * as Ns from './x';"), () => null);
+
+    expect(kinds.get('Ns')).toBe('erased');
+  });
+
+  it('does not invent a wildcard offence out of an unresolved type-only star', () => {
+    // The value-star sentinel exists because an unresolved star could be hiding a client value. A
+    // type-only one carries nothing at runtime, so there is nothing for it to hide.
+    const kinds = exportKindsOf(parse('barrel.tsx', "export type * from './missing';"), () => null);
+
+    expect(kinds.has('*')).toBe(false);
   });
 
   it("does not attribute a nested scope's return to the component containing it", () => {
