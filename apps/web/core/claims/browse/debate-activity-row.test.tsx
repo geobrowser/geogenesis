@@ -219,6 +219,39 @@ describe('DebateActivityRow when the transcript will not load', () => {
   });
 
   /**
+   * Where a comment the reader just wrote appears. `useCreateComment` appends its optimistic row, so
+   * without an order of its own this branch drew it beneath comments from weeks earlier.
+   */
+  it('draws a just-written comment first, not last', () => {
+    mocks.debateComments = [
+      {
+        id: 'comment-old',
+        markdownContent: 'From three weeks ago.',
+        author: { spaceId: 'author-space', address: '0xabc', name: 'Ada', avatarUrl: null },
+        createdAt: '2026-09-01T10:00:00Z',
+        spaceId: 'author-space',
+        replies: [],
+      },
+      // Appended, as the cache appends it.
+      {
+        id: 'comment-new',
+        markdownContent: 'Just now.',
+        author: { spaceId: 'author-space', address: '0xabc', name: 'Ada', avatarUrl: null },
+        createdAt: '2026-09-26T10:00:00Z',
+        spaceId: 'author-space',
+        replies: [],
+      },
+    ];
+
+    renderRow({ claimCount: 0, commentCount: 2 });
+
+    expect(screen.getAllByText(/From three weeks ago\.|Just now\./).map(n => n.textContent?.trim())).toEqual([
+      'Just now.',
+      'From three weeks ago.',
+    ]);
+  });
+
+  /**
    * The comments are their own read, so they fail on their own — and a row whose count says there are
    * comments kept that count, and its collapse control, while drawing none of them.
    */

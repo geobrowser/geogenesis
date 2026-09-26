@@ -36,6 +36,9 @@ const mocks = vi.hoisted(() => ({
   activityCountError: null as Error | null,
   retryActivityCount: vi.fn(),
   adjustActivityTotal: vi.fn(),
+  countsMountedFor: [] as string[],
+  // The active tab comes from the route, so a test that needs another tab sets this.
+  pathname: '/space/space-1/claim-1',
   entity: null as Record<string, unknown> | null,
   /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
   activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
@@ -100,7 +103,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/space/space-1/claim-1',
+  usePathname: () => mocks.pathname,
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 
@@ -159,11 +162,14 @@ vi.mock('./use-claim-activity-rows', () => ({
 // The heading's number, which is the same one the claim's Explore card shows. Its own query is
 // covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
 vi.mock('./claim-activity-count', () => ({
-  useClaimActivityCounts: () => ({
-    counts: new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
-    error: mocks.activityCountError,
-    retry: mocks.retryActivityCount,
-  }),
+  useClaimActivityCounts: (ids: string[]) => {
+    mocks.countsMountedFor.push(...ids);
+    return {
+      counts: new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+      error: mocks.activityCountError,
+      retry: mocks.retryActivityCount,
+    };
+  },
   adjustClaimActivityTotal: mocks.adjustActivityTotal,
 }));
 
@@ -298,6 +304,8 @@ beforeEach(() => {
   mocks.activityCountError = null;
   mocks.retryActivityCount.mockClear();
   mocks.adjustActivityTotal.mockClear();
+  mocks.countsMountedFor.length = 0;
+  mocks.pathname = '/space/space-1/claim-1';
   mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
@@ -739,6 +747,23 @@ describe('ClaimPageView comments', () => {
    * aggregate, which the heading prefers unconditionally. So explaining a position left the number one
    * behind.
    */
+  /**
+   * The adjustment corrects a cached answer, so it does nothing when that answer was never fetched. The
+   * hero renders on every tab; the heading — the only other caller of the aggregate — is inside the
+   * Overview. So an explanation published from the Debates tab moved nothing at all, and switching to
+   * Overview before the indexer caught up showed the pre-comment number.
+   */
+  it('keeps the activity aggregate mounted on a tab that does not display it', () => {
+    mocks.pathname = '/space/space-1/claim-1/debates';
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    // The Overview — and so the heading, the aggregate's only other caller — is not rendered here.
+    expect(screen.queryByText('Activity (34)')).not.toBeInTheDocument();
+    // The hero is, so the number it adjusts has to be on its way regardless.
+    expect(mocks.countsMountedFor).toContain('claim-1');
+  });
+
   it('routes the hero explanation into the same activity count the thread uses', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 

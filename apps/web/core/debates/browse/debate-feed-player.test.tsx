@@ -867,7 +867,7 @@ describe('a seek asked for by the link that brought the reader here', () => {
     return {
       seeks,
       /** Re-render as the feed does, optionally with the media now seekable or a different debate. */
-      update(next: { ready?: boolean; active?: boolean; debateId?: string } = {}) {
+      update(next: { ready?: boolean; active?: boolean; debateId?: string; seekSeconds?: number } = {}) {
         mocks.controller = controllerFixture({
           mutedByUser: true,
           turnSlot: 1,
@@ -878,7 +878,7 @@ describe('a seek asked for by the link that brought the reader here', () => {
           <DebateFeedPlayer
             debate={next.debateId == null ? debate : ({ ...debate, id: next.debateId } as typeof debate)}
             active={next.active ?? true}
-            initialSeekSeconds={initialSeekSeconds}
+            initialSeekSeconds={next.seekSeconds ?? initialSeekSeconds}
           />
         );
       },
@@ -917,6 +917,29 @@ describe('a seek asked for by the link that brought the reader here', () => {
     expect(player.seeks).toEqual([124, 124]);
   });
 
+  /**
+   * Two claims extracted from one debate carry two timecodes, and following one after the other is a
+   * client-side navigation: `initialSeekSeconds` changes and this card is not remounted. Latched on the
+   * debate alone, the second timecode did nothing at all.
+   */
+  it('fires again for a different moment in the same debate', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: 500 });
+
+    expect(player.seeks).toEqual([124, 500]);
+  });
+
+  it('still does not re-seek when the same moment is asked for again', () => {
+    const player = renderWithSeek(124);
+
+    player.update({ seekSeconds: 124 });
+    player.update();
+
+    expect(player.seeks).toEqual([124]);
+  });
+
   it('does nothing at all when the link named no moment', () => {
     const player = renderWithSeek(null);
 
@@ -925,7 +948,6 @@ describe('a seek asked for by the link that brought the reader here', () => {
     expect(player.seeks).toEqual([]);
   });
 });
-
 
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
@@ -1090,6 +1112,5 @@ describe('the round it is playing', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(container.querySelector('[data-round-card]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')).toBeNull();
-
   });
 });

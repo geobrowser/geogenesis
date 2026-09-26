@@ -460,9 +460,23 @@ function ClaimTabPanel({
  * The adjustment lands in the query cache rather than in a component's state, which is what makes it
  * survive a remount and stay behind when the reader walks to the next claim. See
  * {@link adjustClaimActivityTotal}.
+ *
+ * Which is why this subscribes to the aggregate as well as returning the adjuster: the adjustment is a
+ * correction to a cached answer, and it does nothing at all when that answer was never fetched. The
+ * hero renders on every tab while the heading — and so the only other caller of this query — lives
+ * inside the Overview, so an explanation published from the Debates tab moved nothing, and switching
+ * to Overview before the indexer caught up showed the pre-comment number. Now a caller cannot hold the
+ * adjuster without the baseline being on its way, which is the kind of thing that should not depend on
+ * remembering.
+ *
+ * It costs one batched aggregate request on the tabs that do not display the number. The Overview is
+ * the default tab, so nearly every visit was fetching it anyway, and `staleTime` is a minute, so
+ * moving between tabs does not refetch.
  */
 function useAdjustActivityTotal(claimId: string): (delta: number) => void {
   const queryClient = useQueryClient();
+  useClaimActivityCounts(React.useMemo(() => [claimId], [claimId]));
+
   return React.useCallback(
     (delta: number) => void adjustClaimActivityTotal(queryClient, claimId, delta),
     [claimId, queryClient]

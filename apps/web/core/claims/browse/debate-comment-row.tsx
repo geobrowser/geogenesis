@@ -21,6 +21,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ActivityRowTag } from './activity-row-tag';
 import { canNestBelow } from './claim-activity-depth';
+import { orderNewestFirst } from './claim-activity-order';
 
 /**
  * A comment somebody left on a debate, shown in the claim's activity thread.
@@ -83,7 +84,13 @@ export function DebateCommentRow({
 
   const spine = useThreadParentSpine(avatarBottomInRowPx(PAGE_DENSITY));
   const body = React.useMemo(() => renderMarkdownDocument(comment.markdownContent), [comment.markdownContent]);
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  // Same order and the same reason as the branches above: `buildCommentTree` groups these out of the
+  // newest-first list the query returns, and an optimistic reply is appended to it. Sorted before the
+  // slice below, so "show more" reveals the next-newest rather than whatever the cache appended.
+  const replies = React.useMemo(
+    () => orderNewestFirst(Array.isArray(comment.replies) ? comment.replies : []),
+    [comment.replies]
+  );
 
   // Two different overflows, and they want different offers. Replies we are holding back for length
   // are already loaded, so revealing them is free and happens here. Replies below the depth floor

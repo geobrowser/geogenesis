@@ -166,3 +166,23 @@ function netScoreOf(counts: { positive: number; negative: number } | null): numb
 function upvotesOf(counts: { positive: number; negative: number } | null): number {
   return counts?.positive ?? 0;
 }
+
+/**
+ * A comment list in the order it claims to be in: newest first.
+ *
+ * The fetched list already is — `comment-entities-connection` asks for `[CREATED_AT_DESC, ID_ASC]` —
+ * but `useCreateComment` *appends* its optimistic row, so a comment the reader has just written landed
+ * at the bottom of every branch in this feed until the indexer replaced the list. The one row that is
+ * certainly the newest was the one drawn last.
+ *
+ * So this is a no-op on a settled list and a correction for exactly the optimistic case. `sort` is
+ * stable in every engine we target, so rows sharing a timestamp keep the order the query gave them,
+ * which is `ID_ASC`.
+ *
+ * Not the same thing as the top-level thread's ordering: that has a sort control and pins the
+ * reader's own comments through `sortWithSessionPinned`. A branch has neither, and newest-first is
+ * what it says it draws.
+ */
+export function orderNewestFirst<T extends ActivityOrderable>(comments: T[]): T[] {
+  return [...comments].sort((a, b) => compareByTime(a, b, -1));
+}

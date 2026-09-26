@@ -143,12 +143,17 @@ export function DebateFeedPlayer({
   };
 
   /**
-   * Honour a link that named a moment, once.
+   * Honour a link that named a moment, once per moment.
    *
    * Waits for `ready` rather than firing on mount: before the media is seekable the request would
-   * be dropped, and this is the arriving reader's one chance to land where they were sent. Latched
-   * by debate id so re-renders, a re-activation, or the viewer scrolling back to this card cannot
-   * yank the playhead back to where the link pointed after they have moved it themselves.
+   * be dropped, and this is the arriving reader's one chance to land where they were sent. Latched so
+   * that re-renders, a re-activation, or the viewer scrolling back to this card cannot yank the
+   * playhead back to where the link pointed after they have moved it themselves.
+   *
+   * Latched on the debate *and* the moment, not the debate alone. Two claims extracted from the same
+   * debate carry two timecodes, and following one after the other is a client-side navigation that
+   * changes `initialSeekSeconds` without remounting this card — which the id-only latch swallowed, so
+   * the second timecode did nothing at all.
    *
    * Not routed through the measured `seekBoth` above: this is a seek the reader asked for on the
    * previous page, not a scrub performed on this player, and counting it as one would report a
@@ -157,8 +162,9 @@ export function DebateFeedPlayer({
   const appliedInitialSeekRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (initialSeekSeconds == null || !ready) return;
-    if (appliedInitialSeekRef.current === debate.id) return;
-    appliedInitialSeekRef.current = debate.id;
+    const request = `${debate.id}@${initialSeekSeconds}`;
+    if (appliedInitialSeekRef.current === request) return;
+    appliedInitialSeekRef.current = request;
     seekBothRaw(initialSeekSeconds);
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 

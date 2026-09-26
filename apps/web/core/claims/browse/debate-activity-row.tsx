@@ -29,7 +29,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ActivityRowTag } from './activity-row-tag';
 import { ACTIVITY_ROOT_DEPTH } from './claim-activity-depth';
-import { orderExtractedClaims } from './claim-activity-order';
+import { orderExtractedClaims, orderNewestFirst } from './claim-activity-order';
 import { DebateCommentRow } from './debate-comment-row';
 import { ExtractedClaimRow, type SpeakerProfile } from './extracted-claim-row';
 
@@ -354,6 +354,9 @@ function DebateBranch({
   }, [claims.blocks]);
 
   const ordered = React.useMemo(() => orderExtractedClaims(claims.all, timings), [claims.all, timings]);
+  // Newest first, which is what this branch says it draws — see `orderNewestFirst`. The fetched list
+  // already is; the reader's own comment is the one row that is not, because it is appended.
+  const orderedComments = React.useMemo(() => orderNewestFirst(debateComments), [debateComments]);
 
   if (isLoading || !isReady) {
     // Held rather than painted unordered. `isReady` is false only while a timing source is still
@@ -379,7 +382,7 @@ function DebateBranch({
   const commentsFailed = commentsError != null && debateComments.length === 0;
   // One row, at the head: it is about the claims, which is what the rest of the branch leads with.
   const leadingRows = claimsFailed ? 1 : 0;
-  const rowCount = leadingRows + claimsInOrder.length + debateComments.length + (commentsFailed ? 1 : 0);
+  const rowCount = leadingRows + claimsInOrder.length + orderedComments.length + (commentsFailed ? 1 : 0);
 
   if (rowCount === 0) return null;
 
@@ -437,7 +440,7 @@ function DebateBranch({
         </ThreadBranchRow>
       )}
 
-      {debateComments.map((comment, index) => (
+      {orderedComments.map((comment, index) => (
         <ThreadBranchRow key={comment.id} isLast={leadingRows + claimsInOrder.length + index === rowCount - 1}>
           <DebateCommentRow
             comment={comment}

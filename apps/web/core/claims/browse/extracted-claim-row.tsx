@@ -29,6 +29,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ActivityRowTag } from './activity-row-tag';
 import { canNestBelow } from './claim-activity-depth';
+import { orderNewestFirst } from './claim-activity-order';
 import type { OrderedTranscriptClaim } from './claim-activity-order';
 import { ClaimCommentPositionBoundary, ResponsePositionTag } from './claim-comment-position';
 import { DebateCommentRow } from './debate-comment-row';
@@ -315,7 +316,10 @@ function ClaimComments({
   onCollapse: () => void;
   label: { expand: string; collapse: string };
 }) {
-  const { comments, error, refetch } = useComments({ entityId: claimId, spaceId });
+  const { comments: unordered, error, refetch } = useComments({ entityId: claimId, spaceId });
+  // Newest first, as the branch above draws its own: the reader's own comment is appended to the cache
+  // and would otherwise be the last row rather than the first. See `orderNewestFirst`.
+  const comments = React.useMemo(() => orderNewestFirst(unordered), [unordered]);
   // Only after a *successful* empty response. A failed read reports the same empty list, so returning
   // null on it drew an expanded branch with nothing in it under a count that said there were replies.
   if (comments.length === 0 && error == null) return null;

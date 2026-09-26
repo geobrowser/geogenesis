@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClaimTiming } from '~/core/debates/claim-timing';
 import type { TranscriptClaim } from '~/core/debates/transcript-claims';
 
-import { activityTime, mergeActivityRows, orderExtractedClaims } from './claim-activity-order';
+import { activityTime, mergeActivityRows, orderExtractedClaims, orderNewestFirst } from './claim-activity-order';
 
 function claim(id: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
   return {
@@ -315,5 +315,48 @@ describe('rows nothing can place in time', () => {
     const merged = mergeActivityRows([], [undated('no-date'), dated('dated', '2026-01-01T00:00:00Z')], 'best');
 
     expect(merged.map(entry => entry.row.id)).toEqual(['dated', 'no-date']);
+  });
+});
+
+/**
+ * The one row that is certainly the newest was the one drawn last.
+ *
+ * `useCreateComment` appends its optimistic row, while the query asks for `[CREATED_AT_DESC, ID_ASC]`.
+ * So every branch in this feed put a comment the reader had just written at the bottom, under comments
+ * from weeks earlier, until the indexer replaced the list.
+ */
+describe('orderNewestFirst', () => {
+  const older = { id: 'c-old', createdAt: '2026-09-01T10:00:00Z' };
+  const newer = { id: 'c-new', createdAt: '2026-09-20T10:00:00Z' };
+
+  it('lifts a just-appended comment to the front', () => {
+    expect(orderNewestFirst([newer, older, { id: 'c-just-now', createdAt: '2026-09-26T10:00:00Z' }])).toEqual([
+      { id: 'c-just-now', createdAt: '2026-09-26T10:00:00Z' },
+      newer,
+      older,
+    ]);
+  });
+
+  it('leaves a settled list alone, because the query already ordered it', () => {
+    expect(orderNewestFirst([newer, older]).map(c => c.id)).toEqual(['c-new', 'c-old']);
+  });
+
+  it('keeps the query order within one timestamp, which is its id order', () => {
+    const a = { id: 'a', createdAt: '2026-09-20T10:00:00Z' };
+    const b = { id: 'b', createdAt: '2026-09-20T10:00:00Z' };
+
+    expect(orderNewestFirst([a, b]).map(c => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('does not mutate what it was given', () => {
+    const list = [older, newer];
+    orderNewestFirst(list);
+
+    expect(list.map(c => c.id)).toEqual(['c-old', 'c-new']);
+  });
+
+  // Undated rows go last rather than to 1970, the same rule the merged feed follows.
+  it('puts a row nothing can place at the tail', () => {
+    expect(orderNewestFirst([{ id: 'undated', createdAt: '' }, older]).map(c => c.id)).toEqual(['c-old', 'undated']);
   });
 });
