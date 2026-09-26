@@ -37,7 +37,22 @@ export const TAGLINE_MAX_LENGTH = 220;
  * shorten, not an error, and keeping the first 220 leaves them something to edit.
  */
 export function normalizeTagline(value: string): string {
-  return value.slice(0, TAGLINE_MAX_LENGTH);
+  const cut = value.slice(0, TAGLINE_MAX_LENGTH);
+
+  // Nothing was removed, so there is no boundary to have landed in the middle of.
+  if (cut.length === value.length) return cut;
+
+  // `slice` counts UTF-16 code units, and an emoji is two of them. Cutting at 220 can land
+  // between the halves of one and leave the first behind: 219 letters and an emoji come back
+  // as 219 letters and a lone high surrogate, which is not valid text at all — it renders as a
+  // replacement character and is stored that way. Drop the orphan rather than publish it.
+  //
+  // Only a *high* surrogate can be orphaned this way; a trailing low surrogate has its partner
+  // in front of it, inside the slice.
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) return cut.slice(0, -1);
+
+  return cut;
 }
 
 /**

@@ -3,6 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { TAGLINE_MAX_LENGTH, normalizeTagline, taglineLengthHint } from './profile-ontology';
 
 /**
+ * What `String.prototype.isWellFormed` answers, spelled out: no surrogate without its partner.
+ * That method is ES2024 and this project's `lib` does not reach it, and widening the compiler
+ * target for one assertion is not this PR's business.
+ */
+const isWellFormed = (value: string) =>
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(value);
+
+/**
  * The limit is the app's, not the graph's — a tagline written by any other client can be longer.
  * Every field that writes one runs its value through here, so this is the only place the rule is
  * stated and the only place it can drift from.
@@ -24,6 +32,34 @@ describe('normalizeTagline', () => {
 
   it('matches LinkedIn at 220 characters', () => {
     expect(TAGLINE_MAX_LENGTH).toBe(220);
+  });
+
+  /*
+   * The cut counts UTF-16 code units, so it can land between the two halves of an emoji and
+   * keep only the first — text that is not merely wrong but malformed, and that publishes as a
+   * replacement character. Reachable by editing a tagline that was already over the limit,
+   * which is the one case the field's own `maxLength` cannot prevent.
+   */
+  it('does not leave half an emoji behind when it cuts', () => {
+    const cut = normalizeTagline(`${'a'.repeat(TAGLINE_MAX_LENGTH - 1)}😀`);
+
+    expect(isWellFormed(cut)).toBe(true);
+    // The whole emoji goes, rather than half of it staying.
+    expect(cut).toBe('a'.repeat(TAGLINE_MAX_LENGTH - 1));
+  });
+
+  it('keeps an emoji that fits whole', () => {
+    const cut = normalizeTagline(`${'a'.repeat(TAGLINE_MAX_LENGTH - 2)}😀`);
+
+    expect(cut).toHaveLength(TAGLINE_MAX_LENGTH);
+    expect(cut.endsWith('😀')).toBe(true);
+    expect(isWellFormed(cut)).toBe(true);
+  });
+
+  // The guard only fires on a cut. A string already short enough is returned untouched, even
+  // the malformed ones this function did not create.
+  it('leaves a short string alone even when it ends in a high surrogate', () => {
+    expect(normalizeTagline('ok\ud83d')).toBe('ok\ud83d');
   });
 });
 
