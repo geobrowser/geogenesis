@@ -203,7 +203,7 @@ describe('DebateEndCard', () => {
   });
 
   it('waits rather than characterising a split off a handful of votes', () => {
-    const { container } = renderCard(cardFixture({ steve: [2, 1] }));
+    const { container } = renderCard(cardFixture({ steve: [1, 1] }));
 
     expect(container.querySelector('[data-end-card-comparison]')).toHaveAttribute(
       'data-end-card-comparison',

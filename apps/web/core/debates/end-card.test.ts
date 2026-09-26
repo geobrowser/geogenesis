@@ -62,16 +62,24 @@ describe('claimVsArguments', () => {
     });
   });
 
-  it('waits while the claim or either debater is under the floor', () => {
-    // A gap between two shares off a handful of votes is noise drawn as a finding.
-    expect(claimVsArguments({ claim: split(3, 1), agreeSide: split(40, 20), disagreeSide: split(40, 20) })).toEqual({
+  it('waits while the claim or either debater has fewer than three votes', () => {
+    // A gap between two shares off one or two votes is noise drawn as a finding.
+    expect(claimVsArguments({ claim: split(1, 1), agreeSide: split(40, 20), disagreeSide: split(40, 20) })).toEqual({
       status: 'waiting',
     });
-    expect(claimVsArguments({ claim: split(60, 40), agreeSide: split(2, 1), disagreeSide: split(40, 20) })).toEqual({
+    expect(claimVsArguments({ claim: split(60, 40), agreeSide: split(2, 0), disagreeSide: split(40, 20) })).toEqual({
       status: 'waiting',
     });
     expect(claimVsArguments({ claim: split(60, 40), agreeSide: split(40, 20), disagreeSide: split(0, 0) })).toEqual({
       status: 'waiting',
+    });
+  });
+
+  it('compares as soon as all three have three votes, well under the platform floor of ten', () => {
+    // The platform is too young for three counts to each reach ten; this is the debate from the
+    // preview, which would otherwise wait indefinitely.
+    expect(claimVsArguments({ claim: split(3, 4), agreeSide: split(2, 1), disagreeSide: split(1, 2) })).toMatchObject({
+      status: 'ready',
     });
   });
 

@@ -54,13 +54,24 @@ export function distinctResponders(tallies: ResponseTally[]): string[] {
   return ordered;
 }
 
+/**
+ * How many votes the claim and each debater need before the card compares them.
+ *
+ * Lower than `CLAIM_RESPONSE_FLOOR`'s 10, deliberately. That floor decides when a claim can be
+ * called controversial across the whole platform, and it stays where it is. The comparison asks
+ * three separate counts to clear it at once — the claim and both debaters — and at the platform's
+ * current voting volume almost no debate would ever show one. Three is the least that is more than
+ * one person's opinion on each side, and the sentence is read against faces that show how few
+ * people it rests on.
+ */
+export const COMPARISON_VOTE_FLOOR = 3;
+
 type Lean = 'agree' | 'disagree' | 'even';
 
 export type ClaimVsArguments =
   /**
-   * Not enough votes to say anything yet. Deliberately a state rather than a guess: a gap between
-   * two percentages off a handful of responses is noise drawn as a finding, and printing one would
-   * teach people to distrust the row on the debates where it does mean something.
+   * Not enough votes to say anything yet — see {@link COMPARISON_VOTE_FLOOR}. A state rather than
+   * a guess: a gap between two percentages off one or two responses is noise drawn as a finding.
    */
   | { status: 'waiting' }
   | {
@@ -89,10 +100,10 @@ function leanOf(percent: number): Lean {
  * Disagree-side one puts 44 / (44 + 71) = 38% of the agreement on the Agree side. Both are then
  * positions on the same line, and the distance between them is what the card reports.
  *
- * Waits until the claim and both debaters have cleared `CLAIM_RESPONSE_FLOOR`. The shares
+ * Waits until the claim and both debaters have {@link COMPARISON_VOTE_FLOOR} votes each. The shares
  * themselves are shown at any count — that is Geo's rule everywhere, and the faces beside them say
- * how many people they are shares of — but comparing two of them is *characterising* the split, which
- * is the one thing the floor exists to gate.
+ * how many people they are shares of — but comparing two of them is *characterising* the split, so
+ * it needs something to stand on.
  */
 export function claimVsArguments({
   claim,
@@ -105,7 +116,8 @@ export function claimVsArguments({
   /** The same for the debater who argued against it. */
   disagreeSide: ResponseSplit;
 }): ClaimVsArguments {
-  if (!claim.meetsFloor || !agreeSide.meetsFloor || !disagreeSide.meetsFloor) return { status: 'waiting' };
+  const enough = (split: ResponseSplit) => split.total >= COMPARISON_VOTE_FLOOR;
+  if (!enough(claim) || !enough(agreeSide) || !enough(disagreeSide)) return { status: 'waiting' };
   if (claim.percent === null || agreeSide.percent === null || disagreeSide.percent === null) {
     return { status: 'waiting' };
   }

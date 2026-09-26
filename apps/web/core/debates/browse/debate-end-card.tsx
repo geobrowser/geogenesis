@@ -55,17 +55,26 @@ export function DebateEndCard({
     <div data-debate-end-card className="absolute inset-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-black/55" />
       {/* The corner the pause control sat in during playback. Inside this layer rather than left on
-          the tile, which the card sits above. */}
-      <div className="absolute top-3 left-3">{replay}</div>
+          the tile, which the card sits above.
+
+          On a narrow player the corner costs the card a 60px band it cannot spare, so replay moves
+          into the card's own top-right corner, a size down and ringed so a white circle still reads
+          against the white card. One control either way — it is placed, not duplicated. */}
+      <div className="absolute top-3 left-3 z-10 @max-md:top-3.5 @max-md:right-3.5 @max-md:left-auto @max-md:[&>button]:size-9 @max-md:[&>button]:ring-1 @max-md:[&>button]:ring-grey-02">
+        {replay}
+      </div>
 
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-16 bottom-3.5 flex flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2.5 @max-md:top-[3.75rem] @max-md:bottom-2.5 @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-x-4 top-16 bottom-3.5 flex flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:bottom-2 @max-md:rounded-lg @max-md:p-3.5"
       >
         <div className="flex flex-col gap-3.5 @max-md:gap-2.5">
-          <div className="flex flex-col gap-1.5 @max-md:gap-1">
+          {/* Clear of the replay control, which sits over this corner on a narrow player. */}
+          <div className="flex flex-col gap-1.5 @max-md:gap-1 @max-md:pr-10">
             <span className="text-chatMedium text-grey-04">Where do you stand?</span>
-            <p className="text-cardEntityTitle text-balance @max-md:text-[1.0625rem] @max-md:leading-[1.375rem]">
+            {/* Two lines at most on a narrow player: the feed prints the claim in full directly above
+                the video, so here it only has to say which claim the question is about. */}
+            <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
               {card.claimText}
             </p>
           </div>
@@ -108,7 +117,7 @@ export function DebateEndCard({
           </div>
         </div>
 
-        <div className="mt-[1.125rem] mb-4 h-px shrink-0 bg-divider @max-md:my-3" />
+        <div className="mt-[1.125rem] mb-4 h-px shrink-0 bg-divider @max-md:my-2.5" />
 
         {/* Side by side at every width. Two debaters is the one comparison this card exists to make,
             and stacking them on a phone turns it into two readouts that happen to be near each other. */}
@@ -129,8 +138,10 @@ export function DebateEndCard({
 
         <div className="min-h-3 flex-1" />
 
+        {/* Not on a narrow player, where the same pill sits directly under the video and the card
+            needs the height more than a second copy of it. */}
         {onOpenClaims && card.totalClaims > 0 ? (
-          <div className="flex justify-center">
+          <div className="flex justify-center @max-md:hidden">
             <PillAction
               label={`View ${card.totalClaims} ${card.totalClaims === 1 ? 'claim' : 'claims'}`}
               icon={<Warning />}
@@ -338,8 +349,7 @@ function ComparisonBox({
           {ends}
         </div>
         <p className="text-metadata text-grey-04 @max-md:text-chat">
-          Once more of the debaters&rsquo; claims have votes, this shows whether the vote on the claim matches the
-          arguments people agreed with.
+          Shows once the claim and each debater&rsquo;s claims have a few votes.
         </p>
       </div>
     );
