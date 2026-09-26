@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import { TAGLINE_MAX_LENGTH, normalizeTagline, taglineLengthHint } from '~/core/profile/profile-ontology';
 import {
   type EducationDraft,
   type PositionDraft,
@@ -42,7 +43,7 @@ type Props = {
 };
 
 /**
- * Edit profile (GEO-2839). Four fields, published straight to the viewer's
+ * Edit profile (GEO-2839). Five fields, published straight to the viewer's
  * personal space with no review step.
  *
  * Saving closes it. The write is slow — p50 ~10s, p95 ~48s — and the status bar
@@ -62,7 +63,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   /**
    * Which sheet is open, if any. A sheet replaces the modal's body rather than
-   * stacking over it — the four fields underneath have nothing to do with the
+   * stacking over it — the fields underneath have nothing to do with the
    * position being added, and two scroll areas fighting is worse than one.
    *
    * `editing` is the row the sheet was opened on, where it was opened on one.
@@ -100,6 +101,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const [name, setName] = React.useState('');
+  const [tagline, setTagline] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [banner, setBanner] = React.useState<ImageState>(EMPTY_IMAGE_STATE);
   const [avatar, setAvatar] = React.useState<ImageState>(EMPTY_IMAGE_STATE);
@@ -110,7 +112,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // form: the name arrives early from the warm profile query while the description
   // only exists on the entity, so a single flag let someone type a name during
   // hydration and silently delete a description they never saw.
-  const pristineRef = React.useRef({ name: true, description: true });
+  const pristineRef = React.useRef({ name: true, tagline: true, description: true });
 
   const isPublishing = status === 'publishing';
 
@@ -118,7 +120,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const pressStartedOnBackdrop = React.useRef(false);
 
   const resetForm = React.useCallback(() => {
-    pristineRef.current = { name: true, description: true };
+    pristineRef.current = { name: true, tagline: true, description: true };
     setBanner(previous => {
       if (previous.previewUrl) URL.revokeObjectURL(previous.previewUrl);
       return EMPTY_IMAGE_STATE;
@@ -153,8 +155,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   React.useEffect(() => {
     if (!open) return;
     if (pristineRef.current.name) setName(current.name);
+    // Seeded as stored, not cut. A tagline over the limit is somebody's real headline, and
+    // showing it short would be the modal lying about what it is about to leave alone —
+    // `taglineLengthHint` says what editing it would do instead.
+    if (pristineRef.current.tagline) setTagline(current.tagline);
     if (pristineRef.current.description) setDescription(current.description);
-  }, [open, current.name, current.description]);
+  }, [open, current.name, current.tagline, current.description]);
 
   // A finished publish is the one case where the modal closes itself.
   //
@@ -223,6 +229,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // an untrimmed original marked the form dirty the moment it opened, and let an
   // image-only edit quietly rewrite the name in trimmed form.
   const publishName = pristineRef.current.name ? current.name : name.trim();
+  // Same rule as the name above, and for the same reason. Cutting a pristine tagline here
+  // would make `hasChanges` true the moment the modal opened on a stored one over the limit —
+  // Save live against an edit nobody made, and one click away from silently republishing
+  // somebody's headline 40 characters shorter. It is cut when they edit it, not before.
+  const publishTagline = pristineRef.current.tagline ? current.tagline : normalizeTagline(tagline.trim());
   const publishDescription = pristineRef.current.description ? current.description : description.trim();
 
   // Compared the way they are published — trimmed, and with a removal of an image
@@ -233,11 +244,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   const hasChanges =
     publishName !== current.name ||
+    publishTagline !== current.tagline ||
     publishDescription !== current.description ||
     changesImage(banner, current.bannerUrl) ||
     changesImage(avatar, current.avatarUrl) ||
     // Work and education write nothing until this Save, so a position added with
-    // the four fields left alone is the whole of the edit.
+    // the other fields left alone is the whole of the edit.
     history.hasPendingChanges;
 
   // A failed save has already written its rows to the local store, so the entity
@@ -290,7 +302,13 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // No `resetForm()` here: the draft has to survive in case the publish fails
     // and the modal is reopened on it.
     void publish(
-      { name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit },
+      {
+        name: publishName,
+        tagline: publishTagline,
+        description: publishDescription,
+        banner: banner.edit,
+        avatar: avatar.edit,
+      },
       history.stagePending()
     );
     onOpenChange(false);
@@ -444,6 +462,32 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   </label>
 
                   <label className="flex flex-col gap-1.5">
+                    <span className="text-metadataMedium text-grey-04">Tagline</span>
+                    <Input
+                      value={tagline}
+                      onChange={event => {
+                        pristineRef.current.tagline = false;
+                        // Cut here rather than relying on `maxLength` alone, which some browsers
+                        // let a paste past and which says nothing about a value seeded from the
+                        // entity that is already too long.
+                        setTagline(normalizeTagline(event.currentTarget.value));
+                      }}
+                      disabled={isPublishing}
+                      maxLength={TAGLINE_MAX_LENGTH}
+                      placeholder="Your role, or what you’re working on now."
+                    />
+                    {/* What it is on the left, how much room is left on the right. There is no
+                    error state to reach — the field cannot hold more than it allows — so the
+                    count is guidance rather than validation. */}
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-footnote text-grey-04">
+                      <span>One line under your name. The first thing people should know about you.</span>
+                      {/* Wraps to a line of its own when it is the over-limit sentence rather
+                      than a count, which is the only time it is long. */}
+                      <span className="tabular-nums">{taglineLengthHint(tagline)}</span>
+                    </span>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
                     <span className="text-metadataMedium text-grey-04">Description</span>
                     <textarea
                       value={description}
@@ -453,10 +497,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       rows={3}
-                      placeholder="A sentence about who you are and what you work on."
+                      placeholder="A few sentences on your background, what you work on, and what you’re interested in."
                       className={cx(inputStyles(), 'resize-none')}
                     />
-                    <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
+                    {/* Named against the tagline above it — "the longer version" is the whole
+                    distinction, and it is the one thing somebody looking at both fields needs. */}
+                    <span className="text-footnote text-grey-04">
+                      The longer version, shown in the About section of your profile.
+                    </span>
                   </label>
 
                   <HistorySection

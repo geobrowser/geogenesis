@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EditProfileStatus } from '~/core/hooks/use-edit-profile';
+import { TAGLINE_MAX_LENGTH } from '~/core/profile/profile-ontology';
 
 import { EditProfileDialog } from './edit-profile-dialog';
 
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   errorMessage: null as string | null,
   current: {
     name: 'Preston Mantel',
+    tagline: 'Engineer at Geo',
     description: 'Working on debates.',
     bannerUrl: undefined as string | undefined,
     avatarUrl: undefined as string | undefined,
@@ -67,7 +69,8 @@ function renderDialog(onOpenChange = vi.fn()) {
 }
 
 const nameField = () => screen.getByPlaceholderText('Your name');
-const descriptionField = () => screen.getByPlaceholderText(/A sentence about who you are/);
+const taglineField = () => screen.getByPlaceholderText('Your role, or what you’re working on now.');
+const descriptionField = () => screen.getByPlaceholderText(/A few sentences on your background/);
 const saveButton = () => screen.getByRole('button', { name: /Save profile|Publishing|Retry/ });
 
 beforeEach(() => {
@@ -83,6 +86,7 @@ beforeEach(() => {
   mocks.stagedHistory = { values: [], relations: [] };
   mocks.current = {
     name: 'Preston Mantel',
+    tagline: 'Engineer at Geo',
     description: 'Working on debates.',
     bannerUrl: undefined,
     avatarUrl: undefined,
@@ -96,7 +100,58 @@ describe('EditProfileDialog', () => {
     renderDialog();
 
     expect(nameField()).toHaveValue('Preston Mantel');
+    expect(taglineField()).toHaveValue('Engineer at Geo');
     expect(descriptionField()).toHaveValue('Working on debates.');
+  });
+
+  it('publishes an edited tagline, capped at the limit', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.clear(taglineField());
+    await userEvent.type(taglineField(), 'Building debates');
+    await userEvent.click(saveButton());
+
+    expect(taglineField()).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
+    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 'Building debates'.length} characters left`)).toBeInTheDocument();
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ tagline: 'Building debates' }),
+      expect.anything()
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // A tagline already over the limit — written before this field existed, or by another client —
+  // is somebody's real headline. Cutting it on open would make Save live against an edit nobody
+  // made and republish it 40 characters shorter on one click. Same rule as the name field.
+  it('leaves an over-long tagline alone until it is edited', async () => {
+    const stored = 'y'.repeat(TAGLINE_MAX_LENGTH + 40);
+    mocks.current = { ...mocks.current, tagline: stored };
+    renderDialog();
+
+    expect(taglineField()).toHaveValue(stored);
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText(/Over the 220-character limit/)).toBeInTheDocument();
+
+    await userEvent.type(nameField(), '!');
+    await userEvent.click(saveButton());
+
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ tagline: stored }), expect.anything());
+  });
+
+  it('cuts the tagline once the field is actually edited', async () => {
+    mocks.current = { ...mocks.current, tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
+    renderDialog();
+
+    // A deletion, because `maxLength` is what an over-long field allows: typing into one is
+    // refused outright, so the first edit anybody can make is taking a character out — and that
+    // is the keystroke that snaps the whole value down to the limit.
+    await userEvent.type(taglineField(), '{backspace}');
+    await userEvent.click(saveButton());
+
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ tagline: 'y'.repeat(TAGLINE_MAX_LENGTH) }),
+      expect.anything()
+    );
   });
 
   it('keeps save disabled until something actually changes', async () => {
@@ -178,6 +233,7 @@ describe('EditProfileDialog', () => {
     expect(mocks.publish).toHaveBeenCalledWith(
       {
         name: 'Preston',
+        tagline: 'Engineer at Geo',
         description: 'Working on debates.',
         banner: { kind: 'unchanged' },
         avatar: { kind: 'unchanged' },
@@ -452,7 +508,7 @@ describe('EditProfileDialog', () => {
     await userEvent.paste('Half-typed name');
 
     mocks.entityId = 'entity-b';
-    mocks.current = { name: 'Someone Else', description: '', bannerUrl: undefined, avatarUrl: undefined };
+    mocks.current = { name: 'Someone Else', tagline: '', description: '', bannerUrl: undefined, avatarUrl: undefined };
     rerender(<EditProfileDialog open onOpenChange={vi.fn()} />);
 
     // Re-seeded from the new profile rather than holding the old draft.

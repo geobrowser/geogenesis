@@ -15,18 +15,23 @@ import {
   normalizeEducation,
   normalizeEmployment,
 } from '~/core/profile/normalize-history';
+import { TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 
 import { graphql } from './graphql';
 
 interface NetworkResult {
   entity: {
-    description: Array<{ text: string | null }>;
+    /** Optional because a partial answer can drop a selection rather than return it empty. */
+    tagline?: Array<{ text: string | null }>;
+    description?: Array<{ text: string | null }>;
     employment: HistoryEdgeNode[];
     education: HistoryEdgeNode[];
   } | null;
 }
 
 export interface ProfileHistory {
+  /** The line the person wrote about themselves; preferred over everything derived from it. */
+  tagline: string | null;
   description: string | null;
   employment: EmploymentCard[];
   education: EducationCard[];
@@ -133,6 +138,10 @@ const orgAvatar = `
 const profileHistoryQuery = (entityId: string, spaceId: string) => `
   {
     entity(id: ${JSON.stringify(entityId)}) {
+      tagline: valuesList(first: 1, filter: {
+        propertyId: { is: ${JSON.stringify(TAGLINE_PROPERTY)} }
+        spaceId: { is: ${JSON.stringify(spaceId)} }
+      }) { text }
       description: valuesList(first: 1, filter: {
         propertyId: { is: ${JSON.stringify(DESCRIPTION_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
@@ -192,7 +201,10 @@ export async function fetchProfileHistory(entityId: string, spaceId: string): Pr
   const entity = result.right.entity;
 
   return {
-    description: entity?.description[0]?.text?.trim() || null,
+    // Indexed through `?.`: a partial answer that drops a selection entirely is a missing
+    // field here, not an empty list, and reading `[0]` off it threw the whole request away.
+    tagline: entity?.tagline?.[0]?.text?.trim() || null,
+    description: entity?.description?.[0]?.text?.trim() || null,
     employment: normalizeEmployment(entity?.employment ?? []),
     education: normalizeEducation(entity?.education ?? []),
   };

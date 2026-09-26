@@ -129,8 +129,20 @@ export function nameInSpace(values: Value[], spaceId?: string): string | null {
  * silence is the honest answer. Empty and absent are the same answer here for that reason.
  */
 export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return description(values) || null;
-  return description(writtenIn(values, spaceId)) || null;
+  return textInSpace(values, SystemIds.DESCRIPTION_PROPERTY, spaceId);
+}
+
+/**
+ * The same rule as `descriptionInSpace`, for any other text a space writes about an entity.
+ *
+ * Every such property is editorial in the way a description is — a tagline borrowed from
+ * another space puts words in this space's mouth — so none of them fall back across spaces,
+ * and empty reads as absent. `descriptionInSpace` is this function with its property fixed;
+ * it keeps its own name because that is what nearly every caller wants.
+ */
+export function textInSpace(values: Value[], propertyId: string, spaceId?: string): string | null {
+  const scoped = spaceId ? writtenIn(values, spaceId) : values;
+  return pickBySpaceRank(scoped, propertyId)?.value || null;
 }
 
 /**

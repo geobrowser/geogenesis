@@ -29,6 +29,7 @@ import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-pr
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
 import { ProfileActions } from '~/partials/profile/profile-actions';
 import { ProfileRail } from '~/partials/profile/profile-rail';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
@@ -141,8 +142,11 @@ export default async function Layout(props0: LayoutProps) {
    * scoped its values and relations to this space, which is the filtering the
    * Overview page used to do by hand.
    */
-  const profileRail = isProfile ? (
-    <ProfileRail spaceId={spaceId} personEntityId={props.id} {...profileRailFacts(props.space, spaceId)} />
+  // Read once: the rail takes all of it, and the header takes the tagline out of it.
+  const profileFacts = isProfile ? profileRailFacts(props.space, spaceId) : null;
+
+  const profileRail = profileFacts ? (
+    <ProfileRail spaceId={spaceId} personEntityId={props.id} {...profileFacts} />
   ) : null;
 
   return (
@@ -205,8 +209,22 @@ export default async function Layout(props0: LayoutProps) {
                     ) : null
                   }
                 />
+                {/* Name, then the line they wrote, then the roles behind it. */}
+                {isProfile && (
+                  <PersonalSpaceTagline
+                    spaceId={spaceId}
+                    personEntityId={props.id}
+                    fallbackTagline={profileFacts?.tagline ?? null}
+                  />
+                )}
                 {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
-                <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} hideWhenReading={isProfile} />
+                {/*
+                 * Off a profile entirely, in both modes. A person's description
+                 * is shown and edited in the rail's About card instead, and a
+                 * field here would have put the same sentence in two places
+                 * depending on the edit toggle.
+                 */}
+                {!isProfile && <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />}
                 {/*
                  * A profile renders none of this row. Types move to the rail's
                  * About section, the vote pair into the action row beside Edit
