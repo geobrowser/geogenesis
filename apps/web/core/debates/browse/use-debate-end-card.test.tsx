@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
   summaries: new Map<string, unknown>() as Map<string, unknown> | undefined,
   batchCalls: [] as { spaceId: string; targets: { entityId: string }[]; enabled: boolean }[],
   claimSummary: null as unknown,
+  /** The `enabled` each entity lookup was made with. */
+  entityEnabled: [] as boolean[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -32,7 +34,10 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   },
 }));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [] }),
+  useQueryEntities: ({ enabled }: { enabled: boolean }) => {
+    mocks.entityEnabled.push(enabled);
+    return { entities: [] };
+  },
 }));
 vi.mock('./use-debate-claim-response', () => ({
   useDebateClaimResponse: () => ({ responseKind: 'stance', summary: mocks.claimSummary, control: {} }),
@@ -69,6 +74,7 @@ const debate = {
 describe('useDebateEndCard', () => {
   beforeEach(() => {
     mocks.batchCalls = [];
+    mocks.entityEnabled = [];
     mocks.claimSummary = { positive: 62, negative: 38, total: 100, percent: 62, meetsFloor: true };
     mocks.claims = transcript({
       [STEVE]: [claim('s1', DEBATE_SPACE_HEX), claim('s2', DEBATE_SPACE_HEX), claim('s3', ELSEWHERE)],
@@ -143,6 +149,32 @@ describe('useDebateEndCard', () => {
     const { result } = renderHook(() => useDebateEndCard(debate, true));
 
     expect(result.current.countsReady).toBe(false);
+  });
+
+  it('keeps asking once the debate has been active, so scrolling past it does not empty the card', () => {
+    // Scrolling makes another debate the active one while this card is still on screen. Turning the
+    // reads off then emptied the entity lookup — a disabled one answers with nothing — and the
+    // comparison box vanished and came back as the viewer scrolled.
+    const { rerender } = renderHook(({ enabled }) => useDebateEndCard(debate, enabled), {
+      initialProps: { enabled: true },
+    });
+    mocks.batchCalls = [];
+    mocks.entityEnabled = [];
+
+    rerender({ enabled: false });
+
+    expect(mocks.batchCalls.at(-1)?.enabled).toBe(true);
+    expect(mocks.entityEnabled.at(-1)).toBe(true);
+  });
+
+  it('holds a different debate back until it too has been active', () => {
+    const { rerender } = renderHook(({ current, enabled }) => useDebateEndCard(current, enabled), {
+      initialProps: { current: debate, enabled: true },
+    });
+    const next = { ...debate, id: 'debate-2' } as Debate;
+
+    rerender({ current: next, enabled: false });
+    expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
   });
 
   it('asks for nothing while held back', () => {
