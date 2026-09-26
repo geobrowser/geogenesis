@@ -48,8 +48,8 @@ export type SpeakerProfile = { name?: string | null; avatarUrl?: string | null }
  *
  * Built out of what the thread around it already uses: the comment row's own density metrics, the
  * same `Avatar` framing every other avatar in the app gets, `EntityVoteButtons` (which already
- * draws responder faces beside the control and picks its icons from the response kind — thumbs for
- * a stance, chevrons for veracity), and `EntityCommentsButton`. Nothing here is a new control.
+ * draws responder faces beside the control, and answers a claim with Agree/Disagree like every other
+ * claim surface), and `EntityCommentsButton`. Nothing here is a new control.
  */
 export function ExtractedClaimRow({
   claim,
@@ -92,7 +92,6 @@ export function ExtractedClaimRow({
    * Null when the speaker is unknown or the debate does not record a side for them.
    */
   speakerPosition: boolean | null;
-  /** The claim page's vocabulary, so the tag reads Agree/Disagree or Verify/Dispute to match. */
   /**
    * How many comments the claim has, counted by the server.
    *

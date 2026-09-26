@@ -509,8 +509,6 @@ function ClaimOverviewTab({
   hrefs: { debates: string; claims: string };
   onSelectSystemTab?: (tab: ClaimSystemTab) => void;
 }) {
-  // The claim's own vocabulary carries into the thread: a debater's side reads Agree/Disagree on
-  // an opinion claim and Verify/Dispute on a factual one, the same as every commenter's badge.
   // The same number the claim's card shows in Explore, from the same query — one definition of
   // "how much has happened here", so the two surfaces cannot disagree.
   const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
