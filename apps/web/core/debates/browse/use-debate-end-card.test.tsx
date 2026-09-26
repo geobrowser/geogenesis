@@ -123,6 +123,21 @@ describe('useDebateEndCard', () => {
     expect(result.current.comparison).toMatchObject({ status: 'ready', claimPercent: 62, argumentsPercent: 38 });
   });
 
+  it('puts the Agree-side debater first whatever slot they recorded in', () => {
+    // The card's Agree button, the green end of every bar and the Agree end of the comparison are all
+    // on the left; the debater arguing for the claim has to be too.
+    const flipped = {
+      ...debate,
+      participants: [
+        { participant_slot: 1, profile_space_id: JONATHAN, display_name: 'Jonathan', position: false },
+        { participant_slot: 2, profile_space_id: STEVE, display_name: 'Steve', position: true },
+      ],
+    } as unknown as Debate;
+
+    const { result } = renderHook(() => useDebateEndCard(flipped, true));
+    expect(result.current.debaters.map(debater => debater.name)).toEqual(['Steve', 'Jonathan']);
+  });
+
   it('is not ready to report counts until the batch has answered', () => {
     mocks.summaries = undefined;
     const { result } = renderHook(() => useDebateEndCard(debate, true));

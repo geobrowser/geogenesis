@@ -94,18 +94,23 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
 
   const debaters = React.useMemo<EndCardDebater[]>(
     () =>
-      claimsByParticipant.map(({ participant, claimCount, countedIds }) => {
-        const tallies = countedIds.map(
-          entityId => batch.data?.get(claimResponseTargetKey({ entityId, responseKind })) ?? EMPTY_TALLY
-        );
-        return {
-          participant,
-          name: speakerLabel(participant),
-          claimCount,
-          split: poolResponses(tallies),
-          responderSpaceIds: distinctResponders(tallies),
-        };
-      }),
+      // The Agree side first, whatever slot it recorded in: the card's Agree button, the green end
+      // of every split bar and the Agree end of the comparison line are all on the left, so the
+      // debater arguing for the claim has to be too. Stable, so slot order holds within a side.
+      [...claimsByParticipant]
+        .sort((left, right) => Number(right.participant.position) - Number(left.participant.position))
+        .map(({ participant, claimCount, countedIds }) => {
+          const tallies = countedIds.map(
+            entityId => batch.data?.get(claimResponseTargetKey({ entityId, responseKind })) ?? EMPTY_TALLY
+          );
+          return {
+            participant,
+            name: speakerLabel(participant),
+            claimCount,
+            split: poolResponses(tallies),
+            responderSpaceIds: distinctResponders(tallies),
+          };
+        }),
     [batch.data, claimsByParticipant, responseKind]
   );
 

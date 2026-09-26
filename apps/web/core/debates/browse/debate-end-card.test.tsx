@@ -35,13 +35,6 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     <div data-testid="position-row" data-show-participants={String(showParticipants)} />
   ),
 }));
-vi.mock('./debate-interaction-bar', () => ({
-  PillAction: ({ label, onClick }: { label: string; onClick: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {label}
-    </button>
-  ),
-}));
 
 type CardData = React.ComponentProps<typeof DebateEndCard>['card'];
 
@@ -174,18 +167,9 @@ describe('DebateEndCard', () => {
     expect(onOpenClaims).toHaveBeenCalledWith('jonathan-space');
   });
 
-  it('opens the claims panel at the top from the pill at the foot', () => {
-    const onOpenClaims = vi.fn();
-    renderCard(cardFixture(), onOpenClaims);
-
-    fireEvent.click(screen.getByRole('button', { name: 'View 17 claims' }));
-    expect(onOpenClaims).toHaveBeenCalledWith();
-  });
-
   it('draws no way into the claims when there is nowhere to open them', () => {
     renderCard(cardFixture());
 
-    expect(screen.queryByRole('button', { name: 'View 17 claims' })).toBeNull();
     expect(screen.queryByRole('button', { name: /voted on Steve Fuller's claims/ })).toBeNull();
     // The faces are still shown, just not as a control.
     expect(screen.getAllByTestId('debater-faces')).toHaveLength(2);
@@ -198,8 +182,18 @@ describe('DebateEndCard', () => {
     expect(
       screen.getByText("Most agree with the claim, but found Jonathan Bostock's arguments against it more convincing.")
     ).toBeInTheDocument();
-    expect((container.querySelector('[data-marker="claim"]') as HTMLElement).style.left).toBe('62%');
-    expect((container.querySelector('[data-marker="arguments"]') as HTMLElement).style.left).toBe('38%');
+    // Agree runs from the left, under the Agree button: 62% agree sits 38% of the way along.
+    expect((container.querySelector('[data-marker="claim"]') as HTMLElement).style.left).toBe('38%');
+    expect((container.querySelector('[data-marker="arguments"]') as HTMLElement).style.left).toBe('62%');
+  });
+
+  it('puts the Agree end of the line on the left, as the Agree button and every split bar are', () => {
+    renderCard(cardFixture());
+
+    const [left, right] = [screen.getByText(/^Agree · /), screen.getByText(/ · Disagree$/)];
+    expect(left).toHaveTextContent('Agree · Steve Fuller');
+    expect(right).toHaveTextContent('Jonathan Bostock · Disagree');
+    expect(left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('waits rather than characterising a split off a handful of votes', () => {

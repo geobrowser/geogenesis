@@ -10,14 +10,12 @@ import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { type ResponseKind, responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
-import { Warning } from '~/design-system/icons/warning';
 import { Text } from '~/design-system/text';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { RespondersPopover } from '~/partials/entity-page/entity-vote-buttons';
 
-import { PillAction } from './debate-interaction-bar';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
 
 type EndCardData = ReturnType<typeof useDebateEndCard>;
@@ -35,8 +33,12 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  * and a fullscreen view, and a phone layout keyed to the window would get the wide ones wrong. The
  * player carries `@container`, and below 448px the card tightens and the comparison drops its line.
  *
- * No claims list. They popped up over the video as they were made; the card offers the way back to
- * them — the faces beside each debater, and the pill at the foot — rather than repeating them.
+ * No claims list. They popped up over the video as they were made; the faces beside each debater
+ * open them in the claims panel, and the claims pill sits directly under the video as it always has.
+ *
+ * Sized to fit a feed card's player without scrolling. That is why replay lives in the card's own
+ * header rather than in a band above it, and why the card carries no second claims pill: each was a
+ * row of height the content needed. It still scrolls as a last resort on a player too short for it.
  */
 export function DebateEndCard({
   card,
@@ -54,29 +56,25 @@ export function DebateEndCard({
   return (
     <div data-debate-end-card className="absolute inset-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-black/55" />
-      {/* The corner the pause control sat in during playback. Inside this layer rather than left on
-          the tile, which the card sits above.
-
-          On a narrow player the corner costs the card a 60px band it cannot spare, so replay moves
-          into the card's own top-right corner, a size down and ringed so a white circle still reads
-          against the white card. One control either way — it is placed, not duplicated. */}
-      <div className="absolute top-3 left-3 z-10 @max-md:top-3.5 @max-md:right-3.5 @max-md:left-auto @max-md:[&>button]:size-9 @max-md:[&>button]:ring-1 @max-md:[&>button]:ring-grey-02">
-        {replay}
-      </div>
 
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-16 bottom-3.5 flex flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:bottom-2 @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-4 flex flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-2 @max-md:rounded-lg @max-md:p-3.5"
       >
-        <div className="flex flex-col gap-3.5 @max-md:gap-2.5">
-          {/* Clear of the replay control, which sits over this corner on a narrow player. */}
-          <div className="flex flex-col gap-1.5 @max-md:gap-1 @max-md:pr-10">
-            <span className="text-chatMedium text-grey-04">Where do you stand?</span>
-            {/* Two lines at most on a narrow player: the feed prints the claim in full directly above
-                the video, so here it only has to say which claim the question is about. */}
-            <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
-              {card.claimText}
-            </p>
+        <div className="flex flex-col gap-3 @max-md:gap-2.5">
+          <div className="flex items-start gap-3 @max-md:gap-2.5">
+            {/* Top-left, the corner the pause control held for the whole debate, now inside the card
+                rather than in a band above it. Ringed, since a white circle on a white card has no
+                edge of its own. */}
+            <div className="shrink-0 [&>button]:ring-1 [&>button]:ring-grey-02 @max-md:[&>button]:size-9">{replay}</div>
+            <div className="flex min-w-0 flex-col gap-1 pt-0.5">
+              <span className="text-chatMedium text-grey-04">Where do you stand?</span>
+              {/* Two lines at most on a narrow player: the feed prints the claim in full directly
+                  above the video, so here it only has to say which claim the question is about. */}
+              <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
+                {card.claimText}
+              </p>
+            </div>
           </div>
 
           <VoteRow
@@ -117,10 +115,11 @@ export function DebateEndCard({
           </div>
         </div>
 
-        <div className="mt-[1.125rem] mb-4 h-px shrink-0 bg-divider @max-md:my-2.5" />
+        <div className="my-3.5 h-px shrink-0 bg-divider @max-md:my-2.5" />
 
         {/* Side by side at every width. Two debaters is the one comparison this card exists to make,
-            and stacking them on a phone turns it into two readouts that happen to be near each other. */}
+            and stacking them on a phone turns it into two readouts that happen to be near each other.
+            The Agree side on the left, under the Agree button — `useDebateEndCard` orders them. */}
         <div className="grid grid-cols-2 gap-4 @max-md:gap-3">
           {debaters.map(debater => (
             <DebaterColumn
@@ -134,22 +133,6 @@ export function DebateEndCard({
 
         {comparison && agreeSide && disagreeSide && countsReady && claimResponse.summary.hasCounts ? (
           <ComparisonBox comparison={comparison} agreeName={agreeSide.name} disagreeName={disagreeSide.name} />
-        ) : null}
-
-        <div className="min-h-3 flex-1" />
-
-        {/* Not on a narrow player, where the same pill sits directly under the video and the card
-            needs the height more than a second copy of it. */}
-        {onOpenClaims && card.totalClaims > 0 ? (
-          <div className="flex justify-center @max-md:hidden">
-            <PillAction
-              label={`View ${card.totalClaims} ${card.totalClaims === 1 ? 'claim' : 'claims'}`}
-              icon={<Warning />}
-              onClick={() => onOpenClaims()}
-              ariaLabel={`View all ${card.totalClaims} claims from this debate`}
-              actionKind="claims"
-            />
-          </div>
         ) : null}
       </section>
     </div>
@@ -271,7 +254,7 @@ function DebaterColumn({
   );
 
   return (
-    <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2.5 @max-md:gap-1.5">
+    <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2 @max-md:gap-1.5">
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
           <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
@@ -281,7 +264,9 @@ function DebaterColumn({
       </div>
 
       <div className="flex items-baseline gap-1.5">
-        <span className="text-largeTitle leading-none tabular-nums @max-md:text-[1.5rem]">{claimCount}</span>
+        <span className="text-[1.5rem] leading-none font-semibold tracking-[-0.5px] tabular-nums @max-md:text-[1.25rem]">
+          {claimCount}
+        </span>
         <span className="text-metadata text-grey-04 @max-md:text-chat">
           {claimCount === 1 ? 'claim' : 'claims'}
           <span className="hidden @max-md:inline"> · {side}</span>
@@ -332,8 +317,8 @@ function ComparisonBox({
 }) {
   const ends = (
     <div className="flex justify-between gap-2 text-[0.75rem] leading-[0.875rem] text-grey-04">
-      <span className="truncate">Disagree · {disagreeName}</span>
-      <span className="truncate">{agreeName} · Agree</span>
+      <span className="truncate">Agree · {agreeName}</span>
+      <span className="truncate">{disagreeName} · Disagree</span>
     </div>
   );
 
@@ -341,11 +326,11 @@ function ComparisonBox({
     return (
       <div
         data-end-card-comparison="waiting"
-        className="mt-4 flex flex-col gap-2.5 rounded-lg bg-grey-01 px-4 py-3.5 @max-md:mt-3 @max-md:px-3 @max-md:py-2.5"
+        className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-3 @max-md:px-3 @max-md:py-2.5"
       >
         <span className="text-chatMedium">Claim vs. arguments</span>
         <div className="flex flex-col gap-1 @max-md:hidden">
-          <div className="my-2.5 h-1 rounded-full bg-grey-02" />
+          <div className="my-1.5 h-1 rounded-full bg-grey-02" />
           {ends}
         </div>
         <p className="text-metadata text-grey-04 @max-md:text-chat">
@@ -356,15 +341,20 @@ function ComparisonBox({
   }
 
   const reading = claimVsArgumentsReading(comparison, { agreeName, disagreeName });
-  const low = Math.min(comparison.claimPercent, comparison.argumentsPercent);
-  const high = Math.max(comparison.claimPercent, comparison.argumentsPercent);
+  // Agree runs from the left, like the Agree button and the green end of every split bar on the card,
+  // so a share of agreement is measured in from the left edge: 62% agree sits 38% of the way along.
+  const along = (agreePercent: number) => 100 - agreePercent;
+  const claimAt = along(comparison.claimPercent);
+  const argumentsAt = along(comparison.argumentsPercent);
+  const low = Math.min(claimAt, argumentsAt);
+  const high = Math.max(claimAt, argumentsAt);
   // Keep a marker's label on the line even where the marker sits at an end of it.
-  const labelAt = (percent: number) => `${Math.min(90, Math.max(10, percent))}%`;
+  const labelAt = (position: number) => `${Math.min(90, Math.max(10, position))}%`;
 
   return (
     <div
       data-end-card-comparison="ready"
-      className="mt-4 flex flex-col gap-2.5 rounded-lg bg-grey-01 px-4 py-3.5 @max-md:mt-3 @max-md:flex-row @max-md:items-center @max-md:px-3 @max-md:py-2.5"
+      className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-3 @max-md:flex-row @max-md:items-center @max-md:px-3 @max-md:py-2.5"
     >
       <div className="flex items-baseline justify-between @max-md:hidden">
         <span className="text-chatMedium">Claim vs. arguments</span>
@@ -380,31 +370,31 @@ function ComparisonBox({
         aria-label={`${comparison.claimPercent}% agree with the claim; agreement with the debaters' claims sits at ${comparison.argumentsPercent}% toward the Agree side.`}
         className="flex flex-col gap-1 @max-md:hidden"
       >
-        <div className="relative h-[3.375rem]">
+        <div className="relative h-11">
           <span
             className="absolute top-0 -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
-            style={{ left: labelAt(comparison.claimPercent) }}
+            style={{ left: labelAt(claimAt) }}
           >
             Claim
           </span>
-          <div className="absolute inset-x-0 top-[1.5625rem] h-1 rounded-full bg-grey-02" />
+          <div className="absolute inset-x-0 top-[1.125rem] h-1 rounded-full bg-grey-02" />
           <div
-            className="absolute top-[1.5625rem] h-1 bg-ctaPrimary"
+            className="absolute top-[1.125rem] h-1 bg-ctaPrimary"
             style={{ left: `${low}%`, width: `${high - low}%` }}
           />
           <span
             data-marker="claim"
-            className="absolute top-[1.3125rem] size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
-            style={{ left: `${comparison.claimPercent}%` }}
+            className="absolute top-3.5 size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
+            style={{ left: `${claimAt}%` }}
           />
           <span
             data-marker="arguments"
-            className="absolute top-[1.3125rem] size-3 -translate-x-1/2 rounded-full border-2 border-text bg-grey-01"
-            style={{ left: `${comparison.argumentsPercent}%` }}
+            className="absolute top-3.5 size-3 -translate-x-1/2 rounded-full border-2 border-text bg-grey-01"
+            style={{ left: `${argumentsAt}%` }}
           />
           <span
-            className="absolute top-10 -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
-            style={{ left: labelAt(comparison.argumentsPercent) }}
+            className="absolute top-[1.875rem] -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
+            style={{ left: labelAt(argumentsAt) }}
           >
             Arguments
           </span>
