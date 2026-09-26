@@ -33,10 +33,17 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * Nameless entities get nothing. The bar exists to say which entity this is, and an id in that slot
  * says less than the empty bar it would replace.
  *
- * The interaction on the right is `EntityVoteButtons` unmodified, which already resolves what it
- * should offer from the entity's own types: upvote/downvote for an ordinary entity, agree/disagree
- * for a claim, verify/dispute for a factual one. Reproducing that choice here would be a second
- * place for it to be made, and a second place for it to be made differently.
+ * The interaction on the right is `EntityVoteButtons`, which resolves what it should offer from the
+ * entity's own types: upvote/downvote for an ordinary entity, agree/disagree for a claim. Every
+ * claim, since #2541 — `ResponseKind` is `curation | stance` and the factual flag no longer picks a
+ * third. Reproducing that choice here would be a second place for it to be made, and a second place
+ * for it to be made differently; this contract already went stale once by describing a verify/dispute
+ * kind that had been deleted upstream, which is the argument for not restating it at all.
+ *
+ * Two things are asked of it. `compact`, because the bar is one fixed-height line and three of this
+ * control's states are sentences — see the prop's own contract, which says which survive and why. And
+ * the responder faces after the thumbs rather than before, because the bar's name runs right up to
+ * the control and faces in between read as part of the name.
  *
  * Its row is measured off the page's own content column rather than given a width, for the same
  * reason: the pages it covers run 840 to 1142 wide with two different gutters between them, and a
@@ -108,10 +115,6 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
                 lines would take back most of the room it exists to give. */}
             <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
             <span className="flex shrink-0 items-center">
-              {/* Faces after the thumbs, not before them. Everywhere else the cluster leads because
-                  it sits inside a card with the claim's text above it; here the bar's own text runs
-                  right up to it, and a stack of faces between the name and the control it belongs to
-                  reads as part of the name. */}
               <EntityVoteButtons
                 entityId={entityId}
                 spaceId={spaceId}

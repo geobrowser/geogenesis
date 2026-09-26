@@ -359,6 +359,33 @@ describe('useScrolledPastElement', () => {
     expect(result.current.scrolledPast).toBe(false);
   });
 
+  /**
+   * A retired observer's callback can still run. `disconnect()` empties `[[ObservationTargets]]`; the
+   * spec does not empty `[[QueuedEntries]]`, and "notify intersection observers" invokes the callback
+   * of any observer whose queue is non-empty. That closure keeps the *old* `watched`, so the
+   * target filter waves the record straight through and it lands on top of the render-time reset the
+   * new selector just performed.
+   */
+  it('ignores a callback from an observer it has already disconnected', async () => {
+    const first = atViewportBottom(addTitle('entity-1'), -200);
+    const { result, rerender } = renderForSelector('[data-entity-page-title="entity-1"]');
+
+    const retired = latestObserver();
+    notify(retired, first, { isIntersecting: false, bottom: -200 });
+    expect(result.current.scrolledPast).toBe(true);
+
+    // A new entity: the effect tears the old observer down and starts another.
+    act(() => first.remove());
+    rerender({ selector: '[data-entity-page-title="entity-2"]' });
+    await waitFor(() => expect(result.current.scrolledPast).toBe(false));
+    expect(retired.disconnect).toHaveBeenCalled();
+
+    // The retired observer's queued record, arriving after its own teardown.
+    notify(retired, first, { isIntersecting: false, bottom: -200 });
+
+    expect(result.current.scrolledPast).toBe(false);
+  });
+
   it('stays false when IntersectionObserver is unavailable', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     addTitle();

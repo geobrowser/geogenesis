@@ -77,8 +77,21 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
 
     let watched: Element | null = null;
 
+    /*
+     * A retired observer can still call back. `disconnect()` empties `[[ObservationTargets]]`; the
+     * spec does not empty `[[QueuedEntries]]`, and "notify intersection observers" invokes the
+     * callback of any observer whose queue is non-empty. That closure keeps this effect's `watched`,
+     * so the target filter below waves the record straight through — and it lands on top of the
+     * render-time reset the new selector just performed.
+     *
+     * `ResizeObserver` and `MutationObserver` need no equivalent: both specs clear their pending work
+     * on `disconnect` (`activeTargets`, and the record queue respectively). This one is alone in not.
+     */
+    let disposed = false;
+
     const observer = new IntersectionObserver(
       entries => {
+        if (disposed) return;
         // Entries are queued chronologically and several transitions can arrive in one batch, so a
         // reversible state has to follow the last of them rather than any earlier one.
         //
@@ -132,7 +145,10 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     sync();
 
     if (typeof MutationObserver === 'undefined') {
-      return () => observer.disconnect();
+      return () => {
+        disposed = true;
+        observer.disconnect();
+      };
     }
 
     // Coalesced to one lookup a frame. `sync` is cheap while the title is mounted — a connectedness
@@ -151,6 +167,7 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
     mutations.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      disposed = true;
       if (queued) cancelAnimationFrame(queued);
       mutations.disconnect();
       observer.disconnect();

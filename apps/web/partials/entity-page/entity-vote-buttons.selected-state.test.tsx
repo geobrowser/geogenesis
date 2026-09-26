@@ -73,7 +73,6 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-/** Inline draws up, the score, then down. The score is a popover trigger, hence the gap. */
 /**
  * The two direction buttons, picked out by the `group/vote` marker they share rather than by
  * position. The row's button order is not this file's subject and has already changed once — the
