@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { DebateTileChip } from '~/core/debates/debate-video-tile';
@@ -56,31 +58,31 @@ export function DebateEndCard({
   return (
     <div data-debate-end-card className="absolute inset-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-black/55" />
+      {/* The corner the pause control sat in for the whole debate, now starting it again. Inside this
+          layer rather than left on the tile, which the card sits above. */}
+      <div className="absolute top-3 left-3 @max-md:top-2.5 @max-md:left-2.5 @max-md:[&>button]:size-9">{replay}</div>
 
+      {/* As tall as its content rather than the player: a card stretched to the bottom edge left a
+          band of blank white under the comparison that read as something missing. Capped at the
+          player, and scrolls as a last resort on one too short for it. */}
       <section
         aria-label="Debate results"
-        className="absolute inset-4 flex flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-2 @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-14 @max-md:max-h-[calc(100%-4rem)] @max-md:rounded-lg @max-md:p-3.5"
       >
         <div className="flex flex-col gap-3 @max-md:gap-2.5">
-          <div className="flex items-start gap-3 @max-md:gap-2.5">
-            {/* Top-left, the corner the pause control held for the whole debate, now inside the card
-                rather than in a band above it. Ringed, since a white circle on a white card has no
-                edge of its own. */}
-            <div className="shrink-0 [&>button]:ring-1 [&>button]:ring-grey-02 @max-md:[&>button]:size-9">{replay}</div>
-            <div className="flex min-w-0 flex-col gap-1 pt-0.5">
-              <span className="text-chatMedium text-grey-04">Where do you stand?</span>
-              {/* Two lines at most on a narrow player: the feed prints the claim in full directly
-                  above the video, so here it only has to say which claim the question is about. */}
-              <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
-                {card.claimText}
-              </p>
-            </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-chatMedium text-grey-04">Where do you stand?</span>
+            {/* Two lines at most on a narrow player: the feed prints the claim in full directly above
+                the video, so here it only has to say which claim the question is about. */}
+            <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
+              {card.claimText}
+            </p>
           </div>
 
           <VoteRow
             summary={claimResponse.summary}
             countsReady={claimResponse.summary.hasCounts}
-            barClassName="h-2 @max-md:h-1.5"
+            variant="claim"
             faces={
               <ClaimVoters
                 claimId={card.claimId}
@@ -152,31 +154,44 @@ function VoteRow({
   summary,
   countsReady,
   faces,
-  barClassName,
-  compactLabel = false,
+  variant,
+  leading,
 }: {
   summary: Pick<ResponseSplit, 'percent' | 'total'>;
   countsReady: boolean;
   faces: React.ReactNode;
-  barClassName: string;
-  /** Drop "agree" below the container breakpoint, where a debater's column cannot spare the width. */
-  compactLabel?: boolean;
+  /**
+   * `claim` is the full row under the claim: "62% agree", the thicker bar. `debater` is the same row
+   * at a column's width, sharing its line with the claim count — so it drops the verb, which the
+   * claim's row directly above has already established, rather than squeezing the bar to nothing.
+   */
+  variant: 'claim' | 'debater';
+  /** Drawn before the share, on the same line. */
+  leading?: React.ReactNode;
 }) {
   const hasVotes = countsReady && summary.percent !== null;
+  const isClaim = variant === 'claim';
+  const bar = isClaim ? 'h-2 @max-md:h-1.5' : 'h-1.5';
 
   return (
-    <div className="flex items-center gap-3 @max-md:gap-2">
+    <div className={cx('flex items-center', isClaim ? 'gap-3 @max-md:gap-2' : 'gap-2 @max-md:gap-1.5')}>
+      {leading}
       {hasVotes ? (
-        <span className="shrink-0 text-metadataMedium tabular-nums @max-md:text-chatMedium">
-          {summary.percent}%<span className={compactLabel ? '@max-md:hidden' : undefined}> agree</span>
+        <span
+          className={cx(
+            'shrink-0 tabular-nums',
+            isClaim ? 'text-metadataMedium @max-md:text-chatMedium' : 'text-chatMedium'
+          )}
+        >
+          {summary.percent}%{isClaim ? ' agree' : null}
         </span>
       ) : countsReady ? (
         <span className="shrink-0 text-chat text-grey-04">No votes yet</span>
       ) : null}
       {hasVotes ? (
-        <ClaimSplitBar percent={summary.percent!} className={`min-w-8 flex-1 ${barClassName}`} />
+        <ClaimSplitBar percent={summary.percent!} className={cx('min-w-8 flex-1', bar)} />
       ) : (
-        <div className={`min-w-8 flex-1 rounded-full bg-grey-01 ${barClassName}`} />
+        <div className={cx('min-w-8 flex-1 rounded-full bg-grey-01', bar)} />
       )}
       {hasVotes ? faces : null}
     </div>
@@ -241,6 +256,7 @@ function DebaterColumn({
 }) {
   const { participant, name, claimCount, split, responderSpaceIds } = debater;
   const side = responsePositionLabel(participant.position);
+  const countLabel = `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
 
   // Across one debater's claims the same person can agree with some and disagree with others, so a
   // single list split by side would misfile them. The faces open the claims panel at this debater's
@@ -263,21 +279,19 @@ function DebaterColumn({
         <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
       </div>
 
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-[1.5rem] leading-none font-semibold tracking-[-0.5px] tabular-nums @max-md:text-[1.25rem]">
-          {claimCount}
-        </span>
-        <span className="text-metadata text-grey-04 @max-md:text-chat">
-          {claimCount === 1 ? 'claim' : 'claims'}
-          <span className="hidden @max-md:inline"> · {side}</span>
-        </span>
-      </div>
+      {/* On a narrow player the count and the side take their own line: the vote row below has no
+          width to spare for them, and the side chip is dropped from the name's row there. */}
+      <span className="hidden text-chat text-grey-04 tabular-nums @max-md:block">
+        {countLabel} · {side}
+      </span>
 
       <VoteRow
         summary={split}
         countsReady={countsReady}
-        barClassName="h-1.5"
-        compactLabel
+        variant="debater"
+        // Wider players fold the count into this row rather than giving it one of its own: a
+        // number and a word left most of a line empty, and the card needed that height.
+        leading={<span className="shrink-0 text-chat text-grey-04 tabular-nums @max-md:hidden">{countLabel} ·</span>}
         faces={
           onOpenClaims ? (
             <button
@@ -315,12 +329,9 @@ function ComparisonBox({
   agreeName: string;
   disagreeName: string;
 }) {
-  const ends = (
-    <div className="flex justify-between gap-2 text-[0.75rem] leading-[0.875rem] text-grey-04">
-      <span className="truncate">Agree · {agreeName}</span>
-      <span className="truncate">{disagreeName} · Disagree</span>
-    </div>
-  );
+  // The line's two ends, named inline beside it rather than on a row of their own. Just the sides:
+  // which debater argued which is already on the card, directly above.
+  const endLabel = 'shrink-0 text-[0.75rem] leading-[0.875rem] text-grey-04';
 
   if (comparison.status === 'waiting') {
     return (
@@ -329,9 +340,10 @@ function ComparisonBox({
         className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-3 @max-md:px-3 @max-md:py-2.5"
       >
         <span className="text-chatMedium">Claim vs. arguments</span>
-        <div className="flex flex-col gap-1 @max-md:hidden">
-          <div className="my-1.5 h-1 rounded-full bg-grey-02" />
-          {ends}
+        <div className="flex items-center gap-2.5 py-1 @max-md:hidden">
+          <span className={endLabel}>Agree</span>
+          <div className="h-1 flex-1 rounded-full bg-grey-02" />
+          <span className={endLabel}>Disagree</span>
         </div>
         <p className="text-metadata text-grey-04 @max-md:text-chat">
           Shows once the claim and each debater&rsquo;s claims have a few votes.
@@ -368,28 +380,27 @@ function ComparisonBox({
       <div
         role="img"
         aria-label={`${comparison.claimPercent}% agree with the claim; agreement with the debaters' claims sits at ${comparison.argumentsPercent}% toward the Agree side.`}
-        className="flex flex-col gap-1 @max-md:hidden"
+        className="flex items-center gap-2.5 @max-md:hidden"
       >
-        <div className="relative h-11">
+        <span className={endLabel}>Agree</span>
+        <div className="relative h-11 flex-1">
           <span
             className="absolute top-0 -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
             style={{ left: labelAt(claimAt) }}
           >
             Claim
           </span>
-          <div className="absolute inset-x-0 top-[1.125rem] h-1 rounded-full bg-grey-02" />
-          <div
-            className="absolute top-[1.125rem] h-1 bg-ctaPrimary"
-            style={{ left: `${low}%`, width: `${high - low}%` }}
-          />
+          {/* Centred in the box, so the end labels beside it sit level with the line itself. */}
+          <div className="absolute inset-x-0 top-5 h-1 rounded-full bg-grey-02" />
+          <div className="absolute top-5 h-1 bg-ctaPrimary" style={{ left: `${low}%`, width: `${high - low}%` }} />
           <span
             data-marker="claim"
-            className="absolute top-3.5 size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
+            className="absolute top-4 size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
             style={{ left: `${claimAt}%` }}
           />
           <span
             data-marker="arguments"
-            className="absolute top-3.5 size-3 -translate-x-1/2 rounded-full border-2 border-text bg-grey-01"
+            className="absolute top-4 size-3 -translate-x-1/2 rounded-full border-2 border-text bg-grey-01"
             style={{ left: `${argumentsAt}%` }}
           />
           <span
@@ -399,7 +410,7 @@ function ComparisonBox({
             Arguments
           </span>
         </div>
-        {ends}
+        <span className={endLabel}>Disagree</span>
       </div>
 
       <p className="text-metadata @max-md:text-chat">{reading}</p>

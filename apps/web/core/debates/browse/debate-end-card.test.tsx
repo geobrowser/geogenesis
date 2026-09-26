@@ -149,14 +149,17 @@ describe('DebateEndCard', () => {
     expect(screen.queryByText('Claim vs. arguments')).toBeNull();
   });
 
-  it('shows each debater side by side with their side, their count and how their claims landed', () => {
+  it('shows each debater with their side, and their count and share on one line', () => {
     renderCard(cardFixture());
 
     const steve = document.querySelector('[data-end-card-debater="steve-space"]') as HTMLElement;
     expect(within(steve).getByText('Steve Fuller')).toBeInTheDocument();
-    expect(within(steve).getByText('8')).toBeInTheDocument();
-    expect(within(steve).getByText(/^44%/)).toHaveTextContent('44% agree');
     expect(within(steve).getAllByText(/Agree/).length).toBeGreaterThan(0);
+
+    // The count leads the vote row rather than taking a line of its own, and the share drops the
+    // verb the claim's row above has already said.
+    const row = within(steve).getByText('44%').parentElement as HTMLElement;
+    expect(row.textContent).toMatch(/^8 claims ·\s*44%/);
   });
 
   it("opens the claims panel at a debater's claims from their faces", () => {
@@ -187,13 +190,16 @@ describe('DebateEndCard', () => {
     expect((container.querySelector('[data-marker="arguments"]') as HTMLElement).style.left).toBe('62%');
   });
 
-  it('puts the Agree end of the line on the left, as the Agree button and every split bar are', () => {
-    renderCard(cardFixture());
+  it('names the ends of the line Agree and Disagree, left to right, and leaves the names above', () => {
+    // Agree on the left, as the Agree button and the green end of every split bar are. Which debater
+    // argued which side is already on the card directly above, so the line does not repeat it.
+    const { container } = renderCard(cardFixture());
+    const line = container.querySelector('[data-end-card-comparison] [role="img"]') as HTMLElement;
+    const ends = [...line.children].filter(child => child.tagName === 'SPAN').map(child => child.textContent);
 
-    const [left, right] = [screen.getByText(/^Agree · /), screen.getByText(/ · Disagree$/)];
-    expect(left).toHaveTextContent('Agree · Steve Fuller');
-    expect(right).toHaveTextContent('Jonathan Bostock · Disagree');
-    expect(left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ends).toEqual(['Agree', 'Disagree']);
+    expect(line.textContent).not.toContain('Steve Fuller');
+    expect(line.textContent).not.toContain('Jonathan Bostock');
   });
 
   it('waits rather than characterising a split off a handful of votes', () => {
