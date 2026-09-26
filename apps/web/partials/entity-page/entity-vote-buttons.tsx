@@ -417,8 +417,16 @@ export function EntityVoteButtons({
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {isResponseIndexingDelayed && !compact ? (
-        <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
+      {isResponseIndexingDelayed ? (
+        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
+        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
+        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
+        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
+        //
+        // I had claimed the page's own copy still announced. It does not on the surface that matters
+        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
+        // same sentence in a `title` attribute — read on focus, never announced as a live update.
+        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
           {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}

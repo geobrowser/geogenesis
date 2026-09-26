@@ -11,7 +11,7 @@ import { type ContentColumnBox, useMirroredContentColumn } from '~/core/hooks/us
 import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { useEntityMediaUrl } from '~/core/utils/use-entity-media';
+import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
@@ -52,7 +52,20 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
   const { entity } = useQueryEntity({ id: entityId });
   const name = storedName ?? entity?.name ?? null;
 
-  const mediaUrl = useEntityMediaUrl(entityId, spaceId);
+  /*
+   * The keyed hook, not `useEntityMediaUrl`.
+   *
+   * That one composes `useEntityAvatarUrl` and `useEntityCoverUrl`, which each hold their fetched
+   * URL as a bare string with nothing recording which entity it was fetched for. This bar is
+   * deliberately long-lived across entity changes — the scroll hook resets for exactly that case —
+   * so it is the caller those hooks were waiting to bite: the previous entity's face could stay on
+   * the bar, and because avatar wins over cover it could mask the new entity's real cover.
+   *
+   * `useEntityMedia` keys its state by `entityId:spaceId` and says so in its own comment. Avatar over
+   * cover is the same preference `useEntityMediaUrl` applied, made here instead.
+   */
+  const { avatarUrl, coverUrl } = useEntityMedia(entityId, spaceId);
+  const mediaUrl = avatarUrl ?? coverUrl;
 
   const { scrolledPast: isScrolledPastTitle, target: title } = useScrolledPastElement({
     selector: entityPageTitleSelector(entityId),

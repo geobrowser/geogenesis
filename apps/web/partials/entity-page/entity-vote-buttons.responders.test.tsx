@@ -264,19 +264,33 @@ describe('compact, for the sticky header', () => {
     };
   }
 
-  it('drops the indexing notice but keeps the control', async () => {
+  /**
+   * Out of layout, still announced. This assertion used to demand the node be gone entirely, on my
+   * claim that the page's own control announced instead — which is false exactly where it matters:
+   * `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this sentence in a
+   * `title`, read on focus and never announced. A vote cast from the bar had no confirmation at all
+   * for a screen reader.
+   */
+  it('keeps the indexing notice announceable while taking no layout', async () => {
     mocks.indexingDelayed = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
 
     await waitFor(() => expect(tallyTrigger()).toBeInTheDocument());
-    expect(screen.queryByText(INDEXING)).toBeNull();
+
+    const notice = screen.getByText(INDEXING);
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    // `sr-only` is absolutely positioned and clipped, so it cannot widen the 48px row.
+    expect(notice).toHaveClass('sr-only');
+    expect(notice).not.toHaveClass('ml-1');
   });
 
   it('still shows the indexing notice everywhere else', async () => {
     mocks.indexingDelayed = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
-    expect(await screen.findByText(INDEXING)).toBeInTheDocument();
+    const notice = await screen.findByText(INDEXING);
+    expect(notice).toHaveClass('ml-1');
+    expect(notice).not.toHaveClass('sr-only');
   });
 
   /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */

@@ -13,7 +13,10 @@ const mocks = vi.hoisted(() => ({
   /** Stands in for the tracked title element the bar measures its column from. */
   title: null as Element | null,
   queriedName: null as string | null,
-  mediaUrl: undefined as string | undefined,
+  avatarUrl: undefined as string | undefined,
+  coverUrl: undefined as string | undefined,
+  /** The (entityId, spaceId) the media hook was asked for. */
+  mediaArgs: null as unknown[] | null,
   scrolledPast: true,
   /** Props `EntityVoteButtons` was handed, or null if the bar drew none. */
   voteProps: null as Record<string, unknown> | null,
@@ -44,7 +47,10 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.queriedName ? { name: mocks.queriedName } : null, isLoading: false }),
 }));
 vi.mock('~/core/utils/use-entity-media', () => ({
-  useEntityMediaUrl: () => mocks.mediaUrl,
+  useEntityMedia: (...args: unknown[]) => {
+    mocks.mediaArgs = args;
+    return { avatarUrl: mocks.avatarUrl, coverUrl: mocks.coverUrl, isResolving: false };
+  },
 }));
 // The real control reaches for the sync engine, wallet and response queries. What matters here is
 // that the bar hands it the entity, not what it draws.
@@ -74,7 +80,9 @@ function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
 beforeEach(() => {
   mocks.storedName = 'Vitalik Buterin';
   mocks.queriedName = null;
-  mocks.mediaUrl = undefined;
+  mocks.avatarUrl = undefined;
+  mocks.coverUrl = undefined;
+  mocks.mediaArgs = null;
   mocks.scrolledPast = true;
   mocks.voteProps = null;
   mocks.scrollOptions = null;
@@ -149,11 +157,44 @@ describe('EntityStickyHeader', () => {
   });
 
   it('shows the avatar or cover when the entity has one', () => {
-    mocks.mediaUrl = 'https://example.com/avatar.png';
+    mocks.avatarUrl = 'https://example.com/avatar.png';
     renderBar();
 
     const image = screen.getByTestId('entity-sticky-header').querySelector('img');
     expect(image).toHaveAttribute('src', 'https://example.com/avatar.png');
+  });
+
+  it('falls back to the cover when there is no avatar', () => {
+    mocks.coverUrl = 'https://example.com/cover.png';
+    renderBar();
+
+    expect(screen.getByTestId('entity-sticky-header').querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/cover.png'
+    );
+  });
+
+  it('prefers the avatar over the cover', () => {
+    mocks.avatarUrl = 'https://example.com/avatar.png';
+    mocks.coverUrl = 'https://example.com/cover.png';
+    renderBar();
+
+    expect(screen.getByTestId('entity-sticky-header').querySelector('img')).toHaveAttribute(
+      'src',
+      'https://example.com/avatar.png'
+    );
+  });
+
+  /**
+   * The keyed hook, asked for this entity. `useEntityMediaUrl` composes two hooks that hold their
+   * fetched URL as a bare string with nothing recording which entity it was for — and this bar
+   * deliberately outlives an entity change, so it is the caller that bites: the previous entity's
+   * face could stay up, and because avatar wins over cover it could mask the new entity's cover.
+   */
+  it('reads media through the entity-keyed hook', () => {
+    renderBar();
+
+    expect(mocks.mediaArgs).toEqual(['entity-1', 'space-1']);
   });
 
   it('leaves the image out rather than drawing a placeholder', () => {
