@@ -46,7 +46,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_BUTTON_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { VOTE_BUTTON_CLASS, VOTE_BUTTON_CONFIRMING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
@@ -397,30 +397,45 @@ export function EntityVoteButtons({
     );
   }
 
-  // Shared by both thumbs so the two cannot drift, which is how the cursor came to be missing here in
-  // the first place: the claim pills gained it (#2598) and nothing tied this control to them.
-  //
-  // `cursor-progress` while the response is still on its way — submitted, not yet confirmed. The
-  // pills' reason applies unchanged: a response spends tens of seconds confirming, the side is
-  // already drawn as taken, and nothing else in a 48px bar says the press registered. `progress`
-  // rather than `wait` because it is the cursor for "busy, still usable", which these still are.
-  // `isProcessingResponse` is the hook's own account of that window, not a copy of its predicate.
-  const voteButtonClassName = cx(
-    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-    VOTE_BUTTON_CLASS,
-    responseDisabled && 'cursor-default opacity-50',
-    isProcessingResponse && 'cursor-progress'
-  );
+  /*
+   * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
+   * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
+   * taught the pills how to behave in that window and nothing tied the thumbs to them.
+   *
+   * For the tens of seconds a response spends confirming (`isProcessingResponse`, the hook's own
+   * account of that window), the pills and now the thumbs:
+   *
+   * - **ignore presses.** The held thumb is this client's guess until the write lands, and pressing a
+   *   held thumb means "remove" — so a second press, or a double-click, published a retraction nobody
+   *   asked for mid-confirmation;
+   * - say so to assistive technology with `aria-disabled`, and to the pointer with `cursor-progress`;
+   * - drop the hover step, since nothing under the pointer is going to happen;
+   * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
+   * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
+   *
+   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
+   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
+   * overlay belongs with unifying the pills and the thumbs into one control.
+   */
+  const voteButtonProps = (onPress: () => void, title: string) => ({
+    onClick: () => {
+      if (!isProcessingResponse) onPress();
+    },
+    disabled: responseDisabled,
+    'aria-disabled': isProcessingResponse || undefined,
+    title: isProcessingResponse ? RESPONSE_CONFIRMING_COPY : title,
+    className: cx(
+      'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+      isProcessingResponse ? VOTE_BUTTON_CONFIRMING_CLASS : VOTE_BUTTON_CLASS,
+      responseDisabled && 'cursor-default opacity-50',
+      isProcessingResponse && 'cursor-progress'
+    ),
+  });
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
-      <button
-        onClick={handlePositiveResponse}
-        disabled={responseDisabled}
-        title={positiveTitle}
-        className={voteButtonClassName}
-      >
+      <button {...voteButtonProps(handlePositiveResponse, positiveTitle)}>
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
       <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
@@ -432,12 +447,7 @@ export function EntityVoteButtons({
           {displayLabel}
         </button>
       </RespondersPopover>
-      <button
-        onClick={handleNegativeResponse}
-        disabled={responseDisabled}
-        title={negativeTitle}
-        className={voteButtonClassName}
-      >
+      <button {...voteButtonProps(handleNegativeResponse, negativeTitle)}>
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}

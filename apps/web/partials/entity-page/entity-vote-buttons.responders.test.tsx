@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   indexingDelayed: false,
   /** Submitted and not yet confirmed — the window the claim pills show a progress cursor for. */
   processing: false,
+  /** Captured so a test can tell whether a press was sent or swallowed. */
+  submitResponse: vi.fn(),
   /** What `useQueryEntity` reports, for the branches that read the entity rather than a prop. */
   entity: null as unknown,
 }));
@@ -51,7 +53,7 @@ vi.mock('~/core/analytics', () => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
-    submitResponse: vi.fn(),
+    submitResponse: mocks.submitResponse,
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimistic,
     isResponseIndexingDelayed: mocks.indexingDelayed,
@@ -119,6 +121,7 @@ beforeEach(() => {
   mocks.optimistic = undefined;
   mocks.indexingDelayed = false;
   mocks.processing = false;
+  mocks.submitResponse = vi.fn();
   mocks.entity = null;
   jotaiStore.current = createStore();
 });
@@ -340,36 +343,84 @@ describe('compact, for the sticky header', () => {
 });
 
 /**
- * The claim pills show a progress cursor while a response confirms (#2598) — tens of seconds in
- * which the side is already drawn as taken and nothing else says the press registered. The thumbs
- * this control draws, which is what the sticky header votes with, had no such cue.
+ * The claim pills' behaviour while a response confirms (#2587, #2598), which the thumbs — what the
+ * sticky header votes with — did not share. For tens of seconds the held side is this client's guess,
+ * and pressing a held thumb means "remove", so a second press published a retraction mid-confirmation.
  */
 describe('while a response is confirming', () => {
   function thumbs() {
     return screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
   }
 
-  it('shows a progress cursor on both thumbs', async () => {
-    mocks.processing = true;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
-
+  async function renderThumbs({ compact = true }: { compact?: boolean } = {}) {
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact={compact} />, {
+      wrapper,
+    });
     await waitFor(() => expect(thumbs()).toHaveLength(2));
-    for (const thumb of thumbs()) expect(thumb).toHaveClass('cursor-progress');
+    return thumbs();
+  }
+
+  it('ignores presses, as the pills do', async () => {
+    mocks.processing = true;
+    const user = userEvent.setup();
+    const [up, down] = await renderThumbs();
+
+    await user.click(up!);
+    await user.click(down!);
+
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
   });
 
-  it('does not once nothing is on its way', async () => {
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
+  it('sends presses again once nothing is on its way', async () => {
+    const user = userEvent.setup();
+    const [up] = await renderThumbs();
 
-    await waitFor(() => expect(thumbs()).toHaveLength(2));
-    for (const thumb of thumbs()) expect(thumb).not.toHaveClass('cursor-progress');
+    await user.click(up!);
+
+    expect(mocks.submitResponse).toHaveBeenCalledOnce();
   });
 
-  /** Not a bar-only concern: the cursor says "busy", which is as true on an entity header as in the bar. */
-  it('shows it outside the bar as well', async () => {
+  it('says so to assistive technology without greying out', async () => {
     mocks.processing = true;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    for (const thumb of await renderThumbs()) {
+      expect(thumb).toHaveAttribute('aria-disabled', 'true');
+      // `aria-disabled`, not `disabled`: the held side still has to read as taken.
+      expect(thumb).toBeEnabled();
+      expect(thumb).not.toHaveClass('opacity-50');
+    }
+  });
 
-    await waitFor(() => expect(thumbs()).toHaveLength(2));
-    for (const thumb of thumbs()) expect(thumb).toHaveClass('cursor-progress');
+  it('shows a progress cursor and no hover step', async () => {
+    mocks.processing = true;
+    for (const thumb of await renderThumbs()) {
+      expect(thumb).toHaveClass('cursor-progress');
+      expect(thumb.className).not.toMatch(/hover:/);
+    }
+  });
+
+  it('puts the confirming copy in the tooltip', async () => {
+    mocks.processing = true;
+    for (const thumb of await renderThumbs()) expect(thumb).toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
+  });
+
+  it('is an ordinary control otherwise', async () => {
+    for (const thumb of await renderThumbs()) {
+      expect(thumb).not.toHaveAttribute('aria-disabled');
+      expect(thumb).not.toHaveClass('cursor-progress');
+      expect(thumb.className).toMatch(/hover:text-text/);
+      expect(thumb).not.toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
+    }
+  });
+
+  /** Not a bar-only concern: the retraction was as possible from an entity header as from the bar. */
+  it('behaves the same outside the bar', async () => {
+    mocks.processing = true;
+    const user = userEvent.setup();
+    const [up] = await renderThumbs({ compact: false });
+
+    await user.click(up!);
+
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
+    expect(up).toHaveAttribute('aria-disabled', 'true');
   });
 });
