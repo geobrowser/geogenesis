@@ -581,7 +581,8 @@ describe('DebateRecordingUploadCoordinator', () => {
     const { unmount } = render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByRole('status')).toBeInTheDocument();
-    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('28px');
+    // Written out, not read from the constant the claim itself uses — see the banner's height test.
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('40px');
 
     unmount();
     expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');

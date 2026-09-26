@@ -7,7 +7,7 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY, getResponseActionMethod, type ResponseKind } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY, type ResponseKind, getResponseActionMethod } from '~/core/responses/entity-response';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';

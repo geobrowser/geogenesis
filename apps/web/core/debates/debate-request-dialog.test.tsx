@@ -68,9 +68,7 @@ describe('DebateRequestDialog', () => {
     // reads "Verify"/"Dispute" on a claim it still calls factual, and this dialog is the invitation
     // to debate a claim whose pills can only publish an Agree.
     expect(within(within(dialog).getByText('You').parentElement!).getByText('Agree')).toBeInTheDocument();
-    expect(
-      within(within(dialog).getByText('Remote speaker').parentElement!).getByText('Disagree')
-    ).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Remote speaker').parentElement!).getByText('Disagree')).toBeInTheDocument();
     expect(within(dialog).queryByText('Yes')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('No')).not.toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);

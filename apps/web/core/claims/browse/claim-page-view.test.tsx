@@ -155,7 +155,6 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     isConnected: false,
     isResponsePending: mocks.isResponsePending,
   }),
-  ResponseConfirmingNote: () => <p data-testid="confirming" />,
 }));
 vi.mock('./claim-position-comment', () => ({
   ClaimPositionCommentControl: (props: Record<string, unknown>) => {
@@ -561,20 +560,20 @@ describe('ClaimPageView description', () => {
 });
 
 describe('ClaimPageView position', () => {
-  // The claim page is where a confirming response was pressed again and published a retraction:
-  // it drew no sign of the wait, so a held pill looked like a settled one.
-  it('says the response is confirming, and marks the pills pending, while it is', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction.
+  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
+  // cursor, and only the presses that would undo it are dropped until it lands.
+  it('marks the pills pending while the response confirms, without announcing a wait', () => {
     mocks.isResponsePending = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('confirming')).toBeInTheDocument();
     expect(mocks.positionControl?.pending).toBe(true);
+    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
   });
 
-  it('says nothing once it has landed', () => {
+  it('releases the pills once it has landed', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(screen.queryByTestId('confirming')).toBeNull();
     expect(mocks.positionControl?.pending).toBe(false);
   });
 });

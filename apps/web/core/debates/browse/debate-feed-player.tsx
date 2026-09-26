@@ -8,11 +8,13 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { validateSpaceId } from '~/core/io/rest/validation';
-import { responsePositionLabel } from '~/core/responses/entity-response';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import type { RoundCue } from '~/core/debates/round-cues';
+import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
+import { validateSpaceId } from '~/core/io/rest/validation';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -20,6 +22,7 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -90,6 +93,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
+    turnCount,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -152,6 +157,23 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     timelineMs: timelineSeconds * 1000,
     enabled: (active || preload) && !reducedOverlays,
   });
+
+  /**
+   * Which round is playing, as a card at the top of the turn and a label beside the timer after.
+   *
+   * Gated on `playing` for the same reason the countdown badge is: a card frozen on a paused tile
+   * is an announcement with no turn behind it, and the viewer has stopped to look at something
+   * else. Gated on `reducedOverlays` with the claim layer, because a compact gallery tile is too
+   * small for a phrase across it.
+   */
+  const roundCard = React.useMemo(
+    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+  );
+  const roundBadge = React.useMemo(
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+  );
 
   const showReplay = ready && playbackEnded;
   const showControls = ready && (awaitingTap || showReplay);
@@ -356,9 +378,17 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       data-debate-playing={playing ? 'true' : 'false'}
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
-      // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
+      // frame, which is what lets the subtitle and the round card straddle the seam rather than
+      // sit inside one tile.
       // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
-      className={cx('group relative flex flex-col overflow-hidden', reducedOverlays ? 'rounded-lg' : 'rounded-xl')}
+      //
+      // `@container` so the round card sizes against the player rather than the viewport: this
+      // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
+      // would get two of the three wrong.
+      className={cx(
+        'group @container relative flex flex-col overflow-hidden',
+        reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+      )}
     >
       <DebaterVideo
         participant={slot1Participant}
@@ -367,6 +397,10 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
+        roundBadge={turnState?.slot === 1 ? roundBadge : null}
+        // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
+        // band and comes nowhere near the bottom tile's, half a player away.
+        cardYield={roundCard?.opacity ?? 0}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -422,6 +456,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
+        roundBadge={turnState?.slot === 2 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -499,12 +534,20 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           the longest segment measures 284, so on a desktop they already never wrap and widening
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
-          seam. */}
-      {subtitle && (!reducedOverlays || (active && playing && mutedByUser)) && (
+          seam.
+
+          Stood down while the round card has the seam — the two are given the same 20 pixels and
+          would otherwise be printed over each other, and a card the size of this one wins that.
+          It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
+          real only where the render retained speech from before the incoming debater's clock
+          started (GEO-2754), which is the one case where they are already talking as it lands. */}
+      {subtitle && !roundCard && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
       )}
+
+      <DebateRoundCard cue={roundCard} />
 
       {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
@@ -552,6 +595,8 @@ function DebaterVideo({
   videoRef,
   audible,
   countdown,
+  roundBadge,
+  cardYield = 0,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -572,6 +617,15 @@ function DebaterVideo({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
+  /** The round, beside this tile's timer for as long as this tile's turn runs. */
+  roundBadge?: RoundCue | null;
+  /**
+   * How much of this tile's bottom band the round card has taken, 0–1.
+   *
+   * The card's own opacity, handed straight back, so the name crossfades against it rather than
+   * running a timer of its own. See where it is applied below.
+   */
+  cardYield?: number;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -779,11 +833,28 @@ function DebaterVideo({
     openProfile(event);
   };
 
+  /**
+   * Whether the keyboard is on this tile's name, which overrides the round card's crossfade.
+   *
+   * The same answer the scrubber gives a few hundred lines up, and for the same reason: fading a
+   * control out does not take it out of the tab order, so a viewer tabbing during the card would
+   * otherwise land on an invisible button and open a profile they could not see themselves
+   * choosing. Making it `inert` or `disabled` for the card's 1.8s closes that, but at a worse
+   * price — it blurs anyone already standing there, dumping them on `document.body` and losing
+   * their place in the middle of a video. Bringing it back into view instead keeps the control
+   * visible exactly for the person who needs to see it.
+   */
+  const [nameFocused, setNameFocused] = React.useState(false);
+
   return (
     <div
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
+      // Which half of the debate this is, readable from outside React like the player's own state
+      // above it. The turn overlays move between the tiles as the turn does, and "on the right
+      // tile" is otherwise only checkable by counting DOM order.
+      data-debate-slot={participant?.participant_slot}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
@@ -858,6 +929,7 @@ function DebaterVideo({
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -957,12 +1029,44 @@ function DebaterVideo({
           pause/play surface underneath.
 
           A generous 55%, and it no longer rations the claim corner's width: the corner shares this
-          row and draws over it rather than sitting beside it. It also stays put — it used to fade
-          out under a card, which cost the viewer the link to the debater's profile exactly when
-          they were reading something that debater had said. */}
+          row and draws over it rather than sitting beside it. It also stays put under a claim
+          card — it used to fade out under those, which cost the viewer the link to the debater's
+          profile exactly when they were reading something that debater had said.
+
+          The round card is the one thing it does yield to, and the difference is attribution. A
+          claim card is a quotation and the name under it is who said it, so the two belong on
+          screen together. A round card attributes nothing, sits across this exact band, and is
+          gone in under two seconds — and a lower third under a title card is something no
+          broadcast does, because neither gets read.
+
+          It crossfades against the card's own opacity rather than running a timer, so the name
+          leaves as the card arrives and is back as it goes: one movement, and nothing to fall out
+          of step with a scrub.
+
+          `opacity` is in the transition because the value it crossfades against arrives about four
+          times a second — `playheadSeconds` is maintained by `timeupdate`, which
+          `use-debate-playback.ts` documents at that rate — and the card's fades are 250ms and
+          300ms. Left to the playhead alone the name would step once and be gone rather than
+          leaving, and where it landed in that step would vary from round to round. Letting CSS
+          interpolate between the samples is the whole fix here, and it works *here* because this
+          row is always mounted and so always has a value to interpolate from; the card and the
+          badge are drawn only inside their windows, so they have no from-state on the way in and
+          nothing to animate into on the way out. Those two would need a clock, and do not have one.
+
+          Its link goes with it for the pointer — an invisible profile button in the middle of the
+          pause surface is a misclick waiting to happen — but not for the keyboard, which keeps the
+          row in the tab order and brings it back into view on focus. `pointer-events-none` does
+          not touch focusability, which is what makes those two separable. */}
       <div
+        data-debater-row
+        onFocus={() => setNameFocused(true)}
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNameFocused(false);
+        }}
+        style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
+          cardYield > 0.5 && '[&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -974,7 +1078,7 @@ function DebaterVideo({
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex min-w-0 max-w-[55%] items-center gap-2 text-left"
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
@@ -992,11 +1096,7 @@ function DebaterVideo({
               )}
             </span>
             {byline && (
-              <span
-                data-debate-byline
-                title={byline}
-                className="truncate text-[0.75rem] leading-4 text-white/80"
-              >
+              <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
                 {byline}
               </span>
             )}

@@ -1005,17 +1005,6 @@ function UnresolvableControls({
   );
 }
 
-/** Said under the pills while the viewer's response is confirming, in the vote arrows' words. */
-export function ResponseConfirmingNote() {
-  return (
-    <div role="status" className="mt-2">
-      <Text as="p" variant="footnote" color="grey-04">
-        {RESPONSE_CONFIRMING_COPY}
-      </Text>
-    </div>
-  );
-}
-
 export function PositionRow({
   positions,
   responseKind,
@@ -1034,7 +1023,8 @@ export function PositionRow({
   disabled?: boolean;
   /**
    * The viewer's response is still confirming. The pills stay at full strength — the side is drawn
-   * as taken — but presses are dropped, and the buttons say so to assistive technology.
+   * as taken — but presses are dropped, and the buttons say so to assistive technology and, on the
+   * pointer, with a wait cursor.
    */
   pending?: boolean;
   titleFor?: (position: boolean) => string;
@@ -1232,6 +1222,9 @@ function PositionButton({
       className={cx(
         className,
         'transition-colors disabled:opacity-60',
+        // The only sign the press was taken: the pill drops presses for the 10-50s a response
+        // spends confirming, and nothing else on the page says so. The copy that used to sit
+        // under the pills read as an unsettled side, so the cue stays on the pointer.
         pending && 'cursor-progress',
         !selected && !disabled && !pending && 'hover:border-text'
       )}
