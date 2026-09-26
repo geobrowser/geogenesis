@@ -107,10 +107,8 @@ function cardFixture({
   } as unknown as CardData;
 }
 
-const renderCard = (card: CardData, onOpenClaims?: (id?: string) => void) =>
-  render(
-    <DebateEndCard card={card} onOpenClaims={onOpenClaims} replay={<button type="button">Replay debate</button>} />
-  );
+const renderCard = (card: CardData, onOpenClaims?: (id?: string) => void, onReplay = vi.fn()) =>
+  render(<DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} />);
 
 describe('DebateEndCard', () => {
   it('asks where the viewer stands on the claim, above how the room voted on it', () => {
@@ -222,8 +220,19 @@ describe('DebateEndCard', () => {
     expect(screen.queryByText(/pts apart/)).toBeNull();
   });
 
-  it('draws the replay control it is handed', () => {
-    renderCard(cardFixture());
-    expect(screen.getByRole('button', { name: 'Replay debate' })).toBeInTheDocument();
+  it('offers replay as the pause circle on a wide player and a header pill on a narrow one', () => {
+    const onReplay = vi.fn();
+    renderCard(cardFixture(), undefined, onReplay);
+
+    // Both are drawn and the player's width shows one: the circle where pause sat, or a pill on the
+    // question's line, which saves a phone the band the circle needs above the card.
+    const [circle, pill] = screen.getAllByRole('button', { name: 'Replay debate' });
+    expect([...circle.classList]).toContain('@max-md:hidden');
+    expect([...pill.classList]).toContain('@max-md:flex');
+    expect(pill).toHaveTextContent('Replay');
+
+    fireEvent.click(circle);
+    fireEvent.click(pill);
+    expect(onReplay).toHaveBeenCalledTimes(2);
   });
 });

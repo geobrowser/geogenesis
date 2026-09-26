@@ -33,14 +33,16 @@ vi.mock('./use-debate-end-card', () => ({
 // it is handed for replay, and whether the claims opener reaches it.
 vi.mock('./debate-end-card', () => ({
   DebateEndCard: ({
-    replay,
+    onReplay,
     onOpenClaims,
   }: {
-    replay: React.ReactNode;
+    onReplay: () => void;
     onOpenClaims?: (participantSpaceId?: string) => void;
   }) => (
     <div data-testid="end-card">
-      {replay}
+      <button type="button" onClick={onReplay}>
+        Replay debate
+      </button>
       <button type="button" onClick={() => onOpenClaims?.('debater-space')}>
         open debater claims
       </button>
@@ -1036,7 +1038,7 @@ describe('the end card', () => {
   const ended = (extra: { subtitle?: string } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playing: false, playbackEnded: true, ...extra });
 
-  it('lands an ended debate on the end card, with replay in the corner pause held', () => {
+  it('lands an ended debate on the end card, which takes over replay', () => {
     const controller = ended();
     mocks.controller = controller;
     mocks.ticker = emptyTicker();
@@ -1045,10 +1047,9 @@ describe('the end card', () => {
     const card = within(container).getByTestId('end-card');
     const replays = within(container).getAllByRole('button', { name: 'Replay debate' });
 
-    // One replay, and it is the card's corner control rather than a second one over the middle.
+    // One replay, and it is the card's rather than a second one over the middle of the video.
     expect(replays).toHaveLength(1);
     expect(card.contains(replays[0])).toBe(true);
-    expect([...replays[0].classList]).not.toContain('top-1/2');
 
     fireEvent.click(replays[0]);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);

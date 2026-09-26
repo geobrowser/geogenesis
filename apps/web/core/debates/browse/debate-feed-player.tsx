@@ -25,6 +25,7 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -599,18 +600,7 @@ export function DebateFeedPlayer({
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
 
-      {endCardShown && (
-        <DebateEndCard
-          card={endCard}
-          onOpenClaims={onOpenClaims}
-          replay={
-            // Where pause sat for the whole debate: the same control, now starting it again.
-            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
-              <RetrySmall />
-            </ControlCircle>
-          }
-        />
-      )}
+      {endCardShown && <DebateEndCard card={endCard} onOpenClaims={onOpenClaims} onReplay={playFromStart} />}
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -1185,10 +1175,7 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx(
-        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
-        className
-      )}
+      className={cx(CONTROL_CIRCLE_CLASS, className)}
     >
       {children}
     </button>
