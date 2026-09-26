@@ -13,6 +13,7 @@ import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 
 import {
   type CommentDensity,
@@ -54,6 +55,7 @@ export function ExtractedClaimRow({
   debateId,
   debateSpaceId,
   responseKind,
+  isResponseKindPending = false,
   speaker,
   speakerPosition,
   responseVocabulary,
@@ -73,7 +75,16 @@ export function ExtractedClaimRow({
    * per instance — twenty extracted claims would mean twenty of them. Passing it down is the
    * difference between one lookup and one per row.
    */
-  responseKind: ResponseKind;
+  /**
+   * How this claim is answered — thumbs or chevrons — resolved in a batch by the caller.
+   *
+   * `null` means that batch has no answer for this claim, and the control is then asked to resolve
+   * the kind from the entity itself. Deliberately not defaulted to `stance`: a vote is published *as*
+   * a kind, so a control drawn on a guess writes the wrong kind of answer into the graph.
+   */
+  responseKind: ResponseKind | null;
+  /** The caller's batch is still in flight, so the vote control holds rather than guessing. */
+  isResponseKindPending?: boolean;
   /** The debater this turn is attributed to, or null on a block with no `Authors` relation. */
   speaker: (SpeakerProfile & { spaceId: string }) | null;
   /**
@@ -154,6 +165,9 @@ export function ExtractedClaimRow({
           height includes everything nested under it. */}
       <ThreadAvatar
         href={speaker ? NavUtils.toSpace(speaker.spaceId) : undefined}
+        // The same name `SpeakerLink` prints below, including its fallback — a face is a link with
+        // nothing readable in it otherwise.
+        label={speaker ? speaker.name?.trim() || 'Unnamed debater' : undefined}
         onClick={speaker ? openSpeakerProfile : undefined}
         avatarUrl={speaker?.avatarUrl ?? null}
         value={speaker?.spaceId}
@@ -225,16 +239,26 @@ export function ExtractedClaimRow({
                 onToggle={() => setCommentsCollapsed(collapsed => !collapsed)}
               />
             )}
-            <EntityVoteButtons
-              entityId={claim.id}
-              spaceId={claimSpaceId}
-              responseKind={responseKind}
-              // Faces after the control rather than before it. On the claim page's own surfaces the
-              // stack leads, because it is the first thing in its row; here the row opens with the
-              // speaker's avatar already, and a second cluster of faces on the left made the two
-              // read as one group.
-              claimResponderAvatarsPosition="trailing"
-            />
+            {isResponseKindPending ? (
+              // The same shape the control holds for its own unresolved kind, so the row does not
+              // reflow when the real one arrives.
+              <Skeleton className="h-5 w-16 shrink-0 rounded" />
+            ) : (
+              <EntityVoteButtons
+                entityId={claim.id}
+                spaceId={claimSpaceId}
+                // `undefined`, not `null`: that is what tells `EntityVoteButtons` to read the kind off
+                // the entity itself. The batch above answers for nearly every claim, so this costs a
+                // read only for the ones it could not — a claim geo-chat holds no row for, or a space
+                // it cannot speak for at all — where the alternative is guessing.
+                responseKind={responseKind ?? undefined}
+                // Faces after the control rather than before it. On the claim page's own surfaces the
+                // stack leads, because it is the first thing in its row; here the row opens with the
+                // speaker's avatar already, and a second cluster of faces on the left made the two
+                // read as one group.
+                claimResponderAvatarsPosition="trailing"
+              />
+            )}
             <EntityCommentsButton
               entityId={claim.id}
               spaceId={claimSpaceId}

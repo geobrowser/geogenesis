@@ -121,6 +121,8 @@ export function DebateCommentRow({
           itself intercepted to open the profile beside the thread instead of replacing it. */}
       <ThreadAvatar
         href={NavUtils.toSpace(comment.author.spaceId)}
+        // The same name the row prints beside it, because a face on its own announces nothing.
+        label={comment.author.name ?? 'Anonymous'}
         onClick={openAuthorProfile}
         avatarUrl={comment.author.avatarUrl}
         value={comment.author.address}

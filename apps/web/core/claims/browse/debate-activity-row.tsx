@@ -331,7 +331,7 @@ function DebateBranch({
   /** Someone has commented from this row since the page loaded, so the aggregate is behind. */
   hasPostedHere: boolean;
 }) {
-  const { claims, isLoading } = useDebateTranscriptClaims(debateId, spaceId);
+  const { claims, isLoading, error: claimsError, retry: retryClaims } = useDebateTranscriptClaims(debateId, spaceId);
   const { timings, isReady } = useClaimTimings(debateId, claims);
   // The debate's own comments, on the same query key the comments panel uses — so opening the panel
   // on this debate costs no extra request, and a comment posted there appears here too.
@@ -383,7 +383,26 @@ function DebateBranch({
 
   // Silent rather than apologetic. Claim extraction postdates a chunk of the corpus, so a debate
   // with nothing under it is ordinary — and a line saying so under every old debate is noise.
-  if (rowCount === 0) return null;
+  //
+  // A *failed* read is not that, and the hook reports both as the same empty grouping. Staying silent
+  // here said "this debate produced nothing" on a row whose own indicator was advertising eighteen
+  // extracted claims, with nothing to press and no way to tell the difference.
+  if (rowCount === 0) {
+    if (claimsError == null) return null;
+
+    return (
+      <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
+        <ThreadBranchRow isLast>
+          <span className={cx(PAGE_DENSITY.metaClass, 'text-grey-04')}>
+            Couldn’t load the claims from this debate.{' '}
+            <button type="button" onClick={retryClaims} className="text-ctaPrimary hover:underline">
+              Try again
+            </button>
+          </span>
+        </ThreadBranchRow>
+      </ThreadBranch>
+    );
+  }
 
   return (
     <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
@@ -400,9 +419,19 @@ function DebateBranch({
               commentCount={countFor(commentCounts, claim.id)}
               // A debate is the root of this branch, so everything hanging off it is one below.
               depth={ACTIVITY_ROOT_DEPTH + 1}
-              // Stance unless geo-chat says otherwise. A missing row means the space is not indexed,
-              // not that the claim is factual, and stance is what the graph defaults to as well.
-              responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? 'stance'}
+              // Never guessed. A vote is published *as* a kind — thumbs write a stance response and
+              // chevrons write a veracity one — so a control drawn on a guess can write the wrong kind
+              // of answer into the graph, which no later correction undoes. This used to default to
+              // `stance` on the grounds that it is the graph's own default, which is true of a claim
+              // with nothing recorded and not true of one whose row simply has not arrived yet.
+              //
+              // `null` here means this lookup has no answer, and the row then asks the control to
+              // resolve the kind from the entity itself rather than assuming one — see
+              // `ExtractedClaimRow`.
+              responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? null}
+              // Still in flight. The row holds rather than drawing a control it cannot yet label, and
+              // rather than falling back to the per-entity read this batch exists to replace.
+              isResponseKindPending={claimRows.isLoading}
               responseVocabulary={responseVocabulary}
               // A debater who is somehow not recorded on either side gets no tag rather than a
               // guessed one — the same rule the speaker name follows below.

@@ -1230,6 +1230,8 @@ function CommentItem({
       >
         <ThreadAvatar
           href={NavUtils.toSpace(comment.author.spaceId)}
+          // The same name printed beside it: a linked face with an empty `alt` has no accessible name.
+          label={comment.author.name ?? 'Anonymous'}
           onClick={recordAuthorOpen}
           avatarUrl={comment.author.avatarUrl}
           value={comment.author.address}

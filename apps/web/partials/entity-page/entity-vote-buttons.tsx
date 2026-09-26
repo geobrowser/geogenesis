@@ -289,7 +289,14 @@ export function EntityVoteButtons({
   // `effectiveTotal` as well as the kind: `ClaimResponderAvatars` renders nothing when nobody has
   // responded, but it is still an element, so a truthiness check on it put an empty clickable button
   // on every unanswered claim in the app — offering to list nobody.
-  const claimResponderAvatars =
+  //
+  // The count is not the whole answer, though, and that is why the trigger is handed *inwards* as
+  // `wrap` rather than wrapped around this from outside. The count and the list of responders are two
+  // queries: a claim the count says has five responses still draws no faces while the list is
+  // unresolved, or for good if it failed. Deciding out here on the count alone left exactly that state
+  // as an invisible, focusable button — so the component that knows whether it drew anything is the one
+  // that puts the trigger on.
+  const claimResponderAvatars = (positionClassName: string) =>
     isClaimResponse && effectiveTotal > 0 ? (
       <ClaimResponderAvatars
         entityId={entityId}
@@ -299,6 +306,7 @@ export function EntityVoteButtons({
         totalResponders={effectiveTotal}
         viewerSpaceId={personalSpaceId}
         optimisticViewerResponse={effectiveOptimistic}
+        wrap={faces => respondersTrigger(faces, positionClassName)}
       />
     ) : null;
 
@@ -372,7 +380,7 @@ export function EntityVoteButtons({
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {claimResponderAvatarsPosition === 'leading' ? respondersTrigger(claimResponderAvatars, 'mr-1') : null}
+      {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatars('mr-1') : null}
       <button
         onClick={handlePositiveResponse}
         disabled={responseDisabled}
@@ -410,7 +418,7 @@ export function EntityVoteButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
-      {claimResponderAvatarsPosition === 'trailing' ? respondersTrigger(claimResponderAvatars, 'ml-1') : null}
+      {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatars('ml-1') : null}
       {isResponseIndexingDelayed ? (
         <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
           Response submitted. Waiting for confirmation.

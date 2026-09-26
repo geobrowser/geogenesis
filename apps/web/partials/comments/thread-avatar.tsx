@@ -24,6 +24,7 @@ export function ThreadAvatar({
   value,
   sizePx,
   href,
+  label,
   onClick,
   className,
 }: {
@@ -33,6 +34,16 @@ export function ThreadAvatar({
   sizePx: number;
   /** Renders an anchor rather than a span. Omit where there is no person to open. */
   href?: string;
+  /**
+   * Who this face belongs to, for the link's accessible name.
+   *
+   * A face is the one kind of link with nothing readable inside it: the image carries empty `alt`
+   * because the name is right beside it, and the generated fallback is an unlabelled SVG. So a linked
+   * avatar announced as nothing at all, and there is no way to tell from the keyboard where it goes.
+   * Required whenever `href` is — the name is always to hand at these call sites, because the row is
+   * already printing it.
+   */
+  label?: string;
   onClick?: (event: React.MouseEvent) => void;
   className?: string;
 }) {
@@ -51,7 +62,7 @@ export function ThreadAvatar({
   }
 
   return (
-    <a href={href} onClick={onClick} className={frameClassName} style={frameStyle}>
+    <a href={href} aria-label={label} onClick={onClick} className={frameClassName} style={frameStyle}>
       {face}
     </a>
   );

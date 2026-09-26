@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,7 +8,11 @@ import type { Entity } from '~/core/types';
 
 import { DebateActivityRow } from './debate-activity-row';
 
-const mocks = vi.hoisted(() => ({ commentQueries: [] as Array<{ entityId: string; enabled: boolean }> }));
+const mocks = vi.hoisted(() => ({
+  commentQueries: [] as Array<{ entityId: string; enabled: boolean }>,
+  transcriptError: null as Error | null,
+  retryTranscript: vi.fn(),
+}));
 
 // The controls have their own suites and both reach for wallet and query context. What this file is
 // about is what the row decides from its two counts: whether there is a branch under it at all.
@@ -41,7 +45,12 @@ vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => (
 // The branch's own reads. Empty, so what the tests observe is whether the row *offered* a branch —
 // not what came back inside it.
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
-  useDebateTranscriptClaims: () => ({ claims: { all: [], blocks: [] }, isLoading: false }),
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], blocks: [] },
+    isLoading: false,
+    error: mocks.transcriptError,
+    retry: mocks.retryTranscript,
+  }),
 }));
 
 vi.mock('~/core/debates/use-claim-timings', () => ({
@@ -95,6 +104,8 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof DebateActivity
 describe('DebateActivityRow', () => {
   beforeEach(() => {
     mocks.commentQueries.length = 0;
+    mocks.transcriptError = null;
+    mocks.retryTranscript.mockClear();
   });
   afterEach(cleanup);
 
@@ -149,5 +160,41 @@ describe('DebateActivityRow', () => {
 
     renderRow({ claimCount: null });
     expect(screen.queryByLabelText(/extracted claim/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A debate whose transcript could not be read is not a debate that produced nothing.
+ *
+ * The hook answers with the same empty grouping either way — deliberately, because "no claims yet" is
+ * a real state for a chunk of the corpus that predates claim extraction. So the branch stayed silent
+ * on a failure, which put "nothing here" under a row that was simultaneously advertising eighteen
+ * extracted claims, with nothing to press and no way to tell which had happened.
+ */
+describe('DebateActivityRow when the transcript will not load', () => {
+  beforeEach(() => {
+    mocks.commentQueries.length = 0;
+    mocks.transcriptError = null;
+    mocks.retryTranscript.mockClear();
+  });
+  afterEach(cleanup);
+
+  it('says so, and offers to try again', () => {
+    mocks.transcriptError = new Error('transcript unavailable');
+    renderRow({ claimCount: 18, commentCount: 0 });
+
+    expect(screen.getByText(/Couldn’t load the claims from this debate/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryTranscript).toHaveBeenCalledOnce();
+  });
+
+  // The ordinary empty debate still says nothing: a line under every old debate is noise, which is
+  // why silence was chosen in the first place.
+  it('stays silent when the transcript loaded and there was simply nothing in it', () => {
+    renderRow({ claimCount: 18, commentCount: 0 });
+
+    expect(screen.queryByText(/Couldn’t load the claims/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 });

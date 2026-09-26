@@ -213,6 +213,34 @@ describe('ExtractedClaimRow', () => {
     expect(screen.getByText('Practical effects age better than CGI.')).toBeInTheDocument();
   });
 
+  /**
+   * A vote is published *as* a kind — thumbs write a stance response, chevrons a veracity one — so a
+   * control drawn on a guessed kind can write the wrong kind of answer into the graph, which nothing
+   * later undoes. The batch that resolves the kind is a separate request from the claims themselves,
+   * and this row used to default to `stance` for the whole time it was in flight.
+   */
+  describe('the response kind it has not been told yet', () => {
+    it('holds the control while the batch is still resolving', () => {
+      renderRow({ isResponseKindPending: true });
+
+      expect(screen.queryByTestId('vote-buttons')).not.toBeInTheDocument();
+    });
+
+    it('asks the control to resolve the kind itself once the batch has settled without an answer', () => {
+      renderRow({ responseKind: null });
+
+      // `undefined` is what tells `EntityVoteButtons` to read the kind off the entity. Anything else
+      // here — `stance` above all — is this row inventing an answer it was not given.
+      expect(screen.getByTestId('vote-buttons')).toHaveAttribute('data-kind', 'undefined');
+    });
+
+    it('passes the kind straight through when the batch did answer', () => {
+      renderRow({ responseKind: 'veracity' });
+
+      expect(screen.getByTestId('vote-buttons')).toHaveAttribute('data-kind', 'veracity');
+    });
+  });
+
   it('shows the server-counted comments rather than seeding the button at zero', () => {
     renderRow({ commentCount: 4 });
 
@@ -232,6 +260,28 @@ describe('ExtractedClaimRow', () => {
 
     renderRow({ commentCount: null });
     expect(screen.getAllByLabelText('Hide comments on this claim').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * A face is the one link with nothing readable inside it: the image carries empty `alt` because the
+   * name is right beside it, and the generated fallback is an unlabelled SVG. Linked and unnamed, it
+   * announced nothing at all and gave a keyboard user no way to tell where it went.
+   */
+  it('names the face it links, including when the speaker has no name', () => {
+    renderRow();
+
+    // Two links to the same person — the face and the name — and both have to say whose they are.
+    // Two adjacent links with one name is the cost of that, and the alternative is worse: a single
+    // anchor around both is the nesting that put a 987px face in a 32px row.
+    const named = screen.getAllByRole('link', { name: 'Ada Reyes' });
+    expect(named).toHaveLength(2);
+    for (const link of named) expect(link).toHaveAttribute('href', expect.stringContaining('speaker-space'));
+
+    cleanup();
+    renderRow({ speaker: { spaceId: 'speaker-space', name: null } });
+
+    // The same fallback the row prints, rather than a link announced as nothing at all.
+    expect(screen.getAllByRole('link', { name: 'Unnamed debater' })).toHaveLength(2);
   });
 
   it('links the sentence to the claim in its own space', () => {
