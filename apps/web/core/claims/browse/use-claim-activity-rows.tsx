@@ -19,7 +19,7 @@ import type { Entity } from '~/core/types';
 
 import type { CommentActivityRow } from '~/partials/comments/types';
 
-import { debateDate, relationTargets } from './claim-debates';
+import { debateCreatedDate, debateDate, relationTargets } from './claim-debates';
 import { DebateActivityRow } from './debate-activity-row';
 import { useDebateKeyframes } from './use-debate-keyframes';
 
@@ -138,8 +138,10 @@ export function useClaimActivityRows({
       spaceId,
       // `createdAt` rather than `updatedAt`: this row's place in the feed is when the debate
       // happened, and `updatedAt` moves whenever anything touches the entity — including a backlink
-      // from an unrelated edit, which would float an old debate to the top of the thread.
-      createdAt: debateDate(debate)?.toISOString() ?? '',
+      // from an unrelated edit, which would float an old debate to the top of the thread. This comment
+      // said so while the line under it used `debateDate`, which falls back to `updatedAt`; ordering
+      // now reads `createdAt` alone and a debate without one sorts to the tail as undated.
+      createdAt: debateCreatedDate(debate)?.toISOString() ?? '',
       content: (
         <DebateActivityRow
           debate={debate}

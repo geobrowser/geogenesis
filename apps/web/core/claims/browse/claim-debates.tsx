@@ -63,13 +63,7 @@ const VOTE_FETCH_CAP = 500;
  * Renders nothing when the claim has never been debated. The invitation to be the first belongs
  * next to the readiness toggle, which is the control that acts on it — not in an empty module here.
  */
-export function ClaimDebates({
-  claimId,
-  spaceId,
-}: {
-  claimId: string;
-  spaceId: string;
-}) {
+export function ClaimDebates({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   // A page at a time rather than an accumulating list: appending pushes everything below the
   // section down the page as the reader loads more, where swapping keeps the layout where they
   // left it.
@@ -408,15 +402,30 @@ function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number
 }
 
 /**
- * When the debate was published, as a date.
+ * When the debate was published, as a date to *show*.
  *
  * `createdAt` and `updatedAt` are typed as "unix seconds or ISO 8601, varies by backend", so both
  * shapes are handled rather than assumed. `createdAt` is the one that means "when this debate
  * happened" — `updatedAt` moves whenever anything touches the entity, including a backlink from
- * some unrelated edit.
+ * some unrelated edit. Falling back to it is acceptable for a label, where an approximate date beats
+ * none; it is not acceptable for a position — see {@link debateCreatedDate}.
  */
 export function debateDate(debate: Entity): Date | null {
-  const raw = debate.createdAt ?? debate.updatedAt;
+  return entityTimestamp(debate.createdAt ?? debate.updatedAt);
+}
+
+/**
+ * When the debate was published, and nothing else — for placing it among other rows.
+ *
+ * No `updatedAt` fallback, which is the whole difference from {@link debateDate}. Ordering by a
+ * timestamp that moves on any unrelated edit floats an old debate up among recent activity; a debate
+ * with no `createdAt` is better left undated, which the feed's ordering already sends to the tail.
+ */
+export function debateCreatedDate(debate: Entity): Date | null {
+  return entityTimestamp(debate.createdAt);
+}
+
+function entityTimestamp(raw: string | number | null | undefined): Date | null {
   if (raw === undefined || raw === null) return null;
 
   const date = typeof raw === 'number' ? new Date(raw * 1000) : new Date(/^\d+$/.test(raw) ? Number(raw) * 1000 : raw);

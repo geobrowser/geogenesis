@@ -4,6 +4,7 @@ import type { ClaimTiming } from '~/core/debates/claim-timing';
 import type { TranscriptClaim } from '~/core/debates/transcript-claims';
 
 import { activityTime, mergeActivityRows, orderExtractedClaims, orderNewestFirst } from './claim-activity-order';
+import { debateCreatedDate, debateDate } from './claim-debates';
 
 function claim(id: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
   return {
@@ -358,5 +359,36 @@ describe('orderNewestFirst', () => {
   // Undated rows go last rather than to 1970, the same rule the merged feed follows.
   it('puts a row nothing can place at the tail', () => {
     expect(orderNewestFirst([{ id: 'undated', createdAt: '' }, older]).map(c => c.id)).toEqual(['c-old', 'undated']);
+  });
+});
+
+/**
+ * Where a debate goes in the feed is when it happened. `updatedAt` moves whenever anything touches the
+ * entity — a backlink from an unrelated edit included — so ordering by it floats an old debate up among
+ * recent activity. The feed's own comment said as much while it ordered by `debateDate`, which falls
+ * back to `updatedAt` when `createdAt` is missing.
+ */
+describe('the date a debate is ordered by', () => {
+  const touchedYesterday = { createdAt: null, updatedAt: '2026-09-25T10:00:00Z' } as unknown as Parameters<
+    typeof debateDate
+  >[0];
+
+  it('does not borrow `updatedAt` for ordering', () => {
+    expect(debateCreatedDate(touchedYesterday)).toBeNull();
+  });
+
+  // A label is a different question: an approximate date beats none.
+  it('still borrows it for display', () => {
+    expect(debateDate(touchedYesterday)?.toISOString()).toBe('2026-09-25T10:00:00.000Z');
+  });
+
+  it('so a debate with no creation date sorts to the tail rather than to the front', () => {
+    const comments = [{ id: 'c-week-ago', createdAt: '2026-09-19T10:00:00Z' }];
+    const debates = [{ id: 'd-touched', createdAt: debateCreatedDate(touchedYesterday)?.toISOString() ?? '' }];
+
+    expect(mergeActivityRows(comments, debates, 'newest').map(entry => entry.row.id)).toEqual([
+      'c-week-ago',
+      'd-touched',
+    ]);
   });
 });

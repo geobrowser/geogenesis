@@ -80,6 +80,7 @@ export function usePublishComment(
        */
       let countedByCaller = false;
       const countRow = (commentId: string) => {
+        if (countedByCaller) return;
         countedByCaller = true;
         onOptimistic?.(commentId);
       };
@@ -112,13 +113,15 @@ export function usePublishComment(
             targetSpaceId,
             ancestorComments,
             commentId: result.id,
+            // Counted when its row is put back, not when the publish succeeds. An earlier failure took
+            // the row out, and `useCreateComment` reinserts it for this attempt and reports it here —
+            // so the count follows the row the reader can see. Re-counting on success instead, which
+            // is what this used to do, counted a comment the thread was not drawing, because nothing
+            // had put its row back. A retry whose row survived is found cached and not reported.
+            onOptimistic: countRow,
           });
 
-          if (recordIfPublished(published)) {
-            // A retry after a rollback: the comment exists again, so it counts again.
-            if (!countedByCaller) countRow(result.id);
-            return;
-          }
+          if (recordIfPublished(published)) return;
 
           // The row is gone — `useCreateComment` removes it on a failed publish — so anything the
           // caller counted for this comment comes back before the error is surfaced.

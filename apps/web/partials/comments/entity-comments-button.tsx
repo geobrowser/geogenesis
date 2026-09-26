@@ -64,7 +64,12 @@ export function EntityCommentsButton({
         onActivate ? `Comment on ${targetEntityType}` : `Open ${targetEntityType} comments panel`
       }
       data-geo-analytics-intent={onActivate ? 'open_inline_composer' : 'open_comments_panel'}
-      aria-label={`Comments (${liveCount})`}
+      // Named for what the number measures. When `commentsInCount` is set the count is broader than this
+      // entity's comments — on the Explore card it is the claim's whole activity, its debates and the
+      // claims extracted from them included — and announcing it as "Comments (42)" on a claim with one
+      // comment tells a screen reader something false. The label reads off the same prop that already
+      // says the count is broader, rather than a second one a caller would have to keep in step with it.
+      aria-label={`${commentsInCount != null ? 'Activity' : 'Comments'} (${liveCount})`}
       aria-expanded={isOpen}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.

@@ -93,6 +93,8 @@ describe('usePublishComment', () => {
       targetSpaceId: 'space-1',
       ancestorComments: undefined,
       commentId: 'comment-1',
+      // The retry is counted when its row is put back, so it is handed the same counter.
+      onOptimistic: expect.any(Function),
     });
     expect(mocks.commentCreated).toHaveBeenCalledTimes(1);
     expect(mocks.commentCreated).toHaveBeenCalledWith(
@@ -238,16 +240,31 @@ describe('usePublishComment reporting a failure', () => {
    * times, as many times as the reader pressed retry — and a retry that finally succeeded never gave it
    * back. The two callbacks are a transition, not an event.
    */
-  it('reports the loss once however many retries fail, and reports it back when one succeeds', async () => {
-    // `useCreateComment` inserts the optimistic row and calls `onOptimistic` when it is handed one,
-    // which is what the first attempt passes and the retries do not.
+  /**
+   * The count follows the row, and the row is what the reader can see.
+   *
+   * A failed attempt takes the optimistic row out (`useCreateComment`'s failure path), and a retry puts
+   * it back — it used to skip that, assuming its row was still there, and the success was counted
+   * regardless: the Activity heading reported a comment the thread was not drawing. Now every insertion
+   * is reported and every removal is reversed, so at each step the count equals the rows present.
+   *
+   * The stand-in models that cache: a row is inserted, and reported, only when it is not already there.
+   */
+  it('keeps the count equal to the rows present through failed retries and a successful one', async () => {
+    let rowPresent = false;
     let nextResult: unknown = { id: 'comment-1', published: false };
     mocks.createComment.mockImplementation(async (input: { onOptimistic?: (id: string) => void }) => {
-      input.onOptimistic?.('comment-1');
+      if (!rowPresent) {
+        rowPresent = true;
+        input.onOptimistic?.('comment-1');
+      }
+      // A failure takes the row back out, as the real hook does.
+      if (nextResult == null) rowPresent = false;
       return nextResult;
     });
 
     const counted: number[] = [];
+    const total = () => counted.reduce((a, b) => a + b, 0);
     const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
 
     await act(() =>
@@ -258,24 +275,26 @@ describe('usePublishComment reporting a failure', () => {
       })
     );
 
-    expect(counted).toEqual([1]);
+    // Retained: its row is there, and so is its count.
+    expect(total()).toBe(1);
+    expect(rowPresent).toBe(true);
 
     const queued = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
     nextResult = null;
 
-    await expect(queued.run()).rejects.toThrow();
-    await expect(queued.run()).rejects.toThrow();
-    await expect(queued.run()).rejects.toThrow();
-
-    // Three failures, one row: one rollback.
-    expect(counted).toEqual([1, -1]);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(queued.run()).rejects.toThrow();
+      // Never above the rows actually present, however many attempts fail.
+      expect(total()).toBe(rowPresent ? 1 : 0);
+      expect(total()).toBeGreaterThanOrEqual(0);
+    }
 
     nextResult = { id: 'comment-1', published: true };
     await queued.run();
 
-    // The comment exists again, so it counts again — and the net is back to one.
-    expect(counted).toEqual([1, -1, 1]);
-    expect(counted.reduce((a, b) => a + b, 0)).toBe(1);
+    // The row is back, so the comment counts — once.
+    expect(rowPresent).toBe(true);
+    expect(total()).toBe(1);
   });
 
   it('says nothing when the retry succeeds', async () => {

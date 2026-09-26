@@ -31,4 +31,24 @@ describe('EntityCommentsButton', () => {
 
     expect(mocks.openComments).toHaveBeenCalledWith('claim-1', 'space-1', 'claim');
   });
+
+  /**
+   * On the Explore card the number is the claim's whole activity — its debates and the claims extracted
+   * from them as well as its comments. The button always announced it as "Comments", so a claim with one
+   * comment and a debate behind it was read out as having dozens of comments.
+   */
+  it('announces an activity total as activity, not as comments', () => {
+    render(
+      <EntityCommentsButton
+        entityId="claim-1"
+        spaceId="space-1"
+        targetEntityType="claim"
+        count={42}
+        commentsInCount={1}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Activity (42)' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Comments/ })).not.toBeInTheDocument();
+  });
 });
