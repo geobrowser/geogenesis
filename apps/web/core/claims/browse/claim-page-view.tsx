@@ -552,6 +552,20 @@ function ClaimOverviewTab({
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
+        {/*
+          The debates could not be read, so the feed below is missing every debate and every claim
+          extracted from one — while the heading above it, which is a different query, goes on counting
+          them. Said here rather than as a row inside the section: it is about the whole list, not a
+          place in it, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
+        */}
+        {activity.error != null && (
+          <div className="pt-10 text-metadata text-grey-04" data-activity-debates-error>
+            Couldn’t load the debates on this claim.{' '}
+            <button type="button" onClick={activity.retry} className="text-ctaPrimary hover:underline">
+              Try again
+            </button>
+          </div>
+        )}
         {/* "Activity", because the list now holds debates as well as comments — and the count says
             how much has happened to this claim rather than how many people typed. */}
         <CommentSection

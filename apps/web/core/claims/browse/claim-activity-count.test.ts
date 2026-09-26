@@ -202,6 +202,33 @@ describe('adjustClaimActivityTotal', () => {
     expect(totalIn(client)).toBe(33);
   });
 
+  /**
+   * The cancel has to be as narrow as the write, and it was not.
+   *
+   * Matched on the key alone, a comment published while the very first request was still out aborted
+   * that request — and then the write bailed, because there was no entry to adjust. Nothing was left to
+   * answer, so the heading stayed on its incomplete fallback until something else happened to refetch.
+   * A query with no baseline has nothing to overwrite, so there is no race worth cancelling.
+   */
+  it('does not abort the first request, which is the only thing that can answer', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    let landFirstAnswer = (_value: Map<string, ClaimActivityCount>) => {};
+    const firstRequest = new Promise<Map<string, ClaimActivityCount>>(resolve => {
+      landFirstAnswer = resolve;
+    });
+    const fetching = client.fetchQuery({ queryKey: key, queryFn: () => firstRequest, staleTime: 0 });
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+
+    landFirstAnswer(seeded(33));
+    await fetching;
+
+    // The aggregate answered for itself, which is what the delta gives way to when there is no
+    // baseline to adjust. Aborted, this would be `undefined` and the heading would have nothing.
+    expect(totalIn(client)).toBe(33);
+  });
+
   it('leaves a claim it has no answer for alone rather than inventing one', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 

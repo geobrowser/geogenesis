@@ -119,9 +119,10 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
  * transaction is rejected, and the count has to give back what it counted. A publish merely
  * *retained* for retry keeps its row, so it keeps its count.
  *
- * A claim with no entry yet is left alone rather than invented: the aggregate is still in flight and
- * will answer for itself. That loses a comment published in the few hundred milliseconds before the
- * first response lands, which is not long enough to write one.
+ * A claim with no entry yet is left alone rather than invented — neither written nor cancelled, so the
+ * request that is still out answers for itself. That loses a comment published in the few hundred
+ * milliseconds before the first response lands, which is not long enough to write one, and is a far
+ * better trade than aborting the only request that was going to produce a number at all.
  *
  * Asynchronous because it cancels before it writes, which is React Query's own recipe for an
  * optimistic update and the only thing that closes this race: a refetch already on its way — the one
@@ -139,21 +140,27 @@ export async function adjustClaimActivityTotal(
   if (delta === 0) return;
   const id = uuidToHex(claimId);
 
-  // Every cached set that holds this claim, not one key: the page asks for one claim and other
-  // surfaces ask for a screenful, and a number that moves on one of them has moved on all of them.
-  // The predicate keeps that from reaching sets this claim is not in, which matters more for the
-  // cancel than for the write — abandoning an unrelated claim's request would cost it a refetch.
-  const heldByThisClaim = {
+  // Every cached set that *already answered* for this claim — which is both what the write can adjust
+  // and, exactly, what the cancel is allowed to touch.
+  //
+  // Matching on the key alone was wrong in a way that mattered more than the race it was fixing: a
+  // comment published while the very first request was still out aborted that request, and then the
+  // write bailed because there was no entry to adjust. Nothing was left to answer, so the heading sat
+  // on its incomplete fallback until something else happened to refetch. A query with no baseline has
+  // nothing to overwrite, so there is no race to cancel — it is left alone to answer for itself, which
+  // is what this comment used to claim happened.
+  const holdsABaseline = {
     queryKey: ['claim-activity-counts'] as const,
-    predicate: (query: { queryKey: readonly unknown[] }) => {
+    predicate: (query: { queryKey: readonly unknown[]; state: { data?: unknown } }) => {
       const ids = query.queryKey[1];
-      return Array.isArray(ids) && ids.includes(id);
+      if (!Array.isArray(ids) || !ids.includes(id)) return false;
+      return (query.state.data as Map<string, ClaimActivityCount> | undefined)?.get(id) != null;
     },
   };
 
-  await queryClient.cancelQueries(heldByThisClaim);
+  await queryClient.cancelQueries(holdsABaseline);
 
-  queryClient.setQueriesData<Map<string, ClaimActivityCount>>(heldByThisClaim, counts => {
+  queryClient.setQueriesData<Map<string, ClaimActivityCount>>(holdsABaseline, counts => {
     const current = counts?.get(id);
     // `undefined` bails out of the update rather than writing anything, so a cached set that does
     // not hold this claim — or one that has not answered yet — is left untouched instead of being

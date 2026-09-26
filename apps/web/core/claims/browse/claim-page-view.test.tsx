@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render as renderBare, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -31,6 +31,8 @@ function render(ui: React.ReactElement) {
 }
 
 const mocks = vi.hoisted(() => ({
+  activityError: null as Error | null,
+  retryActivity: vi.fn(),
   entity: null as Record<string, unknown> | null,
   /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
   activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
@@ -143,7 +145,12 @@ vi.mock('~/core/sync/use-store', () => ({
 // What the Overview puts in its activity thread besides comments. Its own fetching — debates,
 // profiles, keyframes — is covered by the rows' suites; this file is about page composition.
 vi.mock('./use-claim-activity-rows', () => ({
-  useClaimActivityRows: () => ({ rows: mocks.activityRows, isLoading: false }),
+  useClaimActivityRows: () => ({
+    rows: mocks.activityRows,
+    isLoading: false,
+    error: mocks.activityError,
+    retry: mocks.retryActivity,
+  }),
 }));
 
 // The heading's number, which is the same one the claim's Explore card shows. Its own query is
@@ -279,6 +286,8 @@ function claimEntity(description: string | null) {
 
 beforeEach(() => {
   mocks.activityRows = [];
+  mocks.activityError = null;
+  mocks.retryActivity.mockClear();
   mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
@@ -691,6 +700,29 @@ describe('ClaimPageView comments', () => {
    * the prop was optional, which meant the badges on the claim's *own* comments, the common case and
    * the one this was added for, explained nothing.
    */
+  /**
+   * `useQueryEntities` hands back `error` precisely so a caller drawing an empty state can tell
+   * "nothing matched" from "the query never came back". This hook dropped it, so a cold-load failure
+   * made the feed omit every debate — and every claim extracted from one — in silence, while the
+   * heading, which is a separate query, went on counting them.
+   */
+  it('says the debates could not be read rather than drawing a feed without them', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivity).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing when the debates read simply found none', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByText(/Couldn’t load the debates/)).not.toBeInTheDocument();
+  });
+
   it('names the claim its side badges are about', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 

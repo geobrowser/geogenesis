@@ -54,8 +54,27 @@ export function useClaimActivityRows({
   claimId: string;
   spaceId: string;
   enabled?: boolean;
-}): { rows: CommentActivityRow[]; isLoading: boolean } {
-  const { entities: debates, isLoading } = useQueryEntities({
+}): {
+  rows: CommentActivityRow[];
+  isLoading: boolean;
+  /**
+   * The debates read failed, so `rows` being empty says nothing about this claim.
+   *
+   * `useQueryEntities` hands this back precisely so a caller drawing an empty state can tell "nothing
+   * matched" from "the query never came back" — and this feed is the case that documentation warns
+   * about: dropping it meant a cold-load failure silently omitted every debate and every claim
+   * extracted from them, while the heading, which is a different query, went on counting them.
+   */
+  error: Error | null;
+  /** Ask again, so a failed fetch is not "no debates" for as long as the page stays open. */
+  retry: () => void;
+} {
+  const {
+    entities: debates,
+    isLoading,
+    error,
+    refetch,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
@@ -147,7 +166,9 @@ export function useClaimActivityRows({
     spaceId,
   ]);
 
-  return { rows, isLoading };
+  const retry = React.useCallback(() => void refetch(), [refetch]);
+
+  return { rows, isLoading, error: (error as Error | null) ?? null, retry };
 }
 
 /**
