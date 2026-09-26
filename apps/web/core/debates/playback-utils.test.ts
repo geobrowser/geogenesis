@@ -11,6 +11,8 @@ import {
   sortTurnSegments,
   timelineSecondsFor,
   timelineSecondsForSegments,
+  turnSpansForDurations,
+  turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
 } from './playback-utils';
@@ -711,5 +713,32 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     const b = fakeVideo({ muted: false, blockUnmuted: false });
     expect(await playBothWithMutedFallback(a, b)).toBe('playing');
     expect(a.muted).toBe(false);
+  });
+});
+
+describe('turn spans', () => {
+  it('walks the allowance into alternating turns', () => {
+    expect(turnSpansForDurations(2, [30_000, 45_000])).toEqual([
+      { index: 0, slot: 2, startSeconds: 0, endSeconds: 30 },
+      { index: 1, slot: 1, startSeconds: 30, endSeconds: 75 },
+    ]);
+  });
+
+  it('spans the rendered cut, lead-in included, rather than the clock the debaters watched', () => {
+    // `countdown_start_ms` sits 5s after the cut (GEO-2754) and the span deliberately ignores it:
+    // naming a turn is about when the speaker arrives on screen, which is the cut. Timing one is a
+    // different question, and `turnStateFromSegments` answers it off the clock.
+    const spans = turnSpansFromSegments([
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 35_000,
+        duration_ms: 35_000,
+        countdown_start_ms: 5_000,
+      },
+    ]);
+
+    expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35 });
   });
 });

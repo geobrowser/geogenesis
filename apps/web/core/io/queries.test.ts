@@ -8,6 +8,7 @@ import {
   getEntityBacklinks,
   groupRestResults,
   hasDefaultSearchExcludedType,
+  indexVoteRowsByObject,
   shouldIncludeRestSearchResult,
 } from './queries';
 import { MAX_SEARCH_QUERY_LENGTH } from './search-query';
@@ -428,5 +429,111 @@ describe('getEntityBacklinks', () => {
     await Effect.runPromise(getEntityBacklinks('12a21058-4706-4d9c-b8c8-813732ef63b2'));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * GEO-2993. Verify is gone, so a factual claim's responder answers it again with Agree — and their
+ * old kind-2 row stays on chain, because nothing can clear it any more. That person now holds two
+ * vote rows on one claim, which is the state these lookups have to describe correctly.
+ */
+describe('indexVoteRowsByObject', () => {
+  const CLAIM = '4c81561d1f9541319cdddd20ab831ba2';
+
+  /** Newest first, as `VOTED_AT_DESC` returns them: today's Agree, then August's Verify. */
+  const bothKinds = [
+    { objectId: CLAIM, voteKind: 1, votedAt: '2026-09-24T00:00:00.000Z' },
+    { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+  ];
+
+  it('describes an entity by its newest vote row, not its oldest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Kind 1. `Object.fromEntries` gave the last row the key and reported 2, which is the vote the
+    // person no longer holds a way to cast.
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('keeps both lookups on the same row', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Read from different rows these disagree, and the timestamp is the list's sort key — so the
+    // entity would sort by one vote and be filtered by another.
+    const kindRow = bothKinds.find(row => row.voteKind === voteKindByObjectId[CLAIM]);
+    expect(kindRow?.votedAt).toBe(votedAtByObjectId[CLAIM]);
+  });
+
+  /**
+   * The reverse ordering, which taking the newest row does not survive on its own.
+   *
+   * The two kinds are independent, so the Verify can be the *newer* of the pair: answer a claim
+   * Agree while it is an ordinary claim, have it flagged factual, answer it again with Verify. The
+   * kind-1 stance is still live, but the kind-2 row is newer — so "newest wins" reports 2, and
+   * `useVoteTabEntities` drops the claim from the Agreed tab exactly as it did before that fix.
+   *
+   * Nothing resolves to kind 2 any more, so a retired row can never be an entity's current answer
+   * and is skipped rather than merely out-ordered.
+   */
+  it('ignores a retired row even when it is the newest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-08-06T00:00:00.000Z');
+  });
+
+  it('reports nothing for an entity whose only row is retired', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(CLAIM in voteKindByObjectId).toBe(false);
+  });
+
+  /**
+   * The ids have to drop the retired row too, not just the lookups.
+   *
+   * `useUserVotedEntityIds` binds an id to the first page it appears on and reads its kind from the
+   * lookups merged across every page. An id reported here without a kind is claimed by this page,
+   * skipped as a duplicate on the page that *can* describe it, and hydrated where nothing can
+   * classify it — and `useVoteTabEntities` banks a page against its ids, which do not change when
+   * the kind later arrives, so the claim stays missing from the tab.
+   */
+  it('reports no id it cannot describe', () => {
+    const OTHER = 'a1b2c3d4e5f6478899aabbccddeeff00';
+
+    const { objectIds, voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: OTHER, voteKind: 1, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(objectIds.every(id => id in voteKindByObjectId)).toBe(true);
+    expect(objectIds).toEqual([OTHER]);
+  });
+
+  /**
+   * The straddle itself: the pair split across a page boundary, which is the only arrangement the
+   * skip in the lookups did not already cover. The retired row ends one page and the live stance
+   * begins the next, so the live page has to be the one that owns the id.
+   */
+  it('gives the id to the page holding the live stance, not the retired row', () => {
+    const retiredPage = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+    ]);
+    const stancePage = indexVoteRowsByObject([{ objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' }]);
+
+    expect(retiredPage.objectIds).toEqual([]);
+    expect(stancePage.objectIds).toEqual([CLAIM]);
+  });
+
+  it('leaves an entity with one row alone', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 0, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(0);
   });
 });

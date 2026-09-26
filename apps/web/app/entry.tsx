@@ -69,11 +69,6 @@ const PendingCreatedSpaceStatus = dynamic(
   { ssr: false }
 );
 
-const SignInPrompt = dynamic(
-  () => import('~/partials/sign-in-prompt/sign-in-prompt').then(m => ({ default: m.SignInPrompt })),
-  { ssr: false }
-);
-
 const PostAuthRedirect = dynamic(
   () => import('~/partials/post-auth-redirect').then(m => ({ default: m.PostAuthRedirect })),
   { ssr: false }
@@ -178,7 +173,6 @@ export function App({ children }: { children: React.ReactNode }) {
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />
-          <SignInPrompt />
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
             <DeepLinkHandler />

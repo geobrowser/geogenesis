@@ -39,8 +39,9 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * place for it to be made, and a second place for it to be made differently.
  *
  * Its row is measured off the page's own content column rather than given a width, for the same
- * reason: the pages it covers are 900, 840, 720 and 1142 wide with two different gutters between
- * them, and a number here would be a fourth opinion that drifts. See `useMirroredContentColumn`.
+ * reason: the pages it covers run 840 to 1142 wide with two different gutters between them, and a
+ * number here would be one more opinion that drifts — as it would have when #2580 changed the topic
+ * page's width out from under this. See `useMirroredContentColumn`.
  */
 export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const host = useAtomValue(entityStickyHeaderHostElementAtom);

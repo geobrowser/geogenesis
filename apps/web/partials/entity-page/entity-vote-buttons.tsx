@@ -24,6 +24,7 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
+  RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -45,7 +46,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { VOTE_BUTTON_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
@@ -116,7 +117,7 @@ export function EntityVoteButtons({
   // by design — so that vote is no longer the one displayed. It is still recorded in that space.
   // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
   const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
-  const inferredResponseKind = resolveEntityResponseKind(entity, spaceId);
+  const inferredResponseKind = resolveEntityResponseKind(entity);
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
   const hasUnpublishedResponseKindEdit =
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
@@ -278,20 +279,14 @@ export function EntityVoteButtons({
   const isClaimResponse = queryResponseKind !== 'curation';
   const displayLabel = isClaimResponse ? percentLabel : scoreLabel;
 
-  // Grey either way; the filled icon says which one you picked. The thumbs used to rest lighter
-  // and darken when picked, and curation got no class at all, pinning its arrows' colour on the
-  // icon instead — three spellings of a control that should look the same everywhere. See
+  // Grey whichever side is held; the filled icon says which one you picked. The thumbs used to rest
+  // lighter and darken when picked, and curation got no class at all, pinning its arrows' colour on
+  // the icon instead — three spellings of a control that should look the same everywhere. See
   // `vote-button-styles` for why the shade is `grey-04` rather than the lighter `grey-03`.
   //
-  // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
-  // the only signal it has.
-  //
-  // One class or the other, never both. `cx` is `classnames`, which concatenates — it does not
-  // resolve conflicting Tailwind utilities the way `tailwind-merge` would, and this repo does not
-  // use that. Emitting `text-grey-03` alongside `text-[#2A2B2E]` leaves the winner to whichever
-  // rule Tailwind happens to emit second, which is not something this file gets to decide.
-  const responseButtonColor = (active: boolean) =>
-    queryResponseKind === 'veracity' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
+  // Every response kind takes the same class now, held or not. The exception was the veracity
+  // chevron, which had no filled form and so needed colour to say it was held; there are no
+  // chevrons here any more, so this is no longer a choice and `VOTE_BUTTON_CLASS` is used directly.
 
   const claimResponderAvatars = isClaimResponse ? (
     <ClaimResponderAvatars
@@ -394,7 +389,7 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          responseButtonColor(positiveActive),
+          VOTE_BUTTON_CLASS,
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -415,7 +410,7 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          responseButtonColor(negativeActive),
+          VOTE_BUTTON_CLASS,
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -424,7 +419,7 @@ export function EntityVoteButtons({
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
       {isResponseIndexingDelayed && !compact ? (
         <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
-          Response submitted. Waiting for confirmation.
+          {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}
     </div>

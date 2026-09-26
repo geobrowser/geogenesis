@@ -3,6 +3,7 @@ import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -13,13 +14,13 @@ const SPACE_2 = '22222222222222222222222222222222';
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
-  affiliations: new Map<string, string>(),
+  bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
 }));
 
-vi.mock('~/core/debates/participant-affiliations', () => ({
-  useParticipantAffiliations: () => mocks.affiliations,
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => mocks.bylines,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -68,11 +69,17 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: () => null,
 }));
 
+/**
+ * `position_label` is set to the retired wording on purpose. geo-chat still sends "Verify" and
+ * "Dispute" for a claim it calls factual, and the chip is named from `position` instead — so the
+ * chip reading "Agree"/"Disagree" below is what proves the server's label is not the source.
+ */
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
     profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
-    position_label: slot === 1 ? 'For' : 'Against',
+    position: slot === 1,
+    position_label: slot === 1 ? 'Verify' : 'Dispute',
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
@@ -94,7 +101,21 @@ function controllerFixture(overrides: {
   /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
    * blanking pass that precedes a different pair leaves behind. */
   urls?: { slot1: string | null; slot2: string | null };
+  /** Where the playhead sits, which is all a round cue reads. */
+  playheadSeconds?: number;
 }) {
+  /*
+   * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
+   *
+   * `turnSpansForDurations` takes the debate's *first* slot, so pinning `turnState.slot` to it
+   * made the fixture contradict itself the moment a test moved the playhead past the first turn:
+   * at 30.5s the spans say slot 2 is speaking while `turnState` still said slot 1. The reply tests
+   * were then checking that a badge existed somewhere rather than that it had crossed tiles.
+   */
+  const turnSpans = turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]);
+  const playheadSeconds = overrides.playheadSeconds ?? 5;
+  const speakingSlot = turnSpans.find(span => playheadSeconds < span.endSeconds)?.slot ?? overrides.turnSlot;
+
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
@@ -111,10 +132,15 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: 5,
-    timelineSeconds: 60,
-    turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
-    activeSlot: overrides.turnSlot,
+    playheadSeconds,
+    // Four 30s turns, so the whole timeline is 120s.
+    timelineSeconds: 120,
+    turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
+    turnSpans,
+    // The format's count, which is what names a round. Equal to the spans here because nothing was
+    // yielded early; the two part company on a debate that was.
+    turnCount: 4,
+    activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
     resyncSlot: vi.fn(),
@@ -159,7 +185,7 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
-  mocks.affiliations = new Map();
+  mocks.bylines = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -189,7 +215,7 @@ describe('player layout', () => {
    */
   it("puts each debater's position immediately after their name", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    mocks.bylines = new Map([
       [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
       [SPACE_2, 'Another affiliation whose width must not place the position chip'],
     ]);
@@ -197,8 +223,8 @@ describe('player layout', () => {
     const { getByText } = within(container);
 
     for (const [name, position, affiliation] of [
-      [SPACE_1_DASHED, 'For', 'A deliberately much longer affiliation than the participant name'],
-      [SPACE_2, 'Against', 'Another affiliation whose width must not place the position chip'],
+      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
     ]) {
       const chip = getByText(position);
       const nameNode = getByText(name);
@@ -209,7 +235,6 @@ describe('player layout', () => {
       expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
       expect(nameNode.closest('button')?.className).toContain('items-center');
     }
-
   });
 
   it('keeps the position chip in the video playback surface', () => {
@@ -218,41 +243,48 @@ describe('player layout', () => {
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
-    fireEvent.click(within(container).getByText('For'));
+    fireEvent.click(within(container).getByText('Agree'));
     expect(controller.togglePlayback).toHaveBeenCalledOnce();
   });
 
-  it('draws no chip for a debater whose position has no label', () => {
-    mocks.controller = {
-      ...controllerFixture({ mutedByUser: true, turnSlot: 1 }),
-      slot1Participant: { ...participant(1), position_label: '' },
-    };
+  /**
+   * A test here covered an empty `position_label`, which typed non-null but arrived from geo-chat
+   * and would have drawn a bare pill. The chip is named from `position` now — a non-null boolean —
+   * so there is no label for the server to leave blank and the case is gone rather than untested.
+   * What replaces it is the fixture above: a stale server label that must not reach the chip.
+   */
+  it('names the side itself rather than repeating the label geo-chat sent', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const { queryByText } = within(container);
+    const { queryByText, getByText } = within(container);
 
-    expect(queryByText('For')).toBeNull();
-    expect(queryByText('Against')).not.toBeNull();
+    expect(getByText('Agree')).not.toBeNull();
+    expect(getByText('Disagree')).not.toBeNull();
+    expect(queryByText('Verify')).toBeNull();
+    expect(queryByText('Dispute')).toBeNull();
   });
 
-  it('shows each participant affiliation below their name and exposes the full line on hover', () => {
+  it('shows each participant byline below their name, clamped with the full line on hover', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
+    mocks.bylines = new Map([
       [SPACE_1, 'Head of Product at Geo'],
-      [SPACE_2, 'PhD student, Economics at Stanford'],
+      [SPACE_2, description],
     ]);
 
     const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
 
-    expect(getByText('Head of Product at Geo').className).toContain('truncate');
-    expect(getByTitle('PhD student, Economics at Stanford')).not.toBeNull();
+    expect(getByText('Head of Product at Geo').hasAttribute('data-debate-byline')).toBe(true);
+    expect(getByText(description).className).toContain('truncate');
+    expect(getByTitle(description)).not.toBeNull();
   });
 
-  it('leaves no affiliation row when a participant has none', () => {
+  it('leaves no byline row when a participant has no affiliation or description', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
-    expect(container.querySelector('[title*=" at "]')).toBeNull();
+    expect(container.querySelector('[data-debate-byline]')).toBeNull();
   });
 });
 
@@ -269,9 +301,9 @@ describe('overlay variants', () => {
     expect(queryByTestId('claim-stack')).toBeNull();
   });
 
-  it('hides participant affiliations in a compact debate card', () => {
+  it('hides participant bylines in a compact debate card', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.affiliations = new Map([
+    mocks.bylines = new Map([
       [SPACE_1, 'Head of Product at Geo'],
       [SPACE_2, 'PhD student, Economics at Stanford'],
     ]);
@@ -802,5 +834,171 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
     act(() => vi.advanceTimersByTime(2_000));
 
     expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+describe('the round it is playing', () => {
+  const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
+
+  it('announces the round once, on the seam between the tiles', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const cards = [...container.querySelectorAll('[data-round-card]')];
+
+    // One card for the player, not one per tile: the round is about both of them.
+    expect(cards).toHaveLength(1);
+    expect(cards[0].getAttribute('data-round-card')).toBe('Round 1 · Opening');
+  });
+
+  it('takes the top tile\u2019s name with it and gives it straight back', () => {
+    // A lower third under a title card is something no broadcast does, because neither gets read.
+    // It crossfades against the card, so at full card the name is gone and a second later it is
+    // not — and the bottom tile's name, half a player away, never moves.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(0.5);
+    const up = render(<DebateFeedPlayer debate={debate} active />).container;
+    const [topUnder, bottomUnder] = [...up.querySelectorAll('[data-debater-row]')] as HTMLElement[];
+    expect(topUnder.style.opacity).toBe('0');
+    expect(bottomUnder.style.opacity).toBe('1');
+
+    mocks.controller = at(12);
+    const after = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect((after.querySelector('[data-debater-row]') as HTMLElement).style.opacity).toBe('1');
+  });
+
+  it('brings the name back for a viewer who tabs to it under the card', () => {
+    // Fading a control out does not take it out of the tab order. Rather than make it `inert` for
+    // the card's 1.8s — which would blur anyone already standing there — the row comes back into
+    // view when the keyboard reaches it, the same answer the scrubber gives.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+    expect(row.style.opacity).toBe('0');
+
+    fireEvent.focus(row.querySelector('button') as HTMLElement);
+    expect(row.style.opacity).toBe('1');
+
+    // And leaves again once focus goes somewhere outside the row.
+    fireEvent.blur(row.querySelector('button') as HTMLElement, { relatedTarget: container });
+    expect(row.style.opacity).toBe('0');
+  });
+
+  it('lets CSS carry the crossfade between playhead samples', () => {
+    // The playhead arrives about four times a second against a 250ms fade, so without this the
+    // name steps once and is gone rather than leaving — and where it lands in that step varies
+    // from round to round. The row can do this because it is always mounted; the card and the
+    // badge are drawn only inside their windows and have nothing to interpolate from.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('transition-[padding-bottom,opacity]');
+  });
+
+  it('does not leave an invisible profile link on the pause surface', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('[&_button]:pointer-events-none');
+  });
+
+  it('keeps the seam to itself while it is up', () => {
+    const subtitle = 'The line under the round card';
+    mocks.controller = { ...at(0.5), subtitle };
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).not.toBeNull();
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it('parks it beside the timer for the rest of the turn', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    // Only the speaking tile has a timer, so only it carries the label.
+    const badges = [...container.querySelectorAll('[data-round-badge]')];
+    expect(badges).toHaveLength(1);
+    expect(badges[0].getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('does not announce the round again when the other debater replies', () => {
+    // Turn 2 of 4 starts at 30s. The badge is already carrying the round; a second card would be
+    // the same announcement made twice.
+    mocks.controller = at(30.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')?.getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('carries the badge across to the tile whose turn it now is', () => {
+    // The same round on the other debater: the badge belongs to the timer, and the timer follows
+    // the speaker. Slot 1 opens, so at 12s it is on slot 1's tile and at 30.5s on slot 2's.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(12);
+    const opening = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(opening.querySelector('[data-debate-slot="1"] [data-round-badge]')).not.toBeNull();
+    expect(opening.querySelector('[data-debate-slot="2"] [data-round-badge]')).toBeNull();
+
+    mocks.controller = at(30.5);
+    const reply = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(reply.querySelector('[data-debate-slot="2"] [data-round-badge]')).not.toBeNull();
+    expect(reply.querySelector('[data-debate-slot="1"] [data-round-badge]')).toBeNull();
+  });
+
+  it('names the round in words a screen reader can read', () => {
+    // The card is aria-hidden, so this badge is the only non-visual route to the one thing the
+    // page states nowhere else: whether this turn is an opening, a rebuttal or a closing.
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const badge = container.querySelector('[data-round-badge]') as HTMLElement;
+
+    expect(badge.hasAttribute('aria-hidden')).toBe(false);
+    expect(badge.querySelector('.sr-only')?.textContent).toBe('Round 1, Opening');
+  });
+
+  it('names the round the playhead is actually in', () => {
+    mocks.controller = at(60.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 2 · Rebuttal');
+  });
+
+  it('stands down while the viewer has the debate paused', () => {
+    // A card frozen on a paused tile is an announcement with no turn behind it.
+    mocks.controller = at(0.5, { playing: false });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
+  });
+
+  it('stays off a compact gallery tile, where there is no room for a phrase', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
   });
 });

@@ -34,7 +34,6 @@ function place(
 ) {
   return withViewerPosition({
     positions,
-    responseKind: 'stance',
     serverPosition,
     viewerPosition,
     viewerSpaceId: VIEWER_SPACE,
@@ -194,7 +193,6 @@ describe('withViewerPosition', () => {
 
     const sides = withViewerPosition({
       positions,
-      responseKind: 'stance',
       serverPosition: undefined,
       viewerPosition: null,
       viewerSpaceId: VIEWER_SPACE,

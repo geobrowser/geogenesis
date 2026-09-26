@@ -30,7 +30,8 @@ export function entityPageTitleAnchor(entityId: string | undefined) {
  * Spread onto a page's content column.
  *
  * There is no single width to hand the header instead: the generic page is 900 and unpadded, a claim
- * 840 at `px-4`/`px-5`, a topic 720 at the same, and a page with a rail 1142. It measures whichever
+ * 840 at `px-4`/`px-5`, a topic the generic width at that gutter, and a page with a rail 1142. It
+ * measures whichever
  * of these carries this, so a view with a width of its own is matched by saying so rather than by
  * teaching the header about it.
  */

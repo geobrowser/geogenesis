@@ -9,12 +9,16 @@ import { ClaimCommentPositionProvider } from '~/core/claims/browse/claim-comment
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import {
+  trustedIndexedPosition,
+  useBackfillReadinessForHeldPosition,
+} from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -527,7 +531,8 @@ function ClaimPositionSection({
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
-  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
+  const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
+  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
 
   return (
     // No card of its own: it renders in the hero's left column, under the claim.
@@ -536,11 +541,12 @@ function ClaimPositionSection({
         entityId={entityId}
         spaceId={spaceId}
         positions={control.optimisticPositions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
+        pending={control.isResponsePending}
         titleFor={control.actionTitle}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
@@ -566,6 +572,7 @@ function ClaimPositionSection({
         // The offer rests on the side set by the pills directly above it, so it moves when they do.
         // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
         viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+        indexedViewerPosition={indexedPosition}
         className="mt-2"
       />
     </section>

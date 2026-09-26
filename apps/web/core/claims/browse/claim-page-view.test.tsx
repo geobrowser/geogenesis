@@ -56,6 +56,10 @@ const mocks = vi.hoisted(() => ({
   },
   /** Claim response context supplied to the otherwise generic comment thread. */
   commentPosition: null as Record<string, unknown> | null,
+  /** Whether the viewer's own response is still confirming, per the shared position control. */
+  isResponsePending: false,
+  /** Props the position pills received. */
+  positionControl: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -149,10 +153,14 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     actionTitle: () => undefined,
     responseError: null,
     isConnected: false,
+    isResponsePending: mocks.isResponsePending,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
-  ClaimPositionCommentControl: () => <div data-testid="position" />,
+  ClaimPositionCommentControl: (props: Record<string, unknown>) => {
+    mocks.positionControl = props;
+    return <div data-testid="position" />;
+  },
 }));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
@@ -170,6 +178,7 @@ vi.mock('~/design-system/prefetch-link', () => ({
   ),
 }));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
+  trustedIndexedPosition: () => null,
   useBackfillReadinessForHeldPosition: () => {},
 }));
 vi.mock('~/partials/explore/claim-explore-feed-card', () => ({
@@ -245,6 +254,8 @@ beforeEach(() => {
   mocks.record.debatesHasNextPage = false;
   mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
+  mocks.isResponsePending = false;
+  mocks.positionControl = null;
 });
 
 describe('ClaimPageView record', () => {
@@ -545,6 +556,25 @@ describe('ClaimPageView description', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+describe('ClaimPageView position', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction.
+  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
+  // cursor, and only the presses that would undo it are dropped until it lands.
+  it('marks the pills pending while the response confirms, without announcing a wait', () => {
+    mocks.isResponsePending = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(true);
+    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+  });
+
+  it('releases the pills once it has landed', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
   });
 });
 

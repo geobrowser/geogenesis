@@ -10,11 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
-import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from './vote-button-styles';
+import { VOTE_BUTTON_CLASS } from './vote-button-styles';
 
 /**
  * GEO-2792. Four surfaces had four answers for "this is the one you picked": curation said it with
- * fill alone, stance darkened to `grey-04`, veracity used a hand-written `#2A2B2E`, and the debates
+ * fill alone, stance darkened to `grey-04`, and the debates
  * pill went blue for up and red for down.
  *
  * They now all say it the way curation always did — grey, with the filled icon carrying the signal.
@@ -118,37 +118,33 @@ describe('the selected vote treatment', () => {
     });
   });
 
-  // Deliberately exempt, and unchanged from what shipped: a chevron has no filled form, so colour
-  // is the only signal it has.
-  describe('veracity chevrons', () => {
-    it('keeps its own darker selected colour', () => {
+  /**
+   * The exception is gone with the chevrons.
+   *
+   * A veracity claim used to keep its own darker selected colour, because a chevron has no filled
+   * form and colour was the only signal it had. Claims are all thumbs now, so the held side is said
+   * by the fill and this control has exactly one shade — which is what this pins, since the
+   * hand-written `#2A2B2E` that used to override it has been deleted.
+   */
+  describe('a claim', () => {
+    it('takes the same grey as every other control, held or not', () => {
       mocks.optimisticResponse = 'positive';
-      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
-      expect(inlineButtons().up).toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
-    });
-
-    // Presence is not enough, and this is the assertion the first version of this file was missing.
-    // `cx` is `classnames`: it concatenates rather than resolving conflicting Tailwind utilities,
-    // so emitting the grey alongside the darker colour leaves the winner to whichever rule Tailwind
-    // emits second — and it emitted grey, silently deleting this exception. jsdom evaluates no
-    // cascade, so only the absence of the competing class can catch it.
-    it('does not also carry the grey it is meant to override', () => {
-      mocks.optimisticResponse = 'positive';
-      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
-
-      const { up } = inlineButtons();
-      expect(up).not.toHaveClass('text-grey-04');
-      expect(up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
-    });
-
-    it('leaves the direction the viewer did not pick grey', () => {
-      mocks.optimisticResponse = 'positive';
-      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
-
-      const { down } = inlineButtons();
-      expect(down).not.toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
+      const { up, down } = inlineButtons();
+      expect(up).toHaveClass('text-grey-04');
       expect(down).toHaveClass('text-grey-04');
+      expect(up.className).toBe(down.className);
+    });
+
+    // `cx` concatenates rather than resolving conflicting Tailwind utilities, so a second `text-`
+    // class would leave the winner to whichever rule Tailwind emits second. jsdom evaluates no
+    // cascade, so only counting them can catch it.
+    it('carries exactly one text colour', () => {
+      mocks.optimisticResponse = 'positive';
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+
+      expect(inlineButtons().up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
     });
   });
 

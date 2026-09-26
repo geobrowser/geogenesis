@@ -72,9 +72,6 @@ export type PairHeaderToast =
   | { kind: 'opponent-talking'; onUnmute: () => void; onDismiss: () => void }
   | { kind: 'talking-while-muted'; onUnmute: () => void; onDismiss: () => void };
 
-/** Both sides of a locked pairing, once the pair have agreed what they are debating. */
-export type PairHeaderPositions = { localAgrees: boolean; opponentAgrees: boolean };
-
 /**
  * "Jenna Ruiz" -> "Jenna". The notice and the toasts address the opponent directly, and a display
  * handle read out in the middle of a sentence reads like a username, not like the person talking.
@@ -90,9 +87,6 @@ type RematchPairHeaderProps = {
   voice: PairHeaderVoice;
   notice?: PairHeaderNotice | null;
   toast?: PairHeaderToast | null;
-  /** Set once the pair lock a claim — the claim sits above the cards and each card takes a side chip. */
-  lockedClaim?: { claim: string; spaceName?: string | null } | null;
-  positions?: PairHeaderPositions | null;
   /** Opens the opponent's profile in the side panel — see `useOpenDebaterProfile`. */
   onOpenOpponentSpace: (event: React.MouseEvent) => void;
   /**
@@ -112,8 +106,6 @@ export function RematchPairHeader({
   voice,
   notice,
   toast,
-  lockedClaim,
-  positions,
   onOpenOpponentSpace,
   leaveAction,
 }: RematchPairHeaderProps) {
@@ -131,17 +123,10 @@ export function RematchPairHeader({
    * other person mutes, and a control whose name moves is harder to use than one that is quiet.
    */
   const opponentStatusId = React.useId();
-  const opponentStatus = [
-    voice.kind === 'live' ? opponentMicLabel(voice.opponentState, opponentName) : null,
-    positions ? `${opponentName} ${positions.opponentAgrees ? 'agrees' : 'disagrees'}` : null,
-  ]
-    .filter(Boolean)
-    .join('. ');
+  const opponentStatus = voice.kind === 'live' ? opponentMicLabel(voice.opponentState, opponentName) : '';
 
   return (
     <div className="flex flex-col gap-3">
-      {lockedClaim ? <LockedClaim claim={lockedClaim.claim} spaceName={lockedClaim.spaceName} /> : null}
-
       {/* Them, then the badge, then you — the home side of a scoreboard, and the side a reader's
           eye lands on last. Three tracks on desktop, stacked on a phone: two 150px cards side by
           side at 375px leave no room for a labelled pill, and a labelled pill is the entire point
@@ -152,18 +137,11 @@ export function RematchPairHeader({
           name={opponentName}
           state={voice.kind === 'live' ? voice.opponentState : 'waiting'}
           showMicState={voice.kind === 'live'}
-          agrees={positions?.opponentAgrees}
           onOpen={onOpenOpponentSpace}
           describedBy={opponentStatusId}
         />
         <VsBadge />
-        <YouCard
-          local={local}
-          voice={voice}
-          opponentName={opponentName}
-          agrees={positions?.localAgrees}
-          leaveAction={leaveAction}
-        />
+        <YouCard local={local} voice={voice} opponentName={opponentName} leaveAction={leaveAction} />
       </div>
 
       {/* The spoken half of the nudges: a region that is always mounted and only changes text. A
@@ -189,15 +167,6 @@ function toastAnnouncement(toast: PairHeaderToast, opponentName: string) {
   return toast.kind === 'opponent-talking'
     ? `${firstName(opponentName)} is talking. Unmute to reply.`
     : `You’re talking while muted.`;
-}
-
-function LockedClaim({ claim, spaceName }: { claim: string; spaceName?: string | null }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {spaceName ? <span className="text-footnoteMedium text-grey-04">{spaceName}</span> : null}
-      <h2 className="text-mediumTitle text-text">{claim}</h2>
-    </div>
-  );
 }
 
 function VsBadge() {
@@ -251,7 +220,6 @@ function PairCardBody({
   nameTitle,
   state,
   action,
-  footer,
 }: {
   avatar: React.ReactNode;
   name: string;
@@ -260,8 +228,6 @@ function PairCardBody({
   state?: React.ReactNode;
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
-  /** Below the whole row, spanning the card — the locked position chip. */
-  footer?: React.ReactNode;
 }) {
   return (
     <>
@@ -275,7 +241,6 @@ function PairCardBody({
         </div>
         {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
       </div>
-      {footer}
     </>
   );
 }
@@ -284,13 +249,11 @@ function YouCard({
   local,
   voice,
   opponentName,
-  agrees,
   leaveAction,
 }: {
   local: PairHeaderParticipant | null;
   voice: PairHeaderVoice;
   opponentName: string;
-  agrees?: boolean;
   leaveAction?: React.ReactNode;
 }) {
   const live = voice.kind === 'live';
@@ -393,7 +356,6 @@ function YouCard({
           </>
         }
         action={leaveAction}
-        footer={agrees === undefined ? null : <PositionChip agrees={agrees} />}
       />
     </div>
   );
@@ -404,7 +366,6 @@ function OpponentCard({
   name,
   state,
   showMicState,
-  agrees,
   onOpen,
   describedBy,
 }: {
@@ -412,7 +373,6 @@ function OpponentCard({
   name: string;
   state: PairMicState;
   showMicState: boolean;
-  agrees?: boolean;
   onOpen: (event: React.MouseEvent) => void;
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
@@ -446,7 +406,6 @@ function OpponentCard({
           <ChevronRight />
         </span>
       }
-      footer={agrees === undefined ? null : <PositionChip agrees={agrees} />}
     />
   );
 
@@ -537,39 +496,6 @@ function TalkingBars() {
       <span className="w-0.5 rounded-xs bg-green" style={{ height: 11 }} />
       <span className="w-0.5 rounded-xs bg-green" style={{ height: 7 }} />
     </span>
-  );
-}
-
-/** Which side of the locked claim this person is on. */
-function PositionChip({ agrees }: { agrees: boolean }) {
-  return (
-    <span
-      className={cx(
-        'flex min-h-7 items-center gap-1.5 self-start rounded-full px-3 text-button text-text',
-        agrees ? 'bg-successTertiary' : 'bg-errorTertiary'
-      )}
-    >
-      <ThumbIcon down={!agrees} />
-      {agrees ? 'Agree' : 'Disagree'}
-    </span>
-  );
-}
-
-function ThumbIcon({ down }: { down: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      className={cx('size-3.5', down ? 'rotate-180 text-red-01' : 'text-green')}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M7 10v11H4V10h3z" />
-      <path d="M7 10l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.3 7A2 2 0 0 1 17.7 21H7" />
-    </svg>
   );
 }
 

@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   /** The crowd's share of positive responses, or null on a claim nobody has answered. */
   percent: null as number | null,
-  responseKind: 'stance' as 'stance' | 'veracity',
+  responseKind: 'stance' as const,
   respond: vi.fn(),
 }));
 
@@ -215,16 +215,11 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('65% agree')).toBeInTheDocument();
   });
 
-  // "65% agree" on "the SEC sued Coinbase" is the wrong sentence; the share takes the same verb
-  // the rest of the app uses for the claim's own vocabulary.
-  it("reads the share with the claim's own vocabulary verb", () => {
-    mocks.percent = 65;
-    mocks.responseKind = 'veracity';
-
-    renderCard();
-
-    expect(screen.getByText('65% verify')).toBeInTheDocument();
-  });
+  // A case that used to sit here — "reads the share with agree even on a claim geo-chat still calls
+  // factual" — is gone, and the type is why. The share verb comes from the kind this hook returns,
+  // which is `DebateResponseKind` and so can only be `stance`; geo-chat's own word for it never
+  // reaches here. Setting `mocks.responseKind = 'veracity'` no longer compiles, and with the input
+  // unrepresentable the case is the one directly above it.
 
   // A genuine 0% and "nobody has answered" are different statements, and the great majority of
   // claims are the second one.

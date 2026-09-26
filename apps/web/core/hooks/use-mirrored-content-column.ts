@@ -35,8 +35,9 @@ function measure(content: Element, host: Element): ContentColumnBox | null {
  * Where a page's content column sits, in `host`'s coordinates.
  *
  * For lining a fixed or portalled element up with a column it is not inside. There is no width to
- * hard-code: the generic entity page is 900 and unpadded, a claim 840 at `px-4`/`px-5`, a topic 720,
- * a page with a rail 1142 — and a view added later will have its own. Reading the column the caller
+ * hard-code: the generic entity page is 900 and unpadded, a claim 840 at `px-4`/`px-5`, a page with
+ * a rail 1142 — and a view added later will have its own. A topic was 720 until #2580 moved it to
+ * the generic width, which is the point: nothing here needed changing when it did. Reading the column the caller
  * is actually tracking means a new one is matched by tagging it, with nothing to keep in sync here.
  *
  * `anchor` is any element inside that column; the column itself is the nearest ancestor carrying

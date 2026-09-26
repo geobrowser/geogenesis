@@ -45,6 +45,7 @@ export function ClaimEndSlot({
   enabled = true,
   variant = 'inline',
   viewerPosition,
+  indexedViewerPosition,
   className,
 }: {
   claimId: string;
@@ -65,6 +66,8 @@ export function ClaimEndSlot({
    * reader is on. Silence is not a contradiction.
    */
   viewerPosition: boolean | null | undefined;
+  /** The chain's side, where the host has it — see `useClaimMatchup`. */
+  indexedViewerPosition?: boolean | null;
   /**
    * The live debate on this claim.
    *
@@ -103,6 +106,8 @@ export function ClaimEndSlot({
     claimId,
     spaceId,
     enabled,
+    viewerPosition,
+    indexedViewerPosition,
   });
 
   // The live-debate link below shares its shape with this offer, so both read the size from one

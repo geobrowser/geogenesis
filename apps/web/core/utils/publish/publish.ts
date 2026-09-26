@@ -287,10 +287,22 @@ function parseDecimalString(val: string): { exponent: number; mantissa: DecimalM
 }
 
 /**
+ * Parses a stored date/time value, refusing one the engine cannot read.
+ *
+ * An unreadable value used to become "NaN-NaN-NaN", which the SDK only rejects at encode time and
+ * the publish flow then reports, and retries, as an IPFS upload failure.
+ */
+function parseStoredDate(val: string): Date {
+  const date = new Date(GeoDate.toFullISOString(val));
+  if (Number.isNaN(date.getTime())) throw new Error(`Cannot publish unreadable date value "${val}"`);
+  return date;
+}
+
+/**
  * Convert a stored value to RFC 3339 date-only: "YYYY-MM-DD"
  */
 function toRfc3339Date(val: string): string {
-  const date = new Date(GeoDate.toFullISOString(val));
+  const date = parseStoredDate(val);
   const yyyy = String(date.getUTCFullYear()).padStart(4, '0');
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(date.getUTCDate()).padStart(2, '0');
@@ -301,7 +313,7 @@ function toRfc3339Date(val: string): string {
  * Convert a stored value to RFC 3339 time-only: "HH:MM:SSZ"
  */
 function toRfc3339Time(val: string): string {
-  const date = new Date(GeoDate.toFullISOString(val));
+  const date = parseStoredDate(val);
   const hh = String(date.getUTCHours()).padStart(2, '0');
   const min = String(date.getUTCMinutes()).padStart(2, '0');
   const ss = String(date.getUTCSeconds()).padStart(2, '0');

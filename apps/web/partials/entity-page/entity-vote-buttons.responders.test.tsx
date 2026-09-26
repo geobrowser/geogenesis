@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -9,7 +10,8 @@ import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 import { slideUpPopoverContainersAtom } from '~/atoms';
@@ -229,23 +231,32 @@ describe('the responder faces on a claim', () => {
  * browser too: with the notice forced on, one lives on the page and none in the bar.
  */
 describe('compact, for the sticky header', () => {
-  const INDEXING = 'Response submitted. Waiting for confirmation.';
+  // master extracted this string to a constant while this branch was open; taken from there rather
+  // than copied, so a reword cannot leave the test passing against text nobody ships.
+  const INDEXING = RESPONSE_CONFIRMING_COPY;
   const UNPUBLISHED = 'Publish changes before responding';
   const UNAVAILABLE = 'Response unavailable';
 
   /**
-   * An unpublished edit to the claim's factual flag, shaped so the real
-   * `hasUnpublishedClaimResponseKindEdit` answers true. Built rather than stubbed: the predicate is
-   * pure over the entity, so driving it is both more faithful and no harder than mocking it — and
-   * this branch only runs when the caller passes no `responseKind`, so the entity is what decides.
+   * An unpublished edit to the Claim type, shaped so the real `hasUnpublishedClaimResponseKindEdit`
+   * answers true. Built rather than stubbed: the predicate is pure over the entity, so driving it is
+   * both more faithful and no harder than mocking it — and this branch only runs when the caller
+   * passes no `responseKind`, so the entity is what decides.
+   *
+   * It was a draft edit to the "Is factual" flag until #2541 landed. That flag used to choose between
+   * two vote kinds; it chooses nothing now, so the guard stopped watching it and this fixture stopped
+   * reaching the branch — a drift a clean textual merge hid and only this test caught. Adding or
+   * removing the Claim type still moves an entity between curation and stance, so that is what stops
+   * a response now.
    */
   function withUnpublishedResponseKindEdit() {
     mocks.entity = {
-      relations: [],
-      values: [
+      values: [],
+      relations: [
         {
           spaceId: SPACE,
-          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
           isLocal: true,
           hasBeenPublished: false,
         },
