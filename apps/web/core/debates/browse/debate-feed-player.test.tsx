@@ -923,6 +923,9 @@ describe('a seek asked for by the link that brought the reader here', () => {
     player.update();
 
     expect(player.seeks).toEqual([]);
+  });
+});
+
 
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>

@@ -122,14 +122,38 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
  * A claim with no entry yet is left alone rather than invented: the aggregate is still in flight and
  * will answer for itself. That loses a comment published in the few hundred milliseconds before the
  * first response lands, which is not long enough to write one.
+ *
+ * Asynchronous because it cancels before it writes, which is React Query's own recipe for an
+ * optimistic update and the only thing that closes this race: a refetch already on its way — the one
+ * a mount past `staleTime` starts, or a reconnect — answers with a number from before the comment
+ * existed, and if it lands *after* the write it puts that number back. Timestamps cannot tell the two
+ * apart, because the response was requested before the publish and arrives after it. Cancelling makes
+ * it never arrive. Callers do not await this; the write lands a microtask later, which is not a
+ * perceptible delay in a heading.
  */
-export function adjustClaimActivityTotal(queryClient: QueryClient, claimId: string, delta: number): void {
+export async function adjustClaimActivityTotal(
+  queryClient: QueryClient,
+  claimId: string,
+  delta: number
+): Promise<void> {
   if (delta === 0) return;
   const id = uuidToHex(claimId);
 
   // Every cached set that holds this claim, not one key: the page asks for one claim and other
   // surfaces ask for a screenful, and a number that moves on one of them has moved on all of them.
-  queryClient.setQueriesData<Map<string, ClaimActivityCount>>({ queryKey: ['claim-activity-counts'] }, counts => {
+  // The predicate keeps that from reaching sets this claim is not in, which matters more for the
+  // cancel than for the write — abandoning an unrelated claim's request would cost it a refetch.
+  const heldByThisClaim = {
+    queryKey: ['claim-activity-counts'] as const,
+    predicate: (query: { queryKey: readonly unknown[] }) => {
+      const ids = query.queryKey[1];
+      return Array.isArray(ids) && ids.includes(id);
+    },
+  };
+
+  await queryClient.cancelQueries(heldByThisClaim);
+
+  queryClient.setQueriesData<Map<string, ClaimActivityCount>>(heldByThisClaim, counts => {
     const current = counts?.get(id);
     // `undefined` bails out of the update rather than writing anything, so a cached set that does
     // not hold this claim — or one that has not answered yet — is left untouched instead of being

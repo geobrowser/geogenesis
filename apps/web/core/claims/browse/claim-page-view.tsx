@@ -481,15 +481,11 @@ function ClaimOverviewTab({
   // next claim — see `adjustClaimActivityTotal`.
   const queryClient = useQueryClient();
   const adjustActivityTotal = React.useCallback(
-    (delta: number) => adjustClaimActivityTotal(queryClient, entityId, delta),
+    (delta: number) => void adjustClaimActivityTotal(queryClient, entityId, delta),
     [entityId, queryClient]
   );
 
-  const activity = useClaimActivityRows({
-    claimId: entityId,
-    spaceId,
-    responseVocabulary: responseKind === 'veracity' ? 'veracity' : 'stance',
-  });
+  const activity = useClaimActivityRows({ claimId: entityId, spaceId });
 
   const kinds: ActivityKind[] = [
     {

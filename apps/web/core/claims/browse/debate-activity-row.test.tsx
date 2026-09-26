@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   commentQueries: [] as Array<{ entityId: string; enabled: boolean }>,
   transcriptError: null as Error | null,
   retryTranscript: vi.fn(),
+  debateComments: [] as unknown[],
 }));
 
 // The controls have their own suites and both reach for wallet and query context. What this file is
@@ -62,7 +63,7 @@ vi.mock('~/core/debates/hooks', () => ({ useDebateClaims: () => ({ data: null })
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: ({ entityId, enabled }: { entityId: string; enabled?: boolean }) => {
     mocks.commentQueries.push({ entityId, enabled: enabled !== false });
-    return { comments: [] };
+    return { comments: mocks.debateComments };
   },
 }));
 
@@ -89,7 +90,6 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof DebateActivity
         spaceId="claim-space"
         profilesBySpaceId={new Map()}
         sides={[]}
-        responseVocabulary="stance"
         claimText="Practical effects age better than CGI."
         keyframeUrl={null}
         publishedAt={new Date('2026-09-01T00:00:00.000Z')}
@@ -176,6 +176,7 @@ describe('DebateActivityRow when the transcript will not load', () => {
     mocks.commentQueries.length = 0;
     mocks.transcriptError = null;
     mocks.retryTranscript.mockClear();
+    mocks.debateComments = [];
   });
   afterEach(cleanup);
 
@@ -187,6 +188,30 @@ describe('DebateActivityRow when the transcript will not load', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mocks.retryTranscript).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The first version of this only spoke up when the whole branch was empty, so a debate that also had
+   * comments drew them and dropped its failed claims without a word — under a row still advertising
+   * eighteen of them. The comments are not a substitute for the claims.
+   */
+  it('says so alongside the comments it did manage to draw', () => {
+    mocks.transcriptError = new Error('transcript unavailable');
+    mocks.debateComments = [
+      {
+        id: 'comment-1',
+        markdownContent: 'A comment that loaded fine.',
+        author: { spaceId: 'author-space', address: '0xabc', name: 'Ada', avatarUrl: null },
+        createdAt: '2026-09-20T10:00:00Z',
+        spaceId: 'author-space',
+        replies: [],
+      },
+    ];
+
+    renderRow({ claimCount: 18, commentCount: 1 });
+
+    expect(screen.getByText(/Couldn’t load the claims from this debate/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   // The ordinary empty debate still says nothing: a line under every old debate is noise, which is

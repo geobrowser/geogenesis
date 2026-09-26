@@ -1,6 +1,13 @@
+import { QueryClient } from '@tanstack/react-query';
+
 import { describe, expect, it } from 'vitest';
 
-import { decodeClaimActivityCounts } from './claim-activity-count';
+import {
+  adjustClaimActivityTotal,
+  claimActivityCountsQueryKey,
+  decodeClaimActivityCounts,
+} from './claim-activity-count';
+import type { ClaimActivityCount } from './claim-activity-fields';
 
 function debate(comments: number, extracted: Array<number>) {
   return {
@@ -130,5 +137,88 @@ describe('decodeClaimActivityCounts', () => {
   it('is empty when nothing came back', () => {
     expect(decodeClaimActivityCounts({}).size).toBe(0);
     expect(decodeClaimActivityCounts({ entities: null }).size).toBe(0);
+  });
+});
+
+/**
+ * The reader's own comment, against a refetch that was already on its way.
+ *
+ * This aggregate is held for a minute, so a mount past that — or a reconnect — starts a background
+ * fetch. That request answers with a number from before the comment existed, and if it lands after the
+ * optimistic write it puts that number back: the heading drops a comment still sitting in the list
+ * underneath it. Timestamps cannot separate the two, because the response was asked for before the
+ * publish and arrives after it, so the write cancels first instead.
+ */
+describe('adjustClaimActivityTotal', () => {
+  const CLAIM = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const key = claimActivityCountsQueryKey([CLAIM]);
+
+  function seeded(total: number) {
+    return new Map([[CLAIM, { total, comments: 1, debates: 0, extractedClaims: 0 } as ClaimActivityCount]]);
+  }
+
+  function totalIn(client: QueryClient) {
+    return client.getQueryData<Map<string, ClaimActivityCount>>(key)?.get(CLAIM)?.total;
+  }
+
+  it('counts the comment', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(key, seeded(33));
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+
+    expect(totalIn(client)).toBe(34);
+  });
+
+  it('keeps it when a refetch that started earlier lands afterwards', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(key, seeded(33));
+
+    // A fetch already in flight, holding the pre-publish answer.
+    let landPreIndexAnswer = (_value: Map<string, ClaimActivityCount>) => {};
+    const inFlight = new Promise<Map<string, ClaimActivityCount>>(resolve => {
+      landPreIndexAnswer = resolve;
+    });
+    const fetching = client.fetchQuery({ queryKey: key, queryFn: () => inFlight, staleTime: 0 }).catch(() => {});
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+    expect(totalIn(client)).toBe(34);
+
+    // The indexer has not caught up, so what was already on its way still says 33.
+    landPreIndexAnswer(seeded(33));
+    await fetching;
+    await Promise.resolve();
+
+    expect(totalIn(client)).toBe(34);
+  });
+
+  it('gives the count back when the publish is rejected', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(key, seeded(33));
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+    await adjustClaimActivityTotal(client, CLAIM, -1);
+
+    expect(totalIn(client)).toBe(33);
+  });
+
+  it('leaves a claim it has no answer for alone rather than inventing one', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+
+    expect(client.getQueryData(key)).toBeUndefined();
+  });
+
+  // Another claim's request is not this claim's business: abandoning it would cost it a refetch for
+  // nothing.
+  it('does not touch a cached set this claim is not in', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const otherKey = claimActivityCountsQueryKey(['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']);
+    client.setQueryData(otherKey, seeded(7));
+
+    await adjustClaimActivityTotal(client, CLAIM, 1);
+
+    expect(client.getQueryData<Map<string, ClaimActivityCount>>(otherKey)?.get(CLAIM)?.total).toBe(7);
   });
 });

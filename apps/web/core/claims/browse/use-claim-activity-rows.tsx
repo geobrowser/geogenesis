@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
-import type { DebateResponseKind } from '~/core/debates/api';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
@@ -50,13 +49,10 @@ const NO_ROWS: CommentActivityRow[] = [];
 export function useClaimActivityRows({
   claimId,
   spaceId,
-  responseVocabulary,
   enabled = true,
 }: {
   claimId: string;
   spaceId: string;
-  /** The claim's own Agree/Disagree or Verify/Dispute wording, for the debaters' side tags. */
-  responseVocabulary: DebateResponseKind;
   enabled?: boolean;
 }): { rows: CommentActivityRow[]; isLoading: boolean } {
   const { entities: debates, isLoading } = useQueryEntities({
@@ -132,7 +128,6 @@ export function useClaimActivityRows({
           profilesBySpaceId={profilesBySpaceId}
           sides={sidesByDebateId.get(debate.id) ?? []}
           claimText={debatedClaimText(debate)}
-          responseVocabulary={responseVocabulary}
           keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
           publishedAt={debateDate(debate)}
           // `countFor`, not `?? 0`: a failed aggregate answers `null`, and the row draws its branch
@@ -148,7 +143,6 @@ export function useClaimActivityRows({
     debates,
     keyframeByDebateId,
     profilesBySpaceId,
-    responseVocabulary,
     sidesByDebateId,
     spaceId,
   ]);

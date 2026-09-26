@@ -5,14 +5,11 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
-import type { DebateResponseKind } from '~/core/debates/api';
-import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { countFor } from '~/core/hooks/batched-counts';
 import { useComments } from '~/core/hooks/use-comments';
 import { uuidToHex } from '~/core/id/normalize';
-import type { ResponseKind } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -70,8 +67,6 @@ export type DebateActivityRowProps = {
   profilesBySpaceId: Map<string, SpeakerProfile>;
   /** Each debater and the side they argued, from `Supported by` / `Opposed by`. */
   sides: Array<{ spaceId: string; position: boolean }>;
-  /** The claim page's vocabulary, so a debater's side reads in the claim's own terms. */
-  responseVocabulary: DebateResponseKind;
   /** What the debate argued. The row's body — without it the row is a byline and a control strip. */
   claimText: string | null;
   keyframeUrl: string | null;
@@ -106,7 +101,6 @@ export function DebateActivityRow({
   spaceId,
   profilesBySpaceId,
   sides,
-  responseVocabulary,
   claimText,
   keyframeUrl,
   publishedAt,
@@ -286,7 +280,6 @@ export function DebateActivityRow({
                 spaceId={spaceId}
                 profilesBySpaceId={profilesBySpaceId}
                 positionBySpaceId={positionBySpaceId}
-                responseVocabulary={responseVocabulary}
                 onCollapse={() => setCollapsed(true)}
                 branchLabel={branchLabel}
                 commentCount={commentCount}
@@ -312,7 +305,6 @@ function DebateBranch({
   spaceId,
   profilesBySpaceId,
   positionBySpaceId,
-  responseVocabulary,
   onCollapse,
   branchLabel,
   commentCount,
@@ -323,7 +315,6 @@ function DebateBranch({
   profilesBySpaceId: Map<string, SpeakerProfile>;
   /** Debater space id (canonical) → the side they argued in this debate. */
   positionBySpaceId: Map<string, boolean>;
-  responseVocabulary: DebateResponseKind;
   onCollapse: () => void;
   branchLabel: { expand: string; collapse: string };
   /** From the feed's own aggregate. Zero means nothing here is worth a request; `null` means it could not say. */
@@ -347,17 +338,7 @@ function DebateBranch({
   });
 
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  // One call for every extracted claim on screen. Without it each row's own vote control would read
-  // the entity to work out whether it takes thumbs or chevrons — one request per row.
-  const claimRows = useDebateClaims(spaceId, claimIds, claimIds.length > 0);
   const commentCounts = useEntityCommentCounts(claimIds);
-  const responseKindByClaimId = React.useMemo(() => {
-    const map = new Map<string, ResponseKind>();
-    for (const row of claimRows.data?.claims ?? []) {
-      map.set(uuidToHex(row.claim_entity_id), row.response_kind === 'veracity' ? 'veracity' : 'stance');
-    }
-    return map;
-  }, [claimRows.data?.claims]);
 
   const speakerBySourceBlockId = React.useMemo(() => {
     const map = new Map<string, string>();
@@ -379,20 +360,25 @@ function DebateBranch({
   // Timed first, in order, then the ones nothing could place. The tail is not sorted among itself:
   // there is nothing to sort it by, and imposing an order would say there was.
   const claimsInOrder = [...ordered.timed, ...ordered.untimed];
-  const rowCount = claimsInOrder.length + debateComments.length;
 
-  // Silent rather than apologetic. Claim extraction postdates a chunk of the corpus, so a debate
-  // with nothing under it is ordinary — and a line saying so under every old debate is noise.
+  // The claims could not be read, so the branch owes the reader an account of what it is not showing.
   //
-  // A *failed* read is not that, and the hook reports both as the same empty grouping. Staying silent
-  // here said "this debate produced nothing" on a row whose own indicator was advertising eighteen
-  // extracted claims, with nothing to press and no way to tell the difference.
-  if (rowCount === 0) {
-    if (claimsError == null) return null;
+  // Silence is right for a debate that simply has nothing under it — claim extraction postdates a
+  // chunk of the corpus, and a line saying so beneath every old debate is noise — and the hook reports
+  // a failure as the same empty grouping, so the two have to be told apart here. The first version of
+  // this only spoke up when the *whole* branch was empty, which meant a debate that also had comments
+  // drew them and dropped its failed claims without a word, under a row still advertising eighteen.
+  const claimsFailed = claimsError != null && claimsInOrder.length === 0;
+  // One row, at the head: it is about the claims, which is what the rest of the branch leads with.
+  const leadingRows = claimsFailed ? 1 : 0;
+  const rowCount = leadingRows + claimsInOrder.length + debateComments.length;
 
-    return (
-      <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
-        <ThreadBranchRow isLast>
+  if (rowCount === 0) return null;
+
+  return (
+    <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
+      {claimsFailed && (
+        <ThreadBranchRow isLast={rowCount === 1}>
           <span className={cx(PAGE_DENSITY.metaClass, 'text-grey-04')}>
             Couldn’t load the claims from this debate.{' '}
             <button type="button" onClick={retryClaims} className="text-ctaPrimary hover:underline">
@@ -400,16 +386,12 @@ function DebateBranch({
             </button>
           </span>
         </ThreadBranchRow>
-      </ThreadBranch>
-    );
-  }
+      )}
 
-  return (
-    <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
       {claimsInOrder.map((claim, index) => {
         const speakerSpaceId = speakerBySourceBlockId.get(uuidToHex(claim.blockId)) ?? null;
         return (
-          <ThreadBranchRow key={claim.id} isLast={index === rowCount - 1}>
+          <ThreadBranchRow key={claim.id} isLast={leadingRows + index === rowCount - 1}>
             <ExtractedClaimRow
               claim={claim}
               debateId={debateId}
@@ -419,20 +401,15 @@ function DebateBranch({
               commentCount={countFor(commentCounts, claim.id)}
               // A debate is the root of this branch, so everything hanging off it is one below.
               depth={ACTIVITY_ROOT_DEPTH + 1}
-              // Never guessed. A vote is published *as* a kind — thumbs write a stance response and
-              // chevrons write a veracity one — so a control drawn on a guess can write the wrong kind
-              // of answer into the graph, which no later correction undoes. This used to default to
-              // `stance` on the grounds that it is the graph's own default, which is true of a claim
-              // with nothing recorded and not true of one whose row simply has not arrived yet.
+              // Known rather than looked up. Every extracted claim is a Claim entity, and #2541
+              // answered every claim with Agree/Disagree — so `stance` is the only kind a claim has,
+              // and stating it saves the per-entity read the control would otherwise make to find out.
               //
-              // `null` here means this lookup has no answer, and the row then asks the control to
-              // resolve the kind from the entity itself rather than assuming one — see
-              // `ExtractedClaimRow`.
-              responseKind={responseKindByClaimId.get(uuidToHex(claim.id)) ?? null}
-              // Still in flight. The row holds rather than drawing a control it cannot yet label, and
-              // rather than falling back to the per-entity read this batch exists to replace.
-              isResponseKindPending={claimRows.isLoading}
-              responseVocabulary={responseVocabulary}
+              // This was a batched geo-chat lookup per page, guarded against ever guessing an answer
+              // it had not received, because publishing a stance vote on a veracity claim wrote the
+              // wrong kind of response. That distinction no longer exists: the `veracity` kind, its
+              // vote kind and its SDK methods are gone, so there is one answer and nothing to guess.
+              responseKind="stance"
               // A debater who is somehow not recorded on either side gets no tag rather than a
               // guessed one — the same rule the speaker name follows below.
               speakerPosition={
@@ -452,7 +429,7 @@ function DebateBranch({
       })}
 
       {debateComments.map((comment, index) => (
-        <ThreadBranchRow key={comment.id} isLast={claimsInOrder.length + index === rowCount - 1}>
+        <ThreadBranchRow key={comment.id} isLast={leadingRows + claimsInOrder.length + index === rowCount - 1}>
           <DebateCommentRow
             comment={comment}
             targetEntityId={debateId}

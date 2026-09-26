@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { DebateResponseKind } from '~/core/debates/api';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { formatTimecode, isAssertableMoment } from '~/core/debates/claim-timing';
 import { debateSeekSeconds, withDebateTimecode } from '~/core/debates/debate-timecode';
@@ -13,7 +12,6 @@ import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Skeleton } from '~/design-system/skeleton';
 
 import {
   type CommentDensity,
@@ -55,10 +53,8 @@ export function ExtractedClaimRow({
   debateId,
   debateSpaceId,
   responseKind,
-  isResponseKindPending = false,
   speaker,
   speakerPosition,
-  responseVocabulary,
   commentCount = 0,
   depth,
   density = PAGE_DENSITY,
@@ -76,15 +72,13 @@ export function ExtractedClaimRow({
    * difference between one lookup and one per row.
    */
   /**
-   * How this claim is answered — thumbs or chevrons — resolved in a batch by the caller.
+   * How this claim is answered.
    *
-   * `null` means that batch has no answer for this claim, and the control is then asked to resolve
-   * the kind from the entity itself. Deliberately not defaulted to `stance`: a vote is published *as*
-   * a kind, so a control drawn on a guess writes the wrong kind of answer into the graph.
+   * Stated by the caller rather than looked up, which saves the control a read of the entity. Every
+   * claim is `stance` since #2541; it stays a parameter because the control's own domain still has
+   * `curation` in it and a row that knows better should be able to say so.
    */
-  responseKind: ResponseKind | null;
-  /** The caller's batch is still in flight, so the vote control holds rather than guessing. */
-  isResponseKindPending?: boolean;
+  responseKind: ResponseKind;
   /** The debater this turn is attributed to, or null on a block with no `Authors` relation. */
   speaker: (SpeakerProfile & { spaceId: string }) | null;
   /**
@@ -96,7 +90,6 @@ export function ExtractedClaimRow({
    */
   speakerPosition: boolean | null;
   /** The claim page's vocabulary, so the tag reads Agree/Disagree or Verify/Dispute to match. */
-  responseVocabulary: DebateResponseKind;
   /**
    * How many comments the claim has, counted by the server.
    *
@@ -187,11 +180,7 @@ export function ExtractedClaimRow({
               name it follows; the kind belongs to the row. Reading them the other way round put a
               label about the row between a name and the fact about that name. */}
           {speakerPosition !== null && (
-            <ResponsePositionTag
-              responseKind={responseVocabulary}
-              position={speakerPosition}
-              title={`Argued this side in the debate: ${claim.text}`}
-            />
+            <ResponsePositionTag position={speakerPosition} title={`Argued this side in the debate: ${claim.text}`} />
           )}
 
           <ActivityRowTag kind="claim" />
@@ -239,26 +228,16 @@ export function ExtractedClaimRow({
                 onToggle={() => setCommentsCollapsed(collapsed => !collapsed)}
               />
             )}
-            {isResponseKindPending ? (
-              // The same shape the control holds for its own unresolved kind, so the row does not
-              // reflow when the real one arrives.
-              <Skeleton className="h-5 w-16 shrink-0 rounded" />
-            ) : (
-              <EntityVoteButtons
-                entityId={claim.id}
-                spaceId={claimSpaceId}
-                // `undefined`, not `null`: that is what tells `EntityVoteButtons` to read the kind off
-                // the entity itself. The batch above answers for nearly every claim, so this costs a
-                // read only for the ones it could not — a claim geo-chat holds no row for, or a space
-                // it cannot speak for at all — where the alternative is guessing.
-                responseKind={responseKind ?? undefined}
-                // Faces after the control rather than before it. On the claim page's own surfaces the
-                // stack leads, because it is the first thing in its row; here the row opens with the
-                // speaker's avatar already, and a second cluster of faces on the left made the two
-                // read as one group.
-                claimResponderAvatarsPosition="trailing"
-              />
-            )}
+            <EntityVoteButtons
+              entityId={claim.id}
+              spaceId={claimSpaceId}
+              responseKind={responseKind}
+              // Faces after the control rather than before it. On the claim page's own surfaces the
+              // stack leads, because it is the first thing in its row; here the row opens with the
+              // speaker's avatar already, and a second cluster of faces on the left made the two
+              // read as one group.
+              claimResponderAvatarsPosition="trailing"
+            />
             <EntityCommentsButton
               entityId={claim.id}
               spaceId={claimSpaceId}

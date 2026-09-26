@@ -54,7 +54,8 @@ vi.mock('~/core/debates/use-debate-votes', () => ({ useDebateVotesByVoter: () =>
 vi.mock('~/core/governance/use-proposal-comment-attribution', () => ({
   useProposalCommentAttribution: () => new Map(),
 }));
-vi.mock('~/core/state/sign-in-prompt-store', () => ({ useSignInPrompt: () => ({ open: vi.fn() }) }));
+// #2583 deleted the sign-up interstitial and its store; every gate now opens Privy directly.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));
 vi.mock('~/core/claims/browse/claim-comment-position', () => ({ ClaimCommentPositionBadge: () => null }));
 vi.mock('~/core/state/editor/markdown-render', () => ({ renderMarkdownDocument: (text: string) => text }));

@@ -106,7 +106,6 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof ExtractedClaim
         debateId="debate-1"
         debateSpaceId="debate-space"
         responseKind="stance"
-        responseVocabulary="stance"
         speaker={{ spaceId: 'speaker-space', name: 'Ada Reyes' }}
         speakerPosition={null}
         depth={2}
@@ -174,12 +173,6 @@ describe('ExtractedClaimRow', () => {
     expect(screen.getByText('Disagree')).toBeInTheDocument();
   });
 
-  it('uses the claim’s own vocabulary for that tag', () => {
-    renderRow({ speakerPosition: false, responseVocabulary: 'veracity' });
-
-    expect(screen.getByText('Dispute')).toBeInTheDocument();
-  });
-
   // A debater the debate does not record on either side gets no tag rather than a guessed one.
   it('draws no side tag when the debate records no side for the speaker', () => {
     renderRow({ speakerPosition: null });
@@ -188,11 +181,11 @@ describe('ExtractedClaimRow', () => {
     expect(screen.queryByText('Disagree')).not.toBeInTheDocument();
   });
 
-  it('passes the resolved response kind and trailing avatars to the vote control', () => {
-    renderRow({ responseKind: 'veracity' });
+  it('passes the response kind and trailing avatars to the vote control', () => {
+    renderRow({ responseKind: 'curation' });
 
     const votes = screen.getByTestId('vote-buttons');
-    expect(votes).toHaveAttribute('data-kind', 'veracity');
+    expect(votes).toHaveAttribute('data-kind', 'curation');
     expect(votes).toHaveAttribute('data-avatars', 'trailing');
   });
 
@@ -211,34 +204,6 @@ describe('ExtractedClaimRow', () => {
     expect(screen.queryByTestId('comments-button')).not.toBeInTheDocument();
     // The sentence is still readable, just not actionable.
     expect(screen.getByText('Practical effects age better than CGI.')).toBeInTheDocument();
-  });
-
-  /**
-   * A vote is published *as* a kind — thumbs write a stance response, chevrons a veracity one — so a
-   * control drawn on a guessed kind can write the wrong kind of answer into the graph, which nothing
-   * later undoes. The batch that resolves the kind is a separate request from the claims themselves,
-   * and this row used to default to `stance` for the whole time it was in flight.
-   */
-  describe('the response kind it has not been told yet', () => {
-    it('holds the control while the batch is still resolving', () => {
-      renderRow({ isResponseKindPending: true });
-
-      expect(screen.queryByTestId('vote-buttons')).not.toBeInTheDocument();
-    });
-
-    it('asks the control to resolve the kind itself once the batch has settled without an answer', () => {
-      renderRow({ responseKind: null });
-
-      // `undefined` is what tells `EntityVoteButtons` to read the kind off the entity. Anything else
-      // here — `stance` above all — is this row inventing an answer it was not given.
-      expect(screen.getByTestId('vote-buttons')).toHaveAttribute('data-kind', 'undefined');
-    });
-
-    it('passes the kind straight through when the batch did answer', () => {
-      renderRow({ responseKind: 'veracity' });
-
-      expect(screen.getByTestId('vote-buttons')).toHaveAttribute('data-kind', 'veracity');
-    });
   });
 
   it('shows the server-counted comments rather than seeding the button at zero', () => {

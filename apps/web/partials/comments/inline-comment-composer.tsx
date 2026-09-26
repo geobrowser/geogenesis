@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { useAdjustActivityPosts } from './activity-posts';
 import { CommentInput } from './comments-section';
@@ -59,9 +59,9 @@ export function InlineCommentComposer({
     interactionSurface: 'activity_feed',
   });
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const promptSignIn = usePrivySignIn();
   const isSignedIn = !!smartAccount;
-  const { isComposing, close, markPosted } = composer;
+  const { isComposing, close, markPosted, markPostRejected } = composer;
   const adjustActivityPosts = useAdjustActivityPosts();
 
   // Asked before the box opens, not after a draft is typed into it. The thread's own composer
@@ -69,7 +69,7 @@ export function InlineCommentComposer({
   // types a paragraph and is then asked to sign in loses the paragraph.
   React.useEffect(() => {
     if (!isComposing || isSignedIn) return;
-    openSignInPrompt('comment');
+    promptSignIn();
     close();
     // Only on the transition into a signed-out open composer; `close` is a fresh closure each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,8 +98,13 @@ export function InlineCommentComposer({
             },
           }).then(result => {
             // A rejected transaction takes the optimistic row back out, so the heading has to give
-            // back the one it just counted. A retained publish returns a result and keeps its row.
-            if (!result) adjustActivityPosts(-1);
+            // back the one it just counted — and this row has to stop holding a branch open for a
+            // comment that is no longer there. A retained publish returns a result and keeps its row,
+            // so it keeps both.
+            if (!result) {
+              markPostRejected();
+              adjustActivityPosts(-1);
+            }
           });
           close();
         }}
@@ -119,22 +124,35 @@ export type InlineComposerState = ReturnType<typeof useInlineComposer>;
 
 export function useInlineComposer() {
   const [isComposing, setIsComposing] = React.useState(false);
-  // Sticky: once something has been posted here the row keeps showing its thread, even while the
-  // server count that gated it is still zero.
-  const [hasPosted, setHasPosted] = React.useState(false);
+  /**
+   * How many comments written here are still standing.
+   *
+   * Sticky while it is above zero: the row keeps showing its thread even while the server count that
+   * gated it is still reporting nothing, because the aggregate has not heard about a comment written
+   * a second ago.
+   *
+   * A count rather than a flag, because a publish can be rejected. As a flag it latched true and
+   * stayed there, so a rejected first comment left the row holding a branch with nothing in it — a
+   * collapse control that collapsed nothing, and a comments fetch enabled to look for a comment that
+   * had been taken back out. Counting means a rejection can undo exactly its own post and a reader
+   * who published two comments and lost one keeps the branch for the one that stood.
+   */
+  const [postedCount, setPostedCount] = React.useState(0);
 
   return React.useMemo(
     () => ({
       isComposing,
-      hasPosted,
+      hasPosted: postedCount > 0,
       toggle: () => setIsComposing(open => !open),
       open: () => setIsComposing(true),
       close: () => setIsComposing(false),
       markPosted: (_commentId?: string) => {
-        setHasPosted(true);
+        setPostedCount(posted => posted + 1);
         setIsComposing(false);
       },
+      /** The transaction was rejected and the optimistic row is gone, so this post no longer counts. */
+      markPostRejected: () => setPostedCount(posted => Math.max(0, posted - 1)),
     }),
-    [hasPosted, isComposing]
+    [isComposing, postedCount]
   );
 }

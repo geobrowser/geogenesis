@@ -187,7 +187,7 @@ export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: st
   const direction = context?.directions.get(uuidToHex(authorSpaceId));
   if (!context || !direction) return null;
 
-  const label = responsePositionLabel(context.responseKind, direction === 'positive');
+  const label = responsePositionLabel(direction === 'positive');
 
   return (
     <ResponsePositionTag
