@@ -32,11 +32,11 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
-// The real player resolves affiliations through react-query. This page suite intentionally stubs
-// the player's data dependencies instead of recreating the app provider tree; affiliation loading
+// The real player resolves bylines through react-query. This page suite intentionally stubs
+// the player's data dependencies instead of recreating the app provider tree; byline loading
 // and rendering have focused coverage in the player and hook suites.
-vi.mock('~/core/debates/participant-affiliations', () => ({
-  useParticipantAffiliations: () => new Map(),
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => new Map(),
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({

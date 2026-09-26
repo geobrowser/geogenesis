@@ -19,6 +19,8 @@ import {
   sortTurnSegments,
   timelineSecondsFor,
   timelineSecondsForSegments,
+  turnSpansForDurations,
+  turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
 } from './playback-utils';
@@ -269,6 +271,28 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
     [mediaQuery.data?.turn_segments]
   );
+  /**
+   * Every turn's place on the timeline, for anything that has to name a turn rather than time it.
+   *
+   * Same precedence as `turnStateAt`: the rendered segments where they exist, the format's
+   * allowance where they do not.
+   *
+   * `turnSpans.length` is therefore what the render cut, and is not interchangeable with
+   * `turnCount` below — an early yield can leave the two disagreeing.
+   */
+  const turnSpans = React.useMemo(
+    () =>
+      turnSegments.length > 0
+        ? turnSpansFromSegments(turnSegments)
+        : turnSpansForDurations(debate.first_participant_slot, turnDurations),
+    [debate.first_participant_slot, turnDurations, turnSegments]
+  );
+  /**
+   * How many turns the format allows for, which is what says whether a round is a rebuttal or a
+   * closing. Deliberately off the allowance rather than off `turnSpans`, which counts what the
+   * render kept — see `round-cues.ts`.
+   */
+  const turnCount = turnDurations.length;
   const turnStateAt = React.useCallback(
     (seconds: number): TurnState =>
       turnSegments.length > 0
@@ -1216,6 +1240,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
+    turnCount,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,

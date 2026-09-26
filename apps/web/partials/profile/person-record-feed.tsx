@@ -151,14 +151,13 @@ export function PersonRecordFeed({
               <ExploreFeedCard
                 item={item}
                 fullWidthDebate={fullWidthDebates}
-                // The card resolves the claim's response kind and hands it back, so
-                // the tag is worded from the question actually asked.
+                // One wording for every claim, so the card has no kind to hand back — it passes
+                // the side and the tag names it.
                 responseNote={
                   responseByClaimId
-                    ? (responseKind, position) => (
+                    ? position => (
                         <ClaimResponseTag
                           response={responseByClaimId[normId(item.entityId)]}
-                          responseKind={responseKind}
                           personName={personName}
                           forPosition={position}
                         />

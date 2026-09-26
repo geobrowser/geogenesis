@@ -465,8 +465,8 @@ describe('ExploreEmailCapturePopup', () => {
     expect(screen.getByRole('status').textContent).toContain('You are on the list.');
   });
 
-  // The general case, and the reason this guard stopped being a list of names. The sign-in prompt
-  // (`partials/sign-in-prompt/sign-in-prompt.tsx`) and global search (`partials/search/dialog.tsx`)
+  // The general case, and the reason this guard stopped being a list of names. The onboarding
+  // dialog (`partials/onboarding/dialog.tsx`) and global search (`partials/search/dialog.tsx`)
   // are both Radix underneath, which renders `role="dialog"` with `data-state` and no `aria-modal`
   // — so neither is reachable by naming it here, and both are covered by asking the document.
   it('waits while any modal dialog is open, including ones it does not know about', async () => {

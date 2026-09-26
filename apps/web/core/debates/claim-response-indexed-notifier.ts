@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import {
   type DebateResponseKind,
@@ -32,7 +33,7 @@ const MAX_RATE_LIMITED_RETRIES = 3;
  * `matches` is included because a new position can create or dissolve a match outright, not merely
  * change how one renders.
  */
-function readinessQueryPrefixes(accountKey: string, spaceId: string) {
+export function readinessQueryPrefixes(accountKey: string, spaceId: string) {
   return [
     // Explore cards and the claim page: ['debates', 'claims', spaceId, claimIds, accountKey]
     ['debates', 'claims', spaceId],
@@ -76,7 +77,7 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
     scope !== 'entity-response-indexing' ||
     indexingState?.status !== 'indexed' ||
     !indexingState.pending ||
-    (responseKind !== 'stance' && responseKind !== 'veracity')
+    !isClaimResponseKind(responseKind)
   ) {
     return null;
   }
@@ -84,10 +85,24 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
     entityId: String(entityId),
     position:
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
-    responseKind: responseKind as DebateResponseKind,
+    responseKind,
     runId: indexingState.runId,
     spaceId: String(spaceId),
   };
+}
+
+/**
+ * Whether a query key's response-kind segment is a claim's.
+ *
+ * A type guard, so the two parses below narrow rather than cast. They each spelled this inline and
+ * then asserted the result with `as DebateResponseKind` — which was how `"veracity"` stayed
+ * admissible here after it stopped being a kind: the cast said it was one.
+ *
+ * Only `"stance"` now. Nothing writes an indexing key under the retired kind, and forwarding one to
+ * geo-chat would record a kind against a response published as a stance.
+ */
+function isClaimResponseKind(responseKind: unknown): responseKind is DebateResponseKind {
+  return responseKind === CLAIM_RESPONSE_KIND;
 }
 
 /**
@@ -106,18 +121,14 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
 export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
   const [scope, personalSpaceId, entityId, spaceId, responseKind] = queryKey;
   const indexingState = data as EntityResponseIndexingState | undefined;
-  if (
-    scope !== 'entity-response-indexing' ||
-    !indexingState?.pending ||
-    (responseKind !== 'stance' && responseKind !== 'veracity')
-  ) {
+  if (scope !== 'entity-response-indexing' || !indexingState?.pending || !isClaimResponseKind(responseKind)) {
     return null;
   }
   return {
     entityId: String(entityId),
     position:
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
-    responseKind: responseKind as DebateResponseKind,
+    responseKind,
     spaceId: String(spaceId),
     /** Whose write this is, so a reader can attribute the row without assuming the current viewer. */
     personalSpaceId: String(personalSpaceId),

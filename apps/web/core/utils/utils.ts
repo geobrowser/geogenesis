@@ -387,9 +387,12 @@ export class GeoDate {
       return `1970-01-01T${dateString}`;
     }
 
-    // Date-only: "YYYY-MM-DD" (no T or time portion)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return `${dateString}T00:00:00.000Z`;
+    // Date-only: "YYYY-MM-DD", optionally with a trailing "Z" (no T or time portion). The profile's
+    // work and education dates are written as "YYYY-MM-01Z". V8 parses that as-is but Safari's
+    // `Date` returns NaN for it, so it has to be expanded here rather than left to the engine.
+    const dateOnly = /^(\d{4}-\d{2}-\d{2})Z?$/.exec(dateString);
+    if (dateOnly) {
+      return `${dateOnly[1]}T00:00:00.000Z`;
     }
 
     return dateString;

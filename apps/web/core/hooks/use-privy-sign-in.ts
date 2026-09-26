@@ -28,8 +28,8 @@ type UsePrivySignInOptions = {
 /**
  * Opens Privy's own "Log in or sign up" dialog straight away, the way the upvote control does.
  *
- * The alternative, `SignInPrompt`, shows a "create your personal space" card first — which costs
- * the viewer a second click and paints a tinted overlay over the page on the way. For a control
+ * Signed-out gates use this rather than an interstitial "create your personal space" card, which
+ * cost the viewer a second click and a tinted overlay on the way to this same dialog. For a control
  * whose only barrier is "you are signed out", going directly to the login is the shorter path.
  *
  * Clears any half-finished onboarding first, and records where to return to so the viewer lands

@@ -22,6 +22,7 @@ import { useProposalCommentAttribution } from '~/core/governance/use-proposal-co
 import { useComments } from '~/core/hooks/use-comments';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
@@ -29,7 +30,6 @@ import { uuidToHex } from '~/core/id/normalize';
 import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dropdown } from '~/design-system/dropdown';
@@ -278,7 +278,7 @@ export function CommentSection({
   });
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const promptSignIn = usePrivySignIn();
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
@@ -296,9 +296,9 @@ export function CommentSection({
   const requireSignInToComment = React.useCallback(
     (replyToCommentId?: string) => {
       setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
-      openSignInPrompt('comment');
+      promptSignIn();
     },
-    [entityId, openSignInPrompt, setPendingComposer]
+    [entityId, promptSignIn, setPendingComposer]
   );
 
   React.useEffect(() => {

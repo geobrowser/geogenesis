@@ -1729,17 +1729,347 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTestId('rematch-opponent-card')).toHaveAttribute('aria-label', 'Open Salina’s personal space');
   });
 
-  // Same label, same problem: once the pair lock a claim the opponent's side is a chip inside that
-  // button, and the accessible name hides it too.
-  it('carries the opponent locked position in the card description', async () => {
+  // The header used to grow a claim heading and two position chips the moment a request went out,
+  // pushing everything under it down at exactly the moment the viewer was watching for an answer.
+  // That belongs in a card in the content — see `RematchRequestCard` — not in the sticky block.
+  it('holds its shape when the pair lock a claim', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentMicPublication = { isMuted: true };
-    render(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+    const browsing = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={browsing} currentUserId="me" />);
+    await flushOwnership();
+    const before = screen.getByTestId('rematch-you-card').className;
+
+    rerender(<RematchVoiceHeader session={lockedSession()} currentUserId="me" />);
+
+    expect(screen.queryByText('A man should always pay for the first date')).toBeNull();
+    expect(screen.queryByText('Agree')).toBeNull();
+    expect(screen.queryByText('Disagree')).toBeNull();
+    expect(screen.getByTestId('rematch-you-card').className).toBe(before);
+    // The control the header exists for is untouched by the lock.
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+  });
+
+  // The other person dropping out is not a reason to move everything under the notice. It says the
+  // viewer is muted and names who they came here to talk to, and neither stops being true of the
+  // visit when the other side reconnects — or goes for good, taking the session with it.
+  it('keeps the unmute notice when the opponent drops out of the room', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.remoteParticipants = [];
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+    // The opponent's own card still reports the truth — they are not here.
+    expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
+  });
+
+  // A blip is the same shift on a shorter clock.
+  it('keeps the unmute notice across a reconnect', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
+  // Holding voice open on the way out must not be the same thing as starting it. Open a link to a
+  // rematch that is already over and the page is exiting from its very first render — so a flag
+  // that only says "exiting" would take the tab lock, fetch a token and publish the microphone
+  // into a session the viewer is not in, on a page that is busy redirecting.
+  it('does not arm voice on a session that was already over when the page loaded', async () => {
+    const carriedOver = { ...makeSession('ended'), source_debate_id: 'debate-1' };
+    const { container } = render(
+      <RematchVoiceHeader
+        session={carriedOver}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+        exiting
+      />
+    );
     await flushOwnership();
 
-    // Visible on the card, and reachable from the control that hides it.
-    expect(within(screen.getByTestId('rematch-opponent-card')).getByText('Disagree')).toBeInTheDocument();
-    expect(screen.getByTestId('rematch-opponent-status')).toHaveTextContent('Salina is muted. Salina disagrees');
+    expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+    // The pair are still drawn; there is simply no voice to arm.
+    expect(screen.getByText('Salina')).toBeInTheDocument();
+  });
+
+  // The status is not the room. A rematch that ended while this page was still working through
+  // ownership and the token answers `browsing` for a render or two longer — React Query serves the
+  // stale one — so latching "voice was live" off the status latched it where nothing was live. With
+  // `exiting`, holding that open is not holding anything: it is taking the tab lock, minting a
+  // token and publishing the microphone into a session the viewer has already left.
+  it('does not arm voice for a status that went stale before the room came up', async () => {
+    const carriedOver = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    // No `flushOwnership` between the two: the point is that the exit lands while the ladder is
+    // still several awaits from a room.
+    const { container, rerender } = render(<RematchVoiceHeader session={carriedOver} currentUserId="me" exiting />);
+
+    rerender(
+      <RematchVoiceHeader
+        session={{ ...makeSession('ended'), source_debate_id: 'debate-1' }}
+        currentUserId="me"
+        exiting
+      />
+    );
+    await flushOwnership();
+
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+    expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  // Leaving is a mutation, and the session answers voice-capable for the whole round trip after the
+  // click. So `exiting` arrives while the status still says voice is on — and a keep-alive that
+  // reads the status at all would let the ladder finish the lock, the token and the connection
+  // during the request, publishing a microphone because the viewer asked to leave.
+  it('does not arm voice while the leave request is still in flight', async () => {
+    const session = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    // No `flushOwnership` before the click: the room has not come up yet, which is the only state
+    // where there is nothing to hold open and everything to avoid starting.
+    const { container, rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    // What Leave does first. The mutation is pending, so the session is still `browsing`.
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" exiting />);
+    await flushOwnership();
+
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+    expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);
+    expect(mocks.getUserMedia).not.toHaveBeenCalled();
+    // And the header has not collapsed for it: the line it was drawing is still the line it draws.
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+  });
+
+  // The nudge is the other thing in this header that can arrive on its own, and leaving is exactly
+  // the event that arms it: an unmuted viewer's microphone reads as muted the moment the room
+  // drops, and "they are talking" is still true on that render, so the one-shot fires — growing
+  // the header at the one moment `exiting` exists to hold it still.
+  it('does not raise the talking nudge on the way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentMicPublication = { isMuted: false };
+    mocks.isSpeaking = true;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    // Unmuted while they talk, so the nudge is unspent and there is a live "they are audible".
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+
+    // Leaving: the room drops, which takes the microphone and the remote participants with it.
+    mocks.isMicrophoneEnabled = false;
+    mocks.connectionState = 'disconnected';
+    mocks.remoteParticipants = [];
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+  });
+
+  // And the other direction: one already on screen must not time out mid-exit either. Ten seconds
+  // is long enough that a click can land nine into it, and the bubble going away on its own is the
+  // same shift upward that raising it is downward.
+  it('does not let the talking nudge time out while leaving', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.isMicrophoneEnabled = false;
+      mocks.remoteParticipants = [remoteOpponent()];
+      const session = makeSession('browsing');
+      const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+      await flushOwnership();
+
+      mocks.isSpeaking = true;
+      rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+
+      rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+      await act(async () => {
+        vi.advanceTimersByTime(12_000);
+      });
+
+      expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /**
+   * The freeze is over the nudge's own lifecycle, not over the gate that renders it.
+   *
+   * A reconnect during the exit is the one state where the toast still goes, and deliberately: the
+   * header has already swapped the cards for `Reconnecting…` — the exception this exit path keeps
+   * on purpose, because live mute controls over a room with no connection are worse than the
+   * change — and `OpponentPresence` is dropped with it, which is what was sourcing "they are
+   * talking". Holding the bubble through that would keep a claim about the other person after the
+   * subscription behind it is gone, over a card that says the room is reconnecting, offering an
+   * Unmute that is the only mute affordance left and cannot work. The unmute notice stays, and the
+   * asymmetry is the point: "you are muted" survives a blip, "they are talking" does not.
+   */
+  it('lets a reconnect take the nudge down even while leaving', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    mocks.isSpeaking = true;
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+    expect(screen.getByTestId('rematch-voice-toast-opponent-talking')).toBeInTheDocument();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByTestId('rematch-voice-toast-opponent-talking')).toBeNull();
+    // What replaced it, and what did not: the room says what it is doing, and the notice — whose
+    // claim is about the viewer's own microphone — rides the blip out as it always has.
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
+  // Letting that room go must not take the header's shape with it. The connection is held open for
+  // a room that was up; the shape is held whatever was drawn — here the one line the room itself
+  // draws while it connects, which is what was on screen a moment before the click.
+  it('keeps the connecting line when it leaves before the room connected', async () => {
+    mocks.connectionState = 'connecting';
+    const session = makeSession('browsing');
+    const { container, rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
+  });
+
+  // A room that has given up is not a blip. Its Unmute is a button that cannot work, and pressing
+  // it would still spend the notice's one dismissal on a click that did nothing — so here the
+  // notice gives way to the card's own "Voice disconnected · Retry", which is the actionable thing.
+  it('drops the unmute notice when the room is gone rather than away', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoiceHeader session={session} currentUserId="me" />);
+
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  // Except on the way out, where the whole point is that nothing moves.
+  it('keeps the unmute notice over a dead room while leaving', async () => {
+    mocks.isMicrophoneEnabled = false;
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.getByTestId('rematch-unmute-notice')).toBeInTheDocument();
+  });
+
+  // Keeping the notice through an exit is not the same as raising one there. A pair from a recorded
+  // debate join unmuted and never see it; leaving drops the room, which takes `isMicrophoneEnabled`
+  // with it — so it used to appear for the first time on the way out, growing the header at the one
+  // moment `exiting` exists to hold it still.
+  it('does not raise the unmute notice on the way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const carriedOver = { ...makeSession('browsing'), source_debate_id: 'debate-1' };
+    const { rerender } = render(<RematchVoiceHeader session={carriedOver} currentUserId="me" />);
+    await flushOwnership();
+    // Unmuted, so it has never been raised.
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+
+    // Leaving: the session ends and the room goes with it.
+    mocks.isMicrophoneEnabled = false;
+    mocks.connectionState = 'disconnected';
+    rerender(
+      <RematchVoiceHeader
+        session={{ ...makeSession('ended'), source_debate_id: 'debate-1' }}
+        currentUserId="me"
+        exiting
+      />
+    );
+
+    expect(screen.queryByTestId('rematch-unmute-notice')).toBeNull();
+  });
+
+  // Suppressing the dead-room message on the way out must not suppress the rest of the ladder: a
+  // room that never connected would otherwise be drawn with live mute controls over nothing.
+  it('keeps saying a room is reconnecting even while leaving', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    mocks.connectionState = 'reconnecting';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeNull();
+  });
+
+  // Leaving ends the session, and an ended session is not voice-capable — so the controls used to
+  // tear themselves down in the second before the redirect landed, collapsing the card in front of
+  // someone who had already left.
+  it('keeps the controls while the viewer is on their way out', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const browsing = makeSession('browsing');
+    const { rerender } = render(
+      <RematchVoiceHeader
+        session={browsing}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+
+    // What leaving does: the session comes back ended, and the page says it is on its way out.
+    rerender(
+      <RematchVoiceHeader
+        session={makeSession('ended')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+        exiting
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+  });
+
+  // A dropped room on the way out is the same layout shift wearing a different hat, and "Retry" is
+  // an offer of something the viewer has just declined.
+  it('does not swap in a connection message while leaving', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoiceHeader session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoiceHeader session={makeSession('ended')} currentUserId="me" exiting />);
+
+    expect(screen.queryByText('Voice disconnected')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
   });
 
   // A hover variant outranks a plain utility on specificity whichever order they are written in,
@@ -1772,7 +2102,7 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
 
     expect(mocks.capture).toHaveBeenCalledWith('debate_rematch_voice_joined', {
-      session_id: 'session-1',
+      rematch_session_id: 'session-1',
       surface: 'pair_header',
       joined_muted: true,
     });
@@ -1788,7 +2118,7 @@ describe('RematchVoiceHeader', () => {
 
     const unmuted = mocks.capture.mock.calls.filter(call => call[0] === 'debate_rematch_voice_unmuted');
     expect(unmuted).toHaveLength(1);
-    expect(unmuted[0][1]).toMatchObject({ session_id: 'session-1', surface: 'pair_header' });
+    expect(unmuted[0][1]).toMatchObject({ rematch_session_id: 'session-1', surface: 'pair_header' });
     expect(typeof unmuted[0][1].seconds_to_first_unmute).toBe('number');
   });
 

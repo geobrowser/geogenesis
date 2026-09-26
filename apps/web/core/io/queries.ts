@@ -41,9 +41,9 @@ import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
+  RETIRED_VERACITY_VOTE_KIND,
   type ResponseKind,
   type ResponseObjectType,
-  type ResponseVoteKind,
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
@@ -61,6 +61,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
+import { promoteEntityIds } from './entity-id-filter';
 import { collapseOrFilter } from './filter-or-collapse';
 import { graphql } from './graphql-client';
 import {
@@ -391,6 +392,10 @@ export function getEntitiesOrderedByPropertyConnection(
   if (topLevelTypeIds) {
     normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
   }
+  // The connection's filter applies after the SQL function has sorted every entity carrying the
+  // property; entityIds is applied inside it. See entity-id-filter.ts.
+  const { entityIds, filter: filterWithoutIds } = promoteEntityIds(normalizedFilter);
+  normalizedFilter = filterWithoutIds;
 
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
@@ -404,6 +409,7 @@ export function getEntitiesOrderedByPropertyConnection(
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
+      entityIds,
       limit,
       after,
       offset,
@@ -1459,15 +1465,16 @@ export function getUserEntityResponse(
 /**
  * Has this user cast a vote of any of the given kinds?
  *
- * Takes the kinds rather than assuming them: curation (0) is an entity upvote, stance (1) and
- * veracity (2) are a position on a claim, and the onboarding checklist counts those as two
- * different things a person can have done.
+ * Takes the kinds rather than assuming them: curation (0) is an entity upvote and stance (1) is a
+ * position on a claim, and the onboarding checklist counts those as two different things a person
+ * can have done.
+ *
+ * `number` rather than `ResponseVoteKind`, because this asks the vote table a *historical*
+ * question and the table holds kinds the app no longer publishes. The retired veracity kind, 2, is
+ * a real value here — the onboarding checklist still passes it, since somebody who answered a
+ * claim back when it asked Verify or Dispute has done the thing the checklist asks about.
  */
-export function getUserHasVoteOfKind(
-  userId: string,
-  voteKinds: readonly ResponseVoteKind[],
-  signal?: AbortController['signal']
-) {
+export function getUserHasVoteOfKind(userId: string, voteKinds: readonly number[], signal?: AbortController['signal']) {
   return graphql({
     query: UserHasVoteOfKindDocument,
     decoder: data => (data.userVotes?.length ?? 0) > 0,
@@ -1548,6 +1555,58 @@ export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
 
+/**
+ * The rows a page can describe: its entity ids, and the current vote row of each.
+ *
+ * **The first row wins, not the last.** One entity can carry more than one row: a claim answered
+ * Verify before the vocabularies merged and Agree after it holds a vote of each kind, and both come
+ * back from a query that filters on direction rather than kind. Rows arrive `VOTED_AT_DESC`, so the
+ * first one is the current answer.
+ *
+ * This was `Object.fromEntries`, which gives a repeated key its *last* value — the oldest row. On
+ * the claim above that reported kind 2, and `useVoteTabEntities` drops any claim whose recorded
+ * kind is not the one it resolves to now, so the claim vanished from the Agreed tab while the
+ * person still held a live stance on it. That is the path every factual-claim responder takes once
+ * Verify is gone, so it is the common case rather than an edge.
+ *
+ * **Retired rows are skipped, not merely out-ordered.** Taking the newest row is not enough on its
+ * own: the two kinds are independent, so the Verify can be the *newer* of the pair — answer a claim
+ * Agree, have it flagged factual, answer it again Verify. Nothing resolves to kind 2 any more, so
+ * such a row can never match and can only shadow the live stance underneath it.
+ *
+ * **The ids come from the same pass**, so the page never reports one it cannot describe. Skipping a
+ * retired row in the lookups alone was not enough: `useUserVotedEntityIds` binds an id to the first
+ * page it appears on and reads its kind from the merged lookups, so a claim whose retired row ended
+ * one page and whose live stance began the next was claimed by the earlier page — which had no kind
+ * for it — and skipped as a duplicate by the later one, which did. `useVoteTabEntities` banks a page
+ * against its ids, and those did not change when the kind arrived, so the claim was never
+ * re-hydrated and stayed missing from the tab for the rest of the session. `decodeVoteOrder` keeps
+ * the same shape for the same reason: its `entityIds` are the ids a response survived for.
+ *
+ * All three are built here together so a single entity's kind and timestamp always describe the
+ * same row; read from different rows they can disagree, and the timestamp is the list's sort key.
+ */
+export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+} {
+  const objectIds: string[] = [];
+  const voteKindByObjectId: Record<string, number> = {};
+  const votedAtByObjectId: Record<string, string> = {};
+
+  for (const node of nodes) {
+    if (node.voteKind === RETIRED_VERACITY_VOTE_KIND) continue;
+    const id = uuidToHex(node.objectId);
+    if (id in voteKindByObjectId) continue;
+    voteKindByObjectId[id] = node.voteKind;
+    votedAtByObjectId[id] = node.votedAt;
+    objectIds.push(node.objectId);
+  }
+
+  return { objectIds, voteKindByObjectId, votedAtByObjectId };
+}
+
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
   voteKindByObjectId: Record<string, number>;
@@ -1579,9 +1638,7 @@ export function getUserEntityVoteObjectIdsPage(
     });
 
     const nodes = rows.filter(node => Boolean(node.objectId));
-    const objectIds = nodes.map(node => node.objectId);
-    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
-    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+    const { objectIds, voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(nodes);
 
     return {
       objectIds,

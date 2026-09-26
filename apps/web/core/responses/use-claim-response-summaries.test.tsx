@@ -44,7 +44,7 @@ describe('useClaimResponseSummaryBatch', () => {
   it('loads all 50 visible claim-kind pairs through one batch query function', async () => {
     const targets = Array.from({ length: 50 }, (_, index) => ({
       entityId: `claim-${index}`,
-      responseKind: index % 2 === 0 ? ('stance' as const) : ('veracity' as const),
+      responseKind: 'stance' as const,
     }));
     const { wrapper } = createHarness();
 
@@ -74,7 +74,7 @@ describe('useClaimResponseSummaryBatch', () => {
     mocks.loadCaches.mockResolvedValue(loaded);
 
     const { result, rerender } = renderHook(
-      ({ targets }: { targets: { entityId: string; responseKind: 'stance' | 'veracity' }[] }) =>
+      ({ targets }: { targets: { entityId: string; responseKind: 'stance' }[] }) =>
         useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }),
       { wrapper, initialProps: { targets: [{ entityId: 'claim-1', responseKind: 'stance' as const }] } }
     );

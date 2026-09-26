@@ -3,7 +3,13 @@ import { Effect, Either } from 'effect';
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
 import { debateVisibilityCounts } from '~/core/profile/profile-debate-visibility';
-import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
+import {
+  POSITION_VOTE_KINDS,
+  type ProfileFacts,
+  type ProfileSpace,
+  type Verifier,
+  orderSpaces,
+} from '~/core/profile/profile-facts';
 
 import { graphql } from './graphql';
 import { hiddenProfileRelationTargetsConnection } from './hidden-profile-relations-query';
@@ -38,12 +44,14 @@ interface NetworkResult {
 }
 
 /**
- * The vote kinds that mean "a position on a claim".
+ * The vote kinds that mean "a position on a claim", spelled for interpolation into the query.
  *
- * 1 is a stance and 2 is veracity. The table holds other kinds, and counting it
- * unfiltered overstates the figure roughly threefold.
+ * Derived from {@link POSITION_VOTE_KINDS} rather than written out, because this count sits
+ * directly above the list that hook builds from the same kinds — and the two were separate
+ * literals, so narrowing the set to drop the retired veracity kind meant editing both by hand and
+ * hoping. One of them is now the other.
  */
-const POSITION_KINDS = '[1, 2]';
+const POSITION_KINDS = `[${POSITION_VOTE_KINDS.join(', ')}]`;
 
 /**
  * One side of a debate, pointed at this space.

@@ -57,7 +57,6 @@ export function GalleryClaimCard({
     isResponseKindResolved,
     isViewerResponseResolved,
     responseBlockedReason,
-    responseKind,
     claim,
     positions,
     readiness,
@@ -96,19 +95,14 @@ export function GalleryClaimCard({
           // pills speak for the viewer. Under the pill that matches, which is
           // where the feed's card puts it too, so one claim reads the same way
           // in both places.
-          // Held back until the kind is known: labelling a factual claim
-          // "agrees" and then correcting it to "verifies" is worse than a beat
-          // with no tag.
-          noteFor={position =>
-            isResponseKindResolved ? (
-              <ClaimResponseTag
-                response={response}
-                responseKind={responseKind}
-                personName={personName}
-                forPosition={position}
-              />
-            ) : null
-          }
+          // Not held back on the claim's metadata. It was, because labelling a
+          // factual claim "agrees" and then correcting it to "verifies" was
+          // worse than a beat with no tag — and there is one wording now. The
+          // answer is already in `response`; waiting on a lookup that cannot
+          // change the wording only hid it, permanently where both reads fail.
+          noteFor={position => (
+            <ClaimResponseTag response={response} personName={personName} forPosition={position} />
+          )}
         />
       ) : (
         // Held at the card's own height rather than collapsed, so the row does

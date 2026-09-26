@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -457,7 +457,7 @@ export function ClaimsTab({
 
     return taggedPage.map(({ claim, spaceId }) => {
       const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = row?.response_kind ?? claimResponseKind(claim.entity, spaceId);
+      const responseKind = resolveClaimResponseKind();
 
       return {
         claim: {
@@ -473,7 +473,7 @@ export function ClaimsTab({
         viewer_position: row?.viewer_response?.position ?? null,
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row, responseKind),
+        positions: taggedPositionSummaries(row),
         // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
         score: 0,
         active_debate: Boolean(row?.active_debate),
@@ -1195,17 +1195,14 @@ export function HubStickyControls({ children }: { children: React.ReactNode }) {
  * off `total_count`, so the online count stands in for it: it is the only count this endpoint
  * gives, and undercounting a side is better than claiming a total it never told us.
  */
-function taggedPositionSummaries(
-  row: DebateClaim | undefined,
-  responseKind: 'stance' | 'veracity'
-): DebateClaimPositionSummary[] {
+function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
   return [true, false].map(position => {
     const choice = row?.online_choices.find(candidate => candidate.position === position);
 
     return {
       position,
-      // A server-supplied label wins, so an authoritative Verify/Dispute survives.
-      position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
+      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
+      position_label: responsePositionLabel(position),
       total_count: choice?.participant_count ?? 0,
       available_now_count: choice?.participant_count ?? 0,
       // These are `online_choices`, so the count already *is* the present population — the same

@@ -9,7 +9,29 @@ export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' 
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
-export type DebateResponseKind = 'stance' | 'veracity';
+/**
+ * How a claim's two sides are labelled: Agree and Disagree, for every claim.
+ *
+ * This used to be `'stance' | 'veracity'`, and a claim carrying the "Is factual" flag took the
+ * second vocabulary — Verify and Dispute, published as its own vote kind. That split is gone, so
+ * this is what the app resolves to and what it sends back.
+ */
+export type DebateResponseKind = 'stance';
+
+/**
+ * What geo-chat can actually put on a `response_kind` field, which is not the same thing.
+ *
+ * It still says `"veracity"` for a claim minted before the vocabularies merged. `geoChatRequest`
+ * casts raw JSON straight to its type parameter, so there is no parse step that could narrow it —
+ * declaring these fields as {@link DebateResponseKind} would be the type telling a lie the compiler
+ * then enforces on everyone downstream.
+ *
+ * Typed apart instead, so the lie is gone and the compiler does the guarding: a `WireResponseKind`
+ * will not fit anywhere a {@link DebateResponseKind} is wanted, which is every place a vocabulary
+ * gets chosen. Nothing reads these fields today — surfaces take the kind from `CLAIM_RESPONSE_KIND`
+ * — and anything that starts to has to say out loud what it means to do with a retired value.
+ */
+export type WireResponseKind = DebateResponseKind | 'veracity';
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -29,7 +51,7 @@ export type DebateClaimSummary = {
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
-  response_kind: DebateResponseKind | null;
+  response_kind: WireResponseKind | null;
   cancellation_reason?: string | null;
   claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
@@ -198,7 +220,7 @@ export type Debate = {
   id: string;
   claim: DebateClaimSummary;
   status: DebateStatus;
-  response_kind: DebateResponseKind | null;
+  response_kind: WireResponseKind | null;
   room_name: string;
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
@@ -242,6 +264,11 @@ export type DebateActivity = {
   outbound_request?: DebateRequest | null;
   /** Number of unexpired incoming debate requests. Drives the navbar badge. */
   incoming_request_count?: number;
+  /**
+   * Scheduled requests waiting on the viewer's answer. Separate from `incoming_request_count`,
+   * which decides whether the instant list is fetched at all.
+   */
+  scheduled_awaiting_answer_count?: number;
 };
 
 export type DebateChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -289,7 +316,7 @@ export type DebateRematchRequest = {
   requester_position_label?: string | null;
   recipient_position: boolean;
   recipient_position_label?: string | null;
-  response_kind?: DebateResponseKind | null;
+  response_kind?: WireResponseKind | null;
   cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;
@@ -320,7 +347,7 @@ export type DebateRematchClaimPosition = {
 
 export type DebateRematchClaim = {
   claim: DebateClaimSummary;
-  response_kind: DebateResponseKind | null;
+  response_kind: WireResponseKind | null;
   participants: DebateRematchClaimPosition[];
   shared_preference: boolean;
   recently_rejected: boolean;
@@ -384,7 +411,7 @@ export type DebateClaim = {
   claim_entity_id: string;
   claim: string;
   description: string | null;
-  response_kind: DebateResponseKind;
+  response_kind: WireResponseKind;
   viewer_response: { position: boolean; position_label: string } | null;
   viewer_debate_ready: boolean;
   readiness_disabled_reason: string | null;
@@ -479,8 +506,8 @@ export type DebateResponseSummary = {
 
 /** Everything the hub needs to render a claim's readiness state alongside the viewer's response. */
 export type MatchmakingReadiness = {
-  /** Which vocabulary labels the sides: Agree/Disagree for `stance`, Verify/Dispute for `veracity`. */
-  response_kind: DebateResponseKind;
+  /** Legacy; see {@link DebateResponseKind}. Every claim is Agree/Disagree. */
+  response_kind: WireResponseKind;
   /** Present whenever the viewer has an active response — including while readiness is off. */
   viewer_response: DebateResponseSummary | null;
   viewer_debate_ready: boolean;

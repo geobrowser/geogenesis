@@ -205,25 +205,28 @@ describe('EntityVoteButtons claim detection across spaces', () => {
     expect(screen.queryByText('67%')).not.toBeInTheDocument();
   });
 
-  // Which *kind* of claim response is asked for stays a per-space question: the space passed in is
-  // the one being responded in, and "Is factual" is a per-space value.
-  it('reads the factual flag from the space it was asked to respond in', async () => {
-    mocks.entity = claimEntity({ isFactualIn: BLOCK_SPACE, alsoIn: BLOCK_SPACE });
-    const view = renderButtons();
-
-    await screen.findByText('67%');
-    // Veracity draws chevrons, which are the only 16x16 icons among the response controls.
-    const icons = [...view.container.querySelectorAll('svg')];
-    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
-  });
-
-  it('ignores a factual flag set in a space other than the one being responded in', async () => {
-    mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE, alsoIn: BLOCK_SPACE });
+  /**
+   * Which *kind* of claim response is asked for used to be a per-space question, because
+   * "Is factual" is a per-space value and it chose between two vocabularies. Two cases sat here
+   * for it: one where the flag was set in the space being responded in (chevrons expected) and one
+   * where it was set elsewhere (no chevrons).
+   *
+   * Neither can fail now — the flag selects nothing — so they are replaced by the invariant that
+   * took their place: wherever the flag is set, the controls are the same. `0 0 16 16` is the
+   * chevron viewBox, the only 16x16 glyph among the response controls, so its absence is what says
+   * the retired vocabulary has not come back.
+   */
+  it.each([
+    ['the space being responded in', { isFactualIn: BLOCK_SPACE, alsoIn: BLOCK_SPACE }],
+    ['some other space', { isFactualIn: CLAIM_SPACE, alsoIn: BLOCK_SPACE }],
+  ])('draws the same controls with the factual flag set in %s', async (_where, entityArgs) => {
+    mocks.entity = claimEntity(entityArgs);
     const view = renderButtons();
 
     await screen.findByText('67%');
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(false);
+    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 });
 
@@ -251,15 +254,17 @@ describe('EntityVoteButtons response space resolution', () => {
     expect(mocks.responseSpaceIds.at(-1)).toBe(CLAIM_SPACE);
   });
 
-  // The kind follows the space: once the claim resolves to its own space, that space's flag is the
-  // one being responded against.
-  it('reads the factual flag from the resolved space', async () => {
+  // The space still decides where the response is published and tallied — that is the case above.
+  // What it no longer decides is the vocabulary, so a claim resolving to a space that flags it
+  // factual still draws the same thumbs as any other claim.
+  it('draws the ordinary claim controls even where the resolved space flags it factual', async () => {
     mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE });
     const view = renderButtons();
 
     await screen.findByText('67%');
     const icons = [...view.container.querySelectorAll('svg')];
-    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(false);
+    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
   /**

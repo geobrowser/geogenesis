@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-8f8dba53d466.js';
+const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-b916886eb8f2.js';
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -34,7 +34,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-j426U9Rmd38aqJcds0bqAaOlribZukZWDJFfY8cZTbY=');
+    expect(script?.integrity).toBe('sha256-uRaIbrjyGABCgpsoCj9CefxylFMK6p/6CN5nLSw8m8A=');
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
@@ -306,6 +306,69 @@ describe('analytics', () => {
       form_type: 'newsletter',
       signup_surface: 'explore_email_capture',
     });
+  });
+
+  it('tracks completed searches with result, latency, and privacy-safe query fields', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: '  reach Jane@example.com using 4242 4242 4242 4242  ',
+      resultCount: 12,
+      latencyMs: 370,
+      surface: 'global',
+    });
+
+    expect(capture).toHaveBeenCalledWith('search_submitted', {
+      app: 'genesis',
+      source: 'global_search',
+      query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
+      query_type: 'global_entities',
+      query_text: 'reach ***** using *****',
+      result_count: 12,
+      no_results: false,
+      latency_bucket: '250_500ms',
+    });
+  });
+
+  it('uses stable search query ids without storing unmasked sensitive text', async () => {
+    const { searchQueryId } = await import('./analytics');
+
+    expect(searchQueryId('Graph Search')).toBe(searchQueryId('  graph search  '));
+    expect(searchQueryId('Graph Search')).not.toBe(searchQueryId('Another Search'));
+  });
+
+  it('marks a completed zero-result search without emitting for an empty query', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: 'missing entity',
+      resultCount: 0,
+      latencyMs: 100,
+      surface: 'entity',
+    });
+    searchSubmitted({ queryText: '   ', resultCount: 0, latencyMs: 100, surface: 'entity' });
+
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(
+      'search_submitted',
+      expect.objectContaining({ result_count: 0, no_results: true })
+    );
+  });
+
+  it('assigns stable latency buckets at their boundaries', async () => {
+    const { searchLatencyBucket } = await import('./analytics');
+
+    expect(searchLatencyBucket(249)).toBe('0_250ms');
+    expect(searchLatencyBucket(250)).toBe('250_500ms');
+    expect(searchLatencyBucket(500)).toBe('500_1000ms');
+    expect(searchLatencyBucket(1000)).toBe('1000_2000ms');
+    expect(searchLatencyBucket(2000)).toBe('2000ms_plus');
   });
 
   it('keeps product actions best-effort when the analytics runtime throws', async () => {

@@ -49,7 +49,7 @@ export function ClaimCommentPositionBoundary({
   children: React.ReactNode;
 }) {
   const { entity } = useQueryEntity({ id: entityId, spaceId });
-  const responseKind = resolveEntityResponseKind(entity, spaceId);
+  const responseKind = resolveEntityResponseKind(entity);
   const summary = useClaimResponseSummary(entityId, spaceId, responseKind, responseKind !== 'curation');
 
   if (responseKind === 'curation') return children;
@@ -132,19 +132,21 @@ export function ClaimCommentPositionProvider({
 }
 
 /**
- * Which side somebody is on, in the claim's own vocabulary — Agree/Disagree or Verify/Dispute.
+ * Which side somebody is on.
  *
  * Shared by the comment rows, where it reports the author's current response, and by the extracted
  * claim rows, where it reports the side the debater argued. Two different facts wearing one badge on
  * purpose: to a reader scanning the thread they are the same question, and the tag that answers it
  * should not change shape depending on which kind of row it sits on.
+ *
+ * It used to take a response kind and read Agree/Disagree or Verify/Dispute from it. #2541 answered
+ * every claim with Agree/Disagree and removed the `veracity` kind outright, so there is one
+ * vocabulary and `responsePositionLabel` needs only the side.
  */
 export function ResponsePositionTag({
-  responseKind,
   position,
   title,
 }: {
-  responseKind: DebateResponseKind;
   position: boolean;
   /** Says what the position is *on*, which the word alone cannot. */
   title?: string;
@@ -157,7 +159,7 @@ export function ResponsePositionTag({
         position ? 'bg-successTertiary' : 'bg-errorTertiary'
       )}
     >
-      {responsePositionLabel(responseKind, position)}
+      {responsePositionLabel(position)}
     </span>
   );
 }
@@ -189,7 +191,6 @@ export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: st
 
   return (
     <ResponsePositionTag
-      responseKind={context.responseKind}
       position={direction === 'positive'}
       title={context.claimName ? `${label}: ${context.claimName}` : undefined}
     />
