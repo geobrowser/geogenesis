@@ -66,9 +66,24 @@ type DebateFeedPlayerProps = {
    * makes arriving at a card feel glitchy (GEO-2895).
    */
   preload?: boolean;
+  /**
+   * Start here, in seconds, the first time this debate becomes playable — from a link that named a
+   * moment, such as a claim row saying where it was said.
+   *
+   * Applied once and never again. Every seek on these recordings is a parse walk (they are
+   * MediaRecorder WebM with one cluster and no Cues), so re-applying it on a later render would
+   * fight the viewer's own scrubbing and re-open GEO-2828's seek storm.
+   */
+  initialSeekSeconds?: number | null;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false, reducedOverlays = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({
+  debate,
+  active,
+  preload = false,
+  reducedOverlays = false,
+  initialSeekSeconds = null,
+}: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -126,6 +141,41 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     measurement.control('seek');
     seekBothRaw(seconds);
   };
+
+  /**
+   * Honour a link that named a moment, once per moment.
+   *
+   * Waits for `ready` rather than firing on mount: before the media is seekable the request would
+   * be dropped, and this is the arriving reader's one chance to land where they were sent. Latched so
+   * that re-renders, a re-activation, or the viewer scrolling back to this card cannot yank the
+   * playhead back to where the link pointed after they have moved it themselves.
+   *
+   * Latched on the debate *and* the moment, not the debate alone. Two claims extracted from the same
+   * debate carry two timecodes, and following one after the other is a client-side navigation that
+   * changes `initialSeekSeconds` without remounting this card — which the id-only latch swallowed, so
+   * the second timecode did nothing at all.
+   *
+   * Not routed through the measured `seekBoth` above: this is a seek the reader asked for on the
+   * previous page, not a scrub performed on this player, and counting it as one would report a
+   * control interaction nobody made here.
+   */
+  const appliedInitialSeekRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    // No moment asked for means the last one has been let go. Without this the latch outlived the
+    // request that set it: `?t=124`, then the parameter dropped, then `?t=124` again — browser Back
+    // does exactly that — matched the stale latch and never seeked, though it was a new navigation
+    // asking for that moment. Only a missing timecode clears it; a render that is merely not ready
+    // yet keeps it, so the same request still cannot fire twice.
+    if (initialSeekSeconds == null) {
+      appliedInitialSeekRef.current = null;
+      return;
+    }
+    if (!ready) return;
+    const request = `${debate.id}@${initialSeekSeconds}`;
+    if (appliedInitialSeekRef.current === request) return;
+    appliedInitialSeekRef.current = request;
+    seekBothRaw(initialSeekSeconds);
+  }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 
   /**
    * Stopped, and only a tap will start it.

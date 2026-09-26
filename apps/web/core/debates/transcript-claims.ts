@@ -31,8 +31,10 @@ export type TranscriptClaim = {
   blockId: string;
   /**
    * The claim's timecodes as published on the block → claim relation entity, in milliseconds from
-   * the start of the debate timeline. Null for every debate published before timecodes existed,
-   * which is nearly all of them — the resolver recovers those from the transcript instead.
+   * the start of the debate timeline. Present for most of the corpus since the backfill ran — 921
+   * of 1,072 statements as of 2026-09-23, and 23 of 25 debates timed all the way through. The
+   * resolver recovers the rest from the transcript, and `useClaimTimings` skips that fetch entirely
+   * for a debate whose claims are all published.
    */
   publishedTiming: { startMs: number; endMs: number } | null;
   /**

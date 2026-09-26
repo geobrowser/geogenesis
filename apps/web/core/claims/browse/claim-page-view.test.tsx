@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -11,8 +12,40 @@ import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
 import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
+/**
+ * The page inside the provider it actually runs inside.
+ *
+ * It reads the activity aggregate out of the query cache and writes a reader's own comment back into
+ * it, so a bare render throws "No QueryClient set" — the client is not optional context here. One
+ * client per render, kept across `rerender` so that a re-render with different props stays a
+ * re-render rather than becoming a fresh cache.
+ */
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = renderBare(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: React.ReactElement) =>
+      view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>),
+  };
+}
+
 const mocks = vi.hoisted(() => ({
+  activityError: null as Error | null,
+  retryActivity: vi.fn(),
+  activityCountError: null as Error | null,
+  retryActivityCount: vi.fn(),
+  adjustActivityTotal: vi.fn(),
+  countsMountedFor: [] as string[],
+  claimCommentsError: null as Error | null,
+  refetchClaimComments: vi.fn(),
+  // The active tab comes from the route, so a test that needs another tab sets this.
+  pathname: '/space/space-1/claim-1',
   entity: null as Record<string, unknown> | null,
+  /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
+  activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
+  /** What the shared activity count answers for this claim; null means it has not answered. */
+  activityTotal: null as number | null,
   /** How many responses the claim has; zero means the hero draws no verdict column. */
   responseTotal: 11,
   /** Whether the response counts are still out, which is what the hero reserves its column for. */
@@ -72,7 +105,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/space/space-1/claim-1',
+  usePathname: () => mocks.pathname,
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 
@@ -115,6 +148,41 @@ vi.mock('./claim-topics-tab', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
+}));
+
+// What the Overview puts in its activity thread besides comments. Its own fetching — debates,
+// profiles, keyframes — is covered by the rows' suites; this file is about page composition.
+vi.mock('./use-claim-activity-rows', () => ({
+  useClaimActivityRows: () => ({
+    rows: mocks.activityRows,
+    isLoading: false,
+    error: mocks.activityError,
+    retry: mocks.retryActivity,
+  }),
+}));
+
+// The heading's number, which is the same one the claim's Explore card shows. Its own query is
+// covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({
+    comments: [],
+    totalCount: 0,
+    isLoading: false,
+    error: mocks.claimCommentsError,
+    refetch: mocks.refetchClaimComments,
+  }),
+}));
+
+vi.mock('./claim-activity-count', () => ({
+  useClaimActivityCounts: (ids: string[]) => {
+    mocks.countsMountedFor.push(...ids);
+    return {
+      counts: new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+      error: mocks.activityCountError,
+      retry: mocks.retryActivityCount,
+    };
+  },
+  adjustClaimActivityTotal: mocks.adjustActivityTotal,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -213,7 +281,22 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
 }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: () => <div data-testid="comments" />,
+  CommentSection: ({
+    title,
+    activityRows,
+    totalOverride,
+  }: {
+    title?: string;
+    activityRows?: Array<{ id: string }>;
+    totalOverride?: number;
+  }) => (
+    <div
+      data-testid="comments"
+      data-title={title}
+      data-total={totalOverride == null ? '' : String(totalOverride)}
+      data-activity-rows={(activityRows ?? []).map(r => r.id).join(',')}
+    />
+  ),
 }));
 
 function claimEntity(description: string | null) {
@@ -227,6 +310,17 @@ function claimEntity(description: string | null) {
 }
 
 beforeEach(() => {
+  mocks.activityRows = [];
+  mocks.activityError = null;
+  mocks.retryActivity.mockClear();
+  mocks.activityCountError = null;
+  mocks.retryActivityCount.mockClear();
+  mocks.adjustActivityTotal.mockClear();
+  mocks.countsMountedFor.length = 0;
+  mocks.claimCommentsError = null;
+  mocks.refetchClaimComments.mockClear();
+  mocks.pathname = '/space/space-1/claim-1';
+  mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
   mocks.hasCounts = true;
@@ -481,6 +575,45 @@ describe('ClaimPageView record', () => {
     expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
   });
 
+  it('hands the debates on this claim to the thread, and names it Activity', () => {
+    mocks.activityRows = [
+      { id: 'debate-1', createdAt: '2026-09-20T10:00:00Z', content: null },
+      { id: 'debate-2', createdAt: '2026-09-21T10:00:00Z', content: null },
+    ];
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const comments = screen.getByTestId('comments');
+    expect(comments).toHaveAttribute('data-activity-rows', 'debate-1,debate-2');
+    // Not "Comments": the list holds more than comments now, and the count says how much has
+    // happened to this claim rather than how many people typed.
+    expect(comments).toHaveAttribute('data-title', 'Activity');
+  });
+
+  it('heads the thread with the same count the claim’s Explore card shows', () => {
+    mocks.activityTotal = 17;
+
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '17');
+  });
+
+  it('lets the thread count for itself until that number answers', () => {
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '');
+  });
+
+  // GEO-3008: debates are in the activity thread *and* keep their gallery. The gallery is the way
+  // through to the Debates tab, which is the complete filterable index; the thread shows the recent
+  // ones in the order they happened. Two jobs rather than two copies.
+  it('keeps the debates gallery alongside the thread', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string }>;
+    expect(kinds.map(kind => kind.key)).toEqual(['debates', 'claims']);
+  });
+
   it('marks only failed record counts unavailable in Activity', () => {
     mocks.record.claimsError = true;
     mocks.record.claimsCountUnavailable = true;
@@ -590,6 +723,117 @@ describe('ClaimPageView comments', () => {
       viewerSpaceId: 'viewer-space',
       isViewerResponseLoading: true,
     });
+  });
+
+  /**
+   * Which claim an Agree is about. By the time a reader reaches the thread the title is off screen,
+   * and a badge on a comment under an extracted claim answers for a different claim than the page —
+   * so each badge names its own in its hover title. The page-level provider left the name out while
+   * the prop was optional, which meant the badges on the claim's *own* comments, the common case and
+   * the one this was added for, explained nothing.
+   */
+  /**
+   * `useQueryEntities` hands back `error` precisely so a caller drawing an empty state can tell
+   * "nothing matched" from "the query never came back". This hook dropped it, so a cold-load failure
+   * made the feed omit every debate — and every claim extracted from one — in silence, while the
+   * heading, which is a separate query, went on counting them.
+   */
+  it('says the debates could not be read rather than drawing a feed without them', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivity).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The heading's aggregate can fail on its own, and its failure was indistinguishable from "not
+   * answered yet": `totalOverride` came back undefined either way, so the heading fell back to this
+   * claim's own comments plus the rows it drew — a number that leaves out every extracted claim and
+   * every comment nested under a debate, presented as the Activity total and never corrected.
+   */
+  /**
+   * The claim page has two surfaces that publish an ordinary comment on the claim — the thread's own
+   * composers and the hero's position explanation — and only the first was wired to the heading's
+   * aggregate, which the heading prefers unconditionally. So explaining a position left the number one
+   * behind.
+   */
+  /**
+   * The adjustment corrects a cached answer, so it does nothing when that answer was never fetched. The
+   * hero renders on every tab; the heading — the only other caller of the aggregate — is inside the
+   * Overview. So an explanation published from the Debates tab moved nothing at all, and switching to
+   * Overview before the indexer caught up showed the pre-comment number.
+   */
+  it('keeps the activity aggregate mounted on a tab that does not display it', () => {
+    mocks.pathname = '/space/space-1/claim-1/debates';
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    // The Overview — and so the heading, the aggregate's only other caller — is not rendered here.
+    expect(screen.queryByText('Activity (34)')).not.toBeInTheDocument();
+    // The hero is, so the number it adjusts has to be on its way regardless.
+    expect(mocks.countsMountedFor).toContain('claim-1');
+  });
+
+  it('routes the hero explanation into the same activity count the thread uses', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const report = mocks.positionControl?.onActivityPublish as ((delta: number) => void) | undefined;
+    report?.(1);
+
+    // The same cache the thread's composers move, keyed by this claim — not a second counter.
+    expect(mocks.adjustActivityTotal).toHaveBeenCalledWith(expect.anything(), 'claim-1', 1);
+  });
+
+  it('says when the activity total could not be read', () => {
+    mocks.activityCountError = new Error('aggregate unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load this claim’s activity total/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivityCount).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The claim's own comments are the third read, and `CommentSection` keeps its failure to itself —
+   * reasonable where the heading counts that same list, wrong here, where the heading is an independent
+   * aggregate that goes on counting the comments the list could not load.
+   */
+  it('says when the claim’s own comments could not be read', () => {
+    mocks.claimCommentsError = new Error('comments unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the comments on this claim/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchClaimComments).toHaveBeenCalledOnce();
+  });
+
+  // Each read speaks for itself: one failing says nothing about the other.
+  it('says only what failed when just the debates read did', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn’t load this claim’s activity total/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the debates read simply found none', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByText(/Couldn’t load the debates/)).not.toBeInTheDocument();
+  });
+
+  it('names the claim its side badges are about', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.commentPosition).toMatchObject({ claimName: 'Pineapple belongs on pizza' });
   });
 });
 

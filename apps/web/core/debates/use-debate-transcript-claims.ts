@@ -16,6 +16,8 @@ export type DebateTranscriptClaimsResult = {
   claims: DebateTranscriptClaims;
   isLoading: boolean;
   error: Error | null;
+  /** Ask again. A failed transcript read is worth offering to retry rather than reporting as empty. */
+  retry: () => void;
 };
 
 /**
@@ -27,6 +29,11 @@ export type DebateTranscriptClaimsResult = {
  *
  * Returns an empty grouping rather than throwing for debates with no transcript: recording
  * predates claim extraction for a chunk of the corpus, and "no claims yet" is a real state.
+ *
+ * Which is exactly why `error` has to be read separately. A failed read and a debate with nothing in
+ * it arrive here as the same empty grouping, and a caller that renders emptiness silently — as the
+ * activity feed's debate branch did — turns a transient failure into "this debate produced nothing"
+ * on a row that is simultaneously advertising eighteen extracted claims.
  */
 export function useDebateTranscriptClaims(
   debateId: string | null,
@@ -38,7 +45,7 @@ export function useDebateTranscriptClaims(
   const debateEntityId = debateId ? ID.uuidToHex(debateId) : '';
   const scopedSpaceId = spaceId ? ID.uuidToHex(spaceId) : '';
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: debateTranscriptClaimsQueryKey(debateEntityId, scopedSpaceId),
     queryFn: ({ signal }) => Effect.runPromise(getDebateTranscriptClaims(debateEntityId, scopedSpaceId, signal)),
     enabled: enabled && debateEntityId !== '' && scopedSpaceId !== '',
@@ -48,5 +55,6 @@ export function useDebateTranscriptClaims(
     claims: data ?? EMPTY_TRANSCRIPT_CLAIMS,
     isLoading,
     error: (error as Error | null) ?? null,
+    retry: () => void refetch(),
   };
 }
