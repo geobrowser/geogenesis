@@ -9,7 +9,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PAGE_DENSITY } from './comment-density';
 
 /**
- * The two things a thread can say when it has more than it is drawing.
+ * The three things a thread can say when it is not drawing rows.
  *
  * Reddit keeps these apart and it is worth copying, because they answer different questions:
  *
@@ -89,5 +89,39 @@ export function ThreadContinue({
     >
       Continue this thread ({count}) →
     </Link>
+  );
+}
+
+/**
+ * A read that failed where rows were expected.
+ *
+ * Third member of this family, and the reason it lives here: {@link ThreadShowMore} and
+ * {@link ThreadContinue} are the other two answers to "this branch is not showing you rows", and a
+ * failure is the third. It arrived three times in two review rounds — the debate's transcript, the
+ * debate's comments, a claim's replies — because every one of those reads reports a failure as an
+ * empty list, and a branch that draws emptiness silently says the discussion is over when it could not
+ * be read at all.
+ *
+ * The retry is the point. Without one a failed fetch reads as "fetched, nothing there" for as long as
+ * the page stays open, which is the same sentence `useQueryEntities` uses to explain why it hands its
+ * callers a `refetch`.
+ */
+export function ThreadRetry({
+  children,
+  onRetry,
+  className,
+}: {
+  /** What could not be read, as a sentence. */
+  children: React.ReactNode;
+  onRetry: () => void;
+  className?: string;
+}) {
+  return (
+    <span className={cx(PAGE_DENSITY.metaClass, 'text-grey-04', className)}>
+      {children}{' '}
+      <button type="button" onClick={onRetry} className="text-ctaPrimary transition-colors hover:text-ctaHover">
+        Try again
+      </button>
+    </span>
   );
 }

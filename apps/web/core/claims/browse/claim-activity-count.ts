@@ -70,11 +70,26 @@ export const claimActivityCountsQueryKey = (ids: string[]) => ['claim-activity-c
  * An absent entry means "not answered yet", not "nothing" — a caller showing a number should hold
  * whatever it already had rather than flashing a zero it invented.
  */
-export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<string, ClaimActivityCount> {
+export function useClaimActivityCounts(
+  claimIds: string[],
+  enabled = true
+): {
+  counts: Map<string, ClaimActivityCount>;
+  /**
+   * The read failed, so an absent entry is not "not answered yet" — nothing is coming.
+   *
+   * It used to return the map alone, and a caller could not tell the two apart. The claim page reads
+   * `?.total` and falls back to its own comments plus debate rows when that is undefined, which is a
+   * number that leaves out every extracted claim and every comment nested under a debate — presented,
+   * silently and permanently, as the Activity total.
+   */
+  error: Error | null;
+  retry: () => void;
+} {
   // Sorted and deduped, so the same claims in a different order are the same query.
   const ids = React.useMemo(() => [...new Set(claimIds.filter(Boolean).map(uuidToHex))].sort(), [claimIds]);
 
-  const { data } = useQuery({
+  const { data, error, refetch } = useQuery({
     queryKey: claimActivityCountsQueryKey(ids),
     queryFn: ({ signal }) =>
       Effect.runPromise(
@@ -95,7 +110,12 @@ export function useClaimActivityCounts(claimIds: string[], enabled = true): Map<
     refetchOnWindowFocus: false,
   });
 
-  return data ?? EMPTY_COUNTS;
+  const retry = React.useCallback(() => void refetch(), [refetch]);
+
+  return React.useMemo(
+    () => ({ counts: data ?? EMPTY_COUNTS, error: (error as Error | null) ?? null, retry }),
+    [data, error, retry]
+  );
 }
 
 /**

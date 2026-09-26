@@ -33,6 +33,8 @@ function render(ui: React.ReactElement) {
 const mocks = vi.hoisted(() => ({
   activityError: null as Error | null,
   retryActivity: vi.fn(),
+  activityCountError: null as Error | null,
+  retryActivityCount: vi.fn(),
   entity: null as Record<string, unknown> | null,
   /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
   activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
@@ -156,8 +158,12 @@ vi.mock('./use-claim-activity-rows', () => ({
 // The heading's number, which is the same one the claim's Explore card shows. Its own query is
 // covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
 vi.mock('./claim-activity-count', () => ({
-  useClaimActivityCounts: () =>
-    new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+  useClaimActivityCounts: () => ({
+    counts: new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+    error: mocks.activityCountError,
+    retry: mocks.retryActivityCount,
+  }),
+  adjustClaimActivityTotal: vi.fn(),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -288,6 +294,8 @@ beforeEach(() => {
   mocks.activityRows = [];
   mocks.activityError = null;
   mocks.retryActivity.mockClear();
+  mocks.activityCountError = null;
+  mocks.retryActivityCount.mockClear();
   mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
@@ -715,6 +723,33 @@ describe('ClaimPageView comments', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mocks.retryActivity).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The heading's aggregate can fail on its own, and its failure was indistinguishable from "not
+   * answered yet": `totalOverride` came back undefined either way, so the heading fell back to this
+   * claim's own comments plus the rows it drew — a number that leaves out every extracted claim and
+   * every comment nested under a debate, presented as the Activity total and never corrected.
+   */
+  it('says when the activity total could not be read', () => {
+    mocks.activityCountError = new Error('aggregate unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load this claim’s activity total/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivityCount).toHaveBeenCalledOnce();
+  });
+
+  // Each read speaks for itself: one failing says nothing about the other.
+  it('says only what failed when just the debates read did', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn’t load this claim’s activity total/)).not.toBeInTheDocument();
   });
 
   it('says nothing when the debates read simply found none', () => {

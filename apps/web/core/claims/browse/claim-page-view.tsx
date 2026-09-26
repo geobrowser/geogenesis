@@ -34,6 +34,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import {
@@ -473,7 +474,7 @@ function ClaimOverviewTab({
   // The same number the claim's card shows in Explore, from the same query — one definition of
   // "how much has happened here", so the two surfaces cannot disagree.
   const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
-  const activityTotal = activityCounts.get(ID.uuidToHex(entityId))?.total;
+  const activityTotal = activityCounts.counts.get(ID.uuidToHex(entityId))?.total;
 
   // The thread can add to that number but cannot compute it, so the page that owns the aggregate
   // owns the adjustment too. It lands in the query cache rather than in the section's state, which
@@ -553,17 +554,21 @@ function ClaimOverviewTab({
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
         {/*
-          The debates could not be read, so the feed below is missing every debate and every claim
-          extracted from one — while the heading above it, which is a different query, goes on counting
-          them. Said here rather than as a row inside the section: it is about the whole list, not a
-          place in it, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
+          Two reads feed this section and either can fail on its own, so each says so for itself.
+          Without the debates the feed is missing every debate and every claim extracted from one;
+          without the total the heading falls back to this claim's own comments plus the rows it drew,
+          which leaves out everything nested under a debate and is not the number it appears to be.
+          Said here rather than as rows inside the section: each is about a whole list rather than a
+          place in one, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
         */}
-        {activity.error != null && (
-          <div className="pt-10 text-metadata text-grey-04" data-activity-debates-error>
-            Couldn’t load the debates on this claim.{' '}
-            <button type="button" onClick={activity.retry} className="text-ctaPrimary hover:underline">
-              Try again
-            </button>
+        {(activity.error != null || activityCounts.error != null) && (
+          <div className="flex flex-col items-start gap-1 pt-10" data-activity-errors>
+            {activity.error != null && (
+              <ThreadRetry onRetry={activity.retry}>Couldn’t load the debates on this claim.</ThreadRetry>
+            )}
+            {activityCounts.error != null && (
+              <ThreadRetry onRetry={activityCounts.retry}>Couldn’t load this claim’s activity total.</ThreadRetry>
+            )}
           </div>
         )}
         {/* "Activity", because the list now holds debates as well as comments — and the count says

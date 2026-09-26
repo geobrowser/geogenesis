@@ -24,6 +24,7 @@ import { EntityCommentsButton } from '~/partials/comments/entity-comments-button
 import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/inline-comment-composer';
 import { ThreadCollapseToggle, ThreadParentSpine, useThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
+import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ActivityRowTag } from './activity-row-tag';
@@ -326,7 +327,11 @@ function DebateBranch({
   const { timings, isReady } = useClaimTimings(debateId, claims);
   // The debate's own comments, on the same query key the comments panel uses — so opening the panel
   // on this debate costs no extra request, and a comment posted there appears here too.
-  const { comments: debateComments } = useComments({
+  const {
+    comments: debateComments,
+    error: commentsError,
+    refetch: refetchComments,
+  } = useComments({
     entityId: debateId,
     spaceId,
     // Most debates have no comments, and this feed already knows which. Fetching them anyway would
@@ -369,9 +374,12 @@ function DebateBranch({
   // this only spoke up when the *whole* branch was empty, which meant a debate that also had comments
   // drew them and dropped its failed claims without a word, under a row still advertising eighteen.
   const claimsFailed = claimsError != null && claimsInOrder.length === 0;
+  // The comments are their own read and fail on their own. Same rule, same sentence, at the end of the
+  // branch rather than the head — the comments sit after the claims, so that is where their absence is.
+  const commentsFailed = commentsError != null && debateComments.length === 0;
   // One row, at the head: it is about the claims, which is what the rest of the branch leads with.
   const leadingRows = claimsFailed ? 1 : 0;
-  const rowCount = leadingRows + claimsInOrder.length + debateComments.length;
+  const rowCount = leadingRows + claimsInOrder.length + debateComments.length + (commentsFailed ? 1 : 0);
 
   if (rowCount === 0) return null;
 
@@ -379,12 +387,7 @@ function DebateBranch({
     <ThreadBranch rowDensity={PAGE_DENSITY} reachPx={BRANCH_REACH_PX} onCollapse={onCollapse} label={branchLabel}>
       {claimsFailed && (
         <ThreadBranchRow isLast={rowCount === 1}>
-          <span className={cx(PAGE_DENSITY.metaClass, 'text-grey-04')}>
-            Couldn’t load the claims from this debate.{' '}
-            <button type="button" onClick={retryClaims} className="text-ctaPrimary hover:underline">
-              Try again
-            </button>
-          </span>
+          <ThreadRetry onRetry={retryClaims}>Couldn’t load the claims from this debate.</ThreadRetry>
         </ThreadBranchRow>
       )}
 
@@ -427,6 +430,12 @@ function DebateBranch({
           </ThreadBranchRow>
         );
       })}
+
+      {commentsFailed && (
+        <ThreadBranchRow isLast>
+          <ThreadRetry onRetry={() => void refetchComments()}>Couldn’t load the comments on this debate.</ThreadRetry>
+        </ThreadBranchRow>
+      )}
 
       {debateComments.map((comment, index) => (
         <ThreadBranchRow key={comment.id} isLast={leadingRows + claimsInOrder.length + index === rowCount - 1}>

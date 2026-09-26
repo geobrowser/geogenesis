@@ -24,6 +24,7 @@ import { InlineCommentComposer, useInlineComposer } from '~/partials/comments/in
 import { ThreadAvatar } from '~/partials/comments/thread-avatar';
 import { ThreadCollapseToggle, ThreadParentSpine, useThreadParentSpine } from '~/partials/comments/thread-branch';
 import { ThreadBranch, ThreadBranchRow } from '~/partials/comments/thread-branch-list';
+import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ActivityRowTag } from './activity-row-tag';
@@ -314,8 +315,10 @@ function ClaimComments({
   onCollapse: () => void;
   label: { expand: string; collapse: string };
 }) {
-  const { comments } = useComments({ entityId: claimId, spaceId });
-  if (comments.length === 0) return null;
+  const { comments, error, refetch } = useComments({ entityId: claimId, spaceId });
+  // Only after a *successful* empty response. A failed read reports the same empty list, so returning
+  // null on it drew an expanded branch with nothing in it under a count that said there were replies.
+  if (comments.length === 0 && error == null) return null;
 
   return (
     // No wrapper of its own. The caller measures where this branch begins in order to stop the spine
@@ -329,6 +332,12 @@ function ClaimComments({
         onCollapse={onCollapse}
         label={label}
       >
+        {comments.length === 0 ? (
+          <ThreadBranchRow isLast>
+            <ThreadRetry onRetry={() => void refetch()}>Couldn’t load the replies to this claim.</ThreadRetry>
+          </ThreadBranchRow>
+        ) : null}
+
         {comments.map((comment, index) => (
           <ThreadBranchRow key={comment.id} isLast={index === comments.length - 1}>
             <DebateCommentRow comment={comment} targetEntityId={claimId} spaceId={spaceId} depth={depth} />

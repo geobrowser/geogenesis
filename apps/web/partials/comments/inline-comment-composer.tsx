@@ -96,15 +96,15 @@ export function InlineCommentComposer({
               // its own.
               adjustActivityPosts(1);
             },
-          }).then(result => {
-            // A rejected transaction takes the optimistic row back out, so the heading has to give
-            // back the one it just counted — and this row has to stop holding a branch open for a
-            // comment that is no longer there. A retained publish returns a result and keeps its row,
-            // so it keeps both.
-            if (!result) {
+            // Whichever way it fails, and there are two: the transaction rejected now, or a publish
+            // retained for a personal space that does not exist yet failing its retry later. Both take
+            // the optimistic row back out, so the heading gives back the one it counted and this row
+            // stops holding a branch open for a comment that is no longer there. Reading the returned
+            // value only ever saw the first of the two.
+            onFailed: () => {
               markPostRejected();
               adjustActivityPosts(-1);
-            }
+            },
           });
           close();
         }}

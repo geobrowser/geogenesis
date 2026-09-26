@@ -26,9 +26,17 @@ const mocks = vi.hoisted(() => ({
    * rejected and it has taken the optimistic row back out, which is the rollback signal.
    */
   publishResult: { id: 'new-comment' } as unknown,
-  /** Stands in for the optimistic row a real publish writes, which is what tells the section. */
-  publishComment: vi.fn((input: { onOptimistic?: (id: string) => void }) => {
+  /**
+   * Stands in for the optimistic row a real publish writes, which is what tells the section.
+   *
+   * It reports a failure through `onFailed` because that is what the real `usePublishComment` does —
+   * and it has to, since a publish can also fail *after* resolving, when one retained for a personal
+   * space that does not exist yet loses its retry. A stub that only resolved falsy would let the
+   * section stop listening to the callback without any test noticing.
+   */
+  publishComment: vi.fn((input: { onOptimistic?: (id: string) => void; onFailed?: () => void }) => {
     input.onOptimistic?.('new-comment');
+    if (!mocks.publishResult) input.onFailed?.();
     return Promise.resolve(mocks.publishResult);
   }),
 }));
@@ -280,7 +288,7 @@ function ActivityHost({ claimId }: { claimId: string }) {
       spaceId="space-1"
       title="Activity"
       activityRows={[]}
-      totalOverride={counts.get(uuidToHex(claimId))?.total}
+      totalOverride={counts.counts.get(uuidToHex(claimId))?.total}
       onActivityPublish={delta => adjustClaimActivityTotal(queryClient, claimId, delta)}
     />
   );

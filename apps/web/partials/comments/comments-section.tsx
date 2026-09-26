@@ -406,10 +406,10 @@ export function CommentSection({
           markSessionNew(commentId);
           adjustActivityPosts(1);
         },
-      }).then(result => {
-        // Rolled back by `useCreateComment` when the transaction is rejected, so the heading gives
-        // back what it counted. A publish retained for retry keeps both its row and its count.
-        if (!result) adjustActivityPosts(-1);
+        // `useCreateComment` takes the optimistic row back out on a failed publish, so the heading
+        // gives back what it counted. Reported rather than read off the returned value, because a
+        // publish retained for a personal space that does not exist yet fails later than that value.
+        onFailed: () => adjustActivityPosts(-1),
       });
     },
     [adjustActivityPosts, markSessionNew, publishComment, smartAccount]

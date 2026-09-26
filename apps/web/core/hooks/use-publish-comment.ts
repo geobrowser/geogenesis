@@ -11,6 +11,16 @@ import { useCreateComment } from './use-create-comment';
 
 type PublishCommentInput = Pick<CreateCommentParams, 'text' | 'ancestorComments'> & {
   onOptimistic?: (commentId: string) => void;
+  /**
+   * The comment did not make it, and `useCreateComment` has taken its optimistic row back out.
+   *
+   * Both ways that can happen report here, which is the point: callers were checking the returned
+   * value, and that only sees the *first* attempt. A publish retained for a personal space that does
+   * not exist yet returns truthy and is retried later — and when that retry failed, the row vanished
+   * while every count and flag the caller had set for it stayed behind. There is no way for a caller
+   * to observe that from the promise it was handed, so the policy belongs on this side of the call.
+   */
+  onFailed?: () => void;
 };
 
 type CommentAnalyticsContext = {
@@ -35,7 +45,7 @@ export function usePublishComment(
   const enqueuePendingAction = useEnqueuePendingAction();
 
   const publishComment = React.useCallback(
-    async ({ text, ancestorComments, onOptimistic }: PublishCommentInput) => {
+    async ({ text, ancestorComments, onOptimistic, onFailed }: PublishCommentInput) => {
       const recordIfPublished = (result: Awaited<ReturnType<typeof createComment>>) => {
         if (!result?.published) return false;
 
@@ -60,22 +70,30 @@ export function usePublishComment(
         onOptimistic,
       });
 
-      if (!result) return result;
+      if (!result) {
+        onFailed?.();
+        return result;
+      }
       if (recordIfPublished(result)) return result;
 
       enqueuePendingAction({
         id: `comment:${targetEntityId}:${result.id}`,
         label: 'your comment',
         requires: 'personalSpace',
-        run: () =>
-          createComment({
+        run: async () => {
+          const published = await createComment({
             text,
             targetSpaceId,
             ancestorComments,
             commentId: result.id,
-          }).then(published => {
-            if (!recordIfPublished(published)) throw new Error('Comment could not be published');
-          }),
+          });
+          if (recordIfPublished(published)) return;
+
+          // The row is already gone — `useCreateComment` removes it on a failed publish — so anything
+          // the caller counted for this comment has to come back before the error is surfaced.
+          onFailed?.();
+          throw new Error('Comment could not be published');
+        },
       });
 
       return result;

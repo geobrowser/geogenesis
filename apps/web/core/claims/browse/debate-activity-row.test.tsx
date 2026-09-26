@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   transcriptError: null as Error | null,
   retryTranscript: vi.fn(),
   debateComments: [] as unknown[],
+  commentsError: null as Error | null,
+  refetchComments: vi.fn(),
 }));
 
 // The controls have their own suites and both reach for wallet and query context. What this file is
@@ -63,7 +65,7 @@ vi.mock('~/core/debates/hooks', () => ({ useDebateClaims: () => ({ data: null })
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: ({ entityId, enabled }: { entityId: string; enabled?: boolean }) => {
     mocks.commentQueries.push({ entityId, enabled: enabled !== false });
-    return { comments: mocks.debateComments };
+    return { comments: mocks.debateComments, error: mocks.commentsError, refetch: mocks.refetchComments };
   },
 }));
 
@@ -177,6 +179,8 @@ describe('DebateActivityRow when the transcript will not load', () => {
     mocks.transcriptError = null;
     mocks.retryTranscript.mockClear();
     mocks.debateComments = [];
+    mocks.commentsError = null;
+    mocks.refetchComments.mockClear();
   });
   afterEach(cleanup);
 
@@ -212,6 +216,20 @@ describe('DebateActivityRow when the transcript will not load', () => {
 
     expect(screen.getByText(/Couldn’t load the claims from this debate/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  /**
+   * The comments are their own read, so they fail on their own — and a row whose count says there are
+   * comments kept that count, and its collapse control, while drawing none of them.
+   */
+  it('says when the comments could not be read, separately from the claims', () => {
+    mocks.commentsError = new Error('comments unavailable');
+
+    renderRow({ claimCount: 0, commentCount: 3 });
+
+    expect(screen.getByText(/Couldn’t load the comments on this debate/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchComments).toHaveBeenCalledOnce();
   });
 
   // The ordinary empty debate still says nothing: a line under every old debate is noise, which is

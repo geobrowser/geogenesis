@@ -54,7 +54,29 @@ vi.mock('~/partials/comments/entity-comments-button', () => ({
   ),
 }));
 
-const mocks = vi.hoisted(() => ({ openedProfiles: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  openedProfiles: [] as string[],
+  comments: [] as unknown[],
+  commentsError: null as Error | null,
+  refetchComments: vi.fn(),
+}));
+
+// The replies branch wraps itself in the position boundary, which reads its claim through the sync
+// engine. The side tag from this same module is asserted below, so only the boundary is stood in for.
+vi.mock('~/core/claims/browse/claim-comment-position', async importOriginal => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  ClaimCommentPositionBoundary: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({
+    comments: mocks.comments,
+    totalCount: mocks.comments.length,
+    isLoading: false,
+    error: mocks.commentsError,
+    refetch: mocks.refetchComments,
+  }),
+}));
 
 vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
   useOpenDebaterProfile: (spaceId: string | undefined) => (event: React.MouseEvent) => {
@@ -76,6 +98,13 @@ vi.mock('~/partials/comments/inline-comment-composer', async importOriginal => (
     targetEntityId: string;
   }) => (composer.isComposing ? <div data-testid="inline-composer" data-target={targetEntityId} /> : null),
 }));
+
+// Both describes below reset what they use; these are shared, so they are reset once for the file.
+afterEach(() => {
+  mocks.comments = [];
+  mocks.commentsError = null;
+  mocks.refetchComments.mockClear();
+});
 
 function claim(overrides: Partial<OrderedTranscriptClaim> = {}): OrderedTranscriptClaim {
   return {
@@ -218,6 +247,27 @@ describe('ExtractedClaimRow', () => {
    * as long as the page stayed open. `null` says the request could not answer, and the row keeps the
    * thread open on it.
    */
+  /**
+   * A failed read of the replies reports the same empty list as a claim that has none, so returning
+   * null on it drew an expanded branch with nothing in it — under a count saying there were replies,
+   * and with nothing to press.
+   */
+  it('says when the replies could not be read rather than drawing an empty branch', () => {
+    mocks.commentsError = new Error('replies unavailable');
+
+    renderRow({ commentCount: 4 });
+
+    expect(screen.getByText(/Couldn’t load the replies to this claim/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchComments).toHaveBeenCalledOnce();
+  });
+
+  it('draws nothing extra when the replies loaded and there are none', () => {
+    renderRow({ commentCount: 4 });
+
+    expect(screen.queryByText(/Couldn’t load the replies/)).not.toBeInTheDocument();
+  });
+
   it('keeps its comments reachable when the count aggregate could not answer', () => {
     const { unmount } = renderRow({ commentCount: 0 });
     expect(screen.queryByLabelText('Hide comments on this claim')).not.toBeInTheDocument();
