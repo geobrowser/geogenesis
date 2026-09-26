@@ -27,7 +27,12 @@ export const TAGLINE_PROPERTY = '0e4f7b40c0924badb5d5ca10bcb60aa9';
 export const TAGLINE_MAX_LENGTH = 220;
 
 /**
- * A tagline cut to the limit.
+ * A tagline as one line, cut to the limit.
+ *
+ * Line breaks become a single space. A tagline is one line — the modal writes it through a
+ * single-line input and the header shows it truncated to one — but the header's field is a
+ * textarea, so a paste or another client can hand this a break. Replaced before the cut, so
+ * the limit is measured on what is actually stored.
  *
  * Deliberately no trimming: this runs on every keystroke in the in-place field, and stripping
  * the trailing space would make "Head of " impossible to type. The surfaces that publish trim
@@ -37,10 +42,11 @@ export const TAGLINE_MAX_LENGTH = 220;
  * shorten, not an error, and keeping the first 220 leaves them something to edit.
  */
 export function normalizeTagline(value: string): string {
-  const cut = value.slice(0, TAGLINE_MAX_LENGTH);
+  const oneLine = value.replace(/[\r\n\u2028\u2029]+/g, ' ');
+  const cut = oneLine.slice(0, TAGLINE_MAX_LENGTH);
 
   // Nothing was removed, so there is no boundary to have landed in the middle of.
-  if (cut.length === value.length) return cut;
+  if (cut.length === oneLine.length) return cut;
 
   // `slice` counts UTF-16 code units, and an emoji is two of them. Cutting at 220 can land
   // between the halves of one and leave the first behind: 219 letters and an emoji come back

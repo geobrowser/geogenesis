@@ -22,6 +22,9 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
  * layout while the side panel assembles its own — the same reason `PersonalSpaceHeadline` is
  * separate.
  */
+/** Stable, so the field's key handler is not rebuilt on every render. */
+const ignoreEnter = () => {};
+
 export function PersonalSpaceTagline({
   spaceId,
   personEntityId,
@@ -63,6 +66,10 @@ export function PersonalSpaceTagline({
           // Cut here as well as on the input's own `maxLength`, which a paste can exceed in
           // some browsers and which does nothing at all to a programmatic change.
           onChange={next => setValue(normalizeTagline(next))}
+          // A textarea for its wrapping, not for its line breaks: Enter does nothing, as it
+          // does in the modal's single-line input. A pasted break still gets through to
+          // `onChange`, which is why the normalizer handles those too.
+          onEnterKey={ignoreEnter}
         />
         <p className="mt-1 text-footnote text-grey-04 tabular-nums">{taglineLengthHint(tagline)}</p>
       </div>

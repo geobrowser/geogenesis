@@ -56,6 +56,32 @@ describe('normalizeTagline', () => {
     expect(isWellFormed(cut)).toBe(true);
   });
 
+  /*
+   * A tagline is one line — the modal writes it through a single-line input, and the header
+   * shows it truncated to one. The header's own field is a textarea, so a line break can reach
+   * here from a paste, from Enter, or from another client, and every write path runs through
+   * this function.
+   */
+  it('turns a line break into a space', () => {
+    expect(normalizeTagline('Head of Product\nat Geo')).toBe('Head of Product at Geo');
+    expect(normalizeTagline('Head of Product\r\nat Geo')).toBe('Head of Product at Geo');
+  });
+
+  it('turns a run of line breaks into one space', () => {
+    expect(normalizeTagline('Head of Product\n\n\nat Geo')).toBe('Head of Product at Geo');
+  });
+
+  it('treats the Unicode line and paragraph separators as line breaks too', () => {
+    expect(normalizeTagline('Head of Product\u2028at Geo\u2029now')).toBe('Head of Product at Geo now');
+  });
+
+  // Replaced before the cut, so the limit is measured on what is actually stored.
+  it('replaces line breaks before measuring the limit', () => {
+    const value = `${'a'.repeat(TAGLINE_MAX_LENGTH - 1)}\r\nb`;
+
+    expect(normalizeTagline(value)).toBe(`${'a'.repeat(TAGLINE_MAX_LENGTH - 1)} `);
+  });
+
   // The guard only fires on a cut. A string already short enough is returned untouched, even
   // the malformed ones this function did not create.
   it('leaves a short string alone even when it ends in a high surrogate', () => {

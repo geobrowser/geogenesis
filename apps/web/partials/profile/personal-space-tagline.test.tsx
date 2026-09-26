@@ -111,6 +111,22 @@ describe('PersonalSpaceTagline', () => {
     expect(screen.getByText(taglineLengthHint('x'.repeat(10)))).toBeInTheDocument();
   });
 
+  // The modal's field is a single-line input, where Enter does nothing to the value. The
+  // header's is a textarea, where it would start a second line of a one-line headline.
+  it('does not start a new line on Enter', async () => {
+    const user = userEvent.setup();
+    mocks.isEditing = true;
+    render(<PersonalSpaceTagline spaceId={SPACE_ID} personEntityId={PERSON_ID} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Tagline' }), 'a{Enter}');
+
+    // Exactly `a`, not merely "no line break". Unblocked, Enter would reach `onChange` as `a\n`
+    // and the normalizer would store `a ` — no line break, and still a keystroke that wrote
+    // something. Only the key handler makes Enter write nothing.
+    expect(mocks.setValue).toHaveBeenCalledTimes(1);
+    expect(mocks.setValue).toHaveBeenLastCalledWith(expect.objectContaining({ value: 'a' }));
+  });
+
   it('deletes the row rather than storing an empty tagline', async () => {
     const user = userEvent.setup();
     mocks.isEditing = true;
