@@ -45,6 +45,7 @@ export function ClaimPositionCommentControl({
   noteFor,
   positionRowClassName,
   positionRowEndSlot,
+  onActivityPublish,
 }: {
   entityId: string;
   spaceId: string;
@@ -54,6 +55,16 @@ export function ClaimPositionCommentControl({
   onRespond: (position: boolean) => void;
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
   promptForComment: boolean;
+  /**
+   * A comment appearing or disappearing here, for a host whose own count cannot see it.
+   *
+   * This composer publishes an ordinary top-level comment on the claim, and on the claim page that
+   * comment is inside the Activity heading's server aggregate — which nothing in the comment caches
+   * can move. The heading prefers that aggregate unconditionally, so without this it stayed one
+   * behind after a reader explained their position. Omitted on the Explore card, whose pill is
+   * derived from the comment list and corrects itself.
+   */
+  onActivityPublish?: (delta: number) => void;
   disabled?: boolean;
   /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
   pending?: boolean;
@@ -130,7 +141,11 @@ export function ClaimPositionCommentControl({
     const text = comment.trim();
     if (!text) return;
     setIsSubmitting(true);
-    const result = await submitComment({ text });
+    const result = await submitComment({
+      text,
+      onOptimistic: () => onActivityPublish?.(1),
+      onFailed: () => onActivityPublish?.(-1),
+    });
 
     // A failed publish leaves the draft available to retry. Successful and queued comments already
     // have an optimistic row in the thread; closing here hands the reader from the composer to it.

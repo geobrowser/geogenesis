@@ -19,6 +19,10 @@ type PublishCommentInput = Pick<CreateCommentParams, 'text' | 'ancestorComments'
    * not exist yet returns truthy and is retried later — and when that retry failed, the row vanished
    * while every count and flag the caller had set for it stayed behind. There is no way for a caller
    * to observe that from the promise it was handed, so the policy belongs on this side of the call.
+   *
+   * Paired with {@link onOptimistic} as a transition rather than an event: at most one of the two is
+   * outstanding at a time, so a retried publish that keeps failing does not report the same loss
+   * repeatedly, and one that eventually succeeds reports the row back.
    */
   onFailed?: () => void;
 };
@@ -76,6 +80,18 @@ export function usePublishComment(
       }
       if (recordIfPublished(result)) return result;
 
+      /**
+       * Whether the caller is currently counting this comment.
+       *
+       * `PendingActionsRunner` keeps a failed action queued and its error toast offers a retry that
+       * runs this again, so `run` is not once-only. Reporting a failure every time it ran took the
+       * count down once per attempt — unbounded drift from a single comment — and a retry that
+       * finally succeeded never gave it back. So the two callbacks are a transition on this flag
+       * rather than an event per attempt: the caller is told at most once that the row is gone, and
+       * told again when a retry puts it back.
+       */
+      let countedByCaller = true;
+
       enqueuePendingAction({
         id: `comment:${targetEntityId}:${result.id}`,
         label: 'your comment',
@@ -87,11 +103,22 @@ export function usePublishComment(
             ancestorComments,
             commentId: result.id,
           });
-          if (recordIfPublished(published)) return;
 
-          // The row is already gone — `useCreateComment` removes it on a failed publish — so anything
-          // the caller counted for this comment has to come back before the error is surfaced.
-          onFailed?.();
+          if (recordIfPublished(published)) {
+            // A retry after a rollback: the comment exists again, so it counts again.
+            if (!countedByCaller) {
+              countedByCaller = true;
+              onOptimistic?.(result.id);
+            }
+            return;
+          }
+
+          // The row is gone — `useCreateComment` removes it on a failed publish — so anything the
+          // caller counted for this comment comes back before the error is surfaced.
+          if (countedByCaller) {
+            countedByCaller = false;
+            onFailed?.();
+          }
           throw new Error('Comment could not be published');
         },
       });

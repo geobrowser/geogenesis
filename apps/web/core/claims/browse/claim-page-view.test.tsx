@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   retryActivity: vi.fn(),
   activityCountError: null as Error | null,
   retryActivityCount: vi.fn(),
+  adjustActivityTotal: vi.fn(),
   entity: null as Record<string, unknown> | null,
   /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
   activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
@@ -163,7 +164,7 @@ vi.mock('./claim-activity-count', () => ({
     error: mocks.activityCountError,
     retry: mocks.retryActivityCount,
   }),
-  adjustClaimActivityTotal: vi.fn(),
+  adjustClaimActivityTotal: mocks.adjustActivityTotal,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -296,6 +297,7 @@ beforeEach(() => {
   mocks.retryActivity.mockClear();
   mocks.activityCountError = null;
   mocks.retryActivityCount.mockClear();
+  mocks.adjustActivityTotal.mockClear();
   mocks.activityTotal = null;
   mocks.responseTotal = 11;
   mocks.summaryLoading = false;
@@ -731,6 +733,22 @@ describe('ClaimPageView comments', () => {
    * claim's own comments plus the rows it drew — a number that leaves out every extracted claim and
    * every comment nested under a debate, presented as the Activity total and never corrected.
    */
+  /**
+   * The claim page has two surfaces that publish an ordinary comment on the claim — the thread's own
+   * composers and the hero's position explanation — and only the first was wired to the heading's
+   * aggregate, which the heading prefers unconditionally. So explaining a position left the number one
+   * behind.
+   */
+  it('routes the hero explanation into the same activity count the thread uses', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const report = mocks.positionControl?.onActivityPublish as ((delta: number) => void) | undefined;
+    report?.(1);
+
+    // The same cache the thread's composers move, keyed by this claim — not a second counter.
+    expect(mocks.adjustActivityTotal).toHaveBeenCalledWith(expect.anything(), 'claim-1', 1);
+  });
+
   it('says when the activity total could not be read', () => {
     mocks.activityCountError = new Error('aggregate unavailable');
 

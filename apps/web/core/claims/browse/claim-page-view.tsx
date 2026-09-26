@@ -449,6 +449,26 @@ function ClaimTabPanel({
  * Its own component because the panel above returns early for every other tab, and a hook cannot
  * live behind an early return.
  */
+/**
+ * Reports a comment this page published into the Activity heading's number.
+ *
+ * Every composer on the page needs it and none of them can compute the number: it is a server
+ * aggregate over the claim's debates, the claims extracted from them and every comment in that tree.
+ * Two surfaces publish an ordinary comment on the claim — the thread's own composers and the hero's
+ * position explanation — and the second was missed while this was written inline beside the first.
+ *
+ * The adjustment lands in the query cache rather than in a component's state, which is what makes it
+ * survive a remount and stay behind when the reader walks to the next claim. See
+ * {@link adjustClaimActivityTotal}.
+ */
+function useAdjustActivityTotal(claimId: string): (delta: number) => void {
+  const queryClient = useQueryClient();
+  return React.useCallback(
+    (delta: number) => void adjustClaimActivityTotal(queryClient, claimId, delta),
+    [claimId, queryClient]
+  );
+}
+
 function ClaimOverviewTab({
   entityId,
   spaceId,
@@ -476,15 +496,7 @@ function ClaimOverviewTab({
   const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
   const activityTotal = activityCounts.counts.get(ID.uuidToHex(entityId))?.total;
 
-  // The thread can add to that number but cannot compute it, so the page that owns the aggregate
-  // owns the adjustment too. It lands in the query cache rather than in the section's state, which
-  // is what makes it survive the section remounting and stay behind when the reader walks to the
-  // next claim — see `adjustClaimActivityTotal`.
-  const queryClient = useQueryClient();
-  const adjustActivityTotal = React.useCallback(
-    (delta: number) => void adjustClaimActivityTotal(queryClient, entityId, delta),
-    [entityId, queryClient]
-  );
+  const adjustActivityTotal = useAdjustActivityTotal(entityId);
 
   const activity = useClaimActivityRows({ claimId: entityId, spaceId });
 
@@ -641,6 +653,9 @@ function ClaimPositionSection({
   });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
+  // The same number the thread's composers move: an explanation published here is a comment on this
+  // claim, and the heading's aggregate counts it.
+  const adjustActivityTotal = useAdjustActivityTotal(entityId);
 
   return (
     // No card of its own: it renders in the hero's left column, under the claim.
@@ -652,6 +667,9 @@ function ClaimPositionSection({
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
+        // The explanation published here is a comment on this claim, so it belongs in the same number
+        // the thread's own composers move — see `adjustClaimActivityTotal`.
+        onActivityPublish={adjustActivityTotal}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
         pending={control.isResponsePending}

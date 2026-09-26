@@ -2,9 +2,12 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
+
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 
 import { useAdjustActivityPosts } from './activity-posts';
 import { CommentInput } from './comments-section';
@@ -64,16 +67,37 @@ export function InlineCommentComposer({
   const { isComposing, close, markPosted, markPostRejected } = composer;
   const adjustActivityPosts = useAdjustActivityPosts();
 
-  // Asked before the box opens, not after a draft is typed into it. The thread's own composer
-  // checks at the same moment — on the press, not on the submit — because a signed-out reader who
-  // types a paragraph and is then asked to sign in loses the paragraph.
+  /**
+   * Sign-in is asked for before the box opens, not after a draft is typed into it — the thread's own
+   * composer checks at the same moment, because a signed-out reader who types a paragraph and is then
+   * asked to sign in loses the paragraph.
+   *
+   * The press is remembered across it. This used to open Privy and close the box, and nothing brought
+   * it back: a reader who signed in landed on the page with the box shut and had to find the control
+   * again, which is not what pressing it said would happen. `CommentSection` already keeps that intent
+   * in `pendingCommentComposerAtom`; this is the same atom, keyed the same way, so the two cannot
+   * disagree — and keying on the reply as well as the entity is what stops a debate's own composer and
+   * a reply composer under one of its comments from both opening on one press.
+   */
+  const replyToCommentId = ancestors?.[0]?.id ?? null;
+  const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
+
   React.useEffect(() => {
     if (!isComposing || isSignedIn) return;
+    setPendingComposer({ entityId: targetEntityId, replyToCommentId });
     promptSignIn();
     close();
     // Only on the transition into a signed-out open composer; `close` is a fresh closure each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isComposing, isSignedIn]);
+
+  React.useEffect(() => {
+    if (!isSignedIn || pendingComposer == null) return;
+    if (pendingComposer.entityId !== targetEntityId || pendingComposer.replyToCommentId !== replyToCommentId) return;
+    setPendingComposer(null);
+    composer.open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, pendingComposer, targetEntityId, replyToCommentId]);
 
   if (!isComposing || !isSignedIn) return null;
 

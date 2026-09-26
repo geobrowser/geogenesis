@@ -202,6 +202,52 @@ describe('usePublishComment reporting a failure', () => {
     expect(onFailed).toHaveBeenCalledOnce();
   });
 
+  /**
+   * `PendingActionsRunner` keeps a failed action queued and its error toast offers a retry that runs it
+   * again, so this is not once-only. Reported per attempt, one comment took the count down twice, three
+   * times, as many times as the reader pressed retry — and a retry that finally succeeded never gave it
+   * back. The two callbacks are a transition, not an event.
+   */
+  it('reports the loss once however many retries fail, and reports it back when one succeeds', async () => {
+    // `useCreateComment` inserts the optimistic row and calls `onOptimistic` when it is handed one,
+    // which is what the first attempt passes and the retries do not.
+    let nextResult: unknown = { id: 'comment-1', published: false };
+    mocks.createComment.mockImplementation(async (input: { onOptimistic?: (id: string) => void }) => {
+      input.onOptimistic?.('comment-1');
+      return nextResult;
+    });
+
+    const counted: number[] = [];
+    const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
+
+    await act(() =>
+      result.current.publishComment({
+        text: 'A comment',
+        onOptimistic: () => void counted.push(1),
+        onFailed: () => void counted.push(-1),
+      })
+    );
+
+    expect(counted).toEqual([1]);
+
+    const queued = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
+    nextResult = null;
+
+    await expect(queued.run()).rejects.toThrow();
+    await expect(queued.run()).rejects.toThrow();
+    await expect(queued.run()).rejects.toThrow();
+
+    // Three failures, one row: one rollback.
+    expect(counted).toEqual([1, -1]);
+
+    nextResult = { id: 'comment-1', published: true };
+    await queued.run();
+
+    // The comment exists again, so it counts again — and the net is back to one.
+    expect(counted).toEqual([1, -1, 1]);
+    expect(counted.reduce((a, b) => a + b, 0)).toBe(1);
+  });
+
   it('says nothing when the retry succeeds', async () => {
     mocks.createComment.mockResolvedValue({ id: 'comment-1', published: false });
     const onFailed = vi.fn();
