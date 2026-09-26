@@ -26,6 +26,7 @@ import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-draw
 import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
@@ -151,6 +152,11 @@ export function App({ children }: { children: React.ReactNode }) {
             triggerRef={mobileBrowseButtonRef}
           />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
+          {/* Directly under the navbar and above the page: a zero-height dock the entity route
+              portals its sticky header into. See `EntityStickyHeaderHost`. The collapsed sidebar
+              leaves a vertical rail across this column with nothing holding the space — the same
+              condition that draws it below. */}
+          <EntityStickyHeaderHost railInset={!sidebarOpen && !fullscreenActive} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>
           </div>

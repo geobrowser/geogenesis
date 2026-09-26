@@ -58,6 +58,36 @@ type EntityVoteButtonsProps = {
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
   presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
+  /**
+   * A surface with no room for prose: the sticky entity header's 48px row.
+   *
+   * Three of this control's states are sentences rather than controls — the indexing notice beside
+   * the buttons, and the two that stand in for the control entirely. Each is wider than a phone can
+   * spare next to a name and a set of thumbs: measured at 390px, the indexing notice alone pushed
+   * the row 94px past its own width and gave the document a horizontal scrollbar.
+   *
+   * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
+   * and dropped rather than wrapped, because the bar is one fixed-height line by design.
+   *
+   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
+   * blocking responses, or that there is no response kind — and the page explains that state too, so
+   * a reader who finds nothing in the bar has somewhere else to find it.
+   *
+   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
+   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
+   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
+   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
+   * earlier version of this comment claimed the page's own copy announced instead, and that is false
+   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
+   * puts this same sentence in a `title`: read on focus, never announced.
+   *
+   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
+   * profile — both live regions are inserted at once and the confirmation can be announced twice.
+   * Deduplicating needs the two surfaces to know about each other, and this component renders once
+   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
+   * announcement is the better failure than none.
+   */
+  compact?: boolean;
 };
 
 export function EntityVoteButtons({
@@ -66,14 +96,9 @@ export function EntityVoteButtons({
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
+  compact = false,
 }: EntityVoteButtonsProps) {
   const prepareOnboarding = usePrepareOnboarding();
-  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
-  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
-  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
-  // anyway, so reading the store at that moment is current enough.
-  const store = useStore();
-  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -160,8 +185,6 @@ export function EntityVoteButtons({
       }
     },
   });
-
-  const [respondersOpen, setRespondersOpen] = React.useState(false);
 
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
@@ -295,11 +318,52 @@ export function EntityVoteButtons({
 
   const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
+  /**
+   * The faces, wrapped in their own trigger for the responder list.
+   *
+   * Gated on `totalResponders` — the served counts — rather than on `effectiveTotal`, which carries
+   * the viewer's own unconfirmed vote. The list this opens reads the served responders, so on the
+   * optimistic count a viewer's first vote made their own face open a popover reporting that nobody
+   * has responded. It is the same gate the tally beside it is disabled by, which is the point: the
+   * two open one list and have no business disagreeing about whether there is one.
+   *
+   * `ClaimResponderAvatars` also draws nothing until the responder rows arrive, and a trigger around
+   * nothing is an invisible tab stop with a tooltip; `empty:hidden` covers that gap.
+   */
+  const claimResponderAvatarsTrigger = (position: 'leading' | 'trailing') => {
+    if (!claimResponderAvatars) return null;
+
+    const spacing = position === 'leading' ? 'mr-1' : 'ml-1';
+
+    if (totalResponders === 0) {
+      return <span className={cx(claimResponderAvatarsClassName, spacing)}>{claimResponderAvatars}</span>;
+    }
+
+    return (
+      <RespondersPopover
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={queryResponseKind}
+        align={position === 'leading' ? 'start' : 'end'}
+      >
+        <button
+          type="button"
+          title={responseCopy.viewResponders}
+          aria-label={responseCopy.viewResponders}
+          className={cx(claimResponderAvatarsClassName, spacing, 'cursor-pointer rounded empty:hidden')}
+        >
+          {claimResponderAvatars}
+        </button>
+      </RespondersPopover>
+    );
+  };
+
   if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
   if (hasUnpublishedResponseKindEdit) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
         Publish changes before responding
@@ -308,6 +372,7 @@ export function EntityVoteButtons({
   }
 
   if (responseKind === null) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="The response type is unavailable">
         Response unavailable
@@ -333,9 +398,7 @@ export function EntityVoteButtons({
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
-        <span className={cx(claimResponderAvatarsClassName, 'mr-1')}>{claimResponderAvatars}</span>
-      ) : null}
+      {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
       <button
         onClick={handlePositiveResponse}
         disabled={responseDisabled}
@@ -348,44 +411,15 @@ export function EntityVoteButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
-      <Popover.Root open={respondersOpen} onOpenChange={setRespondersOpen}>
-        <Popover.Trigger asChild>
-          <button
-            className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
-            title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
-            disabled={totalResponders === 0}
-          >
-            {displayLabel}
-          </button>
-        </Popover.Trigger>
-        {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
-            scroll lock; the body otherwise, unchanged. */}
-        <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
-          <Popover.Content
-            align="center"
-            side="bottom"
-            sideOffset={8}
-            // Kept clear of the fixed navbar, and gone once its trigger is.
-            //
-            // This list hangs off a row inside a scrolling panel — the debates hub — and it is
-            // portalled to a container above everything, so nothing clips it. Scroll the panel and
-            // the popover tracked its trigger up over the 44px app header and sat there.
-            // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
-            // once the trigger is scrolled out of its own container, rather than leaving it
-            // floating over a row it no longer belongs to.
-            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
-            className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          >
-            <RespondersPopoverContent
-              entityId={entityId}
-              spaceId={spaceId}
-              objectType={ENTITY_RESPONSE_OBJECT_TYPE}
-              responseKind={responseKind}
-            />
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
+      <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
+        <button
+          className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
+          title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
+          disabled={totalResponders === 0}
+        >
+          {displayLabel}
+        </button>
+      </RespondersPopover>
       <button
         onClick={handleNegativeResponse}
         disabled={responseDisabled}
@@ -398,15 +432,93 @@ export function EntityVoteButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
-      {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
-        <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
-      ) : null}
+      {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
       {isResponseIndexingDelayed ? (
-        <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
+        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
+        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
+        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
+        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
+        //
+        // I had claimed the page's own copy still announced. It does not on the surface that matters
+        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
+        // same sentence in a `title` attribute — read on focus, never announced as a live update.
+        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
           {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Who responded, hanging off whichever part of the row was clicked.
+ *
+ * Both the faces and the tally open it. The faces are the more obvious handle — they are pictures of
+ * the people the list names, and readers reach for them first — but only the tally was ever wired
+ * up, so the cluster looked like a control and did nothing. `ClaimSideResponders` already opens the
+ * same list from the same faces on the claim hero; this brings the row in line with it.
+ *
+ * A `Popover.Root` per trigger rather than one root with two, which Radix does not support: a second
+ * trigger would re-anchor the content and leave the first one's `aria-expanded` lying. Two roots
+ * also behave correctly when one is already open — the open list dismisses on the outside
+ * pointerdown, and the trigger that was clicked opens its own.
+ */
+function RespondersPopover({
+  entityId,
+  spaceId,
+  responseKind,
+  align = 'center',
+  children,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  align?: 'start' | 'center' | 'end';
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  // Read rather than subscribed: this renders twice per claim on a list, and a subscription would
+  // re-render every one of them whenever a sheet opens or closes — which the batching tests rightly
+  // count as work. What keeps a bare read current is that `Popover.Portal` only mounts when the
+  // popover opens and opening re-renders whatever holds `open` — so the read has to live *with*
+  // that state. It used to sit in `EntityVoteButtons`, which was correct while the open state did
+  // too; splitting the tally and the faces into a root each moved the render down here and left the
+  // read behind, capturing whatever the container was when the row first drew. A sheet registers its
+  // host after the rows inside it mount, so that capture was `null` and the list portalled to
+  // `body` — outside the sheet's `RemoveScroll` shard, visible but unscrollable.
+  const store = useStore();
+  const container = store.get(slideUpPopoverContainerAtom);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>{children}</Popover.Trigger>
+      <Popover.Portal container={container ?? undefined}>
+        <Popover.Content
+          align={align}
+          side="bottom"
+          sideOffset={8}
+          // Kept clear of the fixed navbar, and gone once its trigger is.
+          //
+          // This list hangs off a row inside a scrolling panel — the debates hub — and it is
+          // portalled to a container above everything, so nothing clips it. Scroll the panel and
+          // the popover tracked its trigger up over the 44px app header and sat there.
+          // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
+          // once the trigger is scrolled out of its own container, rather than leaving it
+          // floating over a row it no longer belongs to.
+          collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+          hideWhenDetached
+          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+        >
+          <RespondersPopoverContent
+            entityId={entityId}
+            spaceId={spaceId}
+            objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+            responseKind={responseKind}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -612,9 +724,7 @@ function VoterRow({
     return (
       <Link
         href={profile.profileLink}
-        onClick={() =>
-          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
-        }
+        onClick={() => personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })}
       >
         {content}
       </Link>
