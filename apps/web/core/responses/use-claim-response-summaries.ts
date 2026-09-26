@@ -40,6 +40,8 @@ export function useClaimResponseSummaryBatch({
   const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const normalizedTargets = normalizeClaimResponseTargets(targets);
 
+  const batchEnabled = enabled && !isPersonalSpaceLoading && normalizedTargets.length > 0;
+
   const responseBatch = useQuery({
     queryKey: [
       ...claimResponseSummariesQueryKeyPrefix(personalSpaceId, spaceId),
@@ -53,7 +55,7 @@ export function useClaimResponseSummaryBatch({
         personalSpaceId,
         signal,
       }),
-    enabled: enabled && !isPersonalSpaceLoading && normalizedTargets.length > 0,
+    enabled: batchEnabled,
     staleTime: 30_000,
     retry: 2,
     // GEO-2599: the query key contains the whole target list, so adding a claim —
@@ -73,6 +75,26 @@ export function useClaimResponseSummaryBatch({
     // different space's data.
     placeholderData: keepPreviousData,
   });
+  /*
+   * Asks again for a batch a vote cancelled before it ever answered.
+   *
+   * A vote's read-back cancels every batch in its space (`use-entity-vote`), so a batch still in
+   * flight can't land after it with the pre-vote numbers. It then refreshes only the claim voted on.
+   * A batch that had answered before goes back to that answer; one cancelled on its first fetch goes
+   * back to having none, idle, and nothing asks again — its key hasn't changed and it isn't stale
+   * enough to matter. Every other claim in it would stay unseeded for as long as the page is open.
+   * `isFetched` rather than `data`, since a new target list shows the previous list's answer as a
+   * placeholder while its own first fetch runs.
+   */
+  const wasFetching = React.useRef(false);
+  const askAgain = React.useEffectEvent(() => void responseBatch.refetch());
+  React.useEffect(() => {
+    const cancelledBeforeAnswering =
+      wasFetching.current && responseBatch.fetchStatus === 'idle' && !responseBatch.isFetched;
+    wasFetching.current = responseBatch.fetchStatus === 'fetching';
+    if (cancelledBeforeAnswering && batchEnabled) askAgain();
+  }, [batchEnabled, responseBatch.fetchStatus, responseBatch.isFetched]);
+
   const responderSpaceIds = responseBatch.data ? claimResponseSummaryResponderSpaceIds(responseBatch.data) : [];
 
   useQuery({
