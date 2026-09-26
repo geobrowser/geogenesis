@@ -149,12 +149,17 @@ export function DebateClaimsPanel({
   );
 
   /*
-   * Brought to the focused debater's card once the claims are in place, not before.
+   * Brought to the focused debater's card once the claims are in place, and held there while the
+   * rows above it finish filling in.
    *
-   * The cards grow when their claims land, so scrolling to the second one while the first is still
-   * empty put it on screen and then pushed it off again. And the list's own `scrollTop`, not
-   * `scrollIntoView`, which scrolls every scrollable ancestor to reveal the target — including the
-   * feed behind the panel.
+   * The order settling is not the end of it: each row's pills and summary arrive after, from the
+   * row and entity lookups and the response counts, and every one of them grows a card. Scrolling
+   * once put the focused card on screen and then let the card above push it off again. So the list
+   * re-pins whenever a card changes size — until the reader scrolls, taps or keys in it themselves,
+   * after which it is theirs.
+   *
+   * The list's own `scrollTop`, not `scrollIntoView`, which scrolls every scrollable ancestor to
+   * reveal the target — including the feed behind the panel.
    */
   const listRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -162,7 +167,22 @@ export function DebateClaimsPanel({
     const list = listRef.current;
     const card = list?.querySelector<HTMLElement>(`[data-claims-participant="${focusParticipantSpaceId}"]`);
     if (!list || !card) return;
-    list.scrollTop = card.offsetTop - list.offsetTop;
+
+    const pin = () => {
+      list.scrollTop = card.offsetTop - list.offsetTop;
+    };
+    pin();
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(pin);
+    for (const child of list.children) observer.observe(child);
+    const handBack = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    const release = () => {
+      observer.disconnect();
+      for (const type of handBack) list.removeEventListener(type, release);
+    };
+    for (const type of handBack) list.addEventListener(type, release, { passive: true });
+    return release;
   }, [focusParticipantSpaceId, isOrdering]);
 
   React.useEffect(() => {

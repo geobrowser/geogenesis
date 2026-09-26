@@ -1,7 +1,10 @@
 'use client';
 
+import { skipToken, useQueries } from '@tanstack/react-query';
+
 import * as React from 'react';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import {
@@ -14,7 +17,8 @@ import {
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { claimsForParticipant } from '~/core/debates/transcript-claims';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
+import type { EntityResponder } from '~/core/io/queries';
+import { entityRespondersQueryKey, entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
@@ -24,15 +28,13 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
 export type EndCardDebater = {
   participant: DebateParticipant;
   name: string;
-  /** Every claim they made, wherever it was published — the count the card prints. */
-  claimCount: number;
+  /** Every claim they made, wherever it was published. Null until the transcript has answered. */
+  claimCount: number | null;
   /** Responses to the claims that live in the debate's space, pooled. */
   split: ResponseSplit;
   /** Everyone who answered any of those claims, once each. */
   responderSpaceIds: string[];
 };
-
-const EMPTY_TALLY: ResponseTally = { counts: { positive: 0, negative: 0 }, responders: [] };
 
 /**
  * Everything the end card draws, in one place.
@@ -40,6 +42,10 @@ const EMPTY_TALLY: ResponseTally = { counts: { positive: 0, negative: 0 }, respo
  * One batched read covers the claim being debated and every claim either debater made, and it seeds
  * the per-claim caches as it lands — so the claim's own vote control, its voter list and the claims
  * panel all read what this fetched instead of asking again.
+ *
+ * The debaters' numbers are read back out of those per-claim caches rather than off the batch's own
+ * result. A vote refreshes the caches of the claim it was cast on and leaves the batch alone, so a
+ * card reading the batch kept the old split for every claim voted on in the panel since it loaded.
  *
  * `enabled` is the caller's: the player turns it on while the debate is the active one, so the card
  * has its numbers by the time the video ends rather than drawing empty bars and filling them in.
@@ -67,7 +73,11 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
   const claimId = normId(debate.claim.claim_entity_id);
 
   const participants = React.useMemo(() => orderedParticipants(debate), [debate]);
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, live);
+  const transcript = useDebateTranscriptClaims(debate.id, debate.claim.space_id, live);
+  const { claims } = transcript;
+  // Whether `claims` is the debate's, rather than the empty set standing in while it loads or after
+  // it failed. Nothing below may report a count off the stand-in.
+  const claimsReady = live && !transcript.isLoading && transcript.error === null;
 
   // Responses are per space, so only the claims published in the debate's own space can be
   // counted against it. A claim the debate quoted from elsewhere has its votes somewhere else, and
@@ -87,15 +97,22 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
     [claims, participants, spaceId]
   );
 
+  const countedIds = React.useMemo(() => claimsByParticipant.flatMap(entry => entry.countedIds), [claimsByParticipant]);
   const targets = React.useMemo(
-    () =>
-      [claimId, ...claimsByParticipant.flatMap(entry => entry.countedIds)].map(entityId => ({
-        entityId,
-        responseKind,
-      })),
-    [claimId, claimsByParticipant, responseKind]
+    () => [claimId, ...countedIds].map(entityId => ({ entityId, responseKind })),
+    [claimId, countedIds, responseKind]
   );
-  const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: live });
+  // Fetches and seeds; its own result is not read. See the note on the hook.
+  useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
+
+  // Each counted claim's counts and responders, straight from the caches the batch seeds and a vote
+  // refreshes. `skipToken` because these only ever read: the batch is what asks.
+  const countsById = useCachedByClaim<{ positive: number; negative: number } | null>(countedIds, entityId =>
+    entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind)
+  );
+  const respondersById = useCachedByClaim<EntityResponder[]>(countedIds, entityId =>
+    entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind)
+  );
 
   // The claim's own control resolves its vocabulary off the graph entity, and holds its reads back
   // until it has one — the same lookup the claims panel does for its rows.
@@ -114,19 +131,20 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
       // debater arguing for the claim has to be too. Stable, so slot order holds within a side.
       [...claimsByParticipant]
         .sort((left, right) => Number(right.participant.position) - Number(left.participant.position))
-        .map(({ participant, claimCount, countedIds }) => {
-          const tallies = countedIds.map(
-            entityId => batch.data?.get(claimResponseTargetKey({ entityId, responseKind })) ?? EMPTY_TALLY
-          );
+        .map(({ participant, claimCount, countedIds: ids }) => {
+          const tallies: ResponseTally[] = ids.map(entityId => ({
+            counts: countsById.get(entityId) ?? { positive: 0, negative: 0 },
+            responders: respondersById.get(entityId) ?? [],
+          }));
           return {
             participant,
             name: speakerLabel(participant),
-            claimCount,
+            claimCount: claimsReady ? claimCount : null,
             split: poolResponses(tallies),
             responderSpaceIds: distinctResponders(tallies),
           };
         }),
-    [batch.data, claimsByParticipant, responseKind]
+    [claimsByParticipant, claimsReady, countsById, respondersById]
   );
 
   const agreeSide = debaters.find(debater => debater.participant.position === true) ?? null;
@@ -146,10 +164,32 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
     disagreeSide,
     comparison,
     /**
-     * Whether the debaters' counts are an answer. Until the batch lands their splits are zero
-     * because nothing has been asked, and the card must not print "No votes yet" off that.
+     * Whether the debaters' counts are an answer: the transcript has said which claims are theirs,
+     * and every one of those has its counts. Until then their splits are zero because nothing has
+     * been asked, and the card must not print "No votes yet" off that.
      */
-    countsReady: batch.data !== undefined,
-    totalClaims: claims.totalCount,
+    countsReady: claimsReady && countedIds.every(entityId => countsById.get(entityId) != null),
   };
+}
+
+/**
+ * One cached value per claim, subscribed to so it re-renders when a vote refreshes it.
+ *
+ * Read-only by construction (`skipToken`): the batch is the one fetcher, and a second request per
+ * claim would undo the point of batching them.
+ */
+function useCachedByClaim<T>(claimIds: string[], keyFor: (claimId: string) => readonly unknown[]) {
+  const values = useQueries({
+    queries: claimIds.map(claimId => ({ queryKey: keyFor(claimId), queryFn: skipToken })),
+    combine: dataOf,
+  }) as (T | undefined)[];
+  return React.useMemo(() => new Map(claimIds.map((claimId, index) => [claimId, values[index]])), [claimIds, values]);
+}
+
+/**
+ * Module-level so `useQueries` sees the same `combine` every render and hands back the same array
+ * until a value actually changes — which is what lets the debaters above stay memoized.
+ */
+function dataOf(results: { data: unknown }[]) {
+  return results.map(result => result.data);
 }

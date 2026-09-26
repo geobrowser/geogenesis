@@ -179,8 +179,10 @@ export function DebatesBrowseFeed({
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
   // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
-  // other way in clears it.
-  const [claimsFocus, setClaimsFocus] = React.useState<string | null>(null);
+  // other way in clears it. Held with the debate it was chosen on, because the open panel follows
+  // the active debate as the feed scrolls — and a debater who argues in the next one too would
+  // otherwise have the list jump to them unasked.
+  const [claimsFocus, setClaimsFocus] = React.useState<{ debateId: string; participantSpaceId: string } | null>(null);
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
@@ -361,7 +363,7 @@ export function DebatesBrowseFeed({
           }}
           onOpenClaims={(participantSpaceId?: string) => {
             setActiveId(debate.id);
-            setClaimsFocus(participantSpaceId ?? null);
+            setClaimsFocus(participantSpaceId ? { debateId: debate.id, participantSpaceId } : null);
             setOpenPanel('claims');
           }}
           onOpenComments={() => {
@@ -381,7 +383,11 @@ export function DebatesBrowseFeed({
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} focusParticipantSpaceId={claimsFocus} />
+      <DebateClaimsPanel
+        debate={activeDebate}
+        onClose={closePanel}
+        focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}
+      />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.

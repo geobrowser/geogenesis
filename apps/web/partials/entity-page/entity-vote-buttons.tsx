@@ -68,6 +68,12 @@ export function EntityVoteButtons({
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const prepareOnboarding = usePrepareOnboarding();
+  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
+  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
+  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
+  // anyway, so reading the store at that moment is current enough.
+  const store = useStore();
+  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -342,13 +348,8 @@ export function EntityVoteButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
-      <RespondersPopover
-        open={respondersOpen}
-        onOpenChange={setRespondersOpen}
-        entityId={entityId}
-        spaceId={spaceId}
-        responseKind={responseKind}
-        trigger={
+      <Popover.Root open={respondersOpen} onOpenChange={setRespondersOpen}>
+        <Popover.Trigger asChild>
           <button
             className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
             title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
@@ -356,8 +357,35 @@ export function EntityVoteButtons({
           >
             {displayLabel}
           </button>
-        }
-      />
+        </Popover.Trigger>
+        {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
+            scroll lock; the body otherwise, unchanged. */}
+        <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
+          <Popover.Content
+            align="center"
+            side="bottom"
+            sideOffset={8}
+            // Kept clear of the fixed navbar, and gone once its trigger is.
+            //
+            // This list hangs off a row inside a scrolling panel — the debates hub — and it is
+            // portalled to a container above everything, so nothing clips it. Scroll the panel and
+            // the popover tracked its trigger up over the 44px app header and sat there.
+            // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
+            // once the trigger is scrolled out of its own container, rather than leaving it
+            // floating over a row it no longer belongs to.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
+            className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          >
+            <RespondersPopoverContent
+              entityId={entityId}
+              spaceId={spaceId}
+              objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+              responseKind={responseKind}
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
       <button
         onClick={handleNegativeResponse}
         disabled={responseDisabled}
@@ -453,72 +481,6 @@ type ResponderWithProfile = EntityResponder & { profile: Profile };
  * second one. The popover already existed; it was only ever reachable from the bare number between
  * the chevrons, which is a poor target for something worth pressing.
  */
-/**
- * Who responded to a claim, sectioned by side, hanging off whatever trigger the caller draws.
- *
- * One shell for every surface that opens this list — the vote buttons' count and the debate end
- * card's faces — so the width, the navbar clearance and the portal target cannot drift between
- * them.
- */
-export function RespondersPopover({
-  open,
-  onOpenChange,
-  trigger,
-  entityId,
-  spaceId,
-  responseKind,
-  align = 'center',
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  /** Rendered through `Popover.Trigger asChild`, so it must be a single element that takes a ref. */
-  trigger: React.ReactElement;
-  entityId: string;
-  spaceId: string;
-  responseKind: ResponseKind;
-  align?: 'start' | 'center' | 'end';
-}) {
-  // Read rather than subscribed: the vote buttons render this once per claim on a list, and a
-  // subscription would re-render every one of them whenever a sheet opens or closes — which the
-  // batching tests rightly count as work. `Popover.Portal` only mounts when the popover opens, and
-  // opening renders anyway, so reading the store at that moment is current enough.
-  const store = useStore();
-  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
-
-  return (
-    <Popover.Root open={open} onOpenChange={onOpenChange}>
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
-      {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
-          scroll lock; the body otherwise, unchanged. */}
-      <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
-        <Popover.Content
-          align={align}
-          side="bottom"
-          sideOffset={8}
-          // Kept clear of the fixed navbar, and gone once its trigger is.
-          //
-          // This list hangs off a row inside a scrolling panel — the debates hub — and it is
-          // portalled to a container above everything, so nothing clips it. Scroll the panel and
-          // the popover tracked its trigger up over the 44px app header and sat there.
-          // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
-          // once the trigger is scrolled out of its own container, rather than leaving it
-          // floating over a row it no longer belongs to.
-          collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-          hideWhenDetached
-          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-        >
-          <RespondersPopoverContent
-            entityId={entityId}
-            spaceId={spaceId}
-            objectType={ENTITY_RESPONSE_OBJECT_TYPE}
-            responseKind={responseKind}
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
 export function RespondersPopoverContent({
   entityId,
   spaceId,
@@ -650,7 +612,9 @@ function VoterRow({
     return (
       <Link
         href={profile.profileLink}
-        onClick={() => personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })}
+        onClick={() =>
+          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
+        }
       >
         {content}
       </Link>

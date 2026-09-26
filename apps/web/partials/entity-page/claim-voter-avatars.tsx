@@ -20,7 +20,6 @@ export function ClaimResponderAvatars({
   totalResponders,
   viewerSpaceId,
   optimisticViewerResponse,
-  size = 12,
 }: {
   entityId: string;
   spaceId: string;
@@ -29,8 +28,6 @@ export function ClaimResponderAvatars({
   totalResponders: number;
   viewerSpaceId?: string | null;
   optimisticViewerResponse?: ActiveResponseDirection | null;
-  /** 12 beside a count, as every claim row draws it; 20 where the faces are the row's whole readout. */
-  size?: 12 | 20;
 }) {
   const { responders, queriesEnabled } = useEntityResponders({
     entityId,
@@ -58,7 +55,7 @@ export function ClaimResponderAvatars({
     <RankingAggregatedSubmitterAvatars
       submitterSpaceIds={responderSpaceIds}
       totalCount={Math.max(totalResponders, responderSpaceIds.length)}
-      size={size}
+      size={12}
       queriesEnabled={queriesEnabled}
     />
   );

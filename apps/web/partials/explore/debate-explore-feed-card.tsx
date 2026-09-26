@@ -240,6 +240,20 @@ export function DebateExploreFeedCard({
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onPlaybackRequest) return;
+    // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
+    // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
+    // media controls — capturing them swallowed the vote and handed playback to a debate that had
+    // ended. Only its replay asks to play. The voter list is portalled out of this DOM but its
+    // clicks still bubble through React's tree, so a target outside the wrapper is let go too.
+    const target = event.target;
+    if (target instanceof Node && !event.currentTarget.contains(target)) return;
+    if (
+      target instanceof Element &&
+      target.closest('[data-debate-end-card]') &&
+      !target.closest('[data-end-card-replay]')
+    ) {
+      return;
+    }
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);

@@ -13,17 +13,11 @@ import { DebateEndCard } from './debate-end-card';
 
 afterEach(cleanup);
 
-// The voter faces and their list read the network; what matters here is that the card hands them
-// the right claim, and where it puts them.
-vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
-  ClaimResponderAvatars: ({ size }: { size?: number }) => <span data-testid="claim-faces" data-size={size} />,
-}));
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  RespondersPopover: ({ trigger, entityId }: { trigger: React.ReactNode; entityId: string }) => (
-    <div data-testid="claim-voters" data-entity={entityId}>
-      {trigger}
-    </div>
-  ),
+// Geo's own faces-to-voters control reads the network; what matters here is that the card uses it,
+// for the right claim. The split bar is stood in for alongside it, being the same module's.
+vi.mock('~/core/claims/browse/claim-summary', () => ({
+  ClaimResponders: ({ entityId }: { entityId: string }) => <span data-testid="claim-voters" data-entity={entityId} />,
+  ClaimSplitBar: ({ percent }: { percent: number }) => <span role="presentation" data-split={percent} />,
 }));
 vi.mock('~/partials/blocks/table/ranking-period-metadata', () => ({
   RankingAggregatedSubmitterAvatars: ({ submitterSpaceIds }: { submitterSpaceIds: string[] }) => (
@@ -119,12 +113,14 @@ describe('DebateEndCard', () => {
     expect(screen.getByText(/^62%/)).toHaveTextContent('62% agree');
   });
 
-  it("opens the claim's voter list from its faces, sized to the player", () => {
+  it("opens the claim's voters through Geo's own control, once", () => {
+    // `ClaimResponders`, as the claim page and every claim card draw it — one stack, one popover —
+    // rather than a second implementation of the same faces and list.
     renderCard(cardFixture());
 
-    expect(screen.getByTestId('claim-voters')).toHaveAttribute('data-entity', 'claim-1');
-    // 20px where the row has the width, Geo's 12px on a narrow player; the width picks one.
-    expect(screen.getAllByTestId('claim-faces').map(faces => faces.getAttribute('data-size'))).toEqual(['20', '12']);
+    const voters = screen.getAllByTestId('claim-voters');
+    expect(voters).toHaveLength(1);
+    expect(voters[0]).toHaveAttribute('data-entity', 'claim-1');
   });
 
   it('draws the comparison in full at every width, not a narrow-player summary', () => {
@@ -146,6 +142,16 @@ describe('DebateEndCard', () => {
     const card = screen.getByRole('region', { name: 'Debate results' });
     expect(within(card).getAllByText('No votes yet').length).toBeGreaterThan(0);
     expect(screen.queryByTestId('claim-voters')).toBeNull();
+  });
+
+  it('prints no claim count for a debater before the transcript has said which claims are theirs', () => {
+    const card = cardFixture();
+    card.debaters.forEach(debater => {
+      (debater as { claimCount: number | null }).claimCount = null;
+    });
+    renderCard(card);
+
+    expect(screen.queryByText(/\d+ claims/)).toBeNull();
   });
 
   it('asserts nothing about the votes before the counts have landed', () => {
@@ -230,6 +236,9 @@ describe('DebateEndCard', () => {
     expect([...circle.classList]).toContain('@max-md:hidden');
     expect([...pill.classList]).toContain('@max-md:flex');
     expect(pill).toHaveTextContent('Replay');
+    // Marked, so a player's playback capture can tell the card's one ask-to-play from its other controls.
+    expect(circle).toHaveAttribute('data-end-card-replay');
+    expect(pill).toHaveAttribute('data-end-card-replay');
 
     fireEvent.click(circle);
     fireEvent.click(pill);

@@ -4,20 +4,17 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSplitBar } from '~/core/claims/browse/claim-summary';
+import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { DebateTileChip } from '~/core/debates/debate-video-tile';
 import { type ClaimVsArguments, type ResponseSplit, claimVsArgumentsReading } from '~/core/debates/end-card';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { type ResponseKind, responsePositionLabel } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
-import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { RespondersPopover } from '~/partials/entity-page/entity-vote-buttons';
 
 import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
@@ -65,6 +62,7 @@ export function DebateEndCard({
       <button
         type="button"
         aria-label="Replay debate"
+        data-end-card-replay
         onClick={onReplay}
         className={cx(CONTROL_CIRCLE_CLASS, 'absolute top-3 left-3 @max-md:hidden')}
       >
@@ -88,6 +86,7 @@ export function DebateEndCard({
               <button
                 type="button"
                 aria-label="Replay debate"
+                data-end-card-replay
                 onClick={onReplay}
                 className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-grey-02 bg-white px-2.5 text-smallButton text-grey-04 shadow-light transition-colors hover:text-text @max-md:flex"
               >
@@ -109,11 +108,15 @@ export function DebateEndCard({
             countsReady={claimResponse.summary.hasCounts}
             variant="claim"
             faces={
-              <ClaimVoters
-                claimId={card.claimId}
+              // Geo's own faces-to-voters control, as the claim page and every claim card draw it:
+              // the list sectioned by side, portalled above the hub and the side panel, warmed on
+              // hover so it does not open on a spinner.
+              <ClaimResponders
+                entityId={card.claimId}
                 spaceId={card.spaceId}
                 responseKind={claimResponse.responseKind}
                 summary={claimResponse.summary}
+                label={CLAIM_RESPONSE_COPY.viewResponders}
               />
             }
           />
@@ -223,60 +226,6 @@ function VoteRow({
   );
 }
 
-/**
- * The people who voted on the claim, opening the list every claim opens: sectioned by side, each row
- * a link to the person.
- */
-function ClaimVoters({
-  claimId,
-  spaceId,
-  responseKind,
-  summary,
-}: {
-  claimId: string;
-  spaceId: string;
-  responseKind: ResponseKind;
-  summary: ClaimResponseSummary;
-}) {
-  const [open, setOpen] = React.useState(false);
-
-  return (
-    <RespondersPopover
-      open={open}
-      onOpenChange={setOpen}
-      entityId={claimId}
-      spaceId={spaceId}
-      responseKind={responseKind}
-      align="end"
-      trigger={
-        <button
-          type="button"
-          aria-label={`${summary.total} ${summary.total === 1 ? 'person' : 'people'} voted on this claim — see who`}
-          className="flex shrink-0 cursor-pointer items-center rounded"
-        >
-          {/* 20px where the row has the width for it, Geo's 12px on a narrow player, where 20px faces
-              outweighed the claim above them. The stack comes in fixed sizes rather than scaling, so
-              both are mounted and the width picks one; they read the same cached responders. */}
-          {([20, 12] as const).map(size => (
-            <span key={size} className={size === 20 ? 'flex @max-md:hidden' : 'hidden @max-md:flex'}>
-              <ClaimResponderAvatars
-                entityId={claimId}
-                spaceId={spaceId}
-                objectType={CLAIM_RESPONSE_OBJECT_TYPE}
-                responseKind={responseKind}
-                totalResponders={summary.total}
-                viewerSpaceId={summary.viewerSpaceId}
-                optimisticViewerResponse={summary.viewerDirection}
-                size={size}
-              />
-            </span>
-          ))}
-        </button>
-      }
-    />
-  );
-}
-
 function DebaterColumn({
   debater,
   countsReady,
@@ -288,7 +237,8 @@ function DebaterColumn({
 }) {
   const { participant, name, claimCount, split, responderSpaceIds } = debater;
   const side = responsePositionLabel(participant.position);
-  const countLabel = `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
+  // Nothing rather than "0 claims" while the transcript is still saying which claims are theirs.
+  const countLabel = claimCount === null ? null : `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
 
   // Across one debater's claims the same person can agree with some and disagree with others, so a
   // single list split by side would misfile them. The faces open the claims panel at this debater's
@@ -314,7 +264,7 @@ function DebaterColumn({
       {/* On a narrow player the count and the side take their own line: the vote row below has no
           width to spare for them, and the side chip is dropped from the name's row there. */}
       <span className="hidden text-chat text-grey-04 tabular-nums @max-md:block">
-        {countLabel} · {side}
+        {countLabel ? `${countLabel} · ${side}` : side}
       </span>
 
       <VoteRow
@@ -323,7 +273,11 @@ function DebaterColumn({
         variant="debater"
         // Wider players fold the count into this row rather than giving it one of its own: a
         // number and a word left most of a line empty, and the card needed that height.
-        leading={<span className="shrink-0 text-chat text-grey-04 tabular-nums @max-md:hidden">{countLabel} ·</span>}
+        leading={
+          countLabel ? (
+            <span className="shrink-0 text-chat text-grey-04 tabular-nums @max-md:hidden">{countLabel} ·</span>
+          ) : null
+        }
         faces={
           onOpenClaims ? (
             <button
