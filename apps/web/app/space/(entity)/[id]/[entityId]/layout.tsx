@@ -26,6 +26,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { EntityStickyHeader } from '~/partials/entity-page/entity-sticky-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
@@ -80,14 +81,25 @@ export default async function ProfileLayout(props: Props) {
   const result = await cachedFetchEntityPage(entityId, spaceId);
   const entityTypes = result?.entity?.types ?? [];
 
+  // Mounted here rather than per page: every entity surface below this — the generic page, a
+  // claim, a topic, a profile, and each of the type-owned record tabs — hangs off this one layout,
+  // and the bar has no business being drawn four times with four ideas of what it shows.
+  const stickyHeader = <EntityStickyHeader entityId={entityId} spaceId={spaceId} />;
+
   if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
-    return <>{children}</>;
+    return (
+      <>
+        {stickyHeader}
+        {children}
+      </>
+    );
   }
 
   const profile = await getProfilePage(entityId, spaceId);
 
   return (
     <EntityStoreProvider id={entityId} spaceId={spaceId}>
+      {stickyHeader}
       <RouteEditorProvider
         id={profile.id}
         spaceId={spaceId}

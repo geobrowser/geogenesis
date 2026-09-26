@@ -19,6 +19,17 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
+ * Where the sticky entity header draws itself: a zero-height element docked under the navbar by the
+ * app shell.
+ *
+ * The bar has to span the content column and sit under the navbar, and the entity route that knows
+ * *which* entity is on screen renders deep inside a width-capped, transform-animated `<main>` —
+ * neither a full-bleed `sticky` nor a `fixed` element behaves there. Registering a host once in the
+ * shell and portalling into it keeps the positioning in the one place that can express it.
+ */
+export const entityStickyHeaderHostElementAtom = atom<HTMLElement | null>(null);
+
+/**
  * The comments panel's own element, for the same reason the side panel registers one: a slide-up
  * locks scrolling everywhere but its own subtree, and a panel portalled to the body is outside it.
  */

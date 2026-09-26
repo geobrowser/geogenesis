@@ -23,3 +23,13 @@
  * One definition so these cannot drift apart again.
  */
 export const VOTE_BUTTON_CLASS = 'text-grey-04 hover:text-text';
+
+/**
+ * The same shade with the hover step taken out, for a response that is still confirming.
+ *
+ * The claim pills drop their hover outline for that window (they ignore presses until the response
+ * lands, so nothing under the pointer is going to happen) and the thumbs do the same. A separate
+ * constant rather than `VOTE_BUTTON_CLASS` plus an override, for the reason given above: `cx` does
+ * not resolve conflicting utilities, so a second `hover:` class would leave the winner to emit order.
+ */
+export const VOTE_BUTTON_CONFIRMING_CLASS = 'text-grey-04';
