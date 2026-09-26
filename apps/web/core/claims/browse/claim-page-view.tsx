@@ -37,6 +37,7 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
@@ -222,6 +223,7 @@ export function ClaimPageView({
   return (
     <div className="@container">
       <div
+        {...ENTITY_PAGE_CONTENT_ANCHOR}
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >
@@ -267,7 +269,10 @@ export function ClaimPageView({
                 {isEditing ? (
                   <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
                 ) : (
-                  <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+                  <h1
+                    {...entityPageTitleAnchor(entityId)}
+                    className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]"
+                  >
                     {entity.name ?? entity.id}
                   </h1>
                 )}

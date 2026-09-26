@@ -74,16 +74,14 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 /**
- * The two direction buttons, found by their titles rather than their positions.
- *
- * The row is up, score, down — but the responder faces sit beside them and are a button themselves
- * now, on either side depending on the surface, so an index is a guess about a layout this file
- * does not otherwise care about.
+ * The two direction buttons, picked out by the `group/vote` marker they share rather than by
+ * position. The row's button order is not this file's subject and has already changed once — the
+ * responder faces became a popover trigger ahead of the up arrow, which silently shifted every
+ * index by one.
  */
 function inlineButtons() {
-  const buttons = screen.getAllByRole('button');
-  const withIcon = buttons.filter(button => button.querySelector('svg') && button.title);
-  return { up: withIcon[0]!, down: withIcon[1]! };
+  const [up, down] = screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  return { up: up!, down: down! };
 }
 
 beforeEach(() => {
