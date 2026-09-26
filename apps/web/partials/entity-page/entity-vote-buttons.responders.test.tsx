@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   /** The viewer's own vote, before it has been served back. */
   optimistic: undefined as 'positive' | 'negative' | undefined,
   indexingDelayed: false,
+  /** Submitted and not yet confirmed — the window the claim pills show a progress cursor for. */
+  processing: false,
   /** What `useQueryEntity` reports, for the branches that read the entity rather than a prop. */
   entity: null as unknown,
 }));
@@ -53,6 +55,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimistic,
     isResponseIndexingDelayed: mocks.indexingDelayed,
+    isProcessingResponse: mocks.processing,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),
@@ -115,6 +118,7 @@ beforeEach(() => {
   mocks.negative = 1;
   mocks.optimistic = undefined;
   mocks.indexingDelayed = false;
+  mocks.processing = false;
   mocks.entity = null;
   jotaiStore.current = createStore();
 });
@@ -332,5 +336,40 @@ describe('compact, for the sticky header', () => {
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} />, { wrapper });
 
     expect(screen.getByText(UNPUBLISHED)).toBeInTheDocument();
+  });
+});
+
+/**
+ * The claim pills show a progress cursor while a response confirms (#2598) — tens of seconds in
+ * which the side is already drawn as taken and nothing else says the press registered. The thumbs
+ * this control draws, which is what the sticky header votes with, had no such cue.
+ */
+describe('while a response is confirming', () => {
+  function thumbs() {
+    return screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  }
+
+  it('shows a progress cursor on both thumbs', async () => {
+    mocks.processing = true;
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
+
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    for (const thumb of thumbs()) expect(thumb).toHaveClass('cursor-progress');
+  });
+
+  it('does not once nothing is on its way', async () => {
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
+
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    for (const thumb of thumbs()) expect(thumb).not.toHaveClass('cursor-progress');
+  });
+
+  /** Not a bar-only concern: the cursor says "busy", which is as true on an entity header as in the bar. */
+  it('shows it outside the bar as well', async () => {
+    mocks.processing = true;
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    for (const thumb of thumbs()) expect(thumb).toHaveClass('cursor-progress');
   });
 });

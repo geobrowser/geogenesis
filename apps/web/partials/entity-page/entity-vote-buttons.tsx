@@ -145,6 +145,7 @@ export function EntityVoteButtons({
     submitResponse,
     submitResponseAsync,
     optimisticResponse,
+    isProcessingResponse,
     isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
@@ -396,6 +397,21 @@ export function EntityVoteButtons({
     );
   }
 
+  // Shared by both thumbs so the two cannot drift, which is how the cursor came to be missing here in
+  // the first place: the claim pills gained it (#2598) and nothing tied this control to them.
+  //
+  // `cursor-progress` while the response is still on its way — submitted, not yet confirmed. The
+  // pills' reason applies unchanged: a response spends tens of seconds confirming, the side is
+  // already drawn as taken, and nothing else in a 48px bar says the press registered. `progress`
+  // rather than `wait` because it is the cursor for "busy, still usable", which these still are.
+  // `isProcessingResponse` is the hook's own account of that window, not a copy of its predicate.
+  const voteButtonClassName = cx(
+    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+    VOTE_BUTTON_CLASS,
+    responseDisabled && 'cursor-default opacity-50',
+    isProcessingResponse && 'cursor-progress'
+  );
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
@@ -403,11 +419,7 @@ export function EntityVoteButtons({
         onClick={handlePositiveResponse}
         disabled={responseDisabled}
         title={positiveTitle}
-        className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          VOTE_BUTTON_CLASS,
-          responseDisabled && 'cursor-default opacity-50'
-        )}
+        className={voteButtonClassName}
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
@@ -424,11 +436,7 @@ export function EntityVoteButtons({
         onClick={handleNegativeResponse}
         disabled={responseDisabled}
         title={negativeTitle}
-        className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          VOTE_BUTTON_CLASS,
-          responseDisabled && 'cursor-default opacity-50'
-        )}
+        className={voteButtonClassName}
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
