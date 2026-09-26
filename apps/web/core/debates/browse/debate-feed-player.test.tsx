@@ -19,12 +19,15 @@ const mocks = vi.hoisted(() => ({
   stackOpens: [] as boolean[],
   /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
   endCardEnabled: [] as boolean[],
+  /** Each call's `shown`, so a test can see when the card's numbers are refreshed. */
+  endCardShown: [] as boolean[],
 }));
 
 // The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
 vi.mock('./use-debate-end-card', () => ({
-  useDebateEndCard: (_debate: unknown, enabled: boolean) => {
+  useDebateEndCard: (_debate: unknown, enabled: boolean, shown: boolean) => {
     mocks.endCardEnabled.push(enabled);
+    mocks.endCardShown.push(shown);
     return {};
   },
 }));
@@ -1120,6 +1123,51 @@ describe('the end card', () => {
 
     rerender(<DebateFeedPlayer debate={debate} active />);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to become the active debate when Replay is pressed on one that is not', () => {
+    // The debates feed has no click capture to hand playback over, so without asking, the replay
+    // waited on the scroll observer — and fired whenever the viewer next landed on the debate.
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+    const onPlaybackRequest = vi.fn();
+
+    const { container, rerender } = render(
+      <DebateFeedPlayer debate={debate} active={false} onPlaybackRequest={onPlaybackRequest} />
+    );
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+    expect(onPlaybackRequest).toHaveBeenCalledTimes(1);
+
+    rerender(<DebateFeedPlayer debate={debate} active onPlaybackRequest={onPlaybackRequest} />);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask for playback when the debate already has it', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+    const onPlaybackRequest = vi.fn();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active onPlaybackRequest={onPlaybackRequest} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the card's numbers when the card is on screen, so they can be brought up to date", () => {
+    mocks.ticker = emptyTicker();
+
+    mocks.endCardShown = [];
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardShown.at(-1)).toBe(false);
+
+    mocks.endCardShown = [];
+    mocks.controller = ended();
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardShown.at(-1)).toBe(true);
   });
 
   it('lets a held replay lapse if the debate stops being ended first', () => {

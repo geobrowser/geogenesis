@@ -75,6 +75,12 @@ type DebateFeedPlayerProps = {
    * ways into the claims are simply not drawn.
    */
   onOpenClaims?: (participantSpaceId?: string) => void;
+  /**
+   * Asks for this debate to become the active one. Replay on the end card calls it when the debate
+   * is not the active one yet, and holds the replay until it is. A row whose own click capture
+   * already hands playback over (the explore row) can leave it out.
+   */
+  onPlaybackRequest?: () => void;
 };
 
 export function DebateFeedPlayer({
@@ -83,6 +89,7 @@ export function DebateFeedPlayer({
   preload = false,
   reducedOverlays = false,
   onOpenClaims,
+  onPlaybackRequest,
 }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
@@ -196,7 +203,7 @@ export function DebateFeedPlayer({
   const endCardShown = showReplay && !reducedOverlays;
   // Loaded while the debate is the active one, so its numbers are there when the video ends rather
   // than drawing empty bars and filling them in.
-  const endCard = useDebateEndCard(debate, active && ready && !reducedOverlays);
+  const endCard = useDebateEndCard(debate, active && ready && !reducedOverlays, endCardShown);
 
   /*
    * Replay from the end card, held until this player may play.
@@ -204,13 +211,18 @@ export function DebateFeedPlayer({
    * In a row of cards only one holds playback, and pressing Replay on another first hands playback
    * over — which `active` reports a render later. Playing at once would run this debate beside the
    * one still holding playback; dropping the press made Replay take two taps, because an ended
-   * debate does not resume by itself once it is handed playback. So the press is kept and carried
-   * out the moment playback arrives. It lapses if the debate stops being ended in the meantime.
+   * debate does not resume by itself once it is handed playback. So the press asks for playback,
+   * is kept, and is carried out the moment playback arrives. It lapses if the debate stops being
+   * ended in the meantime.
    */
   const [replayPending, setReplayPending] = React.useState(false);
   const replayFromEndCard = () => {
-    if (active) playFromStart();
-    else setReplayPending(true);
+    if (active) {
+      playFromStart();
+      return;
+    }
+    setReplayPending(true);
+    onPlaybackRequest?.();
   };
   // An effect event, so the effect runs on the three facts that decide it rather than on every render
   // for a `playFromStart` that is a fresh function each time.

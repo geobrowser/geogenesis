@@ -370,6 +370,7 @@ export function DebatesBrowseFeed({
             setActiveId(debate.id);
             setOpenPanel('comments');
           }}
+          onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (
@@ -428,6 +429,7 @@ function DebateFeedItem({
   onOpenJoin,
   onOpenClaims,
   onOpenComments,
+  onPlaybackRequest,
 }: {
   debate: Debate;
   spaceId: string;
@@ -443,6 +445,8 @@ function DebateFeedItem({
   /** With a debater's space id, the panel opens at that debater's claims. */
   onOpenClaims: (participantSpaceId?: string) => void;
   onOpenComments: () => void;
+  /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
+  onPlaybackRequest: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const share = useDebateShareAction();
@@ -513,7 +517,13 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} onOpenClaims={onOpenClaims} />
+            <DebateFeedPlayer
+              debate={debate}
+              active={active}
+              preload={preload}
+              onOpenClaims={onOpenClaims}
+              onPlaybackRequest={onPlaybackRequest}
+            />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}

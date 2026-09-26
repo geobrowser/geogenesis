@@ -49,8 +49,13 @@ export type EndCardDebater = {
  *
  * `enabled` is the caller's: the player turns it on while the debate is the active one, so the card
  * has its numbers by the time the video ends rather than drawing empty bars and filling them in.
+ *
+ * `shown` is whether the card is on screen. Those numbers were read when the debate became active,
+ * minutes before it ended, and a query does not refetch just because it went stale — so when the
+ * card appears, anything older than the batch's `staleTime` is asked for again, with the old numbers
+ * drawn until the new ones land.
  */
-export function useDebateEndCard(debate: Debate, enabled: boolean) {
+export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false) {
   /*
    * One way: once this debate has asked, it keeps asking for as long as the player is mounted.
    *
@@ -105,7 +110,19 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
   // Fetches and seeds. Its values are read back through the per-claim caches (see the note on the
   // hook); all that is read off the batch itself is whether it has finished.
   const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
-  const batchSettled = batch.data !== undefined || batch.isError;
+  // Whether the batch is still on its way to seeding the claim's caches. A transcript still loading
+  // counts, since the batch starts when it lands; a transcript that failed does not, since then the
+  // batch never starts at all.
+  const batchPending = transcript.isLoading || (claimsReady && batch.data === undefined && !batch.isError);
+
+  // Only a batch that has answered is refreshed: one still waiting on the transcript, or that
+  // failed, has nothing on screen to bring up to date.
+  const refreshIfStale = React.useEffectEvent(() => {
+    if (batch.data !== undefined && batch.isStale && !batch.isFetching) void batch.refetch();
+  });
+  React.useEffect(() => {
+    if (shown) refreshIfStale();
+  }, [shown]);
 
   // Each counted claim's counts and responders, straight from the caches the batch seeds and a vote
   // refreshes. `skipToken` because these only ever read: the batch is what asks.
@@ -126,8 +143,9 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
     // Held back until the batch has seeded this claim's caches. Its two reads — the counts and the
     // viewer's own side — then find them fresh (their 30s `staleTime` outlasts the wait) instead of
     // racing the batch to the same two answers on every debate that becomes active. If the batch
-    // fails, the entity is handed over anyway and the claim asks for itself.
-    entity: batchSettled ? (entities[0] ?? null) : null,
+    // fails, or never starts because the transcript failed, the entity is handed over anyway and
+    // the claim asks for itself: its own row needs nothing from the transcript.
+    entity: batchPending ? null : (entities[0] ?? null),
   });
 
   const debaters = React.useMemo<EndCardDebater[]>(

@@ -22,18 +22,29 @@ const CLAIM_HEX = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const mocks = vi.hoisted(() => ({
   claims: null as unknown,
   transcriptLoading: false,
+  transcriptError: null as unknown,
   batchCalls: [] as { spaceId: string; targets: { entityId: string }[]; enabled: boolean }[],
   claimSummary: null as unknown,
   /** The `enabled` each entity lookup was made with. */
   entityEnabled: [] as boolean[],
   /** What the batch query reports: whether it has data yet, and whether it failed. */
-  batchResult: { data: new Map() as unknown, isError: false },
+  batchResult: {
+    data: new Map() as unknown,
+    isError: false,
+    isStale: false,
+    isFetching: false,
+    refetch: (() => Promise.resolve()) as () => Promise<unknown>,
+  },
   /** The entity each render handed the claim's own response state. */
   claimEntity: [] as unknown[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
-  useDebateTranscriptClaims: () => ({ claims: mocks.claims, isLoading: mocks.transcriptLoading, error: null }),
+  useDebateTranscriptClaims: () => ({
+    claims: mocks.claims,
+    isLoading: mocks.transcriptLoading,
+    error: mocks.transcriptError,
+  }),
 }));
 // The batch is the fetcher and seeds the per-claim caches; here the test seeds them itself, so what
 // is under test is the reading — including a cache a vote has refreshed since.
@@ -57,6 +68,16 @@ vi.mock('./use-debate-claim-response', () => ({
 }));
 
 const claim = (id: string, spaceId: string | null) => ({ id, text: id, spaceId });
+
+/** What the batch query reports, answered and fresh unless a test says otherwise. */
+const batch = (overrides: Partial<typeof mocks.batchResult>) => ({
+  data: new Map() as unknown,
+  isError: false,
+  isStale: false,
+  isFetching: false,
+  refetch: () => Promise.resolve(),
+  ...overrides,
+});
 
 function transcript(byAuthor: Record<string, ReturnType<typeof claim>[]>): DebateTranscriptClaims {
   const all = Object.values(byAuthor).flat();
@@ -104,9 +125,10 @@ describe('useDebateEndCard', () => {
     mocks.batchCalls = [];
     mocks.entityEnabled = [];
     mocks.claimEntity = [];
-    mocks.batchResult = { data: new Map(), isError: false };
+    mocks.batchResult = batch({ data: new Map() });
     mocks.claimSummary = { positive: 62, negative: 38, total: 100, percent: 62, meetsFloor: true };
     mocks.transcriptLoading = false;
+    mocks.transcriptError = null;
     mocks.claims = transcript({
       [STEVE]: [claim('s1', DEBATE_SPACE_HEX), claim('s2', DEBATE_SPACE_HEX), claim('s3', ELSEWHERE)],
       [JONATHAN]: [claim('j1', DEBATE_SPACE_HEX), claim('j2', null)],
@@ -236,20 +258,66 @@ describe('useDebateEndCard', () => {
   it("holds the claim's own response reads until the batch has seeded them", () => {
     // Handed its entity early, the claim's response state fires its two reads — counts and the
     // viewer's side — and races the batch to the same answers on every debate that becomes active.
-    mocks.batchResult = { data: undefined, isError: false };
+    mocks.batchResult = batch({ data: undefined });
     const { rerender } = render(() => useDebateEndCard(debate, true));
     expect(mocks.claimEntity.at(-1)).toBeNull();
 
-    mocks.batchResult = { data: new Map(), isError: false };
+    mocks.batchResult = batch({ data: new Map() });
     rerender(undefined as never);
     expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
   });
 
   it('lets the claim ask for itself if the batch fails', () => {
-    mocks.batchResult = { data: undefined, isError: true };
+    mocks.batchResult = batch({ data: undefined, isError: true });
     render(() => useDebateEndCard(debate, true));
 
     expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
+  });
+
+  it('lets the claim ask for itself if the transcript fails, since the batch then never starts', () => {
+    // The batch waits on the transcript to know which claims are the debaters'. The claim's own row
+    // needs none of that, and waiting on a batch that will never run left its vote disabled.
+    mocks.transcriptError = new Error('transcript unavailable');
+    mocks.claims = transcript({});
+    mocks.batchResult = batch({ data: undefined });
+    render(() => useDebateEndCard(debate, true));
+
+    expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
+    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
+  });
+
+  it('still holds the claim back while the transcript is loading, since the batch follows it', () => {
+    mocks.transcriptLoading = true;
+    mocks.claims = transcript({});
+    mocks.batchResult = batch({ data: undefined });
+    render(() => useDebateEndCard(debate, true));
+
+    expect(mocks.claimEntity.at(-1)).toBeNull();
+  });
+
+  it('refreshes numbers read minutes ago when the card comes on screen', () => {
+    // They were read when the debate became active; a query does not refetch just for going stale.
+    const refetch = vi.fn(() => Promise.resolve());
+    mocks.batchResult = batch({ data: new Map(), isStale: true, refetch });
+    const { rerender } = render(({ shown }: { shown: boolean }) => useDebateEndCard(debate, true, shown), {
+      shown: false,
+    });
+    expect(refetch).not.toHaveBeenCalled();
+
+    rerender({ shown: true });
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves fresh numbers, and a batch that has not answered, alone when the card comes on screen', () => {
+    const refetch = vi.fn(() => Promise.resolve());
+
+    mocks.batchResult = batch({ data: new Map(), isStale: false, refetch });
+    render(() => useDebateEndCard(debate, true, true));
+
+    mocks.batchResult = batch({ data: undefined, isStale: true, refetch });
+    render(() => useDebateEndCard(debate, true, true));
+
+    expect(refetch).not.toHaveBeenCalled();
   });
 
   it('asks for nothing while held back', () => {
