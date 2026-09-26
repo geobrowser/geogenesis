@@ -41,6 +41,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
 
 type SharedProps = {
   entityId: string;
@@ -343,12 +344,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
     const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
     const actions = (
-      <EntityPageActions
-        entityId={entityId}
-        spaceId={spaceId}
-        isVoteable={!isRelationPage}
-        compact={isPersonProfile}
-      />
+      <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} compact={isPersonProfile} />
     );
 
     return (
@@ -377,8 +373,28 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               ) : (
                 heading
               )}
+              {isPersonProfile && <PersonalSpaceTagline spaceId={spaceId} personEntityId={entityId} />}
               {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
-              {!isRelationPage && (
+              {/*
+               * A person's description lives in their About tab here too, not under their
+               * name — the panel renders the same About card the space route puts in its rail,
+               * and showing the bio in both left it on screen twice.
+               *
+               * Which means it comes *back* under the name in edit mode, and deliberately.
+               * `customBrowseView` returns 'generic' whenever `isEditing`
+               * (`custom-browse-view.ts:43`), so editing in the panel swaps the whole profile
+               * view — About card included — for the generic editor. That editor excludes
+               * Description from its property rows as "editable elsewhere"
+               * (`editable-entity-page.ts` SYSTEM_PROPERTIES), so this field is the only way
+               * to write a bio in that mode; suppressing it here would make the description
+               * unreachable rather than tidy. Tagline is not excluded there, so it stays
+               * editable as an ordinary row.
+               *
+               * The space route does not go through any of this: it gates on
+               * `Spaces.isPersonProfileSpace` server-side, so its profile chrome and its
+               * editable About card survive the edit toggle.
+               */}
+              {!isRelationPage && !isPersonProfile && (
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}

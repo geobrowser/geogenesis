@@ -15,6 +15,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
+import { TAGLINE_PROPERTY, normalizeTagline } from '~/core/profile/profile-ontology';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { GeoStore } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -36,6 +37,8 @@ export type ProfileImageEdit =
 
 export type ProfileDraft = {
   name: string;
+  /** Capped at `TAGLINE_MAX_LENGTH` by every field that writes one; not enforced by the graph. */
+  tagline: string;
   description: string;
   banner: ProfileImageEdit;
   avatar: ProfileImageEdit;
@@ -91,6 +94,7 @@ type StagedEdit = {
    */
   baseline: {
     name: string;
+    tagline: string;
     description: string;
     /**
      * Whether the modal was showing each image before this edit touched anything.
@@ -109,7 +113,7 @@ const IMAGE_PROPERTIES = {
 } as const;
 
 /**
- * Backs the Edit profile modal (GEO-2839): reads the four fields off the viewer's
+ * Backs the Edit profile modal (GEO-2839): reads the five fields off the viewer's
  * own person entity, and publishes changes straight to their personal space with
  * no review step.
  *
@@ -142,7 +146,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   // is caught by shape alone: it answers with the wallet address when the lookup
   // fails, and with the *space* id when the record carries no entityId — and a
   // space id is a perfectly valid 32-hex entity id. Editing against it would
-  // stage all four fields onto the space's system entity.
+  // stage all five fields onto the space's system entity.
   const profileEntityId = profile && profile.id !== profile.spaceId && IdUtils.isValid(profile.id) ? profile.id : null;
   const entityId = profileEntityId ?? personalEntityId ?? '';
   const canEdit = Boolean(isRegistered && spaceId && entityId);
@@ -195,14 +199,22 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   // The profile query is already warm — the navbar runs it on every page — so it
   // fills the fields immediately while the entity hydrates behind it, and covers
   // a name held outside this space that the space-scoped read won't return.
+  // No `entity.tagline` to read — the entity exposes name and description as fields and
+  // everything else as values, so this is the same lookup `Entities.description` makes.
+  const tagline = React.useMemo(
+    () => (entity.values ?? []).find((value: Value) => value.property.id === TAGLINE_PROPERTY)?.value ?? '',
+    [entity.values]
+  );
+
   const current = React.useMemo(
     () => ({
       name: entity.name ?? profile?.name ?? '',
+      tagline,
       description: entity.description ?? '',
       bannerUrl,
       avatarUrl: avatarUrl ?? profile?.avatarUrl ?? undefined,
     }),
-    [entity.name, entity.description, bannerUrl, avatarUrl, profile?.name, profile?.avatarUrl]
+    [entity.name, entity.description, tagline, bannerUrl, avatarUrl, profile?.name, profile?.avatarUrl]
   );
 
   const rollback = React.useCallback(
@@ -365,6 +377,24 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       try {
         if (draft.name !== baseline.name) {
           setValue(SystemIds.NAME_PROPERTY, 'Name', draft.name);
+        }
+
+        // Same delete-on-empty rule as the description below: an empty tagline is one that
+        // has been taken down, and writing `''` would leave a row that reads as a blank line
+        // wherever a tagline is shown.
+        if (draft.tagline !== baseline.tagline) {
+          if (draft.tagline === '') {
+            const existing = getValues({
+              selector: v => v.entity.id === entityId && v.property.id === TAGLINE_PROPERTY && v.spaceId === spaceId,
+            });
+            existing.forEach(v => {
+              snapshot(v.id);
+              written.valueIds.add(v.id);
+            });
+            storage.values.deleteMany(existing);
+          } else {
+            setValue(TAGLINE_PROPERTY, 'Tagline', normalizeTagline(draft.tagline));
+          }
         }
 
         if (draft.description !== baseline.description) {
@@ -644,6 +674,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       const previouslyStaged = stagedRef.current;
       const baseline = previouslyStaged?.baseline ?? {
         name: current.name,
+        tagline: current.tagline,
         description: current.description,
         showedBanner: Boolean(current.bannerUrl),
         showedAvatar: Boolean(current.avatarUrl),
@@ -652,7 +683,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       const extra = extraRows ?? { values: [], relations: [] };
 
       // A retry re-sends what was staged, so "is this the same edit" has to cover
-      // the whole of it. It compared the four header fields alone, so work and
+      // the whole of it. It compared the header fields alone, so work and
       // education changed after a failure were written to the store here and then
       // skipped: never published, and never tracked for rollback either.
       if (
@@ -669,7 +700,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
       if (!stagedRef.current) {
         // Rows from elsewhere in the modal — the work and education sections — go
-        // out in the same edit as the four header fields, because Save means all
+        // out in the same edit as the header fields, because Save means all
         // of it. Written into the store here so staging collects them like its
         // own, and so a failure rolls them back with the rest.
         //
@@ -792,6 +823,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       current.bannerUrl,
       current.description,
       current.name,
+      current.tagline,
       dispatch,
       entityId,
       clearStagingStatus,
@@ -837,6 +869,7 @@ function isSameDraft(a: ProfileDraft, b: ProfileDraft) {
 
   return (
     a.name === b.name &&
+    a.tagline === b.tagline &&
     a.description === b.description &&
     sameImage(a.banner, b.banner) &&
     sameImage(a.avatar, b.avatar)

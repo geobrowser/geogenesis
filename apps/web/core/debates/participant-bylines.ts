@@ -22,8 +22,12 @@ type ParticipantLike = Pick<DebateParticipant, 'profile_space_id'>;
  *
  * Debate rows carry a personal-space id, while profile history hangs off the person's entity. The
  * profile batch is therefore the necessary first hop. The history queries keep their profile-page
- * cache keys, so opening a participant's profile after watching them reuses the same response. A
- * current affiliation is preferred; the person's description fills the line when they have none.
+ * cache keys, so opening a participant's profile after watching them reuses the same response.
+ *
+ * Tagline first, then a current affiliation, then the description. The order is by how
+ * deliberate each one is: a tagline is the line the person wrote to be read under their name, an
+ * affiliation is derived from their Work and Education records, and a description is prose
+ * written for a profile page that happens to fit on one line.
  */
 export function useParticipantBylines(
   participants: readonly (ParticipantLike | null | undefined)[],
@@ -54,7 +58,10 @@ export function useParticipantBylines(
         const spaceId = spaceIds[index];
         if (!spaceId || !history.data) return;
 
-        const line = currentAffiliation(history.data.employment, history.data.education) ?? history.data.description;
+        const line =
+          history.data.tagline ??
+          currentAffiliation(history.data.employment, history.data.education) ??
+          history.data.description;
         if (line) bySpaceId.set(spaceId, line);
       });
 
