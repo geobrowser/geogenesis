@@ -96,3 +96,16 @@ export function threadArmCenterPx(density: CommentDensity): number {
 export function avatarBottomInRowPx(density: CommentDensity): number {
   return threadArmCenterPx(density) + density.avatarPx / 2;
 }
+
+/**
+ * Class hooks and colours for a thread's connector segments.
+ *
+ * Here rather than beside the comment list because the claim page's activity feed draws the same
+ * connectors for the claims hanging off a debate, and a hover that lit one branch and not the other
+ * is exactly the symptom of there being two copies of this.
+ */
+export const THREAD_LEVEL_BRANCH_SEGMENT = 'thread-level-branch-segment';
+export const THREAD_SEGMENT_DIM = 'bg-grey-02';
+export const THREAD_SEGMENT_DIM_STROKE = 'stroke-[var(--color-grey-02)]';
+export const THREAD_SEGMENT_HI = 'bg-grey-03';
+export const THREAD_SEGMENT_HI_STROKE = 'stroke-[var(--color-grey-03)]';

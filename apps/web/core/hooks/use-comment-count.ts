@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-
 import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 
 import type { CommentEntity } from '~/partials/comments/types';
@@ -50,7 +49,30 @@ export function resetCommentCountSeeds() {
   seeds.clear();
 }
 
-export function useCommentCount(entityId: string, serverCount: number): number {
+export function useCommentCount(
+  entityId: string,
+  serverCount: number,
+  {
+    commentsInSeed,
+  }: {
+    /**
+     * How many of `serverCount` are this entity's comments, when the seed counts more than them.
+     *
+     * The claim card's pill is an *activity* total — the claim's debates, the claims extracted from
+     * them, and every comment in that tree. The comment list is a strict subset of it, so the rule
+     * below ("once the list has answered it *is* the count") turned a pill reading 33 into one
+     * reading 1 as soon as anything fetched that list; the claim page does on every visit, so
+     * opening a claim and going back to Explore was enough.
+     *
+     * Given this, the list still replaces — but only its own share. `serverCount - commentsInSeed`
+     * is the part of the total the list cannot see, and the list's length is the part it can, so the
+     * answer stays exact through publishing, indexing and rollback alike. Counting pending rows
+     * instead would have been right only while a row was in flight: once indexed, the row loses its
+     * flag and the pill fell back to the seed, going 33 → 34 → 33 with the comment still there.
+     */
+    commentsInSeed?: number;
+  } = {}
+): number {
   // Whether the list has ever been fetched, rather than merely written to. Same disabled-subscription
   // shape as the list below, for the same reason: this reads what another hook owns.
   const { data: hasFetchedList } = useQuery<boolean>({
@@ -82,7 +104,11 @@ export function useCommentCount(entityId: string, serverCount: number): number {
     // what keeps those two apart: a publish that fails before the list loads filters its own optimistic
     // row back out and leaves `[]` behind, which is not the list speaking — and a post on top of an
     // authoritatively empty list leaves only a pending row, which is.
-    if (hasFetchedList === true) return data.length;
+    // The list replaces the whole count when it measures the whole count, and only its own share
+    // when the seed is broader — see `commentsInSeed`.
+    if (hasFetchedList === true) {
+      return commentsInSeed == null ? data.length : Math.max(0, serverCount - commentsInSeed) + data.length;
+    }
 
     // Never fetched, so this entry holds only what was written into it: `useCreateComment` seeds it with
     // `(old = [])`. Its length would read 1 where the server knows 5, so the count is the base those

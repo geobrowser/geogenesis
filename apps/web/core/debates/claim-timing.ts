@@ -501,10 +501,26 @@ export function sortClaimsBySpokenOrder<T extends { id: string }>(
     .map(entry => entry.claim);
 }
 
-/** `2:05`, for a timecode chip. */
+/**
+ * `2:05`, for a timecode chip.
+ *
+ * Hours only when there are hours: `12:04` rather than `00:12:04`, and `1:02:04` once a debate runs
+ * past the hour — which the first version of this did not do, printing a claim an hour in as
+ * `62:04`. Minutes keep their leading zero inside an hour-long stamp so the columns line up.
+ *
+ * Rounds to the nearest second rather than flooring, because this is a label rather than a seek
+ * target; `debateSeekSeconds` is what decides where the video actually lands.
+ */
 export function formatTimecode(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(total / 60);
+  if (!Number.isFinite(ms) || ms < 0) return '0:00';
+
+  const total = Math.round(ms / 1000);
   const seconds = total % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+
+  const paddedSeconds = String(seconds).padStart(2, '0');
+  if (hours === 0) return `${minutes}:${paddedSeconds}`;
+
+  return `${hours}:${String(minutes).padStart(2, '0')}:${paddedSeconds}`;
 }

@@ -144,3 +144,75 @@ describe('usePublishComment', () => {
     expect(mocks.commentEdited).toHaveBeenCalledTimes(1);
   });
 });
+
+/**
+ * Who hears that the comment did not make it.
+ *
+ * Callers used to read the returned value, and that only ever sees the first attempt. A publish
+ * retained for a personal space that does not exist yet resolves *truthy* and is retried later — so
+ * when that retry failed, `useCreateComment` removed the optimistic row while every count and flag the
+ * caller had set for it stayed behind: the Activity total one too high, and a row holding a branch open
+ * for a comment that no longer existed.
+ */
+describe('usePublishComment reporting a failure', () => {
+  beforeEach(() => {
+    mocks.commentCreated.mockReset();
+    mocks.createComment.mockReset();
+    mocks.enqueuePendingAction.mockReset();
+  });
+
+  function publish(onFailed: () => void) {
+    const { result } = renderHook(() => usePublishComment('claim-1', 'space-1'));
+    return act(() => result.current.publishComment({ text: 'A comment', onFailed }) as Promise<unknown>);
+  }
+
+  it('reports a publish that failed immediately', async () => {
+    mocks.createComment.mockResolvedValue(null);
+    const onFailed = vi.fn();
+
+    await publish(onFailed);
+
+    expect(onFailed).toHaveBeenCalledOnce();
+  });
+
+  it('does not report one that succeeded', async () => {
+    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: true });
+    const onFailed = vi.fn();
+
+    await publish(onFailed);
+
+    expect(onFailed).not.toHaveBeenCalled();
+  });
+
+  // The case the returned value cannot express: retained now, failed later.
+  it('reports a retained publish whose retry fails, and not before', async () => {
+    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: false });
+    const onFailed = vi.fn();
+
+    await publish(onFailed);
+
+    // Retained, so nothing has failed yet: the row and its counts are still right.
+    expect(onFailed).not.toHaveBeenCalled();
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
+
+    const queued = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
+    mocks.createComment.mockResolvedValue(null);
+
+    await expect(queued.run()).rejects.toThrow('Comment could not be published');
+    expect(onFailed).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing when the retry succeeds', async () => {
+    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: false });
+    const onFailed = vi.fn();
+
+    await publish(onFailed);
+
+    const queued = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
+    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: true });
+
+    await queued.run();
+
+    expect(onFailed).not.toHaveBeenCalled();
+  });
+});

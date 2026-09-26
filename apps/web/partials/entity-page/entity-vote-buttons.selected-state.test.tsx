@@ -73,10 +73,17 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-/** Inline draws up, the score, then down. The score is a popover trigger, hence the gap. */
+/**
+ * The two direction buttons, found by their titles rather than their positions.
+ *
+ * The row is up, score, down — but the responder faces sit beside them and are a button themselves
+ * now, on either side depending on the surface, so an index is a guess about a layout this file
+ * does not otherwise care about.
+ */
 function inlineButtons() {
   const buttons = screen.getAllByRole('button');
-  return { up: buttons[0]!, down: buttons[2]! };
+  const withIcon = buttons.filter(button => button.querySelector('svg') && button.title);
+  return { up: withIcon[0]!, down: withIcon[1]! };
 }
 
 beforeEach(() => {

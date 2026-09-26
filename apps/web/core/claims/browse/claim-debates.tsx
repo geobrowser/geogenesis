@@ -415,7 +415,7 @@ function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number
  * happened" — `updatedAt` moves whenever anything touches the entity, including a backlink from
  * some unrelated edit.
  */
-function debateDate(debate: Entity): Date | null {
+export function debateDate(debate: Entity): Date | null {
   const raw = debate.createdAt ?? debate.updatedAt;
   if (raw === undefined || raw === null) return null;
 

@@ -460,6 +460,20 @@ describe('formatTimecode', () => {
     expect(formatTimecode(134_600)).toBe('2:15');
     expect(formatTimecode(270_000)).toBe('4:30');
   });
+
+  // The hour cases are why there is one of these rather than two: the first version printed a claim
+  // an hour into a debate as `62:04`.
+  it('grows an hours field only once there are hours', () => {
+    expect(formatTimecode(724_000)).toBe('12:04');
+    expect(formatTimecode(4_000)).toBe('0:04');
+    expect(formatTimecode(3_724_000)).toBe('1:02:04');
+    expect(formatTimecode(3_600_000)).toBe('1:00:00');
+  });
+
+  it('degrades to zero rather than printing NaN for a corrupt offset', () => {
+    expect(formatTimecode(Number.NaN)).toBe('0:00');
+    expect(formatTimecode(-1)).toBe('0:00');
+  });
 });
 
 /**

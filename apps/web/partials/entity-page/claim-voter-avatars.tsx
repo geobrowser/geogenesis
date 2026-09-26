@@ -20,6 +20,7 @@ export function ClaimResponderAvatars({
   totalResponders,
   viewerSpaceId,
   optimisticViewerResponse,
+  wrap,
 }: {
   entityId: string;
   spaceId: string;
@@ -28,6 +29,15 @@ export function ClaimResponderAvatars({
   totalResponders: number;
   viewerSpaceId?: string | null;
   optimisticViewerResponse?: ActiveResponseDirection | null;
+  /**
+   * Wraps the faces, once there are faces — a disclosure trigger, typically.
+   *
+   * Passed in rather than applied around this component, because only this component knows whether it
+   * is going to draw anything: the responder *count* and the responder *list* are two queries, so a
+   * claim with five responses still renders nothing here while the list is unresolved or has failed.
+   * Wrapped from outside on the count alone, that state is an invisible, focusable button.
+   */
+  wrap?: (faces: React.ReactNode) => React.ReactNode;
 }) {
   const { responders, queriesEnabled } = useEntityResponders({
     entityId,
@@ -51,7 +61,7 @@ export function ClaimResponderAvatars({
 
   if (responderSpaceIds.length === 0) return null;
 
-  return (
+  const faces = (
     <RankingAggregatedSubmitterAvatars
       submitterSpaceIds={responderSpaceIds}
       totalCount={Math.max(totalResponders, responderSpaceIds.length)}
@@ -59,4 +69,6 @@ export function ClaimResponderAvatars({
       queriesEnabled={queriesEnabled}
     />
   );
+
+  return wrap ? <>{wrap(faces)}</> : faces;
 }

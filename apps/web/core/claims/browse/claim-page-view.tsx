@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -32,6 +34,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import {
@@ -44,11 +47,13 @@ import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
+import { adjustClaimActivityTotal, useClaimActivityCounts } from './claim-activity-count';
 import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
@@ -337,6 +342,7 @@ export function ClaimPageView({
           activeTab={requestedTab}
           entityId={entityId}
           spaceId={spaceId}
+          claimName={entity.name ?? null}
           entityRelations={entity.relations}
           responseKind={responseKind}
           summary={summary}
@@ -356,6 +362,7 @@ function ClaimTabPanel({
   activeTab,
   entityId,
   spaceId,
+  claimName,
   entityRelations,
   responseKind,
   summary,
@@ -368,6 +375,8 @@ function ClaimTabPanel({
   activeTab: ClaimTab;
   entityId: string;
   spaceId: string;
+  /** Passed down to the thread, where every side badge names the claim it is about. */
+  claimName: string | null;
   entityRelations: Relation[];
   responseKind: ClaimResponseState['responseKind'];
   summary: ClaimResponseState['summary'];
@@ -413,8 +422,77 @@ function ClaimTabPanel({
     return <ClaimSourcesTab claimId={entityId} claimRelations={entityRelations} spaceId={spaceId} />;
   }
 
+  return (
+    <ClaimOverviewTab
+      entityId={entityId}
+      spaceId={spaceId}
+      claimName={claimName}
+      responseKind={responseKind}
+      summary={summary}
+      record={record}
+      hrefs={hrefs}
+      onSelectSystemTab={onSelectSystemTab}
+    />
+  );
+}
+
+/**
+ * The claim's overview: the related-claims gallery, then everything that has happened to it.
+ *
+ * Debates appear twice on purpose, and this comment used to say the opposite. An earlier cut did
+ * remove the gallery — a debate belongs in the account of what happened to this claim rather than in
+ * a shelf above it — and it went back in because the two are not the same offer: the gallery is the
+ * way through to the Debates tab, the complete filterable index, while the thread shows the few most
+ * recent in the order they happened, in among the comments. Two jobs. If that stops being true, the
+ * gallery is the one to drop.
+ *
+ * Its own component because the panel above returns early for every other tab, and a hook cannot
+ * live behind an early return.
+ */
+function ClaimOverviewTab({
+  entityId,
+  spaceId,
+  claimName,
+  responseKind,
+  summary,
+  record,
+  hrefs,
+  onSelectSystemTab,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** For the hover title on every commenter's side badge — see `ClaimCommentPositionProvider`. */
+  claimName: string | null;
+  responseKind: ClaimResponseState['responseKind'];
+  summary: ClaimResponseState['summary'];
+  record: ReturnType<typeof useClaimRecord>;
+  hrefs: { debates: string; claims: string };
+  onSelectSystemTab?: (tab: ClaimSystemTab) => void;
+}) {
+  // The claim's own vocabulary carries into the thread: a debater's side reads Agree/Disagree on
+  // an opinion claim and Verify/Dispute on a factual one, the same as every commenter's badge.
+  // The same number the claim's card shows in Explore, from the same query — one definition of
+  // "how much has happened here", so the two surfaces cannot disagree.
+  const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
+  const activityTotal = activityCounts.counts.get(ID.uuidToHex(entityId))?.total;
+
+  // The thread can add to that number but cannot compute it, so the page that owns the aggregate
+  // owns the adjustment too. It lands in the query cache rather than in the section's state, which
+  // is what makes it survive the section remounting and stay behind when the reader walks to the
+  // next claim — see `adjustClaimActivityTotal`.
+  const queryClient = useQueryClient();
+  const adjustActivityTotal = React.useCallback(
+    (delta: number) => void adjustClaimActivityTotal(queryClient, entityId, delta),
+    [entityId, queryClient]
+  );
+
+  const activity = useClaimActivityRows({ claimId: entityId, spaceId });
+
   const kinds: ActivityKind[] = [
     {
+      // Still here as well as in the thread below. The gallery is the way through to the Debates
+      // tab — the complete, filterable index — where the thread shows the few most recent in the
+      // order they happened. Two jobs, not two copies.
       key: 'debates',
       label: 'Debates',
       rows: record.debateRows,
@@ -467,11 +545,46 @@ function ClaimTabPanel({
         entityId={entityId}
         spaceId={spaceId}
         responseKind={responseKind}
+        // Which claim an Agree or a Disagree is about. By the time a reader is this far down the page
+        // the title above it is out of sight, and a badge on a comment under an extracted claim is
+        // answering for a different claim than the one the page is about — so each badge names its own.
+        claimName={claimName}
         viewerDirection={summary.viewerDirection}
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
-        <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="claim" />
+        {/*
+          Two reads feed this section and either can fail on its own, so each says so for itself.
+          Without the debates the feed is missing every debate and every claim extracted from one;
+          without the total the heading falls back to this claim's own comments plus the rows it drew,
+          which leaves out everything nested under a debate and is not the number it appears to be.
+          Said here rather than as rows inside the section: each is about a whole list rather than a
+          place in one, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
+        */}
+        {(activity.error != null || activityCounts.error != null) && (
+          <div className="flex flex-col items-start gap-1 pt-10" data-activity-errors>
+            {activity.error != null && (
+              <ThreadRetry onRetry={activity.retry}>Couldn’t load the debates on this claim.</ThreadRetry>
+            )}
+            {activityCounts.error != null && (
+              <ThreadRetry onRetry={activityCounts.retry}>Couldn’t load this claim’s activity total.</ThreadRetry>
+            )}
+          </div>
+        )}
+        {/* "Activity", because the list now holds debates as well as comments — and the count says
+            how much has happened to this claim rather than how many people typed. */}
+        <CommentSection
+          entityId={entityId}
+          spaceId={spaceId}
+          targetEntityType="claim"
+          title="Activity"
+          activityRows={activity.rows}
+          totalOverride={activityTotal}
+          onActivityPublish={adjustActivityTotal}
+          // Best rather than most-recent: this list is the record of an argument, not a running
+          // conversation, and the thing worth reading first is what the thread rates highest.
+          defaultSortOrder="best"
+        />
       </ClaimCommentPositionProvider>
     </>
   );

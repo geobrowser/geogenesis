@@ -101,6 +101,10 @@ function controllerFixture(overrides: {
   /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
    * blanking pass that precedes a different pair leaves behind. */
   urls?: { slot1: string | null; slot2: string | null };
+  /** False before the media can be seeked. A seek issued then is dropped by the element. */
+  ready?: boolean;
+  /** Shared across re-renders where a test needs to count the calls the component made. */
+  seekBoth?: ReturnType<typeof vi.fn>;
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
 }) {
@@ -122,7 +126,7 @@ function controllerFixture(overrides: {
     slot1Participant: participant(1),
     slot2Participant: participant(2),
     urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
-    ready: true,
+    ready: overrides.ready ?? true,
     error: null,
     playing: overrides.playing ?? true,
     autoplayBlocked: overrides.autoplayBlocked ?? false,
@@ -149,7 +153,7 @@ function controllerFixture(overrides: {
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
     suspend: vi.fn(),
-    seekBoth: vi.fn(),
+    seekBoth: overrides.seekBoth ?? vi.fn(),
     beginScrub: vi.fn(),
     endScrub: vi.fn(),
   };
@@ -837,6 +841,92 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   });
 });
 
+/**
+ * A link that named a moment — the timecode on a claim extracted from this debate — and the one
+ * chance the player gets to honour it.
+ *
+ * Three things have to hold at once, and they pull against each other. The seek cannot fire on mount,
+ * because before the media is seekable the element drops it and the reader lands at zero. It cannot
+ * fire more than once, because the feed re-renders and re-activates cards as the viewer scrolls, and
+ * a second seek would yank the playhead back to where the link pointed after they had moved it
+ * themselves. And it has to fire again for a different debate, because the same mounted card is
+ * reused as the feed scrolls from one to the next.
+ */
+describe('a seek asked for by the link that brought the reader here', () => {
+  function renderWithSeek(initialSeekSeconds: number | null, { ready = true }: { ready?: boolean } = {}) {
+    // One recorder, but a *fresh* function identity on every render — which is what the controller
+    // hook hands back, and what makes the effect re-run. An identity held stable across renders
+    // would keep the effect from running a second time at all, so the latch under test would never
+    // be asked to do anything and the test would pass against no latch whatsoever.
+    const seeks: number[] = [];
+    const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, ready, seekBoth: makeSeek() });
+    const view = render(<DebateFeedPlayer debate={debate} active initialSeekSeconds={initialSeekSeconds} />);
+
+    return {
+      seeks,
+      /** Re-render as the feed does, optionally with the media now seekable or a different debate. */
+      update(next: { ready?: boolean; active?: boolean; debateId?: string } = {}) {
+        mocks.controller = controllerFixture({
+          mutedByUser: true,
+          turnSlot: 1,
+          ready: next.ready ?? ready,
+          seekBoth: makeSeek(),
+        });
+        view.rerender(
+          <DebateFeedPlayer
+            debate={next.debateId == null ? debate : ({ ...debate, id: next.debateId } as typeof debate)}
+            active={next.active ?? true}
+            initialSeekSeconds={initialSeekSeconds}
+          />
+        );
+      },
+    };
+  }
+
+  it('waits for the media to be seekable rather than firing on mount', () => {
+    const player = renderWithSeek(124, { ready: false });
+
+    expect(player.seeks).toEqual([]);
+
+    player.update({ ready: true });
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  it('fires once, and not again when the card re-renders or is scrolled back to', () => {
+    const player = renderWithSeek(124);
+
+    expect(player.seeks).toEqual([124]);
+
+    player.update();
+    // Out of view and back again, which is what scrolling past a card and returning to it looks like.
+    player.update({ active: false });
+    player.update({ active: true });
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  it('fires again for a different debate, because the same card is reused down the feed', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ debateId: 'debate-2' });
+
+    expect(player.seeks).toEqual([124, 124]);
+  });
+
+  it('does nothing at all when the link named no moment', () => {
+    const player = renderWithSeek(null);
+
+    player.update();
+
+    expect(player.seeks).toEqual([]);
+  });
+});
+
+
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
@@ -1000,5 +1090,6 @@ describe('the round it is playing', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(container.querySelector('[data-round-card]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')).toBeNull();
+
   });
 });

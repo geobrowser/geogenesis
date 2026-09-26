@@ -19,6 +19,13 @@ import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from './claim-res
 type ClaimCommentPositionContextValue = {
   directions: Map<string, ActiveResponseDirection>;
   responseKind: DebateResponseKind;
+  /**
+   * What the badge is a position *on*, for the hover title.
+   *
+   * A bare "Agree" beside a name answers a question the reader has to guess at, and the guess is
+   * whatever claim is nearest on screen. Naming it removes the guess.
+   */
+  claimName: string | null;
 };
 
 const ClaimCommentPositionContext = React.createContext<ClaimCommentPositionContextValue | null>(null);
@@ -52,6 +59,7 @@ export function ClaimCommentPositionBoundary({
       entityId={entityId}
       spaceId={spaceId}
       responseKind={responseKind}
+      claimName={entity?.name ?? null}
       viewerDirection={summary.viewerDirection}
       viewerSpaceId={summary.viewerSpaceId}
       isViewerResponseLoading={summary.isViewerResponseLoading}
@@ -72,6 +80,7 @@ export function ClaimCommentPositionProvider({
   entityId,
   spaceId,
   responseKind,
+  claimName,
   viewerDirection,
   viewerSpaceId,
   isViewerResponseLoading,
@@ -80,6 +89,15 @@ export function ClaimCommentPositionProvider({
   entityId: string;
   spaceId: string;
   responseKind: DebateResponseKind;
+  /**
+   * The claim these positions are about, for the badge's hover title.
+   *
+   * Required rather than defaulted, and `null` only where there is genuinely no name to give. It was
+   * optional, and the page-level provider then silently left it out — so the badge explained itself on
+   * comments under an extracted claim and said nothing on the claim's own top-level comments, which is
+   * the case the title was added for. A default is what let one of two call sites forget.
+   */
+  claimName: string | null;
   viewerDirection: ActiveResponseDirection | null;
   viewerSpaceId: string | null;
   /** True until the viewer read succeeds; failures stay unresolved rather than becoming a clear. */
@@ -108,27 +126,73 @@ export function ClaimCommentPositionProvider({
     return result;
   }, [responders]);
 
-  const value = React.useMemo(() => ({ directions, responseKind }), [directions, responseKind]);
+  const value = React.useMemo(() => ({ directions, responseKind, claimName }), [claimName, directions, responseKind]);
 
   return <ClaimCommentPositionContext.Provider value={value}>{children}</ClaimCommentPositionContext.Provider>;
 }
 
-/** Current Agree/Disagree or Verify/Dispute state, rendered only inside a claim comment thread. */
+/**
+ * Which side somebody is on.
+ *
+ * Shared by the comment rows, where it reports the author's current response, and by the extracted
+ * claim rows, where it reports the side the debater argued. Two different facts wearing one badge on
+ * purpose: to a reader scanning the thread they are the same question, and the tag that answers it
+ * should not change shape depending on which kind of row it sits on.
+ *
+ * It used to take a response kind and read Agree/Disagree or Verify/Dispute from it. #2541 answered
+ * every claim with Agree/Disagree and removed the `veracity` kind outright, so there is one
+ * vocabulary and `responsePositionLabel` needs only the side.
+ */
+export function ResponsePositionTag({
+  position,
+  title,
+}: {
+  position: boolean;
+  /** Says what the position is *on*, which the word alone cannot. */
+  title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className={cx(
+        'inline-flex shrink-0 items-center rounded-xs px-1 py-px text-[0.6875rem] font-medium text-text',
+        position ? 'bg-successTertiary' : 'bg-errorTertiary'
+      )}
+    >
+      {responsePositionLabel(position)}
+    </span>
+  );
+}
+
+/**
+ * Where this person stands on the claim their comment hangs under.
+ *
+ * "The claim their comment hangs under" rather than "the claim at the top of the page", and the
+ * difference is not pedantic. A comment on an extracted claim sits directly below that claim's
+ * sentence, so a bare "Agree" beside the author's name reads as agreement with *that* — and the page
+ * claim it actually reported can be the opposite side, several screens up. Observed on testnet: a
+ * comment arguing against an extracted claim, badged "Agree", because its author agrees with the
+ * page claim the debate was about.
+ *
+ * The rule is now one sentence with no special cases: the badge reports the nearest claim above the
+ * comment. Under an extracted claim that is the extracted claim; under a debate, or at the top of
+ * the thread, there is no nearer claim and it stays the page's. Nesting the provider is all it takes,
+ * because the badge reads whichever one is closest.
+ *
+ * Nothing is borrowed from further away when the person holds no position on the nearer claim: an
+ * absent badge says less than a wrong one.
+ */
 export function ClaimCommentPositionBadge({ authorSpaceId }: { authorSpaceId: string }) {
   const context = React.useContext(ClaimCommentPositionContext);
   const direction = context?.directions.get(uuidToHex(authorSpaceId));
   if (!context || !direction) return null;
 
-  const positive = direction === 'positive';
+  const label = responsePositionLabel(direction === 'positive');
 
   return (
-    <span
-      className={cx(
-        'inline-flex shrink-0 items-center rounded-xs px-1 py-px text-[0.6875rem] font-medium text-text',
-        positive ? 'bg-successTertiary' : 'bg-errorTertiary'
-      )}
-    >
-      {responsePositionLabel(positive)}
-    </span>
+    <ResponsePositionTag
+      position={direction === 'positive'}
+      title={context.claimName ? `${label}: ${context.claimName}` : undefined}
+    />
   );
 }
