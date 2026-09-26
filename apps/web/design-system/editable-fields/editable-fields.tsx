@@ -32,6 +32,16 @@ const textareaStyles = cva(
         tableCell: 'mt-[-1.25px] mb-[-2.25px] text-tableCell',
         tableProperty: 'text-tableProperty! text-grey-04!',
         smallTitle: 'text-smallTitle',
+        // For a field inside a rail card, whose read-only text is `metadata` too — the card
+        // must not resize when the edit toggle flips.
+        //
+        // No compensating margin, like `smallTitle` and `tableProperty` above. The numbers on
+        // the other three were each arrived at by eye and revised more than once (see the
+        // history of `tableCell`), and no font metric predicts them — `smallTitle` and
+        // `tableCell` share a size and a line-height and disagree. So this starts at none, and
+        // anyone who sees this field sitting off the browse-mode text it replaces should treat
+        // that as the measurement rather than a regression.
+        metadata: 'text-metadata',
       },
     },
     defaultVariants: {
@@ -92,10 +102,16 @@ export function TableStringField({ variant = 'tableCell', truncateOverflow = fal
 type PageStringFieldProps = {
   onChange: (value: string) => void;
   placeholder?: string;
-  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell';
+  variant?: 'mainPage' | 'body' | 'smallTitle' | 'tableCell' | 'metadata';
   value?: string;
   autoFocus?: boolean;
   onEnterKey?: () => void;
+  /**
+   * Passed straight to the textarea, which stops typing past it. It does not stop a paste in
+   * every browser and does nothing to a programmatic change, so a caller that needs the limit
+   * held also has to cut the value in `onChange` — see `PersonalSpaceTagline`.
+   */
+  maxLength?: number;
 };
 
 export function PageStringField({ onChange, onEnterKey, ...props }: PageStringFieldProps) {

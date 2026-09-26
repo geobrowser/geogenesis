@@ -75,6 +75,9 @@ vi.mock('~/partials/profile/person-profile-view', () => ({
 vi.mock('~/partials/profile/personal-space-profile', () => ({
   PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
 }));
+vi.mock('~/partials/profile/personal-space-tagline', () => ({
+  PersonalSpaceTagline: () => <div data-testid="profile-tagline" />,
+}));
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
 // none of it is what this file asserts.
@@ -214,9 +217,12 @@ describe('EntityPageBody relation side panel', () => {
     expect(screen.getByTestId('person-profile')).toBeInTheDocument();
     expect(screen.queryByTestId('metadata')).toBeNull();
     expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
-    expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
-      4
-    );
+    // Name, tagline, roles — and no description at all: a person's bio is shown and edited in
+    // their About tab here, the same card the space route puts in its rail.
+    expect(
+      screen.getByTestId('profile-tagline').compareDocumentPosition(screen.getByTestId('profile-headline')) & 4
+    ).toBe(4);
+    expect(screen.queryByTestId('description')).toBeNull();
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
     expect(mocks.actions).toMatchObject({ isVoteable: true, compact: true });
   });

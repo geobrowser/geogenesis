@@ -38,7 +38,7 @@ vi.mock('~/core/state/entity-page-store/entity-store', () => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: true,
-    current: { name: 'Preston', description: '' },
+    current: { name: 'Preston', tagline: 'Head of Product at Geo', description: 'A bio' },
     publish: mocks.publish,
     reset: mocks.reset,
     status: mocks.status,
@@ -98,6 +98,16 @@ describe('LinksSection publishing', () => {
     expect(mocks.publish.mock.calls.at(-1)?.[1].values).toContainEqual(
       expect.objectContaining({ value: 'new.example' })
     );
+    // A links edit goes out through the profile modal's own publish, so it carries every
+    // header field it is not editing. Dropping one from the draft is how this card would
+    // quietly delete somebody's tagline while saving a URL.
+    expect(mocks.publish.mock.calls.at(-1)?.[0]).toEqual({
+      name: 'Preston',
+      tagline: 'Head of Product at Geo',
+      description: 'A bio',
+      banner: { kind: 'unchanged' },
+      avatar: { kind: 'unchanged' },
+    });
     expect(mocks.reset).not.toHaveBeenCalled();
 
     mocks.status = 'published';

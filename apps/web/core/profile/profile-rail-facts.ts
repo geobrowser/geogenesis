@@ -1,5 +1,6 @@
 import type { Space } from '~/core/io/dto/spaces';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
+import { TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 import { Entities } from '~/core/utils/entity';
 
 /**
@@ -35,6 +36,14 @@ export type ProfileRailFacts = {
    * the entity; this is only what to show until then.
    */
   description: string | null;
+  /**
+   * The line under the name, read the same way and for the same reason.
+   *
+   * Shown in the header rather than the rail, but derived here because this is where the
+   * space's own values are already unpacked — and because the header has the same blank-then-
+   * grown problem the bio had, one line high and directly above the roles.
+   */
+  tagline: string | null;
 };
 
 /**
@@ -55,6 +64,7 @@ export function profileRailFacts(
     // Scoped to this space, matching the store selector the rail reads: a
     // profile states the bio written here, not one borrowed from elsewhere.
     description: Entities.descriptionInSpace(space?.entity?.values ?? [], spaceId),
+    tagline: Entities.textInSpace(space?.entity?.values ?? [], TAGLINE_PROPERTY, spaceId),
     address: space?.address ?? null,
     spaceType: space?.type ?? 'PERSONAL',
   };

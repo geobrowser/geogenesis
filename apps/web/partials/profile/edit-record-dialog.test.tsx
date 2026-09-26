@@ -42,7 +42,13 @@ vi.mock('~/core/hooks/use-profile-history', () => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: mocks.canEdit,
-    current: { name: 'Preston Mantel', description: 'A bio', bannerUrl: null, avatarUrl: null },
+    current: {
+      name: 'Preston Mantel',
+      tagline: 'Head of Product at Geo',
+      description: 'A bio',
+      bannerUrl: null,
+      avatarUrl: null,
+    },
     publish: mocks.publish,
     status: mocks.status,
     errorMessage: null,
@@ -124,10 +130,12 @@ describe('EditRecordDialog', () => {
 
     const [draft, rows] = mocks.publish.mock.calls[0];
 
-    // This dialog edits one section. Passing the current name and description
-    // back unchanged is what keeps it from touching them.
+    // This dialog edits one section. Passing the current header fields back unchanged is what
+    // keeps it from touching them — and `toEqual` treats an absent key and an `undefined` one
+    // as the same, so a field dropped from the draft passes here unless the mock supplies it.
     expect(draft).toEqual({
       name: 'Preston Mantel',
+      tagline: 'Head of Product at Geo',
       description: 'A bio',
       banner: { kind: 'unchanged' },
       avatar: { kind: 'unchanged' },
