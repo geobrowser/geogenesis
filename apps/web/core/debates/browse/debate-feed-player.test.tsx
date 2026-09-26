@@ -867,7 +867,7 @@ describe('a seek asked for by the link that brought the reader here', () => {
     return {
       seeks,
       /** Re-render as the feed does, optionally with the media now seekable or a different debate. */
-      update(next: { ready?: boolean; active?: boolean; debateId?: string; seekSeconds?: number } = {}) {
+      update(next: { ready?: boolean; active?: boolean; debateId?: string; seekSeconds?: number | null } = {}) {
         mocks.controller = controllerFixture({
           mutedByUser: true,
           turnSlot: 1,
@@ -878,7 +878,7 @@ describe('a seek asked for by the link that brought the reader here', () => {
           <DebateFeedPlayer
             debate={next.debateId == null ? debate : ({ ...debate, id: next.debateId } as typeof debate)}
             active={next.active ?? true}
-            initialSeekSeconds={next.seekSeconds ?? initialSeekSeconds}
+            initialSeekSeconds={'seekSeconds' in next ? next.seekSeconds : initialSeekSeconds}
           />
         );
       },
@@ -936,6 +936,33 @@ describe('a seek asked for by the link that brought the reader here', () => {
 
     player.update({ seekSeconds: 124 });
     player.update();
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  /**
+   * A timecode, then none, then the same timecode again is a new request for that moment — it is what
+   * browser Back produces after following a link and then a plain one. The latch kept the first request
+   * through the gap, so the return matched it and the player never seeked.
+   */
+  it('seeks again for the same moment once the timecode has gone and come back', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: null });
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: 124 });
+    expect(player.seeks).toEqual([124, 124]);
+  });
+
+  // Letting go of the latch is for a missing timecode only. A render that is merely not ready must not
+  // clear it, or the same request would fire twice across a buffering stall.
+  it('does not let go of the latch just because the media is not ready', () => {
+    const player = renderWithSeek(124);
+
+    player.update({ ready: false });
+    player.update({ ready: true });
 
     expect(player.seeks).toEqual([124]);
   });

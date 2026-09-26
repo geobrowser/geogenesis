@@ -161,7 +161,16 @@ export function DebateFeedPlayer({
    */
   const appliedInitialSeekRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (initialSeekSeconds == null || !ready) return;
+    // No moment asked for means the last one has been let go. Without this the latch outlived the
+    // request that set it: `?t=124`, then the parameter dropped, then `?t=124` again — browser Back
+    // does exactly that — matched the stale latch and never seeked, though it was a new navigation
+    // asking for that moment. Only a missing timecode clears it; a render that is merely not ready
+    // yet keeps it, so the same request still cannot fire twice.
+    if (initialSeekSeconds == null) {
+      appliedInitialSeekRef.current = null;
+      return;
+    }
+    if (!ready) return;
     const request = `${debate.id}@${initialSeekSeconds}`;
     if (appliedInitialSeekRef.current === request) return;
     appliedInitialSeekRef.current = request;
