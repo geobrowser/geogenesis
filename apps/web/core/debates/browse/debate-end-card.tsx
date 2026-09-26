@@ -370,9 +370,9 @@ function ComparisonBox({
     >
       <div className="flex items-baseline justify-between @max-md:hidden">
         <span className="text-chatMedium">Claim vs. arguments</span>
-        <span className="text-chatMedium text-ctaPrimary tabular-nums">{comparison.gap} pts apart</span>
+        <span className="text-chatMedium text-purple tabular-nums">{comparison.gap} pts apart</span>
       </div>
-      <span className="hidden shrink-0 text-[1.3125rem] leading-none font-semibold text-ctaPrimary tabular-nums @max-md:block">
+      <span className="hidden shrink-0 text-[1.3125rem] leading-none font-semibold text-purple tabular-nums @max-md:block">
         {comparison.gap}
         <span className="text-[0.75rem] font-medium"> pts</span>
       </span>
@@ -392,7 +392,7 @@ function ComparisonBox({
           </span>
           {/* Centred in the box, so the end labels beside it sit level with the line itself. */}
           <div className="absolute inset-x-0 top-5 h-1 rounded-full bg-grey-02" />
-          <div className="absolute top-5 h-1 bg-ctaPrimary" style={{ left: `${low}%`, width: `${high - low}%` }} />
+          <div className="absolute top-5 h-1 bg-purple" style={{ left: `${low}%`, width: `${high - low}%` }} />
           <span
             data-marker="claim"
             className="absolute top-4 size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
