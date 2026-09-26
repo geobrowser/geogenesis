@@ -9,6 +9,8 @@ import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+
 import { EntityVoteButtons } from './entity-vote-buttons';
 import { slideUpPopoverContainersAtom } from '~/atoms';
 
@@ -27,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   /** The viewer's own vote, before it has been served back. */
   optimistic: undefined as 'positive' | 'negative' | undefined,
   indexingDelayed: false,
+  /** What `useQueryEntity` reports, for the branches that read the entity rather than a prop. */
+  entity: null as unknown,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -64,7 +68,7 @@ vi.mock('~/core/io/queries', () => ({
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({ fetchProfilesBySpaceIds: () => Effect.succeed([]) }));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
-vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }) }));
 
 // Stood in for, so the trigger around it is what the test is looking at rather than the avatar
 // stack's own network reads.
@@ -109,6 +113,7 @@ beforeEach(() => {
   mocks.negative = 1;
   mocks.optimistic = undefined;
   mocks.indexingDelayed = false;
+  mocks.entity = null;
   jotaiStore.current = createStore();
 });
 
@@ -228,6 +233,26 @@ describe('compact, for the sticky header', () => {
   const UNPUBLISHED = 'Publish changes before responding';
   const UNAVAILABLE = 'Response unavailable';
 
+  /**
+   * An unpublished edit to the claim's factual flag, shaped so the real
+   * `hasUnpublishedClaimResponseKindEdit` answers true. Built rather than stubbed: the predicate is
+   * pure over the entity, so driving it is both more faithful and no harder than mocking it — and
+   * this branch only runs when the caller passes no `responseKind`, so the entity is what decides.
+   */
+  function withUnpublishedResponseKindEdit() {
+    mocks.entity = {
+      relations: [],
+      values: [
+        {
+          spaceId: SPACE,
+          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          isLocal: true,
+          hasBeenPublished: false,
+        },
+      ],
+    };
+  }
+
   it('drops the indexing notice but keeps the control', async () => {
     mocks.indexingDelayed = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
@@ -255,10 +280,27 @@ describe('compact, for the sticky header', () => {
     expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
   });
 
-  it('keeps those sentences on every other surface', () => {
+  it('keeps that sentence on every other surface', () => {
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={null} />, { wrapper });
 
     expect(screen.getByText(UNAVAILABLE)).toBeInTheDocument();
-    expect(screen.queryByText(UNPUBLISHED)).toBeNull();
+  });
+
+  /**
+   * The third of the three prose states, and the one my own proof missed: neutering `compact` used
+   * to fail two tests, never this branch.
+   */
+  it('draws nothing for an unpublished response-kind edit', () => {
+    withUnpublishedResponseKindEdit();
+    const { container } = render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} compact />, { wrapper });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('still explains the unpublished edit everywhere else', () => {
+    withUnpublishedResponseKindEdit();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} />, { wrapper });
+
+    expect(screen.getByText(UNPUBLISHED)).toBeInTheDocument();
   });
 });
