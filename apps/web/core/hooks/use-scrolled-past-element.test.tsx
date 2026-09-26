@@ -335,6 +335,30 @@ describe('useScrolledPastElement', () => {
     expect(result.current.scrolledPast).toBe(true);
   });
 
+  /**
+   * `unobserve` stops future records; it does not purge ones already queued. So a notification about
+   * the title a tab just replaced can land after the swap, and taking the batch's last entry without
+   * asking what it describes let that stale record overwrite the measurement taken for the new title
+   * — undoing, for a frame, the very thing measuring at the swap was added to fix.
+   */
+  it('ignores a queued notification about the title it has already dropped', async () => {
+    const first = atViewportBottom(addTitle(), -200);
+    const { result } = render();
+
+    notify(latestObserver(), first, { isIntersecting: false, bottom: -200 });
+    expect(result.current.scrolledPast).toBe(true);
+
+    act(() => first.remove());
+    const second = atViewportBottom(addTitle(), 300);
+    await waitFor(() => expect(result.current.target).toBe(second));
+    expect(result.current.scrolledPast).toBe(false);
+
+    // The old element's record, queued before it was unobserved, arriving late.
+    notify(latestObserver(), first, { isIntersecting: false, bottom: -200 });
+
+    expect(result.current.scrolledPast).toBe(false);
+  });
+
   it('stays false when IntersectionObserver is unavailable', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     addTitle();

@@ -81,7 +81,12 @@ export function useScrolledPastElement({ selector, topOffset, enabled = true }: 
       entries => {
         // Entries are queued chronologically and several transitions can arrive in one batch, so a
         // reversible state has to follow the last of them rather than any earlier one.
-        const latest = entries.at(-1);
+        //
+        // Filtered by target first. `unobserve` stops future records; it does not purge ones already
+        // queued, so a notification about the title a tab just replaced can land after the swap. Read
+        // blindly, that stale record overwrote the measurement taken for the new title — undoing, for
+        // a frame, the very thing measuring at the swap exists to fix.
+        const latest = entries.filter(entry => entry.target === watched).at(-1);
         if (!latest) return;
         setScrolledPast(!latest.isIntersecting && latest.boundingClientRect.bottom <= topOffset);
       },

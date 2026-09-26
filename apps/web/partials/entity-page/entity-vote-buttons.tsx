@@ -67,9 +67,25 @@ type EntityVoteButtonsProps = {
    * the row 94px past its own width and gave the document a horizontal scrollbar.
    *
    * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
-   * and dropped rather than wrapped, because the bar is one fixed-height line by design. Nothing is
-   * lost: the page's own copy of this control is still mounted below — merely scrolled out of view —
-   * so it carries the same text and the same `aria-live` announcement.
+   * and dropped rather than wrapped, because the bar is one fixed-height line by design.
+   *
+   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
+   * blocking responses, or that there is no response kind — and the page explains that state too, so
+   * a reader who finds nothing in the bar has somewhere else to find it.
+   *
+   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
+   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
+   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
+   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
+   * earlier version of this comment claimed the page's own copy announced instead, and that is false
+   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
+   * puts this same sentence in a `title`: read on focus, never announced.
+   *
+   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
+   * profile — both live regions are inserted at once and the confirmation can be announced twice.
+   * Deduplicating needs the two surfaces to know about each other, and this component renders once
+   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
+   * announcement is the better failure than none.
    */
   compact?: boolean;
 };

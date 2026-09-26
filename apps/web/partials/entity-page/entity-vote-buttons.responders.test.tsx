@@ -226,9 +226,14 @@ describe('the responder faces on a claim', () => {
  * browser at 390px, the indexing notice alone pushed the row 94px past its own width and gave the
  * document a horizontal scrollbar.
  *
- * Nothing is lost by dropping them — the page's own copy of this control stays mounted below, merely
- * scrolled out of view, so it keeps the text and the `aria-live` announcement. Verified in the
- * browser too: with the notice forced on, one lives on the page and none in the bar.
+ * The two that describe *state* are dropped outright: the page explains the same thing, so a reader
+ * who finds nothing in the bar has somewhere else to look.
+ *
+ * The indexing notice is not. It announces an event the reader just caused, from a control they can
+ * use in the bar, so it stays in the accessibility tree as `sr-only` — out of layout, still spoken.
+ * The suite used to assert it was gone entirely, on my claim that the page's copy announced instead;
+ * that claim was false for claims, which answer with `ClaimPositionCommentControl` and expose this
+ * sentence only as a `title`.
  */
 describe('compact, for the sticky header', () => {
   // master extracted this string to a constant while this branch was open; taken from there rather
