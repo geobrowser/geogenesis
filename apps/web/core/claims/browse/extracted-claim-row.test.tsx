@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimTiming } from '~/core/debates/claim-timing';
+import { resetCommentCountSeeds } from '~/core/hooks/use-comment-count';
 
 import type { OrderedTranscriptClaim } from './claim-activity-order';
 import { ExtractedClaimRow } from './extracted-claim-row';
@@ -266,6 +267,43 @@ describe('ExtractedClaimRow', () => {
     renderRow({ commentCount: 4 });
 
     expect(screen.queryByText(/Couldn’t load the replies/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * The same gate as the debate row's, for the same reason: the aggregate is a minute stale and nothing
+   * writes to it on publish, so on its own it kept a comment written a moment ago out of reach while
+   * the comment button beside this row — reading the live list — reported it.
+   */
+  it('opens its replies for a comment the aggregate has not heard about yet', () => {
+    resetCommentCountSeeds();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const row = () => (
+      <QueryClientProvider client={client}>
+        <ExtractedClaimRow
+          claim={claim()}
+          debateId="debate-1"
+          debateSpaceId="debate-space"
+          responseKind="stance"
+          speaker={{ spaceId: 'speaker-space', name: 'Ada Reyes' }}
+          speakerPosition={null}
+          depth={2}
+          commentCount={0}
+        />
+      </QueryClientProvider>
+    );
+
+    const first = render(row());
+    expect(screen.queryByLabelText('Hide comments on this claim')).not.toBeInTheDocument();
+
+    client.setQueryData(
+      ['comments', 'claim-1'],
+      [{ id: 'reply-new', createdAt: '2026-09-26T10:00:00Z', isPendingPublish: true }],
+      { updatedAt: Date.now() + 1_000 }
+    );
+    first.unmount();
+    render(row());
+
+    expect(screen.getAllByLabelText('Hide comments on this claim').length).toBeGreaterThan(0);
   });
 
   it('keeps its comments reachable when the count aggregate could not answer', () => {

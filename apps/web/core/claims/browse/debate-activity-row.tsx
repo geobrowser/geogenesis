@@ -8,6 +8,7 @@ import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-count
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { countFor } from '~/core/hooks/batched-counts';
+import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useComments } from '~/core/hooks/use-comments';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Entity } from '~/core/types';
@@ -137,14 +138,23 @@ export function DebateActivityRow({
 
   // A debate with no claims and no comments has no branch: `DebateBranch` returns null for it. The
   // collapse control was drawn anyway, so pressing it on a transcript-less debate collapsed nothing
-  // and merely swapped the keyframe for a plus. `composer.hasPosted` as well as the two counts,
-  // because a comment written here is a branch the server aggregate has not heard about yet.
+  // and merely swapped the keyframe for a plus.
   //
   // A count of `null` is an aggregate that failed, not an empty debate, so it opens the branch: the
   // worst case is that toggle with nothing under it again, against losing every extracted claim and
   // every comment on the page with no way to ask for them.
+  //
+  // The comments are read *live* — the same number the comment button beside this row shows, from the
+  // same hook. The aggregate is batched for the page and held for a minute, and nothing writes to it
+  // when a comment is published, so on its own it answered "no comments" for a debate that had just
+  // gained one. This used to lean on a flag set by this row's own composer, which only knew about
+  // comments written here, since this mount: navigate away and back and it had reset while the
+  // aggregate had not, so the button said 1 and the branch that would show that comment was absent.
+  // The live count survives a remount and sees a comment from any surface, because it reads the
+  // comments cache every composer writes to.
+  const liveCommentCount = useCommentCount(debate.id, commentCount ?? 0);
   const countsUnknown = claimCount == null || commentCount == null;
-  const hasBranch = countsUnknown || claimCount + commentCount > 0 || composer.hasPosted;
+  const hasBranch = countsUnknown || claimCount + liveCommentCount > 0;
 
   return (
     <div ref={spine.rowRef} className="thread-branch-hover-root relative">
@@ -284,7 +294,7 @@ export function DebateActivityRow({
                 onCollapse={() => setCollapsed(true)}
                 branchLabel={branchLabel}
                 commentCount={commentCount}
-                hasPostedHere={composer.hasPosted}
+                liveCommentCount={liveCommentCount}
               />
             </div>
           )}
@@ -309,7 +319,7 @@ function DebateBranch({
   onCollapse,
   branchLabel,
   commentCount,
-  hasPostedHere,
+  liveCommentCount,
 }: {
   debateId: string;
   spaceId: string;
@@ -320,8 +330,11 @@ function DebateBranch({
   branchLabel: { expand: string; collapse: string };
   /** From the feed's own aggregate. Zero means nothing here is worth a request; `null` means it could not say. */
   commentCount: number | null;
-  /** Someone has commented from this row since the page loaded, so the aggregate is behind. */
-  hasPostedHere: boolean;
+  /**
+   * The comments as they stand now, which the aggregate lags. See the row above: this is what makes a
+   * comment written here, or anywhere else, reachable before the aggregate catches up.
+   */
+  liveCommentCount: number;
 }) {
   const { claims, isLoading, error: claimsError, retry: retryClaims } = useDebateTranscriptClaims(debateId, spaceId);
   const { timings, isReady } = useClaimTimings(debateId, claims);
@@ -335,11 +348,11 @@ function DebateBranch({
     entityId: debateId,
     spaceId,
     // Most debates have no comments, and this feed already knows which. Fetching them anyway would
-    // be a backlink walk per debate row to discover a list we were told is empty. A comment made
-    // from this row makes that aggregate stale, so it also lifts the gate — otherwise the first
+    // be a backlink walk per debate row to discover a list we were told is empty. The live count lifts
+    // the gate as soon as a comment exists anywhere, which the aggregate does not — otherwise the first
     // comment on a silent debate would be written and never read back. So does an aggregate that
     // failed (`null`): "we could not ask" is not "there is nothing to fetch".
-    enabled: commentCount == null || commentCount > 0 || hasPostedHere,
+    enabled: commentCount == null || liveCommentCount > 0,
   });
 
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);

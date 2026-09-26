@@ -67,30 +67,40 @@ export function usePublishComment(
         return true;
       };
 
+      /**
+       * Whether the caller is currently counting this comment — one flag for the whole lifecycle, the
+       * first attempt and every queued retry alike.
+       *
+       * The two callbacks are a transition on it rather than an event per attempt, for two reasons
+       * that turned up one round apart. `PendingActionsRunner` keeps a failed action queued and re-runs
+       * it, so reporting per attempt took the count down once per retry — unbounded drift from one
+       * comment. And `createComment` can fail *before* it inserts anything (no cached account, for
+       * one), so the first attempt reporting a failure unconditionally gave back a count that was never
+       * taken. A `-1` is only owed for a `+1` that was actually reported.
+       */
+      let countedByCaller = false;
+      const countRow = (commentId: string) => {
+        countedByCaller = true;
+        onOptimistic?.(commentId);
+      };
+      const uncountRow = () => {
+        if (!countedByCaller) return;
+        countedByCaller = false;
+        onFailed?.();
+      };
+
       const result = await createComment({
         text,
         targetSpaceId,
         ancestorComments,
-        onOptimistic,
+        onOptimistic: countRow,
       });
 
       if (!result) {
-        onFailed?.();
+        uncountRow();
         return result;
       }
       if (recordIfPublished(result)) return result;
-
-      /**
-       * Whether the caller is currently counting this comment.
-       *
-       * `PendingActionsRunner` keeps a failed action queued and its error toast offers a retry that
-       * runs this again, so `run` is not once-only. Reporting a failure every time it ran took the
-       * count down once per attempt — unbounded drift from a single comment — and a retry that
-       * finally succeeded never gave it back. So the two callbacks are a transition on this flag
-       * rather than an event per attempt: the caller is told at most once that the row is gone, and
-       * told again when a retry puts it back.
-       */
-      let countedByCaller = true;
 
       enqueuePendingAction({
         id: `comment:${targetEntityId}:${result.id}`,
@@ -106,19 +116,13 @@ export function usePublishComment(
 
           if (recordIfPublished(published)) {
             // A retry after a rollback: the comment exists again, so it counts again.
-            if (!countedByCaller) {
-              countedByCaller = true;
-              onOptimistic?.(result.id);
-            }
+            if (!countedByCaller) countRow(result.id);
             return;
           }
 
           // The row is gone — `useCreateComment` removes it on a failed publish — so anything the
           // caller counted for this comment comes back before the error is surfaced.
-          if (countedByCaller) {
-            countedByCaller = false;
-            onFailed?.();
-          }
+          uncountRow();
           throw new Error('Comment could not be published');
         },
       });

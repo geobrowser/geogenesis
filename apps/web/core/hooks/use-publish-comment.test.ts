@@ -50,11 +50,13 @@ describe('usePublishComment', () => {
 
     await act(() => result.current.publishComment({ text: 'A reason' }));
 
+    // `onOptimistic` is the hook's own wrapper — it records that the row was counted, so a later
+    // failure knows whether a `-1` is owed — rather than the caller's callback passed straight through.
     expect(mocks.createComment).toHaveBeenCalledWith({
       text: 'A reason',
       targetSpaceId: 'space-1',
       ancestorComments: undefined,
-      onOptimistic: undefined,
+      onOptimistic: expect.any(Function),
     });
     expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
     expect(mocks.commentCreated).toHaveBeenCalledWith('comment-1', 'claim-1', {
@@ -166,13 +168,41 @@ describe('usePublishComment reporting a failure', () => {
     return act(() => result.current.publishComment({ text: 'A comment', onFailed }) as Promise<unknown>);
   }
 
-  it('reports a publish that failed immediately', async () => {
-    mocks.createComment.mockResolvedValue(null);
+  /**
+   * What `useCreateComment` does: inserts the optimistic row and reports it, then resolves. `inserted`
+   * is false for the one outcome where it gives up before inserting anything.
+   */
+  function createCommentThat(outcome: unknown, { inserted = true }: { inserted?: boolean } = {}) {
+    mocks.createComment.mockImplementation(
+      async (input: { onOptimistic?: (id: string) => void; commentId?: string }) => {
+        // A retry passes the existing id and no callback; the first attempt passes a callback.
+        if (inserted) input.onOptimistic?.('comment-1');
+        return outcome;
+      }
+    );
+  }
+
+  it('reports a publish that failed after its row was counted', async () => {
+    createCommentThat(null);
     const onFailed = vi.fn();
 
     await publish(onFailed);
 
     expect(onFailed).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * `createComment` can give up before it inserts anything — no cached account, for one — and the old
+   * path reported a failure regardless. Callers treat the two callbacks as a balanced `+1`/`-1`, so that
+   * took back a count that was never taken: the Activity total one *low*.
+   */
+  it('reports nothing for a publish that failed before any row existed', async () => {
+    createCommentThat(null, { inserted: false });
+    const onFailed = vi.fn();
+
+    await publish(onFailed);
+
+    expect(onFailed).not.toHaveBeenCalled();
   });
 
   it('does not report one that succeeded', async () => {
@@ -186,7 +216,7 @@ describe('usePublishComment reporting a failure', () => {
 
   // The case the returned value cannot express: retained now, failed later.
   it('reports a retained publish whose retry fails, and not before', async () => {
-    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: false });
+    createCommentThat({ id: 'comment-1', published: false });
     const onFailed = vi.fn();
 
     await publish(onFailed);
@@ -196,7 +226,7 @@ describe('usePublishComment reporting a failure', () => {
     expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
 
     const queued = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
-    mocks.createComment.mockResolvedValue(null);
+    createCommentThat(null);
 
     await expect(queued.run()).rejects.toThrow('Comment could not be published');
     expect(onFailed).toHaveBeenCalledOnce();
@@ -249,7 +279,7 @@ describe('usePublishComment reporting a failure', () => {
   });
 
   it('says nothing when the retry succeeds', async () => {
-    mocks.createComment.mockResolvedValue({ id: 'comment-1', published: false });
+    createCommentThat({ id: 'comment-1', published: false });
     const onFailed = vi.fn();
 
     await publish(onFailed);

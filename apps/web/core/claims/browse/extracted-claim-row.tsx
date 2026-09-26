@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { formatTimecode, isAssertableMoment } from '~/core/debates/claim-timing';
 import { debateSeekSeconds, withDebateTimecode } from '~/core/debates/debate-timecode';
+import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useComments } from '~/core/hooks/use-comments';
 import type { ResponseKind } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
@@ -133,8 +134,13 @@ export function ExtractedClaimRow({
 
   // `commentCount == null` is an aggregate that could not answer, not a claim with no comments: the
   // branch opens so the replies stay reachable. See `batched-counts.ts`.
-  const hasComments =
-    Boolean(claimSpaceId) && (commentCount == null || commentCount > 0 || composer.hasPosted) && canNestBelow(depth);
+  //
+  // Otherwise the *live* count, which is the number the comment button beside this row shows: the
+  // aggregate is held for a minute and nothing writes to it on publish, so on its own it kept a
+  // comment written a moment ago — here or on any other surface — out of reach, with the button
+  // reporting it. See `DebateActivityRow`, which gates the same way for the same reason.
+  const liveCommentCount = useCommentCount(claim.id, commentCount ?? 0);
+  const hasComments = Boolean(claimSpaceId) && (commentCount == null || liveCommentCount > 0) && canNestBelow(depth);
   const branchLabel = { expand: 'Show comments on this claim', collapse: 'Hide comments on this claim' };
 
   return (
@@ -266,9 +272,8 @@ export function ExtractedClaimRow({
           />
         )}
 
-        {/* `composer.hasPosted` as well as the server count: the aggregate that gates this is from
-            the page load, so a reader's first comment on a silent claim would otherwise be written
-            and then not drawn. */}
+        {/* Gated on the live count, not the aggregate alone: the aggregate is from the page load, so a
+            reader's first comment on a silent claim would otherwise be written and then not drawn. */}
         {hasComments && !commentsCollapsed && (
           <div ref={spine.branchRef} className="mt-3">
             <ClaimComments

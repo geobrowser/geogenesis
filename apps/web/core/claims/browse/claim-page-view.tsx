@@ -17,6 +17,7 @@ import {
 } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useComments } from '~/core/hooks/use-comments';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
@@ -518,6 +519,12 @@ function ClaimOverviewTab({
   const adjustActivityTotal = useAdjustActivityTotal(entityId);
 
   const activity = useClaimActivityRows({ claimId: entityId, spaceId });
+  // The claim's own comments, for their error alone. `CommentSection` fetches them and keeps its error
+  // to itself, which is right for a thread whose heading counts the same list — there a failure reads
+  // as "Comments (0)" over nothing, consistent if unhelpful. Here the heading is an independent
+  // aggregate that goes on counting them, so a failed read drew a total over a list with none of the
+  // claim's comments in it. Same key as the section's, so this is a second subscription, not a request.
+  const claimComments = useComments({ entityId, spaceId });
 
   const kinds: ActivityKind[] = [
     {
@@ -585,17 +592,23 @@ function ClaimOverviewTab({
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
         {/*
-          Two reads feed this section and either can fail on its own, so each says so for itself.
-          Without the debates the feed is missing every debate and every claim extracted from one;
-          without the total the heading falls back to this claim's own comments plus the rows it drew,
-          which leaves out everything nested under a debate and is not the number it appears to be.
+          Three reads feed this section and any of them can fail on its own, so each says so for
+          itself. Without the debates the feed is missing every debate and every claim extracted from
+          one; without the claim's own comments it is missing those, under a heading that still counts
+          them; without the total the heading falls back to this claim's own comments plus the rows it
+          drew, which leaves out everything nested under a debate and is not the number it appears to be.
           Said here rather than as rows inside the section: each is about a whole list rather than a
           place in one, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
         */}
-        {(activity.error != null || activityCounts.error != null) && (
+        {(activity.error != null || claimComments.error != null || activityCounts.error != null) && (
           <div className="flex flex-col items-start gap-1 pt-10" data-activity-errors>
             {activity.error != null && (
               <ThreadRetry onRetry={activity.retry}>Couldn’t load the debates on this claim.</ThreadRetry>
+            )}
+            {claimComments.error != null && (
+              <ThreadRetry onRetry={() => void claimComments.refetch()}>
+                Couldn’t load the comments on this claim.
+              </ThreadRetry>
             )}
             {activityCounts.error != null && (
               <ThreadRetry onRetry={activityCounts.retry}>Couldn’t load this claim’s activity total.</ThreadRetry>

@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   retryActivityCount: vi.fn(),
   adjustActivityTotal: vi.fn(),
   countsMountedFor: [] as string[],
+  claimCommentsError: null as Error | null,
+  refetchClaimComments: vi.fn(),
   // The active tab comes from the route, so a test that needs another tab sets this.
   pathname: '/space/space-1/claim-1',
   entity: null as Record<string, unknown> | null,
@@ -161,6 +163,16 @@ vi.mock('./use-claim-activity-rows', () => ({
 
 // The heading's number, which is the same one the claim's Explore card shows. Its own query is
 // covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({
+    comments: [],
+    totalCount: 0,
+    isLoading: false,
+    error: mocks.claimCommentsError,
+    refetch: mocks.refetchClaimComments,
+  }),
+}));
+
 vi.mock('./claim-activity-count', () => ({
   useClaimActivityCounts: (ids: string[]) => {
     mocks.countsMountedFor.push(...ids);
@@ -305,6 +317,8 @@ beforeEach(() => {
   mocks.retryActivityCount.mockClear();
   mocks.adjustActivityTotal.mockClear();
   mocks.countsMountedFor.length = 0;
+  mocks.claimCommentsError = null;
+  mocks.refetchClaimComments.mockClear();
   mocks.pathname = '/space/space-1/claim-1';
   mocks.activityTotal = null;
   mocks.responseTotal = 11;
@@ -783,6 +797,21 @@ describe('ClaimPageView comments', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mocks.retryActivityCount).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The claim's own comments are the third read, and `CommentSection` keeps its failure to itself —
+   * reasonable where the heading counts that same list, wrong here, where the heading is an independent
+   * aggregate that goes on counting the comments the list could not load.
+   */
+  it('says when the claim’s own comments could not be read', () => {
+    mocks.claimCommentsError = new Error('comments unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the comments on this claim/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchClaimComments).toHaveBeenCalledOnce();
   });
 
   // Each read speaks for itself: one failing says nothing about the other.

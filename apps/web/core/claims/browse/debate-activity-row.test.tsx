@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetCommentCountSeeds } from '~/core/hooks/use-comment-count';
 import type { Entity } from '~/core/types';
 
 import { DebateActivityRow } from './debate-activity-row';
@@ -272,5 +273,61 @@ describe('DebateActivityRow when the transcript will not load', () => {
 
     expect(screen.queryByText(/Couldn’t load the claims/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * A comment written on this debate, then the reader navigates away and back.
+ *
+ * The comment-count aggregate is batched for the page and held for a minute, and nothing writes to it
+ * on publish, so it still says none. The row used to lean on a flag its own composer set, which reset
+ * on the remount — so the comment button beside the row, reading the live list, said 1 while the
+ * branch that would show that comment was not drawn at all. The gate reads the same live count the
+ * button does now, so the two cannot disagree.
+ */
+describe('DebateActivityRow after a comment it has not heard about from the server', () => {
+  beforeEach(() => {
+    resetCommentCountSeeds();
+    mocks.commentQueries.length = 0;
+    mocks.transcriptError = null;
+    mocks.debateComments = [];
+    mocks.commentsError = null;
+  });
+  afterEach(cleanup);
+
+  it('keeps the comment reachable across a remount while the aggregate still says none', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const row = () => (
+      <QueryClientProvider client={client}>
+        <DebateActivityRow
+          debate={debate()}
+          spaceId="claim-space"
+          profilesBySpaceId={new Map()}
+          sides={[]}
+          claimText="Practical effects age better than CGI."
+          keyframeUrl={null}
+          publishedAt={new Date('2026-09-01T00:00:00.000Z')}
+          // The page's aggregate, a minute stale: it has not heard about the comment.
+          commentCount={0}
+          claimCount={0}
+        />
+      </QueryClientProvider>
+    );
+
+    const first = render(row());
+    expect(screen.queryByLabelText(COLLAPSE_LABEL)).not.toBeInTheDocument();
+
+    // What `useCreateComment` leaves in the cache: the reader's comment, still publishing.
+    client.setQueryData(
+      ['comments', 'debate-1'],
+      [{ id: 'comment-new', createdAt: '2026-09-26T10:00:00Z', isPendingPublish: true }],
+      { updatedAt: Date.now() + 1_000 }
+    );
+
+    // Away and back.
+    first.unmount();
+    render(row());
+
+    expect(screen.getAllByLabelText(COLLAPSE_LABEL).length).toBeGreaterThan(0);
   });
 });

@@ -64,7 +64,7 @@ export function InlineCommentComposer({
   const { smartAccount } = useSmartAccount();
   const promptSignIn = usePrivySignIn();
   const isSignedIn = !!smartAccount;
-  const { isComposing, close, markPosted, markPostRejected } = composer;
+  const { isComposing, close } = composer;
   const adjustActivityPosts = useAdjustActivityPosts();
 
   /**
@@ -114,21 +114,15 @@ export function InlineCommentComposer({
           void publishComment({
             text,
             ancestorComments: ancestors,
-            onOptimistic: commentId => {
-              markPosted(commentId);
-              // The heading above counts things this section cannot see, so it cannot notice this on
-              // its own.
-              adjustActivityPosts(1);
-            },
+            // The heading above counts things this section cannot see, so it cannot notice this on its
+            // own. Nothing else needs telling: the row's branch reads the live comment list, which the
+            // optimistic row is already in.
+            onOptimistic: () => adjustActivityPosts(1),
             // Whichever way it fails, and there are two: the transaction rejected now, or a publish
             // retained for a personal space that does not exist yet failing its retry later. Both take
-            // the optimistic row back out, so the heading gives back the one it counted and this row
-            // stops holding a branch open for a comment that is no longer there. Reading the returned
-            // value only ever saw the first of the two.
-            onFailed: () => {
-              markPostRejected();
-              adjustActivityPosts(-1);
-            },
+            // the optimistic row back out, so the heading gives back the one it counted. The branch
+            // needs no telling here either — the row leaving the list is the signal.
+            onFailed: () => adjustActivityPosts(-1),
           });
           close();
         }}
@@ -148,35 +142,21 @@ export type InlineComposerState = ReturnType<typeof useInlineComposer>;
 
 export function useInlineComposer() {
   const [isComposing, setIsComposing] = React.useState(false);
-  /**
-   * How many comments written here are still standing.
-   *
-   * Sticky while it is above zero: the row keeps showing its thread even while the server count that
-   * gated it is still reporting nothing, because the aggregate has not heard about a comment written
-   * a second ago.
-   *
-   * A count rather than a flag, because a publish can be rejected. As a flag it latched true and
-   * stayed there, so a rejected first comment left the row holding a branch with nothing in it — a
-   * collapse control that collapsed nothing, and a comments fetch enabled to look for a comment that
-   * had been taken back out. Counting means a rejection can undo exactly its own post and a reader
-   * who published two comments and lost one keeps the branch for the one that stood.
-   */
-  const [postedCount, setPostedCount] = React.useState(0);
 
+  // No record of what was posted from here, deliberately. There used to be one — a flag, then a count
+  // so a rejection could undo it — and the rows read it to hold their branch open for a comment the
+  // server aggregate had not heard about yet. It only knew about comments written from this row since
+  // this mount: navigate away and back and it reset, while the aggregate still said none, so the
+  // comment button reported the comment and the branch that would show it was gone. The rows read the
+  // live comment list instead, which every composer writes to, survives a remount, and drops a
+  // rejected comment on its own. What is left here is only whether the box is open.
   return React.useMemo(
     () => ({
       isComposing,
-      hasPosted: postedCount > 0,
       toggle: () => setIsComposing(open => !open),
       open: () => setIsComposing(true),
       close: () => setIsComposing(false),
-      markPosted: (_commentId?: string) => {
-        setPostedCount(posted => posted + 1);
-        setIsComposing(false);
-      },
-      /** The transaction was rejected and the optimistic row is gone, so this post no longer counts. */
-      markPostRejected: () => setPostedCount(posted => Math.max(0, posted - 1)),
     }),
-    [isComposing, postedCount]
+    [isComposing]
   );
 }
