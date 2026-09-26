@@ -1091,6 +1091,53 @@ describe('the end card', () => {
     expect(container.textContent).not.toContain(subtitle);
   });
 
+  it('takes the tiles under the card out of reach, and gives them back once it goes', () => {
+    // The play/pause surface, the scrubber and the name links are still in the DOM under the card;
+    // without this a keyboard tabbed onto controls it could not see and restarted the video behind it.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = ended();
+    const covered = render(<DebateFeedPlayer debate={debate} active />).container;
+    const coveredTiles = [...covered.querySelectorAll('[data-debate-slot]')];
+    expect(coveredTiles).toHaveLength(2);
+    expect(coveredTiles.every(tile => tile.hasAttribute('inert'))).toBe(true);
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    const playing = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect([...playing.querySelectorAll('[data-debate-slot]')].some(tile => tile.hasAttribute('inert'))).toBe(false);
+  });
+
+  it('holds a replay pressed before this player may play, and carries it out when it may', () => {
+    // In a row of cards the first press hands playback over, which arrives a render later. Playing
+    // at once would run beside the old owner; dropping the press made Replay take two taps.
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+    expect(controller.playFromStart).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer debate={debate} active />);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a held replay lapse if the debate stops being ended first', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+
+    mocks.controller = { ...controller, playbackEnded: false };
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+    mocks.controller = controller;
+    rerender(<DebateFeedPlayer debate={debate} active />);
+
+    expect(controller.playFromStart).not.toHaveBeenCalled();
+  });
+
   it("asks for the card's numbers while the debate is active, so they are there when it ends", () => {
     mocks.ticker = emptyTicker();
 

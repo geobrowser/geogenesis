@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,27 @@ const mocks = vi.hoisted(() => ({
   // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
   media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
   castVote: vi.fn(),
+  /** The feed's debates; null for the suite's usual single debate. */
+  debates: null as Debate[] | null,
+  /** Each debate the claims panel was mounted for, in order — a remount appends. */
+  claimsPanelMounts: [] as string[],
 }));
+
+// Stands in for the claims panel so a test can see whether it is remounted or merely handed a new
+// debate: only a mount appends. Its content has its own suite.
+vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
+  const React = await import('react');
+  return {
+    DebateClaimsPanel: ({ debate }: { debate: Debate }) => {
+      React.useEffect(() => {
+        mocks.claimsPanelMounts.push(debate.id);
+        // Mount-only: a new debate handed to the same panel is exactly what must not register here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      return React.createElement('div', { 'data-testid': 'claims-panel', 'data-debate': debate.id });
+    },
+  };
+});
 
 // Voting reaches the chain and the user's personal space, neither of which exists here. The
 // tally logic has its own unit tests; this suite only cares that the feed renders the pills.
@@ -65,7 +85,11 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
-  useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
+  useSpaceDebates: () => ({
+    data: { debates: mocks.debates ?? [completedDebate()], matches: [] },
+    isLoading: false,
+    error: null,
+  }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
@@ -138,6 +162,8 @@ beforeEach(() => {
   mocks.replace.mockClear();
   mocks.mediaArtifactMutate.mockClear();
   mocks.media = { processedIds: ['debate-1'], isLoading: false, hasError: false };
+  mocks.debates = null;
+  mocks.claimsPanelMounts = [];
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
   class MockIntersectionObserver {
@@ -168,6 +194,46 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
+  });
+
+  it('opens the claims panel afresh on each debate the feed scrolls to', () => {
+    // The panel follows the active debate. Reused rather than remounted, it carried the old list's
+    // scroll offset — and the debater it had been opened at — onto the next debate.
+    const second = {
+      ...completedDebate(),
+      id: 'debate-2',
+      room_name: 'debate-2',
+      claim: { ...completedDebate().claim, id: 'claim-2', claim_entity_id: 'claim-entity-2', claim: 'Second claim' },
+    };
+    mocks.debates = [completedDebate(), second];
+    mocks.media = { processedIds: ['debate-1', 'debate-2'], isLoading: false, hasError: false };
+    const observed: { callback: IntersectionObserverCallback; element: Element }[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe(element: Element) {
+          observed.push({ callback: this.callback, element });
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+
+    render(<DebatesPageClient spaceId="space-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims (0)' })[0]);
+    expect(mocks.claimsPanelMounts).toEqual(['debate-1']);
+
+    const secondItem = observed.find(entry => entry.element.textContent?.includes('Second claim'))!;
+    act(() =>
+      secondItem.callback(
+        [{ isIntersecting: true, intersectionRatio: 0.7, target: secondItem.element } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      )
+    );
+
+    expect(screen.getByTestId('claims-panel')).toHaveAttribute('data-debate', 'debate-2');
+    expect(mocks.claimsPanelMounts).toEqual(['debate-1', 'debate-2']);
   });
 
   // Both recordings exist, so `isWatchableDebate` passes — only the media gate withholds it.

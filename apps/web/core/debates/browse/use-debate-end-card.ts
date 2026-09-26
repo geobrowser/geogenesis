@@ -102,8 +102,10 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
     () => [claimId, ...countedIds].map(entityId => ({ entityId, responseKind })),
     [claimId, countedIds, responseKind]
   );
-  // Fetches and seeds; its own result is not read. See the note on the hook.
-  useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
+  // Fetches and seeds. Its values are read back through the per-claim caches (see the note on the
+  // hook); all that is read off the batch itself is whether it has finished.
+  const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
+  const batchSettled = batch.data !== undefined || batch.isError;
 
   // Each counted claim's counts and responders, straight from the caches the batch seeds and a vote
   // refreshes. `skipToken` because these only ever read: the batch is what asks.
@@ -121,7 +123,11 @@ export function useDebateEndCard(debate: Debate, enabled: boolean) {
     claimId,
     spaceId,
     row: null,
-    entity: entities[0] ?? null,
+    // Held back until the batch has seeded this claim's caches. Its two reads — the counts and the
+    // viewer's own side — then find them fresh (their 30s `staleTime` outlasts the wait) instead of
+    // racing the batch to the same two answers on every debate that becomes active. If the batch
+    // fails, the entity is handed over anyway and the claim asks for itself.
+    entity: batchSettled ? (entities[0] ?? null) : null,
   });
 
   const debaters = React.useMemo<EndCardDebater[]>(

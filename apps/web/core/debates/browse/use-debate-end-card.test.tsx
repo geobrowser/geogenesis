@@ -26,6 +26,10 @@ const mocks = vi.hoisted(() => ({
   claimSummary: null as unknown,
   /** The `enabled` each entity lookup was made with. */
   entityEnabled: [] as boolean[],
+  /** What the batch query reports: whether it has data yet, and whether it failed. */
+  batchResult: { data: new Map() as unknown, isError: false },
+  /** The entity each render handed the claim's own response state. */
+  claimEntity: [] as unknown[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -36,17 +40,20 @@ vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: (args: { spaceId: string; targets: { entityId: string }[]; enabled: boolean }) => {
     mocks.batchCalls.push(args);
-    return {};
+    return mocks.batchResult;
   },
 }));
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ enabled }: { enabled: boolean }) => {
     mocks.entityEnabled.push(enabled);
-    return { entities: [] };
+    return { entities: enabled ? [{ id: 'claim-entity' }] : [] };
   },
 }));
 vi.mock('./use-debate-claim-response', () => ({
-  useDebateClaimResponse: () => ({ responseKind: 'stance', summary: mocks.claimSummary, control: {} }),
+  useDebateClaimResponse: ({ entity }: { entity: unknown }) => {
+    mocks.claimEntity.push(entity);
+    return { responseKind: 'stance', summary: mocks.claimSummary, control: {} };
+  },
 }));
 
 const claim = (id: string, spaceId: string | null) => ({ id, text: id, spaceId });
@@ -96,6 +103,8 @@ describe('useDebateEndCard', () => {
   beforeEach(() => {
     mocks.batchCalls = [];
     mocks.entityEnabled = [];
+    mocks.claimEntity = [];
+    mocks.batchResult = { data: new Map(), isError: false };
     mocks.claimSummary = { positive: 62, negative: 38, total: 100, percent: 62, meetsFloor: true };
     mocks.transcriptLoading = false;
     mocks.claims = transcript({
@@ -222,6 +231,25 @@ describe('useDebateEndCard', () => {
 
     rerender({ current: next, enabled: false });
     expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
+  });
+
+  it("holds the claim's own response reads until the batch has seeded them", () => {
+    // Handed its entity early, the claim's response state fires its two reads — counts and the
+    // viewer's side — and races the batch to the same answers on every debate that becomes active.
+    mocks.batchResult = { data: undefined, isError: false };
+    const { rerender } = render(() => useDebateEndCard(debate, true));
+    expect(mocks.claimEntity.at(-1)).toBeNull();
+
+    mocks.batchResult = { data: new Map(), isError: false };
+    rerender(undefined as never);
+    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
+  });
+
+  it('lets the claim ask for itself if the batch fails', () => {
+    mocks.batchResult = { data: undefined, isError: true };
+    render(() => useDebateEndCard(debate, true));
+
+    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
   });
 
   it('asks for nothing while held back', () => {

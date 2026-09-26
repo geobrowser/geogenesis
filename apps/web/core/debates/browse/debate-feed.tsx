@@ -384,6 +384,10 @@ export function DebatesBrowseFeed({
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
       <DebateClaimsPanel
+        // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
+        // its scroll position and the debater it was opened at belong to the debate they were set
+        // on, and a reused panel carried the old offset onto the next one.
+        key={activeDebate.id}
         debate={activeDebate}
         onClose={closePanel}
         focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}

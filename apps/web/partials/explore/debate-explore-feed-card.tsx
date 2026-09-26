@@ -247,13 +247,9 @@ export function DebateExploreFeedCard({
     // clicks still bubble through React's tree, so a target outside the wrapper is let go too.
     const target = event.target;
     if (target instanceof Node && !event.currentTarget.contains(target)) return;
-    if (
-      target instanceof Element &&
-      target.closest('[data-debate-end-card]') &&
-      !target.closest('[data-end-card-replay]')
-    ) {
-      return;
-    }
+    const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
+    const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
+    if (onEndCard && !isReplay) return;
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
@@ -263,8 +259,14 @@ export function DebateExploreFeedCard({
     // This first click either activates the card or transfers the gate. It must not also reach the
     // player's full-tile toggle (or another media control) before the player is both active and
     // allowed, or React's batched ownership update can briefly run it alongside the old owner.
-    event.preventDefault();
-    event.stopPropagation();
+    //
+    // The end card's replay is the exception: it is let through. The player holds a replay until it
+    // is handed playback, so it cannot run alongside the old owner — and swallowing it here left an
+    // ended debate with nothing to resume, so Replay took a second tap.
+    if (!isReplay) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
 
     if (active) {
       pendingPlaybackRequestRef.current = false;

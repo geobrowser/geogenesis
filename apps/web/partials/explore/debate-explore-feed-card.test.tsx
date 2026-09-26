@@ -439,12 +439,15 @@ describe('DebateExploreFeedCard', () => {
       expect(onPlaybackRequest).not.toHaveBeenCalled();
     });
 
-    it("still treats the end card's replay as an ask to play", () => {
+    it('hands playback over on Replay and lets the press reach the player', () => {
+      // Replay is the one ask to play on the card, so it transfers ownership — and the press goes
+      // through, where the player holds it until playback arrives. Swallowing it here left an ended
+      // debate with nothing to resume it, so Replay took a second tap.
       const onPlaybackRequest = nonOwner();
       fireEvent.click(screen.getByTestId('end-card-replay'));
 
       expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
-      expect(mocks.endCardReplay).not.toHaveBeenCalled();
+      expect(mocks.endCardReplay).toHaveBeenCalledTimes(1);
     });
   });
 
