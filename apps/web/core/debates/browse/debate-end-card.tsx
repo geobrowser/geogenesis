@@ -33,7 +33,7 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  *
  * Laid out for the player's width, not the viewport's: the player is a feed card, an explore card
  * and a fullscreen view, and a phone layout keyed to the window would get the wide ones wrong. The
- * player carries `@container`, and below 448px the card tightens and the comparison drops its line.
+ * player carries `@container`, and below 448px the card tightens.
  *
  * No claims list. They popped up over the video as they were made; the faces beside each debater
  * open them in the claims panel, and the claims pill sits directly under the video as it always has.
@@ -69,12 +69,14 @@ export function DebateEndCard({
         aria-label="Debate results"
         className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-14 @max-md:max-h-[calc(100%-4rem)] @max-md:rounded-lg @max-md:p-3.5"
       >
-        <div className="flex flex-col gap-3 @max-md:gap-2.5">
+        <div className="flex flex-col gap-3 @max-md:gap-2">
           <div className="flex flex-col gap-1">
             <span className="text-chatMedium text-grey-04">Where do you stand?</span>
             {/* Two lines at most on a narrow player: the feed prints the claim in full directly above
                 the video, so here it only has to say which claim the question is about. */}
-            <p className="text-cardEntityTitle text-balance @max-md:line-clamp-2 @max-md:text-[0.9375rem] @max-md:leading-5">
+            {/* `text-pretty`, not balanced: balancing evened the two lines out by breaking the first
+                one early, which left a ragged block of white down the right of the card. */}
+            <p className="text-cardEntityTitle text-pretty @max-md:line-clamp-2 @max-md:text-[1.0625rem] @max-md:leading-[1.375rem]">
               {card.claimText}
             </p>
           </div>
@@ -117,7 +119,7 @@ export function DebateEndCard({
           </div>
         </div>
 
-        <div className="my-3.5 h-px shrink-0 bg-divider @max-md:my-2.5" />
+        <div className="my-3.5 h-px shrink-0 bg-divider @max-md:my-2" />
 
         {/* Side by side at every width. Two debaters is the one comparison this card exists to make,
             and stacking them on a phone turns it into two readouts that happen to be near each other.
@@ -229,16 +231,23 @@ function ClaimVoters({
           aria-label={`${summary.total} ${summary.total === 1 ? 'person' : 'people'} voted on this claim — see who`}
           className="flex shrink-0 cursor-pointer items-center rounded"
         >
-          <ClaimResponderAvatars
-            entityId={claimId}
-            spaceId={spaceId}
-            objectType={CLAIM_RESPONSE_OBJECT_TYPE}
-            responseKind={responseKind}
-            totalResponders={summary.total}
-            viewerSpaceId={summary.viewerSpaceId}
-            optimisticViewerResponse={summary.viewerDirection}
-            size={20}
-          />
+          {/* 20px where the row has the width for it, Geo's 12px on a narrow player, where 20px faces
+              outweighed the claim above them. The stack comes in fixed sizes rather than scaling, so
+              both are mounted and the width picks one; they read the same cached responders. */}
+          {([20, 12] as const).map(size => (
+            <span key={size} className={size === 20 ? 'flex @max-md:hidden' : 'hidden @max-md:flex'}>
+              <ClaimResponderAvatars
+                entityId={claimId}
+                spaceId={spaceId}
+                objectType={CLAIM_RESPONSE_OBJECT_TYPE}
+                responseKind={responseKind}
+                totalResponders={summary.total}
+                viewerSpaceId={summary.viewerSpaceId}
+                optimisticViewerResponse={summary.viewerDirection}
+                size={size}
+              />
+            </span>
+          ))}
         </button>
       }
     />
@@ -316,9 +325,8 @@ function DebaterColumn({
 /**
  * The vote on the claim against the claims people agreed with, on one line.
  *
- * The line needs width the two markers cannot get on a narrow player without landing on each
- * other, so below the breakpoint it gives way to the gap and the sentence, which carry the finding
- * on their own.
+ * The same at every width. A narrow player once got only the gap and the sentence, which kept the
+ * finding but lost the picture of it — and the picture is what makes the gap mean something.
  */
 function ComparisonBox({
   comparison,
@@ -337,10 +345,10 @@ function ComparisonBox({
     return (
       <div
         data-end-card-comparison="waiting"
-        className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-3 @max-md:px-3 @max-md:py-2.5"
+        className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-2.5 @max-md:px-3 @max-md:py-2.5"
       >
         <span className="text-chatMedium">Claim vs. arguments</span>
-        <div className="flex items-center gap-2.5 py-1 @max-md:hidden">
+        <div className="flex items-center gap-2.5 py-1 @max-md:gap-2">
           <span className={endLabel}>Agree</span>
           <div className="h-1 flex-1 rounded-full bg-grey-02" />
           <span className={endLabel}>Disagree</span>
@@ -366,21 +374,17 @@ function ComparisonBox({
   return (
     <div
       data-end-card-comparison="ready"
-      className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-3 @max-md:flex-row @max-md:items-center @max-md:px-3 @max-md:py-2.5"
+      className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-2.5 @max-md:px-3 @max-md:py-2.5"
     >
-      <div className="flex items-baseline justify-between @max-md:hidden">
+      <div className="flex items-baseline justify-between gap-2">
         <span className="text-chatMedium">Claim vs. arguments</span>
-        <span className="text-chatMedium text-purple tabular-nums">{comparison.gap} pts apart</span>
+        <span className="shrink-0 text-chatMedium text-purple tabular-nums">{comparison.gap} pts apart</span>
       </div>
-      <span className="hidden shrink-0 text-[1.3125rem] leading-none font-semibold text-purple tabular-nums @max-md:block">
-        {comparison.gap}
-        <span className="text-[0.75rem] font-medium"> pts</span>
-      </span>
 
       <div
         role="img"
         aria-label={`${comparison.claimPercent}% agree with the claim; agreement with the debaters' claims sits at ${comparison.argumentsPercent}% toward the Agree side.`}
-        className="flex items-center gap-2.5 @max-md:hidden"
+        className="flex items-center gap-2.5 @max-md:gap-2"
       >
         <span className={endLabel}>Agree</span>
         <div className="relative h-11 flex-1">

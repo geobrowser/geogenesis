@@ -121,11 +121,20 @@ describe('DebateEndCard', () => {
     expect(screen.getByText(/^62%/)).toHaveTextContent('62% agree');
   });
 
-  it("opens the claim's voter list from its faces, at the row's full size", () => {
+  it("opens the claim's voter list from its faces, sized to the player", () => {
     renderCard(cardFixture());
 
     expect(screen.getByTestId('claim-voters')).toHaveAttribute('data-entity', 'claim-1');
-    expect(screen.getByTestId('claim-faces')).toHaveAttribute('data-size', '20');
+    // 20px where the row has the width, Geo's 12px on a narrow player; the width picks one.
+    expect(screen.getAllByTestId('claim-faces').map(faces => faces.getAttribute('data-size'))).toEqual(['20', '12']);
+  });
+
+  it('draws the comparison in full at every width, not a narrow-player summary', () => {
+    const { container } = renderCard(cardFixture());
+    const box = container.querySelector('[data-end-card-comparison="ready"]') as HTMLElement;
+
+    expect(within(box).getByText('Claim vs. arguments')).toBeInTheDocument();
+    expect(box.querySelector('[role="img"]')?.className).not.toContain('@max-md:hidden');
   });
 
   it('keeps the ready-to-debate faces out of the pills, since the row above shows who voted', () => {
