@@ -455,3 +455,60 @@ describe('DebateClaimsPanel', () => {
     expect(screen.getAllByText('Could not load claims: network down').length).toBeGreaterThan(0);
   });
 });
+
+describe('opening at one debater', () => {
+  /*
+   * jsdom does no layout, so every `offsetTop` is 0. Each card reports the position a browser would
+   * give it — stacked 300px apart — which is what the panel measures to scroll.
+   */
+  const withLayout = (run: () => void) => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.dataset.claimsParticipant === PRESTON_SPACE) return 100;
+        if (this.dataset.claimsParticipant === ARTURAS_SPACE) return 400;
+        // The scrolling list, which starts 60px down the panel under its header.
+        return 60;
+      },
+    });
+    try {
+      run();
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetTop', descriptor);
+    }
+  };
+
+  const listOf = (container: HTMLElement) =>
+    container.querySelector('[data-claims-participant]')!.parentElement as HTMLElement;
+
+  it("scrolls the list to that debater's card", () => {
+    withLayout(() => {
+      const { container } = render(
+        <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+      );
+      expect(listOf(container).scrollTop).toBe(400 - 60);
+    });
+  });
+
+  it('waits for the claims to be in place, since the cards above grow when they land', () => {
+    withLayout(() => {
+      mocks.isLoading = true;
+      const { container, rerender } = render(
+        <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+      );
+      expect(listOf(container).scrollTop).toBe(0);
+
+      mocks.isLoading = false;
+      rerender(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />);
+      expect(listOf(container).scrollTop).toBe(400 - 60);
+    });
+  });
+
+  it('opens at the top when no debater is asked for, as the claims pill always has', () => {
+    withLayout(() => {
+      const { container } = render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+      expect(listOf(container).scrollTop).toBe(0);
+    });
+  });
+});

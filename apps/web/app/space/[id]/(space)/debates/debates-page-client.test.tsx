@@ -39,6 +39,12 @@ vi.mock('~/core/debates/participant-bylines', () => ({
   useParticipantBylines: () => new Map(),
 }));
 
+// The end card's numbers come through react-query too, and it is only drawn once a debate has
+// ended, which nothing here does. Its data and its layout have their own suites.
+vi.mock('~/core/debates/browse/use-debate-end-card', () => ({
+  useDebateEndCard: () => ({}),
+}));
+
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
 }));

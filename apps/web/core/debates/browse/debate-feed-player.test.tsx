@@ -17,6 +17,35 @@ const mocks = vi.hoisted(() => ({
   bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+  /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
+  endCardEnabled: [] as boolean[],
+}));
+
+// The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
+vi.mock('./use-debate-end-card', () => ({
+  useDebateEndCard: (_debate: unknown, enabled: boolean) => {
+    mocks.endCardEnabled.push(enabled);
+    return {};
+  },
+}));
+
+// A stand-in for the card, so the player's half is what is under test: when the card is shown, what
+// it is handed for replay, and whether the claims opener reaches it.
+vi.mock('./debate-end-card', () => ({
+  DebateEndCard: ({
+    replay,
+    onOpenClaims,
+  }: {
+    replay: React.ReactNode;
+    onOpenClaims?: (participantSpaceId?: string) => void;
+  }) => (
+    <div data-testid="end-card">
+      {replay}
+      <button type="button" onClick={() => onOpenClaims?.('debater-space')}>
+        open debater claims
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('~/core/debates/participant-bylines', () => ({
@@ -474,7 +503,7 @@ describe('a refused autoplay', () => {
 });
 
 describe('ended playback', () => {
-  it('centers one replay button over the video', () => {
+  it('centers one replay button over a compact tile, which has no room for the end card', () => {
     const controller = controllerFixture({
       mutedByUser: true,
       turnSlot: 1,
@@ -482,7 +511,7 @@ describe('ended playback', () => {
       playbackEnded: true,
     });
     mocks.controller = controller;
-    const { getByRole } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     const replayButton = getByRole('button', { name: 'Replay debate' });
     expect([...replayButton.classList]).toEqual(
@@ -1000,5 +1029,81 @@ describe('the round it is playing', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(container.querySelector('[data-round-card]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')).toBeNull();
+  });
+});
+
+describe('the end card', () => {
+  const ended = (extra: { subtitle?: string } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playing: false, playbackEnded: true, ...extra });
+
+  it('lands an ended debate on the end card, with replay in the corner pause held', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const card = within(container).getByTestId('end-card');
+    const replays = within(container).getAllByRole('button', { name: 'Replay debate' });
+
+    // One replay, and it is the card's corner control rather than a second one over the middle.
+    expect(replays).toHaveLength(1);
+    expect(card.contains(replays[0])).toBe(true);
+    expect([...replays[0].classList]).not.toContain('top-1/2');
+
+    fireEvent.click(replays[0]);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not drawn while the debate is still playing', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(within(container).queryByTestId('end-card')).toBeNull();
+  });
+
+  it('stays off a compact tile', () => {
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(within(container).queryByTestId('end-card')).toBeNull();
+  });
+
+  it('hands the claims opener through, with the debater the card asked for', () => {
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+    const onOpenClaims = vi.fn();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active onOpenClaims={onOpenClaims} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'open debater claims' }));
+
+    expect(onOpenClaims).toHaveBeenCalledWith('debater-space');
+  });
+
+  it('stands the subtitle down under the card', () => {
+    const subtitle = 'The last line of the debate';
+    mocks.controller = ended({ subtitle });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it("asks for the card's numbers while the debate is active, so they are there when it ends", () => {
+    mocks.ticker = emptyTicker();
+
+    mocks.endCardEnabled = [];
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(true);
+
+    mocks.endCardEnabled = [];
+    render(<DebateFeedPlayer debate={debate} active={false} />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(false);
+
+    mocks.endCardEnabled = [];
+    render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(false);
   });
 });

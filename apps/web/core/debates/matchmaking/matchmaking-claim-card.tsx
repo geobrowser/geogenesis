@@ -1015,6 +1015,7 @@ export function PositionRow({
   titleFor,
   noteFor,
   endSlot,
+  showParticipants = true,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1040,10 +1041,18 @@ export function PositionRow({
   noteFor?: (position: boolean) => React.ReactNode;
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
+  /**
+   * False to leave the ready-to-debate faces out of the pills.
+   *
+   * Those faces are the people standing ready to argue each side — a matchmaking fact. On a surface
+   * that shows who *voted* beside the pills, two face stacks meaning two different things sit a row
+   * apart, and the nearer one reads as the voters.
+   */
+  showParticipants?: boolean;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
-  const forSide = positions.find(position => position.position === true);
-  const againstSide = positions.find(position => position.position === false);
+  const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
+  const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //

@@ -275,6 +275,14 @@ export function DebateExploreFeedCard({
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
   // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
+  // Which debater the panel opens at — set by the end card's faces beside a debater, cleared by
+  // every other way in.
+  const [claimsFocus, setClaimsFocus] = React.useState<string | null>(null);
+  // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
+  const openClaims = React.useCallback((participantSpaceId?: string) => {
+    setClaimsFocus(participantSpaceId ?? null);
+    setClaimsOpen(true);
+  }, []);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -316,7 +324,7 @@ export function DebateExploreFeedCard({
     // See the prop's own note: an explore card can be a data block row listing a debate from
     // another space, and only the lookup finds that space's votes.
     responseKind: 'infer' as const,
-    onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
+    onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
   };
@@ -370,7 +378,12 @@ export function DebateExploreFeedCard({
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} reducedOverlays={compactChrome} />
+            <DebateCardVideos
+              debate={readyDebate}
+              active={active && playbackAllowed}
+              reducedOverlays={compactChrome}
+              onOpenClaims={openClaims}
+            />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -408,7 +421,11 @@ export function DebateExploreFeedCard({
               rail to put it in. The panel itself is the same component. */}
           {claimsOpen ? (
             <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
+              <DebateClaimsPanel
+                debate={readyDebate}
+                onClose={() => setClaimsOpen(false)}
+                focusParticipantSpaceId={claimsFocus}
+              />
             </div>
           ) : null}
         </>
@@ -427,12 +444,22 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
   reducedOverlays,
+  onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
   reducedOverlays: boolean;
+  onOpenClaims: (participantSpaceId?: string) => void;
 }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload reducedOverlays={reducedOverlays} />;
+  return (
+    <DebateFeedPlayer
+      debate={debate}
+      active={active}
+      preload
+      reducedOverlays={reducedOverlays}
+      onOpenClaims={onOpenClaims}
+    />
+  );
 });
 
 function DebateVideoSkeleton() {

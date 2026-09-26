@@ -22,8 +22,10 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 /**
@@ -66,9 +68,21 @@ type DebateFeedPlayerProps = {
    * makes arriving at a card feel glitchy (GEO-2895).
    */
   preload?: boolean;
+  /**
+   * Opens the claims panel — the same panel the claims pill under the player opens. With a
+   * debater's space id, at that debater's claims. The end card offers it; without it the card's
+   * ways into the claims are simply not drawn.
+   */
+  onOpenClaims?: (participantSpaceId?: string) => void;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false, reducedOverlays = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({
+  debate,
+  active,
+  preload = false,
+  reducedOverlays = false,
+  onOpenClaims,
+}: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -176,6 +190,12 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
   );
 
   const showReplay = ready && playbackEnded;
+  // The end card is where an ended debate lands, except on a compact gallery tile — which has no
+  // room for it and keeps the plain centred replay.
+  const endCardShown = showReplay && !reducedOverlays;
+  // Loaded while the debate is the active one, so its numbers are there when the video ends rather
+  // than drawing empty bars and filling them in.
+  const endCard = useDebateEndCard(debate, active && ready && !reducedOverlays);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
@@ -541,7 +561,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-      {subtitle && !roundCard && (!reducedOverlays || (active && playing && mutedByUser)) && (
+      {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
@@ -552,7 +572,7 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
           desktop retains its persistent corner play/pause control while playback is in progress. */}
-      {(showReplay || showPausedGlyph) && (
+      {((showReplay && !endCardShown) || showPausedGlyph) && (
         <button
           type="button"
           aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
@@ -578,6 +598,19 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       >
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
+
+      {endCardShown && (
+        <DebateEndCard
+          card={endCard}
+          onOpenClaims={onOpenClaims}
+          replay={
+            // Where pause sat for the whole debate: the same control, now starting it again.
+            <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
+              <RetrySmall />
+            </ControlCircle>
+          }
+        />
+      )}
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">

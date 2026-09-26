@@ -178,6 +178,9 @@ export function DebatesBrowseFeed({
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
+  // other way in clears it.
+  const [claimsFocus, setClaimsFocus] = React.useState<string | null>(null);
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
@@ -356,8 +359,9 @@ export function DebatesBrowseFeed({
             setOpenPanel(null);
             debatesHub.open('lobby');
           }}
-          onOpenClaims={() => {
+          onOpenClaims={(participantSpaceId?: string) => {
             setActiveId(debate.id);
+            setClaimsFocus(participantSpaceId ?? null);
             setOpenPanel('claims');
           }}
           onOpenComments={() => {
@@ -377,7 +381,7 @@ export function DebatesBrowseFeed({
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
+      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} focusParticipantSpaceId={claimsFocus} />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
@@ -426,7 +430,8 @@ function DebateFeedItem({
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
-  onOpenClaims: () => void;
+  /** With a debater's space id, the panel opens at that debater's claims. */
+  onOpenClaims: (participantSpaceId?: string) => void;
   onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
@@ -461,7 +466,7 @@ function DebateFeedItem({
     commentCount,
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
-    onClaims: onOpenClaims,
+    onClaims: () => onOpenClaims(),
     onShare: share.onOpen,
     shareOpen: share.open,
   };
@@ -498,7 +503,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} onOpenClaims={onOpenClaims} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}

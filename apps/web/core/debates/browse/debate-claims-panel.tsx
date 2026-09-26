@@ -41,7 +41,19 @@ const COLLAPSED_CLAIM_COUNT = 3;
  * relation points at the speaker's personal space — the same `profile_space_id` these rows already
  * key on. See `core/debates/transcript-claims.ts`.
  */
-export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose: () => void }) {
+export function DebateClaimsPanel({
+  debate,
+  onClose,
+  focusParticipantSpaceId = null,
+}: {
+  debate: Debate;
+  onClose: () => void;
+  /**
+   * A debater to open at — the end card's faces beside a debater land here, on that debater's
+   * claims. Null opens at the top, as the claims pill always has.
+   */
+  focusParticipantSpaceId?: string | null;
+}) {
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
@@ -136,6 +148,23 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
     [claims, participants, inSpokenOrder, isOrdering]
   );
 
+  /*
+   * Brought to the focused debater's card once the claims are in place, not before.
+   *
+   * The cards grow when their claims land, so scrolling to the second one while the first is still
+   * empty put it on screen and then pushed it off again. And the list's own `scrollTop`, not
+   * `scrollIntoView`, which scrolls every scrollable ancestor to reveal the target — including the
+   * feed behind the panel.
+   */
+  const listRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!focusParticipantSpaceId || isOrdering) return;
+    const list = listRef.current;
+    const card = list?.querySelector<HTMLElement>(`[data-claims-participant="${focusParticipantSpaceId}"]`);
+    if (!list || !card) return;
+    list.scrollTop = card.offsetTop - list.offsetTop;
+  }, [focusParticipantSpaceId, isOrdering]);
+
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -161,9 +190,13 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
           <Close />
         </button>
       </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
+      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
         {participants.map(participant => (
-          <article key={participant.user_id} className="rounded-lg border border-grey-02 bg-white p-5">
+          <article
+            key={participant.user_id}
+            data-claims-participant={participant.profile_space_id}
+            className="rounded-lg border border-grey-02 bg-white p-5"
+          >
             <div className="flex items-center gap-3">
               <span className="block size-10 shrink-0 overflow-hidden rounded-full bg-grey-02">
                 <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={40} />

@@ -237,7 +237,7 @@ function CircleAction({
   );
 }
 
-function PillAction({
+export function PillAction({
   label,
   icon,
   onClick,
