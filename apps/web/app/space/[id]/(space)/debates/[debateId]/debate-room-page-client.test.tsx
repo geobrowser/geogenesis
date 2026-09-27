@@ -3,14 +3,17 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
+import { unmarkLocalDebateLeave, unmarkLocalRematchLeave } from '~/core/debates/local-debate-leave';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   prefetchAllowlist: vi.fn(),
@@ -319,6 +322,11 @@ vi.mock('~/core/debates/use-related-debate-claims', () => ({
 }));
 
 beforeEach(() => {
+  getDefaultStore().set(opponentLeftNoticeAtom, null);
+  // The local-leave markers are module-scoped and survive earlier "Leave" cases; clear them so a
+  // later case reads the opponent leaving rather than the viewer.
+  unmarkLocalDebateLeave('debate-1');
+  unmarkLocalRematchLeave('rematch-1');
   mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
@@ -4334,7 +4342,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
-  it('redirects an idle room as soon as both debaters have pressed Let\'s go', async () => {
+  it("redirects an idle room as soon as both debaters have pressed Let's go", async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     mocks.debate = {
@@ -4352,7 +4360,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
-  it('enters the rematch browser as soon as the second Let\'s go lands, mid-countdown', async () => {
+  it("enters the rematch browser as soon as the second Let's go lands, mid-countdown", async () => {
     installRecordingMocks();
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
@@ -4912,23 +4920,46 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(getDefaultStore().get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: true });
   });
 
   it('boots off the thank-you screen when the rematch ends under you', async () => {
     setHistoryLength(1);
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
+    // The source recording is already queued, so the persist step resolves without a live capture.
+    mocks.getRecording.mockResolvedValue({ id: 'user-a:debate-1' });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('ended');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    // The source recording is saved first, then the viewer is returned out with no in-place dialog;
-    // the app-wide coordinator shows the "opponent left" notice on the debates page.
+    // On the thank-you screen the boot-out waits: the recording is still finalizing, and
+    // `finishLiveDebate` — not this announce path — is what saves it before the notice shows.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates');
+
+    // Past the thank-you deadline `finishLiveDebate` persists the source recording, then returns the
+    // viewer out with no in-place dialog and raises the "opponent left" notice for the coordinator.
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(getDefaultStore().get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
@@ -5373,10 +5404,7 @@ function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteR
 
 function rematchSession(
   status: DebateRematchSession['status'],
-  {
-    localConsented = false,
-    remoteConsented = false,
-  }: { localConsented?: boolean; remoteConsented?: boolean } = {}
+  { localConsented = false, remoteConsented = false }: { localConsented?: boolean; remoteConsented?: boolean } = {}
 ): DebateRematchSession {
   return {
     id: 'rematch-1',
