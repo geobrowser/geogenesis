@@ -6,12 +6,10 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { Text } from '~/design-system/text';
 
-import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { useDebateRequests } from './hooks';
+import { useGeoChatAuth } from '../hooks';
 import { HubPillButton } from './hub-pill-button';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
-import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * The workspace's right rail: requests and presence — the two lists that are only useful *while*
@@ -20,27 +18,11 @@ import { useUnexpiredRequests } from './use-request-countdown';
 export function HubLiveRail() {
   const { authenticated, ready } = useGeoChatAuth();
 
-  // Hide Requests when nothing is pending so People sits at the top. Same sources as RequestsTab,
-  // including expiry and pending challenges.
-  const requestsQuery = useDebateRequests(authenticated);
-  const { data: activity } = useDebateActivity(authenticated);
-  const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const hasPendingRequests = incoming.length > 0 || outbound !== null || liveChallenges.length > 0;
-
   return (
     <div className="flex flex-col gap-6 pb-8" data-testid="hub-live-rail">
       {!ready ? null : authenticated ? (
         <>
-          {hasPendingRequests && (
-            <RailSection label="Requests">
-              <RequestsTab dense />
-            </RailSection>
-          )}
+          <RequestsTab dense denseLabel="Requests" />
           <RailSection label="Available now">
             <PeopleTab dense />
           </RailSection>

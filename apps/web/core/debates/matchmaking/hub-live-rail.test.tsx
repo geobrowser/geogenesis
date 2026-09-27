@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   incoming: [] as { id: string; expires_at: string }[],
   outbound: null as { id: string; expires_at: string } | null,
   challenge: null as { id: string; status: string; expires_at: string } | null,
+  requestsHasContent: false,
 }));
 
 vi.mock('../hooks', () => ({
@@ -32,7 +33,10 @@ vi.mock('./use-request-countdown', () => ({
 
 // Both lists are the panel's own and have their own suites; this one is about which of them the
 // rail shows, in what order, and what stands in for the one that needs an account.
-vi.mock('./requests-tab', () => ({ RequestsTab: () => <div data-testid="requests-tab" /> }));
+// `RequestsTab` decides for itself whether it has anything to show, and renders nothing when it doesn't.
+vi.mock('./requests-tab', () => ({
+  RequestsTab: () => (mocks.requestsHasContent ? <div data-testid="requests-tab" /> : null),
+}));
 vi.mock('./people-tab', () => ({ PeopleTab: () => <div data-testid="people-tab" /> }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -44,6 +48,7 @@ beforeEach(() => {
   mocks.incoming = [];
   mocks.outbound = null;
   mocks.challenge = null;
+  mocks.requestsHasContent = false;
 });
 
 afterEach(cleanup);
@@ -51,8 +56,8 @@ afterEach(cleanup);
 describe('HubLiveRail', () => {
   // Ordered by urgency: a request expires in ~25 minutes, where presence is the slower of the two.
   it('stacks requests, then who is available', () => {
-    // Requests only draws while one is pending, so the order it sits in is only observable with one.
-    mocks.incoming = [{ id: 'request-1', expires_at: '2099-01-01T00:00:00.000Z' }];
+    // The order is only observable while Requests is drawing something.
+    mocks.requestsHasContent = true;
     render(<HubLiveRail />);
 
     const rendered = ['requests-tab', 'people-tab'].map(id => screen.getByTestId(id));
@@ -62,37 +67,25 @@ describe('HubLiveRail', () => {
     }
   });
 
-  it('leaves Requests out entirely when nothing is pending, so People sits at the top', () => {
+  // Mounted whatever it holds. The rail used to gate this itself, re-deriving "is anything pending"
+  // from incoming requests.
+  it('always mounts Requests when signed in, and lets it decide whether to draw', () => {
+    mocks.requestsHasContent = true;
+    render(<HubLiveRail />);
+    expect(screen.getByTestId('requests-tab')).toBeInTheDocument();
+  });
+
+  it('leaves People at the top when Requests draws nothing', () => {
+    mocks.requestsHasContent = false;
     render(<HubLiveRail />);
 
-    // The heading too, not just the list: an empty section is exactly the thing being removed, and
-    // a bare "Requests" with nothing under it costs the rail the same height either way.
+    // The heading too, not just the list: an empty section is exactly the thing being avoided, and a
+    // bare "Requests" with nothing under it costs the rail the same height either way. It lives with
+    // the content now, so nothing draws it when the content does not.
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
     expect(screen.queryByText('Requests')).not.toBeInTheDocument();
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
-  });
-
-  // Also open for a pending challenge — RequestsTab shows those too.
-  it('keeps Requests open for a pending challenge with no claim requests', () => {
-    mocks.challenge = { id: 'challenge-1', status: 'pending', expires_at: '2099-01-01T00:00:00.000Z' };
-    render(<HubLiveRail />);
-
-    expect(screen.getByTestId('requests-tab')).toBeInTheDocument();
-  });
-
-  it('does not hold Requests open for a challenge that is no longer pending', () => {
-    mocks.challenge = { id: 'challenge-1', status: 'accepted', expires_at: '2099-01-01T00:00:00.000Z' };
-    render(<HubLiveRail />);
-
-    expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
-  });
-
-  it('shows Requests for a sent one as well as a received one', () => {
-    mocks.outbound = { id: 'request-1', expires_at: '2099-01-01T00:00:00.000Z' };
-    render(<HubLiveRail />);
-
-    expect(screen.getByTestId('requests-tab')).toBeInTheDocument();
   });
 
   // Signed out the rail loses two of its three lists. Two empty headings would say nothing, so it

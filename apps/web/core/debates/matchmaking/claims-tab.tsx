@@ -1257,6 +1257,8 @@ export function HubListColumns({
       >
         {rail}
       </aside>
+      {/* `@container/claims` is containment for the cards' own queries (`claim-pills-wide`,
+          `claim-card-narrow`), not a column grid. The list is one card per row at every width. */}
       <div className="@container/claims flex min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );

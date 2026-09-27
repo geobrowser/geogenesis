@@ -35,30 +35,34 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * `dense` (live rail): no sticky filters — three stickies stacked would overlap, and a rail
  * has no room for full-tab chrome.
  */
-export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
+export function RequestsTab({ dense = false, denseLabel }: { dense?: boolean; denseLabel?: string } = {}) {
   // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
   // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
   return usePeerAvailabilityEnabled() ? (
-    <ScheduledRequestsTab dense={dense} />
+    <ScheduledRequestsTab dense={dense} denseLabel={denseLabel} />
   ) : (
-    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} dense={dense} />
+    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} dense={dense} denseLabel={denseLabel} />
   );
 }
 
 const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
 
-function ScheduledRequestsTab({ dense }: { dense: boolean }) {
-  return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled dense={dense} />;
+function ScheduledRequestsTab({ dense, denseLabel }: { dense: boolean; denseLabel?: string }) {
+  return (
+    <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled dense={dense} denseLabel={denseLabel} />
+  );
 }
 
 function RequestsTabBody({
   scheduled,
   schedulingEnabled,
   dense,
+  denseLabel,
 }: {
   scheduled: ScheduledContent;
   schedulingEnabled: boolean;
   dense: boolean;
+  denseLabel?: string;
 }) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
@@ -122,8 +126,15 @@ function RequestsTabBody({
     scheduled.roomsError !== null;
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
 
+  if (dense && isEmpty) return null;
+
   return (
     <div className="flex flex-col">
+      {dense && denseLabel ? (
+        <Text as="h3" variant="footnoteMedium" color="grey-04" className="px-4 pb-1">
+          {denseLabel}
+        </Text>
+      ) : null}
       {!dense && (
         <HubStickyControls>
           <SpaceTopicFilters
