@@ -1073,7 +1073,8 @@ describe('DebateRoomPageClient', () => {
       expect(leaveButton).toBeEnabled();
       fireEvent.click(leaveButton);
       await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
-      await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+
+      expect(mocks.back).not.toHaveBeenCalled();
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
@@ -4527,7 +4528,8 @@ describe('DebateRoomPageClient', () => {
 
     leaveRequest.resolve();
     persistence.resolve();
-    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('publishes an opt-out after an in-flight rematch consent succeeds', async () => {
@@ -4653,7 +4655,8 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
     expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce();
     expect(mocks.abortMutateAsync).not.toHaveBeenCalled();
-    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('enters the rematch browser at the thank-you deadline without waiting for a debate refresh', async () => {
