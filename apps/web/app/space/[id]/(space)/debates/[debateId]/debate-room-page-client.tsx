@@ -2372,7 +2372,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!shouldAnnounceOpponentLeft) return;
-    if (roomState === 'saving' || debate?.status === 'thanking') return;
+    if (
+      roomState === 'saving' ||
+      debate?.status === 'thanking' ||
+      (debate?.status === 'complete' && roomState !== 'idle')
+    )
+      return;
     // Leave marks after this render was committed; re-check so the leaver is not announced.
     if (debate && didLocallyLeaveDebate(debate.id)) return;
     if (debate?.rematch_session_id && didLocallyLeaveRematch(debate.rematch_session_id)) return;
