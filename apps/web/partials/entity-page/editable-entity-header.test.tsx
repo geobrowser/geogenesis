@@ -1,7 +1,6 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

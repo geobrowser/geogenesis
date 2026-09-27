@@ -46,6 +46,7 @@
 export const DEEP_LINK_MODALS = {
   signIn: 'signin',
   debates: 'debates',
+  roomAccess: 'room-access',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];

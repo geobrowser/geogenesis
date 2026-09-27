@@ -36,6 +36,10 @@ import {
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { mergeRelations } from '~/core/sync/orm';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
+
+// A stable empty list, so the memo below is not rebuilt on every render.
+const NO_RELATIONS: Relation[] = [];
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -204,7 +208,7 @@ export function useRankingDailyActivityComplete(
   const initialBlockEntity = initialBlockEntities.find(b => b.id === blockId) ?? null;
   const { entity: blockEntity } = useQueryEntity({ id: blockId, spaceId });
 
-  const blockRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
+  const blockRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? NO_RELATIONS;
   const isRolling = React.useMemo(
     () => isRollingRankingBlock(blockRelations, blockId, spaceId),
     [blockRelations, blockId, spaceId]

@@ -25,7 +25,9 @@ export default function robots(): MetadataRoute.Robots {
         // Per-user and write-oriented views. They render per request, are
         // meaningless without a session, and generate unbounded URL variants.
         '/space/*/import',
+        '/space/*/debug-availability',
         '/space/*/debug-debates',
+        '/space/*/debug-peer-availability',
         '/space/*/ranking-compose',
         '/space/*/power-tools',
       ],

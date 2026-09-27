@@ -6,6 +6,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '../api';
+import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 
@@ -73,6 +74,7 @@ export function HubMessageNote({ children }: { children: React.ReactNode }) {
 }
 
 type HubQueryStateProps = {
+  analyticsSurface: DebateAnalyticsSurface;
   isLoading: boolean;
   error: unknown;
   isEmpty: boolean;
@@ -102,6 +104,7 @@ type HubQueryStateProps = {
 
 /** Shared loading / unavailable / error / empty handling for every hub tab. */
 export function HubQueryState({
+  analyticsSurface,
   isLoading,
   error,
   isEmpty,
@@ -144,7 +147,13 @@ export function HubQueryState({
   return (
     <HubSwap activeKey={state}>
       {state === 'sign-in' ? (
-        <HubMessage action={<HubPillButton onClick={signInAction!.onClick}>{signInAction!.label}</HubPillButton>}>
+        <HubMessage
+          action={
+            <HubPillButton analyticsSurface={analyticsSurface} onClick={signInAction!.onClick}>
+              {signInAction!.label}
+            </HubPillButton>
+          }
+        >
           {signInAction!.message}
         </HubMessage>
       ) : state === 'warming-up' ? (
@@ -157,7 +166,13 @@ export function HubQueryState({
         // who presses it and sees no change concludes the page is broken rather than busy. Until
         // then the message is the whole state, and the reads are getting on with it.
         <HubMessage
-          action={retriesSpent && onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}
+          action={
+            retriesSpent && onRetry ? (
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+                Try again
+              </HubPillButton>
+            ) : null
+          }
         >
           Setting up your account. Check back in a minute.
         </HubMessage>
@@ -166,7 +181,9 @@ export function HubQueryState({
           action={
             // A "not deployed yet" 404 won't resolve by retrying, so only offer it for real errors.
             isMatchmakingUnavailable(error) || !onRetry ? null : (
-              <HubPillButton onClick={onRetry}>Try again</HubPillButton>
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+                Try again
+              </HubPillButton>
             )
           }
         >
@@ -177,7 +194,13 @@ export function HubQueryState({
       ) : state === 'empty' ? (
         <HubMessage
           note={emptyNote}
-          action={emptyAction ? <HubPillButton onClick={emptyAction.onClick}>{emptyAction.label}</HubPillButton> : null}
+          action={
+            emptyAction ? (
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={emptyAction.onClick}>
+                {emptyAction.label}
+              </HubPillButton>
+            ) : null
+          }
         >
           {emptyMessage}
         </HubMessage>

@@ -4,6 +4,13 @@ import * as React from 'react';
 
 export type UseAutofocusOptions = {
   shouldSkipFocus?: () => boolean;
+  /**
+   * Don't let the focus scroll anything into view.
+   *
+   * For a field inside a surface that is already positioned — a popover, a docked panel — where the
+   * browser's idea of revealing it can only move something the caller had placed deliberately.
+   */
+  preventScroll?: boolean;
 };
 
 /**
@@ -17,6 +24,7 @@ export function useAutofocus<T extends HTMLElement = HTMLElement>(
   const ref = React.useRef<T>(null);
   const shouldSkipRef = React.useRef(options?.shouldSkipFocus);
   shouldSkipRef.current = options?.shouldSkipFocus;
+  const preventScroll = options?.preventScroll ?? false;
 
   React.useEffect(() => {
     if (!enabled) return;
@@ -24,7 +32,7 @@ export function useAutofocus<T extends HTMLElement = HTMLElement>(
     const applyFocus = () => {
       try {
         if (shouldSkipRef.current?.()) return;
-        ref.current?.focus();
+        ref.current?.focus({ preventScroll });
       } catch {
         /* detached */
       }
@@ -39,7 +47,7 @@ export function useAutofocus<T extends HTMLElement = HTMLElement>(
       window.requestAnimationFrame(applyFocus);
     }, delayMs);
     return () => clearTimeout(timer);
-  }, [enabled, delayMs]);
+  }, [enabled, delayMs, preventScroll]);
 
   return ref;
 }

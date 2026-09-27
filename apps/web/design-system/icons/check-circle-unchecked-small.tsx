@@ -1,13 +1,9 @@
 import * as React from 'react';
 
-import { ColorName, colors } from '~/design-system/theme/colors';
 
-interface Props {
-  color?: ColorName;
-}
-
-export function CheckedCircleUncheckedSmall({ color }: Props) {
-  const themeColor = color ? colors.light[color] : 'currentColor';
+// Takes no `color`: unlike its siblings this icon hardcodes its stroke, so a `color` prop would
+// have been accepted and ignored. No caller passed one.
+export function CheckedCircleUncheckedSmall() {
 
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">

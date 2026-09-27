@@ -1,6 +1,19 @@
+import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { decodeRelationFacet } from './relation-facet';
+import { decodeRelationFacet, relationFacetByFilterDocument } from './relation-facet';
+
+describe('relationFacetByFilterDocument', () => {
+  it('accepts a complete relation filter so union populations can be grouped exactly', () => {
+    const source = print(relationFacetByFilterDocument);
+
+    expect(source).toContain('$filter: RelationFilter!');
+    expect(source).toContain('relationsConnection(filter: $filter)');
+    expect(source).toContain('groupedAggregates(groupBy: $groupBy)');
+    expect(source).toContain('distinctCount');
+    expect(source).toContain('fromEntityId');
+  });
+});
 
 describe('decodeRelationFacet', () => {
   it('normalizes dashed group keys to the dashless spelling and coerces bigint-string counts', () => {

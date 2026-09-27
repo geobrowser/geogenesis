@@ -14,6 +14,9 @@ import {
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
+import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 
 import {
   type Debate,
@@ -48,10 +51,12 @@ import {
   getDebateMediaArtifactUrl,
   getDebateProfile,
   getDebateRematch,
+  getDebateSchedule,
   getDebateTranscript,
   getLiveKitToken,
   getRecordingUrl,
   getRematchLiveKitToken,
+  getScheduleOverlaps,
   handleDebateSharePrompt,
   isAccountWarmingUp,
   leaveDebateRematch,
@@ -64,6 +69,7 @@ import {
   markDebateReady,
   rejectDebateChallenge,
   rejectDebateRematchRequest,
+  replaceDebateSchedule,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
@@ -118,6 +124,14 @@ export const debateQueryKeys = {
   media: (debateId: string) => ['debates', 'media', debateId] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
+  schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
+  /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
+  peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
+    ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
+  /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
+  room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
+  scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
@@ -523,6 +537,9 @@ export function useDebateActivity(enabled = true) {
     wasPresent.current = present;
     wasAttentive.current = attentive;
     if (returned && queryEnabled) void query.refetch();
+    // `query.refetch` is the stable handle; the `query` object itself is rebuilt whenever its data
+    // changes, so depending on it would re-run this on every refetch it caused.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attentive, present, query.refetch, queryEnabled]);
 
   // Everyone this payload names. The challenge rides here rather than on `useDebateRequests`, and
@@ -566,6 +583,88 @@ export function useDebateActivity(enabled = true) {
   }, [query.data, withAvatar]);
 
   return withQueryData(query, data);
+}
+
+/**
+ * The viewer's saved availability calendar (GEO-2932, GEO-2936).
+ *
+ * Returns blocks rather than the wire payload, so callers never handle the one-based `weekday`
+ * or the absent-when-empty `exceptions` themselves — `fromPayload` is the only place that knows.
+ */
+export function useDebateSchedule() {
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const query = useQuery({
+    queryKey: debateQueryKeys.schedule(accountKey),
+    // Signed out there is no schedule to fetch, and asking would 401 on every render.
+    enabled: accountKey !== null,
+    queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
+  });
+
+  return {
+    ...query,
+    blocks: query.data ? fromPayload(query.data.schedule) : undefined,
+    /** Whether they have ever saved one, which several surfaces gate on. */
+    isSet: query.data?.is_set ?? false,
+  };
+}
+
+/**
+ * Saves the whole calendar.
+ *
+ * The timezone is read at save time rather than stored with the editor's state: a schedule means
+ * "18:00 where I am", and the zone that matters is the one they were in when they said so.
+ */
+export function useSaveDebateSchedule() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const scheduleKey = debateQueryKeys.schedule(accountKey);
+
+  return useMutation({
+    mutationFn: (blocks: AvailabilityBlock[]) =>
+      replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // The server answers with the stored form, so take it rather than re-deriving: anything it
+    // normalised on the way in is then what the calendar draws.
+    onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
+  });
+}
+
+/**
+ * Another person's availability, ready to draw (GEO-2938).
+ *
+ * The only data access behind that view. One request: the response carries their week, the
+ * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
+ */
+export function usePeerSchedule(peerUserId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
+  // dialog that stays mounted passes an empty id, not null.
+  const enabled = authenticated && Boolean(peerUserId);
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryFn: ({ signal }) =>
+      getScheduleOverlaps(
+        peerUserId as string,
+        { days: PEER_SCHEDULE_DAYS },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled,
+  });
+
+  return {
+    ...query,
+    schedule: query.data ? toPeerSchedule(query.data) : undefined,
+    /**
+     * Whether this is a question that can be asked at all. A disabled query sits at `pending`
+     * forever, which a caller would otherwise draw as a spinner that never resolves.
+     */
+    enabled,
+    isPending: enabled && query.isPending,
+  };
 }
 
 export function useUpdateDebateAvailability() {
@@ -1102,6 +1201,9 @@ export function useDebateProfile(profileSpaceId: string, enabled = true) {
     const returnedToForeground = foreground && !wasForeground.current;
     wasForeground.current = foreground;
     if (returnedToForeground && queryEnabled) void query.refetch();
+    // `query.refetch` is the stable handle; the `query` object itself is rebuilt whenever its data
+    // changes, so depending on it would re-run this on every refetch it caused.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [foreground, query.refetch, queryEnabled]);
 
   return query;

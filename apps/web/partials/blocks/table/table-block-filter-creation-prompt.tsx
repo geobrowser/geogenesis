@@ -800,23 +800,6 @@ function hasPendingFilterSelections(state: PromptState, options: (Filter & { col
   });
 }
 
-function hasAnyFilterDraftSelections(state: PromptState): boolean {
-  const normalized = normalizePromptState(state);
-  if (
-    normalized.multiEntitySelections.length > 0 ||
-    normalized.multiSpaceSelections.length > 0 ||
-    normalized.multiStringSelections.length > 0
-  ) {
-    return true;
-  }
-  return Object.values(normalized.columnDrafts).some(
-    draft =>
-      draft.multiEntitySelections.length > 0 ||
-      draft.multiSpaceSelections.length > 0 ||
-      draft.multiStringSelections.length > 0
-  );
-}
-
 function popoverDraftsDifferFromSessionBaseline(
   state: PromptState,
   options: (Filter & { columnName: string })[]
@@ -1179,6 +1162,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           return { type: 'RELATIONS', name: fromName, value: fromId };
         });
       }
+      // `sourceKey` is `sourceStableKey(source)` and stands in for `source` deliberately: the
+      // source is an object rebuilt on render, and this only wants to re-seed when it actually
+      // describes something different.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fromId, fromName, sourceKey]);
 
     React.useEffect(() => {
@@ -1668,12 +1655,6 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
   );
 }
 
-type FilterValueDropdownFooterConfig = {
-  showClearAll: boolean;
-  onClearAll: () => void;
-  showDone: boolean;
-};
-
 interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
@@ -1931,7 +1912,7 @@ function TableBlockEntityFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2247,7 +2228,7 @@ function TableBlockSpaceFilterInput({
       const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
       trapWheelToElement(list, e);
     },
-    [showQueryPanel, showScopedOnlyPanel]
+    [showScopedOnlyPanel]
   );
   const toggleStagingSpace = React.useCallback((result: { id: string; name: string | null }) => {
     setStagingSelections(prev => {
@@ -2265,7 +2246,7 @@ function TableBlockSpaceFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused, setQuery]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2273,7 +2254,7 @@ function TableBlockSpaceFilterInput({
       setQuery('');
     }
     onFocus();
-  }, [committedSpaceSelections, multi, onFocus]);
+  }, [committedSpaceSelections, multi, onFocus, setQuery]);
 
   React.useEffect(() => {
     if (!multi) return;

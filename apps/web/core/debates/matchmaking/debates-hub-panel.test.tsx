@@ -22,6 +22,7 @@ import {
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
   debatesHubMatchesOnlyAtom,
+  debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
@@ -41,6 +42,13 @@ const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/claims',
   searchParams: new URLSearchParams(),
   isMobile: false,
+  peerAvailability: false,
+  scheduledAwaitingAnswerCount: undefined as number | undefined,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -50,9 +58,41 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
+// People compares the roster with the signed-in viewer. This panel suite has no wallet or graph
+// providers and only verifies tab orchestration, so those reads settle to an empty comparison.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isLoading: false }),
+}));
+
+vi.mock('../participant-positions', async importOriginal => ({
+  ...(await importOriginal<typeof import('../participant-positions')>()),
+  useParticipantPositions: () => ({
+    byClaim: new Map(),
+    isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
+    error: null,
+  }),
+}));
+
+vi.mock('../claim-picker-page', async importOriginal => ({
+  ...(await importOriginal<typeof import('../claim-picker-page')>()),
+  useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
+}));
+
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
-  useDebateActivity: () => ({ data: { available_to_debate: mocks.available, incoming_request_count: 0 } }),
+  useDebateActivity: () => ({
+    data: {
+      available_to_debate: mocks.available,
+      incoming_request_count: 0,
+      scheduled_awaiting_answer_count: mocks.scheduledAwaitingAnswerCount,
+    },
+  }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -117,6 +157,20 @@ vi.mock('./use-person-records', () => ({
   usePersonRecords: () => new Map(),
 }));
 
+vi.mock('../use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({
+    allowlist: null,
+    memberSpaceIds: null,
+    isLoading: false,
+    isSettlingMemberships: false,
+  }),
+}));
+
+vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
+  ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
+  useDebatePublishableSpaces: () => ({ publishableSpaceIds: null, isLoading: false }),
+}));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
@@ -150,6 +204,8 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/claims';
   mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
+  mocks.peerAvailability = false;
+  mocks.scheduledAwaitingAnswerCount = undefined;
 });
 
 afterEach(cleanup);
@@ -183,6 +239,7 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbyTopicIdsAtom', atom: debatesHubLobbyTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
+  { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -231,7 +288,9 @@ describe('DebatesHubPanel', () => {
    * new account the previous one's *preference* is what every other stored setting here does.
    */
   it('covers every filter atom on every surface', () => {
-    const exported = Object.keys(atomsModule).filter(name => /^debatesHub(Explore|Lobby|Positions).*Atom$/.test(name));
+    const exported = Object.keys(atomsModule).filter(name =>
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent)Atom$/.test(name)
+    );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
   });
@@ -783,5 +842,38 @@ describe('the filters the expand link carries', () => {
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
+  });
+});
+
+// The Requests tab's badge counts scheduled requests from activity, behind the flag.
+describe('Requests badge', () => {
+  function renderRequestsButton() {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    return screen.getByRole('button', { name: /^Requests/ });
+  }
+
+  it('counts scheduled requests waiting on an answer', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+
+  it('shows no badge when activity has no count', () => {
+    mocks.peerAvailability = true;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
+  });
+
+  it('counts no scheduled requests with the flag off, even when activity has some', () => {
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 });

@@ -60,8 +60,32 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # `web` and `@geogenesis/auth`, not just `web`. The auth package had no tests until the
+      # embedded-wallet hook earned them, and a suite the pipeline cannot see is not a safety net —
+      # that hook decides whether an authenticated session ends up with a wallet, and it had been
+      # wrong five times before it was covered.
       - name: Run tests
-        run: bun turbo run --filter=web test
+        run: bun turbo run --filter=web --filter=@geogenesis/auth test
+
+  # Nothing was running `tsc` before this. `next build` typechecks only what is in the build graph,
+  # which excludes test files — which is how eight type errors accumulated in them unnoticed.
+  typecheck:
+    needs: build
+    name: 'Typecheck'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run typecheck
+        run: bun turbo run --filter=web typecheck
 
   lint:
     needs: build

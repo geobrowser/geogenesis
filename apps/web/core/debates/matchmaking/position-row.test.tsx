@@ -1,7 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 
 import type { DebateClaimPositionSummary } from '../api';
 import { PositionRow } from './matchmaking-claim-card';
@@ -134,10 +139,120 @@ describe('PositionRow', () => {
     expect(screen.getByText('+3')).toBeInTheDocument();
   });
 
-  it('keeps the vocabulary for the response kind on both pills', () => {
-    render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
+  /**
+   * The pills name the sides Agree and Disagree for every claim.
+   *
+   * This case used to render `responseKind="veracity"` and expect Verify and Dispute. The flag that
+   * selected that vocabulary no longer selects anything, so the assertion is inverted rather than
+   * deleted: the claims that used to read Verify/Dispute are exactly the ones this has to prove now
+   * read Agree/Disagree.
+   */
+  it('names both sides Agree and Disagree', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 
-    expect(screen.getByText('Verify')).toBeInTheDocument();
-    expect(screen.getByText('Dispute')).toBeInTheDocument();
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A server label must not put the retired vocabulary back.
+   *
+   * geo-chat still labels the sides of a claim minted before the change, and the pills used to
+   * prefer `position_label` over their own copy — so a stale "Verify" would render on a control
+   * that can only publish an Agree. The label the pill shows and the response it sends have to be
+   * the same word.
+   */
+  it('ignores a stale Verify/Dispute label from the server', () => {
+    const labelled: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Verify',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+      {
+        position: false,
+        position_label: 'Dispute',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+    ];
+
+    render(<PositionRow positions={labelled} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+  });
+
+  /**
+   * The glyph a pill draws, pinned against the icon it should be.
+   *
+   * Not asserted as "not a chevron": a vote arrow and an empty span satisfy that too. Comparing the
+   * rendered icon says which glyph it is, and re-rendering the expectation from the component means
+   * redrawing an icon's art does not fail these.
+   */
+  const glyphMarkup = (label: string) =>
+    screen.getByText(label).closest('span')?.parentElement?.querySelector('svg')?.outerHTML ?? null;
+
+  const iconMarkup = (node: React.ReactNode) => render(<>{node}</>).container.innerHTML;
+
+  it('draws thumbs on both pills', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled={false} />));
+    expect(glyphMarkup('Disagree')).toBe(iconMarkup(<ThumbDown filled={false} />));
+  });
+
+  it('fills the pill and its thumb on the side the viewer holds', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} />);
+
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled />));
+    expect([...(screen.getByText('Agree').closest('div.flex.min-h-7') as HTMLElement).classList]).toContain(
+      'bg-divider'
+    );
+  });
+
+  // A response confirms for 10-50s, and the pills drop presses for all of it. The wait cursor is
+  // the only thing left that says so on screen: the note that used to sit under the pills was
+  // taken out, because it read as a side not yet taken, and `aria-disabled` is heard rather than
+  // seen. Asserted so the next pass at quieting this row does not take the last cue with it.
+  describe('while a response is confirming', () => {
+    const pill = (label: string) => screen.getByText(label).closest('button') as HTMLElement;
+
+    it('puts a wait cursor on both pills', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      expect([...pill('Agree').classList]).toContain('cursor-progress');
+      expect([...pill('Disagree').classList]).toContain('cursor-progress');
+    });
+
+    it('leaves the pills looking taken, with no note under them', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      // The side still reads as held: full strength, and nothing announcing a wait. A pressable
+      // pill carries the fill on the button itself, not on an inner div as the read-only one does.
+      expect([...pill('Agree').classList]).toContain('bg-divider');
+      expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+      // Dropped presses are still spoken, since a cursor is not.
+      expect(pill('Agree')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('drops the cursor once the response lands', () => {
+      render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} onRespond={() => {}} />);
+
+      expect([...pill('Agree').classList]).not.toContain('cursor-progress');
+    });
   });
 });

@@ -342,9 +342,13 @@ describe('one card per organisation', () => {
 });
 
 describe('the organisation avatar', () => {
-  const withImage = (org: string, values: HistoryValueNode[]): HistoryEdgeNode => ({
+  const withImage = (
+    org: string,
+    values: HistoryValueNode[],
+    which: 'avatar' | 'cover' = 'avatar'
+  ): HistoryEdgeNode => ({
     ...edge(org, { relations: [role('Engineer')] }),
-    toEntity: { id: `org-${org}`, name: org, relationsList: [{ toEntity: { valuesList: values } }] },
+    toEntity: { id: `org-${org}`, name: org, [which]: [{ toEntity: { valuesList: values } }] },
   });
 
   // An image entity carries its own name and a couple of dimensions beside the
@@ -362,6 +366,29 @@ describe('the organisation avatar', () => {
     const cards = normalizeEmployment([withImage('Geo', [textValue(NAME_PROPERTY, 'Geo avatar')])]);
 
     expect(cards[0].avatarUrl).toBeNull();
+  });
+
+  // Plenty of organisations in the graph have set only a banner. Cropped square
+  // it is still their own image, which beats the grey placeholder.
+  it('falls back to the cover where there is no avatar', () => {
+    const cards = normalizeEmployment([withImage('Geo', [textValue(IPFS_URL_PROPERTY, 'ipfs://bafycover')], 'cover')]);
+
+    expect(cards[0].avatarUrl).toBe('ipfs://bafycover');
+  });
+
+  it('prefers the avatar where an organisation has set both', () => {
+    const both: HistoryEdgeNode = {
+      ...edge('Geo', { relations: [role('Engineer')] }),
+      toEntity: {
+        id: 'org-Geo',
+        name: 'Geo',
+        avatar: [{ toEntity: { valuesList: [textValue(IPFS_URL_PROPERTY, 'ipfs://bafyavatar')] } }],
+        cover: [{ toEntity: { valuesList: [textValue(IPFS_URL_PROPERTY, 'ipfs://bafycover')] } }],
+      },
+    };
+
+    // An organisation that has set both means the avatar as its mark.
+    expect(normalizeEmployment([both])[0].avatarUrl).toBe('ipfs://bafyavatar');
   });
 });
 

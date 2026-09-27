@@ -232,7 +232,9 @@ describe('AnalyticsUserIdentifier', () => {
     const { AnalyticsUserIdentifier } = await import('./analytics-user-identifier');
     render(<AnalyticsUserIdentifier />);
     await waitFor(() => expect(bindIdentity).toHaveBeenCalledTimes(1));
-    await act(async () => { window.dispatchEvent(new Event('geo-analytics-identity-epoch-issued')); });
+    await act(async () => {
+      window.dispatchEvent(new Event('geo-analytics-identity-epoch-issued'));
+    });
     await waitFor(() => expect(bindIdentity).toHaveBeenCalledTimes(2));
     expect(mocks.privyState.getAccessToken).toHaveBeenCalledTimes(2);
   });

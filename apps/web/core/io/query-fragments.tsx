@@ -399,50 +399,47 @@ export const entityExistsQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
-  query EntityCommentReplyBacklinksPage(
-    $id: UUID!
+export const commentEntitiesConnectionQuery = graphql(/* GraphQL */ `
+  query CommentEntitiesConnection(
+    $targetEntityId: UUID!
     $replyToTypeId: UUID!
     $commentTypeId: UUID!
     $first: Int!
-    $offset: Int!
+    $after: Cursor
   ) {
-    entity(id: $id) {
-      backlinksList(
-        first: $first
-        offset: $offset
-        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
-      ) {
-        fromEntity {
-          id
-        }
+    entitiesConnection(
+      first: $first
+      after: $after
+      typeId: $commentTypeId
+      orderBy: [CREATED_AT_DESC, ID_ASC]
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        ...FullEntity
       }
     }
   }
 `);
 
-export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
-  query EntitiesBatchForComments($filter: EntityFilter) {
+export const entityCommentCountQuery = graphql(/* GraphQL */ `
+  query EntityCommentCount($targetEntityId: UUID!, $replyToTypeId: UUID!, $commentTypeId: UUID!) {
+    entitiesConnection(
+      typeId: $commentTypeId
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      totalCount
+    }
+  }
+`);
+
+export const entitiesBatchForDebateVotesQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForDebateVotes($filter: EntityFilter) {
     entities(filter: $filter) {
-      id
-      name
-      description
-      spaceIds
-      createdAt
-      updatedAt
-
-      types {
-        id
-        name
-      }
-
-      valuesList(first: 1000) {
-        ...EntityValueFields
-      }
-
-      relationsList(first: 1000) {
-        ...RelationFields
-      }
+      ...FullEntity
     }
   }
 `);
@@ -548,6 +545,30 @@ export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
   query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
     space(id: $spaceId) {
       editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+/**
+ * Both roles for a set of people, in one request.
+ *
+ * `memberSpaceId: { in: [...] }` is server-filtered the same way the single-person checks above are,
+ * so this answers "which of these people are editors, and which are members" without a request per
+ * person and without paging the whole space — the participant lists are capped, and a space past the
+ * cap would report everyone beyond it as holding no role, which reads exactly like a correct answer.
+ *
+ * `first` must be at least the number of ids asked about: it caps rows returned, so a smaller value
+ * would quietly drop roles the space really holds. Callers chunk to keep both bounded.
+ */
+export const spaceRolesForParticipantsQuery = graphql(/* GraphQL */ `
+  query SpaceRolesForParticipants($spaceId: UUID!, $participantSpaceIds: [UUID!], $first: Int!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
+        memberSpaceId
+      }
+      membersList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
         memberSpaceId
       }
     }

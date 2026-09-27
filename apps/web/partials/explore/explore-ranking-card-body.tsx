@@ -22,6 +22,7 @@ import { resolveBlockPlacement } from '~/core/blocks/resolve-block-placement';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -62,7 +63,7 @@ function useRankingBlockPlacement(blockEntityId: string, spaceId: string) {
 
 function useExploreRankingBlockData(blockId: string, spaceId: string) {
   const { entity: blockEntity, isLoading: isBlockLoading } = useQueryEntity({ spaceId, id: blockId });
-  const blockRelations = blockEntity?.relations ?? [];
+  const blockRelations = blockEntity?.relations ?? NO_RELATIONS;
 
   const globalRankingEntityIds = React.useMemo(
     () => getOrderedRelationTargetIds(blockRelations, blockId, RANK_POSITION_PROPERTY_ID, spaceId),
@@ -88,6 +89,9 @@ function useExploreRankingBlockData(blockId: string, spaceId: string) {
     isBlockLoading,
   };
 }
+
+// A stable empty list: `?? []` rebuilt the array every render and the three memos below with it.
+const NO_RELATIONS: Relation[] = [];
 
 export function RankingVoteButton({ item }: { item: ExploreFeedItem }) {
   const { startDate, endDate } = useRankingBlockDatesForExplore(item.entityId, item.spaceId);

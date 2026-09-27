@@ -24,6 +24,9 @@ export function PublicDebateRecordingClient({ debateId }: { debateId: string }) 
     return () => {
       active = false;
     };
+    // `artifactUrl` is a react-query mutation whose identity changes across renders, so depending
+    // on it would re-fire the mutation on each one. This is meant to run once per debate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debateId]);
 
   return (

@@ -98,7 +98,7 @@ const containerStyles = cva('relative', {
 });
 
 export const InputPlace = ({
-  relationValueTypes = [],
+  relationValueTypes: _relationValueTypes = [],
   placeholder = 'Find or create...',
   width = 'clamped',
   variant = 'fixed',

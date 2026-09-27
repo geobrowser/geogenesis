@@ -26,7 +26,10 @@ export const Main = ({ children }: MainProps) => {
   const isFullWidth =
     debateFullscreenActive ||
     /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
-    /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
+    // Debates and claims are both full-bleed browse surfaces — see `SpaceChromeGate`, which strips
+    // the space header and tabs from the same two routes. The patterns are separate because that
+    // file also runs on `/root`, which never reaches here.
+    /^\/space\/[^/]+\/(debates|claims)(\/|$)/.test(pathname);
 
   return (
     <motion.main

@@ -38,7 +38,9 @@ describe('the topic coverage document', () => {
     // Coverage renders `ExploreFeedCard` from these rows. A field the feed selects and this one
     // doesn't is not a type error — it decodes to a missing thumbnail, an empty type line or a
     // timestamp that reads as the epoch, on a card that otherwise looks right.
-    const feedNodeFields = names(child(fields(operation(exploreEntitiesConnectionDocument).selectionSet.selections)[0], 'nodes'));
+    const feedNodeFields = names(
+      child(fields(operation(exploreEntitiesConnectionDocument).selectionSet.selections)[0], 'nodes')
+    );
     expect(coverageEntityFields()).toEqual(feedNodeFields);
   });
 

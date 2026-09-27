@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -24,10 +26,17 @@ interface EntityPageActionsProps {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
+  /** Tighten the action spacing when the row shares a compact header. */
+  compact?: boolean;
 }
 
-/** Menu, history, create, and votes — separate from type metadata */
-export function EntityPageActions({ entityId, spaceId, isVoteable = false }: EntityPageActionsProps) {
+/** Votes, create, history, and menu — separate from type metadata */
+export function EntityPageActions({
+  entityId,
+  spaceId,
+  isVoteable = false,
+  compact = false,
+}: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);
@@ -44,20 +53,15 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
   return (
-    <div className="ml-auto flex shrink-0 items-center gap-5">
-      {/* Create, then history, then the menu — master's order, and still the space header's
-          (`editable-space-header.tsx`). The row these moved into is new; the order within it is
-          not, and flipping it put the menu holding "Delete entity" where history used to sit. */}
+    <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
+      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
       {editable && (
-        // NB: breakpoints here are desktop-first (`sm` = max-width 639px), so `sm:hidden` hides
-        // this on phones and shows it everywhere else — that class is master's and unchanged.
-        // New here: the label, since an icon-only link otherwise announces as its bare URL, and
-        // `PrefetchLink` in place of `next/link`, matching the space header (hover prefetch
-        // rather than Next's default).
+        // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
+        // matches the space header and includes hover prefetching.
         <Link
           href={NavUtils.toEntity(spaceId, ID.createEntityId())}
           aria-label="Create new entity"
-          className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+          className="stroke-grey-04 transition-colors duration-75 hover:stroke-text mobile:hidden"
         >
           <Create />
         </Link>
@@ -95,7 +99,6 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false }: Ent
         )}
       </HistoryPanel>
       <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
-      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </div>
   );

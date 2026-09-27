@@ -17,7 +17,7 @@ import {
 } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
-import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { useDebateGatewayScope } from './debate-gateway';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -73,6 +73,12 @@ vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
   useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
+}));
+
+// The coordinator mounts the claim response notifier, which reads the personal space; nothing here
+// is about it.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null }),
 }));
 
 // geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.
@@ -632,13 +638,13 @@ describe('useGeoChatAuth', () => {
     invalidateQueries.mockClear();
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',
@@ -687,13 +693,13 @@ describe('useGeoChatAuth', () => {
     await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',

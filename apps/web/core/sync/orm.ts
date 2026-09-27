@@ -260,8 +260,7 @@ export class E {
     const deletedLocally = (propertyId: string) => Entities.hasDeletedValue(mergedValues, propertyId);
 
     const name =
-      Entities.nameInSpace(liveValues, spaceId) ??
-      (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
+      Entities.nameInSpace(liveValues, spaceId) ?? (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
 
     // The aggregate applies only to an unscoped read: when a space was named, borrowing the graph's
     // prose is what `descriptionInSpace` exists to decline. And only when nothing was deleted, for
@@ -387,6 +386,8 @@ export class E {
     spaceId,
     sort,
     orderBy,
+    includeEmptyNames,
+    signal,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -397,24 +398,29 @@ export class E {
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
     orderBy?: EntitiesOrderBy[];
+    includeEmptyNames?: boolean;
+    signal?: AbortController['signal'];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
 
       if (sort) {
-        const filter = convertWhereConditionToEntityFilter(where);
+        const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
         const page = await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            includeWithoutValue: sort.includeWithoutValue,
-            spaceId,
-            limit: first,
-            after,
-            offset,
-            filter,
-          })
+          getEntitiesOrderedByPropertyConnection(
+            {
+              propertyId: sort.propertyId,
+              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+              dataType: sort.dataType,
+              includeWithoutValue: sort.includeWithoutValue,
+              spaceId,
+              limit: first,
+              after,
+              offset,
+              filter,
+            },
+            signal
+          )
         );
 
         const remoteEntities = page.entities;
@@ -454,32 +460,38 @@ export class E {
       return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
     }
 
-    const filter = convertWhereConditionToEntityFilter(where);
+    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
     const typeIds = extractTypeIdsFromWhere(where);
 
     const page = sort
       ? await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            includeWithoutValue: sort.includeWithoutValue,
-            spaceId,
-            limit: first,
-            after,
-            offset,
-            filter,
-          })
+          getEntitiesOrderedByPropertyConnection(
+            {
+              propertyId: sort.propertyId,
+              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+              dataType: sort.dataType,
+              includeWithoutValue: sort.includeWithoutValue,
+              spaceId,
+              limit: first,
+              after,
+              offset,
+              filter,
+            },
+            signal
+          )
         )
       : await Effect.runPromise(
-          getAllEntities({
-            limit: first,
-            after,
-            offset,
-            filter,
-            typeIds,
-            orderBy,
-          })
+          getAllEntities(
+            {
+              limit: first,
+              after,
+              offset,
+              filter,
+              typeIds,
+              orderBy,
+            },
+            signal
+          )
         );
 
     const remoteEntities = page.entities;

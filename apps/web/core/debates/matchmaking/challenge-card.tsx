@@ -9,6 +9,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge } from '../api';
 import { useAcceptDebateChallenge, useRejectDebateChallenge } from '../hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -75,6 +76,7 @@ export function DebateChallengeCard({
               type="button"
               onClick={() => rejectChallenge.mutate(challenge.id)}
               disabled={busy}
+              {...hubAnalyticsAttributes('Cancel request', 'cancel_debate_request')}
               className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
             >
               {rejectChallenge.isPending ? 'Cancelling…' : 'Cancel request'}

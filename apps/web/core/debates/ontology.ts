@@ -105,3 +105,29 @@ export const TEXT_BLOCK_TYPE_ID = SystemIds.TEXT_BLOCK; // 76474f2f…
 export const MARKDOWN_CONTENT_PROPERTY_ID = SystemIds.MARKDOWN_CONTENT; // e3e363d1… (matches spec)
 export const AUTHORS_PROPERTY_ID = '91a9e2f6e51a48f7997661de8561b690'; // ContentIds.AUTHORS_PROPERTY (matches spec)
 export const SOURCES_PROPERTY_ID = '49c5d5e1679a4dbdbfd33f618f227c94'; // ContentIds.SOURCES_PROPERTY (matches spec)
+
+/**
+ * When a claim was said, in milliseconds from the start of the debate timeline — the same origin
+ * the player's scrubber and `turn_durations_ms` use.
+ *
+ * These live on the *relation entity* of the transcript block → claim relation, not on the claim:
+ * one claim can be stated in two different turns, and each statement has its own moment. The
+ * relation entity is also typed `Selector` and pointed at `Debate videos`, which is the graph's
+ * existing shape for "this relation points at a span of its target" — the same one `Reply to` uses
+ * to anchor a comment to a range of text.
+ *
+ * Both properties already existed in the Geo ontology space, unused, declared as Integer. Nothing
+ * was minted for this. Note the API serialises Integer values as strings.
+ */
+export const CLAIM_START_OFFSET_PROPERTY_ID = 'a1d1cb557b184238ba0ec78ba7f289fb';
+export const CLAIM_END_OFFSET_PROPERTY_ID = '79a677b597f84ca8a1cf24eef7837b61';
+
+/**
+ * The typing that says a relation points at a *span* of its target rather than the whole of it.
+ *
+ * A relation entity carrying offsets is typed `Selector` and given a `Target property` naming the
+ * property the span is measured in — `Debate videos` here, the same shape `Reply to` uses to anchor
+ * a comment to a range of text. Both existed in the Geo ontology space already.
+ */
+export const SELECTOR_TYPE_ID = '813ca865db9b486490dec6764febaab3';
+export const TARGET_PROPERTY_ID = 'e1788cdf9bae42e987b0d9791de09b31';

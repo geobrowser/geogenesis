@@ -58,8 +58,6 @@ function RankingRankedByAvatarGroup({
 }) {
   if (avatars.length === 0 && extraCount <= 0) return null;
 
-  const isCompact = size === 12;
-
   return (
     <AvatarGroup>
       {avatars.map(avatar => (
@@ -71,18 +69,7 @@ function RankingRankedByAvatarGroup({
           )}
         </AvatarGroup.Item>
       ))}
-      {extraCount > 0 ? (
-        <li
-          key="extra-count"
-          className={cx(
-            // Same ring as the faces beside it, so the overflow badge follows the surface too.
-            'relative box-content flex shrink-0 list-none items-center justify-center rounded-full border-2 border-[color:var(--avatar-group-ring,var(--color-white))] bg-grey-02 text-grey-04 tabular-nums',
-            isCompact ? 'h-3 px-1 text-[9px]' : 'h-5 px-1.5 text-[11px]'
-          )}
-        >
-          <span className={cx('block', isCompact ? 'h-3 leading-[12px]' : 'h-5 leading-[20px]')}>+{extraCount}</span>
-        </li>
-      ) : null}
+      <AvatarGroup.Overflow count={extraCount} size={size} />
     </AvatarGroup>
   );
 }

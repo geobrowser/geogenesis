@@ -1,7 +1,7 @@
 import { GeoTestnetConfig, createGeoClient } from '@geoprotocol/geo-sdk';
-import { describe, expect, it } from 'vitest';
 
 import { decodeAbiParameters, decodeFunctionData, encodeFunctionData, parseAbi } from 'viem';
+import { describe, expect, it } from 'vitest';
 
 import { ZERO_ADDRESS, ZERO_SPACE_ID, encodeProposalCreatedData, padBytes16ToBytes32 } from './governance';
 

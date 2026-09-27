@@ -1,120 +1,86 @@
-import type { WinnerShare } from '~/core/claims/browse/claim-debates';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
-import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 
 /**
  * What a People row says about someone, after every "omit, never zero" rule has been applied.
  *
  * A `null` field is one the row leaves out. New people arrive continuously, so a thin row is a
- * permanent case rather than a beta one: "0 debates · 0% won" reads as failure where absence reads
- * as new. The join date is the row's floor — everybody has one — so a person with no record still
- * gets a complete-looking row.
+ * permanent case rather than a beta one: a row of zeroes reads as failure where absence reads as
+ * new. The join date is the row's floor — everybody has one — so a person with no record still gets
+ * a complete-looking row.
  */
 export type PersonRecord = {
   positions: number | null;
   debatesArgued: number | null;
+  /** Spaces with activity already observed, even when a capped page makes the exact counts incomplete. */
+  activeSpaceIds: ReadonlySet<string>;
+  /** Distinct claims the person has answered, grouped by response space; absent if the page was short. */
+  claimsBySpace?: ReadonlyMap<string, number>;
   /**
-   * `percent` is `wins` over `of`, the debates they argued. `judged` is how many of those anybody
-   * has voted on — carried so the row can say what the percentage is actually derived from rather
-   * than presenting a lower bound as a settled figure.
+   * Published debates grouped by the space they were recorded in. Used to order and describe the
+   * active-space list; absent if the relation page was short.
    */
-  winRate: { percent: number; wins: number; of: number; judged: number } | null;
+  debatesBySpace?: ReadonlyMap<string, number>;
   joinedAt: Date | null;
 };
 
 export type PersonRecordInput = {
-  /** The person's personal space id — the same id debate sides point at and `userVotes.userId` holds. */
-  personId: string;
   /** Distinct claims they hold a position on, not `userVotes` rows — see `readPersonRecords`. */
   positions: number;
   /** Their position rows came back short of what the server holds, so the distinct count is low. */
   positionsTruncated: boolean;
+  /** Distinct answered claims grouped by response space. */
+  claimsBySpace?: ReadonlyMap<string, number>;
   /** Every debate they argued, either side, already de-duplicated. */
   debateIds: string[];
+  /** Published debates grouped by relation space, already de-duplicated per debate and space. */
+  debatesBySpace?: ReadonlyMap<string, number>;
   /** A side's relations came back short, so `debateIds` is a subset and any count from it is low. */
   truncated: boolean;
   /** Unix seconds — stringified or numeric — or ISO 8601, as `entity.createdAt` may return it. */
   createdAt: string | number | null;
-  /**
-   * Winner shares keyed by `uuidToHex` — already canonical. Normalised once by the caller rather
-   * than per person, because the same map is read for every row on the tab.
-   */
-  sharesByDebateId: Map<string, WinnerShare>;
 };
 
-/**
- * Re-keys a winner map by canonical hex id, once, for every row that will read it.
- *
- * The two joins in the derivation below cross a service boundary and the sides do not agree on how
- * a UUID is written: the indexer returns them dashed, while the graph query and the matchmaking
- * presence feed return them dashless. An exact match would silently find nothing — no share for any
- * debate — and quietly report a real record as 0%.
- */
-export function canonicalizeWinnerShares(winnerByDebateId: Map<string, WinnerShare>): Map<string, WinnerShare> {
-  const canonical = new Map<string, WinnerShare>();
-  for (const [id, share] of winnerByDebateId) canonical.set(uuidToHex(id), share);
-  return canonical;
-}
-
-/**
- * Win rate is wins over debates *argued*, not over debates anyone voted on.
- *
- * The two diverge whenever a debate goes unwatched and keep diverging at scale. Debates argued is
- * the more honest reading — an unwatched debate is not a win — and picking it once here is what
- * keeps the row, the record page and anything later from disagreeing.
- *
- * A tie is not a win. It still counts in the denominator, because it was still argued.
- *
- * That denominator makes every rate a *lower bound*: unjudged debates sit in it, so the figure can
- * only rise as they are judged. Which is fine at 18% and not fine at 0%, because zero is the one
- * value that reads as a verdict rather than a measurement — "won none of them" where the truth is
- * "nobody has watched most of them". So a rate is shown when it is settled (every debate judged) or
- * when at least one debate has actually been won; a 0% derived from a partly-judged record is
- * withheld, which is the row's own omit-never-zero rule applied to the rate itself. On the live
- * graph today only 14 of 55 debates are judged at all, so this is the common case, not an edge one.
- */
 export function derivePersonRecord({
-  personId,
   positions,
   positionsTruncated,
+  claimsBySpace = new Map(),
   debateIds,
+  debatesBySpace = new Map(),
   truncated,
   createdAt,
-  sharesByDebateId,
 }: PersonRecordInput): PersonRecord {
   const joinedAt = parseCreatedAt(createdAt);
+  const activeSpaceIds = new Set<string>();
+  for (const counts of [claimsBySpace, debatesBySpace]) {
+    for (const [spaceId, count] of counts) {
+      if (count > 0) activeSpaceIds.add(spaceId);
+    }
+  }
   // A truncated page of positions is an arbitrary subset of the claims they answered, so the
   // distinct count from it is quietly low — withheld for the same reason the debate count is.
   const positionsHeld = !positionsTruncated && positions > 0 ? positions : null;
 
-  // A truncated page is an arbitrary subset of someone's debates, so both the count and any rate
-  // derived from it would be quietly low. No number is the honest answer; a wrong one is not.
+  // A truncated page is an arbitrary subset of someone's debates, so its count would be quietly
+  // low. No number is the honest answer; a wrong one is not.
   if (truncated) {
-    return { positions: positionsHeld, debatesArgued: null, winRate: null, joinedAt };
+    return {
+      positions: positionsHeld,
+      debatesArgued: null,
+      activeSpaceIds,
+      claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
+      debatesBySpace: undefined,
+      joinedAt,
+    };
   }
 
   const debatesArgued = debateIds.length;
 
-  let wins = 0;
-  let judged = 0;
-  for (const debateId of debateIds) {
-    const share = sharesByDebateId.get(uuidToHex(debateId));
-    if (!share || share.totalVotes === 0) continue;
-    judged += 1;
-    // The winner's space id crosses the same service seam as the debate keys above, so this is a
-    // dash- and case-insensitive comparison rather than `===`.
-    if (!share.tied && idEquals(share.spaceId, personId)) wins += 1;
-  }
-
-  const rateIsHonest = judged > 0 && (wins > 0 || judged === debatesArgued);
-
   return {
     positions: positionsHeld,
     debatesArgued: debatesArgued > 0 ? debatesArgued : null,
-    winRate:
-      debatesArgued > 0 && rateIsHonest
-        ? { percent: Math.round((wins / debatesArgued) * 100), wins, of: debatesArgued, judged }
-        : null,
+    activeSpaceIds,
+    claimsBySpace: positionsTruncated ? undefined : claimsBySpace,
+    debatesBySpace,
     joinedAt,
   };
 }

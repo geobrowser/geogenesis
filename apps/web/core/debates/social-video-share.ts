@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { capture } from '~/core/analytics';
+import { errorName } from '~/core/utils/error-name';
 
 import { useDebateMediaArtifactUrl } from './hooks';
 
@@ -330,7 +331,7 @@ export async function downloadSocialVideo(
 }
 
 export function isAbortError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+  return errorName(error) === 'AbortError';
 }
 
 /**
@@ -346,23 +347,6 @@ const UNRETRYABLE_SHARE_ERROR_NAMES = new Set(['NotAllowedError', 'NotSupportedE
 
 export function isUnretryableShareError(error: unknown): boolean {
   return UNRETRYABLE_SHARE_ERROR_NAMES.has(errorName(error));
-}
-
-/**
- * The error's own name, for telemetry.
- *
- * Read structurally rather than behind `instanceof Error`, which is what every call site here used
- * to do — and `DOMException` is **not** an instance of `Error`. Since the Web Share API and the
- * fetch abort path both reject with `DOMException`, that guard reported every one of them as
- * `UnknownError`: the share failure Preston hit arrived as a person telling us the string, because
- * `NotAllowedError` never reached the event. `isAbortError` above already reads `.name` this way,
- * which is why cancellation detection worked while the reporting beside it did not.
- */
-export function errorName(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'name' in error && typeof error.name === 'string') {
-    return error.name;
-  }
-  return 'UnknownError';
 }
 
 export function captureSocialVideoEvent(eventName: string, properties: Record<string, unknown>) {

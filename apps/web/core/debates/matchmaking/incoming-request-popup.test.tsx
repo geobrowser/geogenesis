@@ -154,6 +154,19 @@ describe('IncomingRequestPopup', () => {
 
     expect(mocks.block).toHaveBeenCalledWith('user-them');
   });
+
+  it('attributes the shared overflow menu to the request popup rather than the hub', () => {
+    renderPopup();
+
+    const overflow = screen.getByRole('button', { name: 'More options' });
+    expect(overflow).toHaveAttribute('data-geo-analytics-label', 'Debate request popup Request options');
+    expect(overflow).toHaveAttribute('data-geo-analytics-intent', 'open_debate_request_options');
+
+    fireEvent.click(overflow);
+    const block = screen.getByRole('button', { name: 'Block Salina Mitchell' });
+    expect(block).toHaveAttribute('data-geo-analytics-label', 'Debate request popup Block requester');
+    expect(block).toHaveAttribute('data-geo-analytics-intent', 'manage_debate_request');
+  });
 });
 
 describe('IncomingRequestPopup answers', () => {

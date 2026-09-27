@@ -73,8 +73,20 @@ function renderSheet(overrides: Partial<Parameters<typeof AddEducationSheet>[0]>
 
 const pickers = () => screen.getAllByRole('button', { name: /pick existing/ });
 
+/**
+ * The start date, which every record needs before it can be saved.
+ *
+ * Required since GEO-2859: editing a published row is a removal and a fresh
+ * write, and the write emits no date row when it has none — so saving with the
+ * start blank deleted the date that was there.
+ */
+async function pickStart(month = '3', year = '2019') {
+  await userEvent.selectOptions(screen.getByLabelText('Start month'), month);
+  await userEvent.selectOptions(screen.getByLabelText('Start year'), year);
+}
+
 describe('AddEducationSheet', () => {
-  it('needs a school and a degree before it can save', async () => {
+  it('needs a school, a degree and a start date before it can save', async () => {
     renderSheet();
 
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
@@ -82,6 +94,11 @@ describe('AddEducationSheet', () => {
     await userEvent.click(pickers()[0]); // school
     await userEvent.click(pickers()[0]); // degree
 
+    // Saving here used to be allowed, and on an edit it deleted the date the
+    // row already had — the write emits no date row when it has none.
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+
+    await pickStart();
     expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
   });
 
@@ -198,6 +215,7 @@ describe('AddEducationSheet', () => {
 
     await userEvent.click(pickers()[0]);
     await userEvent.click(pickers()[0]);
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ status: 'studying', endDate: null }));
@@ -231,6 +249,7 @@ describe('AddEducationSheet', () => {
     await userEvent.click(screen.getByRole('button', { name: '+ Add another' }));
     await userEvent.click(pickers()[0]); // second field
 
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];
@@ -245,6 +264,7 @@ describe('AddEducationSheet', () => {
     // School and Degree are answered, so their pickers are gone; Field is the
     // first of the two left, with Skills behind it.
     await userEvent.click(screen.getAllByRole('button', { name: /create new/ })[0]);
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     const draft = props.onSave.mock.calls.at(-1)?.[0];
@@ -283,6 +303,7 @@ describe('AddEducationSheet', () => {
     expect(screen.getByText(/Already on your profile/)).toBeInTheDocument();
 
     await userEvent.click(pickers()[0]); // degree
+    await pickStart();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(props.onSave).toHaveBeenCalledWith(expect.objectContaining({ existingStintId: 'record-1' }));
@@ -309,5 +330,61 @@ describe('every picker', () => {
       expect(labelId).toBeTruthy();
       expect(document.getElementById(labelId as string)?.textContent).toBeTruthy();
     }
+  });
+});
+
+/**
+ * ...except on a row that never had one (GEO-2859).
+ *
+ * Editing is a removal and a fresh write, so a blank start *deletes* a date that
+ * was there — which is what the requirement above is for. A row that arrived
+ * undated has nothing to delete, and most history in the graph is undated, so
+ * requiring one there made a legacy record unsavable: correcting a typo in the
+ * degree meant inventing a historical start.
+ */
+describe('AddEducationSheet — a row that was already undated', () => {
+  const undated = {
+    school: { id: 'org-1', name: 'Cincinnati' },
+    degree: { id: 'degree-1', name: 'Doctor of Philosophy' },
+    startDate: null,
+    endDate: null,
+    status: 'studying',
+    fields: [],
+    skills: [],
+  } as never;
+
+  it('lets an undated row be saved without inventing a date', () => {
+    renderSheet({ initial: undated });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+  });
+
+  it('still refuses to let a dated row have its date cleared', async () => {
+    renderSheet({ initial: { ...(undated as object), startDate: '2019-03-01T00:00:00.000Z' } as never });
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeEnabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Start month'), '');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('still requires a date on a brand new row', async () => {
+    renderSheet();
+
+    await userEvent.click(pickers()[0]);
+    await userEvent.click(pickers()[0]);
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
+  });
+
+  it('requires a start before adding an end to an undated row', async () => {
+    renderSheet({ initial: undated });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    await userEvent.selectOptions(screen.getByLabelText('End month'), '3');
+    await userEvent.selectOptions(screen.getByLabelText('End year'), '2024');
+
+    expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
 });

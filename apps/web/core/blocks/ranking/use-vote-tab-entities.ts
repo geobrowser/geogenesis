@@ -102,7 +102,7 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
         // read in the entity's own space — resolving a claim verified elsewhere
         // against this block's space downgrades it and drops it from the tab.
         const entitySpaceId = resolveEntitySpaceId(entity, spaceId);
-        if (responseKindToVoteKind(resolveEntityResponseKind(entity, entitySpaceId)) !== votedKind) return [];
+        if (responseKindToVoteKind(resolveEntityResponseKind(entity)) !== votedKind) return [];
         return [toRankingEntryDisplay(entity, entitySpaceId)];
       }),
     [entities, voteKindById, spaceId]
@@ -135,6 +135,10 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     if (entitiesError) return;
     if (!isFetched || isPlaceholderData) return;
     commit(pageEntries);
+    // `pageEntriesSignature` stands in for `pageEntries` deliberately — same reason as
+    // `use-ranking-accumulated-rows`: the array identity changes on every render of the query, the
+    // signature only when its contents do.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     enabled,
     entitiesError,

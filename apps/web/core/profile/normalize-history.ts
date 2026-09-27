@@ -49,7 +49,9 @@ export type HistoryEdgeNode = {
   toEntity: {
     id: string;
     name: string | null;
-    relationsList?: { toEntity: { valuesList: HistoryValueNode[] } | null }[];
+    /** The organisation's avatar relation, and its cover as a fallback. */
+    avatar?: { toEntity: { valuesList: HistoryValueNode[] } | null }[];
+    cover?: { toEntity: { valuesList: HistoryValueNode[] } | null }[];
   } | null;
   entity: { valuesList: HistoryValueNode[]; relationsList: HistoryRelationNode[] } | null;
 };
@@ -263,8 +265,17 @@ function readEntry(
  * name and a couple of dimensions alongside the URL, so that picked "Geo avatar"
  * and rendered nothing.
  */
+/**
+ * The organisation's picture: its avatar, or its cover where it has no avatar.
+ *
+ * Avatar first, because an organisation that has set both means the avatar as
+ * its mark. A cover cropped square is still this organisation's own image and
+ * beats the placeholder — plenty of companies in the graph have set only one.
+ */
 function readAvatar(edge: HistoryEdgeNode): string | null {
-  for (const relation of edge.toEntity?.relationsList ?? []) {
+  const relations = [...(edge.toEntity?.avatar ?? []), ...(edge.toEntity?.cover ?? [])];
+
+  for (const relation of relations) {
     const values = relation.toEntity?.valuesList ?? [];
     const url = findMediaUrlValue(values.map(value => ({ value: value.text, property: value.property })));
     if (url) return url;

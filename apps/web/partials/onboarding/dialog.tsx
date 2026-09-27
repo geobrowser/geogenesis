@@ -486,12 +486,14 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           {avatar ? (
             <OnboardingAvatarPreview avatar={avatar} />
           ) : (
-            <img
+            <button
+              type="button"
               className="cursor-pointer rounded-full"
-              src="/images/onboarding/no-avatar.png"
-              alt=""
+              aria-label="Choose a profile photo"
               onClick={() => fileInputRef.current?.click()}
-            />
+            >
+              <img className="rounded-full" src="/images/onboarding/no-avatar.png" alt="" />
+            </button>
           )}
           <div className="absolute right-0 bottom-0 h-6 w-6">
             <SquareButton
@@ -780,6 +782,17 @@ function StepInterestedIn({
               <div
                 key={`interested-topic-${featuredSpace.id}`}
                 role="button"
+                // It already said `role="button"`, which promises a control that can be focused and
+                // activated from a keyboard. Without a tabIndex it could not be reached, and without
+                // a key handler Enter and Space did nothing. `aria-pressed` because it is a toggle.
+                tabIndex={0}
+                aria-pressed={selectedTopicIds.includes(featuredSpace.id)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleSelectTopics(featuredSpace.id);
+                  }
+                }}
                 onClick={() => handleSelectTopics(featuredSpace.id)}
                 className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
               >

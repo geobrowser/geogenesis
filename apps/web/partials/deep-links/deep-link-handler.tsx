@@ -1,6 +1,7 @@
 'use client';
 
 import { useSignInDeepLink } from '~/core/auth/use-sign-in-deep-link';
+import { useRoomAccessDeepLink } from '~/core/debates/rooms/use-room-access-deep-link';
 import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-link';
 
 /**
@@ -13,6 +14,7 @@ import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-l
 export function DeepLinkHandler() {
   useSignInDeepLink();
   useDebatesPanelDeepLink();
+  useRoomAccessDeepLink();
 
   return null;
 }

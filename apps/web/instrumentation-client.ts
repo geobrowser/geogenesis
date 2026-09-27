@@ -68,8 +68,17 @@ if (isTelemetryEnabled) {
     // stack minified. Set in next.config.ts from the same value the source-map upload pins.
     release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
 
-    // 100% of traces in development, 20% in production
-    tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.2,
+    // 100% of traces in development, 1% in production.
+    //
+    // 20% is what exhausted the org's quota on 2026-09-10 and left every project blind for the
+    // eleven days after it: 12.3M and 12.7M spans on 8-9 September against 6,542 and 8,781 error
+    // events, so tracing outran errors by roughly 1,500x. Errors at that volume fit in any plan.
+    // Tracing at 20% does not, and a larger budget alone would be spent the same way.
+    //
+    // 1% is a starting point rather than a measured optimum. If a route genuinely needs denser
+    // sampling, prefer a `tracesSampler` that raises it for that route over lifting this floor
+    // for everything.
+    tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.01,
 
     // Filter wallet rejections globally — these are user-initiated, not errors
     beforeSend(event) {

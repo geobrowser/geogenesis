@@ -527,13 +527,19 @@ export function useEditorStore() {
     }
 
     return { editorJson: json, serverBlocks: sBlocks };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     blockRelations,
+    initialBlockEntityRelations,
     spaceId,
     initialBlockValues,
     initialBlockEntities,
     mediaPropertySource,
     markdownValues,
+    // `blockConfigValues` and `blockTypesRelations` are not read in the body, and are not meant to
+    // be: they are store subscriptions, and the helpers this memo calls read that same store. They
+    // are here so the editor JSON is rebuilt when block config or types change. Dropping them as
+    // "unnecessary" would leave it stale.
     blockConfigValues,
     blockTypesRelations,
   ]);

@@ -4,9 +4,11 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 
 import {
   GeoChatRequestError,
+  GeoChatSessionError,
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
+  createScheduledDebate,
   dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
@@ -110,6 +112,30 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+
+  it('reads Retry-After from a 429 as seconds or an HTTP date, without retrying the request', async () => {
+    const rateLimited = (retryAfter: string) =>
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Too many requests' } }), {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter },
+      });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited('7'))
+      .mockResolvedValueOnce(rateLimited(new Date(Date.now() + 30_000).toUTCString()));
+    vi.stubGlobal('fetch', fetch);
+    const notify = () => notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', true, vi.fn(), 'user-a');
+
+    await expect(notify()).rejects.toMatchObject({ status: 429, retryAfterMs: 7_000 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const error = await notify().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeGreaterThan(28_000);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeLessThanOrEqual(30_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -628,7 +654,7 @@ describe('claim response indexing notifications', () => {
     vi.stubGlobal('fetch', fetch);
 
     await expect(
-      notifyClaimResponseIndexed('space-1', 'claim-1', 'veracity', false, vi.fn(), 'user-a')
+      notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', false, vi.fn(), 'user-a')
     ).resolves.toBeUndefined();
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/response-indexed', {
@@ -637,7 +663,7 @@ describe('claim response indexing notifications', () => {
         Authorization: 'Bearer access-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ response_kind: 'veracity', position: false }),
+      body: JSON.stringify({ response_kind: 'stance', position: false }),
       signal: undefined,
     });
   });
@@ -948,5 +974,47 @@ describe('geo-chat session sharing', () => {
 
     await result;
     expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
+  });
+});
+
+describe('GeoChatSessionError', () => {
+  it('keeps the Retry-After delay of the error it wraps', () => {
+    const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
+    expect(wrapped.retryAfterMs).toBe(1_500);
+  });
+});
+
+describe('scheduled debate limit', () => {
+  it("keeps geo-chat's message and code on a refused invitation", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'too_many_open_invitations',
+              message:
+                'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const body = {
+      opponent_user_id: 'user-b',
+      scheduled_start_at: '2026-09-26T10:00:00.000Z',
+      scheduled_end_at: '2026-09-26T10:30:00.000Z',
+    };
+    const error = await createScheduledDebate(body, vi.fn(), 'user-a').catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'too_many_open_invitations',
+      message:
+        'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+    });
   });
 });

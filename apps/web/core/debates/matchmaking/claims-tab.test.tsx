@@ -259,6 +259,10 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
   // below this needs one here.
   debateQueryKeys: {
