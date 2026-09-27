@@ -122,21 +122,20 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * `topic_ids`, so neither is a page-local filter any more and the list is whatever the index says.
  *
  * The server still returns `topics: []` on every row, which is not the contradiction it looks
- * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Featured
+ * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Explore
  * resolves topics itself, because its list comes from the knowledge graph and the index has never
  * seen it.
  */
 /**
  * Which surface is drawing this list (GEO-2861).
  *
- * Each variant is fixed to one list: Lobby is `debate_now`, Explore the Debate tag, Featured the
- * Featured tag, Positions the viewer's own. The panel gives each a tab (Lobby also has a Matches
- * toggle); the workspace picks among them with the menu beside search.
+ * Each variant is fixed to one list: Lobby is `debate_now`, Explore the Debate tag, Positions the
+ * viewer's own. The panel gives each a tab (Lobby also has a Matches toggle); the workspace picks
+ * among them with the menu beside search.
  *
  * They hold their filter selections apart — narrowing what you can debate right now is a different
  * act from narrowing what you are browsing, and from narrowing what you have already answered — so
- * the atoms come from here rather than being read directly. Featured shares Explore's atoms: both
- * describe the corpus, so a space picked on one still applies on the other.
+ * the atoms come from here rather than being read directly.
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
@@ -327,9 +326,9 @@ export function ClaimsTab({
 
   // Which tag this filter reads, and whether it reads one at all.
   //
-  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — switching
-  // Featured to All and back lands on each one's own cached catalog rather than refetching. Whether
-  // that catalog is *used* is `graphSourced`, which is also what holds the index query off.
+  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — moving
+  // between filters lands on each one's own cached catalog rather than refetching. Whether that
+  // catalog is *used* is `graphSourced`, which is also what holds the index query off.
   const claimsTagId = TAG_FOR_FILTER[filter] ?? DEBATE_TAG_ID;
   const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
 
@@ -346,8 +345,8 @@ export function ClaimsTab({
     () => ({
       search: debouncedSearch || null,
       topicIds: debouncedTopicIds,
-      // Narrowed to what geo-chat understands: `featured` and `all` are this tab's own sources, and
-      // the query is disabled for both anyway.
+      // Narrowed to what geo-chat understands: `all` is this tab's own source, and the query is
+      // disabled for it anyway.
       filter: graphSourced ? 'all' : (filter as MatchmakingClaimsFilter),
     }),
     [debouncedSearch, debouncedTopicIds, graphSourced, filter]
@@ -359,7 +358,7 @@ export function ClaimsTab({
   );
 
   // Every way the pages can describe a wider corpus than this tab will show is handled in there,
-  // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
+  // once, for both pickers — see `useScopedMatchmakingClaims`. Explore passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
   const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced);
@@ -372,13 +371,13 @@ export function ClaimsTab({
   //
   // The source gate covers the selections and the query, and deliberately not the search.
   //
-  // Featured builds both menus from the live space and topic selections over a list it already
+  // Explore builds both menus from the live space and topic selections over a list it already
   // holds, so those are right on the same render as the tick and there is nothing to wait for. The
-  // debounce still runs there, feeding a query Featured never makes, so ungated it would drop
+  // debounce still runs there, feeding a query Explore never makes, so ungated it would drop
   // skeletons over numbers that were already correct.
   //
-  // Search is the exception, because Featured filters by `debouncedSearch` like every other source
-  // does — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
+  // Search is the exception, because Explore filters by `debouncedSearch` like the index-sourced
+  // filters do — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
   // as the box is unsettled, so that window has to cover the counts wherever they came from.
   //
   // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
@@ -396,10 +395,10 @@ export function ClaimsTab({
   // run over the loaded pages either: tagged claims are a couple of thousand out of a corpus of
   // thousands, so a page-local filter would page for a very long time before it found one.
   //
-  // GEO-2771 moved `all` here from the index for the same reason it was always true of `featured`,
-  // and for one more: the graph already knows which claims are meant for debating, so replicating
-  // that into geo-chat only to filter on it is a trip with nothing at the end of it. What geo-chat
-  // still answers is everything *about* these claims — see the row lookup below.
+  // GEO-2771 moved `all` here from the index for one more reason: the graph already knows which
+  // claims are meant for debating, so replicating that into geo-chat only to filter on it is a trip
+  // with nothing at the end of it. What geo-chat still answers is everything *about* these claims
+  // — see the row lookup below.
   //
   // The list comes from the graph: one ranked, filtered page at a time (GEO-2798). Search, topics
   // and spaces are all applied by the server, so what arrives is what the viewer asked for and the
@@ -868,9 +867,9 @@ export function ClaimsTab({
     setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
   }, [facetTopics, facetsComplete, setTopicIds, topicsSettling]);
 
-  // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
-  // empty Featured tab should say nothing is featured — not that filters are hiding things — and
-  // "Clear filters" should leave the viewer on the tab they picked.
+  // The variant is not counted as narrowing: it chooses which list is on screen rather than cutting
+  // one down, so an empty list should say the list is empty — not that filters are hiding things —
+  // and "Clear filters" should leave the viewer on the list they picked.
   // Two questions, and they had one answer.
   //
   // What the viewer has *narrowed* by decides what an empty list means: with nothing narrowing it,
@@ -1117,10 +1116,9 @@ export function ClaimsTab({
               ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
               : undefined
           }
-          // What an empty list means depends on where it came from, and the two graph-sourced
-          // filters mean different things by it: Featured says a curator has tagged nothing, All
-          // says nothing carries the Debate tag. Both are statements about curation, not about the
-          // viewer's filters, so they only show when no filter is narrowing anything.
+          // What an empty list means depends on where it came from. Explore is the graph-sourced
+          // one, and empty there says nothing carries the Debate tag — a statement about curation,
+          // not about the viewer's filters, so it only shows when no filter is narrowing anything.
           //
           // Answered-everything comes first, because it is the only one of the three that is true
           // of a list with rows in it. Saying "nothing carries the Debate tag" to someone who has
@@ -1137,8 +1135,8 @@ export function ClaimsTab({
                     : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
-          // empty list means "nobody is around" for — Featured and All claims are statements about
-          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+          // empty list means "nobody is around" for — Explore is a statement about curation, and My
+          // positions is about the viewer. Withheld under a narrowing filter for
           // the same reason it is on the other tabs: that emptiness has a different cause
           // (GEO-2840).
           // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
