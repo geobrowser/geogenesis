@@ -2137,6 +2137,15 @@ export function isGeoChatRefusal(error: unknown) {
 }
 
 /**
+ * `/debate-profiles/:spaceId` for a person geo-chat has never seen — they have not signed in to
+ * debate. By its code rather than its status: a 404 alone is also what a deployment without the
+ * route answers (see `isMatchmakingUnavailable`), and that is a failure, not a fact about them.
+ */
+export function isDebateProfileMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'user_not_found';
+}
+
+/**
  * That refusal read as "not yet" rather than "not you".
  *
  * geo-chat does not know an account for a minute or two after it is created and refuses every

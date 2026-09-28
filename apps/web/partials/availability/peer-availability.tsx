@@ -566,12 +566,22 @@ function Empty({ children, action }: { children: React.ReactNode; action?: React
   );
 }
 
-function Notice({ children, className }: { children: React.ReactNode; className?: string }) {
+/** A one-line state in place of the week. `action` sits outside the paragraph, like `Empty`'s. */
+export function Notice({
+  children,
+  className,
+  action,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className={cx('flex items-center justify-center p-6', className)}>
+    <div className={cx('flex flex-col items-center justify-center gap-3 p-6 text-center', className)}>
       <Text as="p" variant="metadata" color="grey-04">
         {children}
       </Text>
+      {action}
     </div>
   );
 }
