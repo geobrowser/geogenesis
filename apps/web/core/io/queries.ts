@@ -1418,6 +1418,8 @@ export function getProperty(id: string, signal?: AbortController['signal']) {
 }
 
 export function getProperties(ids: string[], signal?: AbortController['signal']) {
+  if (ids.length === 0) return Effect.succeed([]);
+
   return graphql({
     query: propertiesBatchQuery,
     decoder: data => {

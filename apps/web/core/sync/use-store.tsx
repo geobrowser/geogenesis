@@ -658,13 +658,16 @@ type QueryPropertiesOptions = {
 
 export function useQueryProperties({ ids, spaceId, enabled = true }: QueryPropertiesOptions) {
   const { store } = useSyncEngine();
+  // Order-independent key: the merge below walks `ids`, so the same set in any order is one request.
+  const requestIds = React.useMemo(() => [...new Set(ids)].sort(), [ids]);
+  const shouldFetch = enabled && requestIds.length > 0;
 
   const { data: remoteProperties, isFetched } = useQuery({
-    enabled: enabled,
+    enabled: shouldFetch,
     placeholderData: keepPreviousData,
-    queryKey: ['store', 'properties', JSON.stringify({ ids, enabled })],
+    queryKey: ['store', 'properties', requestIds],
     queryFn: async (): Promise<Property[]> => {
-      return await Effect.runPromise(getProperties(ids));
+      return await Effect.runPromise(getProperties(requestIds));
     },
   });
 
@@ -734,7 +737,7 @@ export function useQueryProperties({ ids, spaceId, enabled = true }: QueryProper
 
   return {
     properties: allProperties,
-    isLoading: !isFetched && enabled,
+    isLoading: !isFetched && shouldFetch,
   };
 }
 
