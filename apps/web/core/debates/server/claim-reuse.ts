@@ -3,9 +3,9 @@ import { Effect } from 'effect';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
-import { equals, uuidToHex } from '~/core/id/normalize';
+import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
-import { ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
+import { batchEntityIds } from '~/core/io/queries';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import { readEnv } from './acceptor-config';
@@ -90,27 +90,28 @@ export async function lookupExistingClaimsInGraph(
   fetchFacts: ExistingClaimFactsFetcher = fetchFactsFromGraph,
   fetchRelationPage?: RelationTargetsPageFetcher
 ): Promise<ExistingClaimEntity[]> {
-  const batches: string[][] = [];
-  for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-    batches.push(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE));
-  }
   const [facts, relations] = await Promise.all([
-    Promise.all(batches.map(batch => fetchFacts(batch))).then(results => results.flat()),
+    Promise.all(batchEntityIds(entityIds).map(batch => fetchFacts(batch))).then(results => results.flat()),
     collectRelationTargets(
       { fromEntityIds: entityIds, typeIds: [TOPICS_PROPERTY_ID, TAG_PROPERTY_ID], spaceId },
       fetchRelationPage
     ),
   ]);
 
-  const targets = (entityId: string, typeId: string) =>
-    relations
-      .filter(relation => equals(relation.fromEntityId, entityId) && equals(relation.typeId, typeId))
-      .map(relation => relation.toEntityId);
+  // Grouped once by (entity, relation type), on normalized ids: the API may answer dashed or dashless.
+  const targetsByKey = new Map<string, string[]>();
+  const key = (entityId: string, typeId: string) => `${uuidToHex(entityId)}:${uuidToHex(typeId)}`;
+  for (const relation of relations) {
+    const k = key(relation.fromEntityId, relation.typeId);
+    const targets = targetsByKey.get(k);
+    if (targets) targets.push(relation.toEntityId);
+    else targetsByKey.set(k, [relation.toEntityId]);
+  }
 
   return facts.map(entity => ({
     ...entity,
-    topicIds: targets(entity.id, TOPICS_PROPERTY_ID),
-    tagIds: targets(entity.id, TAG_PROPERTY_ID),
+    topicIds: targetsByKey.get(key(entity.id, TOPICS_PROPERTY_ID)) ?? [],
+    tagIds: targetsByKey.get(key(entity.id, TAG_PROPERTY_ID)) ?? [],
   }));
 }
 

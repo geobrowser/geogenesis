@@ -105,6 +105,15 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
 
+/** `ids` in consecutive batches of at most `ENTITY_ID_BATCH_SIZE`, for `id: { in }` style filters. */
+export function batchEntityIds(ids: readonly string[]): string[][] {
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += ENTITY_ID_BATCH_SIZE) {
+    batches.push(ids.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  }
+  return batches;
+}
+
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
 // automatically...

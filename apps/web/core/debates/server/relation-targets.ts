@@ -4,7 +4,7 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
-import { ENTITY_ID_BATCH_SIZE, RELATIONS_PAGE_SIZE } from '~/core/io/queries';
+import { RELATIONS_PAGE_SIZE, batchEntityIds } from '~/core/io/queries';
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 /**
@@ -72,8 +72,8 @@ const fetchPageFromGraph: RelationTargetsPageFetcher = (request, after) =>
   );
 
 /**
- * Every matching relation, however many there are. The source ids are chunked under the API's
- * per-request cap and each chunk is paged to exhaustion.
+ * Every matching relation, however many there are. The source ids are batched under the API's
+ * per-request cap and each batch is paged to exhaustion.
  *
  * Throws on a failed page or a broken cursor chain (see `collectCursorPages`): a partial list is
  * never returned as though it were the whole set. Callers decide what an unanswered read means.
@@ -82,11 +82,11 @@ export async function collectRelationTargets(
   request: RelationTargetsRequest,
   fetchPage: RelationTargetsPageFetcher = fetchPageFromGraph
 ): Promise<RelationTarget[]> {
-  const chunks: RelationTargetsRequest[] = [];
-  for (let start = 0; start < request.fromEntityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-    chunks.push({ ...request, fromEntityIds: request.fromEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE) });
-  }
-  // Chunks are independent, so they are read concurrently; pages within a chunk cannot be.
-  const results = await Promise.all(chunks.map(chunk => collectCursorPages(after => fetchPage(chunk, after))));
+  // Batches are independent, so they are read concurrently; pages within a batch cannot be.
+  const results = await Promise.all(
+    batchEntityIds(request.fromEntityIds).map(fromEntityIds =>
+      collectCursorPages(after => fetchPage({ ...request, fromEntityIds }, after))
+    )
+  );
   return results.flat();
 }
