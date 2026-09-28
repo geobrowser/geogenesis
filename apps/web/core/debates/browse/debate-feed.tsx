@@ -187,6 +187,11 @@ export function DebatesBrowseFeed({
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
+  // other way in clears it. Held with the debate it was chosen on, because the open panel follows
+  // the active debate as the feed scrolls — and a debater who argues in the next one too would
+  // otherwise have the list jump to them unasked.
+  const [claimsFocus, setClaimsFocus] = React.useState<{ debateId: string; participantSpaceId: string } | null>(null);
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
@@ -368,14 +373,16 @@ export function DebatesBrowseFeed({
             setOpenPanel(null);
             debatesHub.open('lobby');
           }}
-          onOpenClaims={() => {
+          onOpenClaims={(participantSpaceId?: string) => {
             setActiveId(debate.id);
+            setClaimsFocus(participantSpaceId ? { debateId: debate.id, participantSpaceId } : null);
             setOpenPanel('claims');
           }}
           onOpenComments={() => {
             setActiveId(debate.id);
             setOpenPanel('comments');
           }}
+          onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (
@@ -389,7 +396,15 @@ export function DebatesBrowseFeed({
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
+      <DebateClaimsPanel
+        // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
+        // its scroll position and the debater it was opened at belong to the debate they were set
+        // on, and a reused panel carried the old offset onto the next one.
+        key={activeDebate.id}
+        debate={activeDebate}
+        onClose={closePanel}
+        focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}
+      />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
@@ -427,6 +442,7 @@ function DebateFeedItem({
   onOpenJoin,
   onOpenClaims,
   onOpenComments,
+  onPlaybackRequest,
 }: {
   debate: Debate;
   spaceId: string;
@@ -440,8 +456,11 @@ function DebateFeedItem({
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
-  onOpenClaims: () => void;
+  /** With a debater's space id, the panel opens at that debater's claims. */
+  onOpenClaims: (participantSpaceId?: string) => void;
   onOpenComments: () => void;
+  /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
+  onPlaybackRequest: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const share = useDebateShareAction();
@@ -475,7 +494,7 @@ function DebateFeedItem({
     commentCount,
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
-    onClaims: onOpenClaims,
+    onClaims: () => onOpenClaims(),
     onShare: share.onOpen,
     shareOpen: share.open,
   };
@@ -512,7 +531,14 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} initialSeekSeconds={initialSeekSeconds} />
+            <DebateFeedPlayer
+              debate={debate}
+              active={active}
+              preload={preload}
+              initialSeekSeconds={initialSeekSeconds}
+              onOpenClaims={onOpenClaims}
+              onPlaybackRequest={onPlaybackRequest}
+            />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
