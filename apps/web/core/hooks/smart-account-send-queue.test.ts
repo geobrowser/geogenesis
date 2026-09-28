@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { QueuedSendTimeoutError, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
+import {
+  QueuedSendTimeoutError,
+  enqueueFor,
+  queueDepthFor,
+  waitForQueuedSends,
+  withSubmissionRetry,
+} from './smart-account-send-queue';
 
-const reportError = vi.hoisted(() => vi.fn());
-vi.mock('~/core/telemetry/logger', () => ({ reportError }));
+const { reportError, reportEvent } = vi.hoisted(() => ({ reportError: vi.fn(), reportEvent: vi.fn() }));
+vi.mock('~/core/telemetry/logger', () => ({ reportError, reportEvent }));
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -23,6 +29,7 @@ describe('smart-account send queue', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     reportError.mockClear();
+    reportEvent.mockClear();
   });
 
   afterEach(() => {
@@ -118,6 +125,124 @@ describe('smart-account send queue', () => {
 
     await expect(holding).resolves.toBe('done');
     await expect(queued).resolves.toBe('ran');
+  });
+
+  describe('queue timeout telemetry', () => {
+    it('reports an abandoned send with the wait and the depth it queued behind', async () => {
+      const address = nextAddress();
+      const slow = deferred<string>();
+
+      void enqueueFor(address, () => slow.promise);
+      const abandoned = enqueueFor(address, async () => 'never', { maxQueueWaitMs: 120_000 });
+      const assertion = expect(abandoned).rejects.toMatchObject({ queueDepth: 1 });
+
+      await vi.advanceTimersByTimeAsync(121_000);
+      slow.resolve('done');
+      await assertion;
+
+      expect(reportError).toHaveBeenCalledTimes(1);
+      expect(reportError).toHaveBeenCalledWith(expect.any(QueuedSendTimeoutError), {
+        tags: { area: 'smart-account', phase: 'queue', outcome: 'queue-timeout' },
+        contexts: { queue: { waitedMs: expect.any(Number), queueDepth: 1, maxQueueWaitMs: 120_000 } },
+      });
+      const [error] = reportError.mock.calls[0];
+      expect((error as QueuedSendTimeoutError).waitedMs).toBeGreaterThan(120_000);
+    });
+
+    it('returns the queue depth to zero after successes and failures', async () => {
+      const address = nextAddress();
+      const first = deferred<string>();
+
+      const p1 = enqueueFor(address, () => first.promise);
+      const p2 = enqueueFor(address, () => Promise.reject(new Error('boom')));
+      const p3 = enqueueFor(address, async () => 'ok');
+      expect(queueDepthFor(address)).toBe(3);
+
+      first.resolve('done');
+      await p1;
+      await expect(p2).rejects.toThrow('boom');
+      await p3;
+      expect(queueDepthFor(address)).toBe(0);
+    });
+
+    it('cascades: once the head holds past the budget, every send behind it is abandoned unrun', async () => {
+      const address = nextAddress();
+      const head = deferred<string>();
+      const behind = [vi.fn(async () => 'a'), vi.fn(async () => 'b'), vi.fn(async () => 'c')];
+
+      void enqueueFor(address, () => head.promise);
+      const queued = behind.map(task => enqueueFor(address, task, { maxQueueWaitMs: 120_000 }));
+      const assertions = queued.map(p => expect(p).rejects.toBeInstanceOf(QueuedSendTimeoutError));
+
+      await vi.advanceTimersByTimeAsync(121_000);
+      head.resolve('done');
+      await Promise.all(assertions);
+
+      for (const task of behind) expect(task).not.toHaveBeenCalled();
+      expect(reportError).toHaveBeenCalledTimes(3);
+      expect(queueDepthFor(address)).toBe(0);
+    });
+
+    it('warns when a send starts past half its budget, at most once a minute per address', async () => {
+      const address = nextAddress();
+      const slowStarts = async (headHoldMs: number, queued: number) => {
+        const head = deferred<string>();
+        void enqueueFor(address, () => head.promise);
+        const late = Array.from({ length: queued }, () =>
+          enqueueFor(address, async () => 'ran', { maxQueueWaitMs: 120_000 })
+        );
+        await vi.advanceTimersByTimeAsync(headHoldMs);
+        head.resolve('done');
+        await Promise.all(late);
+      };
+
+      await slowStarts(30_000, 1);
+      expect(reportEvent).not.toHaveBeenCalled();
+
+      // Two late starts in the same instant: one warning.
+      await slowStarts(61_000, 2);
+      expect(reportEvent).toHaveBeenCalledTimes(1);
+      expect(reportEvent).toHaveBeenCalledWith({
+        name: 'smart-account.queue-wait-high',
+        level: 'warning',
+        tags: { area: 'smart-account', phase: 'queue', outcome: 'queue-wait-high' },
+        extra: { waitedMs: expect.any(Number), queueDepth: 1, maxQueueWaitMs: 120_000 },
+      });
+
+      // Past the throttle window: warns again.
+      await slowStarts(61_000, 1);
+      expect(reportEvent).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not warn for unbounded sends', async () => {
+      const address = nextAddress();
+      const hold = deferred<string>();
+      void enqueueFor(address, () => hold.promise);
+      const late = enqueueFor(address, async () => 'ran');
+      await vi.advanceTimersByTimeAsync(200_000);
+      hold.resolve('done');
+      await late;
+      expect(reportEvent).not.toHaveBeenCalled();
+      expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it('waitForQueuedSends resolves once queued sends settle, failures included', async () => {
+      const address = nextAddress();
+      const hold = deferred<string>();
+      const failing = enqueueFor(address, () => hold.promise);
+      void failing.catch(() => undefined);
+
+      let idle = false;
+      void waitForQueuedSends().then(() => {
+        idle = true;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(idle).toBe(false);
+
+      hold.reject(new Error('boom'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(idle).toBe(true);
+    });
   });
 
   describe('withSubmissionRetry', () => {
