@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -15,6 +17,7 @@ import {
 } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useComments } from '~/core/hooks/use-comments';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
@@ -32,8 +35,10 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
@@ -44,11 +49,13 @@ import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
 import { type ActivityKind, ProfileActivitySection } from '~/partials/profile/profile-activity-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
+import { adjustClaimActivityTotal, useClaimActivityCounts } from './claim-activity-count';
 import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
@@ -217,6 +224,7 @@ export function ClaimPageView({
   return (
     <div className="@container">
       <div
+        {...ENTITY_PAGE_CONTENT_ANCHOR}
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${CLAIM_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: CLAIM_PAGE_CONTENT_MAX_WIDTH }}
       >
@@ -262,7 +270,10 @@ export function ClaimPageView({
                 {isEditing ? (
                   <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
                 ) : (
-                  <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+                  <h1
+                    {...entityPageTitleAnchor(entityId)}
+                    className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]"
+                  >
                     {entity.name ?? entity.id}
                   </h1>
                 )}
@@ -337,6 +348,7 @@ export function ClaimPageView({
           activeTab={requestedTab}
           entityId={entityId}
           spaceId={spaceId}
+          claimName={entity.name ?? null}
           entityRelations={entity.relations}
           responseKind={responseKind}
           summary={summary}
@@ -356,6 +368,7 @@ function ClaimTabPanel({
   activeTab,
   entityId,
   spaceId,
+  claimName,
   entityRelations,
   responseKind,
   summary,
@@ -368,6 +381,8 @@ function ClaimTabPanel({
   activeTab: ClaimTab;
   entityId: string;
   spaceId: string;
+  /** Passed down to the thread, where every side badge names the claim it is about. */
+  claimName: string | null;
   entityRelations: Relation[];
   responseKind: ClaimResponseState['responseKind'];
   summary: ClaimResponseState['summary'];
@@ -413,8 +428,107 @@ function ClaimTabPanel({
     return <ClaimSourcesTab claimId={entityId} claimRelations={entityRelations} spaceId={spaceId} />;
   }
 
+  return (
+    <ClaimOverviewTab
+      entityId={entityId}
+      spaceId={spaceId}
+      claimName={claimName}
+      responseKind={responseKind}
+      summary={summary}
+      record={record}
+      hrefs={hrefs}
+      onSelectSystemTab={onSelectSystemTab}
+    />
+  );
+}
+
+/**
+ * The claim's overview: the related-claims gallery, then everything that has happened to it.
+ *
+ * Debates appear twice on purpose, and this comment used to say the opposite. An earlier cut did
+ * remove the gallery — a debate belongs in the account of what happened to this claim rather than in
+ * a shelf above it — and it went back in because the two are not the same offer: the gallery is the
+ * way through to the Debates tab, the complete filterable index, while the thread shows the few most
+ * recent in the order they happened, in among the comments. Two jobs. If that stops being true, the
+ * gallery is the one to drop.
+ *
+ * Its own component because the panel above returns early for every other tab, and a hook cannot
+ * live behind an early return.
+ */
+/**
+ * Reports a comment this page published into the Activity heading's number.
+ *
+ * Every composer on the page needs it and none of them can compute the number: it is a server
+ * aggregate over the claim's debates, the claims extracted from them and every comment in that tree.
+ * Two surfaces publish an ordinary comment on the claim — the thread's own composers and the hero's
+ * position explanation — and the second was missed while this was written inline beside the first.
+ *
+ * The adjustment lands in the query cache rather than in a component's state, which is what makes it
+ * survive a remount and stay behind when the reader walks to the next claim. See
+ * {@link adjustClaimActivityTotal}.
+ *
+ * Which is why this subscribes to the aggregate as well as returning the adjuster: the adjustment is a
+ * correction to a cached answer, and it does nothing at all when that answer was never fetched. The
+ * hero renders on every tab while the heading — and so the only other caller of this query — lives
+ * inside the Overview, so an explanation published from the Debates tab moved nothing, and switching
+ * to Overview before the indexer caught up showed the pre-comment number. Now a caller cannot hold the
+ * adjuster without the baseline being on its way, which is the kind of thing that should not depend on
+ * remembering.
+ *
+ * It costs one batched aggregate request on the tabs that do not display the number. The Overview is
+ * the default tab, so nearly every visit was fetching it anyway, and `staleTime` is a minute, so
+ * moving between tabs does not refetch.
+ */
+function useAdjustActivityTotal(claimId: string): (delta: number) => void {
+  const queryClient = useQueryClient();
+  useClaimActivityCounts(React.useMemo(() => [claimId], [claimId]));
+
+  return React.useCallback(
+    (delta: number) => void adjustClaimActivityTotal(queryClient, claimId, delta),
+    [claimId, queryClient]
+  );
+}
+
+function ClaimOverviewTab({
+  entityId,
+  spaceId,
+  claimName,
+  responseKind,
+  summary,
+  record,
+  hrefs,
+  onSelectSystemTab,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** For the hover title on every commenter's side badge — see `ClaimCommentPositionProvider`. */
+  claimName: string | null;
+  responseKind: ClaimResponseState['responseKind'];
+  summary: ClaimResponseState['summary'];
+  record: ReturnType<typeof useClaimRecord>;
+  hrefs: { debates: string; claims: string };
+  onSelectSystemTab?: (tab: ClaimSystemTab) => void;
+}) {
+  // The same number the claim's card shows in Explore, from the same query — one definition of
+  // "how much has happened here", so the two surfaces cannot disagree.
+  const activityCounts = useClaimActivityCounts(React.useMemo(() => [entityId], [entityId]));
+  const activityTotal = activityCounts.counts.get(ID.uuidToHex(entityId))?.total;
+
+  const adjustActivityTotal = useAdjustActivityTotal(entityId);
+
+  const activity = useClaimActivityRows({ claimId: entityId, spaceId });
+  // The claim's own comments, for their error alone. `CommentSection` fetches them and keeps its error
+  // to itself, which is right for a thread whose heading counts the same list — there a failure reads
+  // as "Comments (0)" over nothing, consistent if unhelpful. Here the heading is an independent
+  // aggregate that goes on counting them, so a failed read drew a total over a list with none of the
+  // claim's comments in it. Same key as the section's, so this is a second subscription, not a request.
+  const claimComments = useComments({ entityId, spaceId });
+
   const kinds: ActivityKind[] = [
     {
+      // Still here as well as in the thread below. The gallery is the way through to the Debates
+      // tab — the complete, filterable index — where the thread shows the few most recent in the
+      // order they happened. Two jobs, not two copies.
       key: 'debates',
       label: 'Debates',
       rows: record.debateRows,
@@ -467,11 +581,52 @@ function ClaimTabPanel({
         entityId={entityId}
         spaceId={spaceId}
         responseKind={responseKind}
+        // Which claim an Agree or a Disagree is about. By the time a reader is this far down the page
+        // the title above it is out of sight, and a badge on a comment under an extracted claim is
+        // answering for a different claim than the one the page is about — so each badge names its own.
+        claimName={claimName}
         viewerDirection={summary.viewerDirection}
         viewerSpaceId={summary.viewerSpaceId}
         isViewerResponseLoading={summary.isViewerResponseLoading}
       >
-        <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="claim" />
+        {/*
+          Three reads feed this section and any of them can fail on its own, so each says so for
+          itself. Without the debates the feed is missing every debate and every claim extracted from
+          one; without the claim's own comments it is missing those, under a heading that still counts
+          them; without the total the heading falls back to this claim's own comments plus the rows it
+          drew, which leaves out everything nested under a debate and is not the number it appears to be.
+          Said here rather than as rows inside the section: each is about a whole list rather than a
+          place in one, and a synthetic row would have to claim a timestamp to sort anywhere sensible.
+        */}
+        {(activity.error != null || claimComments.error != null || activityCounts.error != null) && (
+          <div className="flex flex-col items-start gap-1 pt-10" data-activity-errors>
+            {activity.error != null && (
+              <ThreadRetry onRetry={activity.retry}>Couldn’t load the debates on this claim.</ThreadRetry>
+            )}
+            {claimComments.error != null && (
+              <ThreadRetry onRetry={() => void claimComments.refetch()}>
+                Couldn’t load the comments on this claim.
+              </ThreadRetry>
+            )}
+            {activityCounts.error != null && (
+              <ThreadRetry onRetry={activityCounts.retry}>Couldn’t load this claim’s activity total.</ThreadRetry>
+            )}
+          </div>
+        )}
+        {/* "Activity", because the list now holds debates as well as comments — and the count says
+            how much has happened to this claim rather than how many people typed. */}
+        <CommentSection
+          entityId={entityId}
+          spaceId={spaceId}
+          targetEntityType="claim"
+          title="Activity"
+          activityRows={activity.rows}
+          totalOverride={activityTotal}
+          onActivityPublish={adjustActivityTotal}
+          // Best rather than most-recent: this list is the record of an argument, not a running
+          // conversation, and the thing worth reading first is what the thread rates highest.
+          defaultSortOrder="best"
+        />
       </ClaimCommentPositionProvider>
     </>
   );
@@ -528,6 +683,9 @@ function ClaimPositionSection({
   });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
+  // The same number the thread's composers move: an explanation published here is a comment on this
+  // claim, and the heading's aggregate counts it.
+  const adjustActivityTotal = useAdjustActivityTotal(entityId);
 
   return (
     // No card of its own: it renders in the hero's left column, under the claim.
@@ -539,6 +697,9 @@ function ClaimPositionSection({
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
+        // The explanation published here is a comment on this claim, so it belongs in the same number
+        // the thread's own composers move — see `adjustClaimActivityTotal`.
+        onActivityPublish={adjustActivityTotal}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
         pending={control.isResponsePending}

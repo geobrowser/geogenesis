@@ -29,6 +29,7 @@ import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
+import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
   EntityPageInlineDescription,
@@ -267,6 +268,7 @@ export function TopicPageView({
   return (
     <div className="@container">
       <div
+        {...ENTITY_PAGE_CONTENT_ANCHOR}
         className={`mx-auto flex w-full flex-col gap-6 py-6 @[560px]:gap-8 @[560px]:py-8 ${TOPIC_PAGE_CONTENT_INSET_CLASS}`}
         style={{ maxWidth: TOPIC_PAGE_CONTENT_MAX_WIDTH }}
       >
@@ -304,7 +306,13 @@ export function TopicPageView({
           {isEditing ? (
             <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
           ) : (
-            <Text as="h1" variant="entityTitle" color="text" className="block text-pretty wrap-break-word">
+            <Text
+              as="h1"
+              variant="entityTitle"
+              color="text"
+              className="block text-pretty wrap-break-word"
+              {...entityPageTitleAnchor(entityId)}
+            >
               {entity.name ?? entity.id}
             </Text>
           )}
