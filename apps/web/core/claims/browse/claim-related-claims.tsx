@@ -86,10 +86,7 @@ export function ClaimRelatedClaims({
     enabled: topicIds.length > 0,
   });
 
-  const candidates = React.useMemo(
-    () => page.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
-    [claimId, page]
-  );
+  const candidates = React.useMemo(() => page.filter(entity => !ID.equals(entity.id, claimId)), [claimId, page]);
 
   const candidateIds = React.useMemo(() => candidates.map(entity => entity.id), [candidates]);
   const { rankByClaimId, isReady: isRankReady } = useClaimsBestOrder(candidateIds, spaceId);

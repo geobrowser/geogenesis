@@ -16,6 +16,7 @@ import {
   useRequestDebateMediaProcessing,
   useSpaceDebates,
 } from '~/core/debates/hooks';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -46,9 +47,11 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   const currentUserId = getCurrentGeoChatUserId();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
+  // The flag reads its default until hydration, so redirecting before then ignores a stored `true`.
+  const hydrated = useHydrated();
   React.useEffect(() => {
-    if (!enabled) router.replace(`/space/${spaceId}`);
-  }, [enabled, router, spaceId]);
+    if (hydrated && !enabled) router.replace(`/space/${spaceId}`);
+  }, [hydrated, enabled, router, spaceId]);
 
   const debates = React.useMemo(
     () => [...(debatesQuery.data?.debates ?? [])].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)),
@@ -71,7 +74,7 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
 
   return (
     <main className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-4 py-8 md:px-8">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <header className="flex flex-col gap-3 mobile:flex-row mobile:items-start mobile:justify-between">
         <div className="flex max-w-3xl flex-col gap-2">
           <Text as="h1" variant="largeTitle">
             Debug debates
@@ -140,12 +143,12 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
       className="flex scroll-mt-24 flex-col gap-5 rounded-xl border border-grey-02 bg-white p-4 shadow-light md:p-6"
     >
       <header className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 mobile:flex-row mobile:items-start mobile:justify-between">
           <Text as="h2" variant="smallTitle" className="max-w-3xl">
             {debate.claim.claim}
           </Text>
           {canReprocess && (
-            <div className="flex flex-col items-start gap-1 sm:items-end">
+            <div className="flex flex-col items-start gap-1 mobile:items-end">
               <Button
                 type="button"
                 variant="secondary"
@@ -156,7 +159,7 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
                 {isMediaProcessing || reprocessMedia.isPending ? 'Processing…' : 'Reprocess video'}
               </Button>
               {reprocessError && (
-                <Text as="p" variant="metadata" color="red-01" className="max-w-sm sm:text-right">
+                <Text as="p" variant="metadata" color="red-01" className="max-w-sm mobile:text-right">
                   {reprocessError}
                 </Text>
               )}
@@ -164,7 +167,7 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
           )}
         </div>
 
-        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <dl className="grid gap-x-6 gap-y-2 text-sm mobile:grid-cols-2 lg:grid-cols-4">
           <DiagnosticField label="Debate ID" value={debate.id} code />
           <DiagnosticField label="Created" value={formatDate(debate.created_at)} />
           <div className="min-w-0">
@@ -186,7 +189,7 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
         </dl>
       </header>
 
-      <section aria-label="Participants" className="grid gap-3 sm:grid-cols-2">
+      <section aria-label="Participants" className="grid gap-3 mobile:grid-cols-2">
         {[...debate.participants]
           .sort((a, b) => a.participant_slot - b.participant_slot)
           .map(participant => (
@@ -395,7 +398,7 @@ function TranscriptSection({ debateId, segmentCount }: { debateId: string; segme
 
 function TranscriptSegment({ segment }: { segment: DebateTranscriptSegment }) {
   return (
-    <div className="grid gap-2 rounded-lg bg-bg p-3 sm:grid-cols-[150px_1fr]">
+    <div className="grid gap-2 rounded-lg bg-bg p-3 mobile:grid-cols-[150px_1fr]">
       <div className="flex flex-col">
         <Text as="span" variant="metadataMedium">
           {formatTimestamp(segment.start_ms)}–{formatTimestamp(segment.end_ms)}

@@ -28,12 +28,15 @@ export interface FetchProposalOptions {
   voterId?: string;
 }
 
+type ApiProposalStatus = Schema.Schema.Type<typeof ApiProposalStatusResponseSchema>;
+
 /**
- * Fetch a single proposal by ID using the new REST API.
+ * Load and decode a proposal's status payload, or `null` where there is no proposal at that id.
  *
- * Uses the REST endpoint: GET /proposals/:id/status
+ * Shared by the readers below so one place knows the endpoint, how an id becomes a path segment, and
+ * which failures mean "no such proposal" rather than "the request broke".
  */
-export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
+async function fetchApiProposalStatus(options: FetchProposalOptions): Promise<ApiProposalStatus | null> {
   const config = Environment.getConfig();
   const { id, signal, voterId } = options;
 
@@ -74,7 +77,55 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     return null;
   }
 
-  const apiProposal = decoded.right;
+  return decoded.right;
+}
+
+export type ProposalVotes = {
+  /** The space the proposal belongs to, which is not necessarily the space it is being viewed from. */
+  spaceId: string;
+  /** Keyed by personal space id, in the internal vocabulary rather than the wire's YES/NO. */
+  votes: { voterSpaceId: string; vote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' }[];
+  /**
+   * Whether `votes` accounts for every vote the payload says exists.
+   *
+   * The payload reports a tally alongside the list, so a short list is detectable — and it matters to
+   * anything that reads meaning into a *missing* vote. Every proposal on testnet has at most one vote,
+   * so whether the list can ever be a page is not something local data can settle; this reports what
+   * the payload itself says rather than assuming.
+   */
+  complete: boolean;
+};
+
+/**
+ * A proposal's owning space and its vote records — and nothing else.
+ *
+ * `fetchProposal` below hydrates the creator's profile, every voter's profile, and on a membership
+ * request the target's, because the review screen draws all of them. A caller that only needs to know
+ * who voted which way would pay for all of that and discard it, which matters here: the comment
+ * attribution query is invalidated repeatedly as a vote settles through the indexer, so the waste
+ * repeats with it (GEO-2907).
+ */
+export async function fetchProposalVotes(options: FetchProposalOptions): Promise<ProposalVotes | null> {
+  const apiProposal = await fetchApiProposalStatus(options);
+  if (!apiProposal) return null;
+
+  const votes = apiProposal.votes.voters.map(v => ({ voterSpaceId: v.voterId, vote: convertVoteOption(v.vote) }));
+
+  return {
+    spaceId: apiProposal.spaceId,
+    votes,
+    complete: votes.length >= apiProposal.votes.total,
+  };
+}
+
+/**
+ * Fetch a single proposal by ID using the new REST API.
+ *
+ * Uses the REST endpoint: GET /proposals/:id/status
+ */
+export async function fetchProposal(options: FetchProposalOptions): Promise<Proposal | null> {
+  const apiProposal = await fetchApiProposalStatus(options);
+  if (!apiProposal) return null;
 
   // On membership requests `proposedBy` is the DAO space itself, so the
   // action's targetId is the only way to know who the request is about.

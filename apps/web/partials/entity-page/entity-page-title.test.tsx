@@ -16,9 +16,7 @@ const LONG_NAME =
 afterEach(cleanup);
 
 function renderTitle(props?: Partial<React.ComponentProps<typeof EntityPageTitle>>) {
-  return render(
-    <EntityPageTitle value="Ada Lovelace" isEditing={false} onChange={vi.fn()} {...props} />
-  );
+  return render(<EntityPageTitle value="Ada Lovelace" isEditing={false} onChange={vi.fn()} {...props} />);
 }
 
 /**
@@ -47,9 +45,7 @@ describe('EntityPageTitle typography', () => {
 
     for (const className of screen.getByRole('heading', { level: 1 }).className.split(/\s+/)) {
       if (className === 'text-entityTitle') continue;
-      expect(className, `${className} sizes the title outside the token`).not.toMatch(
-        /^(text|leading)-(?!text$)/
-      );
+      expect(className, `${className} sizes the title outside the token`).not.toMatch(/^(text|leading)-(?!text$)/);
     }
   });
 });

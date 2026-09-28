@@ -3,6 +3,7 @@ import {
   type DebateOgSpeaker,
   generateDebateOgImageResponse,
 } from '~/core/debates/debate-og-image';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -335,7 +336,11 @@ type DebateSpeakerLike = Debate['participants'][number];
 function cardSpeaker(participant: DebateSpeakerLike, stillSrc: string): DebateOgSpeaker {
   return {
     name: participant.display_name ?? 'Anonymous',
-    stance: participant.position_label,
+    // Named from the side, not from geo-chat's `position_label`. That field still reads "Verify" or
+    // "Dispute" on a claim geo-chat calls factual, and this card is the worst place for the retired
+    // word to land: it is generated once at publish time and never revisited, so a wrong label is
+    // baked into the share image permanently. See `positionSummariesFromCounts`.
+    stance: responsePositionLabel(participant.position),
     avatarSrc: participant.avatar_cid ? getImagePath(participant.avatar_cid) : null,
     stillSrc,
   };

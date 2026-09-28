@@ -10,11 +10,9 @@ import { EntityId } from '~/core/io/substream-schema';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
-import { SearchResultDto } from '../io/dto/search';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import { PLACE_TYPE } from '../system-ids';
-import { SearchResult } from '../types';
 import { isSearchCancellation } from './search-cancellation';
 import { useDebouncedValue } from './use-debounced-value';
 

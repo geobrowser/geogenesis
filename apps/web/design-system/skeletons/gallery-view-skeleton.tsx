@@ -19,7 +19,7 @@ export const GalleryViewSkeleton = ({ items = 6, frameStyle, hasCustomHeight = f
   const cards = Array.from({ length: Math.max(items, 1) });
 
   return (
-    <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2">
+    <div className="grid grid-cols-3 gap-x-4 gap-y-6 mobile:grid-cols-2">
       {cards.map((_, i) => (
         <div key={i} className="flex animate-pulse flex-col gap-3 rounded-[17px] p-1 pb-2">
           <div

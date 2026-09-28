@@ -15,7 +15,6 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
@@ -34,7 +33,7 @@ import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
-import { exceedsLineClamp } from './line-clamp-overflow';
+import { useLineClampOverflow } from './line-clamp-overflow';
 import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
@@ -50,10 +49,19 @@ const DEBATE_COLUMN_STYLE = {
 export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
+  initialSeekSeconds = null,
   fallback,
 }: {
   spaceId: string;
   initialDebateId?: string;
+  /**
+   * Where to start the anchored debate, in seconds — from a link that named a moment.
+   *
+   * Only ever applied to {@link initialDebateId}: a position means nothing on the debates that
+   * happen to be scrolled to next, and carrying it down the feed would seek every card a reader
+   * passes. See `debate-timecode.ts` for the param this comes from.
+   */
+  initialSeekSeconds?: number | null;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
 }) {
@@ -262,7 +270,12 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
-  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
+  // Memoised because both branches build a new array: the effect below is keyed on this, and an
+  // unmemoised ternary re-ran it on every render.
+  const visibleDebates = React.useMemo(
+    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, debates, visibleCount]
+  );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
   // hold above, and holds the nudge back while the media lookups land one at a time and
@@ -315,6 +328,9 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          initialSeekSeconds={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
+          }
           // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
@@ -377,7 +393,13 @@ export function DebatesBrowseFeed({
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
-      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+      <EntityCommentsPanel
+        key={activeDebate.id}
+        entityId={activeDebate.id}
+        spaceId={spaceId}
+        targetEntityType="debate"
+        onClose={closePanel}
+      />
     ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
@@ -397,6 +419,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  initialSeekSeconds,
   preload,
   root,
   scrollHint,
@@ -411,6 +434,7 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  initialSeekSeconds: number | null;
   preload: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
@@ -420,7 +444,6 @@ function DebateFeedItem({
   onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const winnerVotes = useDebateVotes(debate);
   const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
@@ -489,7 +512,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} votes={winnerVotes} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} initialSeekSeconds={initialSeekSeconds} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
@@ -544,35 +567,16 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
-  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
-  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
 
   React.useEffect(() => setIsClaimExpanded(false), [claim]);
 
-  React.useLayoutEffect(() => {
-    const element = claimRef.current;
-    if (!element || isClaimExpanded) return;
-
-    const measureOverflow = () =>
-      setIsClaimOverflowing(
-        exceedsLineClamp({
-          contentHeight: element.scrollHeight,
-          clampedHeight: element.clientHeight,
-          // Read on every measure rather than once: the breakpoint swaps the whole type scale, so a
-          // rotation or a resize past 767px changes the line height this is counting in.
-          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
-          maxLines: CLAIM_CLAMP_LINES,
-        })
-      );
-    measureOverflow();
-
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(measureOverflow);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [claim, isClaimExpanded]);
+  const isClaimOverflowing = useLineClampOverflow(claimElement, {
+    maxLines: CLAIM_CLAMP_LINES,
+    enabled: !isClaimExpanded,
+    contentKey: claim,
+  });
 
   return (
     <div className="flex flex-col gap-1">
@@ -607,6 +611,8 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          data-geo-analytics-label="Debate feed join debate"
+          data-geo-analytics-intent="open_debates_hub"
           // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
           // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
           // that followed reopened it, which read as a flicker.
@@ -620,7 +626,7 @@ function DebateTitleHeader({
         </Button>
       </div>
       <h2
-        ref={claimRef}
+        ref={setClaimElement}
         title={isClaimOverflowing ? claim : undefined}
         className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'

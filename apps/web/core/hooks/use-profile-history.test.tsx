@@ -31,7 +31,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('~/core/io/subgraph/fetch-profile-history', () => ({
   fetchProfileHistory: vi.fn(),
-  profileHistoryQueryKey: (entityId: string) => ['profile-history', entityId],
+  profileHistoryQueryKey: (entityId: string, spaceId: string) => ['profile-history', entityId, spaceId],
 }));
 
 afterEach(() => {

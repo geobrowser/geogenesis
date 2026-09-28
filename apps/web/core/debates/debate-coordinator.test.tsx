@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
+import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 
@@ -42,6 +42,14 @@ const mocks = vi.hoisted(() => ({
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   rememberDebateReturnDestination: vi.fn(),
+  upcomingRooms: [] as UpcomingDebateRoom[],
+  /** False is a first load still in flight, which is not the same as no rooms. */
+  roomsSettled: true,
+  /** The flags that make rooms reachable at all; off, nothing is polled and nothing is waited on. */
+  roomsFeature: true,
+  roomsError: null as Error | null,
+  finishedRoomIds: new Set<string>() as ReadonlySet<string>,
+  refetchRooms: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -70,6 +78,17 @@ vi.mock('./hooks', () => ({
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./rooms/hooks', () => ({
+  useUpcomingDebateRooms: () => ({
+    data: mocks.roomsSettled ? { rooms: mocks.upcomingRooms } : undefined,
+    isSuccess: mocks.roomsSettled,
+    isError: mocks.roomsError !== null,
+    error: mocks.roomsError,
+    refetch: mocks.refetchRooms,
+  }),
+  useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -121,6 +140,8 @@ vi.mock('./debate-return-navigation', () => ({
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
   useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
+  useDebugDebatesPageEnabled: () => mocks.roomsFeature,
+  usePeerAvailabilityEnabled: () => false,
 }));
 
 beforeEach(() => {
@@ -142,6 +163,12 @@ beforeEach(() => {
   mocks.dismissRequestMutate.mockReset();
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
+  mocks.upcomingRooms = [];
+  mocks.roomsSettled = true;
+  mocks.roomsFeature = true;
+  mocks.roomsError = null;
+  mocks.finishedRoomIds = new Set();
+  mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
@@ -516,7 +543,9 @@ describe('DebateCoordinator', () => {
     mocks.hasAttention = true;
     view.rerender(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
@@ -533,7 +562,9 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
   });
 
   it('does not prompt for a request while a debate is under way', async () => {
@@ -547,7 +578,7 @@ describe('DebateCoordinator', () => {
   });
 
   it('does not route stale debate activity over an active rematch page', async () => {
-    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.pathname = '/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1';
     mocks.activity = {
       ...activityWithRematch('browsing'),
       debate: {
@@ -563,6 +594,281 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
+  // GEO-2941. The join prompt is an offer: nothing moves the viewer until they press Join, so a
+  // room never has to explain why someone is in it.
+  it('offers a joinable room without routing anyone into it', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ others_present: true })];
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Someone is waiting for you now')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
+  // cannot disagree about what is happening.
+  it.each([
+    ['someone is already inside', { others_present: true, due: true }, 'Someone is waiting for you now'],
+    ['the start has passed', { others_present: false, due: true }, 'Your debate is starting now'],
+    ['it is merely open', { others_present: false, due: false }, /^Your debate starts at /],
+  ])('says the right thing when %s', async (_label, row, expected) => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom(row)];
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText(expected)).toBeInTheDocument();
+  });
+
+  // The prompt is mounted app-wide, so without this it floats over a live debate and a recording,
+  // one click from leaving one.
+  it('does not offer a room over a live debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ due: true })];
+    mocks.activity = activityWithDebate();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your scheduled debate')).not.toBeInTheDocument());
+  });
+
+  // GEO-2941 bans automatic redirects into the debate-again flow, and a room's session is the exact
+  // shape this effect pushes on.
+  // A room whose session became a debate stays listed until geo-chat's empty-room sweep closes it.
+  // Joining it only walks back into the finished debate.
+  it('stops offering a room once its debate has happened', async () => {
+    mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'session-done' })];
+    mocks.finishedRoomIds = new Set([mocks.upcomingRooms[0].room_id]);
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument());
+  });
+
+  it('does not push a viewer into the picker for a room-held session', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+    mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'rematch-1' })];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A deep link into a room disables this query, so leaving one is the first load. Every guard
+  // below reads vacuously safe on `[]`, which routed the room's own session into the picker --
+  // where Leave ends the session for both people.
+  it('waits for the first room load rather than reading it as no rooms', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A failed lookup is not an empty one either: the session may well be room-owned and this cannot
+  // tell, so it must not route on the assumption that it is not.
+  it('will not route on a room lookup that failed', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.roomsError = new Error('Service unavailable.');
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A backend with no rooms endpoint has no rooms, so nothing it serves can be room-owned and the
+  // ordinary push is safe. Without this an older geo-chat loses matchmaking routing entirely.
+  it('still routes when the rooms endpoint does not exist', async () => {
+    const { GeoChatRequestError } = await import('./api');
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.roomsError = new GeoChatRequestError('Not found', null, 404);
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // The flags are per browser, so a room booked on another device is invisible here and the room
+  // list cannot rule one out. The session's own space is what proves it: geo-chat gives a room
+  // session the `debates` sentinel rather than a space, and the rematch route 404s on it.
+  it('never routes a room-held session, even with no room list to check it against', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsFeature = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null, source_space_id: 'debates' },
+      challenge: null,
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // Nothing is asked for with the feature off, so there is nothing to wait on: the push has to
+  // behave exactly as it did before rooms existed.
+  it('routes without waiting when rooms are switched off entirely', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsFeature = false;
+    mocks.roomsSettled = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // The other half of the same guard: suppressing the push for *any* session while a room happened
+  // to be open stranded the one flow this effect exists to serve.
+  it('still pushes a challenge rematch while an unrelated room is open', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-unrelated', rematch_session_id: 'session-unrelated' })];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // Until geo-chat reports the field, no room's session can be identified, so an open room has to
+  // suppress the push the coarse way rather than redirecting someone out of a room.
+  it('does not push while a room list without session ids is open', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const { rematch_session_id: _omitted, ...legacyRoom } = upcomingRoom();
+    mocks.upcomingRooms = [legacyRoom as UpcomingDebateRoom];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // A joinable room with no session yet may have just minted this one on a join this tab has not
+  // heard about, so the server is asked once before anyone is moved.
+  it('checks the room list before pushing when a joinable room has no session yet', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+    mocks.refetchRooms.mockImplementation(async () => {
+      mocks.upcomingRooms = [upcomingRoom({ rematch_session_id: 'rematch-1' })];
+    });
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.refetchRooms).toHaveBeenCalledTimes(1));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('still pushes once the room list shows the session is not a room’s', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.refetchRooms).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // The door check is the server's. Offering a room it would refuse is an offer that fails.
+  it('does not offer a room whose door is shut', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ joinable: false })];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+  });
+
+  it('does not offer the room the viewer is already in', async () => {
+    mocks.pathname = '/debate/room-1';
+    mocks.upcomingRooms = [upcomingRoom()];
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+  });
+
+  it('snoozes a room for the session on Not now', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom()];
+
+    render(<DebateCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+  });
+
+  // GEO-2941. A source-debate-less rematch is the branch this coordinator pushes a focused tab
+  // into — see the two tests above. From inside a room it must not: a room is entered by an offer
+  // and never a redirect, and a stale `activity.rematch` otherwise yanks the viewer out.
+  it.each([['browsing'], ['request_pending']] as const)(
+    'does not route a %s rematch over a debate room',
+    async status => {
+      mocks.currentUserId = 'user-requester';
+      mocks.pathname = '/debate/room-1';
+      const activity = activityWithRematch('browsing');
+      mocks.activity = {
+        ...activity,
+        rematch: { ...activity.rematch!, source_debate_id: null, status },
+        challenge: null,
+      };
+
+      render(<DebateCoordinator />);
+
+      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    }
+  );
+
+  // Nor may anything app-wide sit over a room, which is open for as long as the pair are in it.
+  it('does not offer a rejoin bar over a debate room', async () => {
+    mocks.pathname = '/debate/room-1';
+    const activity = activityWithDebate();
+    mocks.activity = { ...activity, debate: { ...activity.debate!, participants: bothParticipants() } };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument());
+  });
+
   // GEO-2604. The window this closes: the rematch session has converted, so activity reports the
   // new `ready` debate and no longer reports a rematch, but the page's own session query has not
   // caught up and so has not navigated yet. That is exactly the shape the ready prompt exists for —
@@ -570,7 +876,7 @@ describe('DebateCoordinator', () => {
   // on its way into the room, then vanished when the navigation landed. Preston reported a popup
   // that "required no interaction" and redirected him anyway.
   it('does not prompt over the rematch page for a debate that page is about to open', async () => {
-    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.pathname = '/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1';
     mocks.activity = {
       ...activityWithDebate(),
       rematch: null,
@@ -1076,7 +1382,7 @@ function showSharePrompt() {
     {
       id: 'prompt-1',
       debate_id: 'debate-1',
-      source_space_id: 'space-1',
+      source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
       claim: 'Debates are useful',
       created_at: '2026-07-02T00:00:00.000Z',
     },
@@ -1100,6 +1406,19 @@ function videoResponse() {
   });
 }
 
+function upcomingRoom(overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom {
+  return {
+    room_id: 'room-1',
+    starts_at: '2026-09-21T09:00:00.000Z',
+    opens_at: '2026-09-21T08:50:00.000Z',
+    joinable: true,
+    due: false,
+    others_present: false,
+    rematch_session_id: null,
+    ...overrides,
+  };
+}
+
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   return {
     online: true,
@@ -1110,7 +1429,7 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
     rematch: {
       id: 'rematch-1',
       source_debate_id: 'debate-1',
-      source_space_id: 'space-1',
+      source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
       status,
       participants: [],
       decision_expires_at: '2026-07-02T00:00:20.000Z',
@@ -1184,7 +1503,7 @@ function pendingChallenge() {
   return {
     id: 'challenge-1',
     status: 'pending',
-    source_space_id: 'space-1',
+    source_space_id: '019fedae-72b6-7ab2-927a-df044d57c566',
     requester: party('user-requester', 'Ada'),
     recipient: party('user-recipient', 'Grace'),
     rematch_session_id: null,

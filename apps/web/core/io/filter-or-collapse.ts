@@ -50,9 +50,7 @@ function soleRelationsSome(branch: EntityFilter): RelationFilter | undefined {
 
   const relations = branch.relations;
   if (!relations) return undefined;
-  const relationKeys = Object.keys(relations).filter(
-    k => (relations as Record<string, unknown>)[k] != null
-  );
+  const relationKeys = Object.keys(relations).filter(k => (relations as Record<string, unknown>)[k] != null);
   if (relationKeys.length !== 1 || relationKeys[0] !== 'some') return undefined;
 
   return relations.some ?? undefined;
@@ -75,7 +73,6 @@ function stableStringify(value: unknown): string {
 
 /** Stable identity for "everything about this branch except which type it matches". */
 function shapeWithoutTypeId(relation: RelationFilter): string {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { typeId: _omitted, ...rest } = relation;
   return stableStringify(rest);
 }
@@ -107,7 +104,6 @@ function collapseRelationsSomeBranches(branches: readonly EntityFilter[]): Entit
   if (!relations.every(r => shapeWithoutTypeId(r) === shape)) return undefined;
 
   const unique = [...new Set(typeIds)];
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { typeId: _omitted, ...shared } = relations[0]!;
 
   return {

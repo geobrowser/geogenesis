@@ -5,7 +5,7 @@ import { QueuedSendTimeoutError, enqueueFor, withSubmissionRetry } from './smart
 const reportError = vi.hoisted(() => vi.fn());
 vi.mock('~/core/telemetry/logger', () => ({ reportError }));
 
-const deferred = <T,>() => {
+const deferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
   const promise = new Promise<T>((res, rej) => {
@@ -87,7 +87,7 @@ describe('smart-account send queue', () => {
     const slow = deferred<string>();
     const guardedTask = vi.fn(async () => 'should-never-run');
 
-    const holding = enqueueFor(address, () => slow.promise);
+    enqueueFor(address, () => slow.promise);
     const abandoned = enqueueFor(address, guardedTask, { maxQueueWaitMs: 45_000 });
     // Attach the rejection expectation before the turn arrives so the rejection is
     // never unhandled.

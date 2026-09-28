@@ -39,9 +39,8 @@ import { useToast } from '../hooks/use-toast';
 const votesQueryKey = (debateEntityId: string) => ['debate-votes', debateEntityId] as const;
 
 /**
- * Shared across every mounted copy of the hook: the feed and claims panel both mount
- * `useDebateVotes` for the same debate, so a local `useState` would leave the other surface's
- * pills enabled mid-publish.
+ * Shared across every mounted copy of the hook: the same debate can be open in more than one
+ * surface, so a local `useState` would leave the other surface's pills enabled mid-publish.
  */
 const debatesWithVoteInFlight = new Set<string>();
 const voteInFlightListeners = new Set<() => void>();

@@ -22,6 +22,15 @@ export const AutomaticModeToggle = () => {
   editableRef.current = editable;
 
   const shouldStartInEditMode = searchParams?.get('edit') === 'true';
+  // Read out here rather than inside the effect: the dependency array named `params?.['id']` and
+  // `params?.['entityId']`, which the rule cannot check statically, and said nothing at all about
+  // the three values taken off `searchParams`. These are all strings, so depending on them is
+  // depending on their content.
+  const spaceIdParam = params?.['id'] as string | undefined;
+  const entityIdParam = params?.['entityId'] as string | undefined;
+  const newEntityName = searchParams?.get('entityName');
+  const entityType = searchParams?.get('type');
+  const queryStringSnapshot = searchParams?.toString() ?? '';
 
   useEffect(() => {
     if (!shouldStartInEditMode) {
@@ -32,11 +41,8 @@ export const AutomaticModeToggle = () => {
     if (hasProcessedRef.current) return;
     hasProcessedRef.current = true;
 
-    const spaceId = params?.['id'] as string | undefined;
-    const entityId = params?.['entityId'] as string | undefined;
-    const newEntityName = searchParams?.get('entityName');
-    const entityType = searchParams?.get('type');
-    const queryStringSnapshot = searchParams?.toString() ?? '';
+    const spaceId = spaceIdParam;
+    const entityId = entityIdParam;
 
     let timeoutDidRun = false;
 
@@ -93,7 +99,17 @@ export const AutomaticModeToggle = () => {
         hasProcessedRef.current = false;
       }
     };
-  }, [shouldStartInEditMode, pathname, params?.['id'], params?.['entityId'], setEditable, storage]);
+  }, [
+    shouldStartInEditMode,
+    pathname,
+    spaceIdParam,
+    entityIdParam,
+    newEntityName,
+    entityType,
+    queryStringSnapshot,
+    setEditable,
+    storage,
+  ]);
 
   return null;
 };

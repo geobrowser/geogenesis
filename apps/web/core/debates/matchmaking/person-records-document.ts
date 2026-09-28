@@ -44,8 +44,14 @@ export const POSITIONS_PER_PERSON = 250;
 
 export type PersonRecordsQuery = Record<
   string,
-  | { totalCount?: number | null; nodes?: Array<{ fromEntityId?: string | null } | null> | null }
-  | { totalCount?: number | null; nodes?: Array<{ objectId?: string | null } | null> | null }
+  | {
+      totalCount?: number | null;
+      nodes?: Array<{ fromEntityId?: string | null; spaceId?: string | null } | null> | null;
+    }
+  | {
+      totalCount?: number | null;
+      nodes?: Array<{ objectId?: string | null; spaceId?: string | null } | null> | null;
+    }
   | { createdAt?: string | number | null }
   | null
   | undefined
@@ -111,15 +117,15 @@ export function buildPersonRecordsDocument(personIds: string[]): {
     ${personAlias(index, 'positions')}: userVotesConnection(
       first: $positionsFirst
       filter: { and: [$positionFilter, { userId: { is: ${person} } }] }
-    ) { totalCount nodes { objectId } }
+    ) { totalCount nodes { objectId spaceId } }
     ${personAlias(index, 'supported')}: relationsConnection(
       first: $first
       filter: { typeId: { is: $supportedBy }, toEntityId: { is: ${person} } }
-    ) { totalCount nodes { fromEntityId } }
+    ) { totalCount nodes { fromEntityId spaceId } }
     ${personAlias(index, 'opposed')}: relationsConnection(
       first: $first
       filter: { typeId: { is: $opposedBy }, toEntityId: { is: ${person} } }
-    ) { totalCount nodes { fromEntityId } }
+    ) { totalCount nodes { fromEntityId spaceId } }
     ${personAlias(index, 'joined')}: entity(id: ${person}) { createdAt }`;
     })
     .join('\n');

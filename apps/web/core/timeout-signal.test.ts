@@ -46,5 +46,4 @@ describe('timeoutSignal', () => {
       expect(signal.aborted).toBe(true);
     });
   });
-
 });

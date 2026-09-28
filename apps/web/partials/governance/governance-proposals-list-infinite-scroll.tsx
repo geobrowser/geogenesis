@@ -4,21 +4,23 @@ import * as React from 'react';
 
 import { SmallButton } from '~/design-system/button';
 
-import type { GovernanceProposalType } from './governance-proposal-type-filter';
+import type { GovernanceProposalCategory, GovernanceProposalStatusFilter } from './governance-proposal-query';
 import { loadMoreProposalsAction } from './load-more-proposals-action';
 
 interface Props {
-  page: number;
+  initialCursor: string | null;
   spaceId: string;
   initialHasMore?: boolean;
-  proposalType?: GovernanceProposalType;
+  category?: GovernanceProposalCategory;
+  status?: GovernanceProposalStatusFilter;
 }
 
 export function GovernanceProposalsListInfiniteScroll({
   spaceId,
-  page = 0,
+  initialCursor,
   initialHasMore = true,
-  proposalType,
+  category = 'all',
+  status = 'pending',
 }: Props) {
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.ReactNode[]>([]);
@@ -26,7 +28,7 @@ export function GovernanceProposalsListInfiniteScroll({
   const [hasMore, setHasMore] = React.useState(initialHasMore);
 
   // Use refs for values needed in the observer callback to avoid dependency cycles
-  const currentPageRef = React.useRef(page);
+  const currentCursorRef = React.useRef(initialCursor);
   const isLoadingRef = React.useRef(false);
   const hasMoreRef = React.useRef(initialHasMore);
 
@@ -35,14 +37,21 @@ export function GovernanceProposalsListInfiniteScroll({
       // Use ref to check loading state to avoid stale closure
       if (isLoadingRef.current || !hasMoreRef.current) return;
 
+      const cursor = currentCursorRef.current;
+      if (!cursor) {
+        hasMoreRef.current = false;
+        setHasMore(false);
+        return;
+      }
+
       isLoadingRef.current = true;
       setIsLoading(true);
 
       try {
-        const [node, next, more] = await loadMoreProposalsAction(spaceId, currentPageRef.current, proposalType);
+        const [node, next, more] = await loadMoreProposalsAction(spaceId, cursor, category, status);
         if (abortController?.signal.aborted) return;
         setLoadMoreNodes(prev => [...prev, node]);
-        currentPageRef.current = next;
+        currentCursorRef.current = next;
         hasMoreRef.current = more;
         setHasMore(more);
       } finally {
@@ -53,7 +62,7 @@ export function GovernanceProposalsListInfiniteScroll({
       }
     },
     // @TODO this was a hacky workaround to avoid infinite rerenders
-    [spaceId, proposalType]
+    [spaceId, category, status]
   );
 
   React.useEffect(() => {

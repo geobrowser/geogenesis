@@ -1,29 +1,24 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Entity } from '~/core/types';
 import { sleep } from '~/core/utils/utils';
 
-import { getChecked } from '~/design-system/checkbox';
-
-export type ResponseKind = 'curation' | 'stance' | 'veracity';
+export type ResponseKind = 'curation' | 'stance';
 export type ResponseDirection = 'positive' | 'negative' | 'clear';
 export type ActiveResponseDirection = Exclude<ResponseDirection, 'clear'>;
-export type ResponseVoteKind = 0 | 1 | 2;
+export type ResponseVoteKind = 0 | 1;
 export type ResponseObjectType = 0 | 1;
 
-export type ResponseActionMethod =
-  'upvote' | 'downvote' | 'unvote' | 'agree' | 'disagree' | 'unagree' | 'verify' | 'dispute' | 'unverify';
+export type ResponseActionMethod = 'upvote' | 'downvote' | 'unvote' | 'agree' | 'disagree' | 'unagree';
 
 const RESPONSE_VOTE_KIND: Record<ResponseKind, ResponseVoteKind> = {
   curation: 0,
   stance: 1,
-  veracity: 2,
 };
 
 const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
-const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
 const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 
 const RESPONSE_ACTION_METHOD: Record<ResponseKind, Record<ResponseDirection, ResponseActionMethod>> = {
@@ -36,11 +31,6 @@ const RESPONSE_ACTION_METHOD: Record<ResponseKind, Record<ResponseDirection, Res
     positive: 'agree',
     negative: 'disagree',
     clear: 'unagree',
-  },
-  veracity: {
-    positive: 'verify',
-    negative: 'dispute',
-    clear: 'unverify',
   },
 };
 
@@ -89,50 +79,90 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     signIn: 'Sign in to respond',
     connect: 'Connect wallet to respond',
   },
-  veracity: {
-    positiveAction: 'Verify',
-    negativeAction: 'Dispute',
-    removePositive: 'Remove verification',
-    removeNegative: 'Remove dispute',
-    firstResponsePrompt: 'Be the first to verify this claim.',
-    empty: 'No veracity responses yet',
-    loading: 'Loading responders…',
-    viewResponders: 'View veracity responses',
-    signIn: 'Sign in to respond',
-    connect: 'Connect wallet to respond',
-  },
 };
 
-export function responsePositionLabel(responseKind: 'stance' | 'veracity' | null, position: boolean) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind ?? 'stance'];
-  return position ? copy.positiveAction : copy.negativeAction;
+/**
+ * What to say while a response has been sent and the chain has not confirmed it yet.
+ *
+ * One sentence for every surface that shows the wait, so the vote arrows and the claim's pills do
+ * not describe the same state in two different words.
+ */
+export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
+
+/**
+ * The one kind a claim is answered with.
+ *
+ * The authority on this, so that no surface has to read it off geo-chat's row. That field can
+ * still say `"veracity"` for a claim minted before the vocabularies merged, and those fields are
+ * typed `WireResponseKind` to say so — which is what stops one being used as a kind: it will not
+ * fit where a `ResponseKind` is wanted. Were it to get through, `getResponseActionMethod` would
+ * select no SDK method and the *write* would throw on click, and `responseKindToVoteKind` would
+ * yield `undefined` so the read asked for no vote kind at all.
+ *
+ * The types keep that from compiling; this is what surfaces use instead of the row.
+ */
+export const CLAIM_RESPONSE_KIND = 'stance' as const satisfies ResponseKind;
+
+/**
+ * The vote kind a Verify or a Dispute was published as, which nothing can write any more.
+ *
+ * Kept as a name because the rows are still there — 178 of them — and code has to say what it means
+ * to do about that. Two answers, and they are opposite on purpose: a *tally* or a *current side*
+ * ignores them, because a claim asks one question now and a retired row is not an answer to it; a
+ * question about what somebody has **ever** done counts them, because they did do it.
+ */
+export const RETIRED_VERACITY_VOTE_KIND = 2;
+
+/**
+ * The copy for a claim's two sides, reached without indexing anything.
+ *
+ * Claim surfaces must not do `ENTITY_RESPONSE_COPY[kind]` with a kind that came off the wire.
+ * geo-chat still labels a claim minted before the vocabularies merged `"veracity"`, and there is no
+ * key by that name any more — the lookup would return `undefined` and the surface would throw on
+ * the first field it read, which is a blank ticker rather than a wrong word.
+ *
+ * `WireResponseKind` is what keeps that from compiling. This exists so there is something to reach
+ * for instead: the copy, without a lookup, so no key is involved at all.
+ */
+export const CLAIM_RESPONSE_COPY = ENTITY_RESPONSE_COPY[CLAIM_RESPONSE_KIND];
+
+/**
+ * What to call one side of a claim: Agree or Disagree.
+ *
+ * It used to take the response kind, because a factual claim's sides were called Verify and
+ * Dispute. Every claim is answered the same way now, so there is nothing left to choose between
+ * and no caller has to work out which vocabulary a claim is in before it can name a side.
+ */
+export function responsePositionLabel(position: boolean) {
+  return position ? CLAIM_RESPONSE_COPY.positiveAction : CLAIM_RESPONSE_COPY.negativeAction;
 }
 
-export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean; isFactual: boolean }): ResponseKind {
-  if (!isClaim) return 'curation';
-  return isFactual ? 'veracity' : 'stance';
+/**
+ * Curation for an ordinary entity, a stance for a claim.
+ *
+ * A claim used to take a third vocabulary — Verify/Dispute, published as its own vote kind —
+ * whenever it carried the "Is factual" flag. That split is gone: every claim is answered with
+ * Agree/Disagree now, whatever the flag says. The flag itself is still written and still read by
+ * the debate surfaces that care; it just no longer decides how a claim is answered.
+ */
+export function getEntityResponseKind({ isClaim }: { isClaim: boolean }): ResponseKind {
+  return isClaim ? 'stance' : 'curation';
 }
 
-export function resolveEntityResponseKind(
-  entity: Pick<Entity, 'relations' | 'values'> | null | undefined,
-  spaceId: string
-): ResponseKind {
+/**
+ * No `spaceId`. It used to take one because "Is factual" is a per-space value, so the same claim
+ * could be factual in one space and not in another. Being a claim is not per-space in that way —
+ * the Types relation is read across every space the entity lives in, which is what lets a claim
+ * collected into another space still draw the claim controls.
+ */
+export function resolveEntityResponseKind(entity: Pick<Entity, 'relations' | 'values'> | null | undefined): ResponseKind {
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
-  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
 
   const isClaim = activeRelations.some(
     relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
   );
 
-  const isFactual =
-    isClaim &&
-    getChecked(
-      activeValues.find(
-        value => uuidToHex(value.spaceId) === uuidToHex(spaceId) && uuidToHex(value.property.id) === CLAIM_IS_FACTUAL
-      )?.value
-    ) === true;
-
-  return getEntityResponseKind({ isClaim, isFactual });
+  return getEntityResponseKind({ isClaim });
 }
 
 export function hasUnpublishedClaimResponseKindEdit(
@@ -147,15 +177,12 @@ export function hasUnpublishedClaimResponseKindEdit(
   // that omits `values`, a partial built for a list. A missing field here should cost a false
   // negative, which is the pills staying live on a claim that has a draft edit; the alternative is
   // an exception thrown during render, which takes the whole surface down.
+  // Only the *type* edit is read now. This used to watch the "Is factual" value too, because that
+  // flag chose between two vote kinds and responding across the edit published the wrong one. It
+  // no longer chooses anything, so watching it would only block responses on a claim whose draft
+  // cannot change how the response is published. Adding or removing the Claim type still flips
+  // curation and stance, which is a real kind change and still worth stopping.
   return (
-    entity?.values?.some(
-      value =>
-        value?.property?.id != null &&
-        uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
-        uuidToHex(value.property.id) === CLAIM_IS_FACTUAL &&
-        value.isLocal === true &&
-        value.hasBeenPublished !== true
-    ) ||
     entity?.relations?.some(
       relation =>
         relation?.type?.id != null &&
@@ -165,8 +192,7 @@ export function hasUnpublishedClaimResponseKindEdit(
         uuidToHex(relation.toEntity.id) === CLAIM_TYPE &&
         relation.isLocal === true &&
         relation.hasBeenPublished !== true
-    ) ||
-    false
+    ) || false
   );
 }
 

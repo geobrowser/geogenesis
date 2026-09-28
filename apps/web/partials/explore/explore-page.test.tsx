@@ -18,6 +18,9 @@ vi.mock('./explore-side-panel', () => ({
 }));
 
 vi.mock('./explore-welcome-banner', () => ({ ExploreWelcomeBanner: () => null }));
+// Stubbed alongside its siblings above: the capture reaches Privy and wagmi for the account
+// shortcut it offers (GEO-2948), and this suite is about which column the layout reserves.
+vi.mock('./email-capture-popup', () => ({ ExploreEmailCapturePopup: () => null }));
 vi.mock('~/partials/feed/entity-feed', () => ({ EntityFeed: () => <div data-testid="feed" /> }));
 
 function renderExplore() {

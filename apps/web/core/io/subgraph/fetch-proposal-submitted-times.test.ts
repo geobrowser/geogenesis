@@ -1,5 +1,4 @@
 import { Effect } from 'effect';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchProposalSubmittedTimes, getSubmittedTime } from './fetch-proposal-submitted-times';

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useIsomorphicLayoutEffect } from './use-isomorphic-layout-effect';
+
 /**
  * Whether any modal dialog is currently open, anywhere on the page.
  *
@@ -32,16 +34,9 @@ import * as React from 'react';
 const OPEN_MODAL_SELECTOR =
   '[role="dialog"][data-state="open"], [role="dialog"][aria-modal="true"], [role="alertdialog"][data-state="open"], [role="alertdialog"][aria-modal="true"]';
 
-/**
- * Layout effect on the client, plain effect on the server.
- *
- * The first read has to happen before paint: a passive effect runs after, so enabling this while a
- * dialog is already open — a reader returning to a restored scroll position with search open — lets
- * the caller paint over that dialog for a frame, which is the exact precedence this exists to keep.
- * The server has no layout phase and React warns if you ask for one, hence the swap.
- */
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? React.useLayoutEffect : React.useEffect;
-
+// Before paint, not after: a passive effect would let the caller paint over a dialog that was
+// already open — a reader returning to a restored scroll position with search open — for a frame,
+// which is the exact precedence this exists to keep.
 export function useAnyModalOpen(enabled: boolean): boolean {
   const [isOpen, setIsOpen] = React.useState(false);
 
@@ -52,12 +47,21 @@ export function useAnyModalOpen(enabled: boolean): boolean {
     }
 
     let frame = 0;
-    const read = () => setIsOpen(document.querySelector(OPEN_MODAL_SELECTOR) !== null);
+    // Teardown removes this component's container from `body`, which is itself a mutation — the
+    // observer can be handed it before `disconnect()` lands, scheduling a frame that fires after
+    // cleanup has already run. Without this flag that callback reads the document and sets state
+    // on an unmounted component, after the test that owned it has finished. It surfaced as
+    // unrelated suites failing at random, which is exactly how this kind of leak presents.
+    let cancelled = false;
+    const read = () => {
+      if (cancelled) return;
+      setIsOpen(document.querySelector(OPEN_MODAL_SELECTOR) !== null);
+    };
 
     // Coalesced to a frame: the observer watches the whole body, and this runs on a page holding an
     // infinite feed, so a re-read per mutation would mean a `querySelector` per appended card.
     const schedule = () => {
-      if (frame) return;
+      if (frame || cancelled) return;
       frame = requestAnimationFrame(() => {
         frame = 0;
         read();
@@ -74,6 +78,7 @@ export function useAnyModalOpen(enabled: boolean): boolean {
     });
 
     return () => {
+      cancelled = true;
       observer.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };

@@ -1,9 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import { Effect } from 'effect';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-
-import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAllEntities, getBatchEntities } from '../io/queries';

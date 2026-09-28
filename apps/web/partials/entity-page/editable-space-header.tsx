@@ -71,6 +71,8 @@ export function EditableSpaceHeading({
   addSubspaceComponent,
   nameAccessoryComponent,
   actionsComponent,
+  keepSpaceActions = false,
+  fallbackName,
 }: {
   spaceId: string;
   entityId: string;
@@ -79,13 +81,32 @@ export function EditableSpaceHeading({
   nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
+  /** Keeps the history and overflow controls on routes below the space's own page. */
+  keepSpaceActions?: boolean;
+  /**
+   * Shown in browse mode when the scoped store has no name yet — the same prop
+   * `EditableHeading` takes, for the same reason and with the same rule.
+   *
+   * `useName` reads the sync store, which hydrates over the network once the
+   * page is mounted, so the heading rendered as a zero-width space for the
+   * length of that request and every space looked like it had failed to load
+   * its own title.
+   */
+  fallbackName?: string | null;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
-  const isSpacePage = path === NavUtils.toSpace(spaceId);
+  // History and the overflow menu are a space's own controls, so they show on
+  // the space's own page and not on an entity inside it.
+  //
+  // A profile keeps them on every one of its tabs (GEO-2859). Its header is
+  // rendered once above all of them rather than per page, so gating on the exact
+  // Overview path made them appear and vanish as the reader moved between tabs
+  // of the same profile — with nothing else in the row changing.
+  const isSpacePage = path === NavUtils.toSpace(spaceId) || keepSpaceActions;
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');
@@ -133,27 +154,33 @@ export function EditableSpaceHeading({
 
   return (
     <>
-      <div className="relative flex items-center justify-between">
+      {/* Wraps rather than squeezing: a long name beside Edit profile, a vote
+          pair, history and the overflow menu has nowhere to go on a phone, and
+          `justify-between` would have compressed the controls into each other.
+          Only engages when it has to, so nothing changes on a wide screen. */}
+      <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <EntityPageTitle
-          value={name ?? ''}
+          // Browse falls back to the server's name; edit must not. A fallback in
+          // the textarea reads as a stored name that isn't there, and one
+          // keystroke would commit it — see `EditableHeading`, which draws the
+          // same line for the same reason.
+          value={isEditing ? (name ?? '') : (name ?? fallbackName ?? '')}
           isEditing={isEditing}
           onChange={onNameChange}
           accessory={nameAccessoryComponent}
           className="min-w-0 grow"
         />
         {(actionsComponent || isSpacePage) && (
-          <div className="inline-flex items-center gap-4">
+          <div className="inline-flex shrink-0 items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
               <>
                 {isEditing && (
-                  // NB: desktop-first breakpoints — `sm` is max-width 639px, so `sm:hidden` hides
-                  // this on phones and shows it everywhere else. Matches the entity row's link;
-                  // only the label is new.
+                  // Matches the entity row's link; only the label is new.
                   <Link
                     href={NavUtils.toEntity(spaceId, ID.createEntityId())}
                     aria-label="Create new entity"
-                    className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+                    className="stroke-grey-04 transition-colors duration-75 hover:stroke-text mobile:hidden"
                   >
                     <Create />
                   </Link>

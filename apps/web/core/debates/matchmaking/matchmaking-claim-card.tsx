@@ -21,15 +21,20 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import {
+  CLAIM_RESPONSE_COPY,
+  CLAIM_RESPONSE_KIND,
+  RESPONSE_CONFIRMING_COPY,
+  type ResponseKind,
+  responsePositionLabel,
+} from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -91,6 +96,13 @@ type Props = {
   responseBlockedReason?: string | null;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
+  /**
+   * Rendered under one of the two response buttons — see `PositionRow`.
+   *
+   * A profile uses it to say which side that person came down on, under the
+   * button that says the same word.
+   */
+  noteFor?: (position: boolean) => React.ReactNode;
   /**
    * Leaves the end slot out.
    *
@@ -170,6 +182,7 @@ export function MatchmakingClaimCard({
   answersMayComeFromIndex,
   responseBlockedReason,
   footer,
+  noteFor,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -215,13 +228,10 @@ export function MatchmakingClaimCard({
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article
-      ref={setCardRef}
-      {...hubCardMotion}
-      className="w-full rounded-lg border border-grey-02 bg-white p-3"
-    >
+    <motion.article ref={setCardRef} {...hubCardMotion} className="w-full claim-card-panel-surface">
       {isOnGraph ? (
         <RespondableControls
+          noteFor={noteFor}
           claim={claim}
           positions={positions}
           readiness={readiness}
@@ -282,7 +292,7 @@ function ClaimHeader({
   isControversial?: boolean;
   onOpenClaim?: () => void;
 }) {
-  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+  const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
@@ -306,7 +316,7 @@ function ClaimHeader({
       {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
           reserved height: the slot is now the height of the chip beside it, so the row does not grow
           when the match lookup answers. */}
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="claim-card-panel-header">
         <span className="flex min-w-0 items-center gap-1.5">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
@@ -416,8 +426,11 @@ export function useClaimPositionControl({
 }) {
   const target = {
     entityId: claim.claim_entity_id,
+    entityName: claim.claim,
     spaceId: claim.space_id,
-    responseKind: readiness.response_kind,
+    // Not `readiness.response_kind`. This target drives the *write*, and geo-chat's field can still
+    // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
+    responseKind: CLAIM_RESPONSE_KIND,
   };
   const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
@@ -426,7 +439,7 @@ export function useClaimPositionControl({
   // the claim page does.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
-  const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
+  const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
 
   // The offer and the faces it implies, from one fact. Same shared query the end slot reads, so this
@@ -452,6 +465,9 @@ export function useClaimPositionControl({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
+  // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
+  const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
 
   // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
   // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
@@ -466,7 +482,6 @@ export function useClaimPositionControl({
         ? positionsWithOpponents
         : withViewerPosition({
             positions: positionsWithOpponents,
-            responseKind: readiness.response_kind,
             // `undefined` where the host cannot say, which is not the same as "no position" — see
             // `viewerResponseUnknown`.
             serverPosition: viewerResponseUnknown ? undefined : (readiness.viewer_response?.position ?? null),
@@ -478,7 +493,6 @@ export function useClaimPositionControl({
     [
       personalSpaceId,
       positionsWithOpponents,
-      readiness.response_kind,
       readiness.viewer_response?.position,
       viewerIdentityPending,
       viewerPosition,
@@ -509,6 +523,11 @@ export function useClaimPositionControl({
       return;
     }
     if (isAccountSetupPending) return;
+    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
+    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
+    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
+    // "respond to this claim first" beside a pill that still looked held.
+    if (isResponsePending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -527,8 +546,9 @@ export function useClaimPositionControl({
     if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
+    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
-    return position ? copy.positiveAction : copy.negativeAction;
+    return responsePositionLabel(position);
   };
 
   return {
@@ -537,6 +557,9 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
+    isConnected,
+    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    isResponsePending,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -566,6 +589,7 @@ function RespondableControls({
   hideEndSlot,
   endSlot,
   hasFooter,
+  noteFor,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -585,6 +609,8 @@ function RespondableControls({
   responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
+  /** See {@link Props.noteFor}. */
+  noteFor?: (position: boolean) => React.ReactNode;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -621,7 +647,7 @@ function RespondableControls({
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
-    readiness.response_kind,
+    CLAIM_RESPONSE_KIND,
     // Or where the index is allowed to answer for the side, since then the kind is the page's and
     // this read is the thing being waited *for* rather than something waiting behind it. Gating it
     // on `answersReady` there would deadlock: that flag is false precisely because geo-chat has not
@@ -661,7 +687,7 @@ function RespondableControls({
    * a stance response is not an answer about a claim that has become Verify/Dispute, and treating
    * it as one would enable the controls over it.
    */
-  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${readiness.response_kind}`;
+  const claimKey = `${claim.space_id}:${claim.claim_entity_id}:${viewerKey ?? 'anon'}:${CLAIM_RESPONSE_KIND}`;
   const sideSettling = !summaryEnabled || summary.isViewerResponseLoading;
   // `'none'` rather than `null` for "settled on no side", so the two facts `null` would otherwise
   // carry stay apart: nothing held yet, against an answer of nobody. A string rather than an object
@@ -686,7 +712,6 @@ function RespondableControls({
       viewerResponse: readiness.viewer_response,
       indexedDirection: settledDirection === 'none' ? null : settledDirection,
       isIndexedLoading: settledDirection === null,
-      responseKind: readiness.response_kind,
     });
     return viewerResponse === (readiness.viewer_response ?? null)
       ? readiness
@@ -701,7 +726,7 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
     useClaimPositionControl({
       claim,
       positions,
@@ -742,14 +767,17 @@ function RespondableControls({
       />
       <PositionRow
         positions={optimisticPositions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
-        // overlapping submissions, so there is nothing to protect against — and dimming the pills
-        // for the length of an indexing round trip read as the response not having landed.
+        // Not disabled while the response publishes: dimming the pills for the length of an indexing
+        // round trip read as the response not having landed. Pending instead — presses are ignored,
+        // because nothing serializes overlapping submissions and a second press on the held side is
+        // a retraction.
         disabled={!canRespond}
+        pending={isResponsePending}
         titleFor={actionTitle}
+        noteFor={noteFor}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -769,11 +797,11 @@ function RespondableControls({
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
-          responseKind={readiness.response_kind}
+          responseKind={CLAIM_RESPONSE_KIND}
           summary={summary}
           layout="inline"
           className={cx(
-            '-mx-3 mt-3 border-t border-divider bg-grey-01 px-3 py-2',
+            '-mx-3 mt-3 claim-card-summary-band',
             // Only reaches the card's base when nothing follows it. A host that passes a footer —
             // the rematch picker's error alert — renders after this, and a band bled past the
             // padding would sit under it.
@@ -795,7 +823,6 @@ function RespondableControls({
  */
 export function withViewerPosition({
   positions,
-  responseKind,
   serverPosition,
   viewerPosition,
   viewerSpaceId,
@@ -803,7 +830,6 @@ export function withViewerPosition({
   viewerAvatarUrl,
 }: {
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
   /**
    * The position geo-chat currently reports for the viewer, or `undefined` where it has not
    * answered — which is not the same as an answer of "no position". See `viewerResponseUnknown`.
@@ -839,7 +865,6 @@ export function withViewerPosition({
     positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
   if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
     // Not geo-chat's id for this user — we don't have it here. Keyed on the personal space instead,
     // which is unique per viewer and is what the avatar renders from anyway.
@@ -904,7 +929,7 @@ export function withViewerPosition({
   if (viewerPosition !== null && !adjusted.some(side => side.position === viewerPosition)) {
     adjusted.push({
       position: viewerPosition,
-      position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
+      position_label: responsePositionLabel(viewerPosition),
       total_count: 1,
       available_now_count: 0,
       present_count: 1,
@@ -968,7 +993,7 @@ function UnresolvableControls({
       />
       <PositionRow
         positions={positions}
-        responseKind={readiness.response_kind}
+        responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
       />
       <div className="mt-3">
@@ -986,16 +1011,37 @@ export function PositionRow({
   viewerPosition,
   onRespond,
   disabled,
+  pending,
   titleFor,
+  noteFor,
+  endSlot,
 }: {
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   viewerPosition: boolean | null;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
+  /**
+   * The viewer's response is still confirming. The pills stay at full strength — the side is drawn
+   * as taken — but presses are dropped, and the buttons say so to assistive technology and, on the
+   * pointer, with a wait cursor.
+   */
+  pending?: boolean;
   titleFor?: (position: boolean) => string;
+  /**
+   * Something to say under one of the two buttons — on a profile, which side
+   * that person came down on.
+   *
+   * Under the button rather than under the row, because the row is two columns
+   * and a line under the whole thing has to name its side in words. Under the
+   * Agree button, "Susan agrees" needs no such help. Asked per side so the note
+   * can be nothing for the other one.
+   */
+  noteFor?: (position: boolean) => React.ReactNode;
+  /** A compact third action, kept beside both positions at narrow and wide card widths. */
+  endSlot?: React.ReactNode;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
 
@@ -1007,29 +1053,62 @@ export function PositionRow({
   // reads this row's own width wherever it has been dropped, and styles.css carries the threshold
   // and how it was measured. Stacking rather than clipping is the point: the label is the only part
   // of a pill allowed to shrink, which is how a button came to read "Dis..." (GEO-2774).
+  //
+  // A compact end slot is the claim-list exception: the Figma row deliberately groups all three
+  // actions, and its two flexible position columns can shed responder faces before their labels
+  // run out of room. Keep that row three columns at every card width instead of letting the nested
+  // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className="@container">
-      <div className="grid grid-cols-1 gap-2 claim-pills-wide:grid-cols-2">
-        <PositionButton
-          // Server labels win when a side has responders; otherwise fall back to the vocabulary for
-          // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
-          label={forSide?.position_label ?? copy.positiveAction}
-          summary={forSide}
-          position
-          selected={viewerPosition === true}
-          onRespond={onRespond}
-          disabled={disabled}
-          title={titleFor?.(true)}
-        />
-        <PositionButton
-          label={againstSide?.position_label ?? copy.negativeAction}
-          summary={againstSide}
-          position={false}
-          selected={viewerPosition === false}
-          onRespond={onRespond}
-          disabled={disabled}
-          title={titleFor?.(false)}
-        />
+      <div
+        className={cx(
+          'grid gap-2',
+          endSlot ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-1 claim-pills-wide:grid-cols-2'
+        )}
+      >
+        {/* The note shares its button's grid cell rather than sitting in one of
+            its own, which is what keeps the two arrangements honest: stacked, it
+            follows the button it belongs to instead of both buttons; side by
+            side, it sits in that button's column.
+
+            `flex flex-col` and not a bare `div`: a grid item stretches to its
+            column, but a *block* child of one does not pass that width on, and
+            the pill sizes itself from its content — so wrapping it collapsed
+            both buttons to their icons, the label truncating to nothing inside
+            `min-w-0`. A flex column stretches its children by default, which is
+            the width the pill had as a grid item. */}
+        <div className="flex flex-col">
+          <PositionButton
+            // This app's vocabulary, not the server's. A side's `position_label` used to win where
+            // it had one, which would now let geo-chat print "Verify" on a claim minted before the
+            // vocabularies merged — a word this app has no way to publish any more.
+            label={copy.positiveAction}
+            summary={forSide}
+            responseKind={responseKind}
+            position
+            selected={viewerPosition === true}
+            onRespond={onRespond}
+            disabled={disabled}
+            pending={pending}
+            title={titleFor?.(true)}
+          />
+          {noteFor?.(true)}
+        </div>
+        <div className="flex flex-col">
+          <PositionButton
+            label={copy.negativeAction}
+            summary={againstSide}
+            responseKind={responseKind}
+            position={false}
+            selected={viewerPosition === false}
+            onRespond={onRespond}
+            disabled={disabled}
+            pending={pending}
+            title={titleFor?.(false)}
+          />
+          {noteFor?.(false)}
+        </div>
+        {endSlot ? <div className="flex h-7 shrink-0 items-center">{endSlot}</div> : null}
       </div>
     </div>
   );
@@ -1070,18 +1149,22 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
 function PositionButton({
   label,
   summary,
+  responseKind,
   position,
   selected,
   onRespond,
   disabled,
+  pending,
   title,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
+  responseKind: ResponseKind;
   position: boolean;
   selected: boolean;
   onRespond?: (position: boolean) => void;
   disabled?: boolean;
+  pending?: boolean;
   title?: string;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
@@ -1089,8 +1172,8 @@ function PositionButton({
   // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
   // green or red, which made the pill argue the position as well as record it — and put white-ish
   // text on two saturated fills that nothing else in the product uses this way. Which side is
-  // yours is said by the fill and the filled thumb; which side is *which* is said by the summary
-  // bar below, where the colours still mean something.
+  // yours is said by the fill (and, on a stance claim, the filled thumb); which side is *which* is
+  // said by the summary bar below, where the colours still mean something.
   //
   // `border` on both states, transparent when held, so picking a side cannot change the pill's
   // width and shuffle the row.
@@ -1108,8 +1191,12 @@ function PositionButton({
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
     <span className="flex min-w-0 items-center gap-1.5">
-      {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
-      <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+      {/* Thumbs for a stance, chevrons for a factual claim — see `ResponsePositionIcon`. Filled,
+          where the glyph has a filled form, so the pill reads as taken even in a screenshot; a
+          chevron has none, and leans on the pill's own fill below. */}
+      <span className="shrink-0">
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      </span>
       <span className="truncate">
         {label}
         {selected ? <span className="sr-only"> — your response</span> : null}
@@ -1126,10 +1213,21 @@ function PositionButton({
     <button
       type="button"
       aria-pressed={selected}
+      aria-disabled={pending || undefined}
       disabled={disabled}
       title={title}
-      onClick={() => onRespond(position)}
-      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:border-text')}
+      onClick={() => {
+        if (!pending) onRespond(position);
+      }}
+      className={cx(
+        className,
+        'transition-colors disabled:opacity-60',
+        // The only sign the press was taken: the pill drops presses for the 10-50s a response
+        // spends confirming, and nothing else on the page says so. The copy that used to sit
+        // under the pills read as an unsettled side, so the cue stays on the pointer.
+        pending && 'cursor-progress',
+        !selected && !disabled && !pending && 'hover:border-text'
+      )}
     >
       {content}
     </button>

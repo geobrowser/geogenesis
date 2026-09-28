@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { INTERESTED_IN_QUERY_KEY } from '~/core/community/use-interested-in-bounty';
+import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
@@ -19,20 +20,6 @@ import {
 import { reconcileDeletedRelations } from './reconcile-store';
 import { bountyQueryKeys } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
-
-/**
- * Wraps `makeProposal` (callback-style) as a promise resolving to whether the
- * publish succeeded. `usePublish` already reports failures through the status
- * bar, so callers only need the boolean.
- */
-function publishOnce(
-  makeProposal: ReturnType<typeof usePublish>['makeProposal'],
-  args: Omit<Parameters<typeof makeProposal>[0], 'onSuccess' | 'onError'>
-): Promise<boolean> {
-  return new Promise(resolve => {
-    void makeProposal({ ...args, onSuccess: () => resolve(true), onError: () => resolve(false) });
-  });
-}
 
 type ActionState = { pending: boolean; error: string | null };
 

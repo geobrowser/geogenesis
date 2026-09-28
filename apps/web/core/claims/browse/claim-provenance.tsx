@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { personProfileOpened } from '~/core/analytics';
 import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -12,12 +13,13 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+import { getClaimSources } from './claim-sources';
 
 /**
  * Where a claim came from.
@@ -49,15 +51,7 @@ export function ClaimProvenance({
   // already exists in the space is linked to the existing entity, which then collects one `Sources`
   // per debate that stated it. The first is rendered as the primary source and the rest listed, so
   // no debate is hidden behind another.
-  const sources = React.useMemo(
-    () =>
-      dedupeRelationsByToEntityId(
-        claimRelations.filter(
-          relation => relation.isDeleted !== true && ID.equals(relation.type.id, SOURCES_PROPERTY_ID)
-        )
-      ).map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name })),
-    [claimRelations]
-  );
+  const sources = React.useMemo(() => getClaimSources(claimRelations), [claimRelations]);
   const source = sources[0] ?? null;
   const otherSources = sources.slice(1);
 
@@ -141,7 +135,15 @@ export function ClaimProvenance({
                       nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from
                       breaking across lines. */}
                   {speaker.profile?.profileLink ? (
-                    <Link href={speaker.profile.profileLink} className="whitespace-nowrap text-text hover:underline">
+                    <Link
+                      href={speaker.profile.profileLink}
+                      onClick={() =>
+                        personProfileOpened(speaker.profile!.spaceId, speaker.profile!.id, {
+                          interaction_surface: 'claim_provenance',
+                        })
+                      }
+                      className="whitespace-nowrap text-text hover:underline"
+                    >
                       {speaker.profile.name}
                     </Link>
                   ) : (

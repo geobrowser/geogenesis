@@ -1,5 +1,5 @@
-import '@testing-library/jest-dom/vitest';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 import type React from 'react';
@@ -63,10 +63,9 @@ const CLAIM_SPACE = 'b5a31f8182b042437ede0f84ee02f104'; // Podcasts — where th
 const renderItem = (nameCell: Partial<Cell>) =>
   render(
     <TableBlockGalleryItem
-      columns={{ [SystemIds.NAME_PROPERTY]: { propertyId: SystemIds.NAME_PROPERTY, ...nameCell } } as Record<
-        string,
-        Cell
-      >}
+      columns={
+        { [SystemIds.NAME_PROPERTY]: { propertyId: SystemIds.NAME_PROPERTY, ...nameCell } } as Record<string, Cell>
+      }
       currentSpaceId={BLOCK_SPACE}
       isEditing={false}
       rowEntityId="entity-1"

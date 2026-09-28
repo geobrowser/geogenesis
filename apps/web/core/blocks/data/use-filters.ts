@@ -102,6 +102,10 @@ export function useFilters(canEdit?: boolean) {
     return base
       .filter(p => !ID.equals(p.id, SystemIds.NAME_PROPERTY))
       .map(p => mergeRelationValueTypesFromStore(p, store, spaceId));
+    // `relationsSnapshot` is not read in here, and is not meant to be. `mergeRelationValueTypesFromStore`
+    // reads out of the mutable `store`, so this list needs something that changes when the
+    // relations do. Dropping it as "unnecessary" would freeze the merged value types.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schemaProperties, relationsSnapshot, spaceId]);
 
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.

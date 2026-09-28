@@ -75,6 +75,7 @@ export function ExplorePage({
           showTypeFilter
           dividerBeforeFeed
           titleOpensSidePanel
+          claimCardVariant="debate-panel-mobile"
           feedTopSpacingClassName=""
         />
       </main>

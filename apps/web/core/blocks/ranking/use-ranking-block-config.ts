@@ -5,10 +5,20 @@ import * as React from 'react';
 import { SUBMISSION_FREQUENCY_PROPERTY_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
-import type { Value } from '~/core/types';
+import type { Relation, Value } from '~/core/types';
 
 import { useDataBlockInstance } from '../data/use-data-block';
 import { isRollingRankingBlock } from './ensure-ranking-type';
+
+/**
+ * A stable empty list, so the fallback below does not mint a new array on every render.
+ *
+ * `a ?? b ?? []` looks harmless and is not: when neither side has relations yet, each render
+ * produces a fresh `[]`, every memo keyed on it recomputes, and anything downstream keyed on
+ * *those* results churns too. Naming the empty case keeps the reference stable, which is what the
+ * memos were written to rely on.
+ */
+const NO_RELATIONS: Relation[] = [];
 
 type Options = {
   blockId?: string;
@@ -34,7 +44,7 @@ export function useRankingBlockConfig(options: Options = {}) {
   const initialBlockEntity = initialBlockEntities.find(b => b.id === blockId) ?? null;
 
   const { entity: blockEntity } = useQueryEntity({ spaceId, id: blockId });
-  const blockRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
+  const blockRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? NO_RELATIONS;
 
   const isRolling = React.useMemo(
     () => isRollingRankingBlock(blockRelations, blockId, spaceId),

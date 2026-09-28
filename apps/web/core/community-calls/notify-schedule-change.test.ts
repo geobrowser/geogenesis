@@ -82,10 +82,7 @@ describe('notifyScheduleChange', () => {
   });
 
   it('keeps polling through a failed read', async () => {
-    const readIndexedSchedule = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValue(NEW);
+    const readIndexedSchedule = vi.fn().mockRejectedValueOnce(new Error('network')).mockResolvedValue(NEW);
     const h = harness({ readIndexedSchedule });
 
     await expect(h.run()).resolves.toEqual({ status: 'notified' });

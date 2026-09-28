@@ -11,11 +11,63 @@ export type ParsedUrl = {
 // Defense-in-depth SSRF block — neither FxTwitter nor Anthropic's webFetch uses
 // the user-supplied URL for a server-side fetch today, but any future direct
 // fetch path must not be steered at loopback / RFC1918 / link-local hosts.
+/**
+ * Dotted-quad form of an IPv4 address written in any of the encodings `inet_aton` accepts, or null.
+ *
+ * `new URL()` keeps the hostname as written, and the dotted-decimal regexes below only match one of
+ * the four forms a resolver will happily take. `2852039166`, `0xA9FEA9FE` and `0251.0376.0251.0376`
+ * are all 169.254.169.254 — the cloud metadata address — and all three read as ordinary hostnames
+ * to a test that is looking for `169.254.`.
+ *
+ * The rules are inet_aton's: one to four parts, `0x`-prefixed hex, `0`-prefixed octal, bare
+ * decimal, and the last part absorbing whatever bytes the earlier ones did not name (so `127.1` is
+ * 127.0.0.1). Anything outside them is not an address and is left alone.
+ */
+function inetAtonDottedQuad(host: string): string | null {
+  const parts = host.split('.');
+  if (parts.length === 0 || parts.length > 4) return null;
+
+  const values: number[] = [];
+  for (const part of parts) {
+    if (part.length === 0) return null;
+    let value: number;
+    if (/^0[xX][0-9a-fA-F]+$/.test(part)) value = parseInt(part.slice(2), 16);
+    else if (/^0[0-7]+$/.test(part)) value = parseInt(part.slice(1), 8);
+    else if (/^(0|[1-9][0-9]*)$/.test(part)) value = Number(part);
+    else return null;
+    if (!Number.isSafeInteger(value) || value < 0) return null;
+    values.push(value);
+  }
+
+  // Every part but the last is one byte; the last fills the remaining ones.
+  const lastMax = 256 ** (4 - values.length + 1);
+  for (let i = 0; i < values.length - 1; i += 1) {
+    if (values[i] > 255) return null;
+  }
+  if (values[values.length - 1] >= lastMax) return null;
+
+  let packed = values[values.length - 1];
+  for (let i = 0; i < values.length - 1; i += 1) {
+    packed += values[i] * 256 ** (3 - i);
+  }
+  if (packed > 0xffffffff) return null;
+
+  return `${(packed >>> 24) & 0xff}.${(packed >>> 16) & 0xff}.${(packed >>> 8) & 0xff}.${packed & 0xff}`;
+}
+
 export function isPrivateHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   // Strip surrounding brackets so `[::1]` and `::1` are treated identically.
   const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
   if (bare === 'localhost' || bare.endsWith('.localhost')) return true;
+
+  // Normalise the non-dotted-decimal IPv4 encodings before the tests below, which all assume it.
+  // Guarded on "looks like it could be numeric" so a real hostname never takes this path.
+  if (/^[0-9a-fx.]+$/i.test(bare)) {
+    const dotted = inetAtonDottedQuad(bare);
+    if (dotted !== null && dotted !== bare) return isPrivateHost(dotted);
+  }
+
   if (bare === '0.0.0.0') return true;
   if (/^10\./.test(bare)) return true;
   if (/^192\.168\./.test(bare)) return true;

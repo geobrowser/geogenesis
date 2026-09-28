@@ -25,10 +25,10 @@ function YesRow({
   compactTrack,
 }: Pick<Props, 'yesPercentage' | 'userVote' | 'user'> & { compactTrack?: boolean }) {
   const trackClass = compactTrack
-    ? 'relative h-1 w-[180px] shrink-0 overflow-clip rounded-full bg-grey-02'
+    ? 'relative h-1 w-[180px] min-w-0 shrink overflow-clip rounded-full bg-grey-02'
     : 'relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02';
   const rowClass = compactTrack
-    ? 'flex items-center gap-2 text-metadataMedium'
+    ? 'flex min-w-0 items-center gap-2 text-metadataMedium'
     : 'flex min-w-0 flex-1 items-center gap-2 text-metadataMedium';
 
   return (
@@ -57,10 +57,10 @@ function NoRow({
   compactTrack,
 }: Pick<Props, 'noPercentage' | 'userVote' | 'user'> & { compactTrack?: boolean }) {
   const trackClass = compactTrack
-    ? 'relative h-1 w-[180px] shrink-0 overflow-clip rounded-full bg-grey-02'
+    ? 'relative h-1 w-[180px] min-w-0 shrink overflow-clip rounded-full bg-grey-02'
     : 'relative h-1 min-w-0 flex-1 overflow-clip rounded-full bg-grey-02';
   const rowClass = compactTrack
-    ? 'flex items-center gap-2 text-metadataMedium'
+    ? 'flex min-w-0 items-center gap-2 text-metadataMedium'
     : 'flex min-w-0 flex-1 items-center gap-2 text-metadataMedium';
 
   return (
@@ -86,8 +86,14 @@ function NoRow({
 export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user, userVote, variant = 'home' }: Props) {
   if (variant === 'space') {
     // Matches prod Geo: two rows, w-[180px] tracks, gap-8 between them (parent adds flex-3 wrapper).
+    //
+    // `min-w-0` and a tighter gap below 640px, because two 180px tracks and a
+    // 32px gap want ~392px before the status chip beside them is counted. The
+    // tracks shrink rather than overflow now; above that width there is slack,
+    // nothing shrinks, and this renders exactly as it did. (Breakpoints here are
+    // desktop-first — `mobile:` applies at 639px and below.)
     return (
-      <div className="inline-flex items-center gap-8">
+      <div className="inline-flex min-w-0 items-center gap-8 mobile:gap-4">
         <YesRow compactTrack yesPercentage={yesPercentage} userVote={userVote} user={user} />
         <NoRow compactTrack noPercentage={noPercentage} userVote={userVote} user={user} />
       </div>

@@ -28,7 +28,9 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
+      playbackDiagnostics: false,
       debugDebatesPage: false,
+      peerAvailability: false,
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
@@ -41,7 +43,9 @@ describe('feature flags', () => {
   // reaching the dialog would render a checkbox for a flag nothing reads.
   it('drops the retired claims-and-debates flags that are still in storage', () => {
     expect(normalizeFeatureFlags({ questionsTab: true, debatesTab: true, debateDebugging: true })).toEqual({
+      playbackDiagnostics: false,
       debugDebatesPage: false,
+      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
@@ -65,7 +69,9 @@ describe('feature flags', () => {
     // serialize in is incidental — it follows the definition list, and pinning it here would fail
     // on a reordering that changes nothing a reader could notice.
     expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
+      playbackDiagnostics: false,
       debugDebatesPage: true,
+      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: true,
       exploreSidePanel: false,

@@ -69,9 +69,7 @@ describe('requiresRelationIdentityReplacement', () => {
   });
 
   it('keeps position-only changes on the existing relation', () => {
-    expect(requiresRelationIdentityReplacement(existingRelation, { ...existingRelation, position: 'a1' })).toBe(
-      false
-    );
+    expect(requiresRelationIdentityReplacement(existingRelation, { ...existingRelation, position: 'a1' })).toBe(false);
   });
 });
 
