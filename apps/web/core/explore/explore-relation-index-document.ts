@@ -4,12 +4,15 @@ import { parse } from 'graphql';
 
 import type { RelationFilter } from '~/core/gql/graphql';
 
-import type { ExploreCompleteIndexNode } from './fetch-explore-feed';
+import {
+  type ExploreCompleteIndexNode,
+  type ExploreIndexConnection,
+  exploreIndexNodeFields,
+} from './explore-index-selection';
 
-export type ExploreRelationIndexConnection = {
-  nodes?: Array<{ fromEntity?: ExploreCompleteIndexNode | null } | null> | null;
-  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-} | null;
+export type ExploreRelationIndexConnection = ExploreIndexConnection<{
+  fromEntity?: ExploreCompleteIndexNode | null;
+} | null>;
 
 /**
  * Start with the matching relations instead of scanning entities in creation order for backlinks.
@@ -21,10 +24,7 @@ export const exploreRelationIndexDocument = parse(/* GraphQL */ `
     relationsConnection(filter: $filter, first: $first, after: $after) {
       nodes {
         fromEntity {
-          id
-          typeIds
-          rankingScore
-          createdAt
+          ${exploreIndexNodeFields}
         }
       }
       pageInfo {

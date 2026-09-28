@@ -351,6 +351,37 @@ describe('a complete contextual population', () => {
     expect(newest.map(row => row.id)).toEqual(['relation-unscored', 'relation-ranked']);
   });
 
+  it.each([
+    { relation: true, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: true, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+    { relation: false, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: false, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+  ])('rejects invalid cursor chains and evicts the failed population: %j', async scenario => {
+    const id = `cursor-contract-${scenario.relation}-${scenario.endCursor}`;
+    const node = { id, rankingScore: '1', createdAt: '1' };
+    const nodes = scenario.relation ? [{ fromEntity: node }] : [node];
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: true, endCursor: scenario.endCursor } });
+    const args = {
+      spaceIds: [SPACE],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      scopes: [
+        {
+          typeIds: [CLAIM_TYPE_ID],
+          entityFilter: { id: { is: id } },
+          ...(scenario.relation ? { relationFilter: { toEntityId: { is: id } } } : {}),
+        },
+      ],
+    };
+
+    await expect(fetchCompleteExplorePopulationIndex(args)).rejects.toThrow(scenario.message);
+    expect(windows.calls).toBe(scenario.failedCalls);
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
+    await expect(fetchCompleteExplorePopulationIndex(args)).resolves.toEqual([node]);
+    expect(windows.calls).toBe(scenario.failedCalls + 1);
+  });
+
   it('shares one compact population when equivalent space filters arrive in a different order', async () => {
     const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     windows.responder = operation =>

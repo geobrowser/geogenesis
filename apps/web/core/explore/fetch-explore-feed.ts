@@ -8,6 +8,7 @@ import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
@@ -33,7 +34,8 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
-import { type ExploreRelationIndexConnection, exploreRelationIndexDocument } from './explore-relation-index-document';
+import type { ExploreCompleteIndexNode } from './explore-index-selection';
+import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
@@ -152,18 +154,6 @@ type ExploreEntitiesPageResponse = {
 
 type EntitiesConnectionShape = {
   nodes?: unknown[];
-  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-} | null;
-
-export type ExploreCompleteIndexNode = {
-  id?: string | null;
-  typeIds?: Array<string | null> | null;
-  rankingScore?: string | number | null;
-  createdAt?: string | number | null;
-};
-
-type CompleteIndexConnection = {
-  nodes?: ExploreCompleteIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -312,88 +302,57 @@ async function fetchExploreEntitiesPage(args: {
 
 const COMPLETE_INDEX_PAGE_SIZE = 500;
 
-async function fetchCompleteRelationIndexScope(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  entityFilter: EntityFilter;
-  relationFilter: RelationFilter;
-}): Promise<ExploreCompleteIndexNode[]> {
-  const rows: ExploreCompleteIndexNode[] = [];
-  let after: string | null = null;
-
-  while (true) {
-    const page: ExploreRelationIndexConnection = await Effect.runPromise(
-      graphql({
-        query: exploreRelationIndexDocument,
-        decoder: response => response.relationsConnection ?? null,
-        variables: {
-          first: COMPLETE_INDEX_PAGE_SIZE,
-          after,
-          filter: {
-            and: [
-              args.relationFilter,
-              { fromEntity: buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: true }) },
-            ],
-          },
-        },
-      })
-    );
-    for (const node of page?.nodes ?? []) {
-      if (node?.fromEntity) rows.push(node.fromEntity);
-    }
-    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
-    after = page.pageInfo.endCursor;
+async function fetchCompleteIndexScope(
+  args: ExploreCompletePopulationScope & {
+    spaceIds: string[];
+    time: ExploreTime;
+    requireName?: boolean;
+    requireDebateTagOnClaims?: boolean;
   }
+): Promise<ExploreCompleteIndexNode[]> {
+  const filter = buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: Boolean(args.relationFilter) });
 
-  // Deduplication happens across the complete population, after every relation page is read.
-  return rows;
-}
+  // Both entry points exhaust the same cursor contract. A malformed cursor must reject the
+  // population promise (and evict it from the cache), never cache a partial count or loop forever.
+  return collectCursorPages<ExploreCompleteIndexNode>(async after => {
+    if (args.relationFilter) {
+      const page = await Effect.runPromise(
+        graphql({
+          query: exploreRelationIndexDocument,
+          decoder: response => response.relationsConnection ?? null,
+          variables: {
+            first: COMPLETE_INDEX_PAGE_SIZE,
+            after: after ?? null,
+            filter: { and: [args.relationFilter, { fromEntity: filter }] },
+          },
+        })
+      );
+      return {
+        items: (page?.nodes ?? []).flatMap(node => (node?.fromEntity ? [node.fromEntity] : [])),
+        endCursor: page?.pageInfo?.endCursor ?? null,
+        hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+      };
+    }
 
-async function fetchCompleteIndexScope(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  entityFilter: EntityFilter;
-  relationFilter?: RelationFilter;
-}): Promise<ExploreCompleteIndexNode[]> {
-  if (args.relationFilter) return fetchCompleteRelationIndexScope({ ...args, relationFilter: args.relationFilter });
-
-  const rows: ExploreCompleteIndexNode[] = [];
-  let after: string | null = null;
-
-  while (true) {
-    const page: CompleteIndexConnection = await Effect.runPromise(
+    const page = await Effect.runPromise(
       graphql({
         query: exploreCompleteIndexDocument,
-        decoder: (data: { entitiesConnection?: CompleteIndexConnection }) => data.entitiesConnection ?? null,
+        decoder: response => response.entitiesConnection ?? null,
         variables: {
           limit: COMPLETE_INDEX_PAGE_SIZE,
-          after,
-          filter: buildExploreFeedFilter({
-            spaceIds: args.spaceIds,
-            time: args.time,
-            typeIds: args.typeIds,
-            requireName: args.requireName,
-            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-            entityFilter: args.entityFilter,
-          }),
+          after: after ?? null,
+          filter,
           spaceIds: { in: args.spaceIds },
           typeIds: { in: [...args.typeIds] },
         },
       })
     );
-
-    rows.push(...(page?.nodes ?? []));
-    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
-    after = page.pageInfo.endCursor;
-  }
-
-  return rows;
+    return {
+      items: page?.nodes ?? [],
+      endCursor: page?.pageInfo?.endCursor ?? null,
+      hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+    };
+  });
 }
 
 function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
