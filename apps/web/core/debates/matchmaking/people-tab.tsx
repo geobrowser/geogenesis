@@ -135,6 +135,16 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
 
   const onlinePeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  // Held in state so the slot filters below re-run as time passes; React Compiler caches a
+  // `Date.now()` read in render once per mount.
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!showOffline) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, [showOffline]);
+
   // Anyone already on the roster is requestable now, so they keep their online row. Someone who is
   // online but off the roster (unavailable, tab hidden) still cannot take a request, so they stay here.
   const { offlinePeople, schedulesByUser } = React.useMemo(() => {
@@ -142,9 +152,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     if (!showOffline || !schedulableQuery.data) return { offlinePeople: [], schedulesByUser: byUser };
 
     const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
-    const now = Date.now();
     // geo-chat's window follows the UTC date, which west of UTC can run a day past the modal's week.
-    const today = new Date();
+    const today = new Date(now);
     const weekEnds = new Date(today.getFullYear(), today.getMonth(), today.getDate() + PEER_SCHEDULE_DAYS).getTime();
     const offline: DebatePerson[] = [];
     for (const candidate of schedulableQuery.data.people) {
@@ -163,7 +172,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       offline.push(schedulableAsPerson(candidate));
     }
     return { offlinePeople: offline, schedulesByUser: byUser };
-  }, [onlinePeople, schedulableQuery.data, showOffline]);
+  }, [now, onlinePeople, schedulableQuery.data, showOffline]);
 
   const allPeople = React.useMemo(() => [...onlinePeople, ...offlinePeople], [onlinePeople, offlinePeople]);
   const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;

@@ -121,6 +121,8 @@ export function PeerAvailabilityView({
   const [selectedStart, setSelectedStart] = React.useState<string | null>(() => {
     if (!initialSelectedStart) return null;
     const instant = Date.parse(initialSelectedStart);
+    // A chip can outlive its time; a past pick would only be refused at Send.
+    if (instant <= (now ?? new Date()).getTime()) return null;
     return days.flatMap(day => day.slots).find(slot => Date.parse(slot.start) === instant)?.start ?? null;
   });
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
