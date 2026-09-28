@@ -68,9 +68,8 @@ export type ExploreFeedResult = {
 /**
  * One disjoint branch of a contextual feed's complete population.
  *
- * Topic feeds use separate direct-entity and Debate branches because the generic predicate's OR
- * across those relation shapes is much slower. Each branch must include every entity that belongs
- * to the feed for its supplied types; the results are merged and ranked here.
+ * Each scope must include every entity that belongs to the feed for its supplied types; the
+ * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
  */
 export type ExploreCompletePopulationScope = {
   typeIds: readonly string[];
