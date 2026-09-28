@@ -43,6 +43,11 @@ const mocks = vi.hoisted(() => ({
   isMobile: false,
   peerAvailability: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
+  scheduledRequests: undefined as unknown[] | undefined,
+}));
+
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
 }));
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
@@ -205,6 +210,7 @@ beforeEach(() => {
   mocks.isMobile = false;
   mocks.peerAvailability = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
+  mocks.scheduledRequests = undefined;
 });
 
 afterEach(cleanup);
@@ -729,6 +735,19 @@ describe('Requests badge', () => {
     mocks.peerAvailability = true;
 
     expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
+  });
+
+  // Pending in either direction: a request you sent is still in the tab until they answer.
+  it('counts every pending scheduled request once the list lands, sent or received', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduledAwaitingAnswerCount = 1;
+    mocks.scheduledRequests = [
+      { status: 'pending', room_id: null, viewer_must_answer: true },
+      { status: 'pending', room_id: null, viewer_must_answer: false },
+      { status: 'accepted', room_id: 'room-1', viewer_must_answer: false },
+    ];
+
+    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
   });
 
   it('counts no scheduled requests with the flag off, even when activity has some', () => {

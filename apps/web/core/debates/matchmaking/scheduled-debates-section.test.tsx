@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   requestsError: null as Error | null,
   roomsError: null as Error | null,
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
+  records: new Map<string, { debatesArgued: number; positions: number }>(),
+  matchContextIds: [] as string[],
 }));
 
 const ADA = {
@@ -40,6 +42,34 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
 
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people } }),
+}));
+
+// The People tab's stats pipeline is its own suite; here it only has to say what it was asked for
+// and hand back a record.
+vi.mock('./use-person-match-context', () => ({
+  usePersonMatchContext: (ids: string[]) => {
+    mocks.matchContextIds = ids;
+    return {
+      record: (id: string) => {
+        const record = mocks.records.get(id);
+        return record
+          ? {
+              ...record,
+              joinedAt: null,
+              activeSpaceIds: [],
+              claimsBySpace: new Map(),
+              debatesBySpace: new Map(),
+            }
+          : null;
+      },
+      matches: () => [],
+      matchesBySpace: () => undefined,
+      activeSpaceIds: () => [],
+      claimNamesById: new Map(),
+      claimNamesLoading: false,
+      labelsById: new Map(),
+    };
+  },
 }));
 
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
@@ -79,6 +109,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+  people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
 }) => ({
@@ -88,6 +119,7 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
+        people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
       }}
@@ -111,6 +143,8 @@ afterEach(() => {
   mocks.requestsError = null;
   mocks.roomsError = null;
   mocks.finishedRoomIds = new Set();
+  mocks.records = new Map();
+  mocks.matchContextIds = [];
 });
 
 describe('answering in the tab', () => {
@@ -189,6 +223,36 @@ describe('naming the other person', () => {
     expect(screen.queryByRole('link', { name: 'Your opponent' })).not.toBeInTheDocument();
   });
 
+  // The whole point of scheduling: whoever invited you is usually not online to be on the roster.
+  it('names an offline requester from the request itself', () => {
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', NavUtils.toSpace(ADA.profile_space_id));
+  });
+
+  it("prefers the request's record of them over the roster's", () => {
+    mocks.people = [{ ...ADA, display_name: 'Ada (stale)' }];
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText('Ada (stale)')).not.toBeInTheDocument();
+  });
+
+  it('shows their debating record, as the People tab does', () => {
+    mocks.records = new Map([[ADA.profile_space_id, { debatesArgued: 4, positions: 12 }]]);
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(mocks.matchContextIds).toEqual([ADA.profile_space_id]);
+    expect(screen.getByText('4 debates')).toBeInTheDocument();
+    expect(screen.getByText('12 positions')).toBeInTheDocument();
+  });
+
+  it('asks for no record when nobody could be named', () => {
+    setup({ answerable: [request()] });
+
+    expect(mocks.matchContextIds).toEqual([]);
+  });
+
   it('never reads the viewer as their own opponent', () => {
     mocks.people = [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }];
     mocks.viewerId = 'user-me';
@@ -219,6 +283,14 @@ describe('pairing a room with the request that booked it', () => {
     const { result } = renderHook(() => useScheduledContent(true));
 
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
+  });
+
+  it("collects every request's participants for naming", () => {
+    mocks.requests = [request({ people: [ADA] }), request({ request_id: 'request-2' })];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.people).toEqual([ADA]);
   });
 
   it('leaves the opponent unknown when no request owns the room', () => {

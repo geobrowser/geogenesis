@@ -4,7 +4,9 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { personProfileOpened } from '~/core/analytics';
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import { speakerLabel } from '~/core/debates/playback-utils';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
@@ -14,20 +16,39 @@ import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { useDebatePeople } from './hooks';
 import { HubPillButton } from './hub-pill-button';
+import { PersonMatches } from './person-disagreements';
+import { PersonRecordLine } from './person-record-line';
+import { PersonSpaceIcons } from './person-space-icons';
+import { type PersonMatchContext, usePersonMatchContext } from './use-person-match-context';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, requestsError, roomsError } = content;
+  const { answerable, upcoming, people, requestsError, roomsError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
-  const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0);
+  const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
+
+  // Everyone a row names, resolved in one batch for the stats line the People tab draws.
+  const opponents = React.useMemo(
+    () =>
+      [
+        ...answerable.map(request => lookUp(opponentOf(request, viewerId))),
+        ...upcoming.map(({ opponentUserId }) => lookUp(opponentUserId)),
+      ].filter((opponent): opponent is DebateParticipantSummary => opponent !== null),
+    [answerable, lookUp, upcoming, viewerId]
+  );
+  const opponentSpaceIds = React.useMemo(() => opponents.map(opponent => opponent.profile_space_id), [opponents]);
+  const context = usePersonMatchContext(opponentSpaceIds);
+  // One elevated portal for every row's popovers, so they clear this z-200 panel.
+  const popoverPortal = useElevatedPopoverPortal();
 
   if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
 
@@ -51,7 +72,13 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId }) => (
-            <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} />
+            <UpcomingRow
+              key={room.room_id}
+              room={room}
+              opponent={lookUp(opponentUserId)}
+              context={context}
+              popoverPortal={popoverPortal}
+            />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </Section>
@@ -65,6 +92,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               key={request.request_id}
               request={request}
               opponent={lookUp(opponentOf(request, viewerId))}
+              context={context}
+              popoverPortal={popoverPortal}
               busy={respond.isPending}
               onAnswer={answer}
             />
@@ -87,6 +116,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
+  /** Who the requests' participants are, as geo-chat reports them. Empty on an older geo-chat. */
+  people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the other returned. */
   requestsError: Error | null;
   roomsError: Error | null;
@@ -125,7 +156,9 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
-  return { answerable, upcoming, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
+  const people = React.useMemo(() => (rows ?? []).flatMap(request => request.people ?? []), [rows]);
+
+  return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
 
 /** `null` whenever the answer would be a guess, so nothing reads the viewer as their own opponent. */
@@ -135,15 +168,20 @@ function opponentOf(request: ScheduledDebateRequest | undefined, viewerId: strin
   return request.participants.find(participant => !sameId(participant.user_id, viewerId))?.user_id ?? null;
 }
 
-/** Names come from the roster, which only covers people who are online. */
-function useParticipantLookup(enabled: boolean) {
-  const people = useDebatePeople(enabled);
+/**
+ * Names come from the request itself. The roster is only a fallback for a geo-chat that predates
+ * `people`: it covers people who are online, and whoever invited you usually is not.
+ */
+function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
+  const roster = useDebatePeople(enabled);
 
   return React.useMemo(() => {
     const byId = new Map<string, DebateParticipantSummary>();
-    for (const person of people.data?.people ?? []) byId.set(normalizeId(person.user_id), person);
+    for (const person of roster.data?.people ?? []) byId.set(normalizeId(person.user_id), person);
+    // Written second so the request's own record wins over the roster's.
+    for (const person of requestPeople) byId.set(normalizeId(person.user_id), person);
     return (userId: string | null) => (userId ? (byId.get(normalizeId(userId)) ?? null) : null);
-  }, [people.data]);
+  }, [requestPeople, roster.data]);
 }
 
 function normalizeId(userId: string) {
@@ -151,10 +189,22 @@ function normalizeId(userId: string) {
 }
 
 /** An open room says so and offers the way in; one that is not yet open says when. */
-function UpcomingRow({ room, opponent }: { room: UpcomingDebateRoom; opponent: DebateParticipantSummary | null }) {
+function UpcomingRow({
+  room,
+  opponent,
+  context,
+  popoverPortal,
+}: {
+  room: UpcomingDebateRoom;
+  opponent: DebateParticipantSummary | null;
+  context: PersonMatchContext;
+  popoverPortal: HTMLElement | null;
+}) {
   return (
     <Row
       opponent={opponent}
+      context={context}
+      popoverPortal={popoverPortal}
       when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
       note={
         room.others_present
@@ -178,17 +228,23 @@ function UpcomingRow({ room, opponent }: { room: UpcomingDebateRoom; opponent: D
 function ScheduledRow({
   request,
   opponent,
+  context,
+  popoverPortal,
   busy,
   onAnswer,
 }: {
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
+  context: PersonMatchContext;
+  popoverPortal: HTMLElement | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
   return (
     <Row
       opponent={opponent}
+      context={context}
+      popoverPortal={popoverPortal}
       when={formatDebateTime(request.scheduled_start_at)}
       note={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
       below={
@@ -215,6 +271,8 @@ const JOIN_PILL =
 /** One shape for both kinds of row: who, when, one line of why, and at most one action. */
 function Row({
   opponent,
+  context,
+  popoverPortal,
   when,
   note,
   urgent = false,
@@ -222,6 +280,8 @@ function Row({
   below,
 }: {
   opponent: DebateParticipantSummary | null;
+  context: PersonMatchContext;
+  popoverPortal: HTMLElement | null;
   when: string;
   note: string;
   urgent?: boolean;
@@ -234,6 +294,7 @@ function Row({
         <Face opponent={opponent} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Name opponent={opponent} />
+          {opponent && <OpponentRecord opponent={opponent} context={context} popoverPortal={popoverPortal} />}
           <Text as="span" variant="footnote" color="grey-04" className="truncate">
             {when}
           </Text>
@@ -256,13 +317,59 @@ function Face({ opponent }: { opponent: DebateParticipantSummary | null }) {
   );
 }
 
-/** A link only where the roster resolved them; a bare name is not a dead link. */
+/** The People tab's stats line — debates, positions, matches, active spaces — for this opponent. */
+function OpponentRecord({
+  opponent,
+  context,
+  popoverPortal,
+}: {
+  opponent: DebateParticipantSummary;
+  context: PersonMatchContext;
+  popoverPortal: HTMLElement | null;
+}) {
+  const profileSpaceId = opponent.profile_space_id;
+  const record = context.record(profileSpaceId);
+  const matches = context.matches(profileSpaceId);
+  const spaceIds = context.activeSpaceIds(profileSpaceId);
+
+  const activeSpaces =
+    spaceIds.length > 0 ? (
+      <PersonSpaceIcons
+        spaceIds={spaceIds}
+        labelsById={context.labelsById}
+        claimsBySpace={record?.claimsBySpace}
+        debatesBySpace={record?.debatesBySpace}
+        matchesBySpace={context.matchesBySpace(profileSpaceId)}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
+  const match =
+    matches.length > 0 ? (
+      <PersonMatches
+        personName={speakerLabel(opponent)}
+        matches={matches}
+        claimNamesById={context.claimNamesById}
+        claimNamesLoading={context.claimNamesLoading}
+        labelsById={context.labelsById}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
+
+  if (!record && !activeSpaces && !match) return null;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
+      <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
+    </div>
+  );
+}
+
+/** A link only where the request or roster resolved them; a bare name is not a dead link. */
 function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
-  const href =
-    opponent && validateSpaceId(opponent.profile_space_id) ? NavUtils.toSpace(opponent.profile_space_id) : null;
+  const profileSpaceId = opponent && validateSpaceId(opponent.profile_space_id) ? opponent.profile_space_id : null;
   const label = shortName(opponent);
 
-  if (!href) {
+  if (!profileSpaceId) {
     return (
       <Text as="span" variant="metadataMedium" className="truncate">
         {label}
@@ -271,7 +378,11 @@ function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
   }
 
   return (
-    <Link href={href} className="truncate text-metadataMedium hover:underline">
+    <Link
+      href={NavUtils.toSpace(profileSpaceId)}
+      onClick={() => personProfileOpened(profileSpaceId, null, { interaction_surface: 'debates_hub_requests' })}
+      className="truncate text-metadataMedium hover:underline"
+    >
       {label}
     </Link>
   );

@@ -48,7 +48,13 @@ export function RequestsTab() {
   );
 }
 
-const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
+const NO_SCHEDULED: ScheduledContent = {
+  answerable: [],
+  upcoming: [],
+  people: [],
+  requestsError: null,
+  roomsError: null,
+};
 
 function ScheduledRequestsTab() {
   return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
