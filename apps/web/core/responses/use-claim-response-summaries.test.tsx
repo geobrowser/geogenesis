@@ -223,26 +223,41 @@ describe('useClaimResponseSummaryBatch after a vote cancels it', () => {
     expect(mocks.loadCaches).toHaveBeenCalledTimes(2);
   });
 
-  it('leaves a batch that had already answered on that answer', async () => {
-    // Its claims are seeded, and the vote refreshes the one it changed; asking again on every vote
-    // would refetch the whole list for nothing.
+  it('asks again for a refresh a vote cancelled, rather than keeping the numbers it was replacing', async () => {
+    // The end card refreshes its batch when it comes on screen. Cancelled, the refresh went back to
+    // the old answer and nothing asked again, so every claim but the one voted on kept the numbers
+    // from when the debate started.
     const { queryClient, wrapper } = createHarness();
-
     const { result } = renderHook(() => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }), {
       wrapper,
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     mocks.loadCaches.mockReturnValueOnce(new Promise(() => {}));
+    const refreshed = new Map([['claim-1:stance', { responders: [] }]]) as never;
+    mocks.loadCaches.mockResolvedValueOnce(refreshed);
     act(() => {
       void result.current.refetch();
     });
     await waitFor(() => expect(result.current.fetchStatus).toBe('fetching'));
     await cancelSpaceBatches(queryClient);
 
-    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'));
-    expect(result.current.isSuccess).toBe(true);
-    expect(mocks.loadCaches).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(result.current.data).toBe(refreshed));
+    expect(mocks.loadCaches).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not ask again after a fetch that answered', async () => {
+    // Answering stamps the query, which is what tells it apart from a cancellation. Without that,
+    // every answer would read as a cancelled fetch and ask again, forever.
+    const { wrapper } = createHarness();
+    const { result } = renderHook(() => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+
+    expect(mocks.loadCaches).toHaveBeenCalledTimes(1);
+    expect(result.current.fetchStatus).toBe('idle');
   });
 });
 
