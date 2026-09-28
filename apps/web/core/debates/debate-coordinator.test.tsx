@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { debatesHubAtom, opponentLeftNoticeAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -440,6 +442,43 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
+  // The room and rematch pages don't draw the opponent-left dialog anymore.
+  it('renders the opponent-left notice from the atom and clears it when dismissed', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, { recordingDiscarded: false });
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Opponent left' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+  });
+
+  it('opens the debates hub and clears the notice from Find debate', () => {
+    const store = createStore();
+    store.set(opponentLeftNoticeAtom, { recordingDiscarded: false });
+
+    render(
+      <Provider store={store}>
+        <DebateCoordinator />
+      </Provider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find debate' }));
+
+    // The notice closes and the hub opens on its default tab, the one way back into a debate.
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(store.get(opponentLeftNoticeAtom)).toBeNull();
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'lobby' });
   });
 
   // The rematch the viewer is already looking at, plus the debate it came from still reported in
