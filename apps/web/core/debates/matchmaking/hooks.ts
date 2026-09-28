@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
 
@@ -171,10 +172,18 @@ export function useDebatePeople(enabled: boolean) {
 }
 
 /**
- * Everyone who shares a free slot with the viewer, online or not (GEO-2937). `days` and `limit`
- * are the caller's: the People tab asks for one modal-week so a picked time is always drawn there.
+ * One window for every caller, so the People tab and the Requests tab's names share a cache entry.
+ * geo-chat's range includes both ends, so this is the booking modal's seven days rather than eight.
+ * The limit leaves room for up to a day of already-past slots, which geo-chat keeps and the People
+ * tab drops before showing a few.
  */
-export function useSchedulablePeople(enabled: boolean, { days, limit }: { days: number; limit: number }) {
+const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
+const SCHEDULABLE_SLOTS = 48 + 3;
+
+/** Everyone who shares a free slot with the viewer, online or not (GEO-2937). */
+export function useSchedulablePeople(enabled: boolean) {
+  const days = SCHEDULABLE_DAYS;
+  const limit = SCHEDULABLE_SLOTS;
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryEnabled = enabled && authenticated;
 

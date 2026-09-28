@@ -70,11 +70,6 @@ const EMPTY_MATCH_COUNTS = new Map<string, number>();
 
 /** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
-/**
- * Asked for with headroom: geo-chat counts slots from today's midnight and keeps past ones, so up to
- * a day of them (48) can come first and are dropped here before the inline cap applies.
- */
-const SCHEDULABLE_FETCH_SLOTS = 48 + INLINE_SLOTS;
 
 type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
 
@@ -136,11 +131,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // Offline people can only be scheduled with, so the switch exists only where booking does.
   const offlineAvailable = bookingEnabled && authenticated;
   const showOffline = offlineAvailable && !onlineOnly;
-  const schedulableQuery = useSchedulablePeople(showOffline, {
-    // geo-chat's range includes both ends, so this is the modal's seven days rather than eight.
-    days: PEER_SCHEDULE_DAYS - 1,
-    limit: SCHEDULABLE_FETCH_SLOTS,
-  });
+  const schedulableQuery = useSchedulablePeople(showOffline);
   const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
 
   const onlinePeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
