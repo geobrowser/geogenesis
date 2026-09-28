@@ -6,36 +6,34 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SharedAvailabilityLauncher, SharedAvailabilityModal } from './shared-availability';
+import { AvailabilityDeepLink, SharedAvailabilityModal } from './shared-availability';
 
 const auth = { ready: true, authenticated: true };
 let profile: { isPending: boolean; isError: boolean; data?: unknown } = { isPending: true, isError: false };
 const signIn = vi.fn();
 let signInCallbacks: { onComplete?: () => void; onError?: () => void } = {};
 let personalSpaceId: string | null = null;
-const replace = vi.fn();
-let search = 'availability=1';
+let search = 'modal=availability&modalTarget=profile-space';
+let signInOptions: { redirectTo?: string } | undefined;
 
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => auth,
   useDebateProfile: () => profile,
-  useDebateSchedule: () => ({ blocks: [], isError: false, refetch: vi.fn() }),
-  useSaveDebateSchedule: () => ({ mutate: vi.fn() }),
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (onComplete?: () => void, options?: { onError?: () => void }) => {
+  usePrivySignIn: (onComplete?: () => void, options?: { onError?: () => void; redirectTo?: string }) => {
     signInCallbacks = { onComplete, onError: options?.onError };
+    signInOptions = options;
     return signIn;
   },
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
-vi.mock('./copy-availability-link', () => ({ CopyOwnAvailabilityLinkButton: () => null }));
-vi.mock('./availability-modal', () => ({
-  AvailabilityModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
+vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: { entity: { name: 'Ada L.' } } }) }));
+vi.mock('./own-schedule-modal', () => ({
+  OwnScheduleModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
 }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/space/profile-space',
-  useRouter: () => ({ replace }),
   useSearchParams: () => new URLSearchParams(search),
 }));
 // The booking modal has its own tests; these are about what gets handed to it.
@@ -69,19 +67,19 @@ beforeEach(() => {
   auth.ready = true;
   auth.authenticated = true;
   profile = { isPending: true, isError: false };
-  search = 'availability=1';
+  search = 'modal=availability&modalTarget=profile-space';
   personalSpaceId = null;
+  signInOptions = undefined;
   signInCallbacks = {};
 });
 
 afterEach(() => {
   cleanup();
   signIn.mockClear();
-  replace.mockClear();
+  vi.restoreAllMocks();
 });
 
-const renderModal = () =>
-  render(<SharedAvailabilityModal open profileSpaceId="profile-space" fallbackName="Ada L." onClose={() => {}} />);
+const renderModal = () => render(<SharedAvailabilityModal open profileSpaceId="profile-space" onClose={() => {}} />);
 
 describe('SharedAvailabilityModal', () => {
   it('asks a signed-out recipient to sign in, naming the person', async () => {
@@ -92,6 +90,9 @@ describe('SharedAvailabilityModal', () => {
     expect(screen.queryByTestId('week')).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }));
     expect(signIn).toHaveBeenCalledOnce();
+    // The trigger is gone from the URL by now, so a new account coming back from onboarding needs
+    // the link itself to land on the week again.
+    expect(signInOptions?.redirectTo).toBe('/space/profile-space?modal=availability&modalTarget=profile-space');
   });
 
   it('does not flash "sign in" before Privy is ready', () => {
@@ -149,22 +150,33 @@ describe('SharedAvailabilityModal', () => {
   });
 });
 
-describe('SharedAvailabilityLauncher', () => {
-  it('does nothing on a profile reached without the link', () => {
+describe('AvailabilityDeepLink', () => {
+  it('does nothing without the link', () => {
     search = 'tab=claims';
-    render(<SharedAvailabilityLauncher profileSpaceId="profile-space" />);
+    render(<AvailabilityDeepLink />);
 
     expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
   });
 
-  it('opens from the link and takes the parameter back off on close', async () => {
-    search = 'availability=1&tab=claims';
+  it('opens the named week, clears the trigger on arrival, and closes', async () => {
+    search = 'modal=availability&modalTarget=profile-space&tab=claims';
     profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
-    render(<SharedAvailabilityLauncher profileSpaceId="profile-space" />);
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    render(<AvailabilityDeepLink />);
+
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-user-id', 'chat-user-1');
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/profile-space?tab=claims');
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+  });
+
+  it('leaves a link that names nobody alone', () => {
+    search = 'modal=availability';
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+    render(<AvailabilityDeepLink />);
 
     expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
-    expect(replace).toHaveBeenCalledWith('/space/profile-space?tab=claims', { scroll: false });
+    expect(replaceState).not.toHaveBeenCalled();
   });
 });

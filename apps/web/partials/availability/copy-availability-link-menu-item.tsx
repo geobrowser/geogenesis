@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { availabilityLinkUrl } from '~/core/availability/share-link';
+import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
@@ -20,9 +20,11 @@ export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceI
 
   return (
     <MenuItem
+      data-geo-analytics-label="Profile menu copy availability link"
+      data-geo-analytics-intent="copy_availability_link"
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(availabilityLinkUrl(profileSpaceId));
+          await copyAvailabilityLink(profileSpaceId);
           setToast(<span>Availability link copied</span>);
         } catch {
           setToast(<span>Could not copy link.</span>);

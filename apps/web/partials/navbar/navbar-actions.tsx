@@ -10,7 +10,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
-import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -31,8 +31,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Toggle } from '~/design-system/toggle';
 
-import { AvailabilityModal } from '~/partials/availability/availability-modal';
-import { CopyOwnAvailabilityLinkButton } from '~/partials/availability/copy-availability-link';
+import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
@@ -100,10 +99,10 @@ export function NavbarActions() {
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
-  // Read here rather than inside the modal so the week is usually cached by the time the menu is
+  // Read here as well as inside the modal so the week is usually cached by the time the menu is
   // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
   // "Loading your schedule" rather than a wrong one.
-  const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
+  useDebateSchedule();
 
   // A re-resolve mid-session (see below) would swap the avatar for the skeleton, unmounting the node
   // the dialogs below return focus to. The last resolved identity stands in for that window, and is
@@ -116,7 +115,6 @@ export function NavbarActions() {
     if (!isUserLoading && resolvedAddress)
       lastIdentity.current = { address: resolvedAddress, profile: resolvedProfile };
   }, [isUserLoading, resolvedAddress, resolvedProfile]);
-  const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
@@ -293,15 +291,10 @@ export function NavbarActions() {
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
       {hasOpenedSchedule ? (
-        <AvailabilityModal
+        <OwnScheduleModal
           key="availability-modal"
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
-          blocks={scheduleBlocks}
-          error={scheduleError}
-          onRetry={() => refetchSchedule()}
-          onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
-          headerAction={<CopyOwnAvailabilityLinkButton />}
           openerRef={avatarTriggerRef}
         />
       ) : null}

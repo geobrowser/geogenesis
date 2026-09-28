@@ -2,15 +2,14 @@
 
 import * as React from 'react';
 
-import { useDebateSchedule, useGeoChatAuth, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { useDebateSchedule, useGeoChatAuth } from '~/core/debates/hooks';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
-import { AvailabilityModal } from '~/partials/availability/availability-modal';
-import { CopyOwnAvailabilityLinkButton } from '~/partials/availability/copy-availability-link';
+import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { hubAnalyticsAttributes } from './hub-analytics';
 
@@ -41,11 +40,9 @@ function Banner() {
   const { authenticated } = useGeoChatAuth();
   const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
-  // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). `blocks` is
-  // undefined until the first read answers; it is passed straight through, because the modal has
-  // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
-  const { blocks, isSet, isError, refetch } = useDebateSchedule();
-  const saveSchedule = useSaveDebateSchedule();
+  // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). Only whether one is
+  // set is read here, for the wording; the modal reads and saves the week itself.
+  const { isSet } = useDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
   // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
@@ -85,16 +82,7 @@ function Banner() {
         {isSet ? 'Edit my schedule' : 'Set my schedule'}
       </button>
 
-      <AvailabilityModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        blocks={blocks}
-        error={isError}
-        onRetry={() => refetch()}
-        onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
-        headerAction={<CopyOwnAvailabilityLinkButton />}
-        openerRef={openerRef}
-      />
+      <OwnScheduleModal open={modalOpen} onOpenChange={setModalOpen} openerRef={openerRef} />
     </div>
   );
 }

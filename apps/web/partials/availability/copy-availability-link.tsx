@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { availabilityLinkUrl } from '~/core/availability/share-link';
+import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
@@ -10,7 +10,7 @@ import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 const COPIED_MS = 2000;
 
 /**
- * "Copy link" in the header of your own schedule editor.
+ * "Copy availability link" in the header of your own schedule editor.
  *
  * The link is to your profile, so it waits on your personal space and draws nothing without one.
  * Behind the booking flag, since booking is what the link opens onto.
@@ -39,9 +39,11 @@ function OwnLinkButton() {
   return (
     <button
       type="button"
+      data-geo-analytics-label="Schedule editor copy availability link"
+      data-geo-analytics-intent="copy_availability_link"
       onClick={async () => {
         try {
-          await navigator.clipboard.writeText(availabilityLinkUrl(personalSpaceId));
+          await copyAvailabilityLink(personalSpaceId);
           setState('copied');
         } catch {
           setState('failed');

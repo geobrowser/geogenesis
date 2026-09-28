@@ -2,66 +2,32 @@
 
 import * as React from 'react';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-
-import { hasAvailabilityLinkParam, withoutAvailabilityLinkParam } from '~/core/availability/share-link';
-import { useDebateProfile, useDebateSchedule, useGeoChatAuth, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { toAvailability } from '~/core/availability/availability-deep-link';
+import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
+import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 
-import { Text } from '~/design-system/text';
-
-import { AvailabilityModal } from './availability-modal';
-import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
+import { OwnScheduleModal } from './own-schedule-modal';
+import { Notice } from './peer-availability';
 import { PeerAvailabilityBookingModal } from './peer-availability-booking-modal';
 
 /**
- * Opens a person's bookable week when their profile is reached through an availability link
- * (`?availability=1`, see `core/availability/share-link`).
+ * Hosts the availability link (`?modal=availability`, see `core/availability/availability-deep-link`)
+ * from `DeepLinkHandler`.
  *
  * Deliberately not behind the booking flag: the link is the opt-in. Only someone with the flag can
  * copy one, and whoever they send it to has no reason to have heard of the flag.
- *
- * Closing takes the parameter back off the URL, so a reload or a back-and-forth does not open it
- * again, and leaves the recipient on the profile.
  */
-export function SharedAvailabilityLauncher(props: { profileSpaceId: string; fallbackName?: string | null }) {
-  // `useSearchParams` suspends a server-rendered route up to the nearest boundary, and this has no
-  // business holding the profile back.
-  return (
-    <React.Suspense fallback={null}>
-      <Launcher {...props} />
-    </React.Suspense>
-  );
-}
+export function AvailabilityDeepLink() {
+  const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
+  useAvailabilityDeepLink(setProfileSpaceId);
 
-function Launcher({ profileSpaceId, fallbackName }: { profileSpaceId: string; fallbackName?: string | null }) {
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
-  const requested = hasAvailabilityLinkParam(searchParams);
-  // The URL update is a navigation and takes a beat; the dialog should not wait on it.
-  const [closed, setClosed] = React.useState(false);
+  if (!profileSpaceId) return null;
 
-  // Arriving on the link again in-app — same profile, component still mounted — opens it again.
-  React.useEffect(() => {
-    if (!requested) setClosed(false);
-  }, [requested]);
-
-  if (!requested) return null;
-
-  return (
-    <SharedAvailabilityModal
-      open={!closed}
-      profileSpaceId={profileSpaceId}
-      fallbackName={fallbackName}
-      onClose={() => {
-        setClosed(true);
-        router.replace(withoutAvailabilityLinkParam(pathname, searchParams?.toString() ?? ''), { scroll: false });
-      }}
-    />
-  );
+  return <SharedAvailabilityModal open profileSpaceId={profileSpaceId} onClose={() => setProfileSpaceId(null)} />;
 }
 
 /**
@@ -77,12 +43,10 @@ function Launcher({ profileSpaceId, fallbackName }: { profileSpaceId: string; fa
 export function SharedAvailabilityModal({
   open,
   profileSpaceId,
-  fallbackName,
   onClose,
 }: {
   open: boolean;
   profileSpaceId: string;
-  fallbackName?: string | null;
   onClose: () => void;
 }) {
   const { ready, authenticated } = useGeoChatAuth();
@@ -90,24 +54,32 @@ export function SharedAvailabilityModal({
   // the login showed but took no clicks or typing. So this steps aside while Privy is up and comes
   // back when it is done, either way.
   const [signingIn, setSigningIn] = React.useState(false);
-  const signIn = usePrivySignIn(() => setSigningIn(false), { onError: () => setSigningIn(false) });
+  const signIn = usePrivySignIn(() => setSigningIn(false), {
+    onError: () => setSigningIn(false),
+    // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
+    // goes through onboarding and is sent back here afterwards, and should land on the week again.
+    redirectTo: toAvailability(profileSpaceId),
+  });
   const profile = useDebateProfile(profileSpaceId, open);
   const { personalSpaceId } = usePersonalSpaceId();
+  // The only name there is for a signed-out recipient, who is who this link is mostly for.
+  const { space } = useSpace(profileSpaceId);
   const person = profile.data?.user;
-  const name = person?.display_name || fallbackName || null;
+  const name = person?.display_name || space?.entity?.name || null;
   // The personal space answers first, from the wallet; geo-chat's own say-so covers the rest.
   const isSelf =
     authenticated &&
     ((personalSpaceId !== null && ID.equals(personalSpaceId, profileSpaceId)) || profile.data?.is_self === true);
 
-  if (isSelf) return <OwnScheduleModal open={open} onClose={onClose} />;
+  if (isSelf) return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} />;
 
   const notice = (() => {
     // Before Privy knows, "sign in" would flash at people who already are.
-    if (!ready) return <Notice>Loading availability…</Notice>;
+    if (!ready) return <Notice className="flex-1">Loading availability…</Notice>;
     if (!authenticated) {
       return (
         <Notice
+          className="flex-1"
           action={
             <button
               type="button"
@@ -125,8 +97,8 @@ export function SharedAvailabilityModal({
         </Notice>
       );
     }
-    if (profile.isPending) return <Notice>Loading availability…</Notice>;
-    if (profile.isError || !person) return <Notice>Couldn&rsquo;t load their availability.</Notice>;
+    if (profile.isPending) return <Notice className="flex-1">Loading availability…</Notice>;
+    if (profile.isError || !person) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
     return null;
   })();
 
@@ -139,34 +111,5 @@ export function SharedAvailabilityModal({
     >
       {notice}
     </PeerAvailabilityBookingModal>
-  );
-}
-
-/** "Set your debate schedule", as the navbar and the hub banner open it. */
-function OwnScheduleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { blocks, isError, refetch } = useDebateSchedule();
-  const saveSchedule = useSaveDebateSchedule();
-
-  return (
-    <AvailabilityModal
-      open={open}
-      onOpenChange={next => !next && onClose()}
-      blocks={blocks}
-      error={isError}
-      onRetry={() => refetch()}
-      onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
-      headerAction={<CopyOwnAvailabilityLinkButton />}
-    />
-  );
-}
-
-function Notice({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div className="flex min-h-40 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-      <Text as="p" variant="metadata" color="grey-04">
-        {children}
-      </Text>
-      {action}
-    </div>
   );
 }
