@@ -342,6 +342,9 @@ export function DebatesBrowseFeed({
           // (GEO-2895). Only one ahead — the feed is vertical and one-at-a-time, so a wider
           // window would fetch recordings most viewers never reach.
           preload={activeIndex >= 0 && index === activeIndex + 1}
+          // Cards stay mounted as the feed grows, so without this every debate the viewer has
+          // passed keeps two loaded <video> elements for the life of the page (GEO-3067).
+          releaseMedia={activeIndex >= 0 && Math.abs(index - activeIndex) > 1}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -436,6 +439,7 @@ function DebateFeedItem({
   active,
   initialSeekSeconds,
   preload,
+  releaseMedia,
   root,
   scrollHint,
   onActivate,
@@ -452,6 +456,7 @@ function DebateFeedItem({
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
+  releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
@@ -535,6 +540,7 @@ function DebateFeedItem({
               debate={debate}
               active={active}
               preload={preload}
+              releaseMedia={releaseMedia}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}

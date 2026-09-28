@@ -95,8 +95,23 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('./debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active, preload }: { debate: Debate; active: boolean; preload?: boolean }) => (
-    <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />
+  DebateFeedPlayer: ({
+    debate,
+    active,
+    preload,
+    releaseMedia,
+  }: {
+    debate: Debate;
+    active: boolean;
+    preload?: boolean;
+    releaseMedia?: boolean;
+  }) => (
+    <div
+      data-testid={`player-${debate.id}`}
+      data-active={active}
+      data-preload={preload ? 'true' : 'false'}
+      data-release-media={releaseMedia ? 'true' : 'false'}
+    />
   ),
 }));
 
@@ -946,6 +961,7 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
       id: el.getAttribute('data-testid'),
       active: el.getAttribute('data-active') === 'true',
       preload: el.getAttribute('data-preload') === 'true',
+      releaseMedia: el.getAttribute('data-release-media') === 'true',
     }));
   }
 
@@ -973,5 +989,20 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
     for (const p of players) {
       if (p.preload) expect(p.active).toBe(false);
     }
+  });
+
+  // Cards stay mounted as the viewer scrolls, so only a window around the active debate may hold
+  // loaded media (GEO-3067).
+  it('releases media on every card more than one away from the active debate', () => {
+    mocks.debates = [...mocks.debates, completedDebate('debate-4', 'Fourth claim', '2026-07-02T00:04:10.000Z')];
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+    const activeIndex = players.findIndex(p => p.active);
+
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    players.forEach((p, i) => {
+      expect(p.releaseMedia).toBe(Math.abs(i - activeIndex) > 1);
+    });
+    expect(players.some(p => p.releaseMedia)).toBe(true);
   });
 });

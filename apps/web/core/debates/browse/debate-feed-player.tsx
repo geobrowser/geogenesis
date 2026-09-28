@@ -70,6 +70,12 @@ type DebateFeedPlayerProps = {
    */
   preload?: boolean;
   /**
+   * Detach both recordings from their <video> elements while keeping the signed URLs, so a card
+   * far from the viewer holds no decoder or buffered media. Coming back re-attaches without
+   * re-requesting the URLs (GEO-3067).
+   */
+  releaseMedia?: boolean;
+  /**
    * Opens the claims panel — the same panel the claims pill under the player opens. With a
    * debater's space id, at that debater's claims. The end card offers it; without it the card's
    * ways into the claims are simply not drawn.
@@ -96,6 +102,7 @@ export function DebateFeedPlayer({
   debate,
   active,
   preload = false,
+  releaseMedia = false,
   reducedOverlays = false,
   onOpenClaims,
   onPlaybackRequest,
@@ -500,7 +507,7 @@ export function DebateFeedPlayer({
         inert={endCardShown}
         participant={slot1Participant}
         byline={bylineFor(slot1Participant)}
-        src={urls.slot1}
+        src={releaseMedia ? null : urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
@@ -560,7 +567,7 @@ export function DebateFeedPlayer({
         inert={endCardShown}
         participant={slot2Participant}
         byline={bylineFor(slot2Participant)}
-        src={urls.slot2}
+        src={releaseMedia ? null : urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
