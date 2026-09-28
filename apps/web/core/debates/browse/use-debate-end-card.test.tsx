@@ -203,6 +203,17 @@ describe('useDebateEndCard', () => {
     expect(result.current.countsReady).toBe(false);
   });
 
+  it('counts a claim the API answers with no counts at all as answered, with no votes', () => {
+    // The per-claim read writes the API's own answer for a claim nobody has voted on, which is null,
+    // and the claims panel's rows run it once these caches are stale. Read as unanswered, it emptied
+    // the card whenever the panel was opened a while after the debate ended.
+    queryClient.setQueryData(entityResponseCountsQueryKey('j1', DEBATE_SPACE_HEX, 0, 'stance'), null);
+    const { result } = render(() => useDebateEndCard(debate, true));
+
+    expect(result.current.countsReady).toBe(true);
+    expect(result.current.debaters[1].split).toMatchObject({ total: 0, percent: null });
+  });
+
   it('picks up a vote cast on a debater claim after the card loaded', async () => {
     // A vote refreshes the caches of the claim it was cast on and leaves the batch alone, so a card
     // reading the batch kept the old split. It reads the caches, and moves with them.

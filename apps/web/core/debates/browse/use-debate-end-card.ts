@@ -191,8 +191,13 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
      * Whether the debaters' counts are an answer: the transcript has said which claims are theirs,
      * and every one of those has its counts. Until then their splits are zero because nothing has
      * been asked, and the card must not print "No votes yet" off that.
+     *
+     * `undefined` is "not asked yet"; `null` is an answer. The batch writes a claim nobody has voted
+     * on as zeros, but the per-claim read — which the claims panel's rows run once these caches are
+     * past their `staleTime` — writes the API's own answer for it, which is `null`. Counting that as
+     * unanswered emptied the card whenever the panel was opened a while after the debate ended.
      */
-    countsReady: claimsReady && countedIds.every(entityId => countsById.get(entityId) != null),
+    countsReady: claimsReady && countedIds.every(entityId => countsById.get(entityId) !== undefined),
   };
 }
 

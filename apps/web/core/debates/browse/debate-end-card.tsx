@@ -106,7 +106,6 @@ export function DebateEndCard({
           <VoteRow
             summary={claimResponse.summary}
             countsReady={claimResponse.summary.hasCounts}
-            variant="claim"
             faces={
               // Geo's own faces-to-voters control, as the claim page and every claim card draw it:
               // the list sectioned by side, portalled above the hub and the side panel, warmed on
@@ -170,8 +169,7 @@ export function DebateEndCard({
 }
 
 /**
- * A share on the left, the split between, the people on the right — the claim's row and each
- * debater's, drawn by one component so the two cannot drift.
+ * The claim's row: its share on the left, the split between, the people on the right.
  *
  * The share is shown at any count, which is Geo's rule on every claim surface (`claimSummaryTier`):
  * the faces beside it say how many people it is a share *of*, so it does not have to hedge. Nothing
@@ -182,36 +180,19 @@ function VoteRow({
   summary,
   countsReady,
   faces,
-  variant,
-  leading,
 }: {
   summary: Pick<ResponseSplit, 'percent' | 'total'>;
   countsReady: boolean;
   faces: React.ReactNode;
-  /**
-   * `claim` is the full row under the claim: "62% agree", the thicker bar. `debater` is the same row
-   * at a column's width, sharing its line with the claim count — so it drops the verb, which the
-   * claim's row directly above has already established, rather than squeezing the bar to nothing.
-   */
-  variant: 'claim' | 'debater';
-  /** Drawn before the share, on the same line. */
-  leading?: React.ReactNode;
 }) {
   const hasVotes = countsReady && summary.percent !== null;
-  const isClaim = variant === 'claim';
-  const bar = isClaim ? 'h-2 @max-md:h-1.5' : 'h-1.5';
+  const bar = 'h-2 @max-md:h-1.5';
 
   return (
-    <div className={cx('flex items-center', isClaim ? 'gap-3 @max-md:gap-2' : 'gap-2 @max-md:gap-1.5')}>
-      {leading}
+    <div className="flex items-center gap-3 @max-md:gap-2">
       {hasVotes ? (
-        <span
-          className={cx(
-            'shrink-0 tabular-nums',
-            isClaim ? 'text-metadataMedium @max-md:text-chatMedium' : 'text-chatMedium'
-          )}
-        >
-          {summary.percent}%{isClaim ? ' agree' : null}
+        <span className="shrink-0 text-metadataMedium tabular-nums @max-md:text-chatMedium">
+          {summary.percent}% agree
         </span>
       ) : countsReady ? (
         <span className="shrink-0 text-chat text-grey-04">No votes yet</span>
@@ -241,14 +222,30 @@ function DebaterColumn({
   const countLabel = claimCount === null ? null : `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
 
   // Across one debater's claims the same person can agree with some and disagree with others, so a
-  // single list split by side would misfile them. The faces open the claims panel at this debater's
-  // card instead, where every claim carries its own split and its own voters.
+  // single list split by side would misfile them. The row — count, share and faces — opens the claims
+  // panel at this debater's card instead, where every claim carries its own split and its own voters.
   const faces = (
     <RankingAggregatedSubmitterAvatars
       submitterSpaceIds={responderSpaceIds}
       totalCount={responderSpaceIds.length}
       size={12}
     />
+  );
+  // Nothing until the counts are an answer, as on the claim's row: "No votes yet" off a query still
+  // in flight would be a fact about the network presented as one about the debate.
+  const hasVotes = countsReady && split.percent !== null;
+  const share = !countsReady ? null : hasVotes ? `${split.percent}% agree` : 'No votes yet';
+
+  // The count, the share and the voters, and nothing drawn between them: a bar per debater repeated
+  // the claim's own bar directly above at a size too small to read. Wraps rather than squeezes, so a
+  // narrow column puts the faces under the numbers instead of clipping them.
+  const stats = (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums">
+      {countLabel ? <span>{countLabel}</span> : null}
+      {countLabel && share ? <span aria-hidden>·</span> : null}
+      {share ? <span className={hasVotes ? 'text-chatMedium text-text' : undefined}>{share}</span> : null}
+      {hasVotes ? <span className="flex items-center">{faces}</span> : null}
+    </span>
   );
 
   return (
@@ -261,40 +258,21 @@ function DebaterColumn({
         <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
       </div>
 
-      {/* On a narrow player the count and the side take their own line: the vote row below has no
-          width to spare for them, and the side chip is dropped from the name's row there. */}
-      <span className="hidden text-chat text-grey-04 tabular-nums @max-md:block">
-        {countLabel ? `${countLabel} · ${side}` : side}
-      </span>
+      {/* The side chip is dropped from the name's row on a narrow player, so the side is said here. */}
+      <span className="hidden text-chat text-grey-04 @max-md:block">{side}</span>
 
-      <VoteRow
-        summary={split}
-        countsReady={countsReady}
-        variant="debater"
-        // Wider players fold the count into this row rather than giving it one of its own: a
-        // number and a word left most of a line empty, and the card needed that height.
-        leading={
-          countLabel ? (
-            <span className="shrink-0 text-chat text-grey-04 tabular-nums @max-md:hidden">{countLabel} ·</span>
-          ) : null
-        }
-        faces={
-          onOpenClaims ? (
-            <button
-              type="button"
-              aria-label={`${responderSpaceIds.length} ${
-                responderSpaceIds.length === 1 ? 'person' : 'people'
-              } voted on ${name}'s claims — open the claims`}
-              onClick={() => onOpenClaims(participant.profile_space_id)}
-              className="flex shrink-0 cursor-pointer items-center rounded"
-            >
-              {faces}
-            </button>
-          ) : (
-            <span className="flex shrink-0 items-center">{faces}</span>
-          )
-        }
-      />
+      {onOpenClaims ? (
+        <button
+          type="button"
+          aria-label={`${[countLabel, share].filter(Boolean).join(', ') || 'Claims'} — open ${name}'s claims`}
+          onClick={() => onOpenClaims(participant.profile_space_id)}
+          className="-mx-1 flex cursor-pointer self-start rounded px-1 text-left transition-colors hover:bg-divider"
+        >
+          {stats}
+        </button>
+      ) : (
+        stats
+      )}
     </div>
   );
 }

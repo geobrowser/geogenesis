@@ -162,33 +162,48 @@ describe('DebateEndCard', () => {
     expect(screen.queryByText('Claim vs. arguments')).toBeNull();
   });
 
-  it('shows each debater with their side, and their count and share on one line', () => {
+  it('shows each debater with their side, then their count, share and voters on one line', () => {
     renderCard(cardFixture());
 
     const steve = document.querySelector('[data-end-card-debater="steve-space"]') as HTMLElement;
     expect(within(steve).getByText('Steve Fuller')).toBeInTheDocument();
     expect(within(steve).getAllByText(/Agree/).length).toBeGreaterThan(0);
 
-    // The count leads the vote row rather than taking a line of its own, and the share drops the
-    // verb the claim's row above has already said.
-    const row = within(steve).getByText('44%').parentElement as HTMLElement;
-    expect(row.textContent).toMatch(/^8 claims ·\s*44%/);
+    const row = within(steve).getByText('44% agree').parentElement as HTMLElement;
+    expect(row.textContent).toMatch(/^8 claims·44% agree4$/);
+    expect(within(row).getByTestId('debater-faces')).toBeInTheDocument();
   });
 
-  it("opens the claims panel at a debater's claims from their faces", () => {
+  it("draws no split bar for a debater — only the claim's own row has one", () => {
+    // A bar per debater repeated the claim's bar directly above at a size too small to read.
+    const { container } = renderCard(cardFixture());
+
+    expect(container.querySelectorAll('[data-split]')).toHaveLength(1);
+    for (const column of container.querySelectorAll('[data-end-card-debater]')) {
+      expect(column.querySelector('[data-split]')).toBeNull();
+    }
+  });
+
+  it("opens the claims panel at a debater's claims from their count, share and voters", () => {
     const onOpenClaims = vi.fn();
     renderCard(cardFixture(), onOpenClaims);
 
-    fireEvent.click(screen.getByRole('button', { name: /voted on Jonathan Bostock's claims/ }));
+    const open = screen.getByRole('button', { name: "9 claims, 71% agree — open Jonathan Bostock's claims" });
+    // The count and the faces are both inside the one control, so either opens it.
+    expect(within(open).getByText('9 claims')).toBeInTheDocument();
+    expect(within(open).getByTestId('debater-faces')).toBeInTheDocument();
+
+    fireEvent.click(within(open).getByText('9 claims'));
     expect(onOpenClaims).toHaveBeenCalledWith('jonathan-space');
   });
 
   it('draws no way into the claims when there is nowhere to open them', () => {
     renderCard(cardFixture());
 
-    expect(screen.queryByRole('button', { name: /voted on Steve Fuller's claims/ })).toBeNull();
-    // The faces are still shown, just not as a control.
+    expect(screen.queryByRole('button', { name: /open Steve Fuller's claims/ })).toBeNull();
+    // The count and faces are still shown, just not as a control.
     expect(screen.getAllByTestId('debater-faces')).toHaveLength(2);
+    expect(screen.getByText('8 claims')).toBeInTheDocument();
   });
 
   it('puts the claim and the arguments on one line, and reads the gap', () => {
