@@ -34,7 +34,11 @@ describe('topicFeedFilter', () => {
     'uses one direct population query for selected types: %j',
     (...typeIds) => {
       expect(topicFeedPopulationScopes('topic-1', ['topic-2'], typeIds)).toEqual([
-        { typeIds, entityFilter: topicFeedFilter('topic-1', ['topic-2']) },
+        {
+          typeIds,
+          entityFilter: topicFeedFilter('topic-1', ['topic-2']),
+          relationFilter: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
+        },
       ]);
     }
   );

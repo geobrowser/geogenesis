@@ -50,7 +50,7 @@ vi.mock('~/core/io/graphql-client', async () => {
           })
         );
       }
-      if (operation?.name?.value === 'ExploreCompleteIndex') {
+      if (operation?.name?.value === 'ExploreRelationIndex') {
         const nodes = [
           { id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' },
           { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
@@ -61,7 +61,11 @@ vi.mock('~/core/io/graphql-client', async () => {
             createdAt: '3',
           },
         ];
-        return Effect.succeed(decoder({ entitiesConnection: { nodes, pageInfo: { hasNextPage: false } } }));
+        return Effect.succeed(
+          decoder({
+            relationsConnection: { nodes: nodes.map(fromEntity => ({ fromEntity })), pageInfo: { hasNextPage: false } },
+          })
+        );
       }
       throw new Error(`Unexpected operation ${operation?.name?.value}`);
     },
@@ -150,16 +154,13 @@ describe('fetchTopicFeedCompositionCounts', () => {
 
     await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
 
-    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreCompleteIndex');
+    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreRelationIndex');
     expect(populationCalls).toHaveLength(1);
-    expect(populationCalls.flatMap(call => call.variables.typeIds.in)).toEqual(
-      expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID])
-    );
-    for (const { variables } of populationCalls) {
-      expect(variables.spaceIds).toEqual({ in: spaceIds });
-      expect(variables.filter.and).toEqual(
-        expect.arrayContaining([expect.objectContaining({ and: expect.any(Array) })])
-      );
-    }
+    const fromEntity = populationCalls[0]?.variables.filter.and[1].fromEntity;
+    expect(fromEntity.and[0]).toMatchObject({
+      spaceIds: { overlaps: spaceIds },
+      typeIds: { overlaps: expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID]) },
+    });
+    expect(fromEntity.and[1]).toEqual(topicFeedFilter(PAGE_TOPIC));
   });
 });

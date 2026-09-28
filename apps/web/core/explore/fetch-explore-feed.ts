@@ -4,7 +4,7 @@ import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
-import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -33,6 +33,7 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import { type ExploreRelationIndexConnection, exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
@@ -74,6 +75,8 @@ export type ExploreFeedResult = {
 export type ExploreCompletePopulationScope = {
   typeIds: readonly string[];
   entityFilter: EntityFilter;
+  /** Optional relation entry point. Source entities still satisfy the full feed predicate. */
+  relationFilter?: RelationFilter;
 };
 
 // Entities we never want to surface in any feed.
@@ -309,6 +312,46 @@ async function fetchExploreEntitiesPage(args: {
 
 const COMPLETE_INDEX_PAGE_SIZE = 500;
 
+async function fetchCompleteRelationIndexScope(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  entityFilter: EntityFilter;
+  relationFilter: RelationFilter;
+}): Promise<ExploreCompleteIndexNode[]> {
+  const rows: ExploreCompleteIndexNode[] = [];
+  let after: string | null = null;
+
+  while (true) {
+    const page: ExploreRelationIndexConnection = await Effect.runPromise(
+      graphql({
+        query: exploreRelationIndexDocument,
+        decoder: response => response.relationsConnection ?? null,
+        variables: {
+          first: COMPLETE_INDEX_PAGE_SIZE,
+          after,
+          filter: {
+            and: [
+              args.relationFilter,
+              { fromEntity: buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: true }) },
+            ],
+          },
+        },
+      })
+    );
+    for (const node of page?.nodes ?? []) {
+      if (node?.fromEntity) rows.push(node.fromEntity);
+    }
+    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
+    after = page.pageInfo.endCursor;
+  }
+
+  // Deduplication happens across the complete population, after every relation page is read.
+  return rows;
+}
+
 async function fetchCompleteIndexScope(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -316,7 +359,10 @@ async function fetchCompleteIndexScope(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter: EntityFilter;
+  relationFilter?: RelationFilter;
 }): Promise<ExploreCompleteIndexNode[]> {
+  if (args.relationFilter) return fetchCompleteRelationIndexScope({ ...args, relationFilter: args.relationFilter });
+
   const rows: ExploreCompleteIndexNode[] = [];
   let after: string | null = null;
 
@@ -404,6 +450,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
           requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           entityFilter: scope.entityFilter,
+          relationFilter: scope.relationFilter,
         })
       )
   );
