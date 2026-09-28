@@ -480,7 +480,8 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
-const RELATIONS_PAGE_SIZE = 500;
+/** Rows per `relationsConnection` page. The API rejects `first: 1000`; 500 is the largest page it serves. */
+export const RELATIONS_PAGE_SIZE = 500;
 
 /**
  * Backlink rows for a set of target entities. The id list is chunked under the
