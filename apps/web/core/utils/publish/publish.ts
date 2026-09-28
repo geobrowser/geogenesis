@@ -13,7 +13,7 @@ import { updateRelation as updateGrc20Relation } from '@geoprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, GeoPoint } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
 import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
@@ -222,21 +222,37 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
       // Stored as full ISO string (e.g. "1970-01-01T14:30:00.000Z"), SDK expects "HH:MM:SSZ"
       return { property, type: 'time', value: toRfc3339Time(val) };
     case 'POINT': {
-      try {
-        const point = JSON.parse(val);
-        return {
-          property,
-          type: 'point',
-          lon: point.lon ?? point.x ?? 0,
-          lat: point.lat ?? point.y ?? 0,
-        };
-      } catch {
-        throw new Error(`Invalid lon/lat conversion data type ${val}`);
-      }
+      const point = parsePointValue(val);
+      if (!point) throw new Error(`Invalid lon/lat conversion data type ${val}`);
+      return { property, type: 'point', lon: point.lon, lat: point.lat };
     }
     default:
       throw new Error(`Unsupported conversion data type: ${dataType}`);
   }
+}
+
+/**
+ * A stored POINT value, in either encoding the app writes.
+ */
+function parsePointValue(val: string): { lon: number; lat: number } | null {
+  try {
+    const parsed = JSON.parse(val);
+    if (parsed !== null && typeof parsed === 'object') {
+      const lon = (parsed as Record<string, unknown>).lon ?? (parsed as Record<string, unknown>).x;
+      const lat = (parsed as Record<string, unknown>).lat ?? (parsed as Record<string, unknown>).y;
+      if (typeof lon === 'number' && typeof lat === 'number' && Number.isFinite(lon) && Number.isFinite(lat)) {
+        return { lon, lat };
+      }
+    }
+  } catch {
+    // Not JSON. The comma form below is the other encoding, not a failure.
+  }
+
+  // `parseCoordinates` reads `"lat, lon"` in that order, trims, and rejects anything that is not two
+  // numbers — the same reading the entity page renders from, so the published point and the drawn
+  // one cannot disagree.
+  const coordinates = GeoPoint.parseCoordinates(val);
+  return coordinates ? { lon: coordinates.longitude, lat: coordinates.latitude } : null;
 }
 
 /**
