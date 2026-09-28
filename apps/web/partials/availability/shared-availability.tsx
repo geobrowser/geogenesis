@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { NOT_A_PERSON_MESSAGE, toAvailability } from '~/core/availability/availability-deep-link';
 import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
+import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -50,8 +51,9 @@ export function AvailabilityDeepLink() {
  * The booking modal, reached by profile rather than by geo-chat user id.
  *
  * A link carries the profile's space id, and the week is keyed by user id, which only geo-chat's
- * debate profile knows — and only answers to someone signed in. Everything before that answer is
- * drawn inside the same dialog, so the recipient never sees it swap out from under them.
+ * debate profile knows. That answers signed out too, so whether the person can be booked at all is
+ * settled before anyone is asked to sign in; the week itself is viewer-relative and needs them to.
+ * Everything before that is drawn inside one dialog, so the recipient never sees it swap under them.
  *
  * The owner opening their own link gets their schedule editor instead: there is nobody to book, and
  * the likeliest reason to open it is checking what it shows.
@@ -89,8 +91,10 @@ export function SharedAvailabilityModal({
     if (spaceKnown && !isPerson) onNotAPerson();
   }, [spaceKnown, isPerson, onNotAPerson]);
 
-  // Nothing to ask geo-chat about a space that is not a person.
-  const profile = useDebateProfile(profileSpaceId, open && isPerson);
+  // Nothing to ask geo-chat about a space that is not a person. Asked signed out too, so a person
+  // who cannot be booked is found out *before* the recipient is sent to sign in for them. Held for
+  // Privy, whose answer changes the key — asking before it would ask twice.
+  const profile = useDebateProfile(profileSpaceId, open && isPerson && ready, { signedOut: true });
   const { personalSpaceId } = usePersonalSpaceId();
   const person = profile.data?.user;
   const name = person?.display_name || space?.entity?.name || null;
@@ -98,15 +102,23 @@ export function SharedAvailabilityModal({
   const isSelf =
     authenticated &&
     ((personalSpaceId !== null && ID.equals(personalSpaceId, profileSpaceId)) || profile.data?.is_self === true);
+  // Which dialog this is — the owner's editor or someone's week — can only be drawn once it is
+  // known. Drawing the week's shell first would swap it for the editor under a signed-in owner, so
+  // nothing shows until then. A failed space read settles it too: there is no one to be.
+  const whoseKnown = ready && (spaceError || !authenticated || isSelf || !profile.isPending);
 
   if (isSelf) return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} />;
+  if (!whoseKnown) return null;
 
   const notice = (() => {
-    // Before Privy knows, "sign in" would flash at people who already are.
     if (spaceError) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
-    // Not a word about signing in until this is known to be a person: signing in to be told the
-    // link was never anybody's would be the worst way to find out.
-    if (!ready || !isPerson) return <Notice className="flex-1">Loading availability…</Notice>;
+    // Not a word about signing in until this is known to be a person who can be booked: signing in
+    // to be told the link leads nowhere would be the worst way to find out.
+    if (!isPerson || profile.isPending) return <Notice className="flex-1">Loading availability…</Notice>;
+    if (isDebateProfileMissing(profile.error)) {
+      return <Notice className="flex-1">{name ?? 'This person'} hasn&rsquo;t set up debates yet.</Notice>;
+    }
+    if (profile.isError || !person) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
     if (!authenticated) {
       return (
         <Notice
@@ -128,8 +140,6 @@ export function SharedAvailabilityModal({
         </Notice>
       );
     }
-    if (profile.isPending) return <Notice className="flex-1">Loading availability…</Notice>;
-    if (profile.isError || !person) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
     return null;
   })();
 

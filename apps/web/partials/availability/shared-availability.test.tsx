@@ -7,10 +7,15 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from '~/core/debates/api';
+
 import { AvailabilityDeepLink, SharedAvailabilityModal } from './shared-availability';
 
 const auth = { ready: true, authenticated: true };
-let profile: { isPending: boolean; isError: boolean; data?: unknown } = { isPending: true, isError: false };
+let profile: { isPending: boolean; isError: boolean; data?: unknown; error?: unknown } = {
+  isPending: true,
+  isError: false,
+};
 const signIn = vi.fn();
 let signInCallbacks: { onComplete?: () => void; onError?: () => void } = {};
 let personalSpaceId: string | null = null;
@@ -22,9 +27,13 @@ let spaceQuery: { space: unknown; isError: boolean } = { space: personSpace, isE
 const setToast = vi.fn();
 let signInOptions: { redirectTo?: string } | undefined;
 
+const profileCalls: unknown[][] = [];
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => auth,
-  useDebateProfile: () => profile,
+  useDebateProfile: (...args: unknown[]) => {
+    profileCalls.push(args);
+    return profile;
+  },
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: (onComplete?: () => void, options?: { onError?: () => void; redirectTo?: string }) => {
@@ -80,6 +89,7 @@ beforeEach(() => {
   setToast.mockClear();
   personalSpaceId = null;
   signInOptions = undefined;
+  profileCalls.length = 0;
   signInCallbacks = {};
 });
 
@@ -100,9 +110,10 @@ const renderModal = () =>
 describe('SharedAvailabilityModal', () => {
   it('asks a signed-out recipient to sign in, naming the person', async () => {
     auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
     renderModal();
 
-    expect(screen.getByText(/Sign in to see when Ada L\. is free/)).toBeInTheDocument();
+    expect(screen.getByText(/Sign in to see when Ada is free/)).toBeInTheDocument();
     expect(screen.queryByTestId('week')).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }));
     expect(signIn).toHaveBeenCalledOnce();
@@ -116,7 +127,8 @@ describe('SharedAvailabilityModal', () => {
     auth.authenticated = false;
     renderModal();
 
-    expect(screen.getByText('Loading availability…')).toBeInTheDocument();
+    // Nothing at all: until Privy knows, it cannot be known whose dialog this is either.
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
   });
 
@@ -148,6 +160,7 @@ describe('SharedAvailabilityModal', () => {
   // Privy's login renders outside the dialog, which a Radix modal makes inert.
   it('steps aside while Privy is open and comes back if it is dismissed', async () => {
     auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
     renderModal();
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }));
@@ -190,10 +203,65 @@ describe('SharedAvailabilityModal', () => {
   });
 
   it('says so when the profile cannot be resolved', () => {
-    profile = { isPending: false, isError: true };
+    profile = { isPending: false, isError: true, error: new GeoChatRequestError('boom', null, 500) };
     renderModal();
 
     expect(screen.getByText('Couldn’t load their availability.')).toBeInTheDocument();
+  });
+
+  // Found out before anyone is sent to sign in for a person who cannot be booked (review, #2604).
+  it('tells a signed-out recipient the person has not set up debates, instead of asking them to sign in', () => {
+    auth.authenticated = false;
+    profile = {
+      isPending: false,
+      isError: true,
+      error: new GeoChatRequestError('user was not found', 'user_not_found', 404),
+    };
+    renderModal();
+
+    expect(screen.getByText('Ada L. hasn’t set up debates yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+    // Asked signed out, which only works because the read opts in to it.
+    expect(profileCalls.at(-1)).toEqual(['profile-space', true, { signedOut: true }]);
+  });
+
+  it('tells "has not set up debates" apart from a failed read when signed in too', () => {
+    profile = {
+      isPending: false,
+      isError: true,
+      error: new GeoChatRequestError('user was not found', 'user_not_found', 404),
+    };
+    renderModal();
+
+    expect(screen.getByText('Ada L. hasn’t set up debates yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Couldn’t load their availability.')).not.toBeInTheDocument();
+  });
+
+  // A deployment without the route also answers 404, and that is a failure, not a fact about them.
+  it('reads a bare 404 as a failure, not as someone without debates', () => {
+    profile = { isPending: false, isError: true, error: new GeoChatRequestError('not found', null, 404) };
+    renderModal();
+
+    expect(screen.getByText('Couldn’t load their availability.')).toBeInTheDocument();
+    expect(screen.queryByText(/hasn’t set up debates/)).not.toBeInTheDocument();
+  });
+
+  // Drawing the week's shell and then swapping it for the owner's editor is the swap this design
+  // exists to avoid (review, #2604).
+  it('draws no dialog for a signed-in viewer until it knows whether the link is their own', () => {
+    profile = { isPending: true, isError: false };
+    const { rerender } = renderModal();
+
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('own-schedule-modal')).not.toBeInTheDocument();
+
+    profile = { isPending: false, isError: false, data: { user: person, is_self: true } };
+    rerender(
+      <SharedAvailabilityModal open profileSpaceId="profile-space" onClose={() => {}} onNotAPerson={onNotAPerson} />
+    );
+
+    expect(screen.getByTestId('own-schedule-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
   });
 });
 

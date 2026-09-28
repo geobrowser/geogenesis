@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { Menu } from '~/design-system/menu';
 
 import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
 import { CopyAvailabilityLinkMenuItem } from './copy-availability-link-menu-item';
@@ -16,6 +18,15 @@ const setToast = vi.fn();
 vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => flagOn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
+
+beforeAll(() => {
+  // The menu's placement hook observes its trigger, and JSDOM has no ResizeObserver.
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
 
 beforeEach(() => {
   flagOn = true;
@@ -51,14 +62,20 @@ describe('CopyOwnAvailabilityLinkButton', () => {
 });
 
 describe('CopyAvailabilityLinkMenuItem', () => {
-  it("copies the profile's link, whoever is looking", async () => {
+  it("copies the profile's link, whoever is looking, and closes the menu it sits in", async () => {
     const user = userEvent.setup();
-    render(<CopyAvailabilityLinkMenuItem profileSpaceId="their-space" />);
+    const onOpenChange = vi.fn();
+    render(
+      <Menu open onOpenChange={onOpenChange} trigger={<span>More</span>}>
+        <CopyAvailabilityLinkMenuItem profileSpaceId="their-space" />
+      </Menu>
+    );
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
     expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/their-space?modal=availability`);
     expect(setToast).toHaveBeenCalledOnce();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('draws nothing behind the flag', () => {

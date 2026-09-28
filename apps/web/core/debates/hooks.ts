@@ -1183,10 +1183,23 @@ export function useRejectDebateRematchRequest() {
   });
 }
 
-export function useDebateProfile(profileSpaceId: string, enabled = true) {
+export function useDebateProfile(
+  profileSpaceId: string,
+  enabled = true,
+  {
+    signedOut = false,
+  }: {
+    /**
+     * Ask signed out too. geo-chat answers anonymously (`auth: 'optional'`), with the viewer fields
+     * false, which is enough to learn whether this person can be booked at all. Off by default: the
+     * profile's Debate button has nothing to show a signed-out viewer.
+     */
+    signedOut?: boolean;
+  } = {}
+) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const foreground = useDebateAttention();
-  const queryEnabled = enabled && authenticated && Boolean(profileSpaceId);
+  const queryEnabled = enabled && (authenticated || signedOut) && Boolean(profileSpaceId);
   const wasForeground = React.useRef(foreground);
 
   const query = useQuery({

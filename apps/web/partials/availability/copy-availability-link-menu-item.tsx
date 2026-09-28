@@ -20,6 +20,7 @@ export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceI
 
   return (
     <MenuItem
+      closeOnSelect
       data-geo-analytics-label="Profile menu copy availability link"
       data-geo-analytics-intent="copy_availability_link"
       onClick={async () => {

@@ -96,8 +96,8 @@ export function EditableSpaceHeading({
   fallbackName?: string | null;
   /**
    * Extra overflow-menu items after the copy actions, e.g. a profile's availability link. A node
-   * rather than a render prop, since the space layout passing it is a server component; a click
-   * anywhere in it closes the menu, as the built-in items do.
+   * rather than a render prop, since the space layout passing it is a server component — so each
+   * item closes the menu itself, with `MenuItem`'s `closeOnSelect`.
    */
   menuItems?: React.ReactNode;
 }) {
@@ -251,7 +251,7 @@ export function EditableSpaceHeading({
                       <MenuItem onClick={onCopyEntityId}>
                         <p>Copy Entity ID</p>
                       </MenuItem>
-                      {menuItems && <div onClick={() => dispatch({ type: 'CLOSE_OVERLAYS' })}>{menuItems}</div>}
+                      {menuItems}
                       <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                         <p>Create in space</p>
                       </MenuItem>
