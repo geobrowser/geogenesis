@@ -72,7 +72,7 @@ export type ExploreFeedResult = {
  * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
  */
 export type ExploreCompletePopulationScope = {
-  typeIds: readonly string[];
+  typeIds?: readonly string[];
   entityFilter: EntityFilter;
 };
 
@@ -312,7 +312,7 @@ const COMPLETE_INDEX_PAGE_SIZE = 500;
 async function fetchCompleteIndexScope(args: {
   spaceIds: string[];
   time: ExploreTime;
-  typeIds: readonly string[];
+  typeIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter: EntityFilter;
@@ -337,7 +337,7 @@ async function fetchCompleteIndexScope(args: {
             entityFilter: args.entityFilter,
           }),
           spaceIds: { in: args.spaceIds },
-          typeIds: { in: [...args.typeIds] },
+          typeIds: args.typeIds ? { in: [...args.typeIds] } : undefined,
         },
       })
     );
@@ -360,7 +360,7 @@ type CompletePopulationIndexArgs = {
   spaceIds: string[];
   sort: Extract<ExploreSort, 'best' | 'new'>;
   time: ExploreTime;
-  typeIds: readonly string[];
+  typeIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   scopes: readonly ExploreCompletePopulationScope[];
@@ -385,7 +385,7 @@ function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
     spaceIds: args.spaceIds.map(normId).sort(),
     sort: args.sort,
     time: args.time,
-    typeIds: args.typeIds.map(normId).sort(),
+    typeIds: args.typeIds?.map(normId).sort() ?? null,
     requireName: args.requireName ?? null,
     requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
     scopes: args.scopes,
@@ -395,7 +395,7 @@ function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
 async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<ExploreCompleteIndexNode[]> {
   const scopeRows = await Promise.all(
     args.scopes
-      .filter(scope => scope.typeIds.length > 0)
+      .filter(scope => scope.typeIds?.length !== 0)
       .map(scope =>
         fetchCompleteIndexScope({
           spaceIds: args.spaceIds,
@@ -483,7 +483,7 @@ async function fetchCompleteEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   offset: number;
-  typeIds: readonly string[];
+  typeIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   scopes: readonly ExploreCompletePopulationScope[];
@@ -764,7 +764,7 @@ export async function fetchExploreFeed(args: {
           time: args.time,
           limit: windowSize,
           offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
-          typeIds: args.typeIds ?? [],
+          typeIds: args.typeIds,
           requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           scopes: args.completePopulationScopes ?? [],

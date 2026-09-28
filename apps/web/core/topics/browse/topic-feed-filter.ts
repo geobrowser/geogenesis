@@ -24,9 +24,7 @@ export function topicFeedFilter(topicId: string, selectedTopicIds: readonly stri
 export function topicFeedPopulationScopes(
   topicId: string,
   selectedTopicIds: readonly string[],
-  typeIds: readonly string[]
+  typeIds?: readonly string[]
 ) {
-  return typeIds.length > 0
-    ? [{ typeIds: [...typeIds], entityFilter: topicFeedFilter(topicId, selectedTopicIds) }]
-    : [];
+  return typeIds?.length === 0 ? [] : [{ typeIds, entityFilter: topicFeedFilter(topicId, selectedTopicIds) }];
 }

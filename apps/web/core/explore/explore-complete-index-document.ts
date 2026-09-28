@@ -17,7 +17,7 @@ const EXPLORE_COMPLETE_INDEX_SOURCE = /* GraphQL */ `
     $after: Cursor
     $filter: EntityFilter!
     $spaceIds: UUIDFilter!
-    $typeIds: UUIDFilter!
+    $typeIds: UUIDFilter
   ) {
     entitiesConnection(
       first: $limit

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
 
   const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
-  if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
+  if (typeIds?.length === 0) return NextResponse.json({ items: [], nextCursor: null });
 
   const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), topicId);
   const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId);

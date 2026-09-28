@@ -10,7 +10,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { TopicFeedCompositionCounts } from './topic-feed-facets';
-import { TOPIC_FEED_ENTITY_TYPES } from './topic-feed-types';
+import { topicFeedTypeOptions } from './topic-feed-types';
 
 type Bucket = { key: string; label: string; count: number; color: string };
 
@@ -47,8 +47,7 @@ export function TopicComposition({
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];
 
-    return [...TOPIC_FEED_ENTITY_TYPES]
-      .sort((left, right) => left.summaryOrder - right.summaryOrder)
+    return topicFeedTypeOptions(counts.typeCounts, counts.typeNames)
       .map(type => {
         const count = counts.typeCounts[type.id] ?? 0;
         return {

@@ -276,7 +276,12 @@ export function EntityFeed({
       nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
     );
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
-  const typeIds = showTypeFilter && !selectsWholePopulation ? selectedTypeIds : undefined;
+  // Contextual menus discover their types asynchronously. Keep the initial request unfiltered
+  // until the reader makes a selection, including the render before the defaults effect runs.
+  const typeIds =
+    showTypeFilter && !selectsWholePopulation && !(selectTypesWithResultsByDefault && !typeSelectionTouchedRef.current)
+      ? selectedTypeIds
+      : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
   const fixedParamsKey = Object.entries(fixedParams)

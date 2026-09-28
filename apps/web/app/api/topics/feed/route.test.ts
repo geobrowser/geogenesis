@@ -61,4 +61,18 @@ describe('GET /api/topics/feed', () => {
     expect(mocks.filter.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
     expect(mocks.scopes.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
   });
+  it('does not add a type allowlist to an unfiltered request', async () => {
+    const params = new URLSearchParams({ topicId: PAGE_TOPIC, spaceId: SPACE });
+    const response = await GET(new Request(`https://example.com/api/topics/feed?${params}`));
+    expect(response.status).toBe(200);
+    expect(mocks.fetchFeed.mock.calls[0]?.[0].typeIds).toBeUndefined();
+    expect(mocks.scopes.mock.calls[0]?.[2]).toBeUndefined();
+  });
+
+  it('returns no entities for an explicitly empty type selection', async () => {
+    const params = new URLSearchParams({ topicId: PAGE_TOPIC, spaceId: SPACE, typeIds: '' });
+    const response = await GET(new Request(`https://example.com/api/topics/feed?${params}`));
+    expect(await response.json()).toEqual({ items: [], nextCursor: null });
+    expect(mocks.fetchFeed).not.toHaveBeenCalled();
+  });
 });
