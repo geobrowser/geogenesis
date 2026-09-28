@@ -239,10 +239,27 @@ function DebaterColumn({
   // The count, the share and the voters, and nothing drawn between them: a bar per debater repeated
   // the claim's own bar directly above at a size too small to read. Wraps rather than squeezes, so a
   // narrow column puts the faces under the numbers instead of clipping them.
+  //
+  // A narrow player has no room for the side chip beside the name, so the side leads this block
+  // instead, sharing its first line with the count ("Agree · 9 claims"), and a break puts the share
+  // and faces on the next. One count, moved by the layout, rather than one per width.
   const stats = (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums">
-      {countLabel ? <span>{countLabel}</span> : null}
-      {countLabel && share ? <span aria-hidden>·</span> : null}
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums @max-md:gap-y-1.5">
+      <span className="hidden @max-md:inline">{side}</span>
+      {countLabel ? (
+        <>
+          <span aria-hidden className="hidden @max-md:inline">
+            ·
+          </span>
+          <span>{countLabel}</span>
+        </>
+      ) : null}
+      <span aria-hidden className="hidden h-0 basis-full @max-md:block" />
+      {countLabel && share ? (
+        <span aria-hidden className="@max-md:hidden">
+          ·
+        </span>
+      ) : null}
       {share ? <span className={hasVotes ? 'text-chatMedium text-text' : undefined}>{share}</span> : null}
       {hasVotes ? <span className="flex items-center">{faces}</span> : null}
     </span>
@@ -257,9 +274,6 @@ function DebaterColumn({
         <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
         <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
       </div>
-
-      {/* The side chip is dropped from the name's row on a narrow player, so the side is said here. */}
-      <span className="hidden text-chat text-grey-04 @max-md:block">{side}</span>
 
       {onOpenClaims ? (
         <button

@@ -170,8 +170,30 @@ describe('DebateEndCard', () => {
     expect(within(steve).getAllByText(/Agree/).length).toBeGreaterThan(0);
 
     const row = within(steve).getByText('44% agree').parentElement as HTMLElement;
-    expect(row.textContent).toMatch(/^8 claims·44% agree4$/);
+    expect(within(row).getByText('8 claims')).toBeInTheDocument();
     expect(within(row).getByTestId('debater-faces')).toBeInTheDocument();
+  });
+
+  it('puts the side and the count on one line on a narrow player, and the share and voters on the next', () => {
+    // jsdom applies no container queries, so this reads the layout off the classes that make it.
+    renderCard(cardFixture());
+    const steve = document.querySelector('[data-end-card-debater="steve-space"]') as HTMLElement;
+    const row = within(steve).getByText('44% agree').parentElement as HTMLElement;
+    const parts = [...row.children] as HTMLElement[];
+    const at = (predicate: (part: HTMLElement) => boolean) => parts.findIndex(predicate);
+
+    const side = at(part => part.textContent === 'Agree');
+    const count = at(part => part.textContent === '8 claims');
+    const lineBreak = at(part => part.classList.contains('basis-full'));
+    const share = at(part => part.textContent === '44% agree');
+
+    expect(side).toBeGreaterThanOrEqual(0);
+    expect(parts[side].className).toContain('hidden @max-md:inline');
+    expect(side < count && count < lineBreak && lineBreak < share).toBe(true);
+    expect(parts[lineBreak].className).toContain('@max-md:block');
+    // The separator between count and share belongs to the one-line layout only.
+    expect(parts[lineBreak + 1].textContent).toBe('·');
+    expect(parts[lineBreak + 1].className).toContain('@max-md:hidden');
   });
 
   it("draws no split bar for a debater — only the claim's own row has one", () => {
