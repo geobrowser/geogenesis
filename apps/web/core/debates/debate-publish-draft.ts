@@ -54,6 +54,9 @@ export type DebatePublishTurn = {
   text: string;
 };
 
+/** A topic entity to relate to via Topics. The name is for display only; publishing writes the id. */
+export type DebatePublishTopic = { id: string; name: string | null };
+
 export type DebateClaimInput = {
   /** The claim text (becomes the Claim entity name). */
   text: string;
@@ -79,7 +82,7 @@ export type DebateClaimInput = {
    * the reuse policy has already subtracted the topics the entity carries on the graph, so the
    * draft never writes a duplicate Topics relation.
    */
-  topics?: { id: string; name: string | null }[];
+  topics?: DebatePublishTopic[];
   /**
    * True when the claim is broad enough to be argued for and against. Tagged `Debate`
    * so it joins the claim picker's candidate motions; a narrowly verifiable claim
@@ -102,7 +105,7 @@ export type DebatePublishInput = {
    * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
    * Debate with no Topics relations.
    */
-  claimTopics?: { id: string; name: string | null }[];
+  claimTopics?: DebatePublishTopic[];
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -220,6 +223,18 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     );
   };
 
+  // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
+  // behind several extracted claims carrying the same topic. Keyed on normalized ids so the dedupe
+  // agrees with the reuse policy, which compares topics as hex: the same entity written once dashed
+  // and once dashless is one edge.
+  const topicEdges = new Set<string>();
+  const relateTopic = (fromEntity: { id: string; name: string | null }, topic: DebatePublishTopic) => {
+    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(topic.id)}`;
+    if (topicEdges.has(edge)) return;
+    topicEdges.add(edge);
+    relate({ fromEntity, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
+  };
+
   // --- Debate entity ---
   setText(debateEntityId, debateName, NAME_PROPERTY_ID, debateName);
   const debateRef = { id: debateEntityId, name: debateName };
@@ -230,15 +245,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     toEntityId: input.claimEntityId,
     toEntityName: claimText,
   });
-  // Deduped on normalized ids for the same reason as the claim topics below: `relate` does not
-  // dedupe, and one topic written dashed and dashless is still one topic.
-  const debateTopics = new Set<string>();
-  for (const topic of input.claimTopics ?? []) {
-    const key = normalizeId(topic.id);
-    if (debateTopics.has(key)) continue;
-    debateTopics.add(key);
-    relate({ fromEntity: debateRef, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
-  }
+  // The Debate is filed under the same topics as the claim it argued.
+  for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
 
   for (const p of bySlot) {
     relate({
@@ -360,7 +368,6 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const claimTopicEdges = new Set<string>();
     const debateTaggedClaims = new Set<string>();
 
     turns.forEach(turn => {
@@ -445,19 +452,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             toEntityName: 'Debate',
           });
         }
-        for (const topic of claim.topics ?? []) {
-          // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
-          // topics as hex: the same entity written once dashed and once dashless is one edge.
-          const edge = `${normalizeId(claimId)}:${normalizeId(topic.id)}`;
-          if (claimTopicEdges.has(edge)) continue;
-          claimTopicEdges.add(edge);
-          relate({
-            fromEntity: claimRef,
-            propertyId: TOPICS_PROPERTY_ID,
-            toEntityId: topic.id,
-            toEntityName: topic.name,
-          });
-        }
+        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic);
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);

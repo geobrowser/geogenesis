@@ -254,14 +254,6 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.claimTopics).toEqual(topics);
   });
 
-  // Publishing is once-only, so a Debate published without topics would never get them.
-  it("refuses to build the input when the motion's topics cannot be read", async () => {
-    vi.mocked(loadMotionTopics).mockRejectedValueOnce(new Error('graph down'));
-    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
-
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow('graph down');
-  });
-
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 

@@ -259,8 +259,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     motionClaimEntityId: debate.claim.claim_entity_id,
   });
 
-  // After the share card and claims, like them, but a failure here throws instead of degrading:
-  // see `loadMotionTopics` for why a debate is never published without its claim's topics.
+  // Like the share card and claims, a failed read degrades to a debate published without topics.
   const claimTopics = await loadMotionTopics(debate.claim.claim_entity_id, debate.claim.space_id);
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({

@@ -1,48 +1,48 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ExistingClaimEntity } from './claim-reuse';
 import { loadMotionTopics } from './motion-topics';
 
 const CLAIM = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
+const TOPIC = 'dddddddddddddddddddddddddddddddd';
+
+function motion(topicIds: string[]): ExistingClaimEntity {
+  return { id: CLAIM, spaces: [SPACE], types: [], topicIds };
+}
 
 describe('loadMotionTopics', () => {
-  it("asks for the claim's topics in the debate's space", async () => {
-    const lookup = vi.fn(async () => [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }]);
+  it("returns the claim's topics in the debate's space", async () => {
+    const lookup = vi.fn(async () => [motion([TOPIC])]);
 
-    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([
-      { id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' },
-    ]);
-    expect(lookup).toHaveBeenCalledWith(CLAIM, SPACE);
+    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([{ id: TOPIC, name: null }]);
+    expect(lookup).toHaveBeenCalledWith([CLAIM], SPACE);
   });
 
-  it('keeps one topic per entity, however its id is written', async () => {
-    const lookup = vi.fn(async () => [
-      { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', name: 'Iran' },
-      { id: 'EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE', name: 'Iran' },
-    ]);
-
-    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([
-      { id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', name: 'Iran' },
-    ]);
+  it('returns no topics when the claim is not in the graph', async () => {
+    await expect(
+      loadMotionTopics(
+        CLAIM,
+        SPACE,
+        vi.fn(async () => [])
+      )
+    ).resolves.toEqual([]);
   });
 
   // The SDK throws on an id it cannot parse, which would fail the whole publish on every sweep.
   it('skips a topic whose id could not be written', async () => {
-    const lookup = vi.fn(async () => [
-      { id: 'not-an-id', name: 'Broken' },
-      { id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' },
-    ]);
+    const lookup = vi.fn(async () => [motion(['not-an-id', TOPIC])]);
 
-    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([
-      { id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' },
-    ]);
+    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([{ id: TOPIC, name: null }]);
   });
 
-  it('lets a failed read throw so the sweep retries instead of publishing without topics', async () => {
+  // Topics are secondary: a failed read must not cost the debate its publish.
+  it('returns no topics when the read fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const lookup = vi.fn(async () => {
       throw new Error('graph down');
     });
 
-    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).rejects.toThrow('graph down');
+    await expect(loadMotionTopics(CLAIM, SPACE, lookup)).resolves.toEqual([]);
   });
 });

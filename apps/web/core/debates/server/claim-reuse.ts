@@ -46,7 +46,8 @@ export type ExistingClaimEntity = {
 
 export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
 
-const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
+/** Batched graph read of the facts above. Also read by `loadMotionTopics`, which needs the same space-scoped Topics. */
+export const lookupExistingClaims: ExistingClaimLookup = (entityIds, spaceId) =>
   Effect.runPromise(
     graphql({
       query: existingClaimsDocument,
@@ -160,7 +161,7 @@ export async function applyClaimReusePolicy(
   const existingTopicsByEntity = new Map<string, Set<string>>();
   const alreadyTaggedDebate = new Set<string>();
   try {
-    const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids, spaceId) : [];
+    const entities = ids.length > 0 ? await (options.lookup ?? lookupExistingClaims)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
     verified = new Set(
       entities
