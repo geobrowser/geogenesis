@@ -6,8 +6,11 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpace } from '~/core/hooks/use-space';
+import { ID } from '~/core/id';
+import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { fallbackProposer, hasRecordToShow } from '~/core/profile/profile-proposer';
 import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
@@ -58,6 +61,8 @@ export function ProfileRecordTabs({
   authoredTabs?: React.ReactNode;
 }) {
   const [tab, setTab] = React.useState<RecordTab>('overview');
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   const {
     facts,
@@ -96,7 +101,11 @@ export function ProfileRecordTabs({
   const tabs = React.useMemo(() => {
     const all: { id: RecordTab; label: string; shown: boolean }[] = [
       { id: 'overview', label: 'Overview', shown: true },
-      { id: 'debates', label: 'Debates', shown: fromFacts(facts.debates) },
+      {
+        id: 'debates',
+        label: 'Debates',
+        shown: fromFacts(profileDebateNavigationCount(facts.debates, facts.totalDebates, isOwner) ?? 0),
+      },
       { id: 'positions', label: 'Positions', shown: hasRecordToShow(arePositionsKnown ? positions : undefined) },
       { id: 'proposals', label: 'Proposals', shown: fromFacts(facts.proposals) },
       // Always: it is the rail, and neither surface has one.
@@ -104,7 +113,7 @@ export function ProfileRecordTabs({
     ];
 
     return all.filter(entry => entry.shown);
-  }, [arePositionsKnown, facts.debates, facts.proposals, fromFacts, positions]);
+  }, [arePositionsKnown, facts.debates, facts.proposals, facts.totalDebates, fromFacts, isOwner, positions]);
 
   // A tab that stops being offered while it is open — its count arrived as zero
   // — would leave the reader on a list nothing points at.

@@ -11,6 +11,8 @@ import { Text } from '~/design-system/text';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 
+import { hubAnalyticsAttributes } from './hub-analytics';
+
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`), like the explore
 // welcome banner. Dismissing it is permanent, which is only safe because the calendar has a
 // standing entry point of its own: "Set my schedule" in the profile menu
@@ -58,6 +60,7 @@ function Banner() {
         <button
           type="button"
           aria-label="Dismiss"
+          {...hubAnalyticsAttributes('Dismiss schedule prompt', 'dismiss_debate_schedule_prompt')}
           onClick={handleDismiss}
           className="shrink-0 text-grey-04 transition-colors hover:text-text"
         >
@@ -74,6 +77,7 @@ function Banner() {
       <button
         ref={openerRef}
         type="button"
+        {...hubAnalyticsAttributes('Open schedule', 'open_debate_schedule')}
         onClick={() => setModalOpen(true)}
         className="mt-4 rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90"
       >

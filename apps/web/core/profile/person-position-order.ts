@@ -54,7 +54,7 @@ const VOTE_ORDER_SOURCE = /* GraphQL */ `
       first: $first
       after: $after
       orderBy: VOTED_AT_DESC
-      filter: { userId: { is: $userId }, or: [{ voteKind: { is: 1 } }, { voteKind: { is: 2 } }] }
+      filter: { userId: { is: $userId }, voteKind: { is: 1 } }
     ) {
       pageInfo {
         hasNextPage
@@ -158,18 +158,16 @@ const ORDER_MAX_PAGES = 20;
 export type Stance = 'agree' | 'disagree';
 
 /**
- * How this person answered a claim, by the question they were answering.
+ * How this person answered a claim.
  *
- * **Both kinds, not just the stance.** A claim marked factual asks Verify or
- * Dispute rather than Agree or Disagree, and that answer is a `voteKind` 2 vote
- * — which the stance-only shape threw away, so 18 of the reference account's 208
- * positions had no indicator anywhere and nothing said why. Which one a card
- * shows is the card's to decide: it resolves the claim's response kind itself,
- * and the same claim can be factual in one space and not in another.
+ * One field, because there is one question. A claim marked factual used to ask Verify or Dispute
+ * rather than Agree or Disagree, and that answer was a `voteKind` 2 vote carried here in a
+ * `veracity` field of its own — so that a card could show whichever matched the claim's own
+ * vocabulary, which was a per-space property the decode could not see. Claims ask one question
+ * now: the stance is the answer, and a kind-2 row is not read at all.
  */
 export type ClaimResponse = {
   stance?: Stance;
-  veracity?: Stance;
 };
 
 export type PositionOrder = {
@@ -224,16 +222,16 @@ export function stanceOf(node: VoteNode): Stance | null {
 /**
  * Vote rows to claim ids, in vote order, one entry per claim.
  *
- * Stance and veracity are separate votes on the same claim, so somebody who
- * cast both would otherwise appear twice in their own record. First seen wins,
- * and the rows arrive newest-first, so the position shown is the current one.
+ * The same claim answered in two spaces is two rows, so somebody would otherwise
+ * appear twice in their own record. First seen wins, and the rows arrive
+ * newest-first, so the position shown is the current one.
  *
- * **Both kinds are kept, apart.** `voteKind` 1 is a stance — do I agree — and 2
- * is veracity — is this true. They are different questions, so they are not
- * merged: a card shows whichever one matches the claim's own response kind, and
- * that kind is a property of the claim *in a space*, which this decode cannot
- * see. Keeping only the stance is what left a claim answered Verify or Dispute
- * with no indicator at all.
+ * **One kind.** `voteKind` 1 is a stance — do I agree — and it is the only
+ * question a claim asks. Kind 2 was veracity, a separate vote asking whether the
+ * claim was true; it was decoded into a field of its own here so that a card
+ * could show whichever matched the claim's own vocabulary. Claims have one
+ * vocabulary now and nothing reads that field, so a kind-2 row is no longer an
+ * answer to anything this list can render.
  *
  * **A retracted claim is not listed at all.** `voteType` 2 is "neither", and it
  * is not something anybody chooses: the controls offer two sides, and
@@ -270,7 +268,11 @@ export function decodeVoteOrder(nodes: readonly (VoteNode | null)[]): PositionOr
     if (!id) continue;
     const key = normId(id);
 
-    const field = node.voteKind === 1 ? 'stance' : node.voteKind === 2 ? 'veracity' : null;
+    // Kind 2 — the retired veracity response — is not an answer any more. It used to decode into a
+    // `veracity` field of its own, and with that field gone a claim answered only that way would
+    // still enter the list while rendering no verdict under either button: a record of attention
+    // with the verdict left out, which is the one thing this list exists to report.
+    const field = node.voteKind === 1 ? 'stance' : null;
     const settledKey = `${key}:${field}:${node.spaceId ? normId(node.spaceId) : ''}`;
 
     if (field && !settled.has(settledKey)) {

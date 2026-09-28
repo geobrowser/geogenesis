@@ -15,6 +15,7 @@ import { Menu, type MenuAlign } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { formatFacetCount } from './topic-facets';
 import { useDelayedFlag } from './use-delayed-flag';
 
@@ -31,6 +32,8 @@ export type HubFilterOption<T extends string> = {
 
 type Props<T extends string> = {
   label: string;
+  /** Stable filter dimension and owning debate surface. Omit on consumers outside debates. */
+  analytics?: { name: string; surface: DebateAnalyticsSurface };
   options: HubFilterOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -63,6 +66,7 @@ type Props<T extends string> = {
  */
 export function HubFilterMenu<T extends string>({
   label,
+  analytics,
   options,
   value,
   onChange,
@@ -81,7 +85,14 @@ export function HubFilterMenu<T extends string>({
       className="max-w-[280px]"
       // Space names come from the knowledge graph and can be long enough to burst the pill.
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]" aria-label={triggerAriaLabel}>
+        <SmallButton
+          icon={<ChevronDownSmall />}
+          className="max-w-[160px]"
+          aria-label={triggerAriaLabel}
+          {...(analytics
+            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+            : {})}
+        >
           {labelPending ? (
             // Sized to the pill's line box so the trigger doesn't resize when the name lands.
             <Skeleton className="h-[1em] w-16" aria-label={labelPendingAnnouncement} />
@@ -99,6 +110,9 @@ export function HubFilterMenu<T extends string>({
             // Picking a space nobody can name yet filters the list to something the viewer can't
             // read back off the trigger. The wait is short; the dead end isn't worth it.
             disabled={option.pending}
+            {...(analytics
+              ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter option`, 'filter')
+              : {})}
             onClick={() => {
               onChange(option.value);
               setOpen(false);
@@ -145,6 +159,8 @@ export function HubFilterMenu<T extends string>({
 type MultiProps<T extends string> = {
   /** Shown in the trigger pill: the one selected name, a count of them, or the "any" wording. */
   label: string;
+  /** Stable filter dimension and owning debate surface. Omit on consumers outside debates. */
+  analytics?: { name: string; surface: DebateAnalyticsSurface };
   options: HubFilterOption<T>[];
   values: T[];
   onToggle: (value: T) => void;
@@ -216,6 +232,7 @@ const SEARCH_FOCUS_DELAY_MS = 1;
  */
 export function HubMultiFilterMenu<T extends string>({
   label,
+  analytics,
   options,
   values,
   onToggle,
@@ -356,7 +373,13 @@ export function HubMultiFilterMenu<T extends string>({
       className="max-w-[280px]"
       viewportRef={setViewportNode}
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
+        <SmallButton
+          icon={<ChevronDownSmall />}
+          className="max-w-[160px]"
+          {...(analytics
+            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+            : {})}
+        >
           {labelPending ? (
             <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
           ) : (
@@ -411,6 +434,13 @@ export function HubMultiFilterMenu<T extends string>({
           {searching ? null : (
             <button
               type="button"
+              {...(analytics
+                ? debateSurfaceAnalyticsAttributes(
+                    analytics.surface,
+                    `Clear ${analytics.name.toLowerCase()} filter`,
+                    'filter'
+                  )
+                : {})}
               onClick={() => {
                 onClear();
                 onOpenChange(false);
@@ -459,6 +489,9 @@ export function HubMultiFilterMenu<T extends string>({
               key={option.value}
               type="button"
               disabled={option.pending}
+              {...(analytics
+                ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter option`, 'filter')
+                : {})}
               // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
               // an ordinary button and nothing says whether it is picked.
               aria-pressed={selected.has(option.value)}

@@ -8,11 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { EntityPageBody } from './entity-page-body';
 
 const mocks = vi.hoisted(() => ({
   actions: null as Record<string, unknown> | null,
+  commentSection: null as Record<string, unknown> | null,
   cover: null as Record<string, unknown> | null,
   entity: { id: 'entity-1', types: [] as { id: string }[] },
   heading: null as Record<string, unknown> | null,
@@ -73,6 +75,9 @@ vi.mock('~/partials/profile/person-profile-view', () => ({
 vi.mock('~/partials/profile/personal-space-profile', () => ({
   PersonalSpaceHeadline: () => <div data-testid="profile-headline" />,
 }));
+vi.mock('~/partials/profile/personal-space-tagline', () => ({
+  PersonalSpaceTagline: () => <div data-testid="profile-tagline" />,
+}));
 
 // Everything below the header row. Each reaches for the sync engine, the editor or geo-chat, and
 // none of it is what this file asserts.
@@ -96,7 +101,12 @@ vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksC
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
-vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+vi.mock('~/partials/comments/comments-section', () => ({
+  CommentSection: (props: Record<string, unknown>) => {
+    mocks.commentSection = props;
+    return null;
+  },
+}));
 vi.mock('~/core/claims/browse/claim-page-view', () => ({
   CLAIM_PAGE_CONTENT_INSET_CLASS: 'claim-content-inset',
   CLAIM_PAGE_CONTENT_MAX_WIDTH: 720,
@@ -129,6 +139,7 @@ function renderPanel(overrides?: { isRelationPage?: boolean; previewName?: strin
 
 beforeEach(() => {
   mocks.actions = null;
+  mocks.commentSection = null;
   mocks.cover = null;
   mocks.entity = { id: 'entity-1', types: [] };
   mocks.heading = null;
@@ -184,6 +195,18 @@ describe('EntityPageBody relation side panel', () => {
     expect(mocks.actions).toMatchObject({ isVoteable: true });
   });
 
+  it('identifies debate comments from the generic entity footer', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: DEBATE_TYPE_ID }] };
+
+    renderPanel();
+
+    expect(mocks.commentSection).toMatchObject({
+      entityId: 'entity-1',
+      spaceId: 'space-1',
+      targetEntityType: 'debate',
+    });
+  });
+
   it('puts profile actions beside the name and hides Person and Space types', () => {
     const personType = { id: SystemIds.PERSON_TYPE };
     mocks.entity = { id: 'entity-1', types: [personType] };
@@ -194,11 +217,14 @@ describe('EntityPageBody relation side panel', () => {
     expect(screen.getByTestId('person-profile')).toBeInTheDocument();
     expect(screen.queryByTestId('metadata')).toBeNull();
     expect(screen.getByTestId('title').parentElement?.parentElement).toContainElement(screen.getByTestId('actions'));
-    expect(screen.getByTestId('profile-headline').compareDocumentPosition(screen.getByTestId('description')) & 4).toBe(
-      4
-    );
+    // Name, tagline, roles — and no description at all: a person's bio is shown and edited in
+    // their About tab here, the same card the space route puts in its rail.
+    expect(
+      screen.getByTestId('profile-tagline').compareDocumentPosition(screen.getByTestId('profile-headline')) & 4
+    ).toBe(4);
+    expect(screen.queryByTestId('description')).toBeNull();
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
-    expect(mocks.actions).toMatchObject({ isVoteable: true, votesFirst: true });
+    expect(mocks.actions).toMatchObject({ isVoteable: true, compact: true });
   });
 
   it('withholds generic-only chrome while the Person space lookup is pending', () => {

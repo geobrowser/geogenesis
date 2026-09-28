@@ -49,10 +49,19 @@ const DEBATE_COLUMN_STYLE = {
 export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
+  initialSeekSeconds = null,
   fallback,
 }: {
   spaceId: string;
   initialDebateId?: string;
+  /**
+   * Where to start the anchored debate, in seconds — from a link that named a moment.
+   *
+   * Only ever applied to {@link initialDebateId}: a position means nothing on the debates that
+   * happen to be scrolled to next, and carrying it down the feed would seek every card a reader
+   * passes. See `debate-timecode.ts` for the param this comes from.
+   */
+  initialSeekSeconds?: number | null;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
 }) {
@@ -319,6 +328,9 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          initialSeekSeconds={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
+          }
           // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
@@ -381,7 +393,13 @@ export function DebatesBrowseFeed({
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
-      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+      <EntityCommentsPanel
+        key={activeDebate.id}
+        entityId={activeDebate.id}
+        spaceId={spaceId}
+        targetEntityType="debate"
+        onClose={closePanel}
+      />
     ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
@@ -401,6 +419,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  initialSeekSeconds,
   preload,
   root,
   scrollHint,
@@ -415,6 +434,7 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  initialSeekSeconds: number | null;
   preload: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
@@ -492,7 +512,7 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
+            <DebateFeedPlayer debate={debate} active={active} preload={preload} initialSeekSeconds={initialSeekSeconds} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
@@ -591,6 +611,8 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          data-geo-analytics-label="Debate feed join debate"
+          data-geo-analytics-intent="open_debates_hub"
           // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
           // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
           // that followed reopened it, which read as a flicker.

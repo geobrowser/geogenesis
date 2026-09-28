@@ -31,8 +31,10 @@ export type ProfileFacts = {
   proposals: number;
   /** Claims this person holds a position on. */
   positions: number;
-  /** Debates they argued a side of. */
+  /** Publicly visible debates they argued a side of. */
   debates: number;
+  /** Debates they argued before profile visibility is applied. Owner navigation only. */
+  totalDebates: number;
   spaces: ProfileSpace[];
   verifiedBy: Verifier[];
   /** Unix seconds, from the person entity rather than the space. */
@@ -43,6 +45,7 @@ export const NO_FACTS: ProfileFacts = {
   proposals: 0,
   positions: 0,
   debates: 0,
+  totalDebates: 0,
   spaces: [],
   verifiedBy: [],
   joinedAt: null,
@@ -51,12 +54,16 @@ export const NO_FACTS: ProfileFacts = {
 /**
  * Vote kinds that are a position on a claim.
  *
- * 1 is a stance, 2 is veracity. The table holds other kinds, so counting it
- * unfiltered overstates the figure — and there is a second table, `votes` on
- * `voterId`, which is a different thing again and returns roughly three times
- * as many rows. Positions is `userVotes` on `userId`, these two kinds.
+ * 1 is a stance. The table holds other kinds, so counting it unfiltered
+ * overstates the figure — and there is a second table, `votes` on `voterId`,
+ * which is a different thing again and returns roughly three times as many
+ * rows. Positions is `userVotes` on `userId`, this kind.
+ *
+ * Kind 2 was the veracity response. It is out for the same reason it is out of
+ * the tallies: nothing reads those rows, so counting them would put a number
+ * above a list that does not contain them.
  */
-export const POSITION_VOTE_KINDS = [1, 2] as const;
+export const POSITION_VOTE_KINDS = [1] as const;
 
 /**
  * Subspace relations that mean somebody vouched for this space.

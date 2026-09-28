@@ -314,13 +314,96 @@ describe('ProfileActivitySection', () => {
     expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
   });
 
-  it('keeps the first available kind selected when an earlier kind finishes later', () => {
+  /*
+   * GEO-3021. The two kinds are separate requests, so which one lands first is a
+   * race — and a default committed to the winner is a default decided by the
+   * network. Debates are the lead kind on every surface that renders this, so
+   * they win the default as soon as they have anything to show, however late.
+   */
+  it('moves to debates when they arrive after claims', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
     const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
 
+    // Claims alone until the debates land: better the record that has arrived
+    // than a skeleton over one that may turn out to be empty.
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
 
     rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves a reader who picked claims there while the debates keep loading in', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // The debates page settling — more rows, ranks landing — re-renders the card.
+    // The default must not run again over a pick that is still valid.
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /*
+   * The other end of GEO-3021. A default that re-reads the record on every render
+   * moves whenever the record moves — including long after the reader settled in,
+   * since the queries refetch on window focus. Once the card has finished
+   * assembling, the default is finished too.
+   */
+  it('stays put when a first debate turns up after the card has settled', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // A refetch, an hour in, turning up a debate this person is now part of.
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('waits for the debates to settle before handing them the default', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    // Rows in, order still out — `useEntityScores` answers a round trip behind the
+    // rows, and the caller reports that wait as `isLoading`.
+    const { rerender } = render(
+      <ProfileActivitySection kinds={[kind({ rows: [row('d2'), row('d1')], isLoading: true }), claims]} />
+    );
+
+    // Not yet: taking the default here would paint an unranked row and reshuffle it.
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
+
+    expect(screen.getAllByTestId('card')[0]).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a pick through a render where both kinds blank together', () => {
+    const debates = kind({ rows: [row('d1')] });
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates, claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // The space Overview withholds every row while its counts are in flight, so
+    // both kinds can empty on the same render. Their pick is not spent on that.
+    rerender(
+      <ProfileActivitySection
+        kinds={[
+          { ...debates, rows: [] },
+          { ...claims, rows: [], isLoading: true },
+        ]}
+      />
+    );
+    rerender(<ProfileActivitySection kinds={[debates, claims]} />);
 
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');

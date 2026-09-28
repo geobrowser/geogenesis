@@ -7,7 +7,7 @@ const gate = (over: Partial<Parameters<typeof debateRequestGate>[0]> = {}) =>
 
 describe('debateRequestGate', () => {
   it('opens once geo-chat holds the side the viewer holds', () => {
-    expect(gate()).toEqual({ canRequest: true, pending: false, pendingLabel: null });
+    expect(gate()).toEqual({ canRequest: true, awaitingOpponent: false, pending: false, pendingLabel: null });
   });
 
   // The defect this replaces: the picker compared the graph-derived position against itself, so the
@@ -33,7 +33,12 @@ describe('debateRequestGate', () => {
 
   describe('the opponent half stays with the surface', () => {
     it('makes no offer when the surface says there is no opponent', () => {
-      expect(gate({ opponentReady: false })).toEqual({ canRequest: false, pending: false, pendingLabel: null });
+      expect(gate({ opponentReady: false })).toEqual({
+        canRequest: false,
+        awaitingOpponent: false,
+        pending: false,
+        pendingLabel: null,
+      });
     });
 
     // Nothing is being waited *for* without an opponent, so a claim the viewer has merely not
@@ -52,6 +57,7 @@ describe('debateRequestGate', () => {
   it('is not waiting when the viewer holds no position', () => {
     expect(gate({ chatPosition: null, localPosition: null })).toEqual({
       canRequest: false,
+      awaitingOpponent: false,
       pending: false,
       pendingLabel: null,
     });
@@ -71,5 +77,29 @@ describe('debateRequestGate', () => {
     it('names nothing once the gate is open', () => {
       expect(gate({ indexingDelayed: true }).pendingLabel).toBeNull();
     });
+  });
+});
+
+describe('opponentPresent', () => {
+  const settled = { chatPosition: true, localPosition: true, opponentReady: true } as const;
+
+  // Off a room there is no join event to wait on, so the gate is unchanged.
+  it('defaults to present', () => {
+    const gate = debateRequestGate(settled);
+    expect(gate.canRequest).toBe(true);
+    expect(gate.awaitingOpponent).toBe(false);
+  });
+
+  // GEO-2941 state 3 turns the button on, so before it the button is disabled, not absent.
+  it('holds a settled request until the opponent arrives, without calling it pending', () => {
+    const gate = debateRequestGate({ ...settled, opponentPresent: false });
+    expect(gate.canRequest).toBe(false);
+    expect(gate.awaitingOpponent).toBe(true);
+    expect(gate.pending).toBe(false);
+  });
+
+  it('is not awaiting an opponent when there is no offer to make', () => {
+    const gate = debateRequestGate({ ...settled, opponentReady: false, opponentPresent: false });
+    expect(gate.awaitingOpponent).toBe(false);
   });
 });

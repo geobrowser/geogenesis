@@ -30,14 +30,14 @@ describe('useClaimResponseIndexedNotifier', () => {
     const { queryClient, wrapper } = createHarness();
     const getPrivyIdentityToken = vi.fn();
     renderHook(() => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, 'account-1'), { wrapper });
-    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'veracity'] as const;
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
     const indexed = {
       status: 'indexed',
       pending: {
         entityId: 'claim-1',
         expectedResponse: 'negative',
         personalSpaceId: 'profile-1',
-        responseKind: 'veracity',
+        responseKind: 'stance',
         spaceId: 'space-1',
       },
       runId: 'run-1',
@@ -48,7 +48,7 @@ describe('useClaimResponseIndexedNotifier', () => {
       expect(mocks.notify).toHaveBeenCalledWith(
         'space-1',
         'claim-1',
-        'veracity',
+        'stance',
         false,
         getPrivyIdentityToken,
         'account-1',
@@ -294,6 +294,36 @@ describe('useClaimResponseIndexedNotifier', () => {
         runId: 'run-other-account',
       });
     });
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A key written under the retired kind is not a report this app can make.
+   *
+   * `isClaimResponseKind` exists to reject it, and every other negative case here differs by
+   * account rather than by kind — so the guard itself had nothing asserting it. Forwarding one
+   * would tell geo-chat a response was published as a veracity vote when it was published as a
+   * stance.
+   */
+  it('ignores an indexing key written under the retired kind', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+
+    act(() =>
+      queryClient.setQueryData(['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'veracity'], {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-retired',
+      })
+    );
 
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(mocks.notify).not.toHaveBeenCalled();

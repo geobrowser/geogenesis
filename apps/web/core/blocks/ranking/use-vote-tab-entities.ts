@@ -102,7 +102,7 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
         // read in the entity's own space — resolving a claim verified elsewhere
         // against this block's space downgrades it and drops it from the tab.
         const entitySpaceId = resolveEntitySpaceId(entity, spaceId);
-        if (responseKindToVoteKind(resolveEntityResponseKind(entity, entitySpaceId)) !== votedKind) return [];
+        if (responseKindToVoteKind(resolveEntityResponseKind(entity)) !== votedKind) return [];
         return [toRankingEntryDisplay(entity, entitySpaceId)];
       }),
     [entities, voteKindById, spaceId]

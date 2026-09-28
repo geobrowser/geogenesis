@@ -231,6 +231,9 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.requests_changed', payload: {} },
       [
         ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'account', 'user-a', 'scheduled-debates'],
+        ['debates', 'account', 'user-a', 'upcoming-rooms'],
+        ['debates', 'account', 'user-a', 'room'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -330,9 +333,9 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-1']], {});
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-2']], {});
     queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']], new Map());
-    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
-    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
-    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:stance']], new Map());
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-2']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', []], {});
@@ -376,14 +379,14 @@ describe('DebateGatewayClient', () => {
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:stance']] })!
       )
     ).toBe(true);
     expect(
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:stance']] })!
       )
     ).toBe(true);
     // The rematch picker draws both participants' sides, so a claim change has to reach the batch
@@ -416,7 +419,7 @@ describe('DebateGatewayClient', () => {
       predicate!(
         queryClient
           .getQueryCache()
-          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']] })!
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:stance']] })!
       )
     ).toBe(false);
     // The rematch picker reads both participants' sides straight from the graph in one query;
@@ -438,10 +441,10 @@ describe('DebateGatewayClient', () => {
     await flushInvalidations();
     invalidateQueries.mockRestore();
 
-    const responseTargets = ['claim-1:stance', 'claim-2:veracity'];
+    const responseTargets = ['claim-1:stance', 'claim-2:stance'];
     const summaryDataKey = ['claim-response-summary-data', 'profile-1', 'space-1', responseTargets] as const;
     const responseBatchKey = ['claim-response-summaries', 'profile-1', 'space-1', responseTargets] as const;
-    const fetchSummaryData = vi.fn(async () => new Map([['claim-2:veracity', { negative: 1 }]]));
+    const fetchSummaryData = vi.fn(async () => new Map([['claim-2:stance', { negative: 1 }]]));
     const observer = new QueryObserver(queryClient, {
       queryKey: responseBatchKey,
       queryFn: () =>
@@ -616,6 +619,38 @@ describe('DebateGatewayClient', () => {
     client.setDebatePresence(true);
     expect(sockets[0]!.sent.at(-1)).toEqual(
       expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true } })
+    );
+  });
+
+  // GEO-3028. Tab visibility travels beside presence, with no grace, so switching tabs takes
+  // someone off other people's lists at once. Until it is reported it is left off the heartbeat
+  // entirely, which geo-chat reads as "unknown", never as "hidden".
+  it('reports tab visibility beside presence, at once, and only once it is known', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      true
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true } })
+    );
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    client.setTabVisible(false);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true, debate_visible: false } })
+    );
+
+    // Behind an unacknowledged heartbeat it coalesces like presence does, keeping the final state.
+    client.setTabVisible(true);
+    client.setTabVisible(false);
+    client.setTabVisible(true);
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true, debate_visible: true } })
     );
   });
 

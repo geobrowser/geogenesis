@@ -8,12 +8,21 @@ import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
+/**
+ * What a reader can see when we could not find out what they can see.
+ *
+ * `featuredError` is the part that matters rather than the empty rows: for a signed-out reader the
+ * Featured list is the whole of Explore's space scope, so an empty one here is not "you belong to
+ * nothing" but "we do not know", and `fetchExploreFeed` has to be able to tell those apart before
+ * it decides whether an empty feed is an honest answer.
+ */
 const EMPTY_BROWSE: BrowseSidebarData = {
   featured: [],
   editorOf: [],
   memberOf: [],
   documentationImage: null,
   personalSpaceId: null,
+  featuredError: true,
 };
 
 /** Auth, memberships, and visible spaces shared by Explore and contextual Topic feeds. */

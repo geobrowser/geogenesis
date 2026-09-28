@@ -399,50 +399,47 @@ export const entityExistsQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
-  query EntityCommentReplyBacklinksPage(
-    $id: UUID!
+export const commentEntitiesConnectionQuery = graphql(/* GraphQL */ `
+  query CommentEntitiesConnection(
+    $targetEntityId: UUID!
     $replyToTypeId: UUID!
     $commentTypeId: UUID!
     $first: Int!
-    $offset: Int!
+    $after: Cursor
   ) {
-    entity(id: $id) {
-      backlinksList(
-        first: $first
-        offset: $offset
-        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
-      ) {
-        fromEntity {
-          id
-        }
+    entitiesConnection(
+      first: $first
+      after: $after
+      typeId: $commentTypeId
+      orderBy: [CREATED_AT_DESC, ID_ASC]
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        ...FullEntity
       }
     }
   }
 `);
 
-export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
-  query EntitiesBatchForComments($filter: EntityFilter) {
+export const entityCommentCountQuery = graphql(/* GraphQL */ `
+  query EntityCommentCount($targetEntityId: UUID!, $replyToTypeId: UUID!, $commentTypeId: UUID!) {
+    entitiesConnection(
+      typeId: $commentTypeId
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      totalCount
+    }
+  }
+`);
+
+export const entitiesBatchForDebateVotesQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForDebateVotes($filter: EntityFilter) {
     entities(filter: $filter) {
-      id
-      name
-      description
-      spaceIds
-      createdAt
-      updatedAt
-
-      types {
-        id
-        name
-      }
-
-      valuesList(first: 1000) {
-        ...EntityValueFields
-      }
-
-      relationsList(first: 1000) {
-        ...RelationFields
-      }
+      ...FullEntity
     }
   }
 `);

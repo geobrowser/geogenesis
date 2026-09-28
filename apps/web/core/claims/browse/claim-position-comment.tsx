@@ -5,10 +5,10 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import type { DebateClaimPositionSummary, MatchmakingReadiness } from '~/core/debates/api';
+import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 const MAX_COMMENT_HEIGHT_PX = 120;
 
@@ -40,24 +40,38 @@ export function ClaimPositionCommentControl({
   onRespond,
   promptForComment,
   disabled,
+  pending,
   titleFor,
   noteFor,
   positionRowClassName,
   positionRowEndSlot,
+  onActivityPublish,
 }: {
   entityId: string;
   spaceId: string;
   positions: DebateClaimPositionSummary[];
-  responseKind: MatchmakingReadiness['response_kind'];
+  responseKind: ResponseKind;
   viewerPosition: boolean | null;
   onRespond: (position: boolean) => void;
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
   promptForComment: boolean;
+  /**
+   * A comment appearing or disappearing here, for a host whose own count cannot see it.
+   *
+   * This composer publishes an ordinary top-level comment on the claim, and on the claim page that
+   * comment is inside the Activity heading's server aggregate — which nothing in the comment caches
+   * can move. The heading prefers that aggregate unconditionally, so without this it stayed one
+   * behind after a reader explained their position. Omitted on the Explore card, whose pill is
+   * derived from the comment list and corrects itself.
+   */
+  onActivityPublish?: (delta: number) => void;
   disabled?: boolean;
+  /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
+  pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   positionRowClassName?: string;
-  /** Compact action rendered after Disagree/Dispute, such as the Explore comments-panel opener. */
+  /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
 }) {
   const [promptedPosition, setPromptedPosition] = React.useState<boolean | null>(null);
@@ -66,7 +80,10 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const { publishComment: submitComment } = usePublishComment(entityId, spaceId);
+  const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
+    targetEntityType: 'claim',
+    interactionSurface: 'claim_position_explanation',
+  });
 
   const closeComposer = React.useCallback(() => {
     setPromptedPosition(null);
@@ -124,7 +141,11 @@ export function ClaimPositionCommentControl({
     const text = comment.trim();
     if (!text) return;
     setIsSubmitting(true);
-    const result = await submitComment({ text });
+    const result = await submitComment({
+      text,
+      onOptimistic: () => onActivityPublish?.(1),
+      onFailed: () => onActivityPublish?.(-1),
+    });
 
     // A failed publish leaves the draft available to retry. Successful and queued comments already
     // have an optimistic row in the thread; closing here hands the reader from the composer to it.
@@ -137,7 +158,7 @@ export function ClaimPositionCommentControl({
     setIsSubmitting(false);
   };
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
   const action = promptedPosition === null ? null : promptedPosition ? copy.positiveAction : copy.negativeAction;
 
   return (
@@ -149,6 +170,7 @@ export function ClaimPositionCommentControl({
           viewerPosition={viewerPosition}
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
+          pending={pending}
           titleFor={titleFor}
           noteFor={noteFor}
           endSlot={positionRowEndSlot}

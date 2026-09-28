@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   isSettlingMemberships: false,
   /** What the feed asked the allowlist hook for. */
   allowlistEnabled: undefined as boolean | undefined,
+  /** The error the infinite query reports, so the failed-feed message can be rendered. */
+  error: null as Error | null,
 }));
 
 function createLocalStorage(): Storage {
@@ -58,7 +60,7 @@ vi.mock('@tanstack/react-query', () => ({
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
       hasNextPage: false,
-      error: null,
+      error: mocks.error,
     };
   },
   useQuery: (options: Record<string, unknown>) => {
@@ -120,6 +122,7 @@ beforeEach(() => {
   mocks.liveMemberSpaceIds = null;
   mocks.isSettlingMemberships = false;
   mocks.allowlistEnabled = undefined;
+  mocks.error = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -710,5 +713,46 @@ describe('the space filter', () => {
     pickOption('Any space');
 
     expect(await sentSpaceIds()).toBeNull();
+  });
+});
+
+/**
+ * An unavailable feed and a feed with nothing in it were the same 200 with an empty
+ * `items` array, so the surface printed "No entities match these filters yet" through an outage —
+ * a sentence about filters the reader never touched — and, seeing a success, never retried. The
+ * route answers 503 now, and what matters on this side is that the body no longer talks the client
+ * out of noticing: an error status is an error however well-formed the JSON underneath it is.
+ */
+describe('a feed request that failed', () => {
+  function renderExploreFeed() {
+    return render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} initialSort="best" />);
+  }
+
+  it('rejects on an error status even when the body still parses as an empty page', async () => {
+    mocks.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ items: [], nextCursor: null, error: 'feed_unavailable' }),
+    });
+    renderExploreFeed();
+
+    const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
+    await expect(queryFn({ pageParam: undefined })).rejects.toThrow();
+  });
+
+  // The retry is what turns a shed traversal on one cold instance back into a working feed, so it
+  // is part of the fix rather than incidental configuration.
+  it('is retried before the reader is told anything', () => {
+    renderExploreFeed();
+
+    expect(mocks.queryOptions?.retry).toBe(2);
+  });
+
+  it('says the feed did not load rather than blaming the filters', () => {
+    mocks.error = new Error('Feed failed');
+    renderExploreFeed();
+
+    expect(screen.getByText('Could not load the feed.')).toBeTruthy();
+    expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
   });
 });

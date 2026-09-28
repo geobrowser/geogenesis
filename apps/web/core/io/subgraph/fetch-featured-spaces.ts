@@ -4,6 +4,7 @@ import { FEATURED_TAG_ID, ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID
 import { Environment } from '~/core/environment';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
+import { isAbortError } from './errors';
 import { graphql } from './graphql';
 import {
   AVATAR_PROPERTY_ID,
@@ -131,19 +132,47 @@ function resolveTopicName(name: string | null | undefined): string {
   return name;
 }
 
-async function runQuery<T>(query: string): Promise<T | null> {
+/**
+ * One extra attempt per traversal round.
+ *
+ * The frontier query asks 200 topics at once for their claiming spaces, images and subtopics, which
+ * makes it the heaviest thing on the Explore path and the first the API sheds under load. It is shed
+ * as a GraphQL *error* rather than a transport failure, and `graphql`'s own retry covers only
+ * Railway DNS blips, so nothing above it re-attempts. Same shape as that one, and kept to a single
+ * retry: the traversal is already five sequential round trips inside a request, and the feed route
+ * retries the whole thing once a failure is visible to it.
+ *
+ * Retried here rather than by widening `graphql`'s policy, which every subgraph fetcher in the app
+ * shares — this is one known-heavy query, not a claim about all of them.
+ */
+const ROUND_RETRY = {
+  times: 1,
+  // A cancelled caller has nothing to retry: it went away.
+  while: (error: { _tag: string }) => !isAbortError(error),
+} as const;
+
+/**
+ * One round of the traversal, or a rejection.
+ *
+ * Never resolves to "no data" on failure. A round that returned `null` used to read downstream as a
+ * frontier with nothing in it, which ends the loop and returns whatever had been collected so far —
+ * so a single shed query produced a short, or empty, Featured list that every caller then treated
+ * as the complete answer. For a signed-out reader the Featured list *is* the whole visible space
+ * scope of Explore, so that empty list emptied the feed and the surface reported it as "No entities
+ * match these filters yet".
+ */
+async function runQuery<T>(query: string): Promise<T> {
   const resultOrError = await Effect.runPromise(
-    Effect.either(graphql<T>({ query, endpoint: Environment.getConfig().api }))
+    Effect.either(Effect.retry(graphql<T>({ query, endpoint: Environment.getConfig().api }), ROUND_RETRY))
   );
 
-  if (Either.isLeft(resultOrError)) {
-    const error = resultOrError.left;
-    if (error._tag === 'AbortError') throw error;
-    console.error(`${error._tag}: Unable to fetch featured spaces`);
-    return null;
-  }
+  if (Either.isRight(resultOrError)) return resultOrError.right;
 
-  return resultOrError.right;
+  const error = resultOrError.left;
+  // The rejection must keep propagating so the shared traversal does not cache an abort as an answer.
+  if (isAbortError(error)) throw error;
+  console.error(`${error._tag}: Unable to fetch featured spaces`);
+  throw new Error('Failed to load featured spaces');
 }
 
 /**
@@ -165,10 +194,37 @@ let shared: Promise<FeaturedSpace[]> | null = null;
 // pile-up this function exists to stop.
 let resolvedAt: number | null = null;
 
-/** Exported for tests; no caller should need to reach for this. */
-export function clearFeaturedSpacesCache(): void {
+/**
+ * The most recent list a traversal actually walked to completion, kept past its TTL.
+ *
+ * The Featured set is curated — an editor tags a topic Featured in the Root space — so a five
+ * minute old copy of it is right in every way that matters to a reader, and serving it beats
+ * serving nothing when a refresh fails. Nothing here is stale in the sense that matters: what
+ * changed is our ability to re-read it, not the answer.
+ *
+ * A list served this way starts the TTL again, so a persistent outage is re-checked every five
+ * minutes rather than on every request. That is the point: the alternative is each request walking
+ * a tree that is currently failing, which is the pile-up the sharing above exists to prevent.
+ */
+let lastResolved: FeaturedSpace[] | null = null;
+
+/**
+ * Drops the shared promise so the next caller starts a traversal, leaving `lastResolved` alone.
+ *
+ * The distinction matters for the one rejection that reaches here with a good list already in
+ * hand: a cancelled caller. Clearing everything would let one reader navigating away take the
+ * fallback down for everyone else — the same hazard the re-throw in `runQuery` exists to avoid,
+ * one level up.
+ */
+function dropSharedTraversal(): void {
   shared = null;
   resolvedAt = null;
+}
+
+/** Exported for tests; no caller should need to reach for this. */
+export function clearFeaturedSpacesCache(): void {
+  dropSharedTraversal();
+  lastResolved = null;
 }
 
 /**
@@ -190,7 +246,22 @@ export function clearFeaturedSpacesCache(): void {
 export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
   if (shared && (resolvedAt === null || Date.now() - resolvedAt < FEATURED_SPACES_TTL_MS)) return shared;
 
-  const started = fetchFeaturedSpaces();
+  const traversal = fetchFeaturedSpaces();
+  // A failed refresh falls back to the last complete walk rather than to nothing. Only a *complete*
+  // one is ever stored, so this can serve a list that is a few minutes old but never a partial one.
+  // An abort still propagates: the caller went away, and swallowing it here would let one
+  // cancelled request install an answer for everyone else.
+  const started = traversal.then(
+    featured => {
+      lastResolved = featured;
+      return featured;
+    },
+    error => {
+      if (isAbortError(error) || lastResolved === null) throw error;
+      console.error('Featured spaces traversal failed; serving the last list walked in full', error);
+      return lastResolved;
+    }
+  );
   shared = started;
   resolvedAt = null;
   // Only start the clock once the answer exists. Timing from the *call* would let a slow
@@ -200,7 +271,7 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
       if (shared === started) resolvedAt = Date.now();
     },
     () => {
-      if (shared === started) clearFeaturedSpacesCache();
+      if (shared === started) dropSharedTraversal();
     }
   );
   return started;
@@ -218,8 +289,6 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
  */
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
   const root = await runQuery<RootResult>(ROOT_QUERY);
-  // `runQuery` returns null only on a failed request (aborts already rethrew).
-  if (root === null) throw new Error('Failed to load featured spaces');
   const rootTopicId = root.space?.topicId;
   if (!rootTopicId) return [];
 
@@ -235,8 +304,10 @@ export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
     const batch = frontier.slice(0, BATCH_SIZE);
     const overflow = frontier.slice(BATCH_SIZE);
 
+    // Rejects rather than returning an empty round, so a shed query cannot end the walk early and
+    // pass a truncated list off as the complete one. See `runQuery`.
     const result = await runQuery<FrontierResult>(frontierQuery(batch));
-    const topics = result?.entities ?? [];
+    const topics = result.entities ?? [];
 
     const nextFrontier: string[] = [];
 

@@ -41,6 +41,13 @@ const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/claims',
   searchParams: new URLSearchParams(),
   isMobile: false,
+  peerAvailability: false,
+  scheduledAwaitingAnswerCount: undefined as number | undefined,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -50,13 +57,41 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
+// People compares the roster with the signed-in viewer. This panel suite has no wallet or graph
+// providers and only verifies tab orchestration, so those reads settle to an empty comparison.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isLoading: false }),
+}));
+
+vi.mock('../participant-positions', async importOriginal => ({
+  ...(await importOriginal<typeof import('../participant-positions')>()),
+  useParticipantPositions: () => ({
+    byClaim: new Map(),
+    isLoading: false,
+    isFetching: false,
+    isPlaceholderData: false,
+    error: null,
+  }),
+}));
+
+vi.mock('../claim-picker-page', async importOriginal => ({
+  ...(await importOriginal<typeof import('../claim-picker-page')>()),
+  useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
+}));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
-  useDebateActivity: () => ({ data: { available_to_debate: mocks.available, incoming_request_count: 0 } }),
+  useDebateActivity: () => ({
+    data: {
+      available_to_debate: mocks.available,
+      incoming_request_count: 0,
+      scheduled_awaiting_answer_count: mocks.scheduledAwaitingAnswerCount,
+    },
+  }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -168,6 +203,8 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/claims';
   mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
+  mocks.peerAvailability = false;
+  mocks.scheduledAwaitingAnswerCount = undefined;
 });
 
 afterEach(cleanup);
@@ -665,5 +702,38 @@ describe('warming Explore', () => {
     renderOpen('lobby');
 
     expect(screen.queryByTestId('claims-tab-warm')).toBeNull();
+  });
+});
+
+// The Requests tab's badge counts scheduled requests from activity, behind the flag.
+describe('Requests badge', () => {
+  function renderRequestsButton() {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    return screen.getByRole('button', { name: /^Requests/ });
+  }
+
+  it('counts scheduled requests waiting on an answer', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+
+  it('shows no badge when activity has no count', () => {
+    mocks.peerAvailability = true;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
+  });
+
+  it('counts no scheduled requests with the flag off, even when activity has some', () => {
+    mocks.scheduledAwaitingAnswerCount = 2;
+
+    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 });

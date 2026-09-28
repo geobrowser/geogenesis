@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { parseExploreSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
+import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { normId } from '~/core/utils/norm-id';
@@ -53,7 +54,6 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
   } catch (e) {
     console.error('explore feed', e);
-    /** Degraded response so the Explore UI still mounts when GraphQL is down; client shows empty feed. */
-    return NextResponse.json({ items: [], nextCursor: null });
+    return feedUnavailableResponse();
   }
 }

@@ -6,12 +6,11 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { type WinnerShare, useWinnerSharesWithStatus } from '~/core/claims/browse/claim-debates';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
-import { type PersonRecord, canonicalizeWinnerShares, derivePersonRecord } from './person-record';
+import { type PersonRecord, derivePersonRecord } from './person-record';
 import {
   DEBATE_RELATIONS_PER_SIDE,
   POSITIONS_PER_PERSON,
@@ -20,13 +19,6 @@ import {
   isPersonId,
   personAlias,
 } from './person-records-document';
-
-const EMPTY_SHARES = new Map<string, WinnerShare>();
-
-/** Canonical identity of the debates a rate was computed over, order- and spelling-independent. */
-function debateSetKey(debateIds: string[]): string {
-  return debateIds.map(uuidToHex).sort().join(',');
-}
 
 /** Raw per-person counts, before the winner grouping and the omit rules are applied. */
 type RawRecord = {
@@ -69,14 +61,9 @@ function isShort<TNode>(side: CountedConnection<TNode> | undefined, collected: n
 /**
  * The record behind every row of the People tab.
  *
- * Two requests, not two per row. The first is one aliased batch for the whole visible list. The
- * second is `useWinnerShares` over the debates that batch turned up, reused rather than
- * reimplemented because deriving a win from `Vote → Winner` relations without grouping them per
- * debate counts *votes cast for someone* instead — on the graph's most decorated debater that is
- * 8 votes across 5 debates of which they won 2, three different numbers from one relation.
- *
- * The second request depends on the first, so this is a waterfall by construction: the debates a
- * person argued are not known until the batch returns.
+ * One aliased graph request for the whole visible list, not one per row. The row no longer shows a
+ * win rate, so this deliberately stops at activity counts instead of fetching winner shares in a
+ * second dependent request whose result nobody renders.
  */
 export function usePersonRecords(personIds: string[]): Map<string, PersonRecord> {
   // Deduplicated and sorted so a re-ordered or repeated list — the presence feed re-sorts as people
@@ -112,90 +99,15 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     },
   });
 
-  // Truncated records are excluded: their rate is withheld anyway, so their debates would only
-  // spend room under the vote cap below without ever producing a number.
-  //
-  // Sorted for the same reason `key` is. `relationsConnection` is asked without an `orderBy`, so
-  // node order is not guaranteed stable across refetches, and an unsorted union would hand
-  // `useWinnerSharesWithStatus` a fresh react-query key — refetching up to 500 vote entities and
-  // reopening the stale window below — on a reordering alone, with no data change behind it.
-  //
-  // That cap is a real ceiling on this. `useWinnerShares` was written for a five-debate browse page
-  // and answers with an empty map once its combined result reaches 500 votes, which here would drop
-  // the win rate from every row at once rather than from the rows responsible. It fails toward
-  // omission rather than toward a wrong number, which is the right direction, but the union of
-  // every listed person's lifetime debates does grow with the graph. The graph holds 47 debate
-  // votes today against a cap of 500; when that stops being true this needs a bounded, paginated
-  // fetch of its own — shared with the record page, which wants the same set.
-  const debateIds = React.useMemo(() => {
-    if (!raw) return [];
-    return [
-      ...new Set([...raw.values()].filter(record => !record.truncated).flatMap(record => record.debateIds)),
-    ].sort();
-  }, [raw]);
-
-  // Retained across the key change so a rate does not blink out every time someone comes online.
-  // `isStale` is the guard that makes retaining safe: see below.
-  const { shares: winnerByDebateId, isStale: sharesAreStale } = useWinnerSharesWithStatus(debateIds, {
-    keepPreviousWhileLoading: true,
-  });
-
-  // Re-keyed once for the whole tab rather than once per row: the same map is read for everybody
-  // listed, and rebuilding it inside the loop is O(people × debates) Map writes on every presence
-  // flap.
-  const sharesByDebateId = React.useMemo(
-    () => canonicalizeWinnerShares(sharesAreStale ? EMPTY_SHARES : winnerByDebateId),
-    [winnerByDebateId, sharesAreStale]
-  );
-
-  // Rates already derived from a settled share set, each remembered against the exact debates it
-  // was computed over, so one can be carried across the window where the shares belong to the
-  // previous set — and only while it still describes what the row is counting.
-  const settledRates = React.useRef<Map<string, SettledRate>>(new Map());
-
-  const { records, settling } = React.useMemo(() => {
+  return React.useMemo(() => {
     const records = new Map<string, PersonRecord>();
-    const settling = new Map<string, SettledRate>();
-    if (!raw) return { records, settling };
+    if (!raw) return records;
 
-    for (const [personId, record] of raw) {
-      // While the shares describe the previous set of debates, they cover some of this person's
-      // debates and not others. Deriving a rate from that overlap produces a real number computed
-      // from part of the evidence — someone's first debate rendering as 0% because the one debate
-      // the stale set happened to cover was not theirs. So the rate is not derived at all here (the
-      // memo above hands over an empty map while stale); a rate already derived from a settled set
-      // is carried over instead, and a person who has none yet simply waits for one. The counts and
-      // join date stay current either way.
-      const fresh = derivePersonRecord({ personId, ...record, sharesByDebateId });
+    for (const [personId, record] of raw) records.set(personId, derivePersonRecord(record));
 
-      // A rate is only carried across if this person's own record is still whole. Once their
-      // relations come back truncated the debate count is withheld, and a rate is a statement about
-      // that count — showing one over a total the row will not print says more than is known.
-      // Carried only while it still describes the debates the row is now counting. A refetch that
-      // turns up a debate the settled rate never saw would otherwise pair "2 debates" with "won 1
-      // of 1" — a row disagreeing with itself.
-      const debateKey = debateSetKey(record.debateIds);
-      const previous = settledRates.current.get(personId);
-      const carried = record.truncated || !previous || previous.debateKey !== debateKey ? null : previous.winRate;
-
-      records.set(personId, sharesAreStale ? { ...fresh, winRate: carried } : fresh);
-      settling.set(personId, { winRate: fresh.winRate, debateKey });
-    }
-
-    return { records, settling };
-  }, [raw, sharesByDebateId, sharesAreStale]);
-
-  // Committed after the render rather than inside the memo. The memo reads `settledRates.current`
-  // for every person before it would have written, so the timing is unchanged — but a write during
-  // render commits state for a render React is free to discard under concurrent scheduling.
-  React.useEffect(() => {
-    if (!sharesAreStale) settledRates.current = settling;
-  }, [settling, sharesAreStale]);
-
-  return records;
+    return records;
+  }, [raw]);
 }
-
-type SettledRate = { winRate: PersonRecord['winRate']; debateKey: string };
 
 /** Pulls the aliased response back apart by position, which is how the aliases were assigned. */
 export function readPersonRecords(response: PersonRecordsQuery, personIds: string[]): Map<string, RawRecord> {

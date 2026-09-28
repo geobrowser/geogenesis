@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { Spaces } from '~/core/utils/space';
@@ -83,6 +84,25 @@ function viewFromTypes(entity: { types: { id: string }[] }): 'claim' | 'topic' |
   if (entity.types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) return 'person';
 
   return null;
+}
+
+export type CommentTargetEntityType = 'claim' | 'topic' | 'debate' | 'entity';
+
+/**
+ * The logical entity type attached to comment analytics when a typed entity falls back to the
+ * generic footer (for example while editing). Browse-specific views pass the same values directly,
+ * so this keeps both render paths in one event family.
+ */
+export function commentTargetEntityType(
+  entity: { types: { id: string }[] } | null | undefined
+): CommentTargetEntityType {
+  if (!entity) return 'entity';
+  if (isDebateEntity(entity.types)) return 'debate';
+
+  const view = viewFromTypes(entity);
+  if (view === 'claim' || view === 'topic') return view;
+
+  return 'entity';
 }
 
 /**

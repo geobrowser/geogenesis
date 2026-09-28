@@ -77,6 +77,8 @@ function WelcomeBanner() {
               opener makes. */}
           <button
             type="button"
+            data-geo-analytics-label="Welcome banner debate hub"
+            data-geo-analytics-intent="open_debates_hub"
             aria-expanded={isDebatesHubOpen}
             onClick={() => openDebatesHub('lobby')}
             className="text-white underline decoration-white underline-offset-2"

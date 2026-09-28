@@ -4,11 +4,19 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
+
 type Props = {
   variant?: 'primary' | 'secondary';
   /** Swapped in while a mutation is in flight, so the press has visible feedback. */
   pendingLabel?: string;
   pending?: boolean;
+  /** Stable auto-capture label; string children are used when omitted. */
+  analyticsLabel?: string;
+  /** Owning surface for shared controls; hub-only callers can use the default. */
+  analyticsSurface?: DebateAnalyticsSurface;
+  /** Explicit override for exceptional actions with a more specific intent. */
+  analyticsIntent?: string;
 } & React.ComponentPropsWithoutRef<'button'>;
 
 /**
@@ -21,14 +29,25 @@ export function HubPillButton({
   variant = 'secondary',
   pendingLabel,
   pending = false,
+  analyticsLabel,
+  analyticsSurface = 'hub',
+  analyticsIntent,
   disabled,
   className,
   children,
   ...rest
 }: Props) {
+  const surfaceAnalytics = debateSurfaceAnalyticsAttributes(
+    analyticsSurface,
+    typeof children === 'string' ? children : 'action'
+  );
+  const resolvedAnalyticsLabel = analyticsLabel ?? rest['aria-label'] ?? surfaceAnalytics['data-geo-analytics-label'];
+
   return (
     <button
       type="button"
+      data-geo-analytics-label={resolvedAnalyticsLabel}
+      data-geo-analytics-intent={analyticsIntent ?? surfaceAnalytics['data-geo-analytics-intent']}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(

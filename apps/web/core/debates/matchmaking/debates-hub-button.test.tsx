@@ -11,6 +11,13 @@ const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: true,
   incomingRequestCount: 0,
+  peerAvailability: true,
+  scheduledAwaitingAnswerCount: undefined as number | undefined,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
 }));
 
 vi.mock('../hooks', () => ({
@@ -19,7 +26,12 @@ vi.mock('../hooks', () => ({
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
-  useDebateActivity: () => ({ data: { incoming_request_count: mocks.incomingRequestCount } }),
+  useDebateActivity: () => ({
+    data: {
+      incoming_request_count: mocks.incomingRequestCount,
+      scheduled_awaiting_answer_count: mocks.scheduledAwaitingAnswerCount,
+    },
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -27,8 +39,9 @@ vi.mock('./hooks', () => ({
 }));
 
 function renderButton() {
+  const store = createStore();
   return render(
-    <Provider store={createStore()}>
+    <Provider store={store}>
       <DebatesHubButton />
     </Provider>
   );
@@ -38,6 +51,8 @@ beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.incomingRequestCount = 0;
+  mocks.peerAvailability = true;
+  mocks.scheduledAwaitingAnswerCount = undefined;
 });
 
 afterEach(cleanup);
@@ -77,6 +92,31 @@ describe('DebatesHubButton', () => {
 
     expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
     expect(screen.queryByText('3')).not.toBeInTheDocument();
+  });
+
+  it('counts scheduled requests waiting on an answer alongside instant ones', () => {
+    mocks.incomingRequestCount = 1;
+    mocks.scheduledAwaitingAnswerCount = 2;
+    renderButton();
+
+    expect(screen.getByRole('button', { name: 'Debate, 3 pending requests' })).toBeInTheDocument();
+  });
+
+  it('badges a scheduled request on its own', () => {
+    mocks.scheduledAwaitingAnswerCount = 1;
+    renderButton();
+
+    expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();
+  });
+
+  // Activity carries the count for everyone, so the flag has to be checked here.
+  it('counts no scheduled requests with the flag off, even when activity has some', () => {
+    mocks.peerAvailability = false;
+    mocks.incomingRequestCount = 1;
+    mocks.scheduledAwaitingAnswerCount = 2;
+    renderButton();
+
+    expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();
   });
 
   it('keeps announcing the pending request count while signed in', () => {

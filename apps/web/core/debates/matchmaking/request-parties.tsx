@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { responsePositionLabel } from '~/core/responses/entity-response';
+
 import { Avatar } from '~/design-system/avatar';
 
 import type { DebateParticipantSummary, DebateRequestParty } from '../api';
@@ -13,8 +15,15 @@ import { speakerLabel } from '../playback-utils';
  */
 type RequestPartyLike = DebateParticipantSummary | DebateRequestParty;
 
+/**
+ * Named from the side the party took, not from geo-chat's `position_label`.
+ *
+ * The label reads "Verify" or "Dispute" on a claim geo-chat still calls factual, which is a word
+ * this app no longer has a way to publish — see `positionSummariesFromCounts`. `position` is the
+ * same boolean either way, and its absence is what distinguishes a claimless challenge.
+ */
 function positionLabel(party: RequestPartyLike): string | null {
-  return 'position_label' in party ? party.position_label : null;
+  return 'position' in party ? responsePositionLabel(party.position) : null;
 }
 
 /**

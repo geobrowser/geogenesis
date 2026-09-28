@@ -33,7 +33,14 @@ const setup = () => ({ user: userEvent.setup(), ...render(<SetScheduleBanner />)
 describe('SetScheduleBanner', () => {
   it('shows the callout and its button', async () => {
     setup();
-    expect(await screen.findByRole('button', { name: 'Set my schedule' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Set my schedule' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Open schedule'
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Dismiss schedule prompt'
+    );
     expect(screen.getByText('Set your debate schedule')).toBeInTheDocument();
   });
 

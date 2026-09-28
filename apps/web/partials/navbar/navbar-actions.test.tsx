@@ -641,16 +641,27 @@ describe('NavbarActions profile menu', () => {
       expect(screen.queryByTestId('profile-menu')).not.toBeInTheDocument();
     });
 
-    it('keeps property and space creation reachable from the mobile menu', async () => {
-      mocks.spaceId = 'space-1';
+    // Root is a case of this rather than a test of its own: as far as create actions go it is an
+    // ordinary space, and the assertion is that the menu offers it the same three. It used to be
+    // excluded, leaving root with only "Create new space".
+    it.each([
+      { name: 'a regular space', spaceId: 'space-1' },
+      { name: 'the root space', spaceId: ROOT_SPACE },
+    ])('keeps entity, property and space creation reachable from the mobile menu in $name', async ({ spaceId }) => {
+      mocks.spaceId = spaceId;
       mocks.isMobileNavbar = true;
       const user = userEvent.setup();
       render(<NavbarActions />);
 
       await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      await user.click(screen.getByRole('button', { name: 'Create new entity' }));
+
+      expect(mocks.push).toHaveBeenNthCalledWith(1, `/space/${spaceId}/new-entity?edit=true`);
+
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
       await user.click(screen.getByRole('button', { name: 'Create new property' }));
 
-      expect(mocks.push).toHaveBeenCalledWith('/space/space-1/new-entity?edit=true&type=property');
+      expect(mocks.push).toHaveBeenNthCalledWith(2, `/space/${spaceId}/new-entity?edit=true&type=property`);
 
       await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
       await user.click(screen.getByRole('button', { name: 'Create new space' }));
@@ -658,11 +669,8 @@ describe('NavbarActions profile menu', () => {
       expect(mocks.openCreateSpaceDialog).toHaveBeenCalledWith();
     });
 
-    it.each([
-      { name: 'a pending personal-space sentinel', spaceId: 'pending:topic-1' },
-      { name: 'the root-space sentinel', spaceId: ROOT_SPACE },
-    ])('does not expose entity creation for $name', async ({ spaceId }) => {
-      mocks.spaceId = spaceId;
+    it('does not expose entity creation for a pending personal-space sentinel', async () => {
+      mocks.spaceId = 'pending:topic-1';
       mocks.isMobileNavbar = true;
       const user = userEvent.setup();
       render(<NavbarActions />);

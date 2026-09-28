@@ -17,6 +17,7 @@ import {
   nameValue,
   ogImage,
   spaces,
+  textInSpace,
 } from './entities';
 
 const valuesWithSystemDescriptionAttribute: Value[] = [
@@ -193,6 +194,20 @@ describe('nameInSpace / descriptionInSpace', () => {
   it('treats an empty value as nothing written', () => {
     expect(nameInSpace([named(ROOT, 'Root'), named(CRYPTO, '')], CRYPTO)).toBe('Root');
     expect(descriptionInSpace([described(ROOT, 'Root desc'), described(CRYPTO, '')], CRYPTO)).toBeNull();
+  });
+
+  // The tagline is the first caller of the generic form, and it has to read the way a
+  // description does: this space's words or none at all.
+  it('scopes any other text property the same way a description is scoped', () => {
+    const TAGLINE = '0e4f7b40c0924badb5d5ca10bcb60aa9';
+    const tagged = (spaceId: string, text: string) => wrote(spaceId, TAGLINE, text);
+
+    expect(textInSpace([tagged(ROOT, 'Root tagline')], TAGLINE, CRYPTO)).toBeNull();
+    expect(textInSpace([tagged(ROOT, 'Root tagline'), tagged(CRYPTO, '')], TAGLINE, CRYPTO)).toBeNull();
+    expect(textInSpace([tagged(ROOT, 'Root tagline'), tagged(CRYPTO, 'Crypto tagline')], TAGLINE, CRYPTO)).toBe(
+      'Crypto tagline'
+    );
+    expect(textInSpace([tagged(ROOT, 'Root tagline')], TAGLINE)).toBe('Root tagline');
   });
 
   it('shows the space its own description when it wrote one', () => {
