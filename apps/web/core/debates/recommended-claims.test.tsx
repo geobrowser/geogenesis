@@ -6,11 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
-import {
-  RECOMMENDED_CLAIMS_PARTICIPANTS_PROPERTY_ID,
-  RECOMMENDED_CLAIMS_TYPE_ID,
-  useRecommendedClaimSections,
-} from './recommended-claims';
+import { PARTICIPANTS_PROPERTY_ID } from './ontology';
+import { RECOMMENDED_CLAIMS_TYPE_ID, useRecommendedClaimSections } from './recommended-claims';
 
 const CURATOR_SPACE = 'f3dab79cb5a3d9d1759656dd5361d1c6';
 const OTHER_SPACE = '019fedae72b67ab2927adf044d57c566';
@@ -66,7 +63,7 @@ function page({
     types: [{ id: RECOMMENDED_CLAIMS_TYPE_ID }],
     relations: [
       ...participants.map((spaceId, index) => ({
-        type: { id: RECOMMENDED_CLAIMS_PARTICIPANTS_PROPERTY_ID },
+        type: { id: PARTICIPANTS_PROPERTY_ID },
         toEntity: { id: spaceId },
         position: `a${index}`,
       })),

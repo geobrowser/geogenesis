@@ -10,7 +10,6 @@ import {
   BLOCKS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
-  DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TAG_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
@@ -22,6 +21,7 @@ import {
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  PARTICIPANTS_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
   TRANSCRIPT_TYPE_ID,
@@ -261,7 +261,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // single filter, which is what a data block needs.
     relate({
       fromEntity: debateRef,
-      propertyId: DEBATE_PARTICIPANTS_PROPERTY_ID,
+      propertyId: PARTICIPANTS_PROPERTY_ID,
       toEntityId: p.spaceEntityId,
       toEntityName: p.displayName,
     });

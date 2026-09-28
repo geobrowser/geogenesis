@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 
 import { BOUNTIES_RELATION_TYPE, NEWS_STORY_TYPE_ID } from '~/core/constants';
-import { DEBATE_PARTICIPANTS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID, LEGACY_PARTICIPANTS_PROPERTY_ID, PARTICIPANTS_PROPERTY_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
@@ -173,8 +173,10 @@ async function fetchDebateCounts(
 ): Promise<{ perCurator: Map<string, number>; total: number; truncated: boolean }> {
   const perCurator = new Map<string, number>();
   const debateType = gqlId(DEBATE_TYPE_ID);
-  const participantsProperty = gqlId(DEBATE_PARTICIPANTS_PROPERTY_ID);
-  if (!debateType || !participantsProperty) return { perCurator, total: 0, truncated: false };
+  // Either Participants property: debates published before the switch carry only the legacy one
+  // until they are backfilled. A debate carrying both is still counted once (see `seen` below).
+  const participantsProperties = gqlIdList([PARTICIPANTS_PROPERTY_ID, LEGACY_PARTICIPANTS_PROPERTY_ID]);
+  if (!debateType) return { perCurator, total: 0, truncated: false };
 
   const createdAtFilter =
     window.seconds === null ? '' : `filter: { createdAt: { greaterThanOrEqualTo: "${window.seconds}" } }`;
@@ -212,7 +214,7 @@ async function fetchDebateCounts(
           first: ${RELATION_PAGE_SIZE}${afterArg(after)}
           filter: {
             spaceId: { is: "${spaceHex}" }
-            typeId: { is: "${participantsProperty}" }
+            typeId: { in: [${participantsProperties}] }
             fromEntityId: { in: [${gqlIdList(ids)}] }
           }
         ) {

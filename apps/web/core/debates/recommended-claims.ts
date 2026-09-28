@@ -8,12 +8,10 @@ import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from './claim-picker-page';
+import { PARTICIPANTS_PROPERTY_ID } from './ontology';
 
 /** A curated "Recommended claims" page: claims a curator has picked out for a specific pairing. */
 export const RECOMMENDED_CLAIMS_TYPE_ID = '2f8a7be40c5242368bac78511bf0b47f';
-
-/** Points at the personal space entity of each debater the page is curated for. */
-export const RECOMMENDED_CLAIMS_PARTICIPANTS_PROPERTY_ID = '7169d65aa8b94addb6cc23c19c9fc0dd';
 
 /**
  * Only pages curated in one of these spaces count. The type alone isn't a permission: anyone could
@@ -77,9 +75,7 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
       .filter(page => page.spaces.some(spaceId => RECOMMENDED_CLAIMS_SPACE_IDS.some(id => ID.equals(id, spaceId))))
       .filter(page => {
         const participants = page.relations
-          .filter(
-            relation => relation.type.id === RECOMMENDED_CLAIMS_PARTICIPANTS_PROPERTY_ID && relation.isDeleted !== true
-          )
+          .filter(relation => relation.type.id === PARTICIPANTS_PROPERTY_ID && relation.isDeleted !== true)
           .map(relation => relation.toEntity.id);
 
         return participantSpaceIds.every(spaceId => participants.some(participant => ID.equals(participant, spaceId)));

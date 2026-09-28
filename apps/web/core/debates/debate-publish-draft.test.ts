@@ -18,7 +18,6 @@ import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
-  DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
@@ -26,8 +25,10 @@ import {
   IMAGE_TYPE_ID,
   IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
+  LEGACY_PARTICIPANTS_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  PARTICIPANTS_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
@@ -154,13 +155,15 @@ describe('buildDebatePublishDraft', () => {
   //
   // Supported by / Opposed by already name everyone, but they encode which side — so that data
   // block would have to union two relations and know which one to look on. This is the
-  // side-agnostic membership, and it uses the canonical `SystemIds.PARTICIPANTS_PROPERTY` so the
-  // query is the same one any other participant-bearing entity answers to.
+  // side-agnostic membership, on the Geo space's Participants property (7169d65a…) — the one that
+  // renders in the browser and that Recommended claims pages share.
   it('relates both participants side-agnostically, as well as by side', () => {
     const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
 
-    const participants = draft.relations.filter(r => r.type.id === DEBATE_PARTICIPANTS_PROPERTY_ID);
+    const participants = draft.relations.filter(r => r.type.id === PARTICIPANTS_PROPERTY_ID);
     expect(participants).toHaveLength(2);
+    // Only the Geo property: the legacy SDK one does not render and is no longer written.
+    expect(draft.relations.some(r => r.type.id === LEGACY_PARTICIPANTS_PROPERTY_ID)).toBe(false);
 
     // Both sides, one relation. Sorted so the assertion does not depend on slot order.
     const supported = draft.relations.find(r => r.type.id === DEBATE_SUPPORTED_BY_PROPERTY_ID);
