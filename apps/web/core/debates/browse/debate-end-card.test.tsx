@@ -191,6 +191,11 @@ describe('DebateEndCard', () => {
     expect(parts[side].className).toContain('hidden @max-md:inline');
     expect(side < count && count < lineBreak && lineBreak < share).toBe(true);
     expect(parts[lineBreak].className).toContain('@max-md:block');
+    // The break spaces the two lines by its own height, the column's gap; a row gap on top of that
+    // would land once above the break and once below, doubling the space over the share.
+    expect(parts[lineBreak].className).toContain('h-1.5');
+    expect(row.className).toContain('@max-md:gap-y-0');
+    expect(steve.className).toContain('@max-md:gap-1.5');
     // The separator between count and share belongs to the one-line layout only.
     expect(parts[lineBreak + 1].textContent).toBe('·');
     expect(parts[lineBreak + 1].className).toContain('@max-md:hidden');

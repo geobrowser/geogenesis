@@ -243,8 +243,12 @@ function DebaterColumn({
   // A narrow player has no room for the side chip beside the name, so the side leads this block
   // instead, sharing its first line with the count ("Agree · 9 claims"), and a break puts the share
   // and faces on the next. One count, moved by the layout, rather than one per width.
+  //
+  // The break is a line of its own, so it is the break that spaces the two lines, not the row gap:
+  // with a gap as well, it took one above it and one below, and the share sat twice as far from the
+  // count as the count sat from the name. `h-1.5` is the column's own gap on a narrow player.
   const stats = (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums @max-md:gap-y-1.5">
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums @max-md:gap-y-0">
       <span className="hidden @max-md:inline">{side}</span>
       {countLabel ? (
         <>
@@ -254,7 +258,7 @@ function DebaterColumn({
           <span>{countLabel}</span>
         </>
       ) : null}
-      <span aria-hidden className="hidden h-0 basis-full @max-md:block" />
+      <span aria-hidden className="hidden h-1.5 basis-full @max-md:block" />
       {countLabel && share ? (
         <span aria-hidden className="@max-md:hidden">
           ·
