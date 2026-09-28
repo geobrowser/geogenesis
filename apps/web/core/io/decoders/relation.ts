@@ -1,6 +1,6 @@
 import { Either, Schema } from 'effect';
 
-import { hasRelationTarget, RelationDtoLive } from '~/core/io/dto/relations';
+import { RelationDtoLive, hasRelationTarget } from '~/core/io/dto/relations';
 import { Relation as RelationType } from '~/core/types';
 
 import { Relation as RelationSchema } from '../schema';

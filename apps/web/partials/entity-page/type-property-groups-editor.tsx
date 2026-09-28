@@ -151,7 +151,11 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     [allGroupPropertyRelations, propertyGroupRelations, spaceId]
   );
 
-  const groupedPropertyIds = new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id));
+  // Memoised because a new `Set` each render made the memo below recompute on every render.
+  const groupedPropertyIds = React.useMemo(
+    () => new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id)),
+    [allGroupPropertyRelations]
+  );
   const ungroupedRelations = React.useMemo(
     () => typePropertyRelations.filter(relation => !groupedPropertyIds.has(relation.toEntity.id)),
     [groupedPropertyIds, typePropertyRelations]

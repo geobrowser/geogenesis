@@ -9,7 +9,11 @@ import { RemoveScroll } from 'react-remove-scroll';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
-import { rankingComposeRemoveScrollShardAtom, rankingFullscreenActiveAtom } from '~/atoms';
+import {
+  rankingComposeRemoveScrollShardAtom,
+  rankingFullscreenActiveAtom,
+  rankingFullscreenFocusTargetAtom,
+} from '~/atoms';
 
 type Props = {
   children: React.ReactNode;
@@ -23,7 +27,15 @@ export function RankingComposeFullscreen({ children, style, coverNavbar = false 
   const removeScrollShards = React.useMemo(() => (removeScrollShard ? [removeScrollShard] : []), [removeScrollShard]);
   const lockScroll = isMobile;
 
+  const fullscreenRef = React.useRef<HTMLDivElement>(null);
   const setRankingFullscreenActive = useSetAtom(rankingFullscreenActiveAtom);
+  const setRankingFullscreenFocusTarget = useSetAtom(rankingFullscreenFocusTargetAtom);
+
+  React.useLayoutEffect(() => {
+    setRankingFullscreenFocusTarget(fullscreenRef.current);
+    return () => setRankingFullscreenFocusTarget(null);
+  }, [setRankingFullscreenFocusTarget]);
+
   React.useEffect(() => {
     setRankingFullscreenActive(true);
     return () => setRankingFullscreenActive(false);
@@ -56,7 +68,11 @@ export function RankingComposeFullscreen({ children, style, coverNavbar = false 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white"
+      ref={fullscreenRef}
+      role="region"
+      aria-label="Ranking"
+      tabIndex={-1}
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-text"
       style={{
         top: coverNavbar ? 0 : '44px',
         ...style,

@@ -237,7 +237,7 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         }
       }
     },
-    [entityId, spaceId, storage, propertyData, allRelations, name]
+    [addPropertyToEntity, entityId, formatValue, spaceId, storage, propertyData, allRelations, name]
   );
 
   // Create property data when Property type is manually added to an existing entity

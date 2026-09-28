@@ -156,10 +156,7 @@ export function useRankingBlockState({
     isSaving,
     personalSpaceId,
     isRolling,
-    submissionFrequencyHours,
     hasRolledOff,
-    isSubmissionLive,
-    submittedAtMs,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({

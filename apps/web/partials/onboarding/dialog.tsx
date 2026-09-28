@@ -157,8 +157,8 @@ export const OnboardingDialog = () => {
 
   // Fetch featured spaces for the 'interested-in' step. This is the same featured-space
   // traversal the Browse sidebar uses. `featuredError` distinguishes a failed fetch from a
-  // genuinely empty result, so the step can offer a retry instead of dead-ending on an empty
-  // card (Create profile requires a pick, and onboarding can't be dismissed.
+  // genuinely empty result, so a failed load offers a retry instead of showing an empty step;
+  // a genuinely empty result just lets the user continue, since the step is skippable.
   const loadFeaturedSpaces = React.useCallback(() => {
     setFeaturedStatus('loading');
     fetchBrowseSidebarData(undefined)
@@ -486,12 +486,14 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           {avatar ? (
             <OnboardingAvatarPreview avatar={avatar} />
           ) : (
-            <img
+            <button
+              type="button"
               className="cursor-pointer rounded-full"
-              src="/images/onboarding/no-avatar.png"
-              alt=""
+              aria-label="Choose a profile photo"
               onClick={() => fileInputRef.current?.click()}
-            />
+            >
+              <img className="rounded-full" src="/images/onboarding/no-avatar.png" alt="" />
+            </button>
           )}
           <div className="absolute right-0 bottom-0 h-6 w-6">
             <SquareButton
@@ -745,7 +747,8 @@ function StepInterestedIn({
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const canCreateProfile = featuredSpaces.length > 0 ? selectedTopicIds.length > 0 : true;
+  const isCreateProfile = selectedTopicIds.length > 0;
+  const primaryLabel = isCreateProfile ? 'Create profile' : 'Skip for now';
 
   return (
     <div className="flex h-full flex-col justify-between">
@@ -780,6 +783,17 @@ function StepInterestedIn({
               <div
                 key={`interested-topic-${featuredSpace.id}`}
                 role="button"
+                // It already said `role="button"`, which promises a control that can be focused and
+                // activated from a keyboard. Without a tabIndex it could not be reached, and without
+                // a key handler Enter and Space did nothing. `aria-pressed` because it is a toggle.
+                tabIndex={0}
+                aria-pressed={selectedTopicIds.includes(featuredSpace.id)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleSelectTopics(featuredSpace.id);
+                  }
+                }}
                 onClick={() => handleSelectTopics(featuredSpace.id)}
                 className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
               >
@@ -807,13 +821,14 @@ function StepInterestedIn({
       ) : (
         <Button
           onClick={onCompleteOnboard}
-          disabled={isLoading || !canCreateProfile}
+          disabled={isLoading}
+          variant={isCreateProfile ? 'primary' : 'secondary'}
           className={cx(
             'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && canCreateProfile && 'bg-ctaHover'
+            !isLoading && isCreateProfile && 'bg-ctaHover'
           )}
         >
-          Create profile
+          {primaryLabel}
         </Button>
       )}
     </div>

@@ -31,8 +31,7 @@ type RelationOp = {
   position?: string;
 };
 
-const toHex = (bytes: Uint8Array) =>
-  Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+const toHex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 
 const templateOps = () => generateNewSpaceTemplateOps({ spaceId: SPACE_ID, spaceHomeEntityId: SPACE_HOME_ENTITY_ID });
 

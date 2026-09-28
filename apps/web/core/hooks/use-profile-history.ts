@@ -209,12 +209,12 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    */
   const [published, setPublished] = React.useState<Published[]>([]);
 
-  const queryKey = profileHistoryQueryKey(entityId);
+  const queryKey = profileHistoryQueryKey(entityId, spaceId);
 
   const { data, dataUpdatedAt, isLoading, isError } = useQuery({
     queryKey,
     enabled: enabled && entityId !== '',
-    queryFn: () => fetchProfileHistory(entityId),
+    queryFn: () => fetchProfileHistory(entityId, spaceId),
     staleTime: 60_000,
     // Only while something is outstanding. Asking again on a timer is the only
     // way to learn the indexer has caught up; there is nothing to subscribe to.
@@ -681,10 +681,15 @@ export function useProfileHistory({ entityId, spaceId, enabled = true }: Params)
    * readable would otherwise be shown over somebody else's history, and its
    * minted stints offered to rows at their employers.
    */
+  // `spaceId` as well as `entityId`. The query below is keyed on both — the same
+  // person reads differently from each space — so an overlay kept across a space
+  // change merges edits authored in one space into another's history, and offers
+  // them for publishing there. The entity being the same is exactly the case
+  // where that goes unnoticed.
   React.useEffect(() => {
     setPending(NOTHING_PENDING);
     setPublished([]);
-  }, [entityId]);
+  }, [entityId, spaceId]);
 
   /**
    * Dismissing the modal forgets the draft. An edit already published is not in

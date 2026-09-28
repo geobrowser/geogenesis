@@ -6,6 +6,9 @@
       "outputs": [".next/**", "dist/**", "build/**", "generated/**"]
     },
     "lint": {},
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "format": {},
     "codegen": {},
     "clean": {},

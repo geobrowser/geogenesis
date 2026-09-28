@@ -186,7 +186,7 @@ export function BountyReviewDialog({
 
             {canReview ? (
               <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 mobile:grid-cols-2">
                   {RATING_LABELS.map(({ key, label }) => (
                     <div key={key} className="flex flex-col gap-1">
                       <Text variant="metadataMedium">{label}</Text>

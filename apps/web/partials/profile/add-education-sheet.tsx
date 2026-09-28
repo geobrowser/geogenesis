@@ -82,7 +82,30 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
   // Still studying writes no end date, so the pair only has to run forwards when
   // one is actually going to be written.
   const isOrdered = status === 'studying' || isOrderedRange(start, end);
-  const canSave = pickedSchool !== null && degree !== null && isOrdered;
+  /**
+   * A start date is required — **unless the row never had one** (GEO-2859).
+   *
+   * Editing a published row is a removal and a fresh write, and the write only
+   * emits a date row when it has one — so saving with the start blank did not
+   * leave the old date alone, it deleted it. A record whose dates silently
+   * vanish when you edit them is worse than one you cannot save.
+   *
+   * It also has nowhere to render: `formatDateRange` draws nothing at all
+   * without a start, so the row would come back with its whole date line gone.
+   *
+   * None of that applies to a row that arrived undated: there is no date to
+   * delete and none on screen to lose. Requiring one there made the *ordinary*
+   * case unsavable — **1,739 of the graph's 1,906 employment rows carry no date
+   * at all** — so fixing a typo in a legacy title meant inventing a historical
+   * start. Required for a new row, impossible to clear on a dated one,
+   * grandfathered on an undated one.
+   */
+  const startedUndated = initial !== undefined && initial.startDate == null;
+  // Grandfather a legacy undated row only while it remains undated. A finished
+  // row with an end date needs the start that `formatDateRange` anchors on;
+  // otherwise the newly entered end date is saved but invisible on the card.
+  const hasStart = start !== null || (startedUndated && (status === 'studying' || end === null));
+  const canSave = pickedSchool !== null && degree !== null && isOrdered && hasStart;
 
   const save = () => {
     if (!pickedSchool || !degree) return;
@@ -172,11 +195,15 @@ export function AddEducationSheet({ spaceId, school, initial, onCancel, onSave }
               a date that has not happened. It needs a status to hang off first. */}
           <MonthYearField label="End" value={end} onChange={setEnd} disabled={status === 'studying'} />
         </div>
-        {!isOrdered && (
+        {!isOrdered ? (
           <span role="alert" className="text-metadata text-red-01">
             The end date is before the start date.
           </span>
-        )}
+        ) : !hasStart ? (
+          <span role="alert" className="text-metadata text-red-01">
+            Pick a start month and year.
+          </span>
+        ) : null}
       </div>
 
       <LabelledField label="Grade">

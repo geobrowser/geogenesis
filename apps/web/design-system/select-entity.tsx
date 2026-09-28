@@ -129,6 +129,8 @@ type SpaceFilter = { spaceId: string; spaceName: string | null };
 
 type TypeFilter = { typeId: string; typeName: string | null };
 
+const NO_RESULTS: never[] = [];
+
 export const SelectEntity = ({
   onDone,
   onCreateEntity,
@@ -227,7 +229,11 @@ export const SelectEntity = ({
    * result. Anything pinned is dropped from the results below it rather than
    * appearing twice.
    */
-  const pinned = query.trim() === '' ? (pinnedResults ?? []) : [];
+  // Memoised: the empty branch was a new array each render, and the memo below is keyed on it.
+  const pinned = React.useMemo(
+    () => (query.trim() === '' ? (pinnedResults ?? []) : NO_RESULTS),
+    [query, pinnedResults]
+  );
 
   const results = React.useMemo(() => {
     if (pinned.length === 0) return searchResults;
@@ -361,7 +367,7 @@ export const SelectEntity = ({
         block: 'nearest',
       });
     }
-  }, [hasResults, selectedIndex]);
+  }, [hasResults, isNavigable, selectedIndex]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);

@@ -15,6 +15,8 @@ import { EntityFeed } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
+  facetQueryOptions: null as Record<string, unknown> | null,
+  facetData: null as { topics: Array<{ id: string; name: string | null; count: number }> } | null,
   /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
   queryKeys: [] as unknown[][],
   fetch: vi.fn(),
@@ -28,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   isSettlingMemberships: false,
   /** What the feed asked the allowlist hook for. */
   allowlistEnabled: undefined as boolean | undefined,
+  /** The error the infinite query reports, so the failed-feed message can be rendered. */
+  error: null as Error | null,
 }));
 
 function createLocalStorage(): Storage {
@@ -46,6 +50,7 @@ function createLocalStorage(): Storage {
 }
 
 vi.mock('@tanstack/react-query', () => ({
+  keepPreviousData: Symbol('keepPreviousData'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -55,6 +60,15 @@ vi.mock('@tanstack/react-query', () => ({
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
       hasNextPage: false,
+      error: mocks.error,
+    };
+  },
+  useQuery: (options: Record<string, unknown>) => {
+    mocks.facetQueryOptions = options;
+    return {
+      data: mocks.facetData ?? undefined,
+      isLoading: Boolean(options.enabled) && mocks.facetData === null,
+      isPlaceholderData: false,
       error: null,
     };
   },
@@ -100,12 +114,15 @@ vi.mock('~/partials/explore/explore-feed-card', () => ({
 beforeEach(() => {
   vi.stubGlobal('localStorage', createLocalStorage());
   mocks.queryOptions = null;
+  mocks.facetQueryOptions = null;
+  mocks.facetData = null;
   mocks.pages = null;
   mocks.cardProps = null;
   mocks.queryKeys = [];
   mocks.liveMemberSpaceIds = null;
   mocks.isSettlingMemberships = false;
   mocks.allowlistEnabled = undefined;
+  mocks.error = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -351,12 +368,21 @@ describe('EntityFeed Explore type filter', () => {
     await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
   });
 
-  it('preserves the historical query key for feeds without the Explore type filter', () => {
+  it('leaves contextual query-key slots empty for ordinary feeds', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
 
     // The time slot is empty rather than 'week': this feed sorts by New, which carries no range,
-    // so there is nothing to send and nothing to key on. Same positions otherwise.
-    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', undefined, 'space-id', null]);
+    // so there is nothing to send and nothing to key on. The Topic/fixed-param slots are empty.
+    expect(mocks.queryOptions?.queryKey).toEqual([
+      '/api/activity/feed',
+      'new',
+      undefined,
+      'space-id',
+      null,
+      '',
+      '',
+      null,
+    ]);
   });
   // GEO-2757. Explore opts its cards into opening the side panel; the space activity tab, which
   // renders this same feed, does not. The flag is a single forward, so nothing but a test says it
@@ -375,6 +401,7 @@ describe('EntityFeed Explore type filter', () => {
       commentCount: 0,
       recordingUrls: [],
       debateVideoUrls: [],
+      debateClaim: null,
       isMemberOrEditor: true,
       hasPendingMembershipRequest: false,
     };
@@ -392,6 +419,139 @@ describe('EntityFeed Explore type filter', () => {
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(false);
     });
+
+    it('hands the mobile debates-panel Claim variant to cards only when requested', () => {
+      mocks.pages = [{ items: [item] }];
+      const { rerender } = render(
+        <EntityFeed apiEndpoint="/api/explore/feed" claimCardVariant="debate-panel-mobile" />
+      );
+
+      expect(mocks.cardProps?.claimCardVariant).toBe('debate-panel-mobile');
+
+      rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+      expect(mocks.cardProps?.claimCardVariant).toBe('feed');
+    });
+  });
+});
+
+describe('EntityFeed contextual filters', () => {
+  const topicOptions = [
+    { value: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', label: 'Alignment' },
+    { value: 'cccccccccccccccccccccccccccccccc', label: 'Governance' },
+  ];
+
+  function renderTopicFeed() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        initialSort="best"
+        showSortFilter
+        showTimeFilter={false}
+        showSpaceFilter={false}
+        showTypeFilter
+        initialTypeIds={EXPLORE_ENTITY_TYPE_IDS}
+        persistTypeSelection={false}
+        topicOptions={topicOptions}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
+      />
+    );
+  }
+
+  it('starts broad and sends the fixed Topic and curated-space scope', async () => {
+    renderTopicFeed();
+
+    const request = new URL(await requestedUrl(), 'https://example.com');
+    expect(request.searchParams.get('sort')).toBe('best');
+    expect(request.searchParams.get('topicId')).toBe('topic-root');
+    expect(request.searchParams.get('spaceId')).toBe('space-route');
+    expect(request.searchParams.get('spaceIds')).toBe('space-route');
+    expect(request.searchParams.get('typeIds')).toBeNull();
+    expect(mocks.allowlistEnabled).toBe(false);
+  });
+
+  it('defaults to types with results, shows their counts, and keeps the unfiltered feed request', async () => {
+    const [claim, debate, article] = EXPLORE_ENTITY_TYPES;
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        initialSort="best"
+        showTimeFilter={false}
+        showSpaceFilter={false}
+        showTypeFilter
+        initialTypeIds={[claim.id, debate.id, article.id]}
+        typeOptions={[claim, debate, article]}
+        typeCounts={[
+          { id: claim.id, count: 31 },
+          { id: debate.id, count: 1 },
+          { id: article.id, count: 0 },
+        ]}
+        selectTypesWithResultsByDefault
+        persistTypeSelection={false}
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
+      />
+    );
+
+    await screen.findByText('2 types');
+    expect(screen.getByRole('button', { name: new RegExp(`${claim.label}.*31.*Selected`) })).not.toBeNull();
+    expect(screen.getByRole('button', { name: new RegExp(`${debate.label}.*1.*Selected`) })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: new RegExp(article.label) })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Unselect all' })).not.toBeNull();
+
+    const request = new URL(await requestedUrl(), 'https://example.com');
+    expect(request.searchParams.get('typeIds')).toBeNull();
+  });
+
+  it('sends selected child topics as additional narrowing', async () => {
+    renderTopicFeed();
+
+    pickOption('Alignment');
+
+    await waitFor(async () => {
+      const request = new URL(await requestedUrl(), 'https://example.com');
+      expect(request.searchParams.get('topicIds')).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+    });
+  });
+
+  it('shows entity counts and removes settled zero-result Topic options', () => {
+    mocks.facetData = {
+      topics: [{ id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Alignment', count: 4 }],
+    };
+
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        topicFacetEndpoint="/api/topics/facets"
+        showSpaceFilter={false}
+        showTopicFilter
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /Alignment.*4/ })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
+  });
+
+  it('requests one population facet rather than sending a global Topic candidate list', async () => {
+    mocks.facetData = { topics: [] };
+    render(
+      <EntityFeed
+        apiEndpoint="/api/topics/feed"
+        topicFacetEndpoint="/api/topics/facets"
+        showSpaceFilter={false}
+        showTopicFilter
+        fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
+      />
+    );
+
+    const queryFn = mocks.facetQueryOptions?.queryFn as (args: { signal?: AbortSignal }) => Promise<unknown>;
+    await queryFn({});
+
+    const body = JSON.parse(mocks.fetch.mock.calls.at(-1)?.[1]?.body as string);
+    expect(body).toMatchObject({
+      selectedTopicIds: [],
+      fixedParams: { topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' },
+    });
+    expect(body).not.toHaveProperty('candidateTopicIds');
   });
 });
 
@@ -553,5 +713,46 @@ describe('the space filter', () => {
     pickOption('Any space');
 
     expect(await sentSpaceIds()).toBeNull();
+  });
+});
+
+/**
+ * An unavailable feed and a feed with nothing in it were the same 200 with an empty
+ * `items` array, so the surface printed "No entities match these filters yet" through an outage —
+ * a sentence about filters the reader never touched — and, seeing a success, never retried. The
+ * route answers 503 now, and what matters on this side is that the body no longer talks the client
+ * out of noticing: an error status is an error however well-formed the JSON underneath it is.
+ */
+describe('a feed request that failed', () => {
+  function renderExploreFeed() {
+    return render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} initialSort="best" />);
+  }
+
+  it('rejects on an error status even when the body still parses as an empty page', async () => {
+    mocks.fetch.mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ items: [], nextCursor: null, error: 'feed_unavailable' }),
+    });
+    renderExploreFeed();
+
+    const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
+    await expect(queryFn({ pageParam: undefined })).rejects.toThrow();
+  });
+
+  // The retry is what turns a shed traversal on one cold instance back into a working feed, so it
+  // is part of the fix rather than incidental configuration.
+  it('is retried before the reader is told anything', () => {
+    renderExploreFeed();
+
+    expect(mocks.queryOptions?.retry).toBe(2);
+  });
+
+  it('says the feed did not load rather than blaming the filters', () => {
+    mocks.error = new Error('Feed failed');
+    renderExploreFeed();
+
+    expect(screen.getByText('Could not load the feed.')).toBeTruthy();
+    expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
   });
 });

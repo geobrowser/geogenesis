@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+
 import { Component, type ReactNode } from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -89,9 +90,7 @@ describe('BacklinksClientContainer', () => {
     // Wait for the query to actually reach `error`, not just for the refetch call to return.
     // Asserting straight after `refetchQueries` passes either way — React has not re-rendered yet,
     // so the boundary could not have tripped regardless of the setting, and the test proves nothing.
-    await waitFor(() =>
-      expect(queryClient.getQueryState(['entity-backlinks', 'entity-1'])?.status).toBe('error')
-    );
+    await waitFor(() => expect(queryClient.getQueryState(['entity-backlinks', 'entity-1'])?.status).toBe('error'));
 
     expect(screen.queryByTestId('caught')).toBeNull();
     expect(screen.getByTestId('backlinks').textContent).toBe('2');

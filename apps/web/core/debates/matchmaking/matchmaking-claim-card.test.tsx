@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY, type ResponseKind, getResponseActionMethod } from '~/core/responses/entity-response';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -45,9 +46,14 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  useEntityResponse: vi.fn(),
 }));
 
 vi.mock('../hooks', () => ({
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
   // below this needs one here.
   debateQueryKeys: {
@@ -117,14 +123,17 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: () => ({
-    submitResponse: mocks.submitResponse,
-    optimisticResponse: undefined,
-    isProcessingResponse: false,
-    isResponseIndexingDelayed: false,
-    isConnected: true,
-    personalSpaceId: mocks.viewerSpaceId,
-  }),
+  useEntityResponse: (input: Record<string, unknown>) => {
+    mocks.useEntityResponse(input);
+    return {
+      submitResponse: mocks.submitResponse,
+      optimisticResponse: undefined,
+      isProcessingResponse: false,
+      isResponseIndexingDelayed: false,
+      isConnected: true,
+      personalSpaceId: mocks.viewerSpaceId,
+    };
+  },
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
@@ -224,6 +233,15 @@ function renderCard(card: ReactElement) {
 }
 
 beforeEach(() => {
+  // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
@@ -240,6 +258,7 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.useEntityResponse.mockReset();
 });
 
 afterEach(cleanup);
@@ -515,40 +534,35 @@ describe('position avatar stack', () => {
     });
 
     /**
-     * And a remembered side belongs to the vocabulary it was read under.
+     * The write must never be handed geo-chat's word for the kind.
      *
-     * The summary query is keyed by response kind, so a claim that changes from stance to
-     * Verify/Dispute starts a fresh read — and a memory that ignored the kind would hand that read's
-     * question the previous one's answer while it was still out, treating an Agree as a Verify and
-     * enabling the controls over it.
+     * geo-chat still labels claims minted before the vocabularies merged `"veracity"`, and that
+     * value arrives typed as the narrowed kind it no longer matches, so nothing catches it. Handed
+     * to `getResponseActionMethod` it selects no SDK method at all, and the click throws on
+     * `undefined['positive']` rather than publishing — on every claim with existing verify or
+     * dispute activity.
      */
-    it('does not carry a side across a change of vocabulary', () => {
-      mocks.summaryIndexedViewerDirection = 'negative';
-      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const card = (responseKind: 'stance' | 'veracity') => (
-        <QueryClientProvider client={queryClient}>
-          <MatchmakingClaimCard
-            claim={claim}
-            positions={twoSides()}
-            readiness={readiness({ viewer_response: null, response_kind: responseKind })}
-            answersReady={false}
-            answersMayComeFromIndex
-          />
-        </QueryClientProvider>
+    it('publishes under a real response kind even when the row still says veracity', () => {
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ response_kind: 'veracity' })}
+        />
       );
-      const view = render(card('stance'));
-      expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
 
-      // The kind changes, so its read starts again — and is in flight.
-      mocks.summaryViewerResponseLoading = true;
-      view.rerender(card('veracity'));
+      const passed = mocks.useEntityResponse.mock.calls.at(-1)?.[0] as { responseKind: ResponseKind };
 
-      // The pills take their labels from the positions, so they read the same; what changes is that
-      // the card no longer claims to know the side.
-      const negative = screen.getByRole('button', { name: /^Disagree/ });
-      expect(negative).toBeDisabled();
-      expect(negative).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+      expect(passed.responseKind).toBe('stance');
+      // The assertion that actually matters: whatever kind was passed, it names an SDK method.
+      expect(getResponseActionMethod(passed.responseKind, 'positive')).toBe('agree');
+      expect(getResponseActionMethod(passed.responseKind, 'negative')).toBe('disagree');
     });
+
+    // A case that used to sit here — "does not carry a side across a change of vocabulary" — is
+    // gone with the vocabularies. A claim had two possible kinds and could move between them, so a
+    // remembered side had to be dropped when it did. There is one kind now, so there is no change
+    // to carry a side across.
 
     // And it does hand back, once geo-chat says the same thing.
     it('retires it when geo-chat answers with the side the viewer took', () => {
@@ -864,6 +878,17 @@ describe('faces borrowed from the match', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('attributes response events to the claim text as well as its id', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(mocks.useEntityResponse).toHaveBeenCalledWith({
+      entityId: CLAIM_ENTITY_ID,
+      entityName: CLAIM_TEXT,
+      spaceId: SPACE_ID,
+      responseKind: 'stance',
+    });
+  });
+
   /**
    * Reported on a freshly created account: the hub panel's pills are dead for the minute geo-chat
    * spends indexing it, while the same claims in the main feed take positions normally.
@@ -973,15 +998,33 @@ describe('MatchmakingClaimCard', () => {
     expect(reserved).not.toHaveTextContent(/\S/);
   });
 
-  it('says why the offer cannot be taken rather than dimming it silently', () => {
+  it('says why the offer cannot be taken when its wrapper receives keyboard focus', async () => {
     mocks.match = { id: 'match-1', viewer_position: true };
     mocks.blockedReason = 'Withdraw your open request to send another.';
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
-    // Shown, not left to a `title`: native tooltips never appear on touch and are unreliable on a
-    // disabled button, which is exactly when the explanation matters.
-    expect(screen.getByText('Withdraw your open request to send another.')).toBeInTheDocument();
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    const trigger = request.parentElement!;
+    expect(request).toBeDisabled();
+    expect(screen.queryByText('Withdraw your open request to send another.')).not.toBeInTheDocument();
+
+    await userEvent.tab();
+
+    expect(trigger).toHaveFocus();
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
+  });
+
+  it('says why the offer cannot be taken when its wrapper is tapped', async () => {
+    mocks.match = { id: 'match-1', viewer_position: true };
+    mocks.blockedReason = 'Withdraw your open request to send another.';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+
+    fireEvent.pointerDown(request.parentElement!, { pointerType: 'touch' });
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });
 
   it('opens the room when a debate is running', () => {
@@ -1234,15 +1277,46 @@ describe('MatchmakingClaimCard', () => {
     expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
   });
 
-  it('keeps the response pills live while the response is publishing', () => {
-    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
-    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+  /**
+   * Not dimmed, because dead pills for the length of an indexing round trip read as a stuck
+   * response — but not live either. Nothing serializes overlapping submissions, and pressing the
+   * held side means "remove": a double-click, or a press on an Agree still confirming, published a
+   * retraction behind a pill that still looked held, and Request debate then failed on it.
+   */
+  describe('while the viewer’s response is confirming', () => {
+    it.each(['reconciling', 'delayed'] as const)('ignores presses on either pill while %s', status => {
+      mocks.indexing = { status, pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    // Dimmed, dead pills for the length of an indexing round trip read as a stuck response.
-    expect(screen.getByRole('button', { name: /^Agree/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(agree).toBeEnabled();
+      expect(agree).toHaveAttribute('aria-disabled', 'true');
+      expect(disagree).toHaveAttribute('aria-disabled', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
-    expect(mocks.submitResponse).toHaveBeenCalled();
+      fireEvent.click(agree);
+      fireEvent.click(agree);
+      fireEvent.click(disagree);
+      expect(mocks.submitResponse).not.toHaveBeenCalled();
+    });
+
+    it('removes the position once the chain has confirmed it', () => {
+      // `indexed` holds the snapshot until geo-chat agrees, but the side it draws is now a fact.
+      mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).not.toHaveAttribute('aria-disabled');
+
+      fireEvent.click(agree);
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
+
+    it('removes a settled position when its pill is pressed', () => {
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
   });
 });

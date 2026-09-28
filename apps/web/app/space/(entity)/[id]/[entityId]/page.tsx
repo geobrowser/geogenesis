@@ -1,4 +1,4 @@
-import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
@@ -8,6 +8,7 @@ import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { isHiddenEntity } from '~/core/moderation/hidden';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
 import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
@@ -43,7 +44,7 @@ export default async function EntityTemplateStrategy(props: Props) {
     notFound();
   }
 
-  if (result?.entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
+  if (result?.entity && entityBrowseViewFromTypes(result.entity.types) === 'person') {
     return <ProfileEntityServerContainer params={params} searchParams={searchParams} />;
   }
 

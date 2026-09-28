@@ -50,3 +50,37 @@ describe('EntityPageSidebarLayout', () => {
     expect(screen.getByRole('complementary').textContent).toBe('Sidebar');
   });
 });
+
+/**
+ * The avatar's box follows the same column, at the same breakpoint.
+ *
+ * `EntityPageContentContainer` narrows a with-sidebar column back to 900px at
+ * `lg` — a max-width of 1023px here — because the rail drops itself there. The
+ * avatar is centred in a box the width of that column so its left edge lands on
+ * the name below it; a fixed 1142 left the box viewport-wide between 901 and
+ * 1023px while the name centred at 900, sliding the avatar up to 121px left of
+ * the name in exactly one band of widths.
+ *
+ * Asserted on the class pair rather than a rendered width, since jsdom has no
+ * layout — but the pair is the whole fix, and the variables have to be declared
+ * on the element itself because the container's copy is scoped to the container.
+ */
+describe('the profile avatar box', () => {
+  it('carries the same responsive width pair as the with-sidebar column', () => {
+    render(<EntityPageContentContainer variant="with-sidebar">Content</EntityPageContentContainer>);
+
+    const container = screen.getByText('Content');
+    const pair = [
+      'max-w-[var(--entity-page-with-sidebar-max-width)]',
+      'lg:max-w-[var(--entity-page-content-max-width)]',
+    ];
+
+    for (const className of pair) {
+      expect(container?.className).toContain(className);
+    }
+
+    // Both variables resolve on the element that uses them.
+    expect(container?.style.getPropertyValue('--entity-page-with-sidebar-max-width')).toBe('1142px');
+    expect(container?.style.getPropertyValue('--entity-page-content-max-width')).toBe('900px');
+  });
+});

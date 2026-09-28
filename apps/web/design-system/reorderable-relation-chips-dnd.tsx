@@ -51,7 +51,7 @@ export default function ReorderableRelationChipsDnd({
   );
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
+  const [_isDragging, setIsDragging] = React.useState(false);
 
   const activeRelation = activeId ? sortedRelations.find(r => r?.id === activeId) : null;
 

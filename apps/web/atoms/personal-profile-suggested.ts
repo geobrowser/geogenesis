@@ -14,11 +14,17 @@ export const PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY = 'geoPersonalProfileS
 /** Removes all per-wallet session-dismiss flags (including prefixed keys). */
 export function clearPersonalProfileSessionDismissStorage() {
   if (typeof window === 'undefined') return;
-  for (let i = sessionStorage.length - 1; i >= 0; i--) {
-    const k = sessionStorage.key(i);
-    if (k?.startsWith(PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY)) {
-      sessionStorage.removeItem(k);
+  // This runs on wallet disconnect, so a throw here would take the sign-out path with it. A browser
+  // with site data blocked throws on the accessor itself, and there is nothing to clear there anyway.
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const k = sessionStorage.key(i);
+      if (k?.startsWith(PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY)) {
+        sessionStorage.removeItem(k);
+      }
     }
+  } catch {
+    // Nothing persisted, so nothing to clear.
   }
 }
 

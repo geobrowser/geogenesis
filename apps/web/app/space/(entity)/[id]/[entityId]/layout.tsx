@@ -15,6 +15,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -25,6 +26,7 @@ import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-c
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
+import { EntityStickyHeader } from '~/partials/entity-page/entity-sticky-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
@@ -77,16 +79,27 @@ export default async function ProfileLayout(props: Props) {
 
   const { children } = props;
   const result = await cachedFetchEntityPage(entityId, spaceId);
-  const typeIds = result?.entity?.types.map(t => t.id) ?? [];
+  const entityTypes = result?.entity?.types ?? [];
 
-  if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
-    return <>{children}</>;
+  // Mounted here rather than per page: every entity surface below this — the generic page, a
+  // claim, a topic, a profile, and each of the type-owned record tabs — hangs off this one layout,
+  // and the bar has no business being drawn four times with four ideas of what it shows.
+  const stickyHeader = <EntityStickyHeader entityId={entityId} spaceId={spaceId} />;
+
+  if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
+    return (
+      <>
+        {stickyHeader}
+        {children}
+      </>
+    );
   }
 
   const profile = await getProfilePage(entityId, spaceId);
 
   return (
     <EntityStoreProvider id={entityId} spaceId={spaceId}>
+      {stickyHeader}
       <RouteEditorProvider
         id={profile.id}
         spaceId={spaceId}

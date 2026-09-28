@@ -150,7 +150,10 @@ export function EntityToSpaceDialog({
                   {/* Header */}
                   <div className="relative z-20 flex items-center justify-between pb-2">
                     <div className="h-1 w-4" />
-                    <h3 className="text-smallTitle" />
+                    {/* A spacer, not a heading: it holds the row's centre and has never carried a
+                        title. As an empty `h3` it put a contentless heading in the accessibility
+                        tree, which a screen reader announces and a reader cannot act on. */}
+                    <div className="text-smallTitle" />
                     <div className="h-1 w-4" />
                   </div>
 

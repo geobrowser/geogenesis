@@ -71,7 +71,7 @@ export function usePlaceholderProperties(entityId: string, spaceId: string) {
  * solve that afterwards.
  */
 
-export function usePlaceholderRenderables_V2(entityId: string) {
+export function usePlaceholderRenderables_V2(_entityId: string) {
   const [placeholders, setPlaceholders] = React.useState<Record<string, Value | Relation>>({});
 
   const onAddPlaceholderRenderable = (placeholdersToAdd: { propertyId: string; dataType: DataType }[]) => {

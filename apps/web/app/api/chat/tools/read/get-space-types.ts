@@ -5,7 +5,7 @@ import * as Effect from 'effect/Effect';
 
 import { getAllEntities } from '~/core/io/queries';
 
-import { MAX_RESULT_ENTRIES, isEntityId, limitEntries, normalizeEntityId, truncateText } from './shared';
+import { isEntityId, limitEntries, normalizeEntityId, truncateText } from './shared';
 
 type GetSpaceTypesInput = {
   spaceId: string;

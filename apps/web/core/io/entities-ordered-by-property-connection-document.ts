@@ -29,6 +29,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
     $spaceId: UUID
     $spaceIds: [UUID!]
     $typeIds: [UUID!]
+    $entityIds: [UUID!]
     $limit: Int
     $after: Cursor
     $offset: Int
@@ -41,6 +42,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
       includeWithoutValue: $includeWithoutValue
       spaceIds: $spaceIds
       typeIds: $typeIds
+      entityIds: $entityIds
       first: $limit
       after: $after
       offset: $offset
