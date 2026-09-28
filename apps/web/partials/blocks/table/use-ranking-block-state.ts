@@ -22,8 +22,8 @@ import {
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import {
-  getPendingProposerSpaceIds,
   isPlaceholderRankingEntry,
+  selectRankingBlockPendingCandidates,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
@@ -448,8 +448,8 @@ export function useRankingBlockState({
 
   // Hide unresolved rows from the global leaderboard for everyone. A row is
   // "unresolved" when the indexer returns no real name for it (placeholder) — this
-  // covers governance-pending entities (backfilled below for my-ranking + the opt-in
-  // disclosure) as well as deleted/rejected ones, so the public list never shows
+  // covers governance-pending entities (the compose screen's disclosure resolves
+  // their names) as well as deleted/rejected ones, so the public list never shows
   // nameless ghost rows. Empty while entries are still loading, so nothing flickers
   // out before names resolve.
   const placeholderGlobalEntityIds = React.useMemo(() => {
@@ -523,43 +523,59 @@ export function useRankingBlockState({
     [showViewerOwnTab, mySubmission]
   );
 
-  const unresolvedRankingEntityIds = React.useMemo(() => {
+  const { entries: viewerOwnEntries, isLoading: isLoadingViewerOwnEntries } = useRankingEntryEntities(
+    spaceId,
+    viewerOwnDisplayEntityIds
+  );
+
+  const viewerOwnEntryByEntityIdBase = React.useMemo(
+    () => buildRankingEntryMap(EMPTY_RANKING_ENTRIES, rows, viewerOwnEntries),
+    [viewerOwnEntries, rows]
+  );
+
+  // Only rendered rows need pending names; global placeholders are hidden from
+  // the leaderboard above, so they are not candidates.
+  const unresolvedMyRankingEntityIds = React.useMemo(() => {
     if (!entriesSettled) return EMPTY_ENTITY_IDS;
-    // Global placeholders are already computed (and hidden from the leaderboard);
-    // reuse them so their names get backfilled for the opt-in disclosure.
-    const ids = new Set<string>(placeholderGlobalEntityIds);
-    for (const id of myRankingListEntityIds) {
-      if (id && isPlaceholderRankingEntry(myRankingEntryByEntityIdBase.get(id))) ids.add(id);
-    }
-    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
-  }, [entriesSettled, placeholderGlobalEntityIds, myRankingListEntityIds, myRankingEntryByEntityIdBase]);
+    const ids = myRankingListEntityIds.filter(
+      id => id && isPlaceholderRankingEntry(myRankingEntryByEntityIdBase.get(id))
+    );
+    return ids.length > 0 ? ids : EMPTY_ENTITY_IDS;
+  }, [entriesSettled, myRankingListEntityIds, myRankingEntryByEntityIdBase]);
+
+  const unresolvedViewerOwnEntityIds = React.useMemo(() => {
+    if (isLoadingViewerOwnEntries) return EMPTY_ENTITY_IDS;
+    const ids = viewerOwnDisplayEntityIds.filter(
+      id => id && isPlaceholderRankingEntry(viewerOwnEntryByEntityIdBase.get(id))
+    );
+    return ids.length > 0 ? ids : EMPTY_ENTITY_IDS;
+  }, [isLoadingViewerOwnEntries, viewerOwnDisplayEntityIds, viewerOwnEntryByEntityIdBase]);
 
   const ownRankingEntityIds = React.useMemo(
     () => (isSharedRankingView || !personalSpaceId ? EMPTY_ENTITY_IDS : myRankingListEntityIds),
     [isSharedRankingView, personalSpaceId, myRankingListEntityIds]
   );
 
-  const pendingCandidateEntityIds = React.useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of ownRankingEntityIds) if (id) ids.add(id);
-    for (const id of unresolvedRankingEntityIds) if (id) ids.add(id);
-    for (const id of viewerOwnDisplayEntityIds) if (id) ids.add(id);
-    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
-  }, [ownRankingEntityIds, unresolvedRankingEntityIds, viewerOwnDisplayEntityIds]);
-
-  const pendingProposerSpaceIds = React.useMemo(() => {
-    // Only worth widening the proposer search when something actually needs one.
-    const needsSubmitters = unresolvedRankingEntityIds.length > 0 || viewerOwnDisplayEntityIds.length > 0;
-    const submitters = needsSubmitters ? aggregatedSubmitterSpaceIds : [];
-    const extra = [personalSpaceId, sharedAuthorSpaceId].filter(Boolean) as string[];
-    return getPendingProposerSpaceIds(submitters, extra);
-  }, [
-    unresolvedRankingEntityIds,
-    viewerOwnDisplayEntityIds,
-    aggregatedSubmitterSpaceIds,
-    personalSpaceId,
-    sharedAuthorSpaceId,
-  ]);
+  const { candidateEntityIds: pendingCandidateEntityIds, proposerSpaceIds: pendingProposerSpaceIds } = React.useMemo(
+    () =>
+      selectRankingBlockPendingCandidates({
+        ownRankingEntityIds,
+        unresolvedMyRankingEntityIds,
+        viewerOwnEntityIds: viewerOwnDisplayEntityIds,
+        unresolvedViewerOwnEntityIds,
+        submitterSpaceIds: aggregatedSubmitterSpaceIds,
+        priorityProposerSpaceIds: [personalSpaceId, sharedAuthorSpaceId],
+      }),
+    [
+      ownRankingEntityIds,
+      unresolvedMyRankingEntityIds,
+      viewerOwnDisplayEntityIds,
+      unresolvedViewerOwnEntityIds,
+      aggregatedSubmitterSpaceIds,
+      personalSpaceId,
+      sharedAuthorSpaceId,
+    ]
+  );
 
   const { pendingEntityIds, pendingEntriesByEntityId, isPendingLoading } = useRankingPendingEntities({
     targetSpaceId: pendingTargetSpaceId,
@@ -581,16 +597,6 @@ export function useRankingBlockState({
   const globalRankByEntityId = React.useMemo(
     () => new Map(visibleGlobalDisplayEntityIds.map((id, index) => [id, index + 1])),
     [visibleGlobalDisplayEntityIds]
-  );
-
-  const { entries: viewerOwnEntries, isLoading: isLoadingViewerOwnEntries } = useRankingEntryEntities(
-    spaceId,
-    viewerOwnDisplayEntityIds
-  );
-
-  const viewerOwnEntryByEntityIdBase = React.useMemo(
-    () => buildRankingEntryMap(EMPTY_RANKING_ENTRIES, rows, viewerOwnEntries),
-    [viewerOwnEntries, rows]
   );
 
   // Same pending overlay the global and my maps get.

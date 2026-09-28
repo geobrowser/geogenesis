@@ -81,6 +81,8 @@ export type FetchUserProposalsOptions = {
   proposerSpaceId: string;
   signal?: AbortController['signal'];
   page?: number;
+  /** Fetch creator profiles; when false, createdBy carries only the proposer id. Defaults to true. */
+  includeProfiles?: boolean;
 };
 
 type NetworkResult = {
@@ -126,6 +128,7 @@ export async function fetchProposalsByUser({
   spaceId,
   signal,
   page = 0,
+  includeProfiles = true,
 }: FetchUserProposalsOptions): Promise<ProposalWithoutVoters[]> {
   const queryId = uuid();
   const offset = page * 5;
@@ -179,7 +182,7 @@ export async function fetchProposalsByUser({
   const creatorIds = proposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];
   const [profilesForProposals, actionTypeByProposalId] = await Promise.all([
-    Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds)),
+    includeProfiles ? Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds)) : Promise.resolve([]),
     fetchActionTypesByProposalId(
       proposals.map(p => p.id),
       signal

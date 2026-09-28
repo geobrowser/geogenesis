@@ -11,7 +11,17 @@ import { AbortError } from './errors';
 export type ProposalDiffResult =
   { status: 'success'; entities: EntityDiff[] } | { status: 'not_cached' } | { status: 'encoding_error' };
 
-export async function fetchProposalDiffs(proposalId: string, spaceId: string): Promise<ProposalDiffResult> {
+export type FetchProposalDiffsOptions = {
+  /** Resolve names, orphan blocks and relation targets. Off returns the raw mapped diff. Defaults to true. */
+  postProcess?: boolean;
+  signal?: AbortSignal;
+};
+
+export async function fetchProposalDiffs(
+  proposalId: string,
+  spaceId: string,
+  { postProcess = true, signal }: FetchProposalDiffsOptions = {}
+): Promise<ProposalDiffResult> {
   const config = Environment.getConfig();
 
   const allEntities: EntityDiff[] = [];
@@ -34,6 +44,7 @@ export async function fetchProposalDiffs(proposalId: string, spaceId: string): P
         restFetch<unknown>({
           endpoint: config.api,
           path,
+          signal,
         })
       )
     );
@@ -70,6 +81,8 @@ export async function fetchProposalDiffs(proposalId: string, spaceId: string): P
     cursor = page.pagination.cursor;
     hasMore = page.pagination.hasMore;
   }
+
+  if (!postProcess) return { status: 'success', entities: allEntities };
 
   if (process.env.NODE_ENV === 'development') {
     console.log('[diff:proposal] before postProcessDiffs ' + JSON.stringify(allEntities));
