@@ -24,6 +24,7 @@ import {
 import { hasProcessedVideo } from '../playback-utils';
 import { applyClaimReusePolicy } from './claim-reuse';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
+import { loadMotionTopics } from './motion-topics';
 
 const debatePublishSettlementMs = 60_000;
 
@@ -258,6 +259,10 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     motionClaimEntityId: debate.claim.claim_entity_id,
   });
 
+  // After the share card and claims, like them, but a failure here throws instead of degrading:
+  // see `loadMotionTopics` for why a debate is never published without its claim's topics.
+  const claimTopics = await loadMotionTopics(debate.claim.claim_entity_id, debate.claim.space_id);
+
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
     displayName: p.display_name,
@@ -270,6 +275,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     spaceId: debate.claim.space_id,
     claimEntityId: debate.claim.claim_entity_id,
     claimText: debate.claim.claim,
+    claimTopics,
     participants,
     videoUrl,
     keyframeUrl,

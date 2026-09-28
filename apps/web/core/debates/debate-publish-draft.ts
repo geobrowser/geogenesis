@@ -97,6 +97,12 @@ export type DebatePublishInput = {
   /** The already-published Claim entity the debate argued. */
   claimEntityId: string;
   claimText: string;
+  /**
+   * The debated claim's Topics in this space, mirrored onto the Debate entity so the debate is
+   * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
+   * Debate with no Topics relations.
+   */
+  claimTopics?: { id: string; name: string | null }[];
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -224,6 +230,15 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     toEntityId: input.claimEntityId,
     toEntityName: claimText,
   });
+  // Deduped on normalized ids for the same reason as the claim topics below: `relate` does not
+  // dedupe, and one topic written dashed and dashless is still one topic.
+  const debateTopics = new Set<string>();
+  for (const topic of input.claimTopics ?? []) {
+    const key = normalizeId(topic.id);
+    if (debateTopics.has(key)) continue;
+    debateTopics.add(key);
+    relate({ fromEntity: debateRef, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
+  }
 
   for (const p of bySlot) {
     relate({

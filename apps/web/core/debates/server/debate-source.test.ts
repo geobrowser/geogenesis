@@ -7,11 +7,18 @@ import {
   loadDebateOgPreview,
   loadDebatePublishSource,
 } from './debate-source';
+import { loadMotionTopics } from './motion-topics';
 
 // The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
 // passes claims through, so what the loader decodes from geo-chat is observable on the input.
 vi.mock('./claim-reuse', () => ({
   applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
+}));
+
+// The motion's topics are a graph read, covered in `motion-topics.test.ts`. Here it returns none
+// unless a test says otherwise.
+vi.mock('./motion-topics', () => ({
+  loadMotionTopics: vi.fn(async () => []),
 }));
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
@@ -234,6 +241,25 @@ describe('loadDebatePublishSource media gating', () => {
       'c9f267dcb0d270718c2a3c45a64afd32',
       { debateId: DEBATE_ID, motionClaimEntityId: 'claim-1' }
     );
+  });
+
+  it("reads the motion's topics in the debate's space and carries them on the input", async () => {
+    const topics = [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }];
+    vi.mocked(loadMotionTopics).mockResolvedValueOnce(topics);
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+
+    expect(vi.mocked(loadMotionTopics)).toHaveBeenCalledWith('claim-1', 'c9f267dcb0d270718c2a3c45a64afd32');
+    expect(input.claimTopics).toEqual(topics);
+  });
+
+  // Publishing is once-only, so a Debate published without topics would never get them.
+  it("refuses to build the input when the motion's topics cannot be read", async () => {
+    vi.mocked(loadMotionTopics).mockRejectedValueOnce(new Error('graph down'));
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow('graph down');
   });
 
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {
