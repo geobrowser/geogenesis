@@ -172,10 +172,8 @@ export function useDebatePeople(enabled: boolean) {
 }
 
 /**
- * One window for every caller, so the People tab and the Requests tab's names share a cache entry.
- * geo-chat's range includes both ends, so this is the booking modal's seven days rather than eight.
- * The limit leaves room for up to a day of already-past slots, which geo-chat keeps and the People
- * tab drops before showing a few.
+ * Fixed so every caller shares one cache entry. geo-chat's range is inclusive, so this is the modal's
+ * seven days; the limit leaves room for a day of past slots, which geo-chat keeps.
  */
 const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;
