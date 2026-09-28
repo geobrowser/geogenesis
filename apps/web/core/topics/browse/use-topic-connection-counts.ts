@@ -9,7 +9,7 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
@@ -20,7 +20,7 @@ import { NEWS_STORY_TYPE_ID } from '../ontology';
 export type TopicConnectionCounts = {
   claims: number;
   news: number;
-  /** Debates on the topic's claims — two hops, not one. See the query. */
+  /** Debates that directly name the topic. */
   debates: number;
   /** What the list is ordered by: everything the card names, added up. */
   total: number;
@@ -31,16 +31,8 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
 /**
  * Asked of entities rather than of relations, for all three buckets.
  *
- * `relationsConnection` answers faster and is what the topic page's composition strip uses, but it
- * counts *links*: the same claim carrying `Topics` in two spaces is two relations, and on
- * `AI governance` that is 552 relations against 505 claims and 209 against 195 news stories. A card
- * saying "552 claims" beside a topic page saying 505 is a number nobody can reconcile, and the
- * count is also what orders the list — so it has to be a count of things.
- *
- * Debates are the bucket that was never a `Topics` relation at all. A Debate carries `Claims` and
- * never `Topics`, so its link to a topic is two hops — debate to claim, claim to topic — expressed
- * as a nested filter on the far end of the relation. That is also exactly what the ask describes:
- * debates connected to the *attached claims*, not to the topic.
+ * Count entities so duplicate Topics relations across spaces count only once. Claims, news and
+ * debates all carry Topics directly and use the same one-hop predicate.
  *
  * Unscoped to spaces, unlike the composition strip. A topic gathers across the whole graph, and
  * this count is asked on a claim page that is scoped to one space — narrowing to the spaces a
@@ -58,7 +50,6 @@ function buildCountsSource(topicCount: number): string {
     '$claimTypeIds: [UUID!]',
     '$newsTypeIds: [UUID!]',
     '$debateTypeIds: [UUID!]',
-    '$debateClaimsPropertyId: UUID!',
     ...Array.from({ length: topicCount }, (_, index) => `$topic${index}: UUID!`),
   ].join(', ');
 
@@ -77,7 +68,7 @@ function buildCountsSource(topicCount: number): string {
       debates${index}: entitiesConnection(
         filter: {
           typeIds: { overlaps: $debateTypeIds }
-          relations: { some: { typeId: { is: $debateClaimsPropertyId }, toEntity: { ${namesTopic} } } }
+          ${namesTopic}
         }
       ) {
         totalCount
@@ -128,7 +119,7 @@ export function decodeTopicConnectionCounts(
 /**
  * Topics per request.
  *
- * Each one contributes three aliased counts, one of them a two-hop nested filter, so the request
+ * Each one contributes three aliased counts, so the request
  * grows with the list. Claims measured on testnet carry at most 7 topics and three at the 95th
  * percentile, which means this is one request in practice — the chunking is what stops a
  * topic-heavy claim from becoming one unbounded query, and what keeps a chunk that fails from
@@ -200,7 +191,6 @@ export function useTopicConnectionCounts(topicIds: string[]) {
               claimTypeIds: [ID.uuidToHex(CLAIM_TYPE_ID)],
               newsTypeIds: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
               debateTypeIds: [ID.uuidToHex(DEBATE_TYPE_ID)],
-              debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
               ...Object.fromEntries(ids.map((id, index) => [`topic${index}`, ID.uuidToHex(id)])),
             },
             signal,
