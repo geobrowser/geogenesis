@@ -33,6 +33,7 @@ import {
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
+import { useDebateVisibility } from '../debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from '../debate-entry-intent';
 import { useDebateGatewayScope } from '../debate-gateway';
 import { debatePath } from '../debate-routes';
@@ -44,6 +45,8 @@ import {
 } from '../hooks';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
+/** How often a non-live matches read refreshes while the tab is on screen. */
+const MATCHES_POLL_MS = 30_000;
 
 /**
  * Every hub query lives under the account-scoped `['debates','account',key,…]` shape the gateway
@@ -270,9 +273,15 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
   return withQueryData(infinite, data);
 }
 
-export function useMatchmakingMatches(enabled: boolean) {
+/**
+ * `live: false` is for surfaces outside the hub (claim cards): they poll instead of holding the
+ * `matchmaking` scope, whose presence fan-out is meant for the open hub only. Same query key, so
+ * inside the hub they still share the panel's live data.
+ */
+export function useMatchmakingMatches(enabled: boolean, { live = true }: { live?: boolean } = {}) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const authenticated = useMatchmakingScope(enabled);
+  const authenticated = useMatchmakingScope(enabled && live);
+  const visible = useDebateVisibility();
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
@@ -280,6 +289,8 @@ export function useMatchmakingMatches(enabled: boolean) {
     queryKey: debateQueryKeys.matches(accountKey),
     queryFn: ({ signal }) => listMatchmakingMatches(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    refetchInterval: !live && visible ? MATCHES_POLL_MS : false,
+    refetchOnWindowFocus: !live,
   });
 
   // The Matches tab draws the same `MatchmakingClaimCard` as the Claims tab, off the same

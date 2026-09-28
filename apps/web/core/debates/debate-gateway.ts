@@ -124,6 +124,24 @@ const ERROR_RECONNECT_COOLDOWN_MS = 60_000;
 /** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
 const MAX_INVALIDATION_RETRIES = 3;
 const BROAD_INVALIDATION_KEY = 'debates:all';
+/**
+ * The participant-positions read pages through the graph 500 rows at a time and already polls every
+ * 20s, so a busy space's `claims_changed` stream only needs to nudge it, not drive it.
+ */
+const PARTICIPANT_POSITIONS_THROTTLE_MS = 10_000;
+const PARTICIPANT_POSITIONS_INVALIDATION_KEY = 'participant-positions';
+/** Per-section refetch windows for `matchmaking_changed`, which arrives with every presence change. */
+const MATCHMAKING_SECTION_THROTTLE_MS: Record<MatchmakingSection, number> = {
+  people: 5_000,
+  claims: 10_000,
+  matches: 10_000,
+};
+
+type InvalidationThrottle = {
+  lastAt: number;
+  timer: ReturnType<typeof setTimeout> | null;
+  filters: InvalidationFilters | null;
+};
 
 export class DebateGatewayClient {
   private readonly queryClient: QueryClient;
@@ -139,6 +157,7 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+  private readonly invalidationThrottles = new Map<string, InvalidationThrottle>();
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -433,6 +452,7 @@ export class DebateGatewayClient {
       case 'debate.claims_changed':
         if (identifiers.space_id) {
           this.queueClaims(identifiers.space_id, identifiers.claim_entity_ids);
+          this.queueParticipantPositions();
         }
         break;
       case 'debate.state_changed':
@@ -466,18 +486,69 @@ export class DebateGatewayClient {
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
-        this.queueMatchmakingSections(identifiers.sections);
+        this.queueMatchmakingSections(identifiers.sections, { throttled: true });
         break;
     }
   }
 
-  private queueMatchmakingSections(sections?: MatchmakingSection[]) {
+  /** Events are throttled per section; READY and reconcile refresh everything at once. */
+  private queueMatchmakingSections(sections?: MatchmakingSection[], { throttled = false } = {}) {
     const changed = sections?.length ? sections : MATCHMAKING_SECTIONS;
     for (const section of changed) {
-      if (section === 'people') this.queueAccountQuery('people');
-      if (section === 'claims') this.queueAccountQuery('matchmaking-claims');
-      if (section === 'matches') this.queueAccountQuery('matches');
+      const kind = section === 'people' ? 'people' : section === 'claims' ? 'matchmaking-claims' : 'matches';
+      if (!throttled) {
+        this.queueAccountQuery(kind);
+        continue;
+      }
+      if (!this.accountKey) continue;
+      const queryKey = ['debates', 'account', this.accountKey, kind];
+      this.queueThrottledInvalidation(
+        `query:${JSON.stringify(queryKey)}`,
+        { queryKey, refetchType: 'active' },
+        MATCHMAKING_SECTION_THROTTLE_MS[section]
+      );
     }
+  }
+
+  /**
+   * The rematch picker reads both participants' sides straight from the graph; any response landing
+   * in a space it watches may be one of theirs. One query, so no need to narrow by space.
+   */
+  private queueParticipantPositions() {
+    this.queueThrottledInvalidation(
+      PARTICIPANT_POSITIONS_INVALIDATION_KEY,
+      { predicate: query => isParticipantPositionsQueryKey(query.queryKey), refetchType: 'active' },
+      PARTICIPANT_POSITIONS_THROTTLE_MS
+    );
+  }
+
+  /**
+   * Leading + trailing throttle per key: the first change in a window goes out at once, and any
+   * further ones collapse into a single refresh when the window ends.
+   */
+  private queueThrottledInvalidation(key: string, filters: InvalidationFilters, windowMs: number) {
+    const now = Date.now();
+    const throttle = this.invalidationThrottles.get(key);
+    if (throttle?.timer) {
+      throttle.filters = filters;
+      return;
+    }
+    if (!throttle || now - throttle.lastAt >= windowMs) {
+      this.invalidationThrottles.set(key, { lastAt: now, timer: null, filters: null });
+      this.queueInvalidation(key, filters);
+      return;
+    }
+    throttle.filters = filters;
+    throttle.timer = setTimeout(
+      () => {
+        throttle.timer = null;
+        throttle.lastAt = Date.now();
+        const pending = throttle.filters;
+        throttle.filters = null;
+        if (pending && this.enabled) this.queueInvalidation(key, pending);
+      },
+      throttle.lastAt + windowMs - now
+    );
   }
 
   private rememberEvent(eventId: string) {
@@ -592,10 +663,6 @@ export class DebateGatewayClient {
           );
         }
 
-        // The rematch picker reads both participants' sides straight from the graph; any response
-        // landing in a space it watches may be one of theirs. One query, so no need to narrow.
-        if (isParticipantPositionsQueryKey(query.queryKey)) return true;
-
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
           targetKeys: changedResponseTargets,
@@ -641,15 +708,17 @@ export class DebateGatewayClient {
         // trips complete; restarting every batch on every event starved the list of updates for as
         // long as the other side kept responding. A batch in flight is left to land and is then
         // asked again, so the answer on screen is never older than the event that prompted it.
-        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+        // Participant positions get the same treatment: the read is paged, and cancelling it
+        // restarts from the first page.
+        const inFlightJoined = this.queryClient.getQueryCache().findAll({
           ...queryFilters,
           fetchStatus: 'fetching',
-          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => isNeverCancelledQueryKey(query.queryKey) && matches(query),
         });
         await this.queryClient.cancelQueries({
           ...queryFilters,
           predicate: query =>
-            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+            query.state.data !== undefined && !isNeverCancelledQueryKey(query.queryKey) && matches(query),
         });
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
         // of aborting it. Everything this flush meant to cancel has been cancelled above.
@@ -660,11 +729,11 @@ export class DebateGatewayClient {
         try {
           await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
         } finally {
-          if (inFlightRematchBatches.length > 0) {
+          if (inFlightJoined.length > 0) {
             await this.queryClient.refetchQueries(
               {
                 type: 'active',
-                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+                predicate: query => inFlightJoined.some(batch => batch.queryHash === query.queryHash),
               },
               { throwOnError: true, cancelRefetch: false }
             );
@@ -844,6 +913,10 @@ export class DebateGatewayClient {
     this.invalidationTimer = null;
     for (const timer of this.invalidationRetryTimers) clearTimeout(timer);
     this.invalidationRetryTimers.clear();
+    for (const throttle of this.invalidationThrottles.values()) {
+      if (throttle.timer) clearTimeout(throttle.timer);
+    }
+    this.invalidationThrottles.clear();
   }
 
   private clearTimer(timer: 'handshake' | 'heartbeat' | 'reconnect' | 'token') {
@@ -916,6 +989,10 @@ function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
   if (error.status === 408 || error.status === 429 || error.status >= 500) return 'retry';
   if (error.status >= 400 && error.status < 500) return 'ignore';
   return 'reconnect';
+}
+
+function isNeverCancelledQueryKey(queryKey: QueryKey) {
+  return isRematchClaimsQueryKey(queryKey) || isParticipantPositionsQueryKey(queryKey);
 }
 
 function isGraphqlRequestError(error: unknown): boolean {

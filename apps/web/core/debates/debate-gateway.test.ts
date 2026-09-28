@@ -1,4 +1,4 @@
-import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, type Query, QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -360,7 +360,10 @@ describe('DebateGatewayClient', () => {
 
     type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
     const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
-    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    const claimQuery = queryClient.getQueryCache().find({ queryKey: ['debates', 'claims', 'space-1', ['claim-2']] })!;
+    const predicate = invalidationCalls
+      .map(call => call[0])
+      .find(filters => filters.predicate?.(claimQuery))?.predicate;
     expect(predicate).toBeTypeOf('function');
     expect(
       predicate!(queryClient.getQueryCache().find({ queryKey: ['debates', 'claims', 'space-1', ['claim-1']] })!)
@@ -422,12 +425,105 @@ describe('DebateGatewayClient', () => {
           .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:stance']] })!
       )
     ).toBe(false);
-    // The rematch picker reads both participants' sides straight from the graph in one query;
-    // any response in a watched space may be one of theirs, so it re-asks.
-    expect(
-      predicate!(queryClient.getQueryCache().find({ queryKey: ['participant-positions', ['profile-1', 'profile-2']] })!)
-    ).toBe(true);
+    // Participant positions are refreshed by their own throttled invalidation, not this one.
+    const positions = queryClient
+      .getQueryCache()
+      .find({ queryKey: ['participant-positions', ['profile-1', 'profile-2']] })!;
+    expect(predicate!(positions)).toBe(false);
+    expect(participantPositionsInvalidations(invalidateQueries, positions)).toBe(1);
     expect(refetchQueries).not.toHaveBeenCalled();
+  });
+
+  // Every claim event used to restart the paged positions read; it already polls, so a busy
+  // space's events only need to nudge it.
+  it('throttles participant-positions refreshes to one leading and one trailing per window', async () => {
+    queryClient.setQueryData(['participant-positions', ['profile-1']], []);
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+    const positions = queryClient.getQueryCache().find({ queryKey: ['participant-positions', ['profile-1']] })!;
+
+    for (const [index, space] of ['space-1', 'space-2', 'space-1'].entries()) {
+      sockets[0]!.receive('EVENT', {
+        event_id: `event-claims-${index}`,
+        event_type: 'debate.claims_changed',
+        payload: { space_id: space, claim_entity_ids: [`claim-${index}`] },
+      });
+      await vi.advanceTimersByTimeAsync(2_000);
+    }
+    expect(participantPositionsInvalidations(invalidateQueries, positions)).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(4_100);
+    expect(participantPositionsInvalidations(invalidateQueries, positions)).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(participantPositionsInvalidations(invalidateQueries, positions)).toBe(2);
+  });
+
+  it('throttles matchmaking section refetches per section', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+    const count = (kind: string) =>
+      (invalidateQueries.mock.calls as unknown as Array<[{ queryKey?: unknown }]>).filter(
+        ([filters]) => JSON.stringify(filters.queryKey) === JSON.stringify(['debates', 'account', 'user-a', kind])
+      ).length;
+
+    for (let index = 0; index < 4; index += 1) {
+      sockets[0]!.receive('EVENT', {
+        event_id: `event-matchmaking-${index}`,
+        event_type: 'debate.matchmaking_changed',
+        payload: {},
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+    }
+    expect([count('people'), count('matchmaking-claims'), count('matches')]).toEqual([1, 1, 1]);
+
+    // People's 5s window closes first; the others wait out 10s.
+    await vi.advanceTimersByTimeAsync(1_100);
+    expect([count('people'), count('matchmaking-claims'), count('matches')]).toEqual([2, 1, 1]);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect([count('people'), count('matchmaking-claims'), count('matches')]).toEqual([2, 2, 2]);
+  });
+
+  it('refreshes matchmaking immediately on a scope reconcile despite the event throttle', async () => {
+    const release = client.retainScope({ scope: 'matchmaking' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-matchmaking',
+      event_type: 'debate.matchmaking_changed',
+      payload: { sections: ['people'] },
+    });
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
+    await flushInvalidations();
+
+    expectInvalidated(invalidateQueries, {
+      queryKey: ['debates', 'account', 'user-a', 'people'],
+      refetchType: 'active',
+    });
+    release();
   });
 
   it('coalesces adjacent claim events into one active summary-data refresh', async () => {
@@ -815,12 +911,13 @@ describe('DebateGatewayClient', () => {
     });
     await flushInvalidations();
     const flushCount = invalidateQueries.mock.calls.length;
-    // The READY flush is one broad invalidation, the claim event one scoped invalidation.
-    expect(flushCount).toBe(2);
+    // The READY flush is one broad invalidation; the claim event is a scoped claims invalidation
+    // plus the participant-positions one.
+    expect(flushCount).toBe(3);
 
     // Both retries fire on their own backoff; the first flush's retry was not lost to the second.
     await vi.advanceTimersByTimeAsync(300);
-    expect(invalidateQueries.mock.calls.length).toBe(flushCount + 2);
+    expect(invalidateQueries.mock.calls.length).toBe(flushCount + 3);
     expect(sockets).toHaveLength(1);
   });
 
@@ -1035,6 +1132,54 @@ describe('DebateGatewayClient', () => {
     const reask = refetchQueries.mock.calls.find(([filters]) => filters?.predicate?.(batch));
     expect(reask).toBeDefined();
     expect(reask![1]).toEqual({ throwOnError: true, cancelRefetch: false });
+
+    settle();
+    unsubscribe();
+  });
+
+  // The positions read is paged; cancelling it restarts from the first page, and under a steady
+  // stream of events no pass ever finished.
+  it('lets an in-flight participant-positions read land instead of cancelling it, then asks it again', async () => {
+    const positionsKey = ['participant-positions', ['profile-1']];
+    queryClient.setQueryData(positionsKey, []);
+    let settle!: () => void;
+    const inFlight = new QueryObserver(queryClient, {
+      queryKey: positionsKey,
+      queryFn: () =>
+        new Promise<unknown>(resolve => {
+          settle = () => resolve([]);
+        }),
+      retry: false,
+    });
+    const unsubscribe = inFlight.subscribe(() => undefined);
+    void inFlight.refetch();
+    await vi.runAllTicks();
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries');
+    const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+    cancelQueries.mockClear();
+    refetchQueries.mockClear();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-claims',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-2'] },
+    });
+    await flushInvalidations();
+
+    const positions = queryClient.getQueryCache().find({ queryKey: positionsKey })!;
+    for (const [filters] of cancelQueries.mock.calls) expect(filters?.predicate?.(positions) ?? false).toBe(false);
+    expect(positions.state.fetchStatus).toBe('fetching');
+    expect(participantPositionsInvalidations(invalidateQueries, positions)).toBe(1);
+    expect(refetchQueries.mock.calls.some(([filters]) => filters?.predicate?.(positions))).toBe(true);
 
     settle();
     unsubscribe();
@@ -1425,6 +1570,13 @@ function readyPayload(subscriptions: unknown[]) {
 
 async function flushInvalidations() {
   await vi.advanceTimersByTimeAsync(50);
+}
+
+function participantPositionsInvalidations(invalidateQueries: ReturnType<typeof vi.spyOn>, positions: Query) {
+  type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+  return (invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>).filter(
+    ([filters]) => filters.predicate?.(positions) === true
+  ).length;
 }
 
 function expectInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>, filters: unknown) {

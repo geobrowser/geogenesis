@@ -12,6 +12,7 @@ import { debateRequestErrorMessage, useClaimMatchup } from './use-claim-matchup'
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(() => Promise.resolve()),
   mutate: vi.fn(),
+  useMatchmakingMatches: vi.fn((_enabled: boolean, _options?: { live?: boolean }) => ({ data: { matches: [] } })),
   /** What the next request fails with, or null for a request that goes through. */
   failWith: null as Error | null,
 }));
@@ -27,7 +28,8 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
-  useMatchmakingMatches: () => ({ data: { matches: [] } }),
+  useMatchmakingMatches: (enabled: boolean, options?: { live?: boolean }) =>
+    mocks.useMatchmakingMatches(enabled, options),
   useDebateRequests: () => ({ data: undefined }),
   useCreateDebateRequest: () => ({
     isPending: false,
@@ -117,6 +119,13 @@ describe('a request refused for missing intent', () => {
     expect(mocks.notify).not.toHaveBeenCalled();
     expect(result.current.requestError).toBe('Choose Agree or Disagree first.');
   });
+});
+
+// Cards sit on every claim list; the hub's live scope is for the open hub only.
+it('reads matches without holding the live matchmaking scope', () => {
+  setup({ viewerPosition: null });
+
+  expect(mocks.useMatchmakingMatches).toHaveBeenCalledWith(true, { live: false });
 });
 
 describe('debateRequestErrorMessage', () => {

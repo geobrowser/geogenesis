@@ -38,7 +38,8 @@ export function debateRequestErrorMessage(error: unknown, viewerPosition: boolea
  * every surface must treat its absence as the ordinary case rather than an error.
  *
  * The queries are the hub's own and are keyed identically, so a list of cards asking this question
- * shares one fetch of the matches rather than one per card.
+ * shares one fetch of the matches rather than one per card. Cards poll the matches rather than hold
+ * the hub's live `matchmaking` scope.
  */
 export function useClaimMatchup({
   claimId,
@@ -61,7 +62,7 @@ export function useClaimMatchup({
 }) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const matchesQuery = useMatchmakingMatches(enabled);
+  const matchesQuery = useMatchmakingMatches(enabled, { live: false });
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
   const createRequest = useCreateDebateRequest();

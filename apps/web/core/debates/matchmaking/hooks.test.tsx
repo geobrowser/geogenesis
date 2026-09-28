@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
+import { useDebateGatewayScope } from '../debate-gateway';
 import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
 
 const mocks = vi.hoisted(() => ({
@@ -63,7 +64,30 @@ beforeEach(() => {
   mocks.listMatchmakingMatches.mockReset();
   mocks.listDebatePeople.mockReset();
   mocks.accountKey = 'user-a';
+  vi.mocked(useDebateGatewayScope).mockClear();
   clearEnteringDebate();
+});
+
+describe('useMatchmakingMatches', () => {
+  it('holds the matchmaking scope by default', async () => {
+    mocks.listMatchmakingMatches.mockResolvedValue({ matches: [] });
+
+    const { unmount } = renderHook(() => useMatchmakingMatches(true), { wrapper });
+
+    expect(useDebateGatewayScope).toHaveBeenCalledWith({ scope: 'matchmaking' }, true);
+    unmount();
+  });
+
+  // Claim cards outside the hub poll instead; holding the scope put every signed-in page on the
+  // hub's presence fan-out.
+  it('does not hold the matchmaking scope when not live, and still reads the matches', async () => {
+    mocks.listMatchmakingMatches.mockResolvedValue({ matches: [] });
+
+    const { result } = renderHook(() => useMatchmakingMatches(true, { live: false }), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
+    expect(useDebateGatewayScope).not.toHaveBeenCalledWith(expect.anything(), true);
+  });
 });
 
 describe('useAcceptDebateRequest', () => {
