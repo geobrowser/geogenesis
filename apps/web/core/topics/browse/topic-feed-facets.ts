@@ -17,11 +17,11 @@ type TopicFacetArgs = {
   spaceIds: string[];
   topicId: string;
   selectedTopicIds: readonly string[];
-  typeIds?: readonly string[];
+  typeIds: readonly string[];
   signal?: AbortSignal;
 };
 
-function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[] | undefined, entityFilter: EntityFilter) {
+function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entityFilter: EntityFilter) {
   return buildExploreFeedFilter({
     spaceIds,
     time: 'all',
@@ -55,7 +55,7 @@ export async function fetchTopicFeedFacets({
   typeIds,
   signal,
 }: TopicFacetArgs): Promise<TopicFeedFacet[]> {
-  if (typeIds?.length === 0 || spaceIds.length === 0) return [];
+  if (typeIds.length === 0 || spaceIds.length === 0) return [];
 
   const facets = await Effect.runPromise(
     graphql({
@@ -75,10 +75,7 @@ export async function fetchTopicFeedFacets({
   return namedFacets(counts, topicId, signal);
 }
 
-export type TopicFeedCompositionCounts = {
-  typeCounts: Record<string, number>;
-  typeNames?: Record<string, string | null>;
-};
+export type TopicFeedCompositionCounts = { typeCounts: Record<string, number> };
 
 export function emptyTopicFeedCompositionCounts(): TopicFeedCompositionCounts {
   return { typeCounts: Object.fromEntries(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [id, 0])) };
@@ -105,23 +102,21 @@ export async function fetchTopicFeedCompositionCounts({
     spaceIds,
     sort: 'best',
     time: 'all',
+    typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
     requireName: true,
-    scopes: topicFeedPopulationScopes(topicId, []),
+    scopes: topicFeedPopulationScopes(topicId, [], TOPIC_FEED_ENTITY_TYPE_IDS),
   });
+  const normalizedIdToCanonicalId = new Map(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [normId(id), id]));
   const counts = emptyTopicFeedCompositionCounts();
 
   for (const row of rows) {
     // An entity can carry more than one selected type. Count it once in each matching bucket,
     // mirroring the dropdown's OR semantics without double-counting duplicate ids on the row.
     for (const normalizedTypeId of new Set((row.typeIds ?? []).flatMap(id => (id ? [normId(id)] : [])))) {
-      counts.typeCounts[normalizedTypeId] = (counts.typeCounts[normalizedTypeId] ?? 0) + 1;
+      const typeId = normalizedIdToCanonicalId.get(normalizedTypeId);
+      if (typeId) counts.typeCounts[typeId] = (counts.typeCounts[typeId] ?? 0) + 1;
     }
   }
 
-  const knownTypeIds = new Set(TOPIC_FEED_ENTITY_TYPE_IDS.map(normId));
-  const unknownTypeIds = Object.keys(counts.typeCounts).filter(id => !knownTypeIds.has(id));
-  if (unknownTypeIds.length > 0) {
-    counts.typeNames = Object.fromEntries(await fetchTopicNames(unknownTypeIds));
-  }
   return counts;
 }

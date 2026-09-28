@@ -12,12 +12,11 @@ import { TOPIC_FEED_ENTITY_TYPES } from './topic-feed-types';
 
 const mocks = vi.hoisted(() => ({
   typeCounts: {} as Record<string, number>,
-  typeNames: {} as Record<string, string | null>,
 }));
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({
-    data: { typeCounts: mocks.typeCounts, typeNames: mocks.typeNames },
+    data: { typeCounts: mocks.typeCounts },
     isLoading: false,
   }),
 }));
@@ -53,12 +52,5 @@ describe('TopicComposition', () => {
     expect((segments?.[1] as HTMLElement).style.width).toBe(`${(41 / 52) * 100}%`);
     expect((segments?.[2] as HTMLElement).style.width).toBe(`${(6 / 52) * 100}%`);
     expect((segments?.[3] as HTMLElement).style.width).toBe(`${(2 / 52) * 100}%`);
-  });
-  it('summarizes types discovered outside the previous allowlist', () => {
-    const id = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    mocks.typeCounts = { [id]: 3 };
-    mocks.typeNames = { [id]: 'Person' };
-    render(<TopicComposition topicId="topic" spaceId="space" spaceIds={['space']} />);
-    expect(screen.getByRole('region', { name: 'What this topic holds' })).toHaveTextContent('3 people');
   });
 });

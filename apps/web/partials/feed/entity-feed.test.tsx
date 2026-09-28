@@ -501,41 +501,6 @@ describe('EntityFeed contextual filters', () => {
     expect(request.searchParams.get('typeIds')).toBeNull();
   });
 
-  it('keeps the feed unfiltered while dynamic type options arrive, then honors user selections', async () => {
-    const [claim, debate] = EXPLORE_ENTITY_TYPES;
-    const props = {
-      apiEndpoint: '/api/topics/feed',
-      showTypeFilter: true,
-      showSpaceFilter: false,
-      initialTypeIds: [],
-      selectTypesWithResultsByDefault: true,
-      persistTypeSelection: false,
-    };
-    const view = render(<EntityFeed {...props} typeOptions={[]} typeCountsPending />);
-    const initialKey = mocks.queryKeys.at(-1);
-    expect(new URL(await requestedUrl(), 'https://example.com').searchParams.get('typeIds')).toBeNull();
-
-    mocks.queryKeys = [];
-    view.rerender(
-      <EntityFeed
-        {...props}
-        typeOptions={[claim, debate]}
-        typeCounts={[
-          { id: claim.id, count: 3 },
-          { id: debate.id, count: 1 },
-        ]}
-      />
-    );
-    expect(mocks.queryKeys.length).toBeGreaterThan(0);
-    expect(mocks.queryKeys.every(key => JSON.stringify(key) === JSON.stringify(initialKey))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(`${debate.label}.*Selected`) }));
-    expect(new URL(await requestedUrl(), 'https://example.com').searchParams.get('typeIds')).toBe(claim.id);
-    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
-    expect(new URL(await requestedUrl(), 'https://example.com').searchParams.get('typeIds')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }));
-    expect(new URL(await requestedUrl(), 'https://example.com').searchParams.get('typeIds')).toBe('');
-  });
-
   it('sends selected child topics as additional narrowing', async () => {
     renderTopicFeed();
 

@@ -302,30 +302,6 @@ describe('a type selection filters server-side (GEO-2885)', () => {
 });
 
 describe('a complete contextual population', () => {
-  it('allows an untyped scope, paginates it, and shares it with composition requests', async () => {
-    const otherType = 'dddddddddddddddddddddddddddddddd';
-    windows.queue = [
-      {
-        nodes: [{ id: 'untyped-first', typeIds: [otherType], rankingScore: '1' }],
-        pageInfo: { hasNextPage: true, endCursor: 'more' },
-      },
-      { nodes: [{ id: 'untyped-second', typeIds: [], rankingScore: '2' }], pageInfo: { hasNextPage: false } },
-    ];
-    const args = {
-      spaceIds: [SPACE],
-      sort: 'best' as const,
-      time: 'all' as const,
-      scopes: [{ entityFilter: { id: { in: ['untyped-first', 'untyped-second'] } } }],
-    };
-    const rows = await fetchCompleteExplorePopulationIndex(args);
-    expect(rows.map(row => row.id)).toEqual(['untyped-second', 'untyped-first']);
-    expect(windows.variables).toHaveLength(2);
-    expect(windows.variables.every(variables => variables.typeIds === undefined)).toBe(true);
-    expect(windows.variables[1]?.after).toBe('more');
-    expect(await fetchCompleteExplorePopulationIndex(args)).toEqual(rows);
-    expect(windows.variables).toHaveLength(2);
-  });
-
   it('shares one compact population when equivalent space filters arrive in a different order', async () => {
     const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     windows.responder = operation =>

@@ -42,9 +42,4 @@ describe('topicFeedFilter', () => {
   it('does not query a population with no selected types', () => {
     expect(topicFeedPopulationScopes('topic-1', [], [])).toEqual([]);
   });
-  it('queries all types when the selection is omitted', () => {
-    expect(topicFeedPopulationScopes('topic-1', [])).toEqual([
-      { entityFilter: topicFeedFilter('topic-1'), typeIds: undefined },
-    ]);
-  });
 });

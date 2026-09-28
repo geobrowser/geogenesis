@@ -14,7 +14,6 @@ import { topicFeedFilter } from './topic-feed-filter';
 
 const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const PAGE_TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const OTHER_TYPE = 'dddddddddddddddddddddddddddddddd';
 const TOPIC_C = 'cccccccccccccccccccccccccccccccc';
 
 const mocks = vi.hoisted(() => ({
@@ -53,7 +52,6 @@ vi.mock('~/core/io/graphql-client', async () => {
       }
       if (operation?.name?.value === 'ExploreCompleteIndex') {
         const nodes = [
-          { id: 'other-type-entity', typeIds: [OTHER_TYPE], rankingScore: '6', createdAt: '6' },
           { id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' },
           { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
           {
@@ -90,12 +88,6 @@ describe('fetchTopicFeedFacets', () => {
       { id: TOPIC_C, name: 'Governance', count: 1 },
     ]);
     expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
-  });
-
-  it('does not restrict facets by type when no selection was supplied', async () => {
-    await fetchTopicFeedFacets({ spaceIds, topicId: PAGE_TOPIC, selectedTopicIds: [] });
-    expect(mocks.calls).toHaveLength(1);
-    expect(mocks.calls[0]?.variables.filter.fromEntity.and[0]).not.toHaveProperty('typeIds');
   });
 
   it.each([[CLAIM_TYPE_ID], [DEBATE_TYPE_ID]])('applies the selected entity types: %j', async typeId => {
@@ -155,15 +147,15 @@ describe('fetchTopicFeedCompositionCounts', () => {
     expected.typeCounts[CLAIM_TYPE_ID] = 2;
     expected.typeCounts[DEBATE_TYPE_ID] = 1;
     expected.typeCounts[NEWS_STORY_TYPE_ID] = 1;
-    expected.typeCounts[OTHER_TYPE] = 1;
-    expected.typeNames = { [OTHER_TYPE]: 'Governance' };
 
     await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
 
     const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreCompleteIndex');
     expect(populationCalls).toHaveLength(1);
+    expect(populationCalls.flatMap(call => call.variables.typeIds.in)).toEqual(
+      expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID])
+    );
     for (const { variables } of populationCalls) {
-      expect(variables.typeIds).toBeUndefined();
       expect(variables.spaceIds).toEqual({ in: spaceIds });
       expect(variables.filter.and).toEqual(
         expect.arrayContaining([expect.objectContaining({ and: expect.any(Array) })])

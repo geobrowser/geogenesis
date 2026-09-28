@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   const typeIds = Array.isArray(body?.typeIds)
     ? parseTopicFeedTypeIds(body.typeIds.filter((id): id is string => typeof id === 'string').join(','))
     : parseTopicFeedTypeIds(null);
-  if (typeIds?.length === 0) {
+  if (typeIds.length === 0) {
     return NextResponse.json({ topics: [] });
   }
 

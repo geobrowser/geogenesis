@@ -1,5 +1,3 @@
-import pluralize from 'pluralize';
-
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
@@ -14,7 +12,6 @@ import {
   QUOTE_TYPE_ID,
   TWEET_TYPE_ID,
 } from '../ontology';
-import { parseTopicFeedIds } from './topic-feed-params';
 
 /** Claims, Debates, and every content type formerly represented by the Coverage tab. */
 export const TOPIC_FEED_ENTITY_TYPES = [
@@ -69,32 +66,20 @@ export const TOPIC_FEED_ENTITY_TYPES = [
 
 export const TOPIC_FEED_ENTITY_TYPE_IDS = TOPIC_FEED_ENTITY_TYPES.map(type => type.id);
 
-/** Missing means all types; an empty value is the deliberate none-selected state. */
-export function parseTopicFeedTypeIds(raw: string | null): string[] | undefined {
-  return raw === null ? undefined : parseTopicFeedIds(raw).slice(0, 100);
-}
+const canonicalIdByNormalizedId = new Map(
+  TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [id.replace(/-/g, '').toLowerCase(), id])
+);
 
-/** Known types keep their labels and colors; other types come from the topic's actual population. */
-export function topicFeedTypeOptions(
-  typeCounts: Record<string, number>,
-  typeNames: Record<string, string | null> = {}
-) {
-  const known = new Map<string, (typeof TOPIC_FEED_ENTITY_TYPES)[number]>(
-    TOPIC_FEED_ENTITY_TYPES.map(type => [type.id, type])
+/** Missing means all Topic feed types; an empty value is the deliberate none-selected state. */
+export function parseTopicFeedTypeIds(raw: string | null): string[] {
+  if (raw === null) return [...TOPIC_FEED_ENTITY_TYPE_IDS];
+  if (raw === '') return [];
+
+  const selected = new Set(
+    raw
+      .split(',')
+      .map(id => canonicalIdByNormalizedId.get(id.replace(/-/g, '').toLowerCase()))
+      .filter((id): id is NonNullable<typeof id> => id !== undefined)
   );
-  return Object.keys(typeCounts)
-    .filter(id => typeCounts[id] > 0)
-    .map(id => {
-      const preset = known.get(id);
-      if (preset) return preset;
-      const label = typeNames[id] ?? id;
-      return {
-        id,
-        label,
-        pluralLabel: pluralize(label.toLowerCase()),
-        color: 'var(--color-grey-05)',
-        summaryOrder: 11,
-      };
-    })
-    .sort((left, right) => left.summaryOrder - right.summaryOrder || left.label.localeCompare(right.label));
+  return TOPIC_FEED_ENTITY_TYPE_IDS.filter(id => selected.has(id));
 }

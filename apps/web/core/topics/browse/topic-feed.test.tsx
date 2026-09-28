@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TopicFeed } from './topic-feed';
 import { MAX_TOPIC_FEED_SELECTED_TOPICS } from './topic-feed-params';
-import { TOPIC_FEED_ENTITY_TYPES, topicFeedTypeOptions } from './topic-feed-types';
+import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 const mocks = vi.hoisted(() => ({
   feed: null as Record<string, unknown> | null,
@@ -45,12 +45,9 @@ describe('TopicFeed', () => {
       showTimeFilter: false,
       showSpaceFilter: false,
       showTypeFilter: true,
-      initialTypeIds: [],
-      typeOptions: topicFeedTypeOptions(mocks.typeCounts),
-      typeCounts: topicFeedTypeOptions(mocks.typeCounts).map(type => ({
-        id: type.id,
-        count: mocks.typeCounts[type.id],
-      })),
+      initialTypeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+      typeOptions: TOPIC_FEED_ENTITY_TYPES,
+      typeCounts: TOPIC_FEED_ENTITY_TYPES.map((type, index) => ({ id: type.id, count: index + 1 })),
       typeCountsPending: false,
       selectTypesWithResultsByDefault: true,
       persistTypeSelection: false,
