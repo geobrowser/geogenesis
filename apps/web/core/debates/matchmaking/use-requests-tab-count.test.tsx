@@ -20,6 +20,8 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 // Expiry has its own suite; here every request handed in is live.
 vi.mock('./use-request-countdown', () => ({
   useUnexpiredRequests: <T,>(requests: T[]) => requests,
+  useLiveRequest: <T extends { status: string }>(request: T | null | undefined) =>
+    request?.status === 'pending' ? request : null,
 }));
 
 const { useRequestsTabCount } = await import('./use-requests-tab-count');

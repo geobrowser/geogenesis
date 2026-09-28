@@ -1,12 +1,11 @@
 'use client';
 
-import * as React from 'react';
-
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import type { DebateActivity, DebateRequestsResponse } from '../api';
+import { isOpenScheduledRequest, useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * The Requests tab's badge: everything pending that the tab lists, in both directions.
@@ -17,7 +16,7 @@ import { useUnexpiredRequests } from './use-request-countdown';
  * belongs in the list.
  *
  * Scheduled requests come from the list itself when the flag is on, so the number cannot disagree
- * with the rows underneath it; until that list lands, activity's "awaiting your answer" count
+ * with the rows underneath it; until that list lands, the navbar's "awaiting your answer" count
  * stands in, which is the most the badge knew before.
  */
 export function useRequestsTabCount({
@@ -31,28 +30,20 @@ export function useRequestsTabCount({
 }) {
   const schedulingEnabled = usePeerAvailabilityEnabled();
   const scheduled = useScheduledDebates(schedulingEnabled && authenticated);
+  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const reportedOutbound = requests ? requests.outbound : (activity?.outbound_request ?? null);
-  const outbound = useUnexpiredRequests(
-    React.useMemo(() => (reportedOutbound?.status === 'pending' ? [reportedOutbound] : []), [reportedOutbound])
-  );
+  const outbound = useLiveRequest(requests ? requests.outbound : activity?.outbound_request);
   // The claimless challenge sits in the tab under Sent or Received, whichever way it points.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const challenge = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
+  const challenge = useLiveRequest(activity?.challenge);
 
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  const scheduledPending =
+    schedulingEnabled && scheduled.data
+      ? scheduled.data.requests.filter(isOpenScheduledRequest).length
+      : scheduledAwaiting;
 
-  // The same predicate the tab's "Scheduled" section draws from.
-  const scheduledPending = !schedulingEnabled
-    ? 0
-    : scheduled.data
-      ? scheduled.data.requests.filter(request => request.status === 'pending' && !request.room_id).length
-      : (activity?.scheduled_awaiting_answer_count ?? 0);
-
-  return instantIncoming + outbound.length + challenge.length + scheduledPending;
+  return instantIncoming + (outbound ? 1 : 0) + (challenge ? 1 : 0) + scheduledPending;
 }

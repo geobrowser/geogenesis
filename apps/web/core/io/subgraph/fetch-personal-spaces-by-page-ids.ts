@@ -1,21 +1,23 @@
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+
+import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
 
 type PageEntitiesResult = { entities: { id: string; spaceIds: string[] }[] };
 type SpacesResult = { spaces: { id: string; type: string; page: { id: string } | null }[] };
 
-const UUID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
-
-function dashless(id: string) {
-  return id.replace(/-/g, '').toLowerCase();
+async function run<T>(query: string): Promise<T> {
+  const result = await Effect.runPromise(Effect.either(graphql<T>({ endpoint: Environment.getConfig().api, query })));
+  if (Either.isLeft(result)) throw new Error('Failed to resolve personal spaces by page id', { cause: result.left });
+  return result.right;
 }
 
 /**
- * The personal space each page entity fronts, keyed by the dashless page id.
+ * The personal space each page entity fronts, keyed by the normalized page id.
  *
  * A geo-chat user id *is* this page id — geo-chat takes it from `space.page.id` at sign-in — so this
  * is how a bare participant id becomes someone the app can name and link. There is no filter for
@@ -24,39 +26,24 @@ function dashless(id: string) {
  * appear in spaces that merely mention them.
  */
 export async function fetchPersonalSpacesByPageIds(pageIds: string[]): Promise<Map<string, string>> {
-  const ids = [...new Set(pageIds.filter(id => UUID.test(id)).map(dashless))];
-  const bySpacePage = new Map<string, string>();
-  if (ids.length === 0) return bySpacePage;
+  // Validated before being written into the query, which takes them inline.
+  const ids = [...new Set(pageIds.map(normId).filter(id => IdUtils.isValid(id)))];
+  const byPageId = new Map<string, string>();
+  if (ids.length === 0) return byPageId;
 
-  const endpoint = Environment.getConfig().api;
-
-  const entities = await Effect.runPromise(
-    Effect.either(
-      graphql<PageEntitiesResult>({
-        endpoint,
-        query: `query { entities(filter: { id: { in: ${JSON.stringify(ids)} } }) { id spaceIds } }`,
-      })
-    )
+  const { entities } = await run<PageEntitiesResult>(
+    `query { entities(filter: { id: { in: ${JSON.stringify(ids)} } }) { id spaceIds } }`
   );
-  if (Either.isLeft(entities)) throw entities.left;
+  const spaceIds = [...new Set(entities.flatMap(entity => entity.spaceIds.map(normId)))];
+  if (spaceIds.length === 0) return byPageId;
 
-  const spaceIds = [...new Set(entities.right.entities.flatMap(entity => entity.spaceIds.map(dashless)))];
-  if (spaceIds.length === 0) return bySpacePage;
-
-  const spaces = await Effect.runPromise(
-    Effect.either(
-      graphql<SpacesResult>({
-        endpoint,
-        query: `query { spaces(filter: { id: { in: ${JSON.stringify(spaceIds)} } }) { id type page { id } } }`,
-      })
-    )
+  const { spaces } = await run<SpacesResult>(
+    `query { spaces(filter: { id: { in: ${JSON.stringify(spaceIds)} } }) { id type page { id } } }`
   );
-  if (Either.isLeft(spaces)) throw spaces.left;
-
-  for (const space of spaces.right.spaces) {
+  for (const space of spaces) {
     if (space.type !== 'PERSONAL' || !space.page) continue;
-    const pageId = dashless(space.page.id);
-    if (ids.includes(pageId)) bySpacePage.set(pageId, dashless(space.id));
+    const pageId = normId(space.page.id);
+    if (ids.includes(pageId)) byPageId.set(pageId, normId(space.id));
   }
-  return bySpacePage;
+  return byPageId;
 }

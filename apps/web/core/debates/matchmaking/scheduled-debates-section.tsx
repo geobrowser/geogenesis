@@ -8,14 +8,16 @@ import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRo
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { isOpenScheduledRequest } from '~/core/debates/rooms/scheduled-awaiting';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { normId } from '~/core/utils/norm-id';
 
 import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
-import { HubPillButton } from './hub-pill-button';
+import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 
@@ -109,10 +111,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
 
   const rows = requests.data?.requests;
 
-  const answerable = React.useMemo(
-    () => (rows ?? []).filter(request => request.status === 'pending' && !request.room_id),
-    [rows]
-  );
+  const answerable = React.useMemo(() => (rows ?? []).filter(isOpenScheduledRequest), [rows]);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
   const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
@@ -159,15 +158,11 @@ function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipant
 
   return React.useMemo(() => {
     const byId = new Map<string, DebateParticipantSummary>();
-    for (const person of roster.data?.people ?? []) byId.set(normalizeId(person.user_id), person);
+    for (const person of roster.data?.people ?? []) byId.set(normId(person.user_id), person);
     // Written second so the graph's record wins over the roster's.
-    for (const person of requestPeople) byId.set(normalizeId(person.user_id), person);
-    return (userId: string | null) => (userId ? (byId.get(normalizeId(userId)) ?? null) : null);
+    for (const person of requestPeople) byId.set(normId(person.user_id), person);
+    return (userId: string | null) => (userId ? (byId.get(normId(userId)) ?? null) : null);
   }, [requestPeople, roster.data]);
-}
-
-function normalizeId(userId: string) {
-  return userId.replace(/-/g, '').toLowerCase();
 }
 
 /** An open room says so and offers the way in; one that is not yet open says when. */
@@ -241,8 +236,7 @@ function ScheduledRow({
 }
 
 /** The hub's pill, as a full-width link. `HubPillButton` renders a button, which this cannot be. */
-const JOIN_PILL =
-  'inline-flex h-7 w-full items-center justify-center rounded-full bg-text px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90';
+const JOIN_PILL = hubPillClassName('primary', 'w-full');
 
 /**
  * One shape for both kinds of card, laid out like the instant request card: a header carrying the
@@ -292,16 +286,18 @@ function ScheduleCard({
   );
 }
 
+const UNNAMED_OPPONENT = 'Your opponent';
+
 /** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
 const UNKNOWN_OPPONENT: DebateParticipantSummary = {
   user_id: '',
   profile_space_id: '',
-  display_name: 'Your opponent',
+  display_name: UNNAMED_OPPONENT,
   avatar_cid: null,
 };
 
 function shortName(opponent: DebateParticipantSummary | null) {
-  return opponent?.display_name || 'Your opponent';
+  return opponent?.display_name || UNNAMED_OPPONENT;
 }
 
 function ReadFailed({ children }: { children: React.ReactNode }) {

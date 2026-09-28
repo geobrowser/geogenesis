@@ -18,7 +18,7 @@ import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -103,11 +103,7 @@ function RequestsTabBody({
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
   // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
+  const challenge = useLiveRequest(activity?.challenge);
   const currentUserId = useCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
