@@ -60,7 +60,7 @@ export type PeerAvailabilityBooking = {
  * Takes a user id and nothing else, so the shareable link that will eventually open this can
  * mount it without this component knowing anything about routing.
  */
-export function PeerAvailability({ userId, peerName, className, booking }: Props) {
+export function PeerAvailability({ userId, peerName, className, booking, initialSelectedStart }: Props) {
   const { schedule, enabled, isPending, isError } = usePeerSchedule(userId);
 
   // Signed out there is no viewer to compare against, so the question cannot be asked rather than
@@ -69,7 +69,15 @@ export function PeerAvailability({ userId, peerName, className, booking }: Props
   if (isPending) return <Notice className={className}>Loading availability…</Notice>;
   if (isError || !schedule) return <Notice className={className}>Couldn&rsquo;t load their availability.</Notice>;
 
-  return <PeerAvailabilityView schedule={schedule} peerName={peerName} className={className} booking={booking} />;
+  return (
+    <PeerAvailabilityView
+      schedule={schedule}
+      peerName={peerName}
+      className={className}
+      booking={booking}
+      initialSelectedStart={initialSelectedStart}
+    />
+  );
 }
 
 type Props = {
@@ -81,6 +89,8 @@ type Props = {
    */
   peerName?: string | null;
   className?: string;
+  /** A slot picked before the week opened, e.g. a time chip on a People tab row. */
+  initialSelectedStart?: string | null;
 };
 
 /**
@@ -93,6 +103,7 @@ export function PeerAvailabilityView({
   className,
   now,
   booking,
+  initialSelectedStart = null,
 }: {
   schedule: PeerSchedule;
   peerName?: string | null;
@@ -100,11 +111,18 @@ export function PeerAvailabilityView({
   /** Pins the week. Tests pass it; nothing in the app does. */
   now?: Date;
   booking?: PeerAvailabilityBooking;
+  initialSelectedStart?: string | null;
 }) {
   const days = React.useMemo(() => peerScheduleDays(schedule, now), [schedule, now]);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
   // can ask for, and the footer needs to name the one that is.
-  const [selectedStart, setSelectedStart] = React.useState<string | null>(null);
+  // Matched by instant, not spelling: the wire sends `…:00Z` and the grid's starts are `…:00.000Z`.
+  // A pick outside the drawn week seeds nothing rather than a selection nobody can see.
+  const [selectedStart, setSelectedStart] = React.useState<string | null>(() => {
+    if (!initialSelectedStart) return null;
+    const instant = Date.parse(initialSelectedStart);
+    return days.flatMap(day => day.slots).find(slot => Date.parse(slot.start) === instant)?.start ?? null;
+  });
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
   // The week starts at today's midnight, so its early columns are already gone. geo-chat refuses a
   // past start outright, so a booking caller must not be able to pick one.
@@ -422,7 +440,10 @@ function DayColumn({
   onSelect: (start: string | null) => void;
   notBefore: number | null;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
+  // Opened on a preselected slot past the fold, the pick has to be visible.
+  const [expanded, setExpanded] = React.useState(
+    () => day.slots.findIndex(slot => slot.start === selectedStart) >= SLOTS_PER_DAY
+  );
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
   const hidden = day.slots.length - shown.length;

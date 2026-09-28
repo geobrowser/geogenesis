@@ -28,6 +28,7 @@ import {
   listDebateRequests,
   listMatchmakingClaims,
   listMatchmakingMatches,
+  listSchedulablePeople,
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
@@ -168,6 +169,39 @@ export function useDebatePeople(enabled: boolean) {
 
   return withQueryData(query, data);
 }
+
+/**
+ * Everyone who shares a free slot with the viewer, online or not (GEO-2937). `days` and `limit`
+ * are the caller's: the People tab asks for one modal-week so a picked time is always drawn there.
+ */
+export function useSchedulablePeople(enabled: boolean, { days, limit }: { days: number; limit: number }) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryEnabled = enabled && authenticated;
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions(accountKey),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit),
+    queryFn: ({ signal }) => listSchedulablePeople({ days, limit }, getPrivyIdentityToken, accountKey, signal),
+    enabled: queryEnabled,
+  });
+
+  // geo-chat's `avatar_cid` is a first-sight snapshot; see `useDebatePeople`.
+  const users = React.useMemo(() => query.data?.people.map(person => person.user) ?? EMPTY_SUMMARIES, [query.data]);
+  const withAvatar = useParticipantAvatars(users, queryEnabled);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? { ...query.data, people: query.data.people.map(person => ({ ...person, user: withAvatar(person.user) })) }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
+}
+
+const EMPTY_SUMMARIES: DebateParticipantSummary[] = [];
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
