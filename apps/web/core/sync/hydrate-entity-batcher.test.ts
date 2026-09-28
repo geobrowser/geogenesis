@@ -2,6 +2,8 @@ import { QueryClient } from '@tanstack/react-query';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hydrateEntityBatched } from './hydrate-entity-batcher';
+import type { GeoStore } from './store';
 import { GeoEventStream } from './stream';
 
 const mocks = vi.hoisted(() => ({ syncMany: vi.fn(), syncOne: vi.fn() }));
@@ -15,10 +17,6 @@ vi.mock('./orm', () => ({
 vi.mock('./use-sync-engine.tsx', () => ({}));
 vi.mock('./use-store.tsx', () => ({}));
 vi.mock('../database/entities', () => ({ readTypes: () => [] }));
-
-import { hydrateEntityBatched } from './hydrate-entity-batcher';
-
-import type { GeoStore } from './store';
 
 function entity(id: string, name = id) {
   return { id, name, description: null, spaces: [], types: [], relations: [], values: [] };
@@ -247,7 +245,10 @@ describe('hydrateEntityBatched', () => {
 
     let releaseTopUp: (v: unknown) => void = () => {};
     mocks.syncOne.mockImplementation(
-      () => new Promise(resolve => { releaseTopUp = () => resolve({ merged: entity('big'), remote: entity('big') }); })
+      () =>
+        new Promise(resolve => {
+          releaseTopUp = () => resolve({ merged: entity('big'), remote: entity('big') });
+        })
     );
 
     let smallSettled = false;

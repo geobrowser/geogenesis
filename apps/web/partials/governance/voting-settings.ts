@@ -25,7 +25,7 @@ export type VotingSettingsSnapshot = {
   durationSeconds: number;
   /** Execution grace period in days — not shown in the form, preserved on edit. */
   graceDays: number;
-  /** Not shown in the form, preserved on edit. */
+  /** Whether members joining from now on are barred from the fast path. Editable — see the form. */
   disableFastPathForNewMembers: boolean;
 };
 
@@ -65,12 +65,25 @@ export type VotingSettingsFormState = {
   durationSeconds: string;
   fastPathVotes: string;
   quorum: string;
+  /**
+   * Whether members who join from now on are barred from the fast path.
+   *
+   * A boolean rather than a string: it is a switch, not something anyone types, so it has no
+   * half-entered state to hold. It was a hidden field until the space had no way to change its
+   * mind about it — see `HiddenVotingSettings`.
+   */
+  disableFastPathForNewMembers: boolean;
 };
 
-/** Fields the form doesn't expose but the SDK still requires; carried through unchanged. */
+/**
+ * Fields the form doesn't expose but the SDK still requires; carried through unchanged.
+ *
+ * `disableFastPathForNewMembers` used to live here. It is on-chain and `updateVotingSettings`
+ * always carried it, so a space could be created with it on and then had no way to turn it off:
+ * the only surface that writes voting settings passed whatever it read straight back.
+ */
 export type HiddenVotingSettings = {
   graceDays: number;
-  disableFastPathForNewMembers: boolean;
 };
 
 /**
@@ -134,19 +147,17 @@ export function snapshotToFormState(snapshot: VotingSettingsSnapshot): VotingSet
     durationSeconds: String(seconds),
     fastPathVotes: String(snapshot.flat),
     quorum: String(snapshot.quorum),
+    disableFastPathForNewMembers: snapshot.disableFastPathForNewMembers,
   };
 }
 
 export function snapshotToHidden(snapshot: VotingSettingsSnapshot): HiddenVotingSettings {
   return {
     graceDays: snapshot.graceDays,
-    disableFastPathForNewMembers: snapshot.disableFastPathForNewMembers,
   };
 }
 
-export type ParseVotingSettingsResult =
-  | { kind: 'ok'; value: VotingSettingsInput }
-  | { kind: 'error'; message: string };
+export type ParseVotingSettingsResult = { kind: 'ok'; value: VotingSettingsInput } | { kind: 'error'; message: string };
 
 /**
  * Validate the form and produce a VotingSettingsInput, preserving the hidden fields.
@@ -215,7 +226,7 @@ export function parseVotingSettingsForm(
     flatSupportThreshold: flat,
     quorum,
     durationInSeconds,
-    disableFastPathAccessForNewMembers: hidden.disableFastPathForNewMembers,
+    disableFastPathAccessForNewMembers: state.disableFastPathForNewMembers,
     executionGracePeriodInDays: hidden.graceDays,
   };
 

@@ -29,6 +29,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { SectionTitle } from '~/partials/entity-page/section-title';
+
 import { CursorPager, useCursorPages } from './use-cursor-pages';
 import { useDebateKeyframes } from './use-debate-keyframes';
 
@@ -61,16 +63,7 @@ const VOTE_FETCH_CAP = 500;
  * Renders nothing when the claim has never been debated. The invitation to be the first belongs
  * next to the readiness toggle, which is the control that acts on it — not in an empty module here.
  */
-export function ClaimDebates({
-  claimId,
-  spaceId,
-  responseKind,
-}: {
-  claimId: string;
-  spaceId: string;
-  /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
-  responseKind: 'stance' | 'veracity';
-}) {
+export function ClaimDebates({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   // A page at a time rather than an accumulating list: appending pushes everything below the
   // section down the page as the reader loads more, where swapping keeps the layout where they
   // left it.
@@ -131,9 +124,7 @@ export function ClaimDebates({
 
   return (
     <section aria-label="Debates on this claim">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
-        Debates on this claim
-      </Text>
+      <SectionTitle>Debates on this claim</SectionTitle>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {debates.map(debate => (
           <li key={debate.id}>
@@ -144,7 +135,6 @@ export function ClaimDebates({
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
               keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-              responseKind={responseKind}
             />
           </li>
         ))}
@@ -163,7 +153,17 @@ export function ClaimDebates({
   );
 }
 
-export type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
+export type WinnerShare = {
+  spaceId: string;
+  percent: number;
+  totalVotes: number;
+  /**
+   * Several debaters share the top count, so `spaceId` is one of them rather than the winner.
+   * The leader is picked with a strict `>`, which on a tie keeps whichever was counted first —
+   * fine for "who is ahead", wrong for anything that derives a win from it.
+   */
+  tied: boolean;
+};
 
 /**
  * Who each debate's viewers picked as the winner, as a share of that debate's votes.
@@ -178,16 +178,40 @@ export type WinnerShare = { spaceId: string; percent: number; totalVotes: number
  * `voteSharePercentages` then rounds by largest remainder so the shares add to 100.
  */
 export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
-  const { entities: votes } = useQueryEntities({
+  return useWinnerSharesWithStatus(debateIds).shares;
+}
+
+/**
+ * As `useWinnerShares`, but says whether the shares still describe the debates that were asked for.
+ *
+ * Retention is opt-in because it is only safe for a caller that reads one share per debate. A
+ * caller deriving an aggregate across a *set* of debates — a person's win rate — would otherwise
+ * compute it from whatever overlap the previous set happened to contain and show a number that is
+ * simply wrong, which is worse than showing none. `isStale` is how such a caller knows to wait.
+ */
+export function useWinnerSharesWithStatus(
+  debateIds: string[],
+  { keepPreviousWhileLoading = false }: { keepPreviousWhileLoading?: boolean } = {}
+): { shares: Map<string, WinnerShare>; isStale: boolean } {
+  const {
+    entities: votes,
+    isPlaceholderData,
+    isFetched,
+    error,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
       relations: [{ typeOf: { id: { equals: VOTE_DEBATES_PROPERTY_ID } }, toEntity: { id: { in: debateIds } } }],
     },
     first: VOTE_FETCH_CAP,
     enabled: debateIds.length > 0,
+    // The debate set is part of the key, so it changes whenever the caller's list does — paging a
+    // browse page, or someone coming online on the People tab. Holding the previous answer keeps
+    // shares on screen for debates that are still there instead of blanking every one of them.
+    placeholderData: keepPreviousWhileLoading ? keepPreviousData : undefined,
   });
 
-  return React.useMemo(() => {
+  const shares = React.useMemo(() => {
     // A truncated page is an arbitrary subset of the votes across every debate on screen, so any
     // share computed from it could name the wrong winner and would state a total that is simply
     // untrue. No share at all is the honest answer; a confidently wrong percentage is not.
@@ -235,14 +259,23 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
       });
 
       const leaderHex = entries[leaderIndex]![0];
+      const leaderCount = entries[leaderIndex]![1];
       shares.set(debateId, {
         spaceId: spaceIdByHex.get(leaderHex) ?? leaderHex,
         percent: percentages[leaderIndex] ?? 0,
         totalVotes,
+        tied: entries.filter(([, count]) => count === leaderCount).length > 1,
       });
     }
     return shares;
   }, [votes]);
+
+  // Not just "is this the previous page's answer". Before the first remote fetch this query answers
+  // from whatever matching votes happen to be in the local store, which is an arbitrary subset and
+  // is not flagged as placeholder data; a failed fetch reads the same way. Any of the three means
+  // the shares do not describe the debates that were asked for, which is the only question an
+  // aggregate caller needs answered.
+  return { shares, isStale: isPlaceholderData || !isFetched || Boolean(error) };
 }
 
 export function DebateRow({
@@ -252,7 +285,6 @@ export function DebateRow({
   profilesBySpaceId,
   winnerShare,
   keyframeUrl,
-  responseKind,
 }: {
   debate: Entity;
   spaceId: string;
@@ -260,7 +292,6 @@ export function DebateRow({
   profilesBySpaceId: Map<string, { name?: string | null; avatarUrl?: string | null }>;
   winnerShare: WinnerShare | null;
   keyframeUrl: string | null;
-  responseKind: 'stance' | 'veracity';
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
 
@@ -301,7 +332,7 @@ export function DebateRow({
                       side.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
                     )}
                   >
-                    {responsePositionLabel(responseKind, side.position)}
+                    {responsePositionLabel(side.position)}
                   </span>
                 </span>
               </React.Fragment>
@@ -371,15 +402,30 @@ function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number
 }
 
 /**
- * When the debate was published, as a date.
+ * When the debate was published, as a date to *show*.
  *
  * `createdAt` and `updatedAt` are typed as "unix seconds or ISO 8601, varies by backend", so both
  * shapes are handled rather than assumed. `createdAt` is the one that means "when this debate
  * happened" — `updatedAt` moves whenever anything touches the entity, including a backlink from
- * some unrelated edit.
+ * some unrelated edit. Falling back to it is acceptable for a label, where an approximate date beats
+ * none; it is not acceptable for a position — see {@link debateCreatedDate}.
  */
-function debateDate(debate: Entity): Date | null {
-  const raw = debate.createdAt ?? debate.updatedAt;
+export function debateDate(debate: Entity): Date | null {
+  return entityTimestamp(debate.createdAt ?? debate.updatedAt);
+}
+
+/**
+ * When the debate was published, and nothing else — for placing it among other rows.
+ *
+ * No `updatedAt` fallback, which is the whole difference from {@link debateDate}. Ordering by a
+ * timestamp that moves on any unrelated edit floats an old debate up among recent activity; a debate
+ * with no `createdAt` is better left undated, which the feed's ordering already sends to the tail.
+ */
+export function debateCreatedDate(debate: Entity): Date | null {
+  return entityTimestamp(debate.createdAt);
+}
+
+function entityTimestamp(raw: string | number | null | undefined): Date | null {
   if (raw === undefined || raw === null) return null;
 
   const date = typeof raw === 'number' ? new Date(raw * 1000) : new Date(/^\d+$/.test(raw) ? Number(raw) * 1000 : raw);

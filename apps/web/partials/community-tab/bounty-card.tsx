@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 
+import { availableBountyCta } from '~/core/bounties/community-adapter';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -186,16 +187,27 @@ function BudgetBadge({ budget }: { budget: number | null }) {
   );
 }
 
-export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
+/**
+ * Optional footprint override. Every card defaults to its own Community-tab
+ * size; the bounty board passes one shared size so mixed statuses line up.
+ * Content is clamped/overflow-hidden, so smaller sizes degrade gracefully too.
+ */
+type CardSize = { height?: number };
+
+export function BountyCard({ bounty, height = COMPLETED_CARD_HEIGHT_PX }: { bounty: SpaceBounty } & CardSize) {
+  // Only when stretched past its native height does the footer sink to the
+  // bottom; at the default size the layout is unchanged.
+  const stretched = height > COMPLETED_CARD_HEIGHT_PX;
+
   return (
-    <BountyCardShell bounty={bounty} height={COMPLETED_CARD_HEIGHT_PX}>
+    <BountyCardShell bounty={bounty} height={height}>
       <div className="flex shrink-0">
         <BudgetBadge budget={bounty.budget} />
       </div>
 
       <h3 className={`mt-3 line-clamp-2 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
-      <div className="mt-3 shrink-0">
+      <div className={`shrink-0 ${stretched ? 'mt-auto pt-3' : 'mt-3'}`}>
         <ContributorRow contributors={bounty.contributors} />
       </div>
     </BountyCardShell>
@@ -241,7 +253,7 @@ function InterestButton({
   onClick: () => void;
 }) {
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const openPrivySignIn = usePrivySignIn();
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
 
@@ -256,7 +268,7 @@ function InterestButton({
         event.stopPropagation();
 
         if (!isLoggedIn) {
-          openSignInPrompt('bounty');
+          openPrivySignIn();
           return;
         }
 
@@ -283,6 +295,7 @@ export function AvailableBountyCard({
   isInterestLoading,
   canRegisterInterest,
   onRegisterInterest,
+  height = AVAILABLE_CARD_HEIGHT_PX,
 }: {
   bounty: SpaceBounty;
   isInterested: boolean;
@@ -290,18 +303,25 @@ export function AvailableBountyCard({
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onRegisterInterest: (bounty: SpaceBounty) => void;
-}) {
+} & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX}>
+    <BountyCardShell bounty={bounty} height={height}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
-        <InterestButton
-          isInterested={isInterested}
-          isPending={isPending}
-          isInterestLoading={isInterestLoading}
-          canRegisterInterest={canRegisterInterest}
-          onClick={() => onRegisterInterest(bounty)}
-        />
+        {availableBountyCta(bounty) === 'apply' || isInterested ? (
+          <InterestButton
+            isInterested={isInterested}
+            isPending={isPending}
+            isInterestLoading={isInterestLoading}
+            canRegisterInterest={canRegisterInterest}
+            onClick={() => onRegisterInterest(bounty)}
+          />
+        ) : (
+          // The detail page refuses these states; the card must not collect them either.
+          <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>
+            {availableBountyCta(bounty) === 'ended' ? 'Ended' : 'Spots filled'}
+          </span>
+        )}
       </div>
 
       {/* 12px badge row → title, 8px title → description, 20px description → skills. */}
@@ -318,9 +338,12 @@ export function AvailableBountyCard({
   );
 }
 
-export function InProgressBountyCard({ bounty }: { bounty: SpaceBounty }) {
+export function InProgressBountyCard({
+  bounty,
+  height = IN_PROGRESS_CARD_HEIGHT_PX,
+}: { bounty: SpaceBounty } & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={IN_PROGRESS_CARD_HEIGHT_PX} className="justify-between">
+    <BountyCardShell bounty={bounty} height={height} className="justify-between">
       <h3 className={`line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
       <div className="shrink-0">

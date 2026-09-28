@@ -18,12 +18,17 @@ import { normId } from '~/core/utils/norm-id';
  * "don't filter on this", never as "nothing is publishable"; the alternative empties every list in
  * the picker on a transient error, and local environments run with no acceptor at all.
  */
-export function useDebatePublishableSpaces(): {
+export function useDebatePublishableSpaces({ enabled = true }: { enabled?: boolean } = {}): {
   /** Normalized space ids, or null while unknown. */
   publishableSpaceIds: Set<string> | null;
   isLoading: boolean;
 } {
   const { data, isLoading } = useQuery({
+    // Hooks cannot be mounted conditionally, so a caller that only *might* need this answer says so
+    // here. The debate room asks for related claims from the moment a debate is under way and not
+    // before — a preflight that times out is a debate that never happened — and without this the
+    // request went out anyway, since a disabled caller still runs every hook it calls.
+    enabled,
     queryKey: ['debates', 'publishable-spaces'],
     queryFn: async (): Promise<string[] | null> => {
       const response = await fetch('/api/debates/publishable-spaces');
@@ -45,12 +50,11 @@ export function useDebatePublishableSpaces(): {
     retryDelay: attempt => Math.min(1_000 * 2 ** attempt, 5_000),
   });
 
-  const publishableSpaceIds = React.useMemo(
-    () => (data ? new Set(data.map(normId)) : null),
-    [data]
-  );
+  const publishableSpaceIds = React.useMemo(() => (data ? new Set(data.map(normId)) : null), [data]);
 
-  return { publishableSpaceIds, isLoading };
+  // Nothing asked for is nothing in flight: react-query reports a disabled query as pending, and a
+  // caller gating a loading state on this would wait on a request that is never made.
+  return { publishableSpaceIds, isLoading: enabled && isLoading };
 }
 
 /**

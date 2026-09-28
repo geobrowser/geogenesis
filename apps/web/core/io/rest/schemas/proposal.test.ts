@@ -5,6 +5,7 @@ import {
   getSubspaceProposalDetails,
   getVotingSettingsProposalDetails,
   mapApiActionsToProposalType,
+  proposalTypeFromActionTypes,
 } from './proposal';
 
 describe('getSubspaceProposalDetails', () => {
@@ -139,6 +140,31 @@ describe('getVotingSettingsProposalDetails', () => {
   it('returns null when the action carries none of the settings values', () => {
     expect(getVotingSettingsProposalDetails([{ actionType: 'UPDATE_VOTING_SETTINGS' }])).toBeNull();
   });
+
+  // `false` is the meaningful half of this field — it is what grants new members the fast path —
+  // and it is the value a truthiness check would drop on the floor. Both directions are asserted
+  // so neither can be mistaken for "absent".
+  it.each([
+    ['granting new members the fast path', false],
+    ['withholding it', true],
+  ])('carries the new-member fast-path value through when it is %s', (_label, disabled) => {
+    expect(
+      getVotingSettingsProposalDetails([
+        { actionType: 'UPDATE_VOTING_SETTINGS', quorum: 3, disableFastPathAccessForNewMembers: disabled },
+      ])
+    ).toEqual({ quorum: 3, disableFastPathForNewMembers: disabled });
+  });
+
+  // `hasAnyValue` tests `!== undefined` rather than truthiness. A proposal whose only reported
+  // change is `false` still has something to say, and returning null here would hide it entirely
+  // rather than merely leaving its row out.
+  it('does not treat a lone false as an empty action', () => {
+    expect(
+      getVotingSettingsProposalDetails([
+        { actionType: 'UPDATE_VOTING_SETTINGS', disableFastPathAccessForNewMembers: false },
+      ])
+    ).toEqual({ disableFastPathForNewMembers: false });
+  });
 });
 
 describe('mapApiActionsToProposalType — voting settings', () => {
@@ -155,5 +181,46 @@ describe('mapApiActionsToProposalType — voting settings', () => {
         { actionType: 'PUBLISH', contentUri: 'ipfs://cid' },
       ])
     ).toBe('ADD_EDIT');
+  });
+});
+
+/**
+ * The same precedence, reachable without a whole `ApiAction`.
+ *
+ * The profile's Proposals tab reads action types off the graph — two columns,
+ * no schema — and had reimplemented this as "keep the first one back". No source
+ * promises action order, which is what `findMembershipAction` has said all
+ * along, so first-wins gives a multi-action proposal an arbitrary identity. For
+ * an unnamed proposal that identity is its title.
+ */
+describe('proposalTypeFromActionTypes', () => {
+  it('agrees with the ApiAction path it was split out of', () => {
+    const actions = [{ actionType: 'ADD_MEMBER' as const, editor: '0x1' }];
+
+    expect(proposalTypeFromActionTypes(actions.map(a => a.actionType))).toBe(mapApiActionsToProposalType(actions));
+  });
+
+  it('prefers PUBLISH wherever it sits in the list', () => {
+    expect(proposalTypeFromActionTypes(['ADD_MEMBER', 'PUBLISH'])).toBe('ADD_EDIT');
+    expect(proposalTypeFromActionTypes(['PUBLISH', 'ADD_MEMBER'])).toBe('ADD_EDIT');
+  });
+
+  // The case first-wins got wrong, and the reason this is not an index lookup.
+  it('finds the membership action when it is not first', () => {
+    expect(proposalTypeFromActionTypes(['UPDATE_VOTING_SETTINGS', 'REMOVE_EDITOR'])).toBe('REMOVE_EDITOR');
+  });
+
+  it('gives the same answer whichever order the actions arrive in', () => {
+    const order = ['UPDATE_VOTING_SETTINGS', 'ADD_EDITOR', 'UNKNOWN'];
+
+    expect(proposalTypeFromActionTypes(order)).toBe(proposalTypeFromActionTypes([...order].reverse()));
+  });
+
+  it('falls back to voting settings only when nothing outranks it', () => {
+    expect(proposalTypeFromActionTypes(['UPDATE_VOTING_SETTINGS'])).toBe('UPDATE_VOTING_SETTINGS');
+  });
+
+  it('answers for a proposal with no actions at all', () => {
+    expect(proposalTypeFromActionTypes([])).toBe('ADD_EDIT');
   });
 });

@@ -8,7 +8,6 @@ import { DebateRow, type DebateSide, relationTargets, useWinnerShares } from '~/
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
@@ -20,7 +19,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { Text } from '~/design-system/text';
+
+import { SectionTitle } from '~/partials/entity-page/section-title';
 
 import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicLinkedEntities } from './use-topic-linked-entities';
@@ -109,40 +109,6 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
   );
   const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
 
-  /**
-   * How each debate's sides should be labelled, read from the claim it argues.
-   *
-   * A factual claim is verified or disputed; everything else is agreed or disagreed with. The
-   * section used to label every row `stance`, which is right for most claims and simply wrong on a
-   * factual one — and the claim is already in hand, since the debates were found through it.
-   *
-   * A debate spanning claims of both kinds takes the first one it names that this page loaded,
-   * which is the claim the row is here on behalf of. There is no correct single label for such a
-   * debate, and picking the claim that put it on the page at least makes the label match the
-   * section around it.
-   */
-  const responseKindByDebateId = React.useMemo(() => {
-    const claimsById = new Map(claims.map(claim => [claim.id, claim]));
-    const kinds = new Map<string, 'stance' | 'veracity'>();
-
-    for (const debate of debates) {
-      const argued = relationTargets(debate.relations, DEBATE_CLAIMS_PROPERTY_ID)
-        .map(id => claimsById.get(id))
-        .find(Boolean);
-      // The claim's own space, not the route's: `claimResponseKind` reads a space-scoped value, and
-      // a topic gathers across spaces, so reading it in the route's space finds nothing and every
-      // factual claim quietly falls back to `stance` — the bug this is fixing.
-      //
-      // Which is also why `spaces[0]` won't do. That list counts spaces holding a relation authored
-      // from the claim and is rank-sorted, so its head is whichever citing space ranks highest —
-      // `Is factual` isn't there either, and the fallback fires just the same, from a line that
-      // looks like it addressed the problem. `resolveEntitySpaceId` asks where the claim is
-      // actually placed, and its own docs name this flag as the case it exists for.
-      if (argued) kinds.set(debate.id, claimResponseKind(argued, resolveEntitySpaceId(argued, spaceId)));
-    }
-    return kinds;
-  }, [claims, debates, spaceId]);
-
   const debateIds = React.useMemo(() => debates.map(debate => debate.id), [debates]);
   const winnerShareByDebateId = useWinnerShares(debateIds);
   const keyframeByDebateId = useDebateKeyframes(debates);
@@ -153,9 +119,7 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
 
   return (
     <section aria-label="Debates on this topic">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Debates
-      </Text>
+      <SectionTitle>Debates</SectionTitle>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {debates.map(debate => (
           <li key={debate.id}>
@@ -169,10 +133,6 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
               keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-              // Sides are labelled in the vocabulary of the claim being argued. `stance` stands in
-              // only when the debate names no claim this page loaded, which is the one case there
-              // is nothing to read the vocabulary from.
-              responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
             />
           </li>
         ))}

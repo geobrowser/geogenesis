@@ -22,6 +22,7 @@ import { resolveBlockPlacement } from '~/core/blocks/resolve-block-placement';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -31,6 +32,8 @@ import { Skeleton } from '~/design-system/skeleton';
 import { RankingBlockGlobalPagination } from '~/partials/blocks/table/ranking-block-global-pagination';
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
+import { ExploreCardEntityLink } from './explore-card-entity-link';
 
 const EXPLORE_RANKING_PAGE_SIZE = 4;
 const ROW_IMAGE_SIZE = 32;
@@ -60,7 +63,7 @@ function useRankingBlockPlacement(blockEntityId: string, spaceId: string) {
 
 function useExploreRankingBlockData(blockId: string, spaceId: string) {
   const { entity: blockEntity, isLoading: isBlockLoading } = useQueryEntity({ spaceId, id: blockId });
-  const blockRelations = blockEntity?.relations ?? [];
+  const blockRelations = blockEntity?.relations ?? NO_RELATIONS;
 
   const globalRankingEntityIds = React.useMemo(
     () => getOrderedRelationTargetIds(blockRelations, blockId, RANK_POSITION_PROPERTY_ID, spaceId),
@@ -86,6 +89,9 @@ function useExploreRankingBlockData(blockId: string, spaceId: string) {
     isBlockLoading,
   };
 }
+
+// A stable empty list: `?? []` rebuilt the array every render and the three memos below with it.
+const NO_RELATIONS: Relation[] = [];
 
 export function RankingVoteButton({ item }: { item: ExploreFeedItem }) {
   const { startDate, endDate } = useRankingBlockDatesForExplore(item.entityId, item.spaceId);
@@ -177,7 +183,15 @@ export function RankingRow({
 }
 
 /** Ranking Block body: ordered leaderboard rows; images only when the entry has avatar/cover. */
-export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; actions?: React.ReactNode }) {
+export function RankingCardBody({
+  item,
+  actions,
+  titleOpensSidePanel = false,
+}: {
+  item: ExploreFeedItem;
+  actions?: React.ReactNode;
+  titleOpensSidePanel?: boolean;
+}) {
   const [pageNumber, setPageNumber] = React.useState(0);
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount, isBlockLoading } =
     useExploreRankingBlockData(item.entityId, item.spaceId);
@@ -203,11 +217,11 @@ export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; acti
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex min-w-0 items-center gap-3">
-        <Link href={NavUtils.toEntity(item.spaceId, item.entityId)} className="min-w-0 flex-1">
+        <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel} className="min-w-0 flex-1">
           <h2 className="mt-0! truncate text-[19px]! leading-[21px]! font-medium! text-[#2A2B2E] hover:underline">
             {item.title}
           </h2>
-        </Link>
+        </ExploreCardEntityLink>
         <RankingVoteButton item={item} />
       </div>
 

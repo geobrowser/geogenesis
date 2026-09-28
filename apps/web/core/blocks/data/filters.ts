@@ -46,7 +46,15 @@ const PropertyFilter = Schema.Struct({
 type PropertyFilter = Schema.Schema.Type<typeof PropertyFilter>;
 
 const FilterString = Schema.Struct({
+  /** Legacy global mode. Read-only compatibility for existing data blocks. */
   mode: Schema.optional(Schema.Literal('AND', 'OR')),
+  /** Per-property modes. Missing entries default to AND. */
+  modes: Schema.optional(
+    Schema.Record({
+      key: Schema.String,
+      value: Schema.Literal('AND', 'OR'),
+    })
+  ),
   spaceId: Schema.optional(
     Schema.Struct({
       in: Schema.Array(Schema.String),
@@ -117,7 +125,35 @@ const FilterMap = Schema.mutable(
 
 type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
-export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mode: FilterMode = 'AND'): string {
+export type ModesByColumn = Record<string, FilterMode>;
+
+/**
+ * Applies mode overrides onto a current mode map and prunes the result to the
+ * columns present in the accompanying filter list. Shared by the persisted and
+ * temporary filter paths in `useFilters` so their semantics cannot drift:
+ *  - an OR override sets the column's entry;
+ *  - any other override (i.e. AND) deletes it — the serializer only persists
+ *    OR, so a stored 'AND' could never deep-equal persisted state;
+ *  - entries for columns with no remaining filter are dropped, so a removed
+ *    group cannot resurrect its old mode when re-added.
+ */
+export function mergeModeOverrides(
+  current: ModesByColumn,
+  overrides: ModesByColumn | undefined,
+  presentColumnIds: ReadonlySet<string>
+): ModesByColumn {
+  const merged = { ...current };
+  for (const [columnId, mode] of Object.entries(overrides ?? {})) {
+    if (mode === 'OR') merged[columnId] = mode;
+    else delete merged[columnId];
+  }
+  return Object.fromEntries(Object.entries(merged).filter(([columnId]) => presentColumnIds.has(columnId)));
+}
+
+export function toGeoFilterState(
+  filters: OmitStrict<Filter, 'valueName'>[],
+  modesByColumn: ModesByColumn = {}
+): string {
   const spaces = filters.filter(f => ID.equals(f.columnId, SystemIds.SPACE_FILTER)).map(f => f.value);
 
   const filterMap: FilterMap = {};
@@ -146,8 +182,24 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mod
       }
     });
 
+  const presentColumnIds = new Set(filters.map(filter => filter.columnId));
+  const persistedModes: ModesByColumn = {};
+
+  for (const [columnId, mode] of Object.entries(modesByColumn)) {
+    if (mode === 'OR' && presentColumnIds.has(columnId)) {
+      persistedModes[columnId] = mode;
+    }
+  }
+
   const filter: FilterString = {
-    ...(mode === 'OR' && { mode: 'OR' as const }),
+    // Always emit `modes`, including when empty. Its presence distinguishes the
+    // per-property format from legacy payloads whose absent global mode meant AND.
+    modes: persistedModes,
+    // Rollout compatibility: a reader still on the legacy schema ignores the
+    // unknown `modes` key and would decode an OR block as AND (zero rows for
+    // mutually-exclusive types). Dual-write the legacy global mode while old
+    // builds may still be reading; remove after the release settles.
+    ...(Object.values(persistedModes).includes('OR') && { mode: 'OR' as const }),
     ...(spaces.length > 0 && { spaceId: { in: spaces } }),
     ...(Object.keys(filterMap).length > 0 && { filter: filterMap }),
   };
@@ -167,8 +219,39 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mod
 
 export type FilterStateResult = {
   filters: Filter[];
-  mode: FilterMode;
+  modesByColumn: ModesByColumn;
 };
+
+function resolveModesByColumn(value: FilterString): ModesByColumn {
+  if (value.modes !== undefined) {
+    return { ...value.modes };
+  }
+
+  const modesByColumn: ModesByColumn = {};
+
+  // The old global mode was applied inside every property group. Fan OR out
+  // to those groups so existing blocks retain their behavior after parsing.
+  if (value.mode === 'OR' && value.filter) {
+    for (const [columnId, filterValue] of Object.entries(value.filter)) {
+      // Keys here must match the `columnId` the parser assigns to the same
+      // filter (a `_relation` entry is parsed with columnId = type.is), since
+      // `modesByColumn` is a raw object lookup. A mismatch would silently
+      // drop a migrated OR back to AND.
+      const resolvedColumnId = columnId === '_relation' && 'type' in filterValue ? filterValue.type.is : columnId;
+      modesByColumn[resolvedColumnId] = 'OR';
+    }
+  }
+
+  // Multi-space is always OR in the where-builder regardless of mode, so this
+  // entry is redundant for querying. It is kept so a migrated legacy payload
+  // becomes self-describing on its next write instead of relying on that
+  // special case.
+  if ((value.spaceId?.in.length ?? 0) > 1) {
+    modesByColumn[SystemIds.SPACE_FILTER] = 'OR';
+  }
+
+  return modesByColumn;
+}
 
 /**
  * Synchronously parse filter string into filters with IDs only (no display names).
@@ -176,14 +259,14 @@ export type FilterStateResult = {
  */
 export function parseFiltersSync(filterString: string | null): FilterStateResult {
   if (!filterString) {
-    return { filters: [], mode: 'AND' };
+    return { filters: [], modesByColumn: {} };
   }
 
   let where: unknown;
   try {
     where = JSON.parse(filterString);
   } catch {
-    return { filters: [], mode: 'AND' };
+    return { filters: [], modesByColumn: {} };
   }
 
   const decoded = Schema.decodeUnknownEither(FilterString)(where);
@@ -253,17 +336,17 @@ export function parseFiltersSync(filterString: string | null): FilterStateResult
 
       return {
         filters,
-        mode: (value.mode ?? 'AND') as FilterMode,
+        modesByColumn: resolveModesByColumn(value),
       };
     },
   });
 
-  return result ?? { filters: [], mode: 'AND' };
+  return result ?? { filters: [], modesByColumn: {} };
 }
 
 export async function fromGeoFilterString(filterString: string | null): Promise<FilterStateResult> {
   if (!filterString) {
-    return { filters: [], mode: 'AND' };
+    return { filters: [], modesByColumn: {} };
   }
 
   const where = JSON.parse(filterString);
@@ -311,7 +394,7 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
       }
 
       return {
-        mode: value.mode,
+        modesByColumn: resolveModesByColumn(value),
         spaces: value.spaceId?.in ?? [],
         filters,
         entity: entity as { fromEntity: string; typeOf: string } | undefined,
@@ -320,10 +403,10 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
   });
 
   if (!filtersFromString) {
-    return { filters: [], mode: 'AND' };
+    return { filters: [], modesByColumn: {} };
   }
 
-  const mode: FilterMode = filtersFromString.mode ?? 'AND';
+  const modesByColumn = filtersFromString.modesByColumn;
 
   const filters: Filter[] = [];
 
@@ -367,7 +450,7 @@ export async function fromGeoFilterString(filterString: string | null): Promise<
     filters.push(entityFilter);
   }
 
-  return { filters, mode };
+  return { filters, modesByColumn };
 }
 
 async function getSpaceName(spaceId: string) {

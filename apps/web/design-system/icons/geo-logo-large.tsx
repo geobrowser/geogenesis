@@ -1,4 +1,11 @@
+import * as React from 'react';
+
 export function GeoLogoLarge() {
+  // Multiple app-shell logos can exist at once (for example, the hidden mobile
+  // navbar logo and the open browse drawer). A shared SVG paint-server id makes
+  // some browsers resolve the visible circle against the hidden logo's gradient.
+  const gradientId = `geo-logo-gradient-${React.useId().replace(/:/g, '')}`;
+
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
@@ -12,12 +19,12 @@ export function GeoLogoLarge() {
         cy="8.49619"
         r="7.4278"
         transform="rotate(-180 9.99613 8.49619)"
-        stroke="url(#paint0_radial_50332_342693)"
+        stroke={`url(#${gradientId})`}
         strokeWidth="2.13675"
       />
       <defs>
         <radialGradient
-          id="paint0_radial_50332_342693"
+          id={gradientId}
           cx="0"
           cy="0"
           r="1"

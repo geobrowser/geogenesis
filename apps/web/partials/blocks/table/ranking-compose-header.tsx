@@ -56,6 +56,7 @@ export function RankingComposePinnedToolbar({
         className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, 'shrink-0')}
         disabled={!canPublish}
         onClick={onPublish}
+        data-analytics-feature="ranking-submit"
       >
         {isSaving ? 'Publishing…' : 'Publish ranking'}
       </Button>

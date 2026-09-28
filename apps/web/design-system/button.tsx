@@ -16,7 +16,27 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   small?: boolean;
 };
 
-const buttonClassNames = (className = '') =>
+/** The pill's shape and type, shared by both of its colourings below. */
+const PILL_BUTTON_SHAPE =
+  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none';
+
+/**
+ * The black pill: the navbar's Log in button.
+ * Layered over the `primary` variant, whose colours it overrides.
+ */
+export const PILL_BUTTON_CLASS_NAME = `${PILL_BUTTON_SHAPE} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text`;
+
+/**
+ * The same pill in the `secondary` variant's colours — white, a grey outline that
+ * darkens on hover. Layered over `secondary`, which supplies those colours.
+ */
+export const PILL_BUTTON_SECONDARY_CLASS_NAME = PILL_BUTTON_SHAPE;
+
+/**
+ * The button's classes on their own, for a link that should look like one. A
+ * `<Button>` inside a `<Link>` nests two interactive elements.
+ */
+export const buttonClassNames = (className = '') =>
   cva(
     `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-hidden ${className}`,
     {
@@ -55,6 +75,16 @@ const buttonClassNames = (className = '') =>
     }
   );
 
+/**
+ * `type="button"` by default, ahead of the spread so a caller can still ask for
+ * `submit`.
+ *
+ * HTML defaults a bare button to `submit`, so every one of these inside a form
+ * was a submit control: the profile modal's Back, its remove-row and add-skill
+ * buttons, and `app/tools`' copy button, none of which meant to submit anything.
+ * No form in the app relied on the old default — the one submit that exists says
+ * so explicitly.
+ */
 export const Button = forwardRef(function Button(
   { variant = 'primary', icon, small = false, className = '', disabled = false, children, ...rest }: ButtonProps,
   ref: React.ForwardedRef<HTMLButtonElement>
@@ -62,6 +92,7 @@ export const Button = forwardRef(function Button(
   return (
     <button
       ref={ref}
+      type="button"
       className={buttonClassNames(className)({ variant: !disabled ? variant : 'disabled', disabled, small })}
       disabled={disabled}
       {...rest}
@@ -105,8 +136,14 @@ export const SquareButton = forwardRef(function SquareButton(
   return (
     <button
       ref={ref}
+      type="button"
       className={squareButtonClassNames({ className, isActive, disabled })}
       style={{ fontFeatureSettings: '"tnum" 1', ...style }}
+      // `disabled` was destructured for the styling and never reached the
+      // element, so the button looked disabled and stayed clickable. Both
+      // existing callers passing it — a remove button with no image, a menu
+      // trigger mid-request — meant it to block the click.
+      disabled={disabled}
       {...rest}
     >
       {icon ? icon : <>{children}</>}
@@ -134,7 +171,10 @@ export const IconButton = forwardRef(function IconButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <button ref={ref} className={iconButtonClassNames({ disabled })} {...rest}>
+    // `disabled` drives the styling and the element alike. Destructured for the
+    // first and never handed to the second, the button looked disabled and stayed
+    // clickable — `table-block.tsx` passes it on a control mid-request.
+    <button ref={ref} type="button" disabled={disabled} className={iconButtonClassNames({ disabled })} {...rest}>
       {icon}
     </button>
   );
@@ -157,7 +197,13 @@ export const AddTypeButton = forwardRef(function AddTypeButton(
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
   return (
-    <button ref={ref} className={className} style={{ fontFeatureSettings: '"tnum" 1', ...style }} {...rest}>
+    <button
+      ref={ref}
+      type="button"
+      className={className}
+      style={{ fontFeatureSettings: '"tnum" 1', ...style }}
+      {...rest}
+    >
       {icon}
       {label}
     </button>

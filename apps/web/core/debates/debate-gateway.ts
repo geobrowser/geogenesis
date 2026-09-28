@@ -48,12 +48,7 @@ export type MatchmakingSection = 'people' | 'claims' | 'matches';
  *   it without a deploy.
  */
 export type DebateGatewayPauseReason =
-  | 'disconnected'
-  | 'session'
-  | 'rate_limited'
-  | 'subscription_limit'
-  | 'unsupported'
-  | 'error';
+  'disconnected' | 'session' | 'rate_limited' | 'subscription_limit' | 'unsupported' | 'error';
 
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
@@ -164,6 +159,13 @@ export class DebateGatewayClient {
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
+  /**
+   * Whether this tab is visible right now, with no grace (GEO-3028). `debatePresence` keeps someone
+   * online for three minutes behind a video call; this is what decides whether they can be offered
+   * a request at all, and a hidden tab cannot see one. `null` until reported, and then left off the
+   * heartbeat entirely, which geo-chat reads as "unknown" rather than "hidden".
+   */
+  private tabVisible: boolean | null = null;
   private presenceTransitionPending = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -202,6 +204,18 @@ export class DebateGatewayClient {
   setDebatePresence(debatePresence: boolean) {
     if (this.debatePresence === debatePresence) return;
     this.debatePresence = debatePresence;
+    this.reportPresenceChange();
+  }
+
+  /** Reported on every `visibilitychange`, and sent at once: switching tabs should take someone
+   *  off other people's lists within a heartbeat round-trip, not at the next 30-second beat. */
+  setTabVisible(tabVisible: boolean) {
+    if (this.tabVisible === tabVisible) return;
+    this.tabVisible = tabVisible;
+    this.reportPresenceChange();
+  }
+
+  private reportPresenceChange() {
     if (!this.socket || this.socket.readyState !== OPEN) return;
     if (this.heartbeatsAwaitingAck > 0) {
       this.presenceTransitionPending = true;
@@ -443,8 +457,12 @@ export class DebateGatewayClient {
       case 'debate.share_prompts_changed':
         this.queueAccountQuery('share-prompts');
         break;
+      // Also carries scheduled requests and room arrivals, so the scheduled and room reads go too.
       case 'debate.requests_changed':
         this.queueAccountQuery('requests');
+        this.queueAccountQuery('scheduled-debates');
+        this.queueAccountQuery('upcoming-rooms');
+        this.queueAccountQuery('room');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -507,7 +525,17 @@ export class DebateGatewayClient {
 
   private queueAccountQuery(
     kind:
-      'activity' | 'rematch' | 'share-prompts' | 'profile' | 'people' | 'matchmaking-claims' | 'matches' | 'requests',
+      | 'activity'
+      | 'rematch'
+      | 'share-prompts'
+      | 'profile'
+      | 'people'
+      | 'matchmaking-claims'
+      | 'matches'
+      | 'requests'
+      | 'scheduled-debates'
+      | 'upcoming-rooms'
+      | 'room',
     id?: string
   ) {
     if (!this.accountKey) return;
@@ -529,7 +557,7 @@ export class DebateGatewayClient {
     for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
     const changedResponseTargets = new Set(
       [...changedClaims].flatMap(entityId =>
-        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+        (['stance'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
       )
     );
     this.queueInvalidation(`claims:${spaceId}`, {
@@ -721,7 +749,13 @@ export class DebateGatewayClient {
     }
     this.heartbeatsAwaitingAck += 1;
     this.presenceTransitionPending = false;
-    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
+    this.sendEnvelope(
+      'HEARTBEAT',
+      this.tabVisible === null
+        ? { debate_presence: this.debatePresence }
+        : { debate_presence: this.debatePresence, debate_visible: this.tabVisible },
+      this.lastSequence
+    );
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
   }
 
@@ -759,11 +793,7 @@ export class DebateGatewayClient {
     this.scheduleReconnect();
   }
 
-  private forceReconnect(
-    socket: WebSocketLike,
-    minimumDelayMs = 0,
-    reason: DebateGatewayPauseReason = 'disconnected'
-  ) {
+  private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0, reason: DebateGatewayPauseReason = 'disconnected') {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
@@ -776,9 +806,7 @@ export class DebateGatewayClient {
   }
 
   private canRecoverFromError() {
-    return (
-      this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS
-    );
+    return this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS;
   }
 
   private scheduleReconnect(minimumDelayMs = 0) {
@@ -922,6 +950,15 @@ export function useDebateGateway(
   React.useEffect(() => {
     debateGateway.setDebatePresence(debatePresence);
   }, [debatePresence]);
+
+  // Raw visibility, deliberately without the grace `debatePresence` has: it answers "can this
+  // person see a request right now", which stops being true the moment the tab is hidden.
+  React.useEffect(() => {
+    const report = () => debateGateway.setTabVisible(document.visibilityState === 'visible');
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, []);
 
   React.useEffect(() => {
     if (!enabled || !accountKey) {

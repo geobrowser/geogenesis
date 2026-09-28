@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { responsePositionLabel } from '~/core/responses/entity-response';
+
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
@@ -50,8 +52,6 @@ type DebateRequestDialogProps = {
   eyebrow?: React.ReactNode;
   /** GEO-2430: a text action beside the "Debate format" heading, e.g. "Dismiss forever". */
   formatAction?: { label: string; onClick: () => void };
-  /** Rendered centred under the claim, e.g. the claim's response control. */
-  headerNote?: React.ReactNode;
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;
 };
@@ -71,7 +71,6 @@ export function DebateRequestDialog({
   actionsLayout = 'stacked',
   eyebrow,
   formatAction,
-  headerNote,
   overflowMenu,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
@@ -110,7 +109,6 @@ export function DebateRequestDialog({
           <h2 id={titleId} className="mt-3 text-cardEntityTitle leading-[1.375rem]">
             {claim}
           </h2>
-          {headerNote ? <div className="mt-3 flex justify-center">{headerNote}</div> : null}
         </header>
 
         <div className="min-h-0 overflow-y-auto pr-1">
@@ -237,7 +235,7 @@ function ParticipantSummary({
         {label}
       </Text>
       <Text as="span" variant="smallButton" color="text" className="rounded-full bg-grey-02 px-2 py-0.5">
-        {participant.position_label}
+        {responsePositionLabel(participant.position)}
       </Text>
     </div>
   );

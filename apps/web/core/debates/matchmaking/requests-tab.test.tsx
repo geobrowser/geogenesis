@@ -19,7 +19,14 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-me' as string | null,
 }));
 
-vi.mock('../hooks', () => ({
+// Partial: the tab now pulls in the scheduling hooks, which read the shared query options and key
+// factory off this module.
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
+  // exercising it — the schedule itself is covered in core/availability.
+  useDebateSchedule: () => ({ blocks: [], isSet: false }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
@@ -134,6 +141,40 @@ afterEach(cleanup);
 const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
 
 describe('RequestsTab', () => {
+  it('gives plain request and filter controls stable analytics metadata', () => {
+    mocks.outbound = request('request-outbound', SPACE_B, 'A second claim');
+    mocks.challenge = challenge('requester');
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('button', { name: /Any status/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Status filter'
+    );
+    expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Space filter'
+    );
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Cancel request'
+    );
+    expect(screen.getByRole('button', { name: 'Withdraw' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Withdraw request'
+    );
+
+    const overflow = screen.getByRole('button', { name: 'More options' });
+    expect(overflow).toHaveAttribute('data-geo-analytics-label', 'Debate hub Request options');
+    fireEvent.click(overflow);
+    expect(screen.getByRole('button', { name: "I don't want to debate this claim" })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Remove claim request intent'
+    );
+    expect(screen.getByRole('button', { name: /Block/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Block requester'
+    );
+  });
   // GEO-2684. The shared helper's own test only proves it carries the sticky classes, so this is
   // what would catch these filters being moved back into the scrolling body.
   it('pins the status and space filters above the requests', () => {
@@ -169,7 +210,70 @@ describe('RequestsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' });
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+  });
+
+  // One answer per card however fast the taps land: `isPending` only disables the button on the
+  // next render, so both taps of a double tap run against a still-enabled one, and the second
+  // answer 409s over the request the first already took.
+  it('answers once however fast the card is tapped', () => {
+    render(<RequestsTab />);
+
+    const dismiss = screen.getByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismiss);
+    fireEvent.click(dismiss);
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot caught this on PR #2359. The guard has to come back when an answer fails, or the card
+  // is answerable exactly once ever: react-query clears `isPending` so the buttons re-enable, but
+  // every press after that is swallowed and the request can only be answered by reloading.
+  it('lets the viewer answer again after a failed answer', () => {
+    mocks.dismiss.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(2);
+  });
+
+  // The two buttons share one guard, so a failed Accept has to free the card for Dismiss too.
+  it('frees the other action when an answer fails', () => {
+    mocks.accept.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(mocks.accept).toHaveBeenCalledTimes(1);
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot raised this on PR #2359. "I don't want to debate this claim" is the same dismiss
+  // endpoint the buttons use, so an answer already taken would 409 behind it.
+  it('counts the overflow dismissal as the card answer', () => {
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('button', { name: "I don't want to debate this claim" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
+    expect(mocks.accept).not.toHaveBeenCalled();
+  });
+
+  // Blocking writes the viewer's block list rather than answering the request, so it must not be
+  // gated: swallowing a safety action because an answer was already taken is the worse failure.
+  it('blocks even once the request has been answered', () => {
+    render(<RequestsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Block/ }));
+
+    expect(mocks.block).toHaveBeenCalledWith('user-them');
   });
 
   it('separates the request you sent from the ones you received', () => {
@@ -277,7 +381,10 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     const parties = screen.getByText('Arturas').closest('div')!;
-    expect(within(parties).getByText('No')).toBeInTheDocument();
+    // Named from the side rather than from the fixture's `position_label` — geo-chat's label reads
+    // "Dispute" on a claim it still calls factual, which this app cannot publish.
+    expect(within(parties).getByText('Disagree')).toBeInTheDocument();
+    expect(within(parties).queryByText('No')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('button', { name: 'Block Arturas' }));

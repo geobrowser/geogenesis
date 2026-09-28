@@ -75,6 +75,7 @@ const item = {
   commentCount: 0,
   recordingUrls: [],
   debateVideoUrls: [],
+  debateClaim: null,
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 } satisfies ExploreFeedItem;

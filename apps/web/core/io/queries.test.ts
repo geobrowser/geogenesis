@@ -5,8 +5,10 @@ import {
   ENTITY_ID_BATCH_SIZE,
   buildSearchPath,
   getBatchEntities,
+  getEntityBacklinks,
   groupRestResults,
   hasDefaultSearchExcludedType,
+  indexVoteRowsByObject,
   shouldIncludeRestSearchResult,
 } from './queries';
 import { MAX_SEARCH_QUERY_LENGTH } from './search-query';
@@ -50,6 +52,36 @@ describe('buildSearchPath', () => {
       expect(path).toContain(`query=${'b'.repeat(MAX_SEARCH_QUERY_LENGTH)}&`);
       expect(path).toContain('limit=25');
       expect(path).toContain('scope=SPACE_SINGLE');
+    });
+  });
+
+  // GEO-2876 added this, GEO-2898 is the first caller. The tag is the to-entity a `Tags` relation
+  // points at, which is what makes "claims a curator marked for debating" expressible here at all —
+  // without it the tagged set, a few hundred claims in a corpus of hundreds of thousands, never
+  // reached a ranked page.
+  describe('tag_ids', () => {
+    const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+
+    it('sends the tag hyphenated, as the endpoint expects', () => {
+      const path = buildSearchPath({ query: 'trump', tagIds: [DEBATE_TAG] });
+
+      expect(path).toContain('tag_ids=55c95b26-26f8-482c-b973-9ea99dfde438');
+    });
+
+    it('omits the param entirely when no tag is asked for', () => {
+      expect(buildSearchPath({ query: 'trump', tagIds: [] })).toBe('/search?query=trump&limit=10&offset=0');
+      expect(buildSearchPath({ query: 'trump' })).toBe('/search?query=trump&limit=10&offset=0');
+    });
+
+    it('composes with the type filter, which the endpoint ANDs against it', () => {
+      const path = buildSearchPath({
+        query: 'trump',
+        tagIds: [DEBATE_TAG],
+        typeIds: ['96f859efa1ca4b229372c86ad58b694b'],
+      });
+
+      expect(path).toContain('type_ids=96f859ef-a1ca-4b22-9372-c86ad58b694b');
+      expect(path).toContain('tag_ids=55c95b26-26f8-482c-b973-9ea99dfde438');
     });
   });
 
@@ -355,5 +387,153 @@ describe('getBatchEntities', () => {
     await Effect.runPromise(getBatchEntities(idsFor(ENTITY_ID_BATCH_SIZE)));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The `id` argument is `UUID!`. An id the server cannot parse comes back as a 400, not as
+ * an empty list, so asking about one is never a way to find out that nothing links there.
+ *
+ * A space with no home entity reaches this with `''` (see `getSpaceFrontPage`), which is
+ * what produced a standing `Variable "$id" got invalid value ""` on /space/[id] in
+ * production. The point of these tests is the *absence of a request*: returning `[]` while
+ * still making the call would leave the 400s exactly where they were.
+ */
+describe('getEntityBacklinks', () => {
+  afterEach(() => graphqlMock.mockReset());
+
+  const VALID = 'c9f267dcb0d270718c2a3c45a64afd32';
+
+  it.each([
+    ['an empty id', ''],
+    ['a pre-migration base58 id', 'BDuZwkjCg3nPWMDshoYtpS'],
+    ['an 0x address', '0xc46618C200f02EF1EEA28923FC3828301e63C4Bd'],
+    ['a truncated hex id', 'c9f267dcb0d270718c2a3c45a64afd3'],
+  ])('answers %s with no backlinks and no request', async (_label, entityId) => {
+    await expect(Effect.runPromise(getEntityBacklinks(entityId))).resolves.toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
+  });
+
+  it('still queries for a valid id', async () => {
+    graphqlMock.mockReturnValue(Effect.succeed([]));
+
+    await Effect.runPromise(getEntityBacklinks(VALID));
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+    expect(graphqlMock.mock.calls[0][0]).toMatchObject({ variables: { id: VALID } });
+  });
+
+  it('accepts a dashed uuid, which the id format also allows', async () => {
+    graphqlMock.mockReturnValue(Effect.succeed([]));
+
+    await Effect.runPromise(getEntityBacklinks('12a21058-4706-4d9c-b8c8-813732ef63b2'));
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * GEO-2993. Verify is gone, so a factual claim's responder answers it again with Agree — and their
+ * old kind-2 row stays on chain, because nothing can clear it any more. That person now holds two
+ * vote rows on one claim, which is the state these lookups have to describe correctly.
+ */
+describe('indexVoteRowsByObject', () => {
+  const CLAIM = '4c81561d1f9541319cdddd20ab831ba2';
+
+  /** Newest first, as `VOTED_AT_DESC` returns them: today's Agree, then August's Verify. */
+  const bothKinds = [
+    { objectId: CLAIM, voteKind: 1, votedAt: '2026-09-24T00:00:00.000Z' },
+    { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+  ];
+
+  it('describes an entity by its newest vote row, not its oldest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Kind 1. `Object.fromEntries` gave the last row the key and reported 2, which is the vote the
+    // person no longer holds a way to cast.
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-09-24T00:00:00.000Z');
+  });
+
+  it('keeps both lookups on the same row', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(bothKinds);
+
+    // Read from different rows these disagree, and the timestamp is the list's sort key — so the
+    // entity would sort by one vote and be filtered by another.
+    const kindRow = bothKinds.find(row => row.voteKind === voteKindByObjectId[CLAIM]);
+    expect(kindRow?.votedAt).toBe(votedAtByObjectId[CLAIM]);
+  });
+
+  /**
+   * The reverse ordering, which taking the newest row does not survive on its own.
+   *
+   * The two kinds are independent, so the Verify can be the *newer* of the pair: answer a claim
+   * Agree while it is an ordinary claim, have it flagged factual, answer it again with Verify. The
+   * kind-1 stance is still live, but the kind-2 row is newer — so "newest wins" reports 2, and
+   * `useVoteTabEntities` drops the claim from the Agreed tab exactly as it did before that fix.
+   *
+   * Nothing resolves to kind 2 any more, so a retired row can never be an entity's current answer
+   * and is skipped rather than merely out-ordered.
+   */
+  it('ignores a retired row even when it is the newest', () => {
+    const { voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(1);
+    expect(votedAtByObjectId[CLAIM]).toBe('2026-08-06T00:00:00.000Z');
+  });
+
+  it('reports nothing for an entity whose only row is retired', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },
+    ]);
+
+    expect(CLAIM in voteKindByObjectId).toBe(false);
+  });
+
+  /**
+   * The ids have to drop the retired row too, not just the lookups.
+   *
+   * `useUserVotedEntityIds` binds an id to the first page it appears on and reads its kind from the
+   * lookups merged across every page. An id reported here without a kind is claimed by this page,
+   * skipped as a duplicate on the page that *can* describe it, and hydrated where nothing can
+   * classify it — and `useVoteTabEntities` banks a page against its ids, which do not change when
+   * the kind later arrives, so the claim stays missing from the tab.
+   */
+  it('reports no id it cannot describe', () => {
+    const OTHER = 'a1b2c3d4e5f6478899aabbccddeeff00';
+
+    const { objectIds, voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+      { objectId: OTHER, voteKind: 1, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(objectIds.every(id => id in voteKindByObjectId)).toBe(true);
+    expect(objectIds).toEqual([OTHER]);
+  });
+
+  /**
+   * The straddle itself: the pair split across a page boundary, which is the only arrangement the
+   * skip in the lookups did not already cover. The retired row ends one page and the live stance
+   * begins the next, so the live page has to be the one that owns the id.
+   */
+  it('gives the id to the page holding the live stance, not the retired row', () => {
+    const retiredPage = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
+    ]);
+    const stancePage = indexVoteRowsByObject([{ objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' }]);
+
+    expect(retiredPage.objectIds).toEqual([]);
+    expect(stancePage.objectIds).toEqual([CLAIM]);
+  });
+
+  it('leaves an entity with one row alone', () => {
+    const { voteKindByObjectId } = indexVoteRowsByObject([
+      { objectId: CLAIM, voteKind: 0, votedAt: '2026-09-01T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[CLAIM]).toBe(0);
   });
 });

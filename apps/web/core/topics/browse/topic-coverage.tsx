@@ -3,16 +3,15 @@
 import * as React from 'react';
 
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
-import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
-import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-
-import { useTopicSpaceScope } from '../use-topic-space-scope';
+import { toExploreFeedItem } from '~/core/explore/explore-card-item';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { Text } from '~/design-system/text';
 
+import { SectionTitle } from '~/partials/entity-page/section-title';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicCoverage } from './use-topic-coverage';
 
 const COVERAGE_PAGE_SIZE = 8;
@@ -54,7 +53,7 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   const items = React.useMemo(
-    () => page.rows.map(row => toFeedItem(row, spaceLabel(labelsById, row.spaceId))),
+    () => page.rows.map(row => toExploreFeedItem(row, spaceLabel(labelsById, row.spaceId))),
     [labelsById, page.rows]
   );
 
@@ -70,9 +69,7 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
 
   return (
     <section aria-label="Coverage">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Coverage
-      </Text>
+      <SectionTitle>Coverage</SectionTitle>
       {/* Cards as direct siblings, exactly as the feed renders them: their bottom rule is a
           `last:border-b-0` on the card itself, so a wrapper around each one would leave a rule
           hanging under the final row.
@@ -94,24 +91,4 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
       />
     </section>
   );
-}
-
-/**
- * A row plus its space's name and thumbnail.
- *
- * `hasPendingMembershipRequest` is false because the Join button it belongs to is hidden — the flag
- * only ever changes that button's label.
- */
-function toFeedItem(
-  row: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>,
-  label: SpaceLabel | undefined
-): ExploreFeedItem {
-  return {
-    ...row,
-    // The same last resort the feed uses when a space has no name yet: an id fragment, which at
-    // least differs between two spaces where a shared placeholder would not.
-    spaceName: label?.name ?? row.spaceId.slice(0, 8),
-    spaceImage: label?.image ?? null,
-    hasPendingMembershipRequest: false,
-  };
 }

@@ -8,15 +8,14 @@ import type { SpaceBounty } from '~/core/community/bounty-types';
 
 import { AvailableBountyCard, BountyCard, InProgressBountyCard } from './bounty-card';
 
+// The interest button opens Privy sign-in when logged out; the hook reaches wagmi, which the card tests don't need.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
+
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: vi.fn(), closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
-
-vi.mock('~/core/state/sign-in-prompt-store', () => ({
-  useSignInPrompt: () => ({ action: null, open: vi.fn(), close: vi.fn() }),
-}));
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avatar" /> }));
 

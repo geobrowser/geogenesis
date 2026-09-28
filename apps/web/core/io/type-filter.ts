@@ -1,23 +1,56 @@
 import type { EntityFilter, UuidFilter, UuidListFilter } from '~/core/gql/graphql';
 
 /**
- * Find a child of a top-level `and` array that carries a `typeIds` clause.
- * Mirrors {@link findSpaceIdsClause} in `space-filter.ts` — see that file
- * for the full rationale. Briefly: the converter AND-wraps with the
- * empty-name exclusion, burying `typeIds` one level deep and breaking
- * the top-level promotion that uses the indexed query path.
+ * Collect every `typeIds` clause reachable through nested `and` arrays.
+ *
+ * Mirrors {@link findSpaceIdsClause} in `space-filter.ts` — see that file for the full rationale.
+ * Briefly: the converter AND-wraps with the empty-name exclusion, burying `typeIds` a level deep
+ * and breaking the top-level promotion that uses the indexed query path.
+ *
+ * This recurses, and that is the fix rather than a tidy-up. Explore sends the picked types as
+ * *separate* clauses inside their own nested `and`:
+ *
+ *   { and: [ { and: [ {typeIds:{anyEqualTo:A}}, {typeIds:{anyEqualTo:B}} ] }, { name: … } ] }
+ *
+ * The previous single-level walk looked at the top-level children, found `{ and: [...] }` with no
+ * own `.typeIds`, and promoted nothing — so every clause stayed in the filter and each compiled to
+ * its own EXISTS over `relations`. Measured against api-testnet: the real explore request is a
+ * **30.6s statement timeout** (it fails, it does not merely load slowly); promoted it is 415ms.
  */
-function findTypeIdsClause(filter: EntityFilter): UuidListFilter | undefined {
-  if (filter.typeIds) return filter.typeIds;
-  if (!filter.and) return undefined;
-  for (const child of filter.and) {
-    if (child?.typeIds) return child.typeIds;
+function collectTypeIdsClauses(filter: EntityFilter, depth = 0): UuidListFilter[] {
+  const found: UuidListFilter[] = [];
+  if (filter.typeIds) found.push(filter.typeIds);
+  // Two levels covers `and`-of-`and`, which is what the converter produces. Deeper nesting is not
+  // generated today, and recursing without a bound would happily walk a caller-supplied cycle.
+  if (filter.and && depth < 2) {
+    for (const child of filter.and) {
+      if (child) found.push(...collectTypeIdsClauses(child, depth + 1));
+    }
   }
-  return undefined;
+  return found;
+}
+
+function findTypeIdsClause(filter: EntityFilter): UuidListFilter | undefined {
+  return collectTypeIdsClauses(filter)[0];
+}
+
+/** Every type id named by any clause, de-duplicated, order preserved. */
+function collectTypeIds(filter: EntityFilter): string[] {
+  const ids: string[] = [];
+  for (const clause of collectTypeIdsClauses(filter)) {
+    if (clause.anyEqualTo) ids.push(clause.anyEqualTo);
+    for (const list of [clause.in, clause.overlaps]) {
+      if (!list) continue;
+      for (const v of list) if (typeof v === 'string') ids.push(v);
+    }
+  }
+  return [...new Set(ids)];
 }
 
 export function extractSingleTypeIdFromFilter(filter?: EntityFilter): string | undefined {
   if (!filter) return undefined;
+  // More than one type named ⇒ this is the multi-type path, not the single one.
+  if (collectTypeIds(filter).length > 1) return undefined;
   const typeIds = findTypeIdsClause(filter);
   if (!typeIds) return undefined;
 
@@ -38,6 +71,20 @@ export function extractSingleTypeIdFromFilter(filter?: EntityFilter): string | u
 
 export function extractTypeIdsFromFilter(filter?: EntityFilter): UuidFilter | undefined {
   if (!filter) return undefined;
+
+  /* Several separate clauses ⇒ promote all of them as one any-of set.
+   *
+   * NOTE THIS CHANGES SEMANTICS, deliberately. Separate AND-ed clauses asked for entities carrying
+   * *every* named type; the promoted `{ in: [...] }` asks for *any* of them. The old reading was
+   * not merely slow, it was unsatisfiable: explore's own request asked for Topic AND Person AND a
+   * third type, and in the live database **zero** entities hold all three (the most any entity
+   * holds is two, and only 11 do). An always-empty predicate is also why it timed out — with no
+   * matches the planner cannot stop early at LIMIT 10 and walks all 49.6M entities to prove it.
+   *
+   * "Every picked topic, not any of them" is a real rule for *topics* — it is not one for types. */
+  const allIds = collectTypeIds(filter);
+  if (allIds.length > 1) return { in: allIds };
+
   const typeIds = findTypeIdsClause(filter);
   if (!typeIds) return undefined;
 
@@ -68,43 +115,39 @@ export function extractTypeIdsFromFilter(filter?: EntityFilter): UuidFilter | un
 }
 
 /**
- * Remove only the `typeIds` clause that {@link findTypeIdsClause} would
- * have promoted. See `space-filter.ts`'s `removeSpaceIdsFromFilter` for
- * the full rationale — this mirrors that behavior for `typeIds`.
+ * Strip every `typeIds` clause that {@link extractTypeIdsFromFilter} promoted, at any nesting
+ * depth it looked at. See `space-filter.ts`'s `removeSpaceIdsFromFilter` for the rationale.
+ *
+ * It must remove *all* of them, not the first. Leaving even one behind reintroduces the EXISTS
+ * that the promotion exists to avoid, and it would then be AND-ed against the promoted any-of set
+ * — quietly re-narrowing the result to the leftover type.
  */
 export function removeTypeIdsFromFilter(filter?: EntityFilter): EntityFilter | undefined {
   if (!filter) return filter;
-  if (!filter.typeIds && !filter.and) return filter;
+  return stripTypeIds(filter, 0);
+}
 
-  const { typeIds: topLevel, and, ...rest } = filter;
-  let next: EntityFilter = { ...rest };
+function stripTypeIds(filter: EntityFilter, depth: number): EntityFilter | undefined {
+  const next: EntityFilter = { ...filter };
+  const and = next.and;
+  delete next.typeIds;
+  delete next.and;
+  let result: EntityFilter = next;
 
   if (and) {
-    if (topLevel !== undefined) {
-      next = { ...next, and };
-    } else {
-      let stripped = false;
-      const cleaned = and
-        .map(child => {
-          if (stripped || !child?.typeIds) return child;
-          stripped = true;
-          const { typeIds: _t, ...childRest } = child;
-          return Object.keys(childRest).length > 0 ? (childRest as EntityFilter) : null;
-        })
-        .filter((child): child is EntityFilter => child !== null);
+    const cleaned = and
+      .map(child => (child && depth < 2 ? stripTypeIds(child, depth + 1) : child))
+      .filter((child): child is EntityFilter => child != null && Object.keys(child).length > 0);
 
-      if (cleaned.length === 1) {
-        const collides = Object.keys(cleaned[0]).some(k => k in next);
-        if (!collides) {
-          next = { ...next, ...cleaned[0] };
-        } else {
-          next = { ...next, and: cleaned };
-        }
-      } else if (cleaned.length > 1) {
-        next = { ...next, and: cleaned };
-      }
+    if (cleaned.length === 1) {
+      // Inline a lone survivor so the caller sees `{ name: ... }` rather than `{ and: [{ name }] }`
+      // — but not if it would clobber a sibling key already present.
+      const collides = Object.keys(cleaned[0]).some(k => k in result);
+      result = collides ? { ...result, and: cleaned } : { ...result, ...cleaned[0] };
+    } else if (cleaned.length > 1) {
+      result = { ...result, and: cleaned };
     }
   }
 
-  return Object.keys(next).length > 0 ? next : undefined;
+  return Object.keys(result).length > 0 ? result : undefined;
 }

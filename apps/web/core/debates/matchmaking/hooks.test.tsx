@@ -5,14 +5,16 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate } from '../api';
+import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest, useClaimReadiness } from './hooks';
+import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
-  joinDebateQueue: vi.fn(),
+  listMatchmakingMatches: vi.fn(),
+  listDebatePeople: vi.fn(),
+  accountKey: 'user-a' as string | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -21,18 +23,27 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('../api', async importOriginal => {
   const actual = await importOriginal<typeof import('../api')>();
-  return { ...actual, acceptDebateRequest: mocks.acceptDebateRequest, joinDebateQueue: mocks.joinDebateQueue };
+  return {
+    ...actual,
+    acceptDebateRequest: mocks.acceptDebateRequest,
+    listMatchmakingMatches: mocks.listMatchmakingMatches,
+    listDebatePeople: mocks.listDebatePeople,
+  };
 });
 
 vi.mock('../hooks', async importOriginal => {
   const actual = await importOriginal<typeof import('../hooks')>();
   return {
     ...actual,
-    useGeoChatAuth: () => ({ accountKey: 'user-a', authenticated: true, getPrivyIdentityToken: vi.fn() }),
+    useGeoChatAuth: () => ({
+      accountKey: mocks.accountKey,
+      authenticated: mocks.accountKey !== null,
+      getPrivyIdentityToken: vi.fn(),
+    }),
   };
 });
 
-vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn() }));
+vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn(), useMatchmakingScope: () => true }));
 
 const debate = {
   id: 'debate-1',
@@ -49,7 +60,9 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
-  mocks.joinDebateQueue.mockReset();
+  mocks.listMatchmakingMatches.mockReset();
+  mocks.listDebatePeople.mockReset();
+  mocks.accountKey = 'user-a';
   clearEnteringDebate();
 });
 
@@ -88,64 +101,91 @@ describe('useAcceptDebateRequest', () => {
   });
 });
 
-describe('useClaimReadiness', () => {
-  // Readiness is keyed (space, claim) server-side and the Claims tab is cross-space, so the same
-  // claim entity can hold two rows with different readiness.
-  it('moves only the switch for the space it was told about', async () => {
-    mocks.joinDebateQueue.mockResolvedValue({ claim: { id: 'claim-row-1' }, match: null });
+/**
+ * A viewer's own reads all fail together for an account geo-chat has not finished registering, and
+ * they all come good a moment later. Reported from a fresh sign-up: the hub sat in "Something went
+ * wrong" for a minute or two, because nothing here refetches on focus or reconnect and a first
+ * failure had nowhere to go but the "Try again" button.
+ */
+describe('viewer-relative reads and a backend catching up', () => {
+  /** The client's own retry is off, as the app's is; these queries carry their own. */
+  function retryingWrapper({ children }: { children: ReactNode }) {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const key = ['debates', 'account', 'user-a', 'matchmaking-claims', { filter: 'all' }];
-    queryClient.setQueryData(key, {
-      pages: [
-        {
-          claims: [
-            { claim: { space_id: 'space-1', claim_entity_id: 'claim-1' }, viewer_debate_ready: false },
-            { claim: { space_id: 'space-2', claim_entity_id: 'claim-1' }, viewer_debate_ready: false },
-          ],
-        },
-      ],
-    });
+    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  }
 
-    const { result } = renderHook(() => useClaimReadiness(), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    });
-    result.current.mutate({ spaceId: 'space-1', claimId: 'claim-1', ready: true });
+  it('asks again when the server faults, and settles once it answers', async () => {
+    mocks.listMatchmakingMatches
+      .mockRejectedValueOnce(new GeoChatRequestError('nope', null, 503))
+      .mockResolvedValue({ matches: [] });
 
-    await waitFor(() => {
-      const claims = (queryClient.getQueryData(key) as { pages: { claims: { viewer_debate_ready: boolean }[] }[] })
-        .pages[0]!.claims;
-      expect(claims[0]!.viewer_debate_ready).toBe(true);
-      expect(claims[1]!.viewer_debate_ready).toBe(false);
-    });
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
+    expect(result.current.error).toBeNull();
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
   });
 
-  // The rematch picker reads readiness from the per-space claims family, which keys the ids on the
-  // entry rather than nesting them under `claim`. Missing it left that toggle unmoved on click.
-  it('moves the switch in the per-space claims family too', async () => {
-    mocks.joinDebateQueue.mockResolvedValue({ claim: { id: 'claim-row-1' }, match: null });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const key = ['debates', 'claims', 'space-1', ['claim-1']];
-    queryClient.setQueryData(key, {
-      claims: [
-        { space_id: 'space-1', claim_entity_id: 'claim-1', viewer_debate_ready: false },
-        { space_id: 'space-2', claim_entity_id: 'claim-1', viewer_debate_ready: false },
-      ],
-    });
+  // A malformed request is geo-chat telling us something. Asking three times gets the same answer,
+  // and the viewer waits out two pointless round trips before being told what it already knew.
+  it('takes a refusal at its word', async () => {
+    mocks.listMatchmakingMatches.mockRejectedValue(new GeoChatRequestError('no', 'bad_request', 400));
 
-    const { result } = renderHook(() => useClaimReadiness(), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    });
-    result.current.mutate({ spaceId: 'space-1', claimId: 'claim-1', ready: true });
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
 
-    await waitFor(() => {
-      const claims = (queryClient.getQueryData(key) as { claims: { viewer_debate_ready: boolean }[] }).claims;
-      expect(claims[0]!.viewer_debate_ready).toBe(true);
-      // Same claim entity in another space keeps its own switch.
-      expect(claims[1]!.viewer_debate_ready).toBe(false);
-    });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * A 401 is two different things, told apart by whether we have an identity at all.
+   *
+   * With one, it is geo-chat not having registered this viewer yet — true of every account for a
+   * minute or two after sign-up, and the reported bug. Without one, it is the plain refusal it looks
+   * like: the hub asks for its anonymous lists without a token, and waiting a minute for that would
+   * be waiting for something that is not coming.
+   */
+  it('waits out a refusal aimed at a viewer it has an identity for', async () => {
+    mocks.listMatchmakingMatches
+      .mockRejectedValueOnce(new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401)))
+      .mockResolvedValue({ matches: [] });
+
+    const { result } = renderHook(() => useMatchmakingMatches(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ matches: [] }));
+    expect(mocks.listMatchmakingMatches).toHaveBeenCalledTimes(2);
+  });
+
+  // Through People, which is one of the two lists the hub asks for without a token — the matches
+  // query is simply not made without an account, so it cannot show this either way.
+  /**
+   * A 401 off a *resource* is the other 401, and waiting is the wrong answer to it.
+   *
+   * `getGeoChatSession` hands back the stored session until it is close to expiry, so a session the
+   * server has stopped accepting is re-presented on every attempt and rejected every time.
+   * `debate-gateway` already knows this — it reads the same status as `reauthenticate` and resets
+   * the session. Retrying it nine times would spend ninety seconds re-offering rejected credentials
+   * and then tell the viewer their account was being set up.
+   */
+  it('does not wait out a session the server has stopped accepting', async () => {
+    mocks.accountKey = 'account-1';
+    mocks.listDebatePeople.mockRejectedValue(new GeoChatRequestError('Unauthorized', null, 401));
+
+    const { result } = renderHook(() => useDebatePeople(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // The transient budget, not the warm-up one: asked once, then given up on.
+    expect(mocks.listDebatePeople).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait one out for a viewer it has no identity for', async () => {
+    mocks.accountKey = null;
+    mocks.listDebatePeople.mockRejectedValue(new GeoChatSessionError(new GeoChatRequestError('no', null, 401)));
+
+    const { result } = renderHook(() => useDebatePeople(true), { wrapper: retryingWrapper });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    expect(mocks.listDebatePeople).toHaveBeenCalledTimes(1);
   });
 });

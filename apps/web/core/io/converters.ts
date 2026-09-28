@@ -232,6 +232,17 @@ export function convertWhereConditionToEntityFilter(
     return emptyNameExclusion;
   }
 
+  // A pure-AND filter is flattened instead of double-wrapped (conjunction is
+  // associative, so this preserves semantics). This keeps clauses like
+  // `spaceIds` at depth one, where the space/type promotion helpers
+  // (extractSingleSpaceIdFromFilter et al.) can still find them — a filter
+  // shaped `{ and: [{ and: [{ spaceIds }, ...] }, { name }] }` defeats the
+  // promotion and the server falls off the indexed path (statement timeouts
+  // on real data blocks).
+  if (Object.keys(filter).length === 1 && filter.and) {
+    return { and: [...filter.and, emptyNameExclusion] };
+  }
+
   return { and: [filter, emptyNameExclusion] };
 }
 

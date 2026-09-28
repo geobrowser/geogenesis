@@ -1,0 +1,189 @@
+'use client';
+
+import * as React from 'react';
+
+import type {
+  DebateClaim,
+  DebateClaimPositionSummary,
+  DebateClaimSummary,
+  DebateResponseKind,
+  MatchmakingReadiness,
+} from '~/core/debates/api';
+import { CLAIM_RESPONSE_KIND, hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
+import type { Entity } from '~/core/types';
+
+import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
+import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
+
+export type ClaimResponseState = {
+  /** How a claim's sides are labelled. One vocabulary: Agree/Disagree. */
+  responseKind: DebateResponseKind;
+  /**
+   * Whether this claim's own data has arrived.
+   *
+   * Callers gate their pills on it. It used to mean "the vocabulary is an answer rather than the
+   * `stance` fallback", back when a factual claim wanted Verify/Dispute and a click made before
+   * the lookups answered published the wrong *vote kind* rather than merely the wrong label.
+   * There is one kind now, so nothing about the write depends on this — what still does is the
+   * viewer's own side, which a pill needs before a click can clear a position rather than
+   * republish it.
+   */
+  isResponseKindResolved: boolean;
+  /**
+   * Whether the viewer's own side is known yet.
+   *
+   * Separate from the vocabulary, and it fails in a different way. The counts and the viewer's
+   * indexed response arrive together; until they do, a viewer who already answered is drawn holding
+   * neither side — and pressing the side they already hold *republishes* it rather than clearing
+   * it, because the control reads the same state the display does.
+   *
+   * A geo-chat row that names the viewer's side is an answer on its own. Otherwise
+   * it takes the on-chain read landing — including under a batch, where "landing" means the batch's
+   * own readiness and a failed batch never resolves.
+   */
+  isViewerResponseResolved: boolean;
+  /**
+   * Why this claim cannot be responded to at all, or null.
+   *
+   * Distinct from the two flags above, which mean "not yet" and clear themselves. This is a
+   * standing condition the reader has to do something about, so it carries its own sentence rather
+   * than borrowing their "still loading" one.
+   */
+  responseBlockedReason: string | null;
+  summary: ClaimResponseSummary;
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+};
+
+/**
+ * Everything a claim surface needs to draw and publish a response, derived once.
+ *
+ * Five surfaces render a claim's pills and split — the explore feed, the debates hub, the topic
+ * page, the debate transcript panel and the claim page — and each of them was assembling this from
+ * the same two inputs in the same order. Four copies of a derivation whose steps are individually
+ * easy to get subtly wrong, which is exactly what happened: the transcript panel hard-coded the
+ * `stance` fallback and published the wrong vote kind, and the "settled is not answered" fix had to
+ * be written twice because two copies had drifted apart. Every one of those was a one-line change
+ * applied N times, and the review that caught them caught them one file at a time.
+ *
+ * The two inputs stay with the caller because they arrive differently and legitimately so: the
+ * panel batches its rows per space and its entities in one query, the feed gates both behind a
+ * viewport observer, the topic page fetches per card because its claims span spaces. What must not
+ * differ is what happens to them afterwards, which is all of this.
+ */
+/**
+ * Which vocabulary a claim uses. There is only one: Agree/Disagree.
+ *
+ * Kept as a function, and still called where a kind is needed, because the thing it guarantees is
+ * worth a name — every claim surface publishes and counts the *same* vote kind. This used to read
+ * geo-chat's row first and the graph's "Is factual" flag second, and the order mattered: resolving
+ * it differently on one surface meant counting one vote kind while publishing another, a bug this
+ * codebase has already had. A constant cannot have that bug.
+ */
+export function resolveClaimResponseKind(): DebateResponseKind {
+  return CLAIM_RESPONSE_KIND;
+}
+
+export function useClaimResponseState({
+  claimId,
+  spaceId,
+  row,
+  entity,
+  title = '',
+  description = null,
+  enabled = true,
+}: {
+  claimId: string;
+  spaceId: string;
+  /** geo-chat's row, where it has one. Null in the spaces it does not index, and before it answers. */
+  row: DebateClaim | null;
+  /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
+  entity: Entity | null;
+  /** The claim's text, where the caller has it. Surfaces that draw their own title pass nothing. */
+  title?: string;
+  description?: string | null;
+  /** False to hold the response reads back — a feed card below the fold. */
+  enabled?: boolean;
+}): ClaimResponseState {
+  const responseKind = resolveClaimResponseKind();
+  const isResponseKindResolved = row !== null || entity !== null;
+
+  // An unpublished edit to the claim's own vocabulary blocks responding, as it did before.
+  //
+  // `EntityVoteButtons` — the control every one of these surfaces used to render — refused outright
+  // while the Claim type had a local edit that had not been published, and said so. Replacing it
+  // with the shared card dropped that, and the failure it prevents is real: the kind selects
+  // `voteKind` on the write, so a draft type edit would publish a claim's stance against an entity
+  // the graph still calls an ordinary one, or the reverse.
+  //
+  // It used to watch the "Is factual" value for the same reason. That flag no longer chooses a
+  // kind, so a draft edit to it cannot change what gets published.
+  //
+  // Only ever true where the entity carries local edits at all: the surfaces that read it through a
+  // narrow projection have no `isLocal` to find, and this is false for them.
+  const responseBlockedReason = hasUnpublishedClaimResponseKindEdit(entity, spaceId)
+    ? 'Publish the claim type change before responding.'
+    : null;
+
+  // Withheld until the claim's own data has arrived.
+  //
+  // This used to be about the vocabulary: the kind is part of both query keys, so asking before it
+  // was known populated the summary from the wrong counts and a card could draw that split until
+  // the entity landed. One kind now, so the keys are stable — what is still worth waiting for is
+  // the row, which carries the viewer's own side.
+  const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled && isResponseKindResolved);
+
+  const claim = React.useMemo(
+    () => ({
+      id: row?.id ?? claimId,
+      space_id: spaceId,
+      claim_entity_id: claimId,
+      claim: title,
+      description,
+    }),
+    [claimId, description, row?.id, spaceId, title]
+  );
+
+  const positions = React.useMemo(
+    () => positionSummariesFromCounts(summary.positive, summary.negative, row),
+    [row, summary.negative, summary.positive]
+  );
+
+  const readiness = React.useMemo(
+    () => ({
+      response_kind: responseKind,
+      // Falls back to the on-chain summary, which resolves independently of geo-chat. Without it the
+      // viewer's own side reads as unselected for as long as the row is out — and permanently in a
+      // space geo-chat does not index — which turns a click on it into a republish rather than a
+      // clear.
+      viewer_response: viewerResponseWithIndexedFallback({
+        viewerResponse: row?.viewer_response,
+        indexedDirection: summary.indexedViewerDirection,
+        isIndexedLoading: summary.isViewerResponseLoading,
+      }),
+      viewer_debate_ready: row?.viewer_debate_ready ?? false,
+      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
+    }),
+    [responseKind, row, summary.indexedViewerDirection, summary.isViewerResponseLoading]
+  );
+
+  return {
+    responseKind,
+    isResponseKindResolved,
+    responseBlockedReason,
+    // Both halves of the fallback below, not just the counts.
+    //
+    // `viewer_response` falls back to `summary.indexedViewerDirection`, which rides a *second* query —
+    // gated on the personal space, itself a smart-account read plus a round trip. It settles after
+    // the counts do. Reading only `summary.isLoading` therefore called this resolved during the
+    // window where the counts had landed and the viewer's side had not: a signed-in viewer who has
+    // already agreed sees both pills unselected, and pressing the one they hold republishes it
+    // instead of clearing it — the exact failure this field exists to prevent.
+    isViewerResponseResolved: Boolean(row?.viewer_response) || (!summary.isLoading && !summary.isViewerResponseLoading),
+    summary,
+    claim,
+    positions,
+    readiness,
+  };
+}

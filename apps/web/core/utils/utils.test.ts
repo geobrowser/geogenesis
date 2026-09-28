@@ -242,6 +242,12 @@ describe('GeoDate', () => {
       expect(GeoDate.toFullISOString('2024-01-15')).toBe('2024-01-15T00:00:00.000Z');
     });
 
+    // Safari's Date returns NaN for "YYYY-MM-DDZ", which is what the profile's work and education
+    // sheets write, so the expansion must not be left to the engine.
+    it('converts date-only with a trailing Z (YYYY-MM-DDZ) to full ISO string', () => {
+      expect(GeoDate.toFullISOString('2010-09-01Z')).toBe('2010-09-01T00:00:00.000Z');
+    });
+
     it('converts time-only (HH:MM:SSZ) to full ISO string with epoch date', () => {
       expect(GeoDate.toFullISOString('14:30:00Z')).toBe('1970-01-01T14:30:00Z');
     });
@@ -698,9 +704,9 @@ describe('getProposalName', () => {
   const space = (name: string | null) => ({ id: 'a'.repeat(32), name, image: '' });
 
   it('names the space when it is known', () => {
-    expect(
-      getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space('Research DAO') })
-    ).toBe('Update governance settings for Research DAO');
+    expect(getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space('Research DAO') })).toBe(
+      'Update governance settings for Research DAO'
+    );
 
     expect(getProposalName({ name: '', type: 'ADD_EDITOR', space: space('Research DAO') })).toBe(
       'Add editor to Research DAO'

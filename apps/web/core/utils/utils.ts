@@ -12,12 +12,12 @@ import {
   PINATA_GATEWAY_READ_PATH,
   ROOT_SPACE,
 } from '~/core/constants';
+import { toDebatesPanel as toDebatesPanelLink } from '~/core/debates/debates-panel-deep-link';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/substream-schema';
-import { Entity, Profile, Relation, Row } from '../types';
-import { Entities } from './entity';
+import { Profile, Relation, Row } from '../types';
 
 export const NavUtils = {
   toRoot: () => '/root',
@@ -27,12 +27,19 @@ export const NavUtils = {
    * "Sign in / Sign up" button — see `core/auth/sign-in-deep-link` for the param contract.
    */
   toSignIn: toSignInLink,
+  /**
+   * Any page, with the debates hub opening on arrival — optionally on a named tab. See
+   * `core/debates/debates-panel-deep-link` for the param contract.
+   */
+  toDebatesPanel: toDebatesPanelLink,
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
+  toBounties: () => '/bounties',
+  toNewBounty: (spaceId: string) => `/space/${spaceId}/bounties/new`,
+  // A bounty is a regular entity; its detail page is the entity page.
+  toBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/${bountyId}`,
   toCommunity: (spaceId: string) => `${NavUtils.toSpace(spaceId)}/community`,
-  toCommunityBounties: (spaceId: string, status: 'completed' | 'in-progress' | 'available') =>
-    `${NavUtils.toSpace(spaceId)}/community/bounties/${status}`,
   toProposal: (spaceId: string, proposalId: string, from?: string, governanceHomeReturnSearch?: string) => {
     const params = new URLSearchParams();
     params.set('proposalId', proposalId);
@@ -205,7 +212,7 @@ export class GeoPoint {
         latitude: GeoPoint.clampLatForMap(latitude),
         longitude: GeoPoint.clampLngForMap(longitude),
       };
-    } catch (e) {
+    } catch {
       console.error(`Unable to parse coordinates: "${value}"`);
       return null;
     }
@@ -380,9 +387,12 @@ export class GeoDate {
       return `1970-01-01T${dateString}`;
     }
 
-    // Date-only: "YYYY-MM-DD" (no T or time portion)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-      return `${dateString}T00:00:00.000Z`;
+    // Date-only: "YYYY-MM-DD", optionally with a trailing "Z" (no T or time portion). The profile's
+    // work and education dates are written as "YYYY-MM-01Z". V8 parses that as-is but Safari's
+    // `Date` returns NaN for it, so it has to be expanded here rather than left to the engine.
+    const dateOnly = /^(\d{4}-\d{2}-\d{2})Z?$/.exec(dateString);
+    if (dateOnly) {
+      return `${dateOnly[1]}T00:00:00.000Z`;
     }
 
     return dateString;
@@ -468,7 +478,7 @@ export class GeoDate {
       const testDate = new Date();
       formatInTimeZone(testDate, 'UTC', format);
       return format;
-    } catch (e) {
+    } catch {
       console.warn(`Invalid date format: "${format}". Using default format instead.`);
       return this.defaultFormat;
     }
@@ -557,12 +567,76 @@ export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 // Image values are free-text entity properties, so an author can type anything.
 // next/image throws on a src that is neither root-relative nor an absolute URL,
 // which kills the whole page that rendered it.
+//
+// The scheme is checked too, not just the syntax: `mailto:`, `javascript:`, `file:`
+// and `blob:` all parse as URLs and none of them is a picture.
+//
+// No `ipfs:` here, deliberately. This runs *after* `getImagePathAtLevel`, so a value
+// the resolver understood is already `https:` by now; the only `ipfs:` strings that
+// can reach this point are the ones it declined to rewrite — `ipfs:QmAbc` without
+// the slashes, `IPFS://` with the wrong case — and admitting those would hand
+// next/image a src it cannot load.
+//
+// Server-side card rendering asks a stricter question again: see `toSatoriImageSrc`,
+// which additionally rejects the relative forms a browser resolves happily.
+const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
+
 export const isRenderableImageSrc = (src: string) => {
   if (src.startsWith('/')) return true;
+
+  let parsed: URL;
   try {
-    new URL(src);
-    return true;
+    parsed = new URL(src);
   } catch {
+    return false;
+  }
+
+  // Only an image data URL is a picture; `data:text/html,...` parses just as happily.
+  if (parsed.protocol === 'data:') return src.startsWith('data:image/');
+
+  return RENDERABLE_IMAGE_PROTOCOLS.has(parsed.protocol);
+};
+
+/**
+ * Hosts whose images may go through our own image optimizer.
+ *
+ * Derived from `IPFS_GATEWAYS` rather than restated, so adding a gateway cannot silently create a
+ * class of image that renders unoptimized forever with nobody noticing.
+ */
+const OPTIMIZABLE_HOSTS = new Set(
+  IPFS_GATEWAYS.map(gateway => new URL(gateway).hostname).concat(['geobrowser.io', 'www.geobrowser.io'])
+);
+
+/**
+ * May this image be served through `/_next/image`?
+ *
+ * **Image values are free-text entity properties — an author can type any URL** — and
+ * `getImagePathAtLevel` passes non-IPFS values through unchanged. With `remotePatterns` set to
+ * `hostname: '**'`, that made the optimizer an open proxy: anyone could call
+ * `/_next/image?url=<any https url>` and have our deployment fetch, decode, resize and re-serve
+ * arbitrary remote content from our domain, under our certificate, on our bill (GEO-2984).
+ *
+ * The obvious fix — enumerate the hosts we use and narrow `remotePatterns` — does not work here,
+ * because "the hosts we use" is not a closed set: an entity's image can legitimately be any URL
+ * someone typed, and a host missed off the list renders as a broken image with no error anywhere.
+ *
+ * So the split is by *who fetches it*, not by whether it may be shown. Images from hosts we
+ * control go through the optimizer. Anything else is handed to the browser as-is, which still
+ * renders it — from its own origin, at its own expense, under its own name.
+ *
+ * `unoptimized` short-circuits `generateImgAttrs` before the default loader runs, so an
+ * unoptimized src is never checked against `remotePatterns` either. That is what lets the config
+ * be narrowed to the hosts that actually reach the optimizer without breaking anything else.
+ */
+export const isOptimizableImageSrc = (src: string) => {
+  // Same-origin: our own static assets and API routes.
+  if (src.startsWith('/')) return true;
+
+  try {
+    return OPTIMIZABLE_HOSTS.has(new URL(src).hostname);
+  } catch {
+    // Not a URL we can reason about. `isRenderableImageSrc` decides whether it renders at all;
+    // for this question the safe answer is "do not put it through our optimizer".
     return false;
   }
 };

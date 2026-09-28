@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { editorSpacesRetryDelayMs, isTransientEditorSpacesError } from './editor-spaces';
 import {
   PUBLISHABLE_SPACES_STALE_LIMIT_MS,
   PUBLISHABLE_SPACES_TTL_MS,
@@ -7,7 +8,6 @@ import {
   isServableWhenStale,
   resolvePublishableSpaces,
 } from './publishable-spaces-cache';
-import { editorSpacesRetryDelayMs, isTransientEditorSpacesError } from './editor-spaces';
 
 const NOW = 1_800_000_000_000;
 const entry = (ageMs: number, spaceIds = ['space-a', 'space-b']) => ({
@@ -23,9 +23,10 @@ describe('publishable spaces cache', () => {
   });
 
   it('caches a successful lookup and marks it cacheable', () => {
-    expect(
-      resolvePublishableSpaces({ entry: null, refreshed: ['space-a'], nowMs: NOW })
-    ).toEqual({ spaceIds: ['space-a'], cacheable: true });
+    expect(resolvePublishableSpaces({ entry: null, refreshed: ['space-a'], nowMs: NOW })).toEqual({
+      spaceIds: ['space-a'],
+      cacheable: true,
+    });
   });
 
   it('treats an empty list as a real answer, not a failure', () => {
@@ -48,9 +49,7 @@ describe('publishable spaces cache', () => {
   it('never caches a response derived from a failure', () => {
     // Cacheability is the half that turned one 503 into hours of a dropped filter.
     for (const stored of [PUBLISHABLE_SPACES_TTL_MS + 1, PUBLISHABLE_SPACES_STALE_LIMIT_MS + 1]) {
-      expect(resolvePublishableSpaces({ entry: entry(stored), refreshed: null, nowMs: NOW }).cacheable).toBe(
-        false
-      );
+      expect(resolvePublishableSpaces({ entry: entry(stored), refreshed: null, nowMs: NOW }).cacheable).toBe(false);
     }
   });
 
@@ -77,9 +76,10 @@ describe('publishable spaces cache', () => {
   });
 
   it('prefers a successful refresh over a stale entry', () => {
-    expect(
-      resolvePublishableSpaces({ entry: entry(60_000, ['old']), refreshed: ['new'], nowMs: NOW })
-    ).toEqual({ spaceIds: ['new'], cacheable: true });
+    expect(resolvePublishableSpaces({ entry: entry(60_000, ['old']), refreshed: ['new'], nowMs: NOW })).toEqual({
+      spaceIds: ['new'],
+      cacheable: true,
+    });
   });
 
   it('keeps the stale window much longer than the retry interval', () => {

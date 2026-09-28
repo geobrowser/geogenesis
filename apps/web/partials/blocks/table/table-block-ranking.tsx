@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -50,9 +51,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const {
     filterState,
     resolvedFilterState,
-    filterMode,
+    modesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     source,
     setSource,
     isFilterOpen,
@@ -190,10 +191,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                   {!isEditing &&
                     filterGroupsForToolbarPills.map(group => (
                       <TableBlockFilterGroupPill
-                        key={group.columnId}
+                        key={group.groupKey}
                         group={group}
-                        mode={filterMode}
-                        onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                        mode={modesByColumn[group.columnId] ?? 'AND'}
+                        onToggleMode={() => {
+                          const mode = modesByColumn[group.columnId] ?? 'AND';
+                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                        }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
                             produce(resolvedFilterState, draft => {
@@ -202,7 +206,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                           );
                         }}
                         onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                          setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
                         }}
                         isEditing={isEditing}
                       />
@@ -212,10 +216,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                   <div className="flex flex-wrap items-center gap-2">
                     {filterGroupsForToolbarPills.map(group => (
                       <TableBlockFilterGroupPill
-                        key={group.columnId}
+                        key={group.groupKey}
                         group={group}
-                        mode={filterMode}
-                        onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                        mode={modesByColumn[group.columnId] ?? 'AND'}
+                        onToggleMode={() => {
+                          const mode = modesByColumn[group.columnId] ?? 'AND';
+                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                        }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
                             produce(resolvedFilterState, draft => {
@@ -224,7 +231,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                           );
                         }}
                         onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                          setFilterState(resolvedFilterState.filter(f => filterGroupKey(f) !== group.groupKey));
                         }}
                         onAddSimilar={anchorEl => {
                           requestAnimationFrame(() => {

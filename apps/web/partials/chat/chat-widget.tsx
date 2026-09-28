@@ -11,6 +11,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { capture } from '~/core/analytics';
+import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
@@ -44,6 +45,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useReportError } from '~/core/state/status-bar-store';
+import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -312,6 +314,17 @@ export function ChatWidget() {
   // mid-stream Anthropic error) surfaces through the global StatusBar modal —
   // the same surface publish failures use. Deduped by Error instance so
   // re-renders don't re-fire the same error.
+  //
+  // GEO-2510. It also goes to Sentry now. `useReportError` here is the *status bar* one, which
+  // only dispatches to a Jotai atom — despite the name, nothing about it is telemetry, and
+  // nothing else in `partials/chat` or `core/chat` captures either. So every assistant failure
+  // showed the user "An error occurred." and told us nothing: the one report we have (2026-08-05)
+  // came with browser, OS and wallet pasted in by hand, and a month later there was still no way
+  // to tell whether it was rare or constant.
+  //
+  // This effect is the right seam rather than a new one — it already sees the whole class the
+  // ticket describes, and it already dedupes by Error instance, so a capture here cannot fire
+  // twice for one failure.
   const reportError = useReportError();
   const reportedErrorRef = React.useRef<Error | null>(null);
   const regenerateRef = React.useRef(regenerate);
@@ -325,6 +338,9 @@ export function ChatWidget() {
     }
     if (reportedErrorRef.current === error) return;
     reportedErrorRef.current = error;
+    // Tagged so assistant failures are separable from the rest of the app's errors, which is the
+    // question the ticket actually needs answered: how often, and on what.
+    captureAssistantError(error, { tags: { surface: 'ai-assistant' } });
     reportError(describeChatError(error), () => {
       stoppedRef.current = false;
       regenerateRef.current();
@@ -374,6 +390,9 @@ export function ChatWidget() {
       setMessages(persisted.messages);
     }
     hydratedRef.current = true;
+    // Hydrate once, guarded by `hydratedRef`. Depending on `persistedCurrent` would re-hydrate from
+    // storage and overwrite whatever the reader has typed since.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
@@ -616,6 +635,9 @@ export function ChatWidget() {
       // QuotaExceededError — auto-compaction normally keeps a single chat
       // well under localStorage's budget. Surrender; in-memory state still works.
     }
+    // `persistedCurrent` is deliberately absent: this effect *writes* it, so depending on it would
+    // re-run on its own output. It is read only for the title it is about to carry forward.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, status]);
 
   // Refs read inside async handlers so we don't tear when the component
@@ -919,6 +941,7 @@ export function ChatWidget() {
     messages.length,
     handleNewChat,
     clearError,
+    setInjectInline,
     setSeed,
     trackAssistantMessage,
     currentSpaceId,
@@ -1003,17 +1026,28 @@ export function ChatWidget() {
       // applied to the store), so this is the only place we mark the daily upload
       // activity done — not at submission time, where the job could still fail.
       completeDailyUploadActivity(injectJob.spaceId);
+      // An enrich never names its target — the story is already on-chain, so no op restates its
+      // name — but the job does. Falling back to it is what lets an enrich render a pill at all
+      // rather than degrading to a bare count (GEO-2983).
+      const primaryLabel = result.primaryEntityName ?? injectState.name ?? null;
       const primaryPill =
-        result.primaryEntityId && result.primaryEntityName
-          ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
+        result.primaryEntityId && primaryLabel
+          ? `[${primaryLabel.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
           : null;
-      const supportingCount = Math.max(0, result.entitiesCreated - (primaryPill ? 1 : 0));
+      // Only discount the primary when this batch created it. On an enrich every created entity
+      // is an addition to a story that already existed, so none of them is the primary.
+      const supportingCount = Math.max(0, result.entitiesCreated - (primaryPill && result.primaryWasCreated ? 1 : 0));
       const supportingClause =
         supportingCount > 0
           ? ` and ${supportingCount} supporting ${supportingCount === 1 ? 'entity' : 'entities'}`
           : '';
+      const enriched = result.entitiesUpdated > 0;
+      const addedClause =
+        supportingCount > 0 ? ` with ${supportingCount} new ${supportingCount === 1 ? 'entity' : 'entities'}` : '';
       const summary = primaryPill
-        ? `Imported ${primaryPill}${supportingClause}. Review and publish when ready.`
+        ? enriched
+          ? `Updated ${primaryPill}${addedClause}. Review and publish when ready.`
+          : `Imported ${primaryPill}${supportingClause}. Review and publish when ready.`
         : `Imported ${result.entitiesCreated} ${result.entitiesCreated === 1 ? 'entity' : 'entities'}. Review and publish when ready.`;
       updateAssistantText(summary);
       setInjectInline(null);
@@ -1021,7 +1055,7 @@ export function ChatWidget() {
       // follow-ups. Fetch equivalent next-step suggestions and append them as a
       // tool-suggestFollowUps part so the existing pill renderer picks them up.
       // Best-effort: failures just mean no pills.
-      const followUpName = result.primaryEntityName ?? injectState.name ?? '';
+      const followUpName = primaryLabel ?? '';
       void appendInjectFollowUps(injectJob.assistantMessageId, followUpName, injectJob.injectType);
       // A clicked follow-up is a normal edit request, not an ingestion turn.
       modeRef.current = 'default';
@@ -1124,7 +1158,7 @@ export function ChatWidget() {
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>

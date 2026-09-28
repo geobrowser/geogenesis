@@ -185,7 +185,6 @@ const GenerateEntityIds = () => {
   const handleCopyEntityIds = async () => {
     try {
       await navigator.clipboard.write([
-        // eslint-disable-next-line no-undef
         new ClipboardItem({
           'text/plain': new Blob([entityIds], { type: 'text/plain' }),
         }),
@@ -295,6 +294,7 @@ const ConvertFilter = () => {
   const [filterString, setFilterString] = React.useState<string>('');
 
   const [filterState, setFilterState] = React.useState<any>(null);
+  const [filterModes, setFilterModes] = React.useState<any>(null);
   const [where, setWhere] = React.useState<any>(null);
   const [spaceId, setSpaceId] = React.useState<any>(null);
   const [entityFilter, setEntityFilter] = React.useState<any>(null);
@@ -302,10 +302,11 @@ const ConvertFilter = () => {
   const handleConvertFilter = async (event: any) => {
     event.preventDefault();
 
-    const { filters: newFilterState } = await fromGeoFilterString(filterString.trim());
+    const { filters: newFilterState, modesByColumn: newModesByColumn } = await fromGeoFilterString(filterString.trim());
     setFilterState(newFilterState);
+    setFilterModes(newModesByColumn);
 
-    const newWhere = filterStateToWhere(newFilterState);
+    const newWhere = filterStateToWhere(newFilterState, newModesByColumn);
     setWhere(newWhere);
 
     const newEntityFilter = convertWhereConditionToEntityFilter(newWhere);
@@ -316,6 +317,7 @@ const ConvertFilter = () => {
     // setFilterString('');
     setSpaceId(null);
     setFilterState(null);
+    setFilterModes(null);
     setWhere(null);
     setEntityFilter(null);
   };
@@ -337,9 +339,17 @@ const ConvertFilter = () => {
       </div>
       <div className="grid grid-cols-3 gap-4">
         {filterState && (
-          <div>
-            <div>filter state</div>
-            <Block>{filterState}</Block>
+          <div className="space-y-4">
+            <div>
+              <div>filter state</div>
+              <Block>{filterState}</Block>
+            </div>
+            {filterModes && Object.keys(filterModes).length > 0 && (
+              <div>
+                <div>filter modes (per column)</div>
+                <Block>{filterModes}</Block>
+              </div>
+            )}
           </div>
         )}
         {where && (

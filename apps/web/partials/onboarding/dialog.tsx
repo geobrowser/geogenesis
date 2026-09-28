@@ -83,8 +83,7 @@ const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
 // personal space keeps creating in the background regardless.
 const COMPLETION_ANIMATION_MS = 3000;
-const TERMS_AND_CONDITIONS_URL =
-  'https://docs.google.com/document/d/1clBax9yApV8uI1m36gX9pEf6jrpMEslsqxmqXW2w9I4/edit?tab=t.0';
+const TERMS_AND_CONDITIONS_URL = 'https://www.geobrowser.io/terms';
 
 const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
@@ -487,12 +486,14 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           {avatar ? (
             <OnboardingAvatarPreview avatar={avatar} />
           ) : (
-            <img
+            <button
+              type="button"
               className="cursor-pointer rounded-full"
-              src="/images/onboarding/no-avatar.png"
-              alt=""
+              aria-label="Choose a profile photo"
               onClick={() => fileInputRef.current?.click()}
-            />
+            >
+              <img className="rounded-full" src="/images/onboarding/no-avatar.png" alt="" />
+            </button>
           )}
           <div className="absolute right-0 bottom-0 h-6 w-6">
             <SquareButton
@@ -529,7 +530,9 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
       <div className="relative">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Text as="p" variant="footnote" className="text-center text-grey-04">
-            All content is public. By signing up, you agree to our{' '}
+            All content is public and shared onchain.
+            <br />
+            By signing up, you agree to our{' '}
             <a
               href={TERMS_AND_CONDITIONS_URL}
               target="_blank"
@@ -779,6 +782,17 @@ function StepInterestedIn({
               <div
                 key={`interested-topic-${featuredSpace.id}`}
                 role="button"
+                // It already said `role="button"`, which promises a control that can be focused and
+                // activated from a keyboard. Without a tabIndex it could not be reached, and without
+                // a key handler Enter and Space did nothing. `aria-pressed` because it is a toggle.
+                tabIndex={0}
+                aria-pressed={selectedTopicIds.includes(featuredSpace.id)}
+                onKeyDown={event => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleSelectTopics(featuredSpace.id);
+                  }
+                }}
                 onClick={() => handleSelectTopics(featuredSpace.id)}
                 className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
               >

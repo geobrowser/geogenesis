@@ -11,7 +11,7 @@ import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { Filter, type FilterMode } from '~/core/blocks/data/filters';
+import { Filter, type FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import { Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -68,7 +68,10 @@ interface TableBlockFilterPromptProps {
   filterSuggestionSpaceId?: string;
   /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
   filterStateForSeed?: Filter[];
-  onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => void;
+  /** Mode map matching `filterStateForSeed` (e.g. temporary modes in Power Tools); defaults to `useFilters().modesByColumn`. */
+  modesByColumnForSeed?: ModesByColumn;
+  /** `modeOverrides` carries AND/OR choices made for chips in this commit; applied atomically with the filters. */
+  onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[], modeOverrides?: ModesByColumn) => void;
   /** When false, pending filter chips and value inputs use read-only (grey, no remove) styling. */
   isEditing?: boolean;
 }
@@ -797,23 +800,6 @@ function hasPendingFilterSelections(state: PromptState, options: (Filter & { col
   });
 }
 
-function hasAnyFilterDraftSelections(state: PromptState): boolean {
-  const normalized = normalizePromptState(state);
-  if (
-    normalized.multiEntitySelections.length > 0 ||
-    normalized.multiSpaceSelections.length > 0 ||
-    normalized.multiStringSelections.length > 0
-  ) {
-    return true;
-  }
-  return Object.values(normalized.columnDrafts).some(
-    draft =>
-      draft.multiEntitySelections.length > 0 ||
-      draft.multiSpaceSelections.length > 0 ||
-      draft.multiStringSelections.length > 0
-  );
-}
-
 function popoverDraftsDifferFromSessionBaseline(
   state: PromptState,
   options: (Filter & { columnName: string })[]
@@ -1033,13 +1019,22 @@ function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): boolean {
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt(
-    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true },
+    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, modesByColumnForSeed, isEditing = true },
     ref
   ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
-    const { filterState, setFilterState, filterMode, setFilterMode } = useFilters();
+    const { filterState, setFilterState, modesByColumn } = useFilters();
+    // Display modes must come from the caller's active map when it differs from
+    // the persisted one (Power Tools non-editors run on temporary modes).
+    const seedModesByColumn = modesByColumnForSeed ?? modesByColumn;
+    // Modes chosen for not-yet-committed chips. They must not go through
+    // setGroupMode: this hook instance's filter list does not contain the
+    // pending chips, so the serializer would prune the mode and the write
+    // would land as AND while the control shows OR. They commit with the
+    // chips through onCreate instead.
+    const [pendingModes, setPendingModes] = React.useState<ModesByColumn>({});
     const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
     const isRelationsMode = source.type === 'RELATIONS';
@@ -1167,6 +1162,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
           return { type: 'RELATIONS', name: fromName, value: fromId };
         });
       }
+      // `sourceKey` is `sourceStableKey(source)` and stands in for `source` deliberately: the
+      // source is an object rebuilt on render, and this only wants to re-seed when it actually
+      // describes something different.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fromId, fromName, sourceKey]);
 
     React.useEffect(() => {
@@ -1188,9 +1187,12 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
 
     const onEntitiesDone = () => {
       const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
-      if (touchedColumnIds.length > 0) {
-        onCreate(filters, touchedColumnIds);
+      // A mode flip with untouched chips is still a commit: without this,
+      // Done silently discards an AND/OR change made on existing chips.
+      if (touchedColumnIds.length > 0 || Object.keys(pendingModes).length > 0) {
+        onCreate(filters, touchedColumnIds, pendingModes);
       }
+      setPendingModes({});
       dispatch({ type: 'done' });
     };
 
@@ -1200,6 +1202,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       // Opened from a filter chip "+" — clear only this column's values, not every filter.
       if (externalAnchorElRef.current) {
         dispatch({ type: 'clearCurrentColumnSelections' });
+        setPendingModes({});
         onCreate([], [columnId]);
         dispatch({ type: 'done' });
         return;
@@ -1217,6 +1220,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const touchedColumnIds = [...touched];
       if (touchedColumnIds.length === 0) return;
       dispatch({ type: 'clearAllColumnDrafts' });
+      setPendingModes({});
       onCreate([], touchedColumnIds);
       dispatch({ type: 'done' });
     };
@@ -1248,8 +1252,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         state={state}
         dispatch={dispatch}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
-        filterMode={filterMode}
-        onFilterModeChange={setFilterMode}
+        filterMode={pendingModes[state.selectedColumn] ?? seedModesByColumn[state.selectedColumn] ?? 'AND'}
+        onFilterModeChange={mode => setPendingModes(previous => ({ ...previous, [state.selectedColumn]: mode }))}
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
         onValueDropdownOpenChange={setValueDropdownOpen}
@@ -1269,6 +1273,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       if (open && !isEditing) return;
       if (!open) {
         clearExternalAnchor();
+        // An abandoned AND/OR toggle must not ride along with a later,
+        // unrelated commit.
+        setPendingModes({});
         dispatch({ type: 'onOpenChange', payload: { open } });
         return;
       }
@@ -1280,6 +1287,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const fs = seedFilterStateRef.current;
       const seedDraft = seedColumnDraftFromCommittedFilters(initialColumn, fs, opts);
       const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
+      setPendingModes({});
       dispatch({ type: 'reset', payload: { source, open: true, seedDraft, sessionBaseline } });
     };
 
@@ -1453,7 +1461,10 @@ function DynamicFilters({
     const all = enumeratePendingFilterChips(state, options);
     return all.filter(item => ID.equals(item.columnId, state.selectedColumn));
   }, [state, options]);
-  const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
+  // Multiple spaces are always OR (see filterStateToWhere), so a mode control
+  // for the Space property would be a switch that does nothing.
+  const showFilterModeControl =
+    state.selectedColumn !== SystemIds.SPACE_FILTER && pendingChipsNeedFilterMode(pendingFilterChips);
 
   const hasValueDropdown = state.selectedColumn === SystemIds.SPACE_FILTER || selectedOption?.valueType === 'RELATION';
 
@@ -1643,12 +1654,6 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
     </>
   );
 }
-
-type FilterValueDropdownFooterConfig = {
-  showClearAll: boolean;
-  onClearAll: () => void;
-  showDone: boolean;
-};
 
 interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
@@ -1907,7 +1912,7 @@ function TableBlockEntityFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2223,7 +2228,7 @@ function TableBlockSpaceFilterInput({
       const list = (showScopedOnlyPanel ? spaceScopedListRef.current : spaceQueryListRef.current) ?? null;
       trapWheelToElement(list, e);
     },
-    [showQueryPanel, showScopedOnlyPanel]
+    [showScopedOnlyPanel]
   );
   const toggleStagingSpace = React.useCallback((result: { id: string; name: string | null }) => {
     setStagingSelections(prev => {
@@ -2241,7 +2246,7 @@ function TableBlockSpaceFilterInput({
     if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
       active.blur();
     }
-  }, [clearBlurTimeout]);
+  }, [clearBlurTimeout, setFocused, setQuery]);
 
   const handleInputFocus = React.useCallback(() => {
     if (multi) {
@@ -2249,7 +2254,7 @@ function TableBlockSpaceFilterInput({
       setQuery('');
     }
     onFocus();
-  }, [committedSpaceSelections, multi, onFocus]);
+  }, [committedSpaceSelections, multi, onFocus, setQuery]);
 
   React.useEffect(() => {
     if (!multi) return;

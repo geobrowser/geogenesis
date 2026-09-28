@@ -4,6 +4,10 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
+import { capture } from '~/core/analytics';
+import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { SmallButton } from '~/design-system/button';
@@ -14,24 +18,47 @@ import {
   GeoChatRequestError,
   type GetPrivyIdentityToken,
   type LocalRecordingCompleteRequest,
+  type LocalRecordingPartUrl,
   type LocalRecordingUploadRequest,
   type LocalRecordingUploadResponse,
+  type ObjectStoreUpload,
+  abortLocalRecordingMultipart,
   cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
+  getDebate,
+  getLocalRecordingPartUrls,
   resolveCurrentGeoChatUserId,
   retryDebatePhaseBoundaryRequest,
 } from './api';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
+  RECORDING_STREAM_ORPHAN_AFTER_MS,
+  type StreamedRecordingMultipart,
+  isMissingRouteError,
+  partRange,
+  putRecordingPart,
+  recoverOrphanedRecordingStreams,
+  uploadRemainingParts,
+} from './recording-stream';
+import {
   type DebateRecordingUpload,
+  debateRecordingUploadId,
   deleteDebateRecordingUpload,
+  enqueueDebateRecordingUpload,
   getDebateRecordingUpload,
   markDebateRecordingUploaded,
   observeDebateRecordingUploads,
+  requeueDebateRecordingParts,
   scheduleDebateRecordingRetry,
+  setDebateRecordingMultipart,
 } from './recording-upload-queue';
-import { useThankingDebate } from './thanking-debate-store';
+import {
+  usePublishOptOutRequest,
+  useSetPublishOptOutOffer,
+  useSetPublishOptOutRequest,
+  useThankingDebate,
+} from './thanking-debate-store';
 
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
@@ -59,6 +86,21 @@ export function isPermanentRecordingUploadError(error: unknown): boolean {
   );
 }
 
+/** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
+type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
+
+/** An upload error in analytics terms: geo-chat's code and status where it has them. */
+function uploadErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
+}
+
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
 type RecordingUploadDependencies = {
@@ -67,6 +109,17 @@ type RecordingUploadDependencies = {
   markUploaded: (id: string, filename: string) => Promise<void>;
   completeUpload: (debateId: string, request: LocalRecordingCompleteRequest) => Promise<unknown>;
   deleteUpload: (id: string) => Promise<void>;
+  /** GEO-2955: the parts of a recording that was streamed during the debate. */
+  getPartUrls?: (
+    debateId: string,
+    filename: string,
+    uploadId: string,
+    partNumbers: number[]
+  ) => Promise<LocalRecordingPartUrl[]>;
+  putPart?: (upload: ObjectStoreUpload, body: Blob) => Promise<void>;
+  setMultipart?: (id: string, multipart: StreamedRecordingMultipart | null) => Promise<void>;
+  requeueParts?: (id: string) => Promise<void>;
+  onPartsProgress?: (uploadedBytes: number) => void;
 };
 
 export async function processDebateRecordingUpload(
@@ -76,31 +129,99 @@ export async function processDebateRecordingUpload(
   const startedAtMs = Math.round(upload.startedAtMs);
   const endedAtMs = Math.round(upload.endedAtMs);
   let filename = upload.filename;
+  let multipart = streamedMultipart(upload, dependencies);
   if (upload.stage === 'queued' || !filename) {
-    const target = await dependencies.createUpload(upload.debateId, {
-      mime_type: upload.mimeType,
-      started_at_ms: startedAtMs,
-    });
-    await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
-    filename = target.filename;
-    await dependencies.markUploaded(upload.id, filename);
+    if (multipart) {
+      try {
+        await sendRemainingParts(upload, multipart, dependencies);
+        filename = multipart.filename;
+      } catch (error) {
+        // A geo-chat that has lost the multipart routes since the debate started. The recording
+        // is whole in the queue, so send it the old way rather than failing the upload.
+        if (!isMissingRouteError(error)) throw error;
+        multipart = null;
+        await dependencies.setMultipart?.(upload.id, null);
+        capture('debate_recording_upload_fallback', { debate_id: upload.debateId, reason: 'multipart_route_missing' });
+      }
+    }
+    if (!multipart) {
+      const target = await dependencies.createUpload(upload.debateId, {
+        mime_type: upload.mimeType,
+        started_at_ms: startedAtMs,
+      });
+      await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
+      filename = target.filename;
+    }
+    await dependencies.markUploaded(upload.id, filename!);
   }
 
-  await retryDebatePhaseBoundaryRequest(() =>
-    dependencies.completeUpload(upload.debateId, {
-      filename,
-      mime_type: upload.mimeType,
-      started_at_ms: startedAtMs,
-      ended_at_ms: endedAtMs,
-      duration_seconds: upload.durationSeconds,
-      byte_size: upload.byteSize,
-      width: upload.width,
-      height: upload.height,
-      framerate: upload.framerate,
-      video_bits_per_second: upload.videoBitsPerSecond,
-    })
-  );
+  try {
+    await retryDebatePhaseBoundaryRequest(() =>
+      dependencies.completeUpload(upload.debateId, {
+        filename: filename!,
+        mime_type: upload.mimeType,
+        started_at_ms: startedAtMs,
+        ended_at_ms: endedAtMs,
+        duration_seconds: upload.durationSeconds,
+        byte_size: upload.byteSize,
+        width: upload.width,
+        height: upload.height,
+        framerate: upload.framerate,
+        video_bits_per_second: upload.videoBitsPerSecond,
+        ...(multipart ? { multipart_upload_id: multipart.uploadId } : {}),
+      })
+    );
+  } catch (error) {
+    // The server listed the parts and something this client believed sent is not there. Forget
+    // what it believed, so the retry sends every part again instead of completing the same gap.
+    if (multipart && error instanceof GeoChatRequestError && error.code === 'recording_upload_incomplete') {
+      await dependencies.requeueParts?.(upload.id);
+      capture('debate_recording_parts_requeued', { debate_id: upload.debateId });
+    }
+    throw error;
+  }
   await dependencies.deleteUpload(upload.id);
+}
+
+/** The streamed upload to finish, when this row has one and the transport to finish it. */
+function streamedMultipart(
+  upload: DebateRecordingUpload,
+  dependencies: RecordingUploadDependencies
+): StreamedRecordingMultipart | null {
+  if (!upload.multipart || !dependencies.getPartUrls || !dependencies.putPart) return null;
+  return upload.multipart;
+}
+
+async function sendRemainingParts(
+  upload: DebateRecordingUpload,
+  multipart: StreamedRecordingMultipart,
+  dependencies: RecordingUploadDependencies
+) {
+  const progress = { ...multipart, uploadedPartNumbers: [...multipart.uploadedPartNumbers] };
+  await uploadRemainingParts(
+    upload.blob,
+    multipart,
+    {
+      getPartUrls: (partFilename, uploadId, partNumbers) =>
+        dependencies.getPartUrls!(upload.debateId, partFilename, uploadId, partNumbers),
+      putPart: dependencies.putPart!,
+    },
+    async (partNumber, uploadedBytes) => {
+      progress.uploadedPartNumbers = [...progress.uploadedPartNumbers, partNumber];
+      await dependencies.setMultipart?.(upload.id, progress);
+      dependencies.onPartsProgress?.(uploadedBytes);
+    }
+  );
+}
+
+/** Bytes of a queued recording already in storage, from the parts streamed during the debate. */
+export function streamedRecordingBytes(upload: DebateRecordingUpload): number {
+  const multipart = upload.multipart;
+  if (!multipart) return 0;
+  return multipart.uploadedPartNumbers.reduce((total, partNumber) => {
+    const range = partRange(partNumber, multipart.partSize, upload.byteSize);
+    return total + Math.max(0, range.end - range.start);
+  }, 0);
 }
 
 export function recordingUploadRetryDelay(attemptCount: number) {
@@ -117,6 +238,8 @@ export function DebateRecordingUploadCoordinator() {
   const [wakeAt, setWakeAt] = React.useState(() => Date.now());
   const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
   const [cancelTargetDebateId, setCancelTargetDebateId] = React.useState<string | null>(null);
+  // Which control opened the prompt, for analytics. A ref: it only rides along with the target.
+  const cancelSourceRef = React.useRef<RecordingCancelSource>('upload_banner');
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
@@ -142,6 +265,14 @@ export function DebateRecordingUploadCoordinator() {
     () => uploads.filter(upload => !isUploadCancelled(upload)),
     [isUploadCancelled, uploads]
   );
+  // The thank-you card carries the publish opt-out while it is on screen, so the banner doesn't
+  // draw a second control for the same debate (GEO-2773). It still speaks for that debate's
+  // upload: the card answers "will this be published?", the banner answers "how much is still
+  // going out, and can I close the tab yet?" — and that second question is about the whole queue,
+  // the thank-you debate included. Deriving the count from anything narrower is what made the
+  // banner disappear for the length of the thank-you period.
+  const cardOwnsPublishControl = Boolean(thankingDebate?.showsPublishControl);
+
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -203,6 +334,50 @@ export function DebateRecordingUploadCoordinator() {
     });
     return () => subscription.unsubscribe();
   }, [userId]);
+
+  // GEO-2955. A tab that died mid-debate left its recording in IndexedDB, chunk by chunk, with no
+  // queue row pointing at it. Adopt it once its debate can accept it; see
+  // `recoverOrphanedRecordingStreams` for what is recovered and what is discarded.
+  React.useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const recover = () =>
+      recoverOrphanedRecordingStreams(userId, {
+        getDebate: debateId => getDebate(debateId, getPrivyIdentityToken, accountKey),
+        hasQueuedUpload: async (streamUserId, debateId) => {
+          const queued = await getDebateRecordingUpload(debateRecordingUploadId(streamUserId, debateId));
+          return queued ? { multipartUploadId: queued.multipart?.uploadId ?? null } : null;
+        },
+        enqueue: async (stream, blob) => {
+          await enqueueDebateRecordingUpload({
+            userId: stream.userId,
+            debateId: stream.debateId,
+            blob,
+            mimeType: stream.mimeType,
+            startedAtMs: stream.startedAtMs,
+            endedAtMs: stream.lastChunkAtMs,
+            durationSeconds: Math.max(1, Math.round((stream.lastChunkAtMs - stream.startedAtMs) / 1_000)),
+            width: stream.width,
+            height: stream.height,
+            framerate: stream.framerate,
+            videoBitsPerSecond: stream.videoBitsPerSecond,
+            multipart: stream.multipart,
+          });
+        },
+        abortMultipart: (debateId, filename, uploadId) =>
+          abortLocalRecordingMultipart(debateId, { filename, upload_id: uploadId }, getPrivyIdentityToken, accountKey),
+      }).catch(error => console.warn('[DebateRecordingUploadCoordinator] recording recovery failed:', error));
+    void recover();
+    // A stream whose debate was still running is looked at again, as is one that only now went
+    // quiet long enough to count as orphaned.
+    const timer = window.setInterval(() => {
+      if (!cancelled) void recover();
+    }, RECORDING_STREAM_ORPHAN_AFTER_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [accountKey, getPrivyIdentityToken, userId]);
 
   // Recording persistence and cancellation can finish in either order at the phase
   // boundary. If a cancelled debate appears in IndexedDB afterward, keep it hidden, never start
@@ -291,6 +466,15 @@ export function DebateRecordingUploadCoordinator() {
         // Drop the local blob for failures no retry can fix (see the permanent codes above)
         // instead of leaving the banner up forever.
         if (isPermanentRecordingUploadError(error)) {
+          // The recording is dropped here and never retried, so this is the one place a lost upload
+          // can be counted. `recording_cancelled` is included: it is the opponent's cancellation
+          // reaching this device, which the canceller's own event does not see.
+          capture('debate_recording_upload_failed', {
+            debate_id: upload.debateId,
+            stage: attemptStage,
+            attempt_count: attemptCount + 1,
+            ...uploadErrorProperties(error),
+          });
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
@@ -299,6 +483,14 @@ export function DebateRecordingUploadCoordinator() {
           return;
         }
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
+        // Bounded by the backoff (5s doubling to 5 minutes), so one stuck upload cannot flood this.
+        capture('debate_recording_upload_retry_scheduled', {
+          debate_id: upload.debateId,
+          stage: attemptStage,
+          attempt_count: attemptCount + 1,
+          online: typeof navigator === 'undefined' || navigator.onLine,
+          ...uploadErrorProperties(error),
+        });
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,
           debateId: upload.debateId,
@@ -323,7 +515,17 @@ export function DebateRecordingUploadCoordinator() {
       });
   }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
-  const waiting = !online || (!activeUploadId && publishableUploads.every(upload => upload.nextAttemptAt > Date.now()));
+  // The upload in flight can be one already withdrawn — the cancellation lands while its request
+  // is still running — so an id alone doesn't mean the banner has anything to report as moving.
+  const uploadActive = activeUploadId !== null && publishableUploads.some(upload => upload.id === activeUploadId);
+  // Uploads run one at a time, so an upload in flight that isn't a publishable one means every
+  // recording left is queued behind it — waiting, whatever their backoff says. The backoff check
+  // only decides the case where nothing is uploading at all: then a recording past its next
+  // attempt is about to start, and one still backing off is not.
+  const waiting =
+    !online ||
+    (!uploadActive &&
+      (activeUploadId !== null || publishableUploads.every(upload => upload.nextAttemptAt > Date.now())));
   const latestFailedUpload = publishableUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
@@ -364,11 +566,63 @@ export function DebateRecordingUploadCoordinator() {
     thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
+  // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
+  // and still withdrawable — so it belongs to the banner only while the banner owns that action.
+  // While the card does, the banner has nothing left to say about a finished upload and falls back
+  // to reporting whatever else is still going out.
+  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
+  // Everything still on its way out of this browser, counted as debates rather than queue rows.
+  // The thank-you recording is counted before it reaches IndexedDB — persisting the blob takes a
+  // moment and the banner has to be up for the whole thank-you period, not from partway through.
+  const pendingUploadCount = publishableUploads.length + (thankingRecordingPending ? 1 : 0);
+  // The one pending recording has not reached the queue yet, so there is no queue state to
+  // describe — neither "uploading" nor "waiting" is true of it.
+  const preparingOnly = thankingRecordingPending && publishableUploads.length === 0;
+
+  // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
+  // layout effect for the same reason the room publishes its side in one: the control and the
+  // banner have to agree within a single paint at the countdown boundary, or one of them shows a
+  // state the other has already left.
+  // `cancelled` is what this knows and the room does not yet: the server has accepted the opt-out,
+  // whether or not the room's debate query has caught up. Without it the card has no way to tell
+  // "withdrawn" from "never recorded" until that refetch lands, and drops the row in between.
+  const thankingOptedOut =
+    normalizedThankingDebateId !== null &&
+    (cancelledDebateIds.has(normalizedThankingDebateId) || thankingDebate?.recordingCancelled === true);
+  const setPublishOptOutOffer = useSetPublishOptOutOffer();
+  React.useLayoutEffect(() => {
+    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy, cancelled: thankingOptedOut });
+  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer, thankingOptedOut]);
+  React.useEffect(
+    () => () => setPublishOptOutOffer({ debateId: null, busy: false, cancelled: false }),
+    [setPublishOptOutOffer]
+  );
+
+  // And take up what the card asks for. It opens the same confirmation the Cancel button did —
+  // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
+  // accident than the button it replaces (GEO-2700 makes that expensive).
+  const publishOptOutRequest = usePublishOptOutRequest();
+  const setPublishOptOutRequest = useSetPublishOptOutRequest();
+  React.useEffect(() => {
+    if (!publishOptOutRequest) return;
+    // A request for some other debate is one whose moment has passed — the viewer has left that
+    // thank-you screen — so it is dropped rather than acted on.
+    if (normalizeDebateId(publishOptOutRequest) !== normalizedThankingDebateId) {
+      setPublishOptOutRequest(null);
+      return;
+    }
+    // Otherwise held until there is something to act on. The queue is read from IndexedDB, so
+    // `cancellableDebateId` can still be null on the render the request arrives in; consuming it
+    // there would swallow the flick and leave the switch off over a recording still uploading.
+    if (cancellableDebateId === null) return;
+    setPublishOptOutRequest(null);
+    cancelSourceRef.current = 'thanking_toggle';
+    setCancelTargetDebateId(cancellableDebateId);
+  }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
+
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
-  const { data: activity } = useDebateActivity(
-    publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending
-  );
+  const { data: activity } = useDebateActivity(pendingUploadCount > 0 || thankingUploadFinished);
   const activityDebateId = activity?.debate ? normalizeDebateId(activity.debate.id) : null;
   const inLiveDebate = Boolean(
     activity?.debate &&
@@ -380,19 +634,36 @@ export function DebateRecordingUploadCoordinator() {
   const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
   const transferredBytes = publishableUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
-    if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
-    return transferred;
+    // A streamed recording arrives with most of its bytes already out, and a multipart attempt
+    // reports whole parts; count whichever is further along.
+    const streamed = streamedRecordingBytes(upload);
+    const live = uploadProgress?.id === upload.id ? uploadProgress.loaded : 0;
+    return transferred + Math.min(Math.max(streamed, live), upload.byteSize);
   }, 0);
   // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
   // stuck, so fall back to the plain in-progress copy.
+  //
+  // A recording still being written to IndexedDB has no byte size yet, so while one is pending the
+  // queue is not the whole of what the bar is counting and any figure off it is already wrong.
+  // Indeterminate until its row lands, rather than a percentage that drops when it does.
   const uploadPercent =
-    queuedBytes > 0 && transferredBytes < queuedBytes ? Math.round((transferredBytes / queuedBytes) * 100) : null;
+    thankingRecordingPending || queuedBytes === 0 || transferredBytes >= queuedBytes
+      ? null
+      : Math.round((transferredBytes / queuedBytes) * 100);
 
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
+    // Backing out is worth counting beside the cancellations: it is how often the prompt talked
+    // someone out of it, or was opened by accident.
+    if (cancelTargetDebateId) {
+      capture('debate_recording_upload_cancel_dismissed', {
+        debate_id: cancelTargetDebateId,
+        cancel_source: cancelSourceRef.current,
+      });
+    }
     setCancelTargetDebateId(null);
     setCancelError(null);
-  }, [cancelBusy]);
+  }, [cancelBusy, cancelTargetDebateId]);
 
   const confirmCancel = React.useCallback(async () => {
     if (!cancelTargetDebateId) return;
@@ -400,6 +671,7 @@ export function DebateRecordingUploadCoordinator() {
     setCancelBusy(true);
     setCancelError(null);
     try {
+      let alreadyCancelled = false;
       try {
         await retryDebatePhaseBoundaryRequest(() =>
           cancelDebateRecording(cancelTargetDebateId, getPrivyIdentityToken, accountKey)
@@ -409,7 +681,17 @@ export function DebateRecordingUploadCoordinator() {
         const terminal =
           error instanceof GeoChatRequestError && (error.code === 'recording_cancelled' || error.status === 404);
         if (!terminal) throw error;
+        alreadyCancelled = true;
       }
+      // Sent once the server has accepted the cancellation, before the best-effort local cleanup,
+      // so a storage failure below cannot lose a cancellation that did happen.
+      capture('debate_recording_upload_cancelled', {
+        debate_id: cancelTargetDebateId,
+        cancel_source: cancelSourceRef.current,
+        // Whether every byte was already out: cancelling then withdraws a finished upload.
+        upload_finished: uploadedDebateIds.has(normalizedTargetDebateId),
+        already_cancelled: alreadyCancelled,
+      });
       if (mountedRef.current) {
         // The server opt-out is authoritative even if this device cannot clean IndexedDB. Mark it
         // before local cleanup so a storage failure can never make Cancel available again.
@@ -424,6 +706,17 @@ export function DebateRecordingUploadCoordinator() {
         // Cancelling ends the debate and the rematch it anchored. Until activity says so the
         // viewer still reads as mid-flow, which greys out every Debate control on every surface.
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      }
+      // The server has refused publication already; this only stops the parts streamed during
+      // the debate from sitting in storage until R2's own 7-day cleanup. Best effort.
+      for (const upload of uploads) {
+        if (!isSameDebateId(upload.debateId, cancelTargetDebateId) || !upload.multipart) continue;
+        void abortLocalRecordingMultipart(
+          upload.debateId,
+          { filename: upload.multipart.filename, upload_id: upload.multipart.uploadId },
+          getPrivyIdentityToken,
+          accountKey
+        ).catch(() => undefined);
       }
       try {
         await Promise.all(
@@ -442,7 +735,7 @@ export function DebateRecordingUploadCoordinator() {
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploads]);
+  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploadedDebateIds, uploads]);
 
   // Close the prompt only when there is nothing left to cancel. The upload finishing mid-prompt
   // must not close it, since the backend still cancels an uploaded recording.
@@ -457,7 +750,15 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
-  const bannerVisible = publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending;
+  const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
+  // The banner sits on the bottom edge of the viewport across its full width, so anything else
+  // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
+  // clear it by exactly the banner's height, which both read from `DEBATE_UPLOAD_BANNER_HEIGHT_PX`.
+  //
+  // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
+  // same two conditions that decide whether the banner actually paints.
+  useAppBottomInset('debate-upload-banner', DEBATE_UPLOAD_BANNER_HEIGHT_PX, bannerVisible && !inLiveDebate);
+
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
   }
@@ -466,14 +767,17 @@ export function DebateRecordingUploadCoordinator() {
     <>
       {bannerVisible && (
         <DebateRecordingUploadBanner
-          count={publishableUploads.length}
-          thankingRecordingPending={thankingRecordingPending}
-          thankingUploadFinished={thankingUploadFinished}
+          count={pendingUploadCount}
+          preparingOnly={preparingOnly}
+          thankingUploadFinished={bannerThankingUploadFinished}
           percent={uploadPercent}
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
-          canCancel={cancellableDebateId !== null && !cancelPromptOpen}
-          onCancel={() => setCancelTargetDebateId(cancellableDebateId)}
+          canCancel={!cardOwnsPublishControl && cancellableDebateId !== null && !cancelPromptOpen}
+          onCancel={() => {
+            cancelSourceRef.current = 'upload_banner';
+            setCancelTargetDebateId(cancellableDebateId);
+          }}
         />
       )}
       {cancelPromptOpen && (
@@ -488,9 +792,12 @@ export function DebateRecordingUploadCoordinator() {
   );
 }
 
+/** The upload banner's height, and what it claims from the bottom of the viewport while it shows. */
+export const DEBATE_UPLOAD_BANNER_HEIGHT_PX = 40;
+
 export function DebateRecordingUploadBanner({
   count,
-  thankingRecordingPending = false,
+  preparingOnly = false,
   thankingUploadFinished = false,
   percent = null,
   waitingReason,
@@ -498,8 +805,10 @@ export function DebateRecordingUploadBanner({
   canCancel,
   onCancel,
 }: {
+  /** Debates still on their way out of this browser, the one being prepared locally included. */
   count: number;
-  thankingRecordingPending?: boolean;
+  /** The only thing pending is a recording still being written to IndexedDB — no bytes in flight. */
+  preparingOnly?: boolean;
   thankingUploadFinished?: boolean;
   percent?: number | null;
   waitingReason: DebateRecordingUploadWaitingReason;
@@ -509,11 +818,13 @@ export function DebateRecordingUploadBanner({
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
   let message: string;
-  if (thankingRecordingPending) {
-    message = 'Preparing debate upload';
-  } else if (thankingUploadFinished) {
-    // The actionable thank-you debate takes priority while unrelated recordings keep uploading.
+  if (thankingUploadFinished && count === 0) {
+    // Nothing left on the wire, and the thank-you debate can still be withdrawn — so the line
+    // belongs to the Cancel action beside it. A queue that is still moving outranks it: that is
+    // the one thing on screen telling the user this tab still has work to finish.
     message = 'Debate uploaded';
+  } else if (preparingOnly) {
+    message = 'Preparing debate upload';
   } else if (waitingReason === 'offline') {
     message = `Waiting to upload ${label} — waiting for a connection`;
   } else if (waitingReason === 'retry' && errorMessage) {
@@ -526,42 +837,73 @@ export function DebateRecordingUploadBanner({
     message = `Uploading & publishing ${label}`;
   }
 
-  const showProgress = thankingRecordingPending || (!thankingUploadFinished && waitingReason === null);
-  const progressPercent = thankingRecordingPending ? null : percent;
-  const progressLabel = thankingRecordingPending ? message : `Uploading and publishing ${label}`;
+  // A bar for work in progress, so it tracks the queue rather than the message: "Debate uploaded"
+  // over a queue that is still moving gets one, and an empty queue never does whatever the message
+  // says. Preparing is the exception — no bytes are in flight yet, but a recording is on its way
+  // into the queue, which is exactly what an indeterminate bar is for.
+  const showProgress = preparingOnly || (waitingReason === null && count > 0);
+  const progressLabel = preparingOnly ? message : `Uploading and publishing ${label}`;
+  // Uploads only make progress while this tab is open. Closing it doesn't lose the recording — the
+  // queue is in IndexedDB and resumes on the next visit — but it does park it indefinitely, and
+  // the debate stays unpublished until then. The warning follows the count and nothing else,
+  // "Debate uploaded" included: that line speaks for the one debate beside the Cancel action,
+  // while the queue behind it can still be busy.
+  const showKeepBrowserOpen = count > 0;
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center justify-center bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
+      style={{ height: DEBATE_UPLOAD_BANNER_HEIGHT_PX }}
     >
-      <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
-        <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
+      {/* Figma centers the progress bar on the viewport with the message and the warning 50px either
+          side of it. Equal `1fr` side columns keep the bar dead centre whatever the two labels
+          measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". A phone
+          can't afford that: at 320px each side column is 112px, narrower than either label, so at
+          `md` (this app's breakpoints are max-width: 767px and below) it drops to a plain row where
+          the message truncates and the warning and Cancel stay whole. With no bar there is nothing
+          to centre on, so the line and its actions just sit together. */}
+      <div
+        className={cx(
+          'max-w-full min-w-0 items-center justify-center gap-[50px] md:gap-2',
+          showProgress ? 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:flex md:w-auto' : 'flex'
+        )}
+      >
+        {/* A grid item sizes to its content and spills out of its track, so `max-w-full` holds each
+            side to its column for `truncate` to act on. */}
+        <span className={cx('max-w-full min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
         {showProgress && (
           <div
             role="progressbar"
             aria-label={progressLabel}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={progressPercent ?? undefined}
-            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
+            aria-valuenow={percent ?? undefined}
+            className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-04"
           >
             <div
-              className={`h-full rounded-full bg-text transition-[width] ${progressPercent === null ? 'w-1/3 animate-pulse' : ''}`}
-              style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
+              className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={percent === null ? undefined : { width: `${percent}%` }}
             />
           </div>
         )}
-        {canCancel && (
-          <SmallButton
-            type="button"
-            variant="ghost"
-            onClick={onCancel}
-            className="shrink-0 bg-transparent! hover:bg-bg!"
+        {(showKeepBrowserOpen || canCancel) && (
+          <div
+            className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}
           >
-            Cancel
-          </SmallButton>
+            {showKeepBrowserOpen && <span className="min-w-0 truncate">Keep browser open</span>}
+            {canCancel && (
+              <SmallButton
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none focus-visible:border-white focus-visible:shadow-none"
+              >
+                Cancel
+              </SmallButton>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -652,6 +994,17 @@ function recordingUploadDependencies(
     completeUpload: (debateId, request) =>
       completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
+    getPartUrls: (debateId, filename, uploadId, partNumbers) =>
+      getLocalRecordingPartUrls(
+        debateId,
+        { filename, upload_id: uploadId, part_numbers: partNumbers },
+        getPrivyIdentityToken,
+        accountKey
+      ),
+    putPart: putRecordingPart,
+    setMultipart: setDebateRecordingMultipart,
+    requeueParts: requeueDebateRecordingParts,
+    onPartsProgress: onProgress,
   };
 }
 

@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 
@@ -22,6 +23,8 @@ function FilterIcon() {
 }
 
 export type FilterGroup = {
+  /** Property-and-direction identity (see filterGroupKey) — the key for React lists, mode lookups, and clears. */
+  groupKey: string;
   columnId: string;
   columnName: string | null;
   filters: { filter: Filter; originalIndex: number }[];
@@ -30,12 +33,18 @@ export type FilterGroup = {
 export function groupFilters(filters: Filter[]): FilterGroup[] {
   const groups = new Map<string, FilterGroup>();
 
+  // Grouped by property AND direction (filterGroupKey), mirroring the
+  // where-builder: a backlink filter renders as its own pill rather than
+  // sitting inside a forward group whose Any/All toggle does not govern it —
+  // and clearing one group must not delete the other direction's filters.
   filters.forEach((f, index) => {
-    const existing = groups.get(f.columnId);
+    const key = filterGroupKey(f);
+    const existing = groups.get(key);
     if (existing) {
       existing.filters.push({ filter: f, originalIndex: index });
     } else {
-      groups.set(f.columnId, {
+      groups.set(key, {
+        groupKey: key,
         columnId: f.columnId,
         columnName: f.columnName,
         filters: [{ filter: f, originalIndex: index }],

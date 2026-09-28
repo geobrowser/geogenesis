@@ -1,20 +1,14 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { Effect } from 'effect';
-
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
-import { getEntityResponders } from '~/core/io/queries';
 import {
   type ActiveResponseDirection,
   type ResponseKind,
   type ResponseObjectType,
-  entityRespondersQueryKey,
 } from '~/core/responses/entity-response';
-import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { useEntityResponders } from '~/core/responses/use-entity-responders';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 
@@ -35,21 +29,16 @@ export function ClaimResponderAvatars({
   viewerSpaceId?: string | null;
   optimisticViewerResponse?: ActiveResponseDirection | null;
 }) {
-  const responseBatch = useClaimResponseBatchState();
-  const { data: responders } = useQuery({
-    queryKey: entityRespondersQueryKey(entityId, spaceId, objectType, responseKind),
-    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
-    enabled: !responseBatch.managed,
-    staleTime: 30_000,
+  const { responders, queriesEnabled } = useEntityResponders({
+    entityId,
+    spaceId,
+    objectType,
+    responseKind,
+    viewerSpaceId,
+    optimisticViewerResponse,
   });
 
-  const responderSpaceIds = React.useMemo(() => {
-    const indexedResponderIds = responders?.map(v => v.userId) ?? [];
-    if (optimisticViewerResponse === undefined || !viewerSpaceId) return indexedResponderIds;
-
-    const otherResponderIds = indexedResponderIds.filter(id => id !== viewerSpaceId);
-    return optimisticViewerResponse === null ? otherResponderIds : [viewerSpaceId, ...otherResponderIds];
-  }, [optimisticViewerResponse, responders, viewerSpaceId]);
+  const responderSpaceIds = React.useMemo(() => responders.map(responder => responder.userId), [responders]);
 
   // Batched claim views render their avatars with queries disabled, relying on a cache primed
   // before this response existed — so nothing there would ever fetch the viewer's own profile.
@@ -67,7 +56,7 @@ export function ClaimResponderAvatars({
       submitterSpaceIds={responderSpaceIds}
       totalCount={Math.max(totalResponders, responderSpaceIds.length)}
       size={12}
-      queriesEnabled={!responseBatch.managed}
+      queriesEnabled={queriesEnabled}
     />
   );
 }
