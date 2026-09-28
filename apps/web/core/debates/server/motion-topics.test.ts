@@ -1,17 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type MotionTopicsPageFetcher, loadMotionTopics } from './motion-topics';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+
+import { loadMotionTopics } from './motion-topics';
+import type { RelationTargetsPageFetcher } from './relation-targets';
 
 const CLAIM = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
 const TOPIC = 'dddddddddddddddddddddddddddddddd';
 
-/** A connection served one page per call, in order. */
+/** A connection served one page per call, in order; items are the topic ids. */
 function pages(...served: Array<{ items: string[]; endCursor: string | null; hasNextPage: boolean }>) {
-  const fetchPage = vi.fn<MotionTopicsPageFetcher>(async () => {
+  const fetchPage = vi.fn<RelationTargetsPageFetcher>(async () => {
     const page = served.shift();
     if (!page) throw new Error('fetched past the last page');
-    return page;
+    return {
+      ...page,
+      items: page.items.map(toEntityId => ({ fromEntityId: CLAIM, typeId: TOPICS_PROPERTY_ID, toEntityId })),
+    };
   });
   return fetchPage;
 }
@@ -25,7 +31,10 @@ describe('loadMotionTopics', () => {
     const fetchPage = pages({ items: [TOPIC], endCursor: null, hasNextPage: false });
 
     await expect(loadMotionTopics(CLAIM, SPACE, fetchPage)).resolves.toEqual([{ id: TOPIC, name: null }]);
-    expect(fetchPage).toHaveBeenCalledWith(CLAIM, SPACE, undefined);
+    expect(fetchPage).toHaveBeenCalledWith(
+      { fromEntityIds: [CLAIM], typeIds: [TOPICS_PROPERTY_ID], spaceId: SPACE },
+      undefined
+    );
   });
 
   // The Debate's topics are written once, so a read that stopped at the first page would publish a
@@ -43,7 +52,7 @@ describe('loadMotionTopics', () => {
       { id: second, name: null },
       { id: third, name: null },
     ]);
-    expect(fetchPage.mock.calls.map(([, , after]) => after)).toEqual([undefined, 'c1', 'c2']);
+    expect(fetchPage.mock.calls.map(([, after]) => after)).toEqual([undefined, 'c1', 'c2']);
   });
 
   it('returns no topics when the claim has none', async () => {
@@ -61,7 +70,7 @@ describe('loadMotionTopics', () => {
 
   // Topics are secondary: a failed read must not cost the debate its publish.
   it('returns no topics when a page fails', async () => {
-    const fetchPage = vi.fn<MotionTopicsPageFetcher>(async () => {
+    const fetchPage = vi.fn<RelationTargetsPageFetcher>(async () => {
       throw new Error('graph down');
     });
 
