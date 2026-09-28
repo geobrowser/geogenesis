@@ -82,6 +82,38 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
   });
 
+  it("mirrors the debated claim's topics onto the Debate, one relation per topic", () => {
+    const TOPIC_A = 'dddddddddddddddddddddddddddddddd';
+    const TOPIC_B = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claimTopics: [
+          { id: TOPIC_A, name: 'Foreign policy' },
+          { id: TOPIC_B, name: 'Iran' },
+          // Same entity as TOPIC_B, dashless: one topic, one relation.
+          { id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', name: 'Iran' },
+        ],
+      }),
+      { createEntityId: idFactory() }
+    );
+
+    const debateTopics = draft.relations.filter(
+      r => r.type.id === TOPICS_PROPERTY_ID && r.fromEntity.id === draft.debateEntityId
+    );
+    expect(debateTopics.map(r => [r.toEntity.id, r.toEntity.name])).toEqual([
+      [TOPIC_A, 'Foreign policy'],
+      [TOPIC_B, 'Iran'],
+    ]);
+    expect(debateTopics.every(r => r.spaceId === SPACE)).toBe(true);
+  });
+
+  it('writes no Topics on the Debate when the debated claim has none', () => {
+    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory() });
+    expect(
+      draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID && r.fromEntity.id === draft.debateEntityId)
+    ).toEqual([]);
+  });
+
   it('names participants in slot order regardless of input order', () => {
     const draft = buildDebatePublishDraft(
       baseInput({
