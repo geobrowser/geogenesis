@@ -74,7 +74,9 @@ function RequestsTabBody({
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  // Through the same expiry filter as the received side, so a lapsed request leaves at its expiry
+  // rather than sitting on an "Expired" card until the server says so.
+  const outbound = useLiveRequest(requestsQuery.data?.outbound ?? activity?.outbound_request);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),

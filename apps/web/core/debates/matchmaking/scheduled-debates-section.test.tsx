@@ -65,8 +65,9 @@ const { ScheduledDebatesSection, formatDebateSlot, useScheduledContent } = await
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
   status: 'pending',
-  scheduled_start_at: '2026-09-24T13:00:00Z',
-  scheduled_end_at: '2026-09-24T13:30:00Z',
+  // Far out: a request expires when its start arrives, and these are about everything else.
+  scheduled_start_at: '2099-09-24T13:00:00Z',
+  scheduled_end_at: '2099-09-24T13:30:00Z',
   invited_by_user_id: 'user-them',
   created_by_admin: false,
   proposed_by_user_id: 'user-them',
@@ -146,10 +147,27 @@ describe('answering in the tab', () => {
     expect(mocks.respond.mock.calls[0][0]).toEqual({ requestId: 'request-1', accepted: true });
   });
 
+  it('says it expires when it starts', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByText('Waiting on your answer · Expires at start')).toBeInTheDocument();
+  });
+
+  it('counts down in the last hour before it expires', () => {
+    const soon = new Date(Date.now() + 12 * 60_000 - 1_000).toISOString();
+    setup({
+      answerable: [
+        request({ scheduled_start_at: soon, scheduled_end_at: new Date(Date.now() + 42 * 60_000).toISOString() }),
+      ],
+    });
+
+    expect(screen.getByText('Waiting on your answer · Expires in 12m')).toBeInTheDocument();
+  });
+
   it('offers no answer on one the viewer is not holding up', () => {
     setup({ answerable: [request({ viewer_must_answer: false })] });
 
-    expect(screen.getByText('Waiting on their answer')).toBeInTheDocument();
+    expect(screen.getByText('Waiting on their answer · Expires at start')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
@@ -288,6 +306,17 @@ describe('pairing a room with the request that booked it', () => {
     const { result } = renderHook(() => useScheduledContent(true));
 
     expect(result.current.upcoming[0].opponentUserId).toBeNull();
+  });
+
+  // geo-chat's sweeper expires an unanswered request once its start arrives, but only every minute.
+  it('drops a pending request whose start has passed', () => {
+    mocks.requests = [
+      request({ scheduled_start_at: '2020-01-01T13:00:00Z', scheduled_end_at: '2020-01-01T13:30:00Z' }),
+    ];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.answerable).toHaveLength(0);
   });
 
   it('keeps an accepted request out of the answerable list', () => {

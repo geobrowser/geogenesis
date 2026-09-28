@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { isOpenScheduledRequest } from '~/core/debates/rooms/scheduled-awaiting';
+import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
@@ -17,9 +18,11 @@ import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
+import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
+import { useRequestCountdown } from './use-request-countdown';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
@@ -66,16 +69,19 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       {(answerable.length > 0 || requestsError) && (
         <Section label="Scheduled">
           {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
-          {answerable.map(request => (
-            <ScheduledRow
-              key={request.request_id}
-              request={request}
-              opponent={lookUp(opponentOf(request, viewerId))}
-              viewer={viewer}
-              busy={respond.isPending}
-              onAnswer={answer}
-            />
-          ))}
+          {/* The instant cards' list, so one that expires folds away the way theirs do. */}
+          <HubCardList>
+            {answerable.map(request => (
+              <ScheduledRow
+                key={request.request_id}
+                request={request}
+                opponent={lookUp(opponentOf(request, viewerId))}
+                viewer={viewer}
+                busy={respond.isPending}
+                onAnswer={answer}
+              />
+            ))}
+          </HubCardList>
           {conflict && (
             <Text as="p" variant="footnote" color="red-01">
               {conflict}
@@ -111,7 +117,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
 
   const rows = requests.data?.requests;
 
-  const answerable = React.useMemo(() => (rows ?? []).filter(isOpenScheduledRequest), [rows]);
+  const answerable = useOpenScheduledRequests(rows);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
   const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
@@ -213,19 +219,25 @@ function ScheduledRow({
   viewer,
   busy,
   onAnswer,
+  ref,
 }: {
+  /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
+  ref?: React.Ref<HTMLElement>;
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
+  const expiry = useScheduledExpiry(request.scheduled_start_at);
+
   return (
     <ScheduleCard
+      ref={ref}
       opponent={opponent}
       viewer={viewer}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
-      status={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
+      status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
       actions={
         request.viewer_must_answer && (
           // Decline first, Accept primary on the right: the order every other request card uses.
@@ -242,6 +254,17 @@ function ScheduledRow({
     />
   );
 }
+
+/**
+ * When an unanswered request lapses: at its start. Counted down in the final hour, where the
+ * instant cards' "Expires in 12m" reads naturally; before that, a minute count days long would not.
+ */
+function useScheduledExpiry(startIso: string) {
+  const countdown = useRequestCountdown(startIso);
+  return countdown.remainingMs <= HOUR_MS ? countdown.label : 'Expires at start';
+}
+
+const HOUR_MS = 60 * 60_000;
 
 /** The hub's pill, as a full-width link. `HubPillButton` renders a button, which this cannot be. */
 const JOIN_PILL = hubPillClassName('primary', 'w-full');
@@ -261,7 +284,9 @@ function ScheduleCard({
   status,
   urgent = false,
   actions,
+  ref,
 }: {
+  ref?: React.Ref<HTMLElement>;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
   when: string;
@@ -270,7 +295,11 @@ function ScheduleCard({
   actions?: React.ReactNode;
 }) {
   return (
-    <article className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
+    <motion.article
+      ref={ref}
+      {...hubCardMotion}
+      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+    >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
       <div className="flex items-start gap-2">
@@ -290,7 +319,7 @@ function ScheduleCard({
       <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />
 
       {actions}
-    </article>
+    </motion.article>
   );
 }
 

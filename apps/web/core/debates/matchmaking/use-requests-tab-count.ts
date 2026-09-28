@@ -3,7 +3,7 @@
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import type { DebateActivity, DebateRequestsResponse } from '../api';
-import { isOpenScheduledRequest, useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
+import { useOpenScheduledRequests, useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -31,6 +31,7 @@ export function useRequestsTabCount({
   const schedulingEnabled = usePeerAvailabilityEnabled();
   const scheduled = useScheduledDebates(schedulingEnabled && authenticated);
   const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
+  const openScheduled = useOpenScheduledRequests(scheduled.data?.requests);
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
   // `??`, as every surface that draws the sent request derives it, so the count matches the card.
@@ -41,10 +42,7 @@ export function useRequestsTabCount({
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
-  const scheduledPending =
-    schedulingEnabled && scheduled.data
-      ? scheduled.data.requests.filter(isOpenScheduledRequest).length
-      : scheduledAwaiting;
+  const scheduledPending = schedulingEnabled && scheduled.data ? openScheduled.length : scheduledAwaiting;
 
   return instantIncoming + (outbound ? 1 : 0) + (challenge ? 1 : 0) + scheduledPending;
 }

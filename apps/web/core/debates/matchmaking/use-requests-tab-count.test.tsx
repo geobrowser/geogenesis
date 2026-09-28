@@ -6,7 +6,8 @@ import type { DebateActivity, DebateRequestsResponse } from '../api';
 
 const mocks = vi.hoisted(() => ({
   schedulingEnabled: true,
-  scheduled: undefined as { requests: { status: string; room_id: string | null }[] } | undefined,
+  scheduled: undefined as
+    { requests: { status: string; room_id: string | null; scheduled_start_at?: string }[] } | undefined,
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -17,9 +18,11 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: mocks.scheduled }),
 }));
 
-// Expiry has its own suite; here every request handed in is live.
+// Expiry has its own suite. This stands in with the same rule: a finite past expiry is dropped, and
+// an unparseable one is kept.
 vi.mock('./use-request-countdown', () => ({
-  useUnexpiredRequests: <T,>(requests: T[]) => requests,
+  useUnexpiredRequests: <T extends { expires_at: string }>(requests: T[]) =>
+    requests.filter(request => !(new Date(request.expires_at).getTime() <= Date.now())),
   useLiveRequest: <T extends { status: string }>(request: T | null | undefined) =>
     request?.status === 'pending' ? request : null,
 }));
@@ -83,6 +86,18 @@ describe('the Requests tab count', () => {
     };
 
     expect(count({ activity: { scheduled_awaiting_answer_count: 1 } })).toBe(2);
+  });
+
+  // The list drops these at their start, so the badge has to as well or the two disagree.
+  it('stops counting a scheduled request once its start has passed', () => {
+    mocks.scheduled = {
+      requests: [
+        { status: 'pending', room_id: null, scheduled_start_at: '2020-01-01T13:00:00Z' },
+        { status: 'pending', room_id: null, scheduled_start_at: '2099-01-01T13:00:00Z' },
+      ],
+    };
+
+    expect(count({})).toBe(1);
   });
 
   it("falls back to activity's awaiting count until the scheduled list lands", () => {
