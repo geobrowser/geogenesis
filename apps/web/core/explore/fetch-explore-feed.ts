@@ -4,10 +4,11 @@ import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
-import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
@@ -33,6 +34,8 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import type { ExploreCompleteIndexNode } from './explore-index-selection';
+import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
@@ -68,13 +71,14 @@ export type ExploreFeedResult = {
 /**
  * One disjoint branch of a contextual feed's complete population.
  *
- * Topic feeds use separate direct-entity and Debate branches because the generic predicate's OR
- * across those relation shapes is much slower. Each branch must include every entity that belongs
- * to the feed for its supplied types; the results are merged and ranked here.
+ * Each scope must include every entity that belongs to the feed for its supplied types; the
+ * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
  */
 export type ExploreCompletePopulationScope = {
   typeIds: readonly string[];
   entityFilter: EntityFilter;
+  /** Optional relation entry point. Source entities still satisfy the full feed predicate. */
+  relationFilter?: RelationFilter;
 };
 
 // Entities we never want to surface in any feed.
@@ -150,18 +154,6 @@ type ExploreEntitiesPageResponse = {
 
 type EntitiesConnectionShape = {
   nodes?: unknown[];
-  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-} | null;
-
-export type ExploreCompleteIndexNode = {
-  id?: string | null;
-  typeIds?: Array<string | null> | null;
-  rankingScore?: string | number | null;
-  createdAt?: string | number | null;
-};
-
-type CompleteIndexConnection = {
-  nodes?: ExploreCompleteIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -310,45 +302,57 @@ async function fetchExploreEntitiesPage(args: {
 
 const COMPLETE_INDEX_PAGE_SIZE = 500;
 
-async function fetchCompleteIndexScope(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  entityFilter: EntityFilter;
-}): Promise<ExploreCompleteIndexNode[]> {
-  const rows: ExploreCompleteIndexNode[] = [];
-  let after: string | null = null;
+async function fetchCompleteIndexScope(
+  args: ExploreCompletePopulationScope & {
+    spaceIds: string[];
+    time: ExploreTime;
+    requireName?: boolean;
+    requireDebateTagOnClaims?: boolean;
+  }
+): Promise<ExploreCompleteIndexNode[]> {
+  const filter = buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: Boolean(args.relationFilter) });
 
-  while (true) {
-    const page: CompleteIndexConnection = await Effect.runPromise(
+  // Both entry points exhaust the same cursor contract. A malformed cursor must reject the
+  // population promise (and evict it from the cache), never cache a partial count or loop forever.
+  return collectCursorPages<ExploreCompleteIndexNode>(async after => {
+    if (args.relationFilter) {
+      const page = await Effect.runPromise(
+        graphql({
+          query: exploreRelationIndexDocument,
+          decoder: response => response.relationsConnection ?? null,
+          variables: {
+            first: COMPLETE_INDEX_PAGE_SIZE,
+            after: after ?? null,
+            filter: { and: [args.relationFilter, { fromEntity: filter }] },
+          },
+        })
+      );
+      return {
+        items: (page?.nodes ?? []).flatMap(node => (node?.fromEntity ? [node.fromEntity] : [])),
+        endCursor: page?.pageInfo?.endCursor ?? null,
+        hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+      };
+    }
+
+    const page = await Effect.runPromise(
       graphql({
         query: exploreCompleteIndexDocument,
-        decoder: (data: { entitiesConnection?: CompleteIndexConnection }) => data.entitiesConnection ?? null,
+        decoder: response => response.entitiesConnection ?? null,
         variables: {
           limit: COMPLETE_INDEX_PAGE_SIZE,
-          after,
-          filter: buildExploreFeedFilter({
-            spaceIds: args.spaceIds,
-            time: args.time,
-            typeIds: args.typeIds,
-            requireName: args.requireName,
-            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-            entityFilter: args.entityFilter,
-          }),
+          after: after ?? null,
+          filter,
           spaceIds: { in: args.spaceIds },
           typeIds: { in: [...args.typeIds] },
         },
       })
     );
-
-    rows.push(...(page?.nodes ?? []));
-    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
-    after = page.pageInfo.endCursor;
-  }
-
-  return rows;
+    return {
+      items: page?.nodes ?? [],
+      endCursor: page?.pageInfo?.endCursor ?? null,
+      hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+    };
+  });
 }
 
 function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
@@ -405,6 +409,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
           requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           entityFilter: scope.entityFilter,
+          relationFilter: scope.relationFilter,
         })
       )
   );

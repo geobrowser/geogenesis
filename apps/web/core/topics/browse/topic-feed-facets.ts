@@ -1,10 +1,6 @@
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-
 import { Effect } from 'effect';
-import { parse } from 'graphql';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { DEBATE_CLAIMS_PROPERTY_ID } from '~/core/debates/ontology';
 import { buildExploreFeedFilter, fetchCompleteExplorePopulationIndex } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
@@ -12,7 +8,7 @@ import { getEntityNames } from '~/core/io/queries';
 import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
-import { topicFeedPopulationScopes } from './topic-feed-filter';
+import { topicFeedFilter, topicFeedPopulationScopes } from './topic-feed-filter';
 import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
@@ -25,62 +21,6 @@ type TopicFacetArgs = {
   signal?: AbortSignal;
 };
 
-type DebateTopicNode = {
-  id?: string | null;
-  relationsList?: Array<{
-    toEntity?: {
-      relationsList?: Array<{ toEntity?: { id?: string | null } | null } | null> | null;
-    } | null;
-  } | null> | null;
-} | null;
-
-type DebateTopicsResponse = {
-  entitiesConnection?: {
-    nodes?: DebateTopicNode[] | null;
-    pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
-  } | null;
-};
-
-const DEBATE_TOPICS_SOURCE = /* GraphQL */ `
-  query TopicFeedDebateTopics(
-    $filter: EntityFilter!
-    $first: Int!
-    $after: Cursor
-    $debateClaimsPropertyId: UUID!
-    $topicsPropertyId: UUID!
-  ) {
-    entitiesConnection(filter: $filter, first: $first, after: $after) {
-      nodes {
-        id
-        relationsList(first: 100, filter: { typeId: { is: $debateClaimsPropertyId } }) {
-          toEntity {
-            relationsList(first: 1000, filter: { typeId: { is: $topicsPropertyId } }) {
-              toEntity {
-                id
-              }
-            }
-          }
-        }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-`;
-
-export const topicFeedDebateTopicsDocument = parse(DEBATE_TOPICS_SOURCE) as TypedDocumentNode<
-  DebateTopicsResponse,
-  {
-    filter: EntityFilter;
-    first: number;
-    after?: string;
-    debateClaimsPropertyId: string;
-    topicsPropertyId: string;
-  }
->;
-
 function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entityFilter: EntityFilter) {
   return buildExploreFeedFilter({
     spaceIds,
@@ -90,46 +30,6 @@ function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entity
     includeEntityScopeInFilter: true,
     entityFilter,
   });
-}
-
-async function fetchDebateTopicCounts(filter: EntityFilter, signal?: AbortSignal) {
-  const counts = new Map<string, number>();
-  let after: string | undefined;
-
-  while (true) {
-    const page = await Effect.runPromise(
-      graphql({
-        query: topicFeedDebateTopicsDocument,
-        decoder: (response: DebateTopicsResponse) => response.entitiesConnection ?? null,
-        variables: {
-          filter,
-          first: 500,
-          after,
-          debateClaimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-          topicsPropertyId: TOPICS_PROPERTY_ID,
-        },
-        signal,
-      })
-    );
-
-    for (const debate of page?.nodes ?? []) {
-      // One Debate may point to several Claims carrying the same Topic. The feed has one Debate
-      // card, so each Topic gets at most one count from this Debate.
-      const debateTopicIds = new Set<string>();
-      for (const claimRelation of debate?.relationsList ?? []) {
-        for (const topicRelation of claimRelation?.toEntity?.relationsList ?? []) {
-          const id = topicRelation?.toEntity?.id;
-          if (id) debateTopicIds.add(normId(id));
-        }
-      }
-      for (const id of debateTopicIds) counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-
-    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
-    after = page.pageInfo.endCursor;
-  }
-
-  return counts;
 }
 
 async function fetchTopicNames(ids: string[], signal?: AbortSignal) {
@@ -147,11 +47,7 @@ async function namedFacets(counts: Map<string, number>, topicId: string, signal?
     .sort((left, right) => right.count - left.count || (left.name ?? left.id).localeCompare(right.name ?? right.id));
 }
 
-/**
- * The same co-occurring Topic facet used by the Debate panel, widened to the mixed Topic feed.
- * Direct entities are one grouped aggregate over the already-filtered population. Debates are
- * traversed once and deduplicated by Debate because their Topics live on their debated Claims.
- */
+/** Counts distinct feed entities per direct Topic relation in one grouped aggregate. */
 export async function fetchTopicFeedFacets({
   spaceIds,
   topicId,
@@ -161,34 +57,21 @@ export async function fetchTopicFeedFacets({
 }: TopicFacetArgs): Promise<TopicFeedFacet[]> {
   if (typeIds.length === 0 || spaceIds.length === 0) return [];
 
-  const scopes = topicFeedPopulationScopes(topicId, selectedTopicIds, typeIds);
-  const directScope = scopes.find(scope => scope.kind === 'direct');
-  const debateScope = scopes.find(scope => scope.kind === 'debate');
-
-  const directCountsPromise = !directScope
-    ? Promise.resolve([])
-    : Effect.runPromise(
-        graphql({
-          query: relationFacetByFilterDocument,
-          decoder: decodeRelationFacet,
-          variables: {
-            filter: {
-              typeId: { is: TOPICS_PROPERTY_ID },
-              fromEntity: scopedFeedFilter(spaceIds, directScope.typeIds, directScope.entityFilter),
-            } satisfies RelationFilter,
-            groupBy: ['TO_ENTITY_ID'],
-          },
-          signal,
-        })
-      );
-
-  const debateCountsPromise = debateScope
-    ? fetchDebateTopicCounts(scopedFeedFilter(spaceIds, debateScope.typeIds, debateScope.entityFilter), signal)
-    : Promise.resolve(new Map<string, number>());
-
-  const [directCounts, debateCounts] = await Promise.all([directCountsPromise, debateCountsPromise]);
-  const counts = new Map(directCounts.map(facet => [normId(facet.id), facet.count]));
-  for (const [id, count] of debateCounts) counts.set(id, (counts.get(id) ?? 0) + count);
+  const facets = await Effect.runPromise(
+    graphql({
+      query: relationFacetByFilterDocument,
+      decoder: decodeRelationFacet,
+      variables: {
+        filter: {
+          typeId: { is: TOPICS_PROPERTY_ID },
+          fromEntity: scopedFeedFilter(spaceIds, typeIds, topicFeedFilter(topicId, selectedTopicIds)),
+        } satisfies RelationFilter,
+        groupBy: ['TO_ENTITY_ID'],
+      },
+      signal,
+    })
+  );
+  const counts = new Map(facets.map(facet => [normId(facet.id), facet.count]));
   return namedFacets(counts, topicId, signal);
 }
 
