@@ -302,6 +302,86 @@ describe('a type selection filters server-side (GEO-2885)', () => {
 });
 
 describe('a complete contextual population', () => {
+  it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
+          { fromEntity: null },
+          null,
+        ],
+        pageInfo: { hasNextPage: true, endCursor: 'next-relation-page' },
+      },
+      {
+        nodes: [
+          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
+          { fromEntity: { id: 'relation-unscored', rankingScore: null, createdAt: '2' } },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+    ];
+    const relationFilter = { typeId: { is: 'topics-property' }, toEntityId: { is: 'page-topic' } };
+    const entityFilter = { relations: { some: { toEntityId: { is: 'selected-topic' } } } };
+    const args = {
+      spaceIds: [SPACE],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      requireName: true,
+      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter, relationFilter }],
+    };
+    const rows = await fetchCompleteExplorePopulationIndex(args);
+    expect(rows.map(row => row.id)).toEqual(['relation-ranked', 'relation-unscored']);
+    expect(windows.operations).toEqual(['ExploreRelationIndex', 'ExploreRelationIndex']);
+    expect(windows.variables[1]?.after).toBe('next-relation-page');
+    const filter = windows.variables[0]?.filter as any;
+    expect(filter.and[0]).toEqual(relationFilter);
+    expect(filter.and[1].fromEntity.and[1]).toEqual(entityFilter);
+    expect(filter.and[1].fromEntity.and[0]).toMatchObject({
+      typeIds: { overlaps: [CLAIM_TYPE_ID] },
+      spaceIds: { overlaps: [SPACE] },
+      values: { some: { spaceId: { in: [SPACE] }, text: { isNull: false, isNot: '' } } },
+      relations: { none: { or: expect.any(Array) } },
+    });
+    expect(await fetchCompleteExplorePopulationIndex(args)).toEqual(rows);
+    expect(windows.calls).toBe(2);
+
+    windows.calls = 0;
+    const newest = await fetchCompleteExplorePopulationIndex({ ...args, sort: 'new' });
+    expect(newest.map(row => row.id)).toEqual(['relation-unscored', 'relation-ranked']);
+  });
+
+  it.each([
+    { relation: true, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: true, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+    { relation: false, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: false, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+  ])('rejects invalid cursor chains and evicts the failed population: %j', async scenario => {
+    const id = `cursor-contract-${scenario.relation}-${scenario.endCursor}`;
+    const node = { id, rankingScore: '1', createdAt: '1' };
+    const nodes = scenario.relation ? [{ fromEntity: node }] : [node];
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: true, endCursor: scenario.endCursor } });
+    const args = {
+      spaceIds: [SPACE],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      scopes: [
+        {
+          typeIds: [CLAIM_TYPE_ID],
+          entityFilter: { id: { is: id } },
+          ...(scenario.relation ? { relationFilter: { toEntityId: { is: id } } } : {}),
+        },
+      ],
+    };
+
+    await expect(fetchCompleteExplorePopulationIndex(args)).rejects.toThrow(scenario.message);
+    expect(windows.calls).toBe(scenario.failedCalls);
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
+    await expect(fetchCompleteExplorePopulationIndex(args)).resolves.toEqual([node]);
+    expect(windows.calls).toBe(scenario.failedCalls + 1);
+  });
+
   it('shares one compact population when equivalent space filters arrive in a different order', async () => {
     const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     windows.responder = operation =>

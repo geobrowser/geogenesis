@@ -1,7 +1,7 @@
 import { Kind, type OperationDefinitionNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
@@ -10,6 +10,7 @@ import {
   fetchTopicFeedCompositionCounts,
   fetchTopicFeedFacets,
 } from './topic-feed-facets';
+import { topicFeedFilter } from './topic-feed-filter';
 
 const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const PAGE_TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -41,48 +42,30 @@ vi.mock('~/core/io/graphql-client', async () => {
           decoder({
             relationsConnection: {
               groupedAggregates: [
-                { keys: [TOPIC_A], distinctCount: { fromEntityId: '3' } },
+                { keys: [TOPIC_A], distinctCount: { fromEntityId: '5' } },
+                { keys: [TOPIC_C], distinctCount: { fromEntityId: '1' } },
                 { keys: [PAGE_TOPIC], distinctCount: { fromEntityId: '8' } },
               ],
             },
           })
         );
       }
-      if (operation?.name?.value === 'TopicFeedDebateTopics') {
+      if (operation?.name?.value === 'ExploreRelationIndex') {
+        const nodes = [
+          { id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' },
+          { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
+          {
+            id: 'claim-news',
+            typeIds: [CLAIM_TYPE_ID, CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID],
+            rankingScore: null,
+            createdAt: '3',
+          },
+        ];
         return Effect.succeed(
           decoder({
-            entitiesConnection: {
-              nodes: [
-                {
-                  id: 'debate-1',
-                  relationsList: [
-                    { toEntity: { relationsList: [{ toEntity: { id: TOPIC_A } }] } },
-                    {
-                      toEntity: {
-                        relationsList: [{ toEntity: { id: TOPIC_A } }, { toEntity: { id: TOPIC_C } }],
-                      },
-                    },
-                  ],
-                },
-                {
-                  id: 'debate-2',
-                  relationsList: [{ toEntity: { relationsList: [{ toEntity: { id: TOPIC_A } }] } }],
-                },
-              ],
-              pageInfo: { hasNextPage: false, endCursor: null },
-            },
+            relationsConnection: { nodes: nodes.map(fromEntity => ({ fromEntity })), pageInfo: { hasNextPage: false } },
           })
         );
-      }
-      if (operation?.name?.value === 'ExploreCompleteIndex') {
-        const requestedTypeIds = variables.typeIds.in as string[];
-        const nodes = requestedTypeIds.includes(DEBATE_TYPE_ID)
-          ? [{ id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' }]
-          : [
-              { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
-              { id: 'claim-news', typeIds: [CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID], rankingScore: null, createdAt: '3' },
-            ];
-        return Effect.succeed(decoder({ entitiesConnection: { nodes, pageInfo: { hasNextPage: false } } }));
       }
       throw new Error(`Unexpected operation ${operation?.name?.value}`);
     },
@@ -96,7 +79,7 @@ beforeEach(() => {
 });
 
 describe('fetchTopicFeedFacets', () => {
-  it('facets only the feed population and counts each Debate once per inherited Claim Topic', async () => {
+  it('facets the mixed feed with a single distinct-entity aggregate', async () => {
     const topics = await fetchTopicFeedFacets({
       spaceIds,
       topicId: PAGE_TOPIC,
@@ -108,18 +91,30 @@ describe('fetchTopicFeedFacets', () => {
       { id: TOPIC_A, name: 'Alignment', count: 5 },
       { id: TOPIC_C, name: 'Governance', count: 1 },
     ]);
-    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter', 'TopicFeedDebateTopics']);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
   });
 
-  it('does not traverse Debate claims when Debate is excluded by the type filter', async () => {
+  it.each([[CLAIM_TYPE_ID], [DEBATE_TYPE_ID]])('applies the selected entity types: %j', async typeId => {
     await fetchTopicFeedFacets({
       spaceIds,
       topicId: PAGE_TOPIC,
       selectedTopicIds: [],
-      typeIds: [CLAIM_TYPE_ID],
+      typeIds: [typeId],
     });
 
-    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
+    expect(mocks.calls).toHaveLength(1);
+    expect(mocks.calls[0]?.variables.filter.fromEntity.and[0]).toMatchObject({
+      typeIds: { overlaps: [typeId] },
+      spaceIds: { overlaps: spaceIds },
+    });
+  });
+
+  it.each([
+    { spaceIds: [], typeIds: [DEBATE_TYPE_ID] },
+    { spaceIds, typeIds: [] },
+  ])('skips empty populations: %j', async scope => {
+    await expect(fetchTopicFeedFacets({ ...scope, topicId: PAGE_TOPIC, selectedTopicIds: [] })).resolves.toEqual([]);
+    expect(mocks.calls).toHaveLength(0);
   });
 
   it('uses the complete feed population for Best facets too', async () => {
@@ -134,7 +129,19 @@ describe('fetchTopicFeedFacets', () => {
       { id: TOPIC_A, name: 'Alignment', count: 5 },
       { id: TOPIC_C, name: 'Governance', count: 1 },
     ]);
-    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter', 'TopicFeedDebateTopics']);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['RelationFacetByFilter']);
+    expect(mocks.calls[0]?.variables).toMatchObject({
+      filter: {
+        typeId: { is: TOPICS_PROPERTY_ID },
+        fromEntity: {
+          and: [
+            { typeIds: { overlaps: [CLAIM_TYPE_ID, DEBATE_TYPE_ID] }, spaceIds: { overlaps: spaceIds } },
+            topicFeedFilter(PAGE_TOPIC, [TOPIC_A]),
+          ],
+        },
+      },
+      groupBy: ['TO_ENTITY_ID'],
+    });
   });
 });
 
@@ -147,16 +154,13 @@ describe('fetchTopicFeedCompositionCounts', () => {
 
     await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
 
-    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreCompleteIndex');
-    expect(populationCalls).toHaveLength(2);
-    expect(populationCalls.flatMap(call => call.variables.typeIds.in)).toEqual(
-      expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID])
-    );
-    for (const { variables } of populationCalls) {
-      expect(variables.spaceIds).toEqual({ in: spaceIds });
-      expect(variables.filter.and).toEqual(
-        expect.arrayContaining([expect.objectContaining({ and: expect.any(Array) })])
-      );
-    }
+    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreRelationIndex');
+    expect(populationCalls).toHaveLength(1);
+    const fromEntity = populationCalls[0]?.variables.filter.and[1].fromEntity;
+    expect(fromEntity.and[0]).toMatchObject({
+      spaceIds: { overlaps: spaceIds },
+      typeIds: { overlaps: expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID]) },
+    });
+    expect(fromEntity.and[1]).toEqual(topicFeedFilter(PAGE_TOPIC));
   });
 });
