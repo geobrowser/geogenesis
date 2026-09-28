@@ -5,11 +5,15 @@ import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { hasAvailabilityLinkParam, withoutAvailabilityLinkParam } from '~/core/availability/share-link';
-import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebateProfile, useDebateSchedule, useGeoChatAuth, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { ID } from '~/core/id';
 
 import { Text } from '~/design-system/text';
 
+import { AvailabilityModal } from './availability-modal';
+import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
 import { PeerAvailabilityBookingModal } from './peer-availability-booking-modal';
 
 /**
@@ -66,6 +70,9 @@ function Launcher({ profileSpaceId, fallbackName }: { profileSpaceId: string; fa
  * A link carries the profile's space id, and the week is keyed by user id, which only geo-chat's
  * debate profile knows — and only answers to someone signed in. Everything before that answer is
  * drawn inside the same dialog, so the recipient never sees it swap out from under them.
+ *
+ * The owner opening their own link gets their schedule editor instead: there is nobody to book, and
+ * the likeliest reason to open it is checking what it shows.
  */
 export function SharedAvailabilityModal({
   open,
@@ -79,10 +86,21 @@ export function SharedAvailabilityModal({
   onClose: () => void;
 }) {
   const { ready, authenticated } = useGeoChatAuth();
-  const signIn = usePrivySignIn();
+  // Privy's login renders outside this dialog, and a Radix modal makes everything outside it inert —
+  // the login showed but took no clicks or typing. So this steps aside while Privy is up and comes
+  // back when it is done, either way.
+  const [signingIn, setSigningIn] = React.useState(false);
+  const signIn = usePrivySignIn(() => setSigningIn(false), { onError: () => setSigningIn(false) });
   const profile = useDebateProfile(profileSpaceId, open);
+  const { personalSpaceId } = usePersonalSpaceId();
   const person = profile.data?.user;
   const name = person?.display_name || fallbackName || null;
+  // The personal space answers first, from the wallet; geo-chat's own say-so covers the rest.
+  const isSelf =
+    authenticated &&
+    ((personalSpaceId !== null && ID.equals(personalSpaceId, profileSpaceId)) || profile.data?.is_self === true);
+
+  if (isSelf) return <OwnScheduleModal open={open} onClose={onClose} />;
 
   const notice = (() => {
     // Before Privy knows, "sign in" would flash at people who already are.
@@ -93,7 +111,10 @@ export function SharedAvailabilityModal({
           action={
             <button
               type="button"
-              onClick={() => signIn()}
+              onClick={() => {
+                setSigningIn(true);
+                signIn();
+              }}
               className="rounded-full bg-text px-4 py-1.5 text-metadata text-white transition-opacity hover:opacity-90"
             >
               Sign in
@@ -106,26 +127,36 @@ export function SharedAvailabilityModal({
     }
     if (profile.isPending) return <Notice>Loading availability…</Notice>;
     if (profile.isError || !person) return <Notice>Couldn&rsquo;t load their availability.</Notice>;
-    if (profile.data?.is_self) {
-      return (
-        <Notice>
-          This is your availability link. Anyone who opens it can see when you&rsquo;re free and request a time to
-          debate you.
-        </Notice>
-      );
-    }
     return null;
   })();
 
   return (
     <PeerAvailabilityBookingModal
-      open={open}
+      open={open && !signingIn}
       userId={person?.user_id ?? ''}
       peerName={name}
       onClose={onClose}
     >
       {notice}
     </PeerAvailabilityBookingModal>
+  );
+}
+
+/** "Set your debate schedule", as the navbar and the hub banner open it. */
+function OwnScheduleModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { blocks, isError, refetch } = useDebateSchedule();
+  const saveSchedule = useSaveDebateSchedule();
+
+  return (
+    <AvailabilityModal
+      open={open}
+      onOpenChange={next => !next && onClose()}
+      blocks={blocks}
+      error={isError}
+      onRetry={() => refetch()}
+      onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+      headerAction={<CopyOwnAvailabilityLinkButton />}
+    />
   );
 }
 

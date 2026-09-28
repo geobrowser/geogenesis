@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -11,14 +11,28 @@ import { SharedAvailabilityLauncher, SharedAvailabilityModal } from './shared-av
 const auth = { ready: true, authenticated: true };
 let profile: { isPending: boolean; isError: boolean; data?: unknown } = { isPending: true, isError: false };
 const signIn = vi.fn();
+let signInCallbacks: { onComplete?: () => void; onError?: () => void } = {};
+let personalSpaceId: string | null = null;
 const replace = vi.fn();
 let search = 'availability=1';
 
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => auth,
   useDebateProfile: () => profile,
+  useDebateSchedule: () => ({ blocks: [], isError: false, refetch: vi.fn() }),
+  useSaveDebateSchedule: () => ({ mutate: vi.fn() }),
 }));
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => signIn }));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: (onComplete?: () => void, options?: { onError?: () => void }) => {
+    signInCallbacks = { onComplete, onError: options?.onError };
+    return signIn;
+  },
+}));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
+vi.mock('./copy-availability-link', () => ({ CopyOwnAvailabilityLinkButton: () => null }));
+vi.mock('./availability-modal', () => ({
+  AvailabilityModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
+}));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/space/profile-space',
   useRouter: () => ({ replace }),
@@ -56,6 +70,8 @@ beforeEach(() => {
   auth.authenticated = true;
   profile = { isPending: true, isError: false };
   search = 'availability=1';
+  personalSpaceId = null;
+  signInCallbacks = {};
 });
 
 afterEach(() => {
@@ -97,12 +113,32 @@ describe('SharedAvailabilityModal', () => {
     expect(screen.getByTestId('week')).toBeInTheDocument();
   });
 
-  it('tells the owner it is their own link rather than booking themselves', () => {
+  it("opens the owner's schedule editor on their own link, as soon as their space is known", () => {
+    personalSpaceId = 'profile-space';
+    renderModal();
+
+    expect(screen.getByTestId('own-schedule-modal')).toBeInTheDocument();
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+  });
+
+  it("falls back to geo-chat's is_self for the owner", () => {
     profile = { isPending: false, isError: false, data: { user: person, is_self: true } };
     renderModal();
 
-    expect(screen.getByText(/This is your availability link/)).toBeInTheDocument();
-    expect(screen.queryByTestId('week')).not.toBeInTheDocument();
+    expect(screen.getByTestId('own-schedule-modal')).toBeInTheDocument();
+  });
+
+  // Privy's login renders outside the dialog, which a Radix modal makes inert.
+  it('steps aside while Privy is open and comes back if it is dismissed', async () => {
+    auth.authenticated = false;
+    renderModal();
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(signIn).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+
+    act(() => signInCallbacks.onError?.());
+    expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
   });
 
   it('says so when the profile cannot be resolved', () => {
