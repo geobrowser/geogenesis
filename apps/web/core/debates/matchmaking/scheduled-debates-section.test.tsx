@@ -19,8 +19,6 @@ const mocks = vi.hoisted(() => ({
   requestsError: null as Error | null,
   roomsError: null as Error | null,
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
-  records: new Map<string, { debatesArgued: number; positions: number }>(),
-  matchContextIds: [] as string[],
   graphPeople: [] as {
     user_id: string;
     profile_space_id: string;
@@ -55,34 +53,6 @@ vi.mock('./use-geo-chat-user-summaries', () => ({
   useGeoChatUserSummaries: (ids: string[]) => {
     mocks.graphLookupIds = ids;
     return mocks.graphPeople;
-  },
-}));
-
-// The People tab's stats pipeline is its own suite; here it only has to say what it was asked for
-// and hand back a record.
-vi.mock('./use-person-match-context', () => ({
-  usePersonMatchContext: (ids: string[]) => {
-    mocks.matchContextIds = ids;
-    return {
-      record: (id: string) => {
-        const record = mocks.records.get(id);
-        return record
-          ? {
-              ...record,
-              joinedAt: null,
-              activeSpaceIds: [],
-              claimsBySpace: new Map(),
-              debatesBySpace: new Map(),
-            }
-          : null;
-      },
-      matches: () => [],
-      matchesBySpace: () => undefined,
-      activeSpaceIds: () => [],
-      claimNamesById: new Map(),
-      claimNamesLoading: false,
-      labelsById: new Map(),
-    };
   },
 }));
 
@@ -157,8 +127,6 @@ afterEach(() => {
   mocks.requestsError = null;
   mocks.roomsError = null;
   mocks.finishedRoomIds = new Set();
-  mocks.records = new Map();
-  mocks.matchContextIds = [];
   mocks.graphPeople = [];
   mocks.graphLookupIds = [];
 });
@@ -254,19 +222,11 @@ describe('naming the other person', () => {
     expect(screen.queryByText('Ada (stale)')).not.toBeInTheDocument();
   });
 
-  it('shows their debating record, as the People tab does', () => {
-    mocks.records = new Map([[ADA.profile_space_id, { debatesArgued: 4, positions: 12 }]]);
-    setup({ answerable: [request()], people: [ADA] });
+  it('puts the viewer on the left of the strip, as every request card does', () => {
+    setup({ answerable: [request()], people: [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }] });
 
-    expect(mocks.matchContextIds).toEqual([ADA.profile_space_id]);
-    expect(screen.getByText('4 debates')).toBeInTheDocument();
-    expect(screen.getByText('12 positions')).toBeInTheDocument();
-  });
-
-  it('asks for no record when nobody could be named', () => {
-    setup({ answerable: [request()] });
-
-    expect(mocks.matchContextIds).toEqual([]);
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Me' })).not.toBeInTheDocument();
   });
 
   it('never reads the viewer as their own opponent', () => {
@@ -301,13 +261,13 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
-  it('looks up everyone but the viewer in the graph', () => {
+  it('looks up both sides in the graph, the viewer included', () => {
     mocks.requests = [request(), request({ request_id: 'request-2' })];
     mocks.graphPeople = [ADA];
 
     const { result } = renderHook(() => useScheduledContent(true));
 
-    expect(mocks.graphLookupIds).toEqual(['user-them', 'user-them']);
+    expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
     expect(result.current.people).toEqual([ADA]);
   });
 

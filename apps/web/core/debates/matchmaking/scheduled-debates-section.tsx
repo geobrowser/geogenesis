@@ -4,28 +4,20 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
-import { personProfileOpened } from '~/core/analytics';
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
-import { speakerLabel } from '~/core/debates/playback-utils';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
-import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
-import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { useDebatePeople } from './hooks';
 import { HubPillButton } from './hub-pill-button';
-import { PersonMatches } from './person-disagreements';
-import { PersonRecordLine } from './person-record-line';
-import { PersonSpaceIcons } from './person-space-icons';
+import { RequestParties } from './request-parties';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
-import { type PersonMatchContext, usePersonMatchContext } from './use-person-match-context';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
@@ -38,19 +30,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
 
-  // Everyone a row names, resolved in one batch for the stats line the People tab draws.
-  const opponents = React.useMemo(
-    () =>
-      [
-        ...answerable.map(request => lookUp(opponentOf(request, viewerId))),
-        ...upcoming.map(({ opponentUserId }) => lookUp(opponentUserId)),
-      ].filter((opponent): opponent is DebateParticipantSummary => opponent !== null),
-    [answerable, lookUp, upcoming, viewerId]
-  );
-  const opponentSpaceIds = React.useMemo(() => opponents.map(opponent => opponent.profile_space_id), [opponents]);
-  const context = usePersonMatchContext(opponentSpaceIds);
-  // One elevated portal for every row's popovers, so they clear this z-200 panel.
-  const popoverPortal = useElevatedPopoverPortal();
+  // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
+  const viewer = lookUp(viewerId);
 
   if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
 
@@ -74,13 +55,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId }) => (
-            <UpcomingRow
-              key={room.room_id}
-              room={room}
-              opponent={lookUp(opponentUserId)}
-              context={context}
-              popoverPortal={popoverPortal}
-            />
+            <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} viewer={viewer} />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </Section>
@@ -94,8 +69,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               key={request.request_id}
               request={request}
               opponent={lookUp(opponentOf(request, viewerId))}
-              context={context}
-              popoverPortal={popoverPortal}
+              viewer={viewer}
               busy={respond.isPending}
               onAnswer={answer}
             />
@@ -118,7 +92,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
-  /** Who the requests' other participants are, resolved from the graph. Empty until that lands. */
+  /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the other returned. */
   requestsError: Error | null;
@@ -158,17 +132,12 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
-  // Everyone but the viewer, who is never the one a row names.
-  const otherUserIds = React.useMemo(
-    () =>
-      (rows ?? []).flatMap(request =>
-        request.participants
-          .map(participant => participant.user_id)
-          .filter(userId => !viewerId || !sameId(userId, viewerId))
-      ),
-    [rows, viewerId]
+  // The viewer included: their own side of the strip needs a face too.
+  const participantIds = React.useMemo(
+    () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
+    [rows]
   );
-  const people = useGeoChatUserSummaries(otherUserIds, enabled);
+  const people = useGeoChatUserSummaries(participantIds, enabled);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
@@ -205,19 +174,16 @@ function normalizeId(userId: string) {
 function UpcomingRow({
   room,
   opponent,
-  context,
-  popoverPortal,
+  viewer,
 }: {
   room: UpcomingDebateRoom;
   opponent: DebateParticipantSummary | null;
-  context: PersonMatchContext;
-  popoverPortal: HTMLElement | null;
+  viewer: DebateParticipantSummary | null;
 }) {
   return (
     <ScheduleCard
       opponent={opponent}
-      context={context}
-      popoverPortal={popoverPortal}
+      viewer={viewer}
       when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
       status={
         room.others_present
@@ -241,23 +207,20 @@ function UpcomingRow({
 function ScheduledRow({
   request,
   opponent,
-  context,
-  popoverPortal,
+  viewer,
   busy,
   onAnswer,
 }: {
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
-  context: PersonMatchContext;
-  popoverPortal: HTMLElement | null;
+  viewer: DebateParticipantSummary | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
   return (
     <ScheduleCard
       opponent={opponent}
-      context={context}
-      popoverPortal={popoverPortal}
+      viewer={viewer}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
       actions={
@@ -291,16 +254,14 @@ const JOIN_PILL =
  */
 function ScheduleCard({
   opponent,
-  context,
-  popoverPortal,
+  viewer,
   when,
   status,
   urgent = false,
   actions,
 }: {
   opponent: DebateParticipantSummary | null;
-  context: PersonMatchContext;
-  popoverPortal: HTMLElement | null;
+  viewer: DebateParticipantSummary | null;
   when: string;
   status: string;
   urgent?: boolean;
@@ -322,97 +283,22 @@ function ScheduleCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-3 py-3">
-        <Face opponent={opponent} />
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <Name opponent={opponent} />
-          {opponent && <OpponentRecord opponent={opponent} context={context} popoverPortal={popoverPortal} />}
-        </div>
-      </div>
+      {/* The same "You vs Them" strip every other request card uses. No positions: a scheduled
+          debate is not about a claim yet, so there is no side to show. */}
+      <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />
 
       {actions}
     </article>
   );
 }
 
-function Face({ opponent }: { opponent: DebateParticipantSummary | null }) {
-  return (
-    <div className="shrink-0">
-      <Avatar avatarUrl={opponent?.avatar_cid ?? null} value={opponent?.profile_space_id ?? 'scheduled'} size={32} />
-    </div>
-  );
-}
-
-/** The People tab's stats line — debates, positions, matches, active spaces — for this opponent. */
-function OpponentRecord({
-  opponent,
-  context,
-  popoverPortal,
-}: {
-  opponent: DebateParticipantSummary;
-  context: PersonMatchContext;
-  popoverPortal: HTMLElement | null;
-}) {
-  const profileSpaceId = opponent.profile_space_id;
-  const record = context.record(profileSpaceId);
-  const matches = context.matches(profileSpaceId);
-  const spaceIds = context.activeSpaceIds(profileSpaceId);
-
-  const activeSpaces =
-    spaceIds.length > 0 ? (
-      <PersonSpaceIcons
-        spaceIds={spaceIds}
-        labelsById={context.labelsById}
-        claimsBySpace={record?.claimsBySpace}
-        debatesBySpace={record?.debatesBySpace}
-        matchesBySpace={context.matchesBySpace(profileSpaceId)}
-        popoverPortal={popoverPortal}
-      />
-    ) : null;
-  const match =
-    matches.length > 0 ? (
-      <PersonMatches
-        personName={speakerLabel(opponent)}
-        matches={matches}
-        claimNamesById={context.claimNamesById}
-        claimNamesLoading={context.claimNamesLoading}
-        labelsById={context.labelsById}
-        popoverPortal={popoverPortal}
-      />
-    ) : null;
-
-  if (!record && !activeSpaces && !match) return null;
-
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5 py-0.5">
-      <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
-    </div>
-  );
-}
-
-/** A link only where the graph or roster resolved them; a bare name is not a dead link. */
-function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
-  const profileSpaceId = opponent && validateSpaceId(opponent.profile_space_id) ? opponent.profile_space_id : null;
-  const label = shortName(opponent);
-
-  if (!profileSpaceId) {
-    return (
-      <Text as="span" variant="metadataMedium" className="truncate">
-        {label}
-      </Text>
-    );
-  }
-
-  return (
-    <Link
-      href={NavUtils.toSpace(profileSpaceId)}
-      onClick={() => personProfileOpened(profileSpaceId, null, { interaction_surface: 'debates_hub_requests' })}
-      className="truncate text-metadataMedium hover:underline"
-    >
-      {label}
-    </Link>
-  );
-}
+/** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
+const UNKNOWN_OPPONENT: DebateParticipantSummary = {
+  user_id: '',
+  profile_space_id: '',
+  display_name: 'Your opponent',
+  avatar_cid: null,
+};
 
 function shortName(opponent: DebateParticipantSummary | null) {
   return opponent?.display_name || 'Your opponent';
