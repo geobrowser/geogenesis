@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
+import { ENTITY_ID_BATCH_CONCURRENCY, ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
 
 import { type RelationTarget, type RelationTargetsPageFetcher, collectRelationTargets } from './relation-targets';
 
@@ -43,24 +43,47 @@ describe('collectRelationTargets', () => {
     expect(targets.map(t => t.fromEntityId)).toEqual(fromEntityIds);
   });
 
+  /** A fetcher whose pages stay pending until released, so in-flight requests can be counted. */
+  function heldPages() {
+    const pending: Array<() => void> = [];
+    const fetchPage = vi.fn<RelationTargetsPageFetcher>(
+      () => new Promise(resolve => pending.push(() => resolve({ items: [], endCursor: null, hasNextPage: false })))
+    );
+    const releaseAll = async (done: Promise<unknown>) => {
+      while (pending.length) {
+        pending.splice(0).forEach(release => release());
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      await done;
+    };
+    return { fetchPage, releaseAll };
+  }
+
   // Measured on testnet: reading 150 ids' batches one after another cost ~360ms over the old
   // single capped request; reading them concurrently brings that to within noise.
   it('reads the batches concurrently, not one after another', async () => {
     const fromEntityIds = Array.from({ length: ENTITY_ID_BATCH_SIZE * 3 }, (_, n) => id(n + 1));
-    const pending: Array<() => void> = [];
-    const fetchPage = vi.fn<RelationTargetsPageFetcher>(
-      () =>
-        new Promise(resolve => {
-          pending.push(() => resolve({ items: [], endCursor: null, hasNextPage: false }));
-        })
-    );
+    const { fetchPage, releaseAll } = heldPages();
 
     const done = collectRelationTargets({ fromEntityIds, typeIds: [TYPE], spaceId: SPACE }, fetchPage);
-    await Promise.resolve();
     // Every batch is in flight before any has answered.
-    expect(fetchPage).toHaveBeenCalledTimes(3);
-    pending.forEach(resolve => resolve());
-    await done;
+    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(3));
+    await releaseAll(done);
+  });
+
+  it('caps how many batches are in flight at once', async () => {
+    const batches = ENTITY_ID_BATCH_CONCURRENCY + 2;
+    const fromEntityIds = Array.from({ length: ENTITY_ID_BATCH_SIZE * batches }, (_, n) => id(n + 1));
+    const { fetchPage, releaseAll } = heldPages();
+
+    const done = collectRelationTargets({ fromEntityIds, typeIds: [TYPE], spaceId: SPACE }, fetchPage);
+    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(ENTITY_ID_BATCH_CONCURRENCY));
+    // Give an uncapped fan-out every chance to start the rest before asserting it did not.
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(fetchPage).toHaveBeenCalledTimes(ENTITY_ID_BATCH_CONCURRENCY);
+
+    await releaseAll(done);
+    expect(fetchPage).toHaveBeenCalledTimes(batches);
   });
 
   it('throws rather than return a partial list when the cursor chain breaks', async () => {

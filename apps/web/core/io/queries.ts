@@ -144,7 +144,7 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
  * host anyway, so firing twenty of those at once trades a queue we control for one we do
  * not. Six keeps a 300-id call to a single wave.
  */
-const ENTITY_ID_BATCH_CONCURRENCY = 6;
+export const ENTITY_ID_BATCH_CONCURRENCY = 6;
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);

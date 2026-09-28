@@ -7,9 +7,9 @@ import { parse } from 'graphql';
  * hold its content, and which types it carries. Its Topics and Tags are read separately, through the
  * paged `collectRelationTargets`, because a nested `relationsList` is one capped page.
  *
- * Deliberately not the full entity query — that one pulls every value and relation (0.31 MB per 50 claims, measured) through a strict decoder that
- * drops the whole entity when any unrelated value fails to parse, which the verifier would read as
- * "not a Claim here" and mint a duplicate for.
+ * Deliberately not the full entity query — that one pulls every value and relation (0.31 MB per 50
+ * claims, measured) through a strict decoder that drops the whole entity when any unrelated value
+ * fails to parse, which the verifier would read as "not a Claim here" and mint a duplicate for.
  */
 const EXISTING_CLAIMS_SOURCE = /* GraphQL */ `
   query ExistingClaims($ids: [UUID!]!, $first: Int!) {

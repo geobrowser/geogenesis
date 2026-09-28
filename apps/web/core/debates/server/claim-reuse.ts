@@ -5,7 +5,8 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
-import { batchEntityIds } from '~/core/io/queries';
+import { ENTITY_ID_BATCH_CONCURRENCY, batchEntityIds } from '~/core/io/queries';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import { readEnv } from './acceptor-config';
@@ -91,7 +92,9 @@ export async function lookupExistingClaimsInGraph(
   fetchRelationPage?: RelationTargetsPageFetcher
 ): Promise<ExistingClaimEntity[]> {
   const [facts, relations] = await Promise.all([
-    Promise.all(batchEntityIds(entityIds).map(batch => fetchFacts(batch))).then(results => results.flat()),
+    mapWithConcurrency(batchEntityIds(entityIds), ENTITY_ID_BATCH_CONCURRENCY, batch => fetchFacts(batch)).then(
+      results => results.flat()
+    ),
     collectRelationTargets(
       { fromEntityIds: entityIds, typeIds: [TOPICS_PROPERTY_ID, TAG_PROPERTY_ID], spaceId },
       fetchRelationPage

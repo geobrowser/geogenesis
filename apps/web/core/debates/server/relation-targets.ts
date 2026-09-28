@@ -4,8 +4,9 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
-import { RELATIONS_PAGE_SIZE, batchEntityIds } from '~/core/io/queries';
+import { ENTITY_ID_BATCH_CONCURRENCY, RELATIONS_PAGE_SIZE, batchEntityIds } from '~/core/io/queries';
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 /**
  * Relations of the given types from a set of entities, in one space. A cursor connection rather
@@ -82,11 +83,12 @@ export async function collectRelationTargets(
   request: RelationTargetsRequest,
   fetchPage: RelationTargetsPageFetcher = fetchPageFromGraph
 ): Promise<RelationTarget[]> {
-  // Batches are independent, so they are read concurrently; pages within a batch cannot be.
-  const results = await Promise.all(
-    batchEntityIds(request.fromEntityIds).map(fromEntityIds =>
-      collectCursorPages(after => fetchPage({ ...request, fromEntityIds }, after))
-    )
+  // Batches are independent, so they are read concurrently (capped like every other entity-id batch
+  // read); pages within a batch cannot be.
+  const results = await mapWithConcurrency(
+    batchEntityIds(request.fromEntityIds),
+    ENTITY_ID_BATCH_CONCURRENCY,
+    fromEntityIds => collectCursorPages(after => fetchPage({ ...request, fromEntityIds }, after))
   );
   return results.flat();
 }

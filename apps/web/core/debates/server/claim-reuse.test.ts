@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
+import { ENTITY_ID_BATCH_CONCURRENCY, ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import {
@@ -321,6 +322,23 @@ describe('lookupExistingClaimsInGraph', () => {
     const entities = await lookupExistingClaimsInGraph(ids, SPACE, fetchFacts, noRelations);
 
     expect(entities.map(entity => entity.id)).toEqual(ids);
+  });
+
+  it('caps how many entity batches are in flight at once', async () => {
+    const ids = Array.from({ length: ENTITY_ID_BATCH_SIZE * (ENTITY_ID_BATCH_CONCURRENCY + 2) }, (_, n) => id(n + 1));
+    let inFlight = 0;
+    let peak = 0;
+    const fetchFacts = vi.fn<ExistingClaimFactsFetcher>(async batch => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      inFlight--;
+      return facts(batch);
+    });
+
+    const entities = await lookupExistingClaimsInGraph(ids, SPACE, fetchFacts, noRelations);
+
+    expect(peak).toBe(ENTITY_ID_BATCH_CONCURRENCY);
+    expect(entities).toHaveLength(ids.length);
   });
 
   // A topic or tag missed here is one the writer adds a second time.
