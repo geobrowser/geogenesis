@@ -8,6 +8,7 @@ import {
   isIncludedSearchResult,
   mergeResolvableSpaces,
   resolveSearchSpaces,
+  selectUnresolvableRemoteIds,
 } from './orm';
 
 function makeSpaceEntity(spaceId: string, overrides: Partial<SpaceEntity> = {}): SpaceEntity {
@@ -41,6 +42,28 @@ describe('resolveSearchSpaces', () => {
 
   it('drops string-only spaces when hydration data is unavailable', () => {
     expect(resolveSearchSpaces(['space-1'], {})).toEqual([]);
+  });
+});
+
+describe('selectUnresolvableRemoteIds', () => {
+  // The reported case: /search ranked an entity the graph had already dropped, so choosing it
+  // added a collection item pointing at nothing.
+  it('reports a hit the graph did not return', () => {
+    expect(selectUnresolvableRemoteIds(['ghost', 'real'], ['real'])).toEqual(new Set(['ghost']));
+  });
+
+  it('reports nothing when every hit resolved', () => {
+    expect(selectUnresolvableRemoteIds(['a', 'b'], ['b', 'a'])).toEqual(new Set());
+  });
+
+  // Blanking the results is the worse failure: an empty answer reads as the graph struggling far
+  // more often than it reads as every hit being a ghost.
+  it('trusts nothing from an empty answer, rather than discarding every hit', () => {
+    expect(selectUnresolvableRemoteIds(['a', 'b'], [])).toEqual(new Set());
+  });
+
+  it('has nothing to say when there were no hits to check', () => {
+    expect(selectUnresolvableRemoteIds([], [])).toEqual(new Set());
   });
 });
 
