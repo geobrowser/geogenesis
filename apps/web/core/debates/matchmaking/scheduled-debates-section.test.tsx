@@ -222,6 +222,17 @@ describe('naming the other person', () => {
     expect(screen.queryByText('Ada (stale)')).not.toBeInTheDocument();
   });
 
+  // A graph entry fills gaps rather than overwriting: a profile without a name must not turn an
+  // online person's roster name into their raw space id.
+  it("keeps the roster's name and face where the graph has none", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: null, avatar_cid: null }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText(ADA.profile_space_id)).not.toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
   it('puts the viewer on the left of the strip, as every request card does', () => {
     setup({ answerable: [request()], people: [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }] });
 

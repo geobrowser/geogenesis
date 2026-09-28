@@ -53,6 +53,17 @@ describe('the Requests tab count', () => {
     expect(count({ requests: { outbound: pendingRequest, incoming: [pendingRequest, pendingRequest] } })).toBe(3);
   });
 
+  // The rule every other surface uses for the sent request (`requests.outbound ?? activity`), so the
+  // badge cannot drop one the tab is still drawing.
+  it('falls back to activity for the sent request when the loaded list has none', () => {
+    expect(
+      count({
+        activity: { outbound_request: pendingRequest } as Partial<DebateActivity>,
+        requests: { outbound: null, incoming: [] },
+      })
+    ).toBe(1);
+  });
+
   it('counts a pending challenge whichever way it points', () => {
     expect(count({ activity: { challenge: pendingRequest } as Partial<DebateActivity> })).toBe(1);
   });

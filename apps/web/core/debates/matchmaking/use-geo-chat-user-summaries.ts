@@ -31,12 +31,16 @@ export function useGeoChatUserSummaries(userIds: string[], enabled: boolean): De
   });
 
   const spaceIds = React.useMemo(() => [...(spaces.data?.values() ?? [])], [spaces.data]);
-  const { profilesBySpaceId } = useProfilesBySpaceIds(spaceIds, enabled);
+  const { profilesBySpaceId, isLoading: profilesLoading } = useProfilesBySpaceIds(spaceIds, enabled);
 
   return React.useMemo(() => {
     const summaries: DebateParticipantSummary[] = [];
     for (const [userId, spaceId] of spaces.data ?? []) {
       const profile = profilesBySpaceId.get(spaceId);
+      // Held back while their profile loads: a summary with no name yet reads as the raw space id,
+      // and would displace the roster's entry for someone online. Once profiles settle without one
+      // — the batch loader can reject — they are emitted anyway, so they keep their profile link.
+      if (!profile && profilesLoading) continue;
       summaries.push({
         user_id: userId,
         profile_space_id: spaceId,
@@ -45,5 +49,5 @@ export function useGeoChatUserSummaries(userIds: string[], enabled: boolean): De
       });
     }
     return summaries;
-  }, [profilesBySpaceId, spaces.data]);
+  }, [profilesBySpaceId, profilesLoading, spaces.data]);
 }

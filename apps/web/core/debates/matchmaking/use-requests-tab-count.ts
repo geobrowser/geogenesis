@@ -33,7 +33,8 @@ export function useRequestsTabCount({
   const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const outbound = useLiveRequest(requests ? requests.outbound : activity?.outbound_request);
+  // `??`, as every surface that draws the sent request derives it, so the count matches the card.
+  const outbound = useLiveRequest(requests?.outbound ?? activity?.outbound_request);
   // The claimless challenge sits in the tab under Sent or Received, whichever way it points.
   const challenge = useLiveRequest(activity?.challenge);
 
