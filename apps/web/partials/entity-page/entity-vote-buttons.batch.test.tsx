@@ -7,13 +7,17 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
+import {
+  entityRespondersQueryKey,
+  entityResponseCountsQueryKey,
+  userEntityResponseQueryKey,
+} from '~/core/responses/entity-response';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
-import { EntityVoteButtons } from './entity-vote-buttons';
+import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
   getCounts: vi.fn(),
@@ -25,14 +29,19 @@ const mocks = vi.hoisted(() => ({
   smartAccount: null as object | null,
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
+  getProfiles: vi.fn(),
+  personProfileOpened: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
+  // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
+  usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 
 vi.mock('~/core/analytics', () => ({
   downvoted: vi.fn(),
+  personProfileOpened: mocks.personProfileOpened,
   trackPrivyAuth: vi.fn(),
   upvoted: vi.fn(),
   voteCast: vi.fn(),
@@ -65,7 +74,7 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({
-  fetchProfilesBySpaceIds: () => Effect.succeed([]),
+  fetchProfilesBySpaceIds: (...args: unknown[]) => Effect.succeed(mocks.getProfiles(...args)),
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -86,6 +95,14 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   },
 }));
 
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 beforeEach(() => {
   mocks.getCounts.mockReset();
   mocks.getCounts.mockReturnValue({ positive: 2, negative: 1 });
@@ -100,6 +117,9 @@ beforeEach(() => {
   mocks.smartAccount = null;
   mocks.submitResponse.mockReset();
   mocks.responderAvatarProps.length = 0;
+  mocks.getProfiles.mockReset();
+  mocks.getProfiles.mockReturnValue([]);
+  mocks.personProfileOpened.mockReset();
 });
 
 afterEach(cleanup);
@@ -125,13 +145,16 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
   });
 
-  it('renders factual claims with the original chevron controls and no explanatory label', () => {
-    const view = renderButtons(true, true, 'veracity');
+  // This used to assert chevrons — the `0 0 16 16` glyphs a factual claim drew. Claims are thumbs
+  // now, which are `0 0 12 12`, so the case is kept and its expectation inverted: the chevrons must
+  // not come back on a claim.
+  it('renders a claim with thumb controls and no explanatory label', () => {
+    const view = renderButtons(true, true, 'stance');
 
     expect(view.queryByText('Is factual')).not.toBeInTheDocument();
     const responseIcons = [...view.container.querySelectorAll('svg')];
     expect(responseIcons).toHaveLength(2);
-    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
   it('renders persisted curation state in the fullscreen debate pill', () => {
@@ -141,10 +164,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       positive: 8,
       negative: 1,
     });
-    queryClient.setQueryData(
-      userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'),
-      'positive'
-    );
+    queryClient.setQueryData(userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'), 'positive');
 
     const view = render(
       <ClaimResponseBatchBoundary ready>
@@ -165,7 +185,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(view.getByText('7')).toBeInTheDocument();
     expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });
 
   it('passes the optimistic viewer response to responder avatars immediately', () => {
@@ -185,7 +205,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     const view = renderButtons(true, true);
 
     fireEvent.click(view.getByTitle('Remove agreement'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear');
 
     mocks.optimisticResponse = 'negative';
     view.rerender(
@@ -194,7 +214,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       </ClaimResponseBatchBoundary>
     );
     fireEvent.click(view.getByTitle('Agree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive');
 
     mocks.optimisticResponse = 'positive';
     view.rerender(
@@ -203,13 +223,13 @@ describe('EntityVoteButtons claims-page batching', () => {
       </ClaimResponseBatchBoundary>
     );
     fireEvent.click(view.getByTitle('Disagree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });
 
   it('renders 50 batched claims with one summary request and no individual response requests', async () => {
     const targets = Array.from({ length: 50 }, (_, index) => ({
       entityId: `claim-${index}`,
-      responseKind: index % 2 === 0 ? ('stance' as const) : ('veracity' as const),
+      responseKind: 'stance' as const,
     }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -230,7 +250,7 @@ describe('EntityVoteButtons claims-page batching', () => {
   });
 });
 
-function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' | 'veracity' }> }) {
+function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' }> }) {
   const batch = useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true });
   return (
     <ClaimResponseBatchBoundary ready={batch.isSuccess}>
@@ -246,7 +266,7 @@ function BatchedClaims({ targets }: { targets: Array<{ entityId: string; respons
   );
 }
 
-function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' | 'veracity' = 'stance') {
+function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' = 'stance') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seedCaches) {
     queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, responseKind), {
@@ -269,3 +289,106 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
     }
   );
 }
+
+/**
+ * The responder list is the one read here that must not stand down for the batch.
+ *
+ * Every other query on this page defers to `ClaimResponseBatchBoundary`, because the batch primes
+ * its key and a page of rows would otherwise fetch one apiece. This content is different in the way
+ * that matters: it lives inside a `Popover.Content`, so it mounts for a single claim when a reader
+ * opens the list, and there is no per-row cost to protect. Deferring bought nothing and cost an
+ * answer — the profiles are primed by a *second* query that runs after the batch resolves and is
+ * not part of the boundary's `ready`.
+ */
+describe('RespondersPopoverContent under a batch', () => {
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
+    render(
+      <ClaimResponseBatchBoundary ready>
+        <RespondersPopoverContent
+          entityId="claim-1"
+          spaceId="space-1"
+          objectType={0}
+          responseKind={responseKind}
+        />
+      </ClaimResponseBatchBoundary>,
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+  it('fetches the profiles the batch has not primed instead of reporting nobody', async () => {
+    // Responders primed by the batch; their profiles not, which is the window between the batch
+    // resolving and its metadata query landing — and the permanent state if that query fails.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    // Not the empty state, which is what a disabled profile query rendered over a real responder.
+    expect(view.queryByText('No responses yet')).not.toBeInTheDocument();
+    expect(mocks.getProfiles).toHaveBeenCalled();
+  });
+
+  it('still answers from the batch’s cache without refetching the responders', async () => {
+    // The saving the batch exists for survives: a primed key is fresh against the same `staleTime`,
+    // so an enabled query serves it without a request.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    expect(mocks.getResponders).not.toHaveBeenCalled();
+  });
+
+  it('contains its own scrolling rather than chaining to the page behind', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    expect(view.container.querySelector('.overflow-y-auto')?.className).toContain('overscroll-contain');
+  });
+
+  it.each([
+    ['stance', 'claim_vote_list'],
+    ['curation', 'entity_vote_list'],
+  ] as const)('attributes %s responder navigation to the right surface', async (responseKind, interactionSurface) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, responseKind), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([
+      {
+        id: 'person-9',
+        spaceId: 'profile-9',
+        address: '0x1234567890abcdef',
+        avatarUrl: null,
+        coverUrl: null,
+        name: 'Dovile',
+        profileLink: '/space/profile-9',
+      },
+    ]);
+
+    const view = renderPopover(queryClient, responseKind);
+    const profileLink = await view.findByRole('link', { name: 'Dovile' });
+    fireEvent.click(profileLink);
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith('profile-9', 'person-9', {
+      interaction_surface: interactionSurface,
+    });
+  });
+});

@@ -69,11 +69,21 @@
   /* Z-index stack — see ~/core/z-layers.ts */
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
-  --z-index-status-bar: 10001;
-  --z-index-toast: 10002;
+  /* Above the panels at 10001-10002 and the elevated popover at 10003: a publish status bar and a
+     toast have to be visible over whatever is open, and they cannot rely on coming later in the DOM
+     than a panel that is portalled to the body when it opens. */
+  --z-index-status-bar: 10004;
+  --z-index-toast: 10005;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
+
+  /* Shared width for the overview side rails (Explore + space home).
+     The rail is fluid between these two: it takes a share of the layout row up to
+     `--width-side-rail`, and stops shrinking at `--width-side-rail-min`, below which
+     `StickySideRail` drops it entirely rather than showing a rail too narrow to read. */
+  --width-side-rail: 360px;
+  --width-side-rail-min: 280px;
 
   /* Animations */
   /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
@@ -82,6 +92,9 @@
   --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  /* Fade in while rising 5px into place. `both` holds the first frame before it starts, so the
+     element never flashes at full opacity. Used by the Explore email capture popup. */
+  --animate-rise-in: riseIn 200ms ease-out both;
   --animate-slide-down: slideDown 300ms ease-in-out;
   --animate-slide-up: slideUp 300ms ease-in-out;
 
@@ -90,6 +103,12 @@
   --text-mainPage--line-height: 3.5rem;
   --text-mainPage--letter-spacing: -0.5px;
   --text-mainPage--font-weight: 600;
+
+  /* >=768 44/46, 410-767 36/38, <=409 26/30. Narrow steps live below the @theme block. */
+  --text-entityTitle: 2.75rem;
+  --text-entityTitle--line-height: 2.875rem;
+  --text-entityTitle--letter-spacing: -0.5px;
+  --text-entityTitle--font-weight: 600;
 
   --text-largeTitle: 2rem;
   --text-largeTitle--line-height: 2.5rem;
@@ -242,13 +261,96 @@
   --text-recordingLabel--font-weight: 600;
 }
 
-/* Desktop-first breakpoints (max-width) */
-@custom-variant sm (@media (max-width: 639px));
+/* Narrow-viewport steps for the entity title token. Kept separate from `mainPage`
+   because entity titles have a smaller desktop size and a responsive ramp that
+   section titles do not share. */
+@media (max-width: 767px) {
+  :root {
+    --text-entityTitle: 2.25rem; /* 36px */
+    --text-entityTitle--line-height: 2.375rem; /* 38px */
+  }
+}
+
+@media (max-width: 409px) {
+  :root {
+    --text-entityTitle: 1.625rem; /* 26px */
+    --text-entityTitle--line-height: 1.875rem; /* 30px */
+  }
+}
+
+/* Desktop-first breakpoints (max-width).
+
+   These invert stock Tailwind. `md:` here means "at most 767px", not "768px and up", so
+   `grid-cols-1 md:grid-cols-2` gives you two columns on a phone and one on a desktop — the reverse
+   of what it reads like. Write the DESKTOP layout in the base classes and use the variant for the
+   narrow override: `grid-cols-2 md:grid-cols-1`.
+
+   `mobile:` is the one name that reads the way it behaves, which is what GEO-2973 renamed it for.
+   Every variant below it still carries the trap.
+
+   `--breakpoint-*: initial` above also means the built-in `max-*` modifier has no breakpoint left
+   to resolve against, so `max-md:pt-2` and friends silently compile to nothing. Use the variants
+   below instead; there is no working `max-md:`. */
+@custom-variant mobile (@media (max-width: 639px));
 @custom-variant md (@media (max-width: 767px));
 @custom-variant lg (@media (max-width: 1023px));
 @custom-variant xl (@media (max-width: 1279px));
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
+
+/* Whether the viewer has a pointer that can hover, which is not the same question as how wide
+   their screen is. The `hover` feature describes the *primary* input, so a touchscreen laptop
+   reports `hover: hover` and keeps the hover affordances it can actually use — where a width
+   breakpoint would have taken them away and left nothing in their place. */
+@custom-variant no-hover (@media (hover: none));
+
+/* Container-query breakpoints for claim surfaces (GEO-2774).
+   NOTE: no apostrophes below. Tailwind reads an apostrophe as a string delimiter even inside a
+   comment, so an odd number of them swallows the closing marker and the whole stylesheet fails to
+   parse — which it did, once, right here.
+
+   These ask the width of the element itself, not the window, because the same claim card and the
+   same Agree/Disagree row are rendered in a feed, a side panel and the claim page at widths none of
+   them agrees on — a 1200px window says nothing about a 230px panel inside it. Both numbers are
+   measured and the second is derived from the first, so they live together rather than being
+   spelled out at every call site.
+
+   `claim-pills-wide`  — the width the pill row needs to render both labels whole. The widest pill is
+     "Disagree" at 100px of content (24px padding + 12px icon + 6px gap + 58px label) and an avatar
+     stack adds ~32px beside it, so a pill wants ~132px; two of those plus the 8px gap is 272px.
+     Under it the row stacks, because the label is the only part of a pill allowed to shrink and
+     "Dis..." is not a button.
+
+   `claim-card-narrow` — the width under which the feed card drops its side-by-side arrangement.
+     The wide form spends 220px on the verdict column and 24px on the gutter, so the pill row is left
+     with `width - 244`; it needs 272px of that, which puts the switch at 516px, rounded to 520px.
+     Change `claim-pills-wide` and this has to move with it.
+
+   One is a floor and the other a ceiling on purpose: the pill row is stacked until it earns two
+   columns, while the card starts from the wide arrangement and gives it up — the shape each
+   component already had, so neither set of base rules had to be rewritten. */
+@custom-variant claim-pills-wide (@container (width >= 272px));
+@custom-variant claim-card-narrow (@container (width < 520px));
+
+/* Shared claim-card chrome.
+   The matchmaking card uses these directly; mobile Explore applies the same utilities through the
+   max-width `md:` variant. Keeping the declarations here means the two surfaces cannot drift by
+   copying a nearly-identical Tailwind string into each component. */
+@utility claim-card-panel-surface {
+  @apply rounded-lg border border-grey-02 bg-white p-3;
+}
+
+@utility claim-card-panel-header {
+  @apply mb-2 flex flex-nowrap items-start justify-between gap-3;
+}
+
+@utility claim-card-panel-title {
+  @apply mb-3 line-clamp-3 block text-metadataMedium leading-snug text-pretty;
+}
+
+@utility claim-card-summary-band {
+  @apply border-t border-divider bg-grey-01 px-3 py-2;
+}
 
 /* Lifts the debate and the indicator and settles them back, miming the direction the
    content travels when the viewer scrolls on to the next debate. */
@@ -268,6 +370,17 @@
   }
   100% {
     opacity: 1;
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -590,6 +703,33 @@ body[data-entity-side-panel-open] .elevated-popover {
 
 body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
+}
+
+/* The same problem one layer up: a slide-up sits at 10000, and anything radix portals to the body
+   lands there at `z-index: auto`, so a popover opened from inside a sheet — a comment's responder
+   list, for one — paints behind the sheet and reads as not opening at all. 10003 is above both
+   raised panels (10001-10002) and below the status bar and toasts (10004-10005), which should still
+   be visible over everything. Driven by `SlideUpBodyState`. */
+body[data-slide-up-open] {
+  --elevated-popover-z: 10003;
+}
+
+body[data-slide-up-open] .elevated-popover {
+  z-index: 10003;
+  position: relative;
+}
+
+body[data-slide-up-open] [data-radix-popper-content-wrapper] {
+  z-index: 10003 !important;
+}
+
+/* Mobile bottom sheets own downward overscroll so the browser cannot turn it into page refresh. */
+@media (max-width: 1023px) {
+  html[data-mobile-sheet-open],
+  html[data-mobile-sheet-open] body,
+  body[data-mobile-sheet-open] {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */

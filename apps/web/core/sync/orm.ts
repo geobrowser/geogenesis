@@ -204,31 +204,71 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    const localEntity = store.getEntity(id, { includeDeleted: true, spaceId });
+    // Read unscoped and filter below. Reading it scoped meant `liveValues` held only the requested
+    // space, so the cross-space fallback had nothing to fall back to and an entity named in another
+    // locally-loaded space still rendered untitled (GEO-2778).
+    const localEntity = store.getEntity(id, { includeDeleted: true });
 
     if (!localEntity && !remoteEntity) {
       return null;
     }
 
     if (!remoteEntity) {
-      return store.getEntity(id) ?? null;
+      // Scoped, like every other exit from this function. A local-only or unpublished entity takes
+      // this branch whenever the network lookup comes back empty, and dropping `spaceId` here handed
+      // back the top-ranked name and cross-space description — the very thing being fixed, reached
+      // by the one path that never consults the remote (GEO-2778).
+      return store.getEntity(id, { spaceId }) ?? null;
     }
 
     if (!localEntity) {
-      return remoteEntity;
+      if (!spaceId) return remoteEntity;
+      // `EntityDtoLive` copies the API's aggregate `description`, which is the graph's rather than
+      // this space's — returning it unchanged would hand back the top-ranked space's prose behind
+      // the scoping. Names may legitimately come from the aggregate; descriptions may not.
+      const remoteValues = remoteEntity.values.filter(v => !v.isDeleted);
+      return {
+        ...remoteEntity,
+        name: Entities.nameInSpace(remoteValues, spaceId) ?? remoteEntity.name,
+        description: Entities.descriptionInSpace(remoteValues, spaceId),
+      };
     }
 
     const mergedValues = merge(localEntity.values, remoteEntity.values);
 
-    const values = mergedValues.filter(v => !v.isDeleted && (spaceId ? v.spaceId === spaceId : true));
+    const liveValues = mergedValues.filter(v => !v.isDeleted);
+    const values = liveValues.filter(v => (spaceId ? v.spaceId === spaceId : true));
 
     const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
     const relations = mergedRelations.filter(r => !r.isDeleted && (spaceId ? r.spaceId === spaceId : true));
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
-    const name = Entities.name(values);
-    const description = Entities.description(values);
+    //
+    // Read from `liveValues` rather than the space-filtered `values`: this path was already scoped
+    // but had no fallback, so an entity a space had never named rendered untitled there rather than
+    // borrowing the graph's name. `nameInSpace` scopes and falls back in one place (GEO-2778).
+    // `?? remoteEntity.name`: a space-scoped response carries no other space's name triples, but its
+    // aggregate `name` still holds the graph's. Without this the merge discards the only fallback
+    // available whenever those triples were never hydrated locally.
+    //
+    // Gated on a local tombstone. `localEntity` is read *with* deleted values precisely so a pending
+    // local deletion can mask the remote one, and deriving the name from merged values alone is what
+    // honoured that before this fallback existed — see the line above. The aggregate covers triples
+    // that were never hydrated; a tombstone means this one was, and the reader deleted it, so
+    // resurrecting the server's pre-deletion name would undo their edit in front of them.
+    const deletedLocally = (propertyId: string) => Entities.hasDeletedValue(mergedValues, propertyId);
+
+    const name =
+      Entities.nameInSpace(liveValues, spaceId) ?? (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
+
+    // The aggregate applies only to an unscoped read: when a space was named, borrowing the graph's
+    // prose is what `descriptionInSpace` exists to decline. And only when nothing was deleted, for
+    // the same reason as the name above. Resolved through the helper rather than `Entities.description`
+    // so an empty triple normalises to null here too, instead of blocking the fallback with `''`.
+    const description =
+      Entities.descriptionInSpace(liveValues, spaceId) ??
+      (spaceId || deletedLocally(SystemIds.DESCRIPTION_PROPERTY) ? null : remoteEntity.description);
     const types = readTypes(relations);
     const derivedSpaces = Entities.spaces(values, relations);
     const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;
@@ -241,6 +281,17 @@ export class E {
       types,
       values: values,
       relations: relations,
+      /**
+       * Carried rather than derived. Everything above is rebuilt from the merged values and
+       * relations, but timestamps are server metadata with no local counterpart, so reconstructing
+       * the entity without them silently strips what the query fetched.
+       *
+       * That matters because consumers read a missing timestamp as "not hydrated yet" and fall back
+       * to their own per-row fetch — the remote is preferred, and the local copy is the fallback so
+       * an entity already in the store keeps whatever it had.
+       */
+      createdAt: remoteEntity.createdAt ?? localEntity.createdAt,
+      updatedAt: remoteEntity.updatedAt ?? localEntity.updatedAt,
     };
   }
 
@@ -335,6 +386,8 @@ export class E {
     spaceId,
     sort,
     orderBy,
+    includeEmptyNames,
+    signal,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -345,24 +398,29 @@ export class E {
     spaceId?: string;
     sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
     orderBy?: EntitiesOrderBy[];
+    includeEmptyNames?: boolean;
+    signal?: AbortController['signal'];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
 
       if (sort) {
-        const filter = convertWhereConditionToEntityFilter(where);
+        const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
         const page = await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            includeWithoutValue: sort.includeWithoutValue,
-            spaceId,
-            limit: first,
-            after,
-            offset,
-            filter,
-          })
+          getEntitiesOrderedByPropertyConnection(
+            {
+              propertyId: sort.propertyId,
+              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+              dataType: sort.dataType,
+              includeWithoutValue: sort.includeWithoutValue,
+              spaceId,
+              limit: first,
+              after,
+              offset,
+              filter,
+            },
+            signal
+          )
         );
 
         const remoteEntities = page.entities;
@@ -402,32 +460,38 @@ export class E {
       return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
     }
 
-    const filter = convertWhereConditionToEntityFilter(where);
+    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
     const typeIds = extractTypeIdsFromWhere(where);
 
     const page = sort
       ? await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection({
-            propertyId: sort.propertyId,
-            sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-            dataType: sort.dataType,
-            includeWithoutValue: sort.includeWithoutValue,
-            spaceId,
-            limit: first,
-            after,
-            offset,
-            filter,
-          })
+          getEntitiesOrderedByPropertyConnection(
+            {
+              propertyId: sort.propertyId,
+              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
+              dataType: sort.dataType,
+              includeWithoutValue: sort.includeWithoutValue,
+              spaceId,
+              limit: first,
+              after,
+              offset,
+              filter,
+            },
+            signal
+          )
         )
       : await Effect.runPromise(
-          getAllEntities({
-            limit: first,
-            after,
-            offset,
-            filter,
-            typeIds,
-            orderBy,
-          })
+          getAllEntities(
+            {
+              limit: first,
+              after,
+              offset,
+              filter,
+              typeIds,
+              orderBy,
+            },
+            signal
+          )
         );
 
     const remoteEntities = page.entities;

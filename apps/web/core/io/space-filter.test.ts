@@ -211,3 +211,38 @@ describe('removeSpaceIdsFromFilter', () => {
     });
   });
 });
+
+describe('promoting the `overlaps` operator the where-converter emits', () => {
+  // `convertWhereConditionToEntityFilter` emits `spaceIds: { overlaps: [...] }` for a `spaces`
+  // clause, because `spaceIds` is an array column and `in` there compares whole arrays. If these
+  // helpers don't recognize it the rows are still correct — the clause stays on the residual filter
+  // and the server applies it — but the query silently loses its indexed top-level path and its
+  // per-row `valuesList`/`relationsList` space scoping, which is how another space's values reach
+  // a row.
+
+  it('promotes a single-space `overlaps` the way it promotes a single-element `in`', () => {
+    expect(extractSingleSpaceIdFromFilter({ spaceIds: { overlaps: ['space-a'] } })).toBe('space-a');
+  });
+
+  it('promotes a multi-space `overlaps` to the top-level spaceIds arg', () => {
+    expect(extractSpaceIdsFromFilter({ spaceIds: { overlaps: ['space-a', 'space-b'] } })).toEqual({
+      in: ['space-a', 'space-b'],
+    });
+  });
+
+  it('finds it through the empty-name `and` wrap the converter adds', () => {
+    // The real shape a data block produces: the converter AND-wraps its filter with the empty-name
+    // exclusion, so the clause is never at the top level in practice.
+    const wrapped = {
+      and: [{ spaceIds: { overlaps: ['space-a', 'space-b'] } }, { name: { isNull: false, isNot: '' } }],
+    };
+
+    expect(extractSpaceIdsFromFilter(wrapped)).toEqual({ in: ['space-a', 'space-b'] });
+    expect(extractSingleSpaceIdFromFilter({ and: [{ spaceIds: { overlaps: ['space-a'] } }] })).toBe('space-a');
+  });
+
+  it('leaves a single-element `overlaps` to the single-space extractor', () => {
+    // Same division of labour as `in`: one space goes to the scalar `$spaceId`, several to the list.
+    expect(extractSpaceIdsFromFilter({ spaceIds: { overlaps: ['space-a'] } })).toBeUndefined();
+  });
+});

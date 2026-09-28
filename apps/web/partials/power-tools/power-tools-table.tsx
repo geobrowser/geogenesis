@@ -408,7 +408,6 @@ function SortableHeaderCell({
 export function PowerToolsTable({
   rows,
   properties,
-  propertiesById,
   spaceId,
   hasNextPage,
   isFetchingNextPage,

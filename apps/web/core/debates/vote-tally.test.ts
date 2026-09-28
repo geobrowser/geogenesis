@@ -13,6 +13,7 @@ const vote = (id: string, voterSpaceId: string, winnerSpaceEntityId: string): De
   voterSpaceId,
   winnerSpaceEntityId,
   winnerName: winnerSpaceEntityId === ALICE ? 'Alice' : 'Bob',
+  winnerRelationId: `${id}-winner`,
 });
 
 describe('tallyDebateVotes', () => {

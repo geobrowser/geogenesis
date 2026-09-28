@@ -81,6 +81,14 @@ export const ApiActionSchema = Schema.Struct({
   slowThreshold: Schema.optional(Schema.Number),
   universalPercentageSupportThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
+  /**
+   * Whether the proposal also flips new-member fast-path access.
+   *
+   * The API had been sending this all along; the schema simply did not declare it, and decoding
+   * drops what it does not know about. So the value was arriving and being thrown away one layer
+   * before anything could read it — which is why the review page showed nothing.
+   */
+  disableFastPathAccessForNewMembers: Schema.optional(Schema.Boolean),
   targetSpaceId: Schema.optional(Schema.String),
   targetTopicId: Schema.optional(Schema.String),
 });
@@ -324,6 +332,11 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
  * carries the new values (`slowThreshold`, `universalPercentageSupportThreshold`,
  * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
  * such action or it carries none of them.
+ *
+ * `disableFastPathAccessForNewMembers` is read here too. It was absent from the schema until the
+ * setting became editable, so decoding dropped it and a proposal that only flipped that switch
+ * rendered as a no-op — five rows, none of them changed, over an access-control change. Nothing
+ * about the API had to change; the field only had to be declared.
  */
 export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]): VotingSettingsProposalDetails | null {
   const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');
@@ -337,6 +350,7 @@ export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]):
     fastThreshold: action.fastThreshold,
     quorum: action.quorum,
     durationSeconds: action.duration,
+    disableFastPathForNewMembers: action.disableFastPathAccessForNewMembers,
   };
 
   const hasAnyValue = Object.values(details).some(value => value !== undefined);
@@ -350,17 +364,38 @@ export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]):
  * anywhere in the list wins over whatever happens to be first.
  */
 export function mapApiActionsToProposalType(actions: readonly ApiAction[]): ProposalType {
-  if (actions.some(a => a.actionType === 'PUBLISH')) {
+  return proposalTypeFromActionTypes(actions.map(action => action.actionType));
+}
+
+/**
+ * What a proposal *is*, from the action types it carries, in precedence order.
+ *
+ * The precedence is the point, and the reason this is not a lookup of the first
+ * action: **no source guarantees action order.** `findMembershipAction` above
+ * says so for the REST schema, and `proposalActionsConnection` on the graph is
+ * the same — so first-wins gives a multi-action proposal an arbitrary identity,
+ * and for an unnamed one the identity *is* the title.
+ *
+ * Split out from `mapApiActionsToProposalType` so a caller holding action types
+ * without the rest of an `ApiAction` gets the same answer. The profile's
+ * Proposals tab is one: its types come from the graph, two columns wide, and it
+ * had reimplemented this as "keep the first" (GEO-2859).
+ */
+export function proposalTypeFromActionTypes(actionTypes: readonly string[]): ProposalType {
+  if (actionTypes.includes('PUBLISH')) {
     return 'ADD_EDIT';
   }
-  const membershipAction = findMembershipAction(actions);
-  if (membershipAction) {
-    return mapActionTypeToProposalType(membershipAction.actionType);
+
+  const membership = actionTypes.find(actionType => (MEMBERSHIP_ACTION_TYPES as ReadonlySet<string>).has(actionType));
+  if (membership) {
+    return mapActionTypeToProposalType(membership);
   }
-  if (actions.some(a => a.actionType === 'UPDATE_VOTING_SETTINGS')) {
+
+  if (actionTypes.includes('UPDATE_VOTING_SETTINGS')) {
     return 'UPDATE_VOTING_SETTINGS';
   }
-  return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
+
+  return mapActionTypeToProposalType(actionTypes[0] ?? 'UNKNOWN');
 }
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {

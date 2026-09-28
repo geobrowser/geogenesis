@@ -1,9 +1,10 @@
 import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
+import { Placeholder } from '@tiptap/extensions';
 import { Editor } from '@tiptap/react';
 
 import React from 'react';
@@ -13,25 +14,42 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BlockDragHandle,
   BlockGutterHoverArea,
+  blockKeyboardCodes,
+  findTopLevelBlockElement,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
+  getTopLevelBlockChildIndexFromTarget,
   getTopLevelBlockElements,
+  insertTextBlockBelow,
   isBlockDropNoOp,
+  isElementInUsefulViewport,
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
+  shouldUseNativeContextMenu,
 } from './block-reorder';
+
+describe('blockKeyboardCodes', () => {
+  it('leaves Enter available to open the drag-handle actions menu', () => {
+    expect(blockKeyboardCodes.start).toEqual(['Space']);
+    expect(blockKeyboardCodes.end).toEqual(['Space', 'Tab']);
+  });
+});
 
 const editors: Editor[] = [];
 
 afterEach(() => {
   cleanup();
-  for (const editor of editors.splice(0)) editor.destroy();
+  for (const editor of editors.splice(0)) {
+    editor.view.dom.remove();
+    editor.destroy();
+  }
   vi.unstubAllGlobals();
 });
 
 describe('BlockDragHandle', () => {
-  it('bridges the gap between the visible handle and the hovered block', () => {
+  it('renders the plus button to the left of the drag handle', () => {
+    const onInsertBelow = vi.fn();
     render(
       React.createElement(
         DndContext,
@@ -42,16 +60,22 @@ describe('BlockDragHandle', () => {
           left: -32,
           isDragging: false,
           visible: true,
+          onInsertBelow,
         })
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
-    const hoverBridge = button.parentElement;
+    const addButton = screen.getByRole('button', { name: 'Add block below block 1' });
+    const dragButton = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
+    const hoverCluster = dragButton.parentElement;
 
-    expect(button).toHaveClass('size-6');
-    expect(hoverBridge).toHaveAttribute('data-block-drag-handle');
-    expect(hoverBridge).toHaveClass('w-8');
+    expect(addButton.compareDocumentPosition(dragButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(hoverCluster).toHaveAttribute('data-block-drag-handle');
+    expect(hoverCluster).toHaveClass('w-[60px]');
+    expect(addButton.firstElementChild).toHaveClass('size-[15px]', '-translate-y-px');
+
+    fireEvent.click(addButton);
+    expect(onInsertBelow).toHaveBeenCalledOnce();
   });
 
   it('reveals a hidden handle when it receives keyboard focus', () => {
@@ -69,7 +93,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     const handle = button.parentElement;
     expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
 
@@ -107,7 +131,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     expect(button.parentElement).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
     expect(button).toHaveClass('touch-none');
   });
@@ -127,7 +151,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     button.focus();
     const pointerDown = new MouseEvent('pointerdown', { bubbles: true });
     button.dispatchEvent(pointerDown);
@@ -136,6 +160,46 @@ describe('BlockDragHandle', () => {
     releasePointerDragFocus(pointerDown);
 
     expect(button).not.toHaveFocus();
+  });
+
+  it('shows block actions from the drag handle', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const onCopyLink = vi.fn();
+    const onCopyBlock = vi.fn();
+    const onDuplicateBlock = vi.fn();
+
+    render(
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: true,
+          actionsOpen: true,
+          onActionsOpenChange: vi.fn(),
+          onCopyLink,
+          onCopyBlock,
+          onDuplicateBlock,
+        })
+      )
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link to block' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy block' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate block' }));
+
+    expect(onCopyLink).toHaveBeenCalledOnce();
+    expect(onCopyBlock).toHaveBeenCalledOnce();
+    expect(onDuplicateBlock).toHaveBeenCalledOnce();
   });
 });
 
@@ -153,10 +217,64 @@ describe('BlockGutterHoverArea', () => {
 
     expect(container.querySelector('[data-block-drag-gutter]')).toHaveStyle({
       top: '10px',
-      left: '52px',
-      width: '48px',
+      left: '40px',
+      width: '60px',
       height: '60px',
     });
+  });
+});
+
+describe('insertTextBlockBelow', () => {
+  it('inserts an empty paragraph directly below the selected block and focuses it', async () => {
+    const editor = makeEditor(['A', 'B']);
+    document.body.appendChild(editor.view.dom);
+
+    expect(insertTextBlockBelow(editor, 0)).toBe(true);
+
+    expect(blockText(editor)).toEqual(['A', '', 'B']);
+    expect(editor.state.selection.from).toBe(editor.state.doc.child(0).nodeSize + 1);
+    await waitFor(() => expect(editor.isFocused).toBe(true));
+  });
+
+  it('inserts below the final block', () => {
+    const editor = makeEditor(['A', 'B']);
+
+    expect(insertTextBlockBelow(editor, 1)).toBe(true);
+    expect(blockText(editor)).toEqual(['A', 'B', '']);
+  });
+
+  it('shows the empty-block help text as soon as the inserted block receives focus', async () => {
+    const helpText = 'Empty block help';
+    const editor = new Editor({
+      extensions: [
+        Document,
+        Paragraph,
+        Text,
+        Placeholder.configure({
+          showOnlyCurrent: false,
+          placeholder: ({ editor: currentEditor, hasAnchor }) => (currentEditor.isFocused && hasAnchor ? helpText : ''),
+        }),
+      ],
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'A' }] }] },
+    });
+    editors.push(editor);
+    document.body.appendChild(editor.view.dom);
+
+    expect(insertTextBlockBelow(editor, 0)).toBe(true);
+    await waitFor(() => expect(editor.isFocused).toBe(true));
+
+    expect(
+      Array.from(editor.view.dom.querySelectorAll('[data-placeholder]')).map(node =>
+        node.getAttribute('data-placeholder')
+      )
+    ).toEqual([helpText]);
+  });
+
+  it('does not change the document for an invalid block index', () => {
+    const editor = makeEditor(['A']);
+
+    expect(insertTextBlockBelow(editor, 1)).toBe(false);
+    expect(blockText(editor)).toEqual(['A']);
   });
 });
 
@@ -203,8 +321,49 @@ describe('getGutterHoveredChildIndex', () => {
   });
 
   it('ignores pointers outside the left gutter', () => {
-    expect(getGutterHoveredChildIndex(blocks, 51, 20, 100)).toBeNull();
+    expect(getGutterHoveredChildIndex(blocks, 39, 20, 100)).toBeNull();
     expect(getGutterHoveredChildIndex(blocks, 101, 20, 100)).toBeNull();
+  });
+});
+
+describe('getTopLevelBlockChildIndexFromTarget', () => {
+  it('maps a nested context-menu target to its top-level block', () => {
+    const editorElement = document.createElement('div');
+    editorElement.className = 'ProseMirror';
+    const firstBlock = document.createElement('p');
+    const nestedTarget = document.createElement('span');
+    firstBlock.appendChild(nestedTarget);
+    editorElement.appendChild(firstBlock);
+    document.body.appendChild(editorElement);
+
+    const childIndex = getTopLevelBlockChildIndexFromTarget(
+      [{ childIndex: 3, element: firstBlock, top: 0, bottom: 20, center: 10 }],
+      nestedTarget
+    );
+    editorElement.remove();
+
+    expect(childIndex).toBe(3);
+  });
+});
+
+describe('shouldUseNativeContextMenu', () => {
+  it('preserves native menus for links and media inside a block', () => {
+    const link = document.createElement('a');
+    link.href = '/target';
+    const linkChild = document.createElement('span');
+    link.appendChild(linkChild);
+
+    expect(shouldUseNativeContextMenu(linkChild, null)).toBe(true);
+    expect(shouldUseNativeContextMenu(document.createElement('img'), null)).toBe(true);
+    expect(shouldUseNativeContextMenu(document.createElement('video'), null)).toBe(true);
+  });
+
+  it('preserves the native menu for a live text selection', () => {
+    expect(shouldUseNativeContextMenu(document.createElement('p'), { isCollapsed: false } as Selection)).toBe(true);
+  });
+
+  it('uses the block menu for an unselected plain block target', () => {
+    expect(shouldUseNativeContextMenu(document.createElement('p'), { isCollapsed: true } as Selection)).toBe(false);
   });
 });
 
@@ -290,9 +449,53 @@ describe('getTopLevelBlockElements', () => {
   });
 });
 
+describe('findTopLevelBlockElement', () => {
+  it('matches compact copied-link IDs to hyphenated block UUIDs', () => {
+    const editor = makeEditor(['Linked block']);
+    const hyphenatedId = 'c5f21322-4693-42a9-9fc6-1e387be82c2a';
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(0, undefined, {
+        ...editor.state.doc.child(0).attrs,
+        id: hyphenatedId,
+      })
+    );
+
+    expect(findTopLevelBlockElement(editor, 'c5f21322469342a99fc61e387be82c2a')).toBe(editor.view.nodeDOM(0));
+  });
+});
+
+describe('isElementInUsefulViewport', () => {
+  it('accepts visible and tall targets without demanding exact centering', () => {
+    const element = document.createElement('div');
+    const rect = (top: number, height = 100) =>
+      ({ top, bottom: top + height, left: 0, right: 100, width: 100, height, x: 0, y: top, toJSON() {} }) as DOMRect;
+    const rectSpy = vi.spyOn(element, 'getBoundingClientRect');
+
+    rectSpy.mockReturnValue(rect(450));
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
+
+    rectSpy.mockReturnValue(rect(50));
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
+
+    rectSpy.mockReturnValue(rect(-400, 1600));
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
+  });
+
+  it('retries only after layout moves the target outside the useful viewport', () => {
+    const element = document.createElement('div');
+    const rectSpy = vi.spyOn(element, 'getBoundingClientRect');
+
+    rectSpy.mockReturnValue({ top: -300, bottom: -200 } as DOMRect);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(false);
+
+    rectSpy.mockReturnValue({ top: 1100, bottom: 1200 } as DOMRect);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(false);
+  });
+});
+
 function makeEditor(labels: string[]) {
   const editor = new Editor({
-    extensions: [Document, Paragraph, Text],
+    extensions: [Document, Paragraph.extend({ addAttributes: () => ({ id: { default: null } }) }), Text],
     content: {
       type: 'doc',
       content: labels.map(label => ({ type: 'paragraph', content: [{ type: 'text', text: label }] })),

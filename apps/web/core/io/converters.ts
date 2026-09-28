@@ -232,6 +232,17 @@ export function convertWhereConditionToEntityFilter(
     return emptyNameExclusion;
   }
 
+  // A pure-AND filter is flattened instead of double-wrapped (conjunction is
+  // associative, so this preserves semantics). This keeps clauses like
+  // `spaceIds` at depth one, where the space/type promotion helpers
+  // (extractSingleSpaceIdFromFilter et al.) can still find them — a filter
+  // shaped `{ and: [{ and: [{ spaceIds }, ...] }, { name }] }` defeats the
+  // promotion and the server falls off the indexed path (statement timeouts
+  // on real data blocks).
+  if (Object.keys(filter).length === 1 && filter.and) {
+    return { and: [...filter.and, emptyNameExclusion] };
+  }
+
   return { and: [filter, emptyNameExclusion] };
 }
 
@@ -298,7 +309,16 @@ function convertWhereConditionToEntityFilterInner(where: WhereCondition): Entity
       }
     });
     if (spaceIds.length > 0) {
-      filter.spaceIds = { in: spaceIds } as UuidListFilter;
+      // `overlaps`, not `in`. `spaceIds` is an array column, and on one of those `in` asks whether
+      // the *whole array* equals one of the given arrays — so an entity living in spaces [A, B]
+      // does not match a filter for A. `overlaps` asks whether the two share an element, which is
+      // what "this entity is in one of these spaces" means, and what the local matcher in
+      // `experimental_query-layer` has always done (`clause.some(...entity.spaces.includes)`).
+      //
+      // Measured against testnet: the same topic-scoped query returns 829 rows with `overlaps` and
+      // 3 with `in`, and 41 of 1,000 sampled entities live in more than one space — so this was
+      // silently hiding multi-space entities from every space-filtered data block.
+      filter.spaceIds = { overlaps: spaceIds } as UuidListFilter;
     }
   }
 

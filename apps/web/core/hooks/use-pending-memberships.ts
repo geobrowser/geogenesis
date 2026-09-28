@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchPendingMembershipSpaceIds } from '~/core/io/subgraph/fetch-pending-membership-space-ids';
 import {
   activeRequestedSpacesForOwner,
@@ -45,6 +46,8 @@ export function usePendingMembershipSpaceIds() {
  */
 export function usePendingMembershipSet(): Set<string> {
   const { personalSpaceId } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const address = smartAccount?.account.address;
   const serverSet = usePendingMembershipSpaceIds();
   const requested = useAtomValue(requestedMembershipSpacesAtom);
 
@@ -52,11 +55,13 @@ export function usePendingMembershipSet(): Set<string> {
     const combined = new Set(serverSet);
     // Only this account's still-active optimistic entries — never a signed-out
     // user's or prior account's leftover state, and never an expired bridge
-    // entry (so a later-rejected request stops showing as pending).
-    const active = activeRequestedSpacesForOwner(requested, personalSpaceId, Date.now());
+    // entry (so a later-rejected request stops showing as pending). Match by the
+    // wallet address too, so an onboarding request (made before the personal
+    // space id exists) shows instantly.
+    const active = activeRequestedSpacesForOwner(requested, personalSpaceId, Date.now(), address);
     for (const id of requestedMembershipIdSet(active)) combined.add(id);
     return combined;
-  }, [serverSet, requested, personalSpaceId]);
+  }, [serverSet, requested, personalSpaceId, address]);
 }
 
 /** Whether the given space currently has a pending membership request for the user. */

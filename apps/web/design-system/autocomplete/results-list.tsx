@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -57,6 +58,69 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
   />
 );
 
+/**
+ * A result row: a link where the row goes somewhere, a button where it picks something.
+ *
+ * Search results are links, and a link the browser cannot act on is a link with most of its
+ * behaviour missing — no cmd-click, no middle click, nothing under right click (GEO-2701). Pickers
+ * choose a value rather than navigate, so they pass no `href` and keep the button they had.
+ */
+function ResultRow({
+  href,
+  onActivate,
+  disabled = false,
+  className,
+  children,
+  ...rest
+}: {
+  href?: string;
+  /** Named away from `onSelect`, which is a DOM prop and collides with the spread row props. */
+  onActivate: () => void;
+  /** The row is showing something the caller has already taken; it renders but does not act. */
+  disabled?: boolean;
+  className: string;
+  children: React.ReactNode;
+  // Attributes both elements understand. Deliberately not the button's own props: `disabled`,
+  // `type` and `form` mean nothing on an anchor, and a wider type here would let a caller pass one
+  // and have it quietly do nothing on whichever branch it landed in.
+} & React.HTMLAttributes<HTMLElement>) {
+  if (!href) {
+    return (
+      <button onClick={onActivate} className={className} {...rest}>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      className={className}
+      onClick={event => {
+        // A row standing in for something already taken does not travel, by any means of asking.
+        // Checked before the modifier branch, which returns without preventing the default.
+        if (disabled) {
+          event.preventDefault();
+          return;
+        }
+        // The browser has been asked for a new tab or window. Let it, and stop the event here so
+        // the list around this row does not navigate the current one as well.
+        if (isModifiedClick(event)) {
+          event.stopPropagation();
+          return;
+        }
+        // An ordinary click belongs to whatever already handled selection — cmdk's `onSelect` in
+        // the search dialog. Following the href too would navigate twice.
+        event.preventDefault();
+        onActivate();
+      }}
+      {...rest}
+    >
+      {children}
+    </a>
+  );
+}
+
 type ResultContentProps = {
   onClick: () => void;
   result: SearchResult;
@@ -66,7 +130,14 @@ type ResultContentProps = {
   active?: boolean;
   /** When set, renders a multi-select checkbox (empty/checked) on the row instead of the single-select indicator. */
   multiSelectChecked?: boolean;
-} & React.ComponentPropsWithoutRef<'button'>;
+  /**
+   * Where this row goes, when it goes somewhere. Set by surfaces that navigate; left unset by the
+   * pickers, which select a value instead.
+   */
+  href?: string;
+  // Attributes shared by the button and the anchor this row can be. It used to promise the
+  // button's own props, which no caller used and the anchor branch could not honour.
+} & React.HTMLAttributes<HTMLElement>;
 
 export const ResultContent = ({
   onClick,
@@ -76,6 +147,7 @@ export const ResultContent = ({
   withDescription = true,
   onChooseSpace,
   multiSelectChecked,
+  href,
   ...rest
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
@@ -99,8 +171,10 @@ export const ResultContent = ({
 
   return (
     <div>
-      <button
-        onClick={onSelect}
+      <ResultRow
+        href={href}
+        onActivate={onSelect}
+        disabled={alreadySelected}
         className={cx(
           active && 'bg-grey-01',
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
@@ -148,7 +222,7 @@ export const ResultContent = ({
             </Truncate>
           </>
         )}
-      </button>
+      </ResultRow>
       {hasOtherSpaces && !!onChooseSpace && (
         <button
           onClick={e => {
@@ -185,6 +259,8 @@ type SpaceContentProps = {
   space: SpaceEntity;
   alreadySelected?: boolean;
   withDescription?: boolean;
+  /** Where this row goes. Same reasoning as `ResultContentProps['href']`. */
+  href?: string;
 };
 
 export const SpaceContent = ({
@@ -193,6 +269,7 @@ export const SpaceContent = ({
   space,
   alreadySelected,
   withDescription = true,
+  href,
 }: SpaceContentProps) => {
   const entity = useEntity({ id: entityId, spaceId: space.spaceId });
 
@@ -209,8 +286,10 @@ export const SpaceContent = ({
 
   return (
     <div>
-      <button
-        onClick={onSelect}
+      <ResultRow
+        href={href}
+        onActivate={onSelect}
+        disabled={alreadySelected}
         className={cx(
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
           'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'
@@ -252,7 +331,7 @@ export const SpaceContent = ({
             </Truncate>
           </>
         )}
-      </button>
+      </ResultRow>
     </div>
   );
 };

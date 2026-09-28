@@ -1,0 +1,258 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
+
+import type { DebateClaimPositionSummary } from '../api';
+import { PositionRow } from './matchmaking-claim-card';
+
+// GEO-2774. The pills carry `truncate` on the label while the icon and the avatar stack are
+// `shrink-0`, so when the row runs out of width the label is what gives — which is how a button
+// that says what pressing it does rendered as "Ag..." and "Dis..." on the explore feed. The row
+// answers that by stacking instead of clipping, and it decides on its *own* width rather than the
+// viewport's, because the same row is dropped into a feed card, a side panel and the claim page at
+// widths none of them agrees on.
+describe('PositionRow', () => {
+  afterEach(cleanup);
+
+  const positions: DebateClaimPositionSummary[] = [];
+
+  // Two faces and a remainder — the widest stack the component will draw.
+  const withParticipants: DebateClaimPositionSummary[] = [
+    {
+      position: true,
+      position_label: 'Agree',
+      total_count: 9,
+      available_now_count: 9,
+      present_count: 9,
+      participants: [
+        { user_id: 'u1', profile_space_id: 's1', display_name: 'One', avatar_cid: null },
+        { user_id: 'u2', profile_space_id: 's2', display_name: 'Two', avatar_cid: null },
+      ],
+    },
+  ];
+
+  it('stacks by default and only goes two across once the row itself is wide enough', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    const grid = screen.getByText('Agree').closest('.grid') as HTMLElement;
+
+    expect(grid).not.toBeNull();
+    // One column is the base, so a row that never gets a container query still renders both labels
+    // whole rather than clipping them.
+    expect([...grid.classList]).toContain('grid-cols-1');
+    expect([...grid.classList]).toContain('claim-pills-wide:grid-cols-2');
+    // Deliberately not a media query: `md:grid-cols-2` would read the window, which says nothing
+    // about the width of the panel this row was dropped into.
+    expect(grid.className).not.toContain('md:grid-cols');
+  });
+
+  it('measures against its own width, not an ancestor container', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    const grid = screen.getByText('Agree').closest('.grid') as HTMLElement;
+
+    // The query above resolves against the nearest container ancestor, so the row has to establish
+    // one of its own. Without this the variant would silently resolve against whatever container
+    // happened to be further up — the explore card, say — and report the wrong width.
+    expect([...(grid.parentElement as HTMLElement).classList]).toContain('@container');
+  });
+
+  it('sheds the avatar stack as the pill narrows rather than letting the label truncate', () => {
+    // Copilot caught this on PR #2325: `claim-pills-wide` guarantees a pill wide enough for the
+    // label plus one face, but a full stack is a face, a second face and a `+N` badge. The stack is
+    // `shrink-0` and the label is not, so the surplus came out of the word — the very bug the
+    // breakpoint exists to prevent, on exactly the claims that have people to show.
+    //
+    // The thresholds are content-box widths, which is what a container query measures, so they read
+    // 24px under the pill widths they correspond to (`px-3`).
+    render(<PositionRow positions={withParticipants} responseKind="stance" viewerPosition={null} />);
+
+    const pill = screen.getByText('Agree').closest('button, div') as HTMLElement;
+    const stack = pill.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const [firstFace, secondFace] = [...stack.children] as HTMLElement[];
+    const badge = stack.lastElementChild as HTMLElement;
+
+    // The pill has to be a container of its own, or these query whatever is further up and shed at
+    // the wrong width.
+    expect([...pill.classList]).toContain('@container');
+
+    // Widest goes first, narrowest last: badge, then the second face, then the first.
+    // Re-derived when the faces became a 16px picture in a 2px ring pitched 13px apart: a first
+    // face costs 20px of box and each one after it 13px. See `PositionAvatars` for the arithmetic.
+    expect([...badge.classList]).toContain('@max-[128px]:hidden');
+    expect([...secondFace.classList]).toContain('@max-[115px]:hidden');
+    expect([...firstFace.classList]).toContain('@max-[102px]:hidden');
+
+    // The label carries no shed rule of its own — it is the thing all of the above protects.
+    const label = screen.getByText('Agree');
+    expect(label.className).not.toContain(':hidden');
+  });
+
+  it('drops the overflow badge before it drops a face, so the faces stay truthful', () => {
+    // `+N` is computed against the participants rendered, so hiding a face would leave a badge that
+    // no longer adds up. Hiding the badge only stops advertising a remainder.
+    render(<PositionRow positions={withParticipants} responseKind="stance" viewerPosition={null} />);
+
+    const stack = (screen.getByText('Agree').closest('button, div') as HTMLElement).querySelector(
+      '[aria-hidden="true"]'
+    ) as HTMLElement;
+    const threshold = (el: Element) => Number(/@max-\[(\d+)px\]:hidden/.exec(el.className)?.[1] ?? NaN);
+
+    const badge = threshold(stack.lastElementChild as HTMLElement);
+    const secondFace = threshold(stack.children[1]);
+    const firstFace = threshold(stack.children[0]);
+
+    expect(badge).toBeGreaterThan(secondFace);
+    expect(secondFace).toBeGreaterThan(firstFace);
+  });
+
+  it('caps the overflow badge so a crowd cannot widen the stack back into the label', () => {
+    // Copilot's follow-up on PR #2325: the shedding rules are written against a 32px badge, which
+    // is its `min-w-5` floor. Measured, the text outgrows that floor between "+99" (32px) and
+    // "+100" (34.9px), so an uncapped count would widen a `shrink-0` stack and start taking width
+    // off the label again — the exact truncation the rules exist to prevent.
+    const crowded: DebateClaimPositionSummary[] = [
+      { ...withParticipants[0], total_count: 900, available_now_count: 900, present_count: 900 },
+    ];
+
+    render(<PositionRow positions={crowded} responseKind="stance" viewerPosition={null} />);
+
+    // 898 people beyond the two faces, printed as the widest thing that still fits the floor.
+    expect(screen.getByText('+99')).toBeInTheDocument();
+    expect(screen.queryByText('+898')).toBeNull();
+  });
+
+  it('prints the exact remainder while it fits', () => {
+    // The cap is a ceiling, not a rounding: an ordinary count is still reported precisely.
+    const few: DebateClaimPositionSummary[] = [
+      { ...withParticipants[0], total_count: 5, available_now_count: 5, present_count: 5 },
+    ];
+
+    render(<PositionRow positions={few} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.getByText('+3')).toBeInTheDocument();
+  });
+
+  /**
+   * The pills name the sides Agree and Disagree for every claim.
+   *
+   * This case used to render `responseKind="veracity"` and expect Verify and Dispute. The flag that
+   * selected that vocabulary no longer selects anything, so the assertion is inverted rather than
+   * deleted: the claims that used to read Verify/Dispute are exactly the ones this has to prove now
+   * read Agree/Disagree.
+   */
+  it('names both sides Agree and Disagree', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A server label must not put the retired vocabulary back.
+   *
+   * geo-chat still labels the sides of a claim minted before the change, and the pills used to
+   * prefer `position_label` over their own copy — so a stale "Verify" would render on a control
+   * that can only publish an Agree. The label the pill shows and the response it sends have to be
+   * the same word.
+   */
+  it('ignores a stale Verify/Dispute label from the server', () => {
+    const labelled: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Verify',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+      {
+        position: false,
+        position_label: 'Dispute',
+        total_count: 1,
+        available_now_count: 0,
+        present_count: 0,
+        participants: [],
+      },
+    ];
+
+    render(<PositionRow positions={labelled} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.queryByText('Verify')).not.toBeInTheDocument();
+    expect(screen.queryByText('Dispute')).not.toBeInTheDocument();
+    expect(screen.getByText('Agree')).toBeInTheDocument();
+    expect(screen.getByText('Disagree')).toBeInTheDocument();
+  });
+
+  /**
+   * The glyph a pill draws, pinned against the icon it should be.
+   *
+   * Not asserted as "not a chevron": a vote arrow and an empty span satisfy that too. Comparing the
+   * rendered icon says which glyph it is, and re-rendering the expectation from the component means
+   * redrawing an icon's art does not fail these.
+   */
+  const glyphMarkup = (label: string) =>
+    screen.getByText(label).closest('span')?.parentElement?.querySelector('svg')?.outerHTML ?? null;
+
+  const iconMarkup = (node: React.ReactNode) => render(<>{node}</>).container.innerHTML;
+
+  it('draws thumbs on both pills', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled={false} />));
+    expect(glyphMarkup('Disagree')).toBe(iconMarkup(<ThumbDown filled={false} />));
+  });
+
+  it('fills the pill and its thumb on the side the viewer holds', () => {
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} />);
+
+    expect(glyphMarkup('Agree')).toBe(iconMarkup(<ThumbUp filled />));
+    expect([...(screen.getByText('Agree').closest('div.flex.min-h-7') as HTMLElement).classList]).toContain(
+      'bg-divider'
+    );
+  });
+
+  // A response confirms for 10-50s, and the pills drop presses for all of it. The wait cursor is
+  // the only thing left that says so on screen: the note that used to sit under the pills was
+  // taken out, because it read as a side not yet taken, and `aria-disabled` is heard rather than
+  // seen. Asserted so the next pass at quieting this row does not take the last cue with it.
+  describe('while a response is confirming', () => {
+    const pill = (label: string) => screen.getByText(label).closest('button') as HTMLElement;
+
+    it('puts a wait cursor on both pills', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      expect([...pill('Agree').classList]).toContain('cursor-progress');
+      expect([...pill('Disagree').classList]).toContain('cursor-progress');
+    });
+
+    it('leaves the pills looking taken, with no note under them', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      // The side still reads as held: full strength, and nothing announcing a wait. A pressable
+      // pill carries the fill on the button itself, not on an inner div as the read-only one does.
+      expect([...pill('Agree').classList]).toContain('bg-divider');
+      expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+      // Dropped presses are still spoken, since a cursor is not.
+      expect(pill('Agree')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('drops the cursor once the response lands', () => {
+      render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} onRespond={() => {}} />);
+
+      expect([...pill('Agree').classList]).not.toContain('cursor-progress');
+    });
+  });
+});

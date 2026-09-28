@@ -11,10 +11,18 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
+import { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
+import {
+  buildAccumulationResetKey,
+  resolveInfiniteScrollDisplay,
+  viewRendersAllEntries,
+} from '~/core/blocks/data/infinite-scroll-display';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
+import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { sourceSupportsDropdowns } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import {
   isEntityVisibleInBlock,
@@ -76,6 +84,8 @@ import { DataBlockViewMenu } from './data-block-view-menu';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
+import { TableBlockDropdowns } from './table-block-dropdowns';
+import { TableBlockDropdownsConfigChips, TableBlockDropdownsConfigTrigger } from './table-block-dropdowns-config';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -149,7 +159,7 @@ function useEntries(
   filterState: Filter[],
   relations: Relation[] | undefined,
   source: Source,
-  canEdit: boolean
+  _canEdit: boolean
 ) {
   const isEditing = useUserIsEditing(spaceId);
 
@@ -551,7 +561,6 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
 const ConfiguredTableBlock = ({
   spaceId,
   blockId,
-  onCompleteQuerySetup,
   initialFiltersOpen = false,
   onConsumedInitialFiltersOpen,
 }: Props) => {
@@ -559,7 +568,6 @@ const ConfiguredTableBlock = ({
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const { entityId, relationId } = useDataBlockInstance();
   const blockEntityId = blockId ?? entityId;
-  const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
 
@@ -573,6 +581,10 @@ const ConfiguredTableBlock = ({
     isLoading,
     isFetched,
     isPlaceholderData,
+    error: dataBlockError,
+    refetch: refetchDataBlock,
+    whereKey,
+    sortKey,
     hasNextPage,
     hasPreviousPage,
     pageNumber,
@@ -588,11 +600,11 @@ const ConfiguredTableBlock = ({
     source,
     setSource,
     filterState: activeFilters,
-    filterMode: activeFilterMode,
+    modesByColumn: activeModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
     sortState,
     setSortState,
     filterableProperties,
@@ -600,6 +612,7 @@ const ConfiguredTableBlock = ({
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
+    browseDropdowns,
   } = useDataBlock({ canEdit });
 
   const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, propertiesSchema, {
@@ -616,12 +629,20 @@ const ConfiguredTableBlock = ({
     onConsumedInitialFiltersOpen?.();
   }, [initialFiltersOpen, onConsumedInitialFiltersOpen]);
 
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
+  );
+
+  const toggleActiveGroupMode = React.useCallback(
+    (columnId: string) => {
+      const mode = activeModesByColumn[columnId] ?? 'AND';
+      setActiveGroupMode(columnId, mode === 'AND' ? 'OR' : 'AND');
+    },
+    [activeModesByColumn, setActiveGroupMode]
   );
 
   const filterSpaceIds = React.useMemo(
@@ -633,14 +654,17 @@ const ConfiguredTableBlock = ({
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
   const setActiveFilters = React.useCallback(
-    (filters: Filter[]) => {
-      if (equal(comparableFilterList(filters), comparableFilterList(activeFilters))) {
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      if (
+        equal(comparableFilterList(filters), comparableFilterList(activeFilters)) &&
+        (!modeOverrides || Object.keys(modeOverrides).length === 0)
+      ) {
         return;
       }
       if (canEdit) {
-        setFilterState(filters);
+        setFilterState(filters, modeOverrides);
       } else {
-        setTemporaryFilters(filters);
+        setTemporaryFilters(filters, modeOverrides);
       }
       // Reset to first page when filters change
       setPage(0);
@@ -720,78 +744,126 @@ const ConfiguredTableBlock = ({
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
     const out = [...filterableProperties];
-    for (const p of properties) {
+    for (const p of [...properties, ...browseDropdowns.collectionMemberProperties]) {
       if (!out.some(x => ID.equals(x.id, p.id))) {
         out.push(p);
       }
     }
     return out;
-  }, [filterableProperties, properties]);
+  }, [filterableProperties, properties, browseDropdowns.collectionMemberProperties]);
 
-  const isExploreView = view === 'EXPLORE';
-  const isInfiniteExplore = isExploreView && !isEditing;
+  /** Dropdowns cover query and collection populations; Relations blocks have none to filter. */
+  const supportsDropdowns = sourceSupportsDropdowns(source);
+
+  // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
+  // relation entity (same entity that holds View and Properties).
+  //
+  // It only applies to views that render every entry handed to them. `TableBlockTable` — the
+  // TABLE view and the fallback for any view without its own renderer — paginates internally at
+  // a fixed 9 rows with no pager of its own, so accumulating past that is invisible: the list
+  // never grows, the sentinel below it never stops intersecting, and it walks the whole source
+  // one page at a time while the user sees nine rows. Allowlist rather than deny TABLE, so a
+  // view added later has to opt in instead of silently inheriting that.
+  const infiniteScrollProperty = useBlockInfiniteScroll();
+  const isInfiniteScroll = infiniteScrollProperty && viewRendersAllEntries(view) && !isEditing;
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
+  // A failed page never lands in `rowPages`, so without this the block cannot tell "no results"
+  // from "the fetch never came back" — see `resolveInfiniteScrollDisplay`. `error` is source-scoped
+  // by `useDataBlock`, so this only ever reflects this block's own query.
+  const hasInfiniteScrollError = isInfiniteScroll && dataBlockError != null;
+
   const accumulationResetKey = React.useMemo(
     () =>
-      JSON.stringify({
-        isInfiniteExplore,
+      buildAccumulationResetKey({
+        isInfiniteScroll,
         pageSize,
-        sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
-        filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
-        filterMode: activeFilterMode,
-        sort: sortState ?? null,
+        sourceKey: JSON.stringify(
+          source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO'
+        ),
+        whereKey,
+        sortKey,
       }),
-    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState]
+    [isInfiniteScroll, pageSize, source, whereKey, sortKey]
   );
 
+  // `setPage(0)` only lands on the next render, so between the reset and that render `pageNumber`
+  // still points at the page the user was on. The accumulation effect below runs in this same
+  // commit, so without this flag it would seed the freshly cleared `rowPages` with the *old*
+  // page's rows under the old index — leaving the list opening at page 3, or stranding those rows
+  // at the end forever if the new result set is shorter.
+  const awaitingPageResetRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (!isExploreView) return;
-    setRowPages([]);
+    setRowPages(prev => (prev.length === 0 ? prev : []));
+    if (!infiniteScrollProperty) return;
+    awaitingPageResetRef.current = true;
     setPage(0);
-  }, [accumulationResetKey, isExploreView, setPage]);
+  }, [accumulationResetKey, infiniteScrollProperty, setPage]);
 
   // Depending on the `entries` array reference (rather than a content signature)
   // is safe here: `upsertRowPage` returns the previous `pages` reference when the
   // page's entity-id signature is unchanged, so `setRowPages` bails and identity-only
   // changes to `entries` can't cause a render loop.
   React.useEffect(() => {
-    if (!isInfiniteExplore) return;
+    if (!isInfiniteScroll) return;
     if (!isFetched || isPlaceholderData) return;
+    // A failed fetch still settles as `isFetched`, so committing here would bank whatever the
+    // local-store fallback returned as if it were the page, and never retry it.
+    if (hasInfiniteScrollError) return;
+    if (awaitingPageResetRef.current) {
+      // Nothing to wait for once we are actually on page 0 — that is the reset having landed
+      // (or it never moved us, because we were already there).
+      if (pageNumber !== 0) return;
+      awaitingPageResetRef.current = false;
+    }
     const realRows = entries.filter(row => !row.placeholder);
     setRowPages(prev => upsertRowPage(prev, pageNumber, realRows));
-  }, [isInfiniteExplore, isFetched, isPlaceholderData, pageNumber, entries]);
+  }, [isInfiniteScroll, isFetched, isPlaceholderData, hasInfiniteScrollError, pageNumber, entries]);
 
   const accumulatedEntries = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageNumber), [rowPages, pageNumber]);
-  const isFetchingNextPage = isInfiniteExplore && pageNumber > 0 && !hasCurrentPage;
+  const isFetchingNextPage = isInfiniteScroll && pageNumber > 0 && !hasCurrentPage;
 
-  const fetchNextExplorePage = React.useCallback(() => {
+  const fetchNextInfinitePage = React.useCallback(() => {
     if (!hasNextPage || !hasCurrentPage || isPlaceholderData) return;
     setPage('next');
   }, [hasNextPage, hasCurrentPage, isPlaceholderData, setPage]);
 
   const infiniteScrollSentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: isInfiniteExplore && hasNextPage,
+    hasNextPage: isInfiniteScroll && hasNextPage && !hasInfiniteScrollError,
     isFetchingNextPage,
-    fetchNextPage: fetchNextExplorePage,
+    fetchNextPage: fetchNextInfinitePage,
     rootMargin: '1000px',
   });
 
-  const displayEntries = !isInfiniteExplore
+  const displayEntries = !isInfiniteScroll
     ? entries
     : accumulatedEntries.length > 0
       ? accumulatedEntries
       : entries.filter(row => !row.placeholder);
 
+  const infiniteScrollDisplay = resolveInfiniteScrollDisplay({
+    isInfiniteScroll,
+    hasRows: displayEntries.length > 0,
+    hasNextPage,
+    hasError: hasInfiniteScrollError,
+    isFetchingNextPage,
+    isFetched,
+    isLoading,
+    isCollection: source.type === 'COLLECTION',
+  });
+
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
-  // Never in infinite (explore browse) mode.
+  // Never in infinite-scroll browse mode. Restoring it on error does not help: the rendered list
+  // is the accumulated pages regardless of page number, so the pager cannot change what is on
+  // screen, and paging switches query keys which clears the error and re-arms the sentinel.
   const hasPagination =
-    !isInfiniteExplore &&
+    !isInfiniteScroll &&
     (hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered));
 
   let EntriesComponent = (
@@ -800,7 +872,7 @@ const ConfiguredTableBlock = ({
       space={spaceId}
       properties={properties}
       propertiesSchema={propertiesSchema}
-      rows={entries}
+      rows={displayEntries}
       placeholder={placeholder}
       isLoading={isLoading}
       isFetched={isFetched}
@@ -817,7 +889,7 @@ const ConfiguredTableBlock = ({
     />
   );
 
-  if (view === 'LIST' && entries.length > 0) {
+  if (view === 'LIST' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockListItemsDnd
         isEditing={isEditing}
@@ -827,7 +899,7 @@ const ConfiguredTableBlock = ({
         mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -841,7 +913,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'BULLETED_LIST' && entries.length > 0) {
+  if (view === 'BULLETED_LIST' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockBulletedListItemsDnd
         isEditing={isEditing}
@@ -850,7 +922,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -864,7 +936,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'GALLERY' && entries.length > 0) {
+  if (view === 'GALLERY' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockGalleryItemsDnd
         isEditing={isEditing}
@@ -874,7 +946,7 @@ const ConfiguredTableBlock = ({
         mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -888,7 +960,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'PILL' && entries.length > 0) {
+  if (view === 'PILL' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockPillItemsDnd
         isEditing={isEditing}
@@ -897,7 +969,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -913,43 +985,59 @@ const ConfiguredTableBlock = ({
 
   if (view === 'EXPLORE' && displayEntries.length > 0) {
     EntriesComponent = (
+      <TableBlockExploreItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={displayEntries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
+        collectionTypeFilters={collectionTypeFilters}
+      />
+    );
+  }
+
+  if (infiniteScrollDisplay.showSentinel || infiniteScrollDisplay.showSkeleton) {
+    EntriesComponent = (
       <>
-        <TableBlockExploreItemsDnd
-          isEditing={isEditing}
-          onChangeEntry={onChangeEntry}
-          onLinkEntry={onLinkEntry}
-          propertiesSchema={propertiesSchema}
-          source={source}
-          spaceId={spaceId}
-          entries={displayEntries}
-          onUpdateRelation={onUpdateRelation}
-          relations={relations ?? []}
-          collectionRelations={collectionRelations ?? []}
-          collectionLength={collectionLength}
-          pageNumber={pageNumber}
-          pageSize={pageSize}
-          shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
-          placeholderFocusKey={placeholderFocusKey}
-          collectionTypeFilters={collectionTypeFilters}
-        />
-        {isInfiniteExplore && (
-          <>
-            {isFetchingNextPage && (
-              <div className="flex flex-col gap-3 py-4" aria-hidden>
-                <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
-                <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
-              </div>
-            )}
-            <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
-          </>
+        {displayEntries.length > 0 && EntriesComponent}
+        {infiniteScrollDisplay.showSkeleton && (
+          <div className="flex flex-col gap-3 py-4" aria-hidden>
+            <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
+            <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
+          </div>
+        )}
+        {infiniteScrollDisplay.showSentinel && (
+          <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
         )}
       </>
     );
   }
-  // In infinite explore mode the current page's `entries` can momentarily be
+
+  // With no rows to show, every view-specific branch above is skipped (each requires
+  // `displayEntries.length > 0`) and `EntriesComponent` is still the default `TableBlockTable` —
+  // which renders its own "nothing here" placeholder on `isEmpty && isFetched && !isLoading`. That
+  // would put the exact message `showEmptyState: false` exists to suppress directly above the
+  // retry, and in the wrong renderer for a LIST or GALLERY block. Show only the retry.
+  if (infiniteScrollDisplay.showRetry && displayEntries.length === 0) {
+    EntriesComponent = <></>;
+  }
+
+  // In infinite-scroll mode the current page's `entries` can momentarily be
   // empty (e.g. a trailing empty page) while accumulated rows are still shown —
-  // gate on `displayEntries` so the empty state can't clobber the populated list.
-  if (source.type !== 'COLLECTION' && displayEntries.length === 0 && isFetched && !isLoading) {
+  // `showEmptyState` gates on the rows actually being displayed so the placeholder can't
+  // clobber a populated list, and stays false on a failed fetch so a timeout isn't
+  // presented to the user as "nothing matched".
+  if (infiniteScrollDisplay.showEmptyState) {
     EntriesComponent = (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
@@ -1052,6 +1140,26 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
+        {!isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
+            <TableBlockDropdowns
+              configs={browseDropdowns.configs}
+              appliedColumnIds={browseDropdowns.appliedColumnIds}
+              properties={mergedBlockProperties}
+              spaceId={spaceId}
+              baseFilterState={browseDropdowns.baseFilterState}
+              baseModesByColumn={browseDropdowns.baseModesByColumn}
+              selections={browseDropdowns.selections}
+              selectionModes={browseDropdowns.selectionModes}
+              updateSelections={browseDropdowns.updateSelections}
+              setColumnMode={browseDropdowns.setColumnMode}
+              hydrated={browseDropdowns.hydrated}
+              collectionItemIds={browseDropdowns.collectionItemIds}
+              populationReady={browseDropdowns.populationReady}
+            />
+          </div>
+        )}
+
         {isFilterOpen && (
           <AnimatePresence>
             <motion.div
@@ -1094,20 +1202,31 @@ const ConfiguredTableBlock = ({
                         ref={filterPromptRef}
                         filterState={activeFilters}
                         setFilterState={setActiveFilters}
+                        modesByColumn={activeModesByColumn}
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
+                        afterFilterTrigger={
+                          supportsDropdowns ? (
+                            <TableBlockDropdownsConfigTrigger
+                              configs={browseDropdowns.configs}
+                              eligiblePropertyIds={browseDropdowns.dropdownEligibleIds}
+                              properties={mergedBlockProperties}
+                              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                            />
+                          ) : null
+                        }
                       />
                     </>
                   )}
                   {!isEditing &&
                     filterGroupsForToolbarPills.length > 0 &&
                     filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
+                      <React.Fragment key={group.groupKey}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1115,7 +1234,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                           }}
                           isEditing={isEditing}
                         />
@@ -1123,36 +1242,45 @@ const ConfiguredTableBlock = ({
                     ))}
                 </div>
 
-                {isEditing && filterGroupsForToolbarPills.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
-                        <TableBlockFilterGroupPill
-                          group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                          onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
-                              draft.splice(originalIndex, 1);
-                            });
-                            setActiveFilters(newFilterState);
-                          }}
-                          onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
-                          }}
-                          onAddSimilar={anchorEl => {
-                            requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                              });
-                            });
-                          }}
-                          isEditing={isEditing}
+                {isEditing &&
+                  (filterGroupsForToolbarPills.length > 0 ||
+                    (supportsDropdowns && browseDropdowns.configs.length > 0)) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {supportsDropdowns && (
+                        <TableBlockDropdownsConfigChips
+                          configs={browseDropdowns.configs}
+                          properties={mergedBlockProperties}
+                          toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                         />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
+                      )}
+                      {filterGroupsForToolbarPills.map(group => (
+                        <React.Fragment key={group.groupKey}>
+                          <TableBlockFilterGroupPill
+                            group={group}
+                            mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                            onToggleMode={() => toggleActiveGroupMode(group.columnId)}
+                            onDeleteValue={originalIndex => {
+                              const newFilterState = produce(activeFilters, draft => {
+                                draft.splice(originalIndex, 1);
+                              });
+                              setActiveFilters(newFilterState);
+                            }}
+                            onClearGroup={() => {
+                              setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
+                            }}
+                            onAddSimilar={anchorEl => {
+                              requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                  filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                                });
+                              });
+                            }}
+                            isEditing={isEditing}
+                          />
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
               </motion.div>
             </motion.div>
           </AnimatePresence>
@@ -1163,6 +1291,29 @@ const ConfiguredTableBlock = ({
             <DataBlockLoadingPlaceholder view={view} items={pageSize} mediaFrame={mediaFrame} />
           ) : (
             EntriesComponent
+          )}
+          {/*
+            Sibling of the list rather than part of it, so the region is in the DOM from the moment
+            the block renders in infinite-scroll mode — through loading, and whether or not the
+            sentinel is mounted. A live region inserted in the same commit as its text is not
+            announced by most screen readers, and a first-page failure is exactly that case: no
+            rows, so no sentinel and no skeleton to have mounted a wrapper earlier.
+          */}
+          {isInfiniteScroll && (
+            <div role="status" aria-live="polite" className="flex flex-col items-center text-footnote text-grey-04">
+              {infiniteScrollDisplay.showRetry && (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <span>Couldn&apos;t load more results.</span>
+                  <button
+                    type="button"
+                    onClick={() => void refetchDataBlock?.()}
+                    className="text-ctaPrimary hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {hasPagination && (
             <>

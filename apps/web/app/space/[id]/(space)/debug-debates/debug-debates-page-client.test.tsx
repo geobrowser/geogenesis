@@ -40,9 +40,16 @@ vi.mock('~/core/debates/api', async importOriginal => {
   return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
 });
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useDebugDebatesPageEnabled: () => mocks.debugEnabled,
-}));
+// Mirrors the real hook: the default (off) until hydration, then the stored value.
+vi.mock('~/core/state/feature-flags', async () => {
+  const { useHydrated } = await import('~/core/hooks/use-hydrated');
+  return {
+    useDebugDebatesPageEnabled: () => {
+      const hydrated = useHydrated();
+      return hydrated ? mocks.debugEnabled : false;
+    },
+  };
+});
 
 vi.mock('~/core/debates/hooks', () => ({
   debateQueryKeys: {
@@ -100,6 +107,13 @@ describe('DebugDebatesPageClient', () => {
 
     expect(container).toBeEmptyDOMElement();
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-1');
+  });
+
+  it('stays on the page when the stored flag is on, though it reads off before hydration', () => {
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'Debug debates' })).toBeInTheDocument();
   });
 
   it.each([

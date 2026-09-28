@@ -8,12 +8,12 @@ import { notFound } from 'next/navigation';
 
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
+import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
@@ -26,8 +26,11 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
-import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
+import { SpaceDebateActivitySection } from '~/partials/space-page/space-debate-activity-section';
+import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
+import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
@@ -35,6 +38,7 @@ import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tabId?: string | string[] }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -66,7 +70,14 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function SpacePage(props0: Props) {
   const params = await props0.params;
+  const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
+  // First value, not "only if there is exactly one". Reading this as `typeof === 'string'` turned a
+  // repeated `?tabId=a&tabId=b` into `undefined`, which reads as Overview and opens the rail on
+  // what the rest of the page treats as a tab — the client half never agreed, since
+  // `useSearchParams().get()` returns the first value, and that is how the gallery this replaces
+  // knew to hide itself.
+  const tabId = firstSearchParamValue(searchParams.tabId);
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
@@ -74,17 +85,60 @@ export default async function SpacePage(props0: Props) {
 
   const space = await cachedFetchSpace(spaceId);
 
+  // A personal space with a person on it gets the profile page. The person is
+  // `space.entity` — `topic ?? page` — because plenty of these carry the person
+  // on `page` with `topicId` still null. See `isPersonProfileSpace`.
+  if (space && Spaces.isPersonProfileSpace(space)) {
+    return <PersonalSpaceBody space={space} topicEntityId={space.entity.id} tabId={tabId} />;
+  }
+
+  // Left on `hasExternalTopic` deliberately, dead though it is: that predicate
+  // cannot return true for a space whose topic resolved — `SpaceDto` builds
+  // `entity` from `topic ?? page`, so the comparison is always false — which
+  // means this branch never fires for the DAO spaces it was written for. Waking
+  // it is a change to every one of them, not a side effect of the profile work.
+  // See `topic-predicates.test.ts`.
   if (Spaces.hasExternalTopic(space)) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { communityCalls }] = await Promise.all([getSpaceFrontPage(space), resolveSpaceSidebar(spaceId)]);
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
+    getSpaceFrontPage(space),
+    resolveSpaceSidebar(spaceId),
+  ]);
+
+  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
+  // (GEO-2875). Both branches are containers under Suspense so the rail's query never delays the
+  // page's own JSX; the gallery this replaces streamed the same way.
+  let sidebar: React.ReactNode = null;
+  if (!tabId) {
+    sidebar = (
+      <React.Suspense fallback={null}>
+        {isRootSpace ? (
+          <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
+        ) : (
+          <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
+        )}
+      </React.Suspense>
+    );
+  }
 
   return (
-    <EntityPageSidebarLayout sidebar={<SpaceOverviewSidePanel spaceId={spaceId} communityCalls={communityCalls} />}>
-      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryContainer spaceId={params.id} />
-      </React.Suspense>
+    <EntityPageSidebarLayout sidebar={sidebar}>
+      {/*
+       * Debate activity first, on Overview only (GEO "space activity section").
+       *
+       * The same card a person's profile leads with, and it leads here for the same reason: the
+       * space's authored page is what the space is *for*, but it is also the part that changes
+       * least, while the debates argued here and the claims queued up for debating are what
+       * somebody arriving wants to know is happening. It renders nothing at all unless the space is
+       * set up for debates and actually holds some, so every other space is unchanged — including
+       * the vertical rhythm, since an absent section contributes no height.
+       *
+       * Not rendered on a tab: `tabId` means an authored page of the space's own, and an activity
+       * card above it would read as a section of that page rather than of the space.
+       */}
+      {!tabId && <SpaceDebateActivitySection spaceId={spaceId} />}
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
       </React.Suspense>
@@ -96,12 +150,82 @@ export default async function SpacePage(props0: Props) {
         boundary. We don't want to show any referenced by loading states but do want to
         stream it in
       */}
+      {/*
+        Skipped entirely when the space has no home entity, where `props.id` is `''`.
+        `getEntityBacklinks` now answers an invalid id without a request, so this is not
+        what stops the 400 — it stops a boundary, a Suspense and a render existing to
+        produce nothing.
+      */}
+      {props.id !== '' && (
+        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+          <React.Suspense fallback={<div />}>
+            <BacklinksServerContainer entityId={props.id} />
+          </React.Suspense>
+        </TrackedErrorBoundary>
+      )}
+    </EntityPageSidebarLayout>
+  );
+}
+
+/**
+ * A personal space, as a profile (GEO-2859).
+ *
+ * The main column only. The header above it and the rail beside it are both
+ * assembled in the layout, so they persist across every tab rather than
+ * appearing and vanishing with this page — see `profileRail` there.
+ *
+ * The layout's providers already carry this entity: for a profile the space's
+ * own `entity` *is* the topic, so `RouteEditorProvider` up there is holding the
+ * person's blocks and tabs, and a second set here would be the same data twice.
+ */
+async function PersonalSpaceBody({
+  space,
+  topicEntityId,
+  tabId,
+}: {
+  space: NonNullable<Awaited<ReturnType<typeof cachedFetchSpace>>>;
+  topicEntityId: string;
+  /** An authored tab, when one is open. Its content replaces the profile. */
+  tabId: string | undefined;
+}) {
+  const spaceId = space.id;
+
+  // An authored tab is a page this person wrote, not a view of their profile.
+  // Rendering Experience and Education underneath it said the tab was a section
+  // of the profile rather than a tab beside it.
+  if (tabId) {
+    return (
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+    );
+  }
+
+  return (
+    <>
+      <PersonalSpaceProfile spaceId={spaceId} personEntityId={topicEntityId} />
+
+      <Spacer height={40} />
+
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+
+      {/*
+       * No properties panel. Every property it would list is already on this
+       * page in a form a reader understands — the types in the rail, the links
+       * beside them, the history in its own sections — and the raw table
+       * underneath them says the same things again in the graph's vocabulary
+       * rather than a person's.
+       */}
+      <Spacer height={40} />
+
       <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
         <React.Suspense fallback={<div />}>
-          <BacklinksServerContainer entityId={props.id} />
+          <BacklinksServerContainer entityId={topicEntityId} />
         </React.Suspense>
       </TrackedErrorBoundary>
-    </EntityPageSidebarLayout>
+    </>
   );
 }
 
@@ -120,7 +244,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
       >
         <EntityPageContentContainer>
           <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={spaceId} />
+            <SubtopicGalleryServerContainer spaceId={spaceId} />
           </React.Suspense>
           <React.Suspense fallback={null}>
             <Editor spaceId={spaceId} shouldHandleOwnSpacing />
@@ -198,7 +322,7 @@ const SubtopicGallerySkeleton = () => {
   return (
     <>
       <div className="h-10" />
-      <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2" aria-hidden>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-6 mobile:grid-cols-2" aria-hidden>
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex flex-col gap-3 rounded-[17px] p-1">
             <Skeleton className="aspect-2/1 w-full rounded-lg" />
@@ -213,30 +337,15 @@ const SubtopicGallerySkeleton = () => {
   );
 };
 
-type SubtopicGalleryContainerProps = {
-  spaceId: string;
-};
-
-const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
-  const space = await cachedFetchSpace(spaceId);
-
-  if (!space) {
-    return null;
-  }
-
-  const subtopics = await fetchSubtopics(spaceId);
-
-  if (subtopics.length === 0) {
-    return null;
-  }
-
-  return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
-};
-
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
   const entity = space?.entity;
 
   if (!entity) {
+    // A space with no home entity. `id` stays `''` rather than a generated one because
+    // consumers here render it, and inventing an id makes them render a page for an
+    // entity that does not exist — the layout's variant generates one only because it
+    // needs a stable key. Anything that treats this as a real id is the caller's bug to
+    // avoid; see the `props.id` guard where backlinks are rendered.
     return {
       id: '',
       name: null,

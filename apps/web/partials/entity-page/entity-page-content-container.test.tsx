@@ -3,7 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { EntityPageContentContainer } from './entity-page-content-container';
-import { EntityPageSideRail } from './entity-page-side-rail';
 import { EntityPageSidebarLayout } from './entity-page-sidebar-layout';
 
 afterEach(cleanup);
@@ -52,41 +51,36 @@ describe('EntityPageSidebarLayout', () => {
   });
 });
 
-describe('EntityPageSideRail', () => {
-  it('renders an aside at the fixed rail width so the content column keeps its size', () => {
-    render(
-      <EntityPageSidebarLayout
-        sidebar={
-          <EntityPageSideRail>
-            <div>Panel</div>
-          </EntityPageSideRail>
-        }
-      >
-        Content
-      </EntityPageSidebarLayout>
-    );
+/**
+ * The avatar's box follows the same column, at the same breakpoint.
+ *
+ * `EntityPageContentContainer` narrows a with-sidebar column back to 900px at
+ * `lg` — a max-width of 1023px here — because the rail drops itself there. The
+ * avatar is centred in a box the width of that column so its left edge lands on
+ * the name below it; a fixed 1142 left the box viewport-wide between 901 and
+ * 1023px while the name centred at 900, sliding the avatar up to 121px left of
+ * the name in exactly one band of widths.
+ *
+ * Asserted on the class pair rather than a rendered width, since jsdom has no
+ * layout — but the pair is the whole fix, and the variables have to be declared
+ * on the element itself because the container's copy is scoped to the container.
+ */
+describe('the profile avatar box', () => {
+  it('carries the same responsive width pair as the with-sidebar column', () => {
+    render(<EntityPageContentContainer variant="with-sidebar">Content</EntityPageContentContainer>);
 
-    const rail = screen.getByRole('complementary');
+    const container = screen.getByText('Content');
+    const pair = [
+      'max-w-[var(--entity-page-with-sidebar-max-width)]',
+      'lg:max-w-[var(--entity-page-content-max-width)]',
+    ];
 
-    // A rail that isn't `w-[...] shrink-0` sizes to its own content and squeezes the
-    // content column — the community-tab regression this guards against.
-    //
-    // Asserted against the token list rather than the className string: a substring
-    // match on `w-[300px]` also passes for `max-w-[300px]`, which would not constrain
-    // the rail at all. jest-dom's `toHaveClass` would say this more directly, but
-    // vite.config.js registers no setupFiles so setupTests.ts never loads its matchers.
-    expect([...rail.classList]).toContain('w-[300px]');
-    expect([...rail.classList]).toContain('shrink-0');
-    expect(rail.textContent).toBe('Panel');
-  });
+    for (const className of pair) {
+      expect(container?.className).toContain(className);
+    }
 
-  it('widens the page container, because the auto-sidebar variant keys off the aside', () => {
-    render(
-      <EntityPageSidebarLayout sidebar={<EntityPageSideRail>Panel</EntityPageSideRail>}>Content</EntityPageSidebarLayout>
-    );
-
-    const container = screen.getByText('Content').closest('[data-entity-page-content-variant]');
-
-    expect(container?.className).toContain('has-[aside]:max-w-[var(--entity-page-with-sidebar-max-width)]');
+    // Both variables resolve on the element that uses them.
+    expect(container?.style.getPropertyValue('--entity-page-with-sidebar-max-width')).toBe('1142px');
+    expect(container?.style.getPropertyValue('--entity-page-content-max-width')).toBe('900px');
   });
 });

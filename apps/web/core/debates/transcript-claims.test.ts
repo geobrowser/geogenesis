@@ -1,0 +1,562 @@
+import { describe, expect, it } from 'vitest';
+
+import type { DebateTranscriptClaimsQuery } from '../io/debate-transcript-claims-document';
+import { claimsForParticipant, groupTranscriptClaims, unmatchedClaims } from './transcript-claims';
+
+const PRESTON = 'f3dab79cb5a3d9d1759656dd5361d1c6';
+const ARTURAS = 'cc31e40f74231d530f1b5d0fc1cd94d8';
+
+const SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
+
+/** The traversal is scoped to the debate's publication space; these fixtures all live in one. */
+const group = (data: DebateTranscriptClaimsQuery) => groupTranscriptClaims(data, SPACE);
+
+type Claim = {
+  id: string;
+  name?: string | null;
+  position?: string;
+  /** null models a claim the graph reports no space for. */
+  spaceId?: string | null;
+  /**
+   * Values on the block → claim relation entity, where timecodes live. Integers arrive from the
+   * API as strings, so these fixtures are written as strings too.
+   */
+  offsets?: Array<{ propertyId: string; integer?: string | null } | null>;
+};
+
+type Block = {
+  id: string;
+  position?: string;
+  author?: string | null;
+  markdown?: string | null;
+  claims: Claim[];
+};
+
+function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptClaimsQuery {
+  return {
+    entity: {
+      transcripts: [
+        {
+          position: transcriptPosition,
+          toEntity: {
+            id: 'transcript-1',
+            blocks: blocks.map(block => ({
+              position: block.position ?? 'a0',
+              toEntity: {
+                id: block.id,
+                markdown: block.markdown === undefined ? [] : [{ spaceId: SPACE, text: block.markdown }],
+                authors: block.author === null ? [] : [{ position: 'a0', toEntity: { id: block.author ?? PRESTON } }],
+                claims: block.claims.map(claim => {
+                  const spaceId = claim.spaceId === undefined ? SPACE : claim.spaceId;
+                  return {
+                    position: claim.position ?? 'a0',
+                    entity: claim.offsets === undefined ? null : { valuesList: claim.offsets },
+                    toEntity: {
+                      id: claim.id,
+                      // Aggregated across spaces, so it is only the resolver's last resort.
+                      name: claim.name === undefined ? `Claim ${claim.id}` : claim.name,
+                      spaceIds: spaceId === null ? [] : [spaceId],
+                      names:
+                        claim.name === undefined
+                          ? spaceId === null
+                            ? []
+                            : [{ spaceId, text: `Claim ${claim.id}` }]
+                          : claim.name === null
+                            ? []
+                            : spaceId === null
+                              ? []
+                              : [{ spaceId, text: claim.name }],
+                    },
+                  };
+                }),
+              },
+            })),
+          },
+        },
+      ],
+    },
+  };
+}
+
+describe('groupTranscriptClaims', () => {
+  it('groups a turn’s claims under the block author, not the claim', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-2' }] },
+        { id: 'block-2', author: ARTURAS, claims: [{ id: 'claim-3' }] },
+      ])
+    );
+
+    expect(grouped.totalCount).toBe(3);
+    expect(claimsForParticipant(grouped, PRESTON).map(claim => claim.id)).toEqual(['claim-1', 'claim-2']);
+    expect(claimsForParticipant(grouped, ARTURAS).map(claim => claim.id)).toEqual(['claim-3']);
+  });
+
+  it('matches a participant whose space id is dashed rather than hex', () => {
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+
+    expect(claimsForParticipant(grouped, 'f3dab79c-b5a3-d9d1-7596-56dd5361d1c6')).toHaveLength(1);
+  });
+
+  it('orders blocks and claims by position rather than list order', () => {
+    const grouped = group(
+      response([
+        { id: 'block-late', position: 'a2', author: PRESTON, claims: [{ id: 'claim-third' }] },
+        {
+          id: 'block-early',
+          position: 'a1',
+          author: PRESTON,
+          claims: [
+            { id: 'claim-second', position: 'a2' },
+            { id: 'claim-first', position: 'a1' },
+          ],
+        },
+      ])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON).map(claim => claim.id)).toEqual([
+      'claim-first',
+      'claim-second',
+      'claim-third',
+    ]);
+  });
+
+  it('counts a claim once when the graph returns it twice', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-1' }] },
+        { id: 'block-2', author: PRESTON, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.totalCount).toBe(1);
+    expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
+  });
+
+  it('lists a claim both debaters stated under each of them, but counts it once', () => {
+    // With find-or-create a transcript claim that already exists in the space is linked to the
+    // existing entity, so the same claim id under two speakers is the ordinary case, not a quotation
+    // to attribute to whoever came first.
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
+    expect(claimsForParticipant(grouped, ARTURAS)).toHaveLength(1);
+    expect(claimsForParticipant(grouped, PRESTON)[0]).toBe(claimsForParticipant(grouped, ARTURAS)[0]);
+    expect(grouped.totalCount).toBe(1);
+    expect(grouped.all).toHaveLength(1);
+  });
+
+  /**
+   * The row is deduped and carries one turn's block, offsets and relation entity out of two, so it
+   * cannot answer "when" or "who". The flag is what stops the surfaces that assert either from
+   * using the first turn's answer for both — see `restated`.
+   */
+  it('marks a claim stated in two turns, so nothing reads one turn as both', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.all[0].restated).toBe(true);
+  });
+
+  it('does not mark a claim the graph merely returned twice for one turn', () => {
+    const grouped = group(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-1' }] }])
+    );
+
+    expect(grouped.all[0].restated).toBe(false);
+  });
+
+  it('still lists a claim once per speaker when that speaker repeats it', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+        { id: 'block-3', position: 'a3', author: PRESTON, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
+    expect(claimsForParticipant(grouped, ARTURAS)).toHaveLength(1);
+  });
+
+  it('drops claims with no text, since the text is the name', () => {
+    const grouped = group(
+      response([
+        {
+          id: 'block-1',
+          author: PRESTON,
+          claims: [{ id: 'claim-1', name: null }, { id: 'claim-2', name: '   ' }, { id: 'claim-3' }],
+        },
+      ])
+    );
+
+    expect(grouped.totalCount).toBe(1);
+    expect(claimsForParticipant(grouped, PRESTON).map(claim => claim.id)).toEqual(['claim-3']);
+  });
+
+  it('collects claims from a block with no author as unattributed', () => {
+    const grouped = group(response([{ id: 'block-1', author: null, claims: [{ id: 'claim-1' }] }]));
+
+    expect(grouped.totalCount).toBe(1);
+    expect(grouped.byAuthorSpaceId.size).toBe(0);
+    expect(grouped.unattributed.map(claim => claim.id)).toEqual(['claim-1']);
+  });
+
+  it('returns an empty grouping for a debate with no transcript', () => {
+    expect(group({ entity: { transcripts: [] } }).totalCount).toBe(0);
+    expect(group({ entity: null }).totalCount).toBe(0);
+    expect(group({ entity: { transcripts: null } }).totalCount).toBe(0);
+  });
+});
+
+describe('unmatchedClaims', () => {
+  it('surfaces claims by an author who is not a participant', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', author: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', claims: [{ id: 'claim-2' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-2']);
+  });
+
+  // Regression: this used to walk the author map and then append the unattributed ones, so one
+  // unknown author's claims came out grouped together and every unauthored claim was pushed to the
+  // end — an A/B/A transcript surfaced as A/A/B.
+  it('keeps transcript order across unknown authors and unauthored claims', () => {
+    const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: null, claims: [{ id: 'claim-2' }] },
+        { id: 'block-3', position: 'a3', author: STRANGER, claims: [{ id: 'claim-3' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1', 'claim-2', 'claim-3']);
+  });
+
+  it('leaves a participant’s claims out while keeping the rest in transcript order', () => {
+    const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: PRESTON, claims: [{ id: 'claim-mine' }] },
+        { id: 'block-3', position: 'a3', author: null, claims: [{ id: 'claim-3' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1', 'claim-3']);
+  });
+
+  it('includes unattributed claims and finds nothing when every author is a participant', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', author: null, claims: [{ id: 'claim-2' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-2']);
+    expect(
+      unmatchedClaims(group(response([{ id: 'b', author: PRESTON, claims: [] }])), [
+        'f3dab79c-b5a3-d9d1-7596-56dd5361d1c6',
+      ])
+    ).toEqual([]);
+  });
+});
+
+describe('unmatchedClaims with reused claims', () => {
+  it('keeps a claim a participant stated when an unknown author stated it too', () => {
+    const OUTSIDER = 'dddddddddddddddddddddddddddddddd';
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: OUTSIDER, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1']);
+    const reversed = group(
+      response([
+        { id: 'block-1', position: 'a1', author: OUTSIDER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: PRESTON, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+    expect(unmatchedClaims(reversed, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1']);
+  });
+});
+
+describe('claim space', () => {
+  it('carries the claim’s own space, which is where its responses are published', () => {
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
+  });
+
+  // Both the link target and the row's actions are space-scoped, so a claim the graph reports no
+  // space for has nothing correct to point at and the panel renders it as inert text.
+  it('leaves a claim with no space unlinkable rather than guessing one', () => {
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: null }] }]));
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBeNull();
+  });
+});
+
+describe('all', () => {
+  it('lists every claim once, in transcript order, matching totalCount', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-2' }, { id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.all.map(claim => claim.id)).toEqual(['claim-1', 'claim-2']);
+    expect(grouped.totalCount).toBe(grouped.all.length);
+  });
+});
+
+/** A claim entity with Name values in several spaces, as the query returns them. */
+function multiSpaceClaim(names: Array<{ spaceId: string; text: string }>, aggregated: string | null) {
+  return {
+    entity: {
+      transcripts: [
+        {
+          position: 'a0',
+          toEntity: {
+            id: 'transcript-1',
+            blocks: [
+              {
+                position: 'a0',
+                toEntity: {
+                  id: 'block-1',
+                  authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                  claims: [
+                    {
+                      position: 'a0',
+                      toEntity: {
+                        id: 'claim-1',
+                        name: aggregated,
+                        spaceIds: names.map(value => value.spaceId),
+                        names,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+describe('claim text resolution', () => {
+  // `toEntity.name` merges every space, so a Name published elsewhere could rewrite what a debater
+  // is shown to have said — the cross-space attribution the relation filters exist to stop,
+  // arriving through the text instead of the link.
+  it('shows the sentence named in the debate’s space, not the aggregated name', () => {
+    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      multiSpaceClaim(
+        [
+          { spaceId: OTHER, text: 'Something the speaker never said.' },
+          { spaceId: SPACE, text: 'What the speaker actually said.' },
+        ],
+        'Something the speaker never said.'
+      ),
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].text).toBe('What the speaker actually said.');
+  });
+
+  it('falls back to the aggregated name only when no space names the claim', () => {
+    const grouped = groupTranscriptClaims(multiSpaceClaim([], 'Only the aggregated name.'), SPACE);
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].text).toBe('Only the aggregated name.');
+  });
+
+  it('drops a claim that no space names and that has no aggregated name either', () => {
+    const grouped = groupTranscriptClaims(multiSpaceClaim([], null), SPACE);
+
+    expect(grouped.totalCount).toBe(0);
+  });
+});
+
+describe('space scoping', () => {
+  // Relations are space-attributed and anyone may publish one in their own space pointing at any
+  // entity, so the traversal is filtered to the debate's publication space. The claim's own row has
+  // to follow that space too: a claim also curated elsewhere would otherwise hand its link and its
+  // response controls a space outside the debate being shown.
+  it('prefers the debate’s space over whichever space the claim lists first', () => {
+    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      {
+        entity: {
+          transcripts: [
+            {
+              position: 'a0',
+              toEntity: {
+                id: 'transcript-1',
+                blocks: [
+                  {
+                    position: 'a0',
+                    toEntity: {
+                      id: 'block-1',
+                      authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                      claims: [
+                        { position: 'a0', toEntity: { id: 'claim-1', name: 'Claim one', spaceIds: [OTHER, SPACE] } },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
+  });
+
+  // `spaceIds` is not a home-space list — it also counts spaces holding an outbound relation — so
+  // its raw first entry can be a space that merely cites the claim. Resolution is deferred to
+  // `entityHomeSpaceId`, the same rule the entity side panel and data block rows follow.
+  it('resolves an external claim to the space that names it, not the first id listed', () => {
+    const CITING = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const NAMING = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const grouped = groupTranscriptClaims(
+      {
+        entity: {
+          transcripts: [
+            {
+              position: 'a0',
+              toEntity: {
+                id: 'transcript-1',
+                blocks: [
+                  {
+                    position: 'a0',
+                    toEntity: {
+                      id: 'block-1',
+                      authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                      claims: [
+                        {
+                          position: 'a0',
+                          toEntity: {
+                            id: 'claim-1',
+                            name: 'External claim',
+                            // The citing space is listed first and does not name the claim.
+                            spaceIds: [CITING, NAMING],
+                            names: [{ spaceId: NAMING, text: 'External claim' }],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(NAMING);
+  });
+});
+
+describe('published timecodes', () => {
+  const START = 'a1d1cb557b184238ba0ec78ba7f289fb';
+  const END = '79a677b597f84ca8a1cf24eef7837b61';
+
+  const offsets = (start: string | null, end: string | null) => [
+    { propertyId: START, integer: start },
+    { propertyId: END, integer: end },
+  ];
+
+  it('reads the pair off the relation entity, parsing the strings the API sends', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: offsets('134600', '143140') }] }]));
+
+    expect(all[0].publishedTiming).toEqual({ startMs: 134600, endMs: 143140 });
+  });
+
+  it('reports no timing for the debates that predate timecodes', () => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1' }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  // Each of these would otherwise be drawn on the timeline as a real moment. Falling back to
+  // matching against the transcript is both honest and, in practice, right.
+  it.each([
+    ['only a start', offsets('1000', null)],
+    ['only an end', offsets(null, '2000')],
+    ['an unparseable value', offsets('about a minute in', '2000')],
+    // `Number('')` is 0, and 0 is a legal start — so a blank start beside a real end would have
+    // published "said in the first two seconds" as a certainty.
+    ['a blank start', offsets('', '2000')],
+    ['a whitespace start', offsets('   ', '2000')],
+    ['a blank end', offsets('1000', '')],
+    ['a negative start', offsets('-500', '2000')],
+    ['an end at the start', offsets('2000', '2000')],
+    ['an end before the start', offsets('4000', '2000')],
+  ])('discards a pair with %s', (_label, values) => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+
+    expect(all[0].publishedTiming).toBeNull();
+  });
+
+  it('carries the block each claim was said in, so its turn can be located on the recording', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-2', markdown: 'The reply.', author: ARTURAS, claims: [{ id: 'c2' }] },
+      ])
+    );
+
+    expect(all.map(claim => claim.blockId)).toEqual(['block-1', 'block-2']);
+    expect(blocks).toEqual([
+      { id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' },
+      { id: 'block-2', authorSpaceId: ARTURAS, text: 'The reply.' },
+    ]);
+  });
+
+  /**
+   * The same rule the claim loop already follows, on the turn list beside it.
+   *
+   * The graph can return one relation twice — duplicate publishes happen, which is why claims are
+   * deduped at all. The app never noticed, because every consumer keys blocks into a `Map`. The
+   * matching scripts do not: `export-claims-for-matching.ts` walks this list and filters claims by
+   * `blockId`, so a repeated block emits one turn twice with the same claims in each — and
+   * `build-plan-from-matches.ts` then reads that as a claim filed under two turns and rejects every
+   * claim in it. A silent loss of placements, from a duplicate this layer is meant to absorb.
+   */
+  it('lists a turn once when the graph returns its relation twice', () => {
+    const { all, blocks } = group(
+      response([
+        { id: 'block-1', markdown: 'The first turn, as spoken.', claims: [{ id: 'c1' }] },
+        { id: 'block-1', markdown: 'The first turn, as spoken.', position: 'a1', claims: [{ id: 'c1' }] },
+      ])
+    );
+
+    expect(blocks).toEqual([{ id: 'block-1', authorSpaceId: PRESTON, text: 'The first turn, as spoken.' }]);
+    // And the repeat is still not a second turn for the claim — see `restated`.
+    expect(all).toHaveLength(1);
+    expect(all[0].restated).toBe(false);
+  });
+});

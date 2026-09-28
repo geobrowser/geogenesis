@@ -18,6 +18,7 @@ const textStyles = cva('', {
   variants: {
     variant: {
       mainPage: 'text-mainPage',
+      entityTitle: 'text-entityTitle',
       largeTitle: 'text-largeTitle',
       mediumTitle: 'text-mediumTitle',
       cardEntityTitle: 'text-cardEntityTitle',

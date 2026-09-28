@@ -1,4 +1,10 @@
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import {
+  REQUEST_BRIDGE_TTL_MS,
+  type RequestedMembershipSpace,
+  activeRequestedSpacesForOwner,
+  requestedMembershipIdSet,
+} from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -29,20 +35,161 @@ export function buildClaimSpaceAllowlist({
   /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
   personalSpaceId: string | null | undefined;
 }): Set<string> {
-  const allowed = new Set<string>();
+  // The viewer's own spaces plus what is on offer to everyone — said that way round, so the two
+  // sets cannot drift. `buildMemberSpaceIds` is the same list the space filter defaults to, and a
+  // space that counts as theirs there has to be one they may see here.
+  const allowed = buildMemberSpaceIds({ editorOf, memberOf, personalSpaceId });
 
   for (const row of featured) allowed.add(normId(row.id));
 
-  // A pending row is a space the viewer has *asked* to join, not one they belong to — the same
-  // distinction `useGlobalSearchSpaceIds` draws off these lists.
-  for (const row of [...editorOf, ...memberOf]) {
-    if (row.pendingLabel) continue;
-    allowed.add(normId(row.id));
-  }
-
-  if (personalSpaceId) allowed.add(normId(personalSpaceId));
-
   return allowed;
+}
+
+/**
+ * The subset of the allowlist the viewer actually belongs to — the spaces they are a member or an
+ * editor of, plus their own.
+ *
+ * The allowlist above is what a viewer may *see*; this is what is theirs. Featured spaces are the
+ * difference: they are on offer to everyone, so they widen what can be browsed without saying
+ * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
+ *
+ * Pending rows count. A viewer who has asked to join a space is telling us it is one of theirs,
+ * and sign-up collects exactly that before any approval exists — so a new account spends its first
+ * minutes with every space pending. Excluding them left that account looking at a panel with none
+ * of the spaces it had just chosen, which then filled in on its own once the approvals landed.
+ * Approval changes nothing here, which is the point: nothing should lurch when it arrives.
+ *
+ * Wider than the same distinction `useGlobalSearchSpaceIds` draws off these lists, deliberately —
+ * that one is picking where to search, this one is deciding whether a space is the viewer's at all.
+ */
+export function buildMemberSpaceIds({
+  editorOf,
+  memberOf,
+  personalSpaceId,
+}: {
+  editorOf: BrowseSpaceRow[];
+  memberOf: BrowseSpaceRow[];
+  /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
+  personalSpaceId: string | null | undefined;
+}): Set<string> {
+  const mine = new Set<string>();
+
+  for (const row of [...editorOf, ...memberOf]) mine.add(normId(row.id));
+
+  if (personalSpaceId) mine.add(normId(personalSpaceId));
+
+  return mine;
+}
+
+export function browseSidebarMemberSpaceIds(
+  data: BrowseSidebarData,
+  personalSpaceId: string | null | undefined
+): Set<string> {
+  return buildMemberSpaceIds({
+    editorOf: data.editorOf,
+    memberOf: data.memberOf,
+    personalSpaceId: personalSpaceId ?? data.personalSpaceId,
+  });
+}
+
+/**
+ * How long a request is treated as still settling.
+ *
+ * Deliberately much shorter than `REQUEST_BRIDGE_TTL_MS`, which the bridge needs for a different
+ * job: keeping a "Membership pending" label up until the server can be trusted to contradict it.
+ * This bounds two things that must not run for five minutes — how long the sidebar payload is
+ * re-asked for, and how long the space filter holds its default waiting for one more answer.
+ *
+ * Sized on the observed gap, which is tens of seconds. A request still missing after this either
+ * failed or was rejected — `fetchPendingMembershipSpaceIds` drops a vote-ended proposal outright,
+ * so it can *never* arrive — and continuing to wait costs a full sidebar payload every tick while
+ * the filter stays open on nothing.
+ */
+export const REQUESTED_MEMBERSHIP_SETTLE_MS = 90_000;
+
+/**
+ * When this hook's answer next changes on its own, as a timestamp — or null if nothing is pending.
+ *
+ * Both deadlines here are read off a clock sampled during render, so neither can retire anything by
+ * itself: once the membership poll stops there may be no further render, and an entry that never
+ * landed would sit in `memberSpaceIds` for the rest of the visit while `isSettlingMemberships` held
+ * the filter default unspent. Callers schedule a render against this so elapsed time is something
+ * the hook observes rather than something it happens to notice.
+ *
+ * The boundaries are {@link REQUESTED_MEMBERSHIP_SETTLE_MS}, after which a request stops being
+ * waited on, and {@link REQUEST_BRIDGE_TTL_MS}, after which it stops counting as a membership at
+ * all. Only future ones count: an entry already past a boundary needs no wake-up for it.
+ */
+export function nextRequestedMembershipDeadline({
+  requestedSpaces,
+  personalSpaceId,
+  walletAddress,
+  now,
+}: {
+  requestedSpaces: RequestedMembershipSpace[];
+  personalSpaceId: string | null | undefined;
+  walletAddress: string | null | undefined;
+  now: number;
+}): number | null {
+  let next: number | null = null;
+  for (const space of activeRequestedSpacesForOwner(requestedSpaces, personalSpaceId, now, walletAddress)) {
+    for (const deadline of [
+      space.requestedAt + REQUESTED_MEMBERSHIP_SETTLE_MS,
+      space.requestedAt + REQUEST_BRIDGE_TTL_MS,
+    ]) {
+      if (deadline > now && (next === null || deadline < next)) next = deadline;
+    }
+  }
+  return next;
+}
+
+/**
+ * Whether this payload still owes the viewer a membership request they have already made.
+ *
+ * The gap it measures is real and about a minute wide: the request reaches the chain when the
+ * transaction does and the indexer some time after, so a payload fetched in between is a correct
+ * answer to a question that has since changed. Everything reading these lists — the space filter's
+ * default among it — was left on the pre-request answer until something happened to refetch, which
+ * in practice meant a hard refresh (GEO-2815).
+ *
+ * The optimistic bridge is the only thing that knows a request was made before the server does, so
+ * it is what says whether waiting is worth it — it decides *when to re-ask*, never what the answer
+ * is. Two things stop the wait: the request appearing here, and
+ * {@link REQUESTED_MEMBERSHIP_SETTLE_MS} passing, which is what retires one that never lands.
+ *
+ * No data yet is treated as owing: there is a live request and nothing to say it has arrived.
+ */
+export function awaitsRequestedMembership({
+  requestedSpaces,
+  personalSpaceId,
+  walletAddress,
+  data,
+  now,
+}: {
+  requestedSpaces: RequestedMembershipSpace[];
+  personalSpaceId: string | null | undefined;
+  walletAddress: string | null | undefined;
+  data: BrowseSidebarData | undefined;
+  now: number;
+}): boolean {
+  // Nothing to wait for until the viewer has a personal space. Membership is proposed *by* that
+  // space, so the sources behind this payload cannot report a request before it exists — and
+  // onboarding seeds bridge entries under the wallet address minutes earlier, while its own
+  // requests are still queued behind the space being created. Polling on those re-asks a question
+  // that has no answer yet, for the whole of signup, and on that branch the query is a *server
+  // action* (`loadBrowseSidebarData`) rather than a plain fetch.
+  if (!personalSpaceId) return false;
+
+  const settling = activeRequestedSpacesForOwner(requestedSpaces, personalSpaceId, now, walletAddress).filter(
+    space => now - space.requestedAt < REQUESTED_MEMBERSHIP_SETTLE_MS
+  );
+
+  const requested = requestedMembershipIdSet(settling);
+  if (requested.size === 0) return false;
+  if (!data) return true;
+
+  const answered = browseSidebarMemberSpaceIds(data, personalSpaceId);
+  return [...requested].some(id => !answered.has(id));
 }
 
 export function browseSidebarClaimSpaceAllowlist(

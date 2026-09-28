@@ -25,12 +25,24 @@ describe('WinnerVoteButton', () => {
     expect(onVote).toHaveBeenCalledOnce();
   });
 
-  it('shows the vote share instead of the button once voted', () => {
-    renderButton({ sharePercent: 35 });
+  it('shows a static share on the viewer’s pick', () => {
+    renderButton({ sharePercent: 65, isMyPick: true });
 
-    expect(screen.getByText('35%')).toBeInTheDocument();
+    expect(screen.getByText('65%')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByText('Winner?')).not.toBeInTheDocument();
+  });
+
+  it('lets the viewer switch by clicking the other debater’s share', async () => {
+    const onVote = vi.fn();
+    renderButton({ sharePercent: 35, isMyPick: false, onVote });
+
+    const button = screen.getByRole('button', { name: 'Vote Aaliyah Johnson as the winner' });
+    expect(button).toHaveTextContent('35%');
+    expect(screen.queryByText('Winner?')).not.toBeInTheDocument();
+
+    await userEvent.click(button);
+    expect(onVote).toHaveBeenCalledOnce();
   });
 
   // Figma "Winners voted on": the debater the viewer picked gets the purple pill with a white

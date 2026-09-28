@@ -9,16 +9,7 @@ export function jsonResponse(status: number, body: unknown) {
   });
 }
 
-export function isSameOrigin(req: Request): boolean {
-  const origin = req.headers.get('origin');
-  const host = req.headers.get('host');
-  if (!origin) return process.env.NODE_ENV !== 'production';
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
-  }
-}
+export { isSameOrigin } from '../same-origin';
 
 export function hasRankingOgAdminSecret(req: Request): boolean {
   const configured = process.env.INTERNAL_API_SECRET?.trim();

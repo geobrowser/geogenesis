@@ -1,7 +1,8 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 /** A relation whose target entity resolved. Dangling relations (`toEntity: null`) are dropped upstream. */
@@ -19,10 +20,21 @@ export function hasRelationTarget(relation: RemoteRelation): relation is RemoteR
 
 export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
-  const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  const webUrlPropertyHex = ContentIds.WEB_URL_PROPERTY.replace(/-/g, '');
+  // `||` so a blank value falls through to the Web URL below.
+  const ipfsUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text || null;
   const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
-  const renderableType = mediaEntityUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
+  // `Web URL` is also a general canonical-link property, so it only counts as a media URL when the
+  // target is typed Image/Video. IPFS URL wins when both are present.
+  const webUrlValue =
+    baseRenderableType === 'IMAGE' || baseRenderableType === 'VIDEO'
+      ? (relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex && isDirectMediaUrl(v.text))?.text ??
+        null)
+      : null;
+  const mediaEntityUrlValue = ipfsUrlValue ?? webUrlValue;
+
+  const renderableType = ipfsUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
 
   const toEntityId = relation.toEntity.id;
   const toEntityName = resolveToEntityName(relation);

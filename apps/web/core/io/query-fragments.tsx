@@ -160,6 +160,36 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       description
       spaceIds
 
+      # Carried because this query now hydrates the sync store, which the singular Entity query
+      # used to do. That one selects them, and a consumer reading a timestamp off the store treats
+      # their absence as not-loaded and falls back to a per-row Entity fetch - which is the N+1
+      # this batching exists to remove. Dropping them here would reintroduce it wherever such a
+      # consumer renders.
+      createdAt
+      updatedAt
+
+      # Same lightweight cross-space projection the singular Entity query carries, for the same
+      # reason: the lists below are space-scoped for display, and EntityDtoLive can only strip
+      # hidden-only spaces out of link routing when it has an unscoped view. Without these it
+      # falls back to the raw spaceIds and can route a link at a space holding nothing visible.
+      # Two scalars per row, and it brings every batch consumer up to the singular contract.
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        propertyId
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+
+      # Authoritative count of this entity's relations, before the 1000-row cap on relationsList
+      # below and before the decoder drops dangling ones. It is the only signal here that says
+      # whether the list was truncated - the decoded array cannot, since a capped page holding a
+      # single dangling relation decodes to fewer than 1000 entries.
+      relations {
+        totalCount
+      }
+
       types {
         id
         name
@@ -282,12 +312,22 @@ export const relationEntityRelationsQuery = graphql(/* GraphQL */ `
 `);
 
 export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
-  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID) {
-    relations(filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
-      id
-      toEntityId
-      spaceId
-      fromEntityId
+  query RelationsByToEntityIds($toEntityIds: [UUID!]!, $typeId: UUID, $spaceId: UUID, $first: Int, $after: Cursor) {
+    relationsConnection(
+      first: $first
+      after: $after
+      filter: { toEntityId: { in: $toEntityIds }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }
+    ) {
+      nodes {
+        id
+        toEntityId
+        spaceId
+        fromEntityId
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 `);
@@ -359,50 +399,47 @@ export const entityExistsQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
-  query EntityCommentReplyBacklinksPage(
-    $id: UUID!
+export const commentEntitiesConnectionQuery = graphql(/* GraphQL */ `
+  query CommentEntitiesConnection(
+    $targetEntityId: UUID!
     $replyToTypeId: UUID!
     $commentTypeId: UUID!
     $first: Int!
-    $offset: Int!
+    $after: Cursor
   ) {
-    entity(id: $id) {
-      backlinksList(
-        first: $first
-        offset: $offset
-        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
-      ) {
-        fromEntity {
-          id
-        }
+    entitiesConnection(
+      first: $first
+      after: $after
+      typeId: $commentTypeId
+      orderBy: [CREATED_AT_DESC, ID_ASC]
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        ...FullEntity
       }
     }
   }
 `);
 
-export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
-  query EntitiesBatchForComments($filter: EntityFilter) {
+export const entityCommentCountQuery = graphql(/* GraphQL */ `
+  query EntityCommentCount($targetEntityId: UUID!, $replyToTypeId: UUID!, $commentTypeId: UUID!) {
+    entitiesConnection(
+      typeId: $commentTypeId
+      filter: { relations: { some: { typeId: { is: $replyToTypeId }, toEntityId: { is: $targetEntityId } } } }
+    ) {
+      totalCount
+    }
+  }
+`);
+
+export const entitiesBatchForDebateVotesQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForDebateVotes($filter: EntityFilter) {
     entities(filter: $filter) {
-      id
-      name
-      description
-      spaceIds
-      createdAt
-      updatedAt
-
-      types {
-        id
-        name
-      }
-
-      valuesList(first: 1000) {
-        ...EntityValueFields
-      }
-
-      relationsList(first: 1000) {
-        ...RelationFields
-      }
+      ...FullEntity
     }
   }
 `);
@@ -508,6 +545,30 @@ export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
   query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
     space(id: $spaceId) {
       editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+/**
+ * Both roles for a set of people, in one request.
+ *
+ * `memberSpaceId: { in: [...] }` is server-filtered the same way the single-person checks above are,
+ * so this answers "which of these people are editors, and which are members" without a request per
+ * person and without paging the whole space — the participant lists are capped, and a space past the
+ * cap would report everyone beyond it as holding no role, which reads exactly like a correct answer.
+ *
+ * `first` must be at least the number of ids asked about: it caps rows returned, so a smaller value
+ * would quietly drop roles the space really holds. Callers chunk to keep both bounded.
+ */
+export const spaceRolesForParticipantsQuery = graphql(/* GraphQL */ `
+  query SpaceRolesForParticipants($spaceId: UUID!, $participantSpaceIds: [UUID!], $first: Int!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
+        memberSpaceId
+      }
+      membersList(filter: { memberSpaceId: { in: $participantSpaceIds } }, first: $first) {
         memberSpaceId
       }
     }
@@ -806,10 +867,42 @@ export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
-  query UserHasEntityVote($userId: UUID!) {
-    userVotes(condition: { userId: $userId }, first: 1) {
+/**
+ * Has this user cast a vote of any of these kinds?
+ *
+ * Kinds are the discriminator, not an afterthought: `user_votes` holds curation (an entity upvote,
+ * kind 0) beside stance and veracity (a position on a claim, kinds 1 and 2). This query used to
+ * take no kind at all, which made "has voted" true for someone who had only ever answered a claim —
+ * fine while the onboarding checklist had a single voting step, wrong the moment it had two
+ * (GEO-2800).
+ */
+export const userHasVoteOfKindQuery = graphql(/* GraphQL */ `
+  query UserHasVoteOfKind($userId: UUID!, $voteKinds: [Int!]) {
+    userVotes(filter: { userId: { is: $userId }, voteKind: { in: $voteKinds } }, first: 1) {
       userId
+    }
+  }
+`);
+
+/**
+ * Is this personal space on either side of a published debate?
+ *
+ * Publishing a debate relates it to each participant's personal space entity through Supported by
+ * or Opposed by, so a relation of either type pointing at the space is the participation — and the
+ * relation only exists once the debate is published, which is the other half of what the checklist
+ * asks.
+ *
+ * GEO-2732 has since landed, so a debate published today *also* carries a side-agnostic Participants
+ * relation that says this more directly. Reading that one instead would be a regression rather than
+ * a simplification: on testnet, 43 of the 55 debates carrying a side relation predate it and have no
+ * Participants relation at all, so the checklist would stop crediting participation in most of the
+ * debates that exist. These two cover both eras, and every participant gets one of them — the
+ * publish flow writes a side for each — so nothing is missed by not reading the third.
+ */
+export const userDebateParticipationQuery = graphql(/* GraphQL */ `
+  query UserDebateParticipation($personalSpaceId: UUID!, $sidePropertyIds: [UUID!]) {
+    relations(filter: { toEntityId: { is: $personalSpaceId }, typeId: { in: $sidePropertyIds } }, first: 1) {
+      id
     }
   }
 `);

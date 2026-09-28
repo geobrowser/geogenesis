@@ -5,26 +5,26 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { isClaimPublishedInSpace } from '~/core/claims/publish';
-import { claimResponseKind } from '~/core/claims/response-kind';
-import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
-import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
-import { useDebateClaims } from '~/core/debates/hooks';
+import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { toggleId } from '~/core/debates/matchmaking/topic-facets';
+import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
+import { type SpaceActivitySort } from '~/core/space/space-activity-rows';
 import {
-  ClaimResponseBatchBoundary,
-  useClaimResponseSummaryBatch,
-} from '~/core/responses/use-claim-response-summaries';
+  useSpaceActivityRowsInfinite,
+  useSpaceClaimSearch,
+  useSpaceClaimTopicFacet,
+} from '~/core/space/use-space-debate-activity';
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+import { SpaceClaimsFilters } from '~/partials/space-page/space-claims-filters';
 
 type ClaimsPageClientProps = {
   spaceId: string;
@@ -48,61 +48,77 @@ const relatedFields: RelatedField[] = [
   },
 ];
 
+/**
+ * A space's claims, ranked, searchable and filterable, as their own full-bleed browse surface.
+ *
+ * This was a fixed list of up to fifty claims in whatever order the entity store happened to hold
+ * them, framed inside the space's tab bar. It is now the destination of "See all claims", so it has
+ * to answer the question that link asks — what is worth reading here — which means an order the
+ * reader picks, a way to narrow it, no floor on how far you can scroll, and a surface of its own
+ * rather than a tab of the space page.
+ *
+ * Edge-to-edge like the debates feed on the sibling route: `Main` drops its max-width and padding
+ * here and `SpaceChromeGate` strips the space header and tabs, so the column and the top padding
+ * below are this page's to supply. The app navbar stays, which is the way back.
+ *
+ * Search, topics and the tag gate all run server-side through the same `taggedEntityFilter` clause
+ * the topic menu is counted through, so the menu and the list cannot disagree about what is in the
+ * corpus. Like Explore, the list is the claims a curator has tagged `Debate` (GEO-2835) rather than
+ * every claim in the space: this surface is about debate activity.
+ *
+ * The staging form stays. It is unrelated to how the list is ordered, and it is the only place in
+ * the app that opens a claim proposal from a space. What it no longer does is show the staged claim
+ * in the list below before it is published — the list reads the graph, not the local edit store —
+ * and staging already opens the review panel, which is where a draft lives until it is published.
+ */
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const { entities: claims, isLoading } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
-    first: 50,
-    deferUntilFetched: true,
-    includeUnpublishedLocal: true,
+  const [sort, setSort] = React.useState<SpaceActivitySort>('best');
+  const [search, setSearch] = React.useState('');
+  const [topicIds, setTopicIds] = React.useState<string[]>([]);
+
+  const {
+    claimIds,
+    search: debouncedSearch,
+    isPending: isSearchPending,
+    error: searchError,
+    retry: retrySearch,
+  } = useSpaceClaimSearch(search, true);
+  // The *debounced* text rides along for the topic menu, which resolves its own ids from it through
+  // the same query the hook above already filled — the raw box would key a second search per
+  // keystroke. The rows are narrowed by `searchClaimIds`. See `SpaceActivityFilters`.
+  const filters = React.useMemo(
+    () => ({ topicIds, search: debouncedSearch, searchClaimIds: claimIds, isSearchPending, searchError }),
+    [claimIds, debouncedSearch, isSearchPending, searchError, topicIds]
+  );
+
+  const { rows, isLoading, isError, isPending, hasNextPage, isFetchingNextPage, fetchNextPage, retry } =
+    useSpaceActivityRowsInfinite(spaceId, 'claims', sort, filters);
+  const facet = useSpaceClaimTopicFacet(spaceId, filters, true);
+
+  const sentinelRef = useInfiniteSentinel({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    isError,
   });
-  // Scoped to this space. `useQueryEntities` filters *which* entities come back, not each one's
-  // relations — rows materialize through a bare `store.getEntity(id)` — so the unscoped predicate
-  // reads a draft edit sitting in any other space and reports the claim unpublished here.
-  const isPublishedHere = React.useCallback((claim: Entity) => isClaimPublishedInSpace(claim, spaceId), [spaceId]);
-  const publishedClaimIds = React.useMemo(
-    () => claims.filter(isPublishedHere).map(claim => claim.id),
-    [claims, isPublishedHere]
-  );
-  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
-  const debateClaimsByEntityId = React.useMemo(() => {
-    const map = new Map<string, DebateClaim>();
-    for (const claim of debateClaimsQuery.data?.claims ?? []) {
-      map.set(claim.claim_entity_id, claim);
-    }
-    return map;
-  }, [debateClaimsQuery.data?.claims]);
-  const activeDebates = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
-    [debateClaimsQuery.data?.claims]
-  );
-  const responseKindsByEntityId = React.useMemo(
-    () =>
-      new Map(
-        claims
-          .filter(isPublishedHere)
-          .map(claim => [
-            claim.id,
-            debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
-          ])
-      ),
-    [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
-  );
-  const responseTargets = React.useMemo(
-    () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
-    [publishedClaimIds, responseKindsByEntityId]
-  );
-  const responseBatch = useClaimResponseSummaryBatch({
-    spaceId,
-    targets: responseTargets,
-    enabled: true,
-  });
-  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
+
+  // The rows on screen describe the previous question while the next answer is out. Dimming says
+  // so without taking them away, which is what an empty list between two filters would imply. A
+  // failed search is not stale — it has an error to draw, and dimming behind one reads as loading.
+  const isStale = (isPending || isSearchPending) && searchError === null;
+  const hasNarrowed = search.trim().length > 0 || topicIds.length > 0;
+
+  // `toggleId`, not a local include/filter. It compares canonically, because the facet answers in
+  // dashed uuids where the rows carry dashless ones — an id-equality toggle would then *add* a
+  // second spelling of a topic already picked instead of removing it. It also appends, which is
+  // what `orderFacetOptions` pins the menu by.
+  const toggleTopic = React.useCallback((topicId: string) => {
+    setTopicIds(current => toggleId(current, topicId));
+  }, []);
+
   return (
-    <div className="py-8">
+    <div className="mx-auto w-full max-w-[880px] px-4 pt-8 pb-16">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Text as="h2" variant="smallTitle" color="text">
           Claims
@@ -114,29 +130,86 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
         )}
       </div>
 
-      {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
+      {formOpen && (
+        <div className="mb-6">
+          <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />
+        </div>
+      )}
 
-      <div className={cx(formOpen && 'mt-6')}>
-        <ClaimResponseBatchBoundary ready={responseBatchReady}>
-          {responseBatch.isError ? (
-            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
-              <Text color="grey-04">Response data could not be loaded.</Text>
-              <Button type="button" variant="secondary" onClick={() => void responseBatch.refetch()}>
-                Retry
-              </Button>
-            </div>
-          ) : null}
-          <ClaimsList
-            claims={claims}
-            isLoading={isLoading}
-            spaceId={spaceId}
-            debateJoinBlocked={activeDebates.length > 0}
-            debateClaimsByEntityId={debateClaimsByEntityId}
-            responseKindsByEntityId={responseKindsByEntityId}
-            debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
-          />
-        </ClaimResponseBatchBoundary>
+      <SpaceClaimsFilters
+        search={search}
+        onSearchChange={setSearch}
+        sort={sort}
+        onSortChange={setSort}
+        topicIds={topicIds}
+        onTopicToggle={toggleTopic}
+        onTopicsClear={() => setTopicIds([])}
+        topics={facet.topics}
+        countsPending={!facet.settled && facet.error === null}
+      />
+
+      <div className={cx('mt-5 transition-opacity', isStale && 'opacity-60')}>
+        {searchError ? (
+          /*
+           * Its own state, ahead of the list's. A failed `/search` leaves the ids unresolved, so
+           * the rows below cannot be narrowed to what was typed — listing the space unfiltered
+           * would answer a question nobody asked, and holding the dim would claim it is still
+           * coming when nothing is in flight.
+           */
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+            <Text color="grey-04">Could not search claims.</Text>
+            <Button type="button" variant="secondary" onClick={retrySearch}>
+              Retry
+            </Button>
+          </div>
+        ) : isError && rows.length === 0 ? (
+          <Text color="grey-04">Could not load claims.</Text>
+        ) : isLoading ? (
+          <ClaimsSkeleton />
+        ) : rows.length === 0 ? (
+          <Text color="grey-04">{hasNarrowed ? 'No claims match these filters.' : 'No claims here yet.'}</Text>
+        ) : (
+          rows.map(row => (
+            <ExploreFeedCard
+              key={`${row.entityId}-${row.spaceId}`}
+              item={{ ...row, spaceName: '', spaceImage: null, hasPendingMembershipRequest: false }}
+              // Every row is this space by construction, so a space chip and a Join button would
+              // say the same thing on all of them.
+              hideSpaceLink
+              hideJoinButton
+              claimCardVariant="debate-panel-mobile"
+            />
+          ))
+        )}
+        <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        {isFetchingNextPage ? <ClaimsSkeleton rows={3} /> : null}
+        {/*
+          A failure with rows already on screen. The sentinel stops observing on an error — it has
+          to, or a failing page is asked for forever — so without this the feed simply stops
+          growing with nothing to say why and no way to try again.
+        */}
+        {isError && rows.length > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+            <Text color="grey-04">Could not load more claims.</Text>
+            <Button type="button" variant="secondary" onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        ) : null}
       </div>
+    </div>
+  );
+}
+
+function ClaimsSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="space-y-4" aria-busy="true">
+      {Array.from({ length: rows }).map((_, index) => (
+        <div key={index} className="space-y-2 rounded-lg border border-grey-02 p-4">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-5 w-2/3" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -244,166 +317,4 @@ function AddClaimForm({ spaceId, onCancel }: { spaceId: string; onCancel: () => 
       </div>
     </form>
   );
-}
-
-function ClaimsList({
-  claims,
-  isLoading,
-  spaceId,
-  debateJoinBlocked,
-  debateClaimsByEntityId,
-  responseKindsByEntityId,
-  debateStatus,
-}: {
-  claims: Entity[];
-  isLoading: boolean;
-  spaceId: string;
-  debateJoinBlocked: boolean;
-  debateClaimsByEntityId: Map<string, DebateClaim>;
-  responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
-  debateStatus: string | null;
-}) {
-  if (isLoading && claims.length === 0) {
-    return (
-      <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-        <Text color="grey-04">Loading claims...</Text>
-      </div>
-    );
-  }
-
-  if (claims.length === 0) {
-    return (
-      <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-        <Text as="h3" variant="bodySemibold" color="text">
-          No claims yet
-        </Text>
-        <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-          Add a claim to stage it as an edit, then publish it through Review edits.
-        </Text>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {debateStatus && (
-        <div className="rounded-lg border border-red-01 bg-white px-5 py-3">
-          <Text color="red-01">{debateStatus}</Text>
-        </div>
-      )}
-      {claims.map(claim => (
-        <ClaimListItem
-          key={claim.id}
-          claim={claim}
-          spaceId={spaceId}
-          debateJoinBlocked={debateJoinBlocked}
-          debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
-          responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ClaimListItem({
-  claim,
-  spaceId,
-  debateJoinBlocked,
-  debateClaim,
-  responseKind,
-}: {
-  claim: Entity;
-  spaceId: string;
-  debateJoinBlocked: boolean;
-  debateClaim: DebateClaim | null;
-  responseKind: 'stance' | 'veracity';
-}) {
-  const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
-  const published = isClaimPublishedInSpace(claim, spaceId);
-  const activeDebate = debateClaim?.active_debate ?? null;
-
-  return (
-    <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <div className="min-w-0">
-        <Text as="h3" variant="bodySemibold" color="text" className="block">
-          {claim.name ?? claim.id}
-        </Text>
-
-        {!published && (
-          <Text as="p" variant="body" color="grey-04" className="mt-2">
-            Publish this claim before starting a debate.
-          </Text>
-        )}
-      </div>
-
-      {published && (
-        <div className="mt-3 flex items-center gap-4">
-          <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
-          <ClaimDebateReadiness
-            compact
-            debateClaim={debateClaim}
-            entityId={claim.id}
-            spaceId={spaceId}
-            canEnable={!activeDebate && !debateJoinBlocked}
-          />
-        </div>
-      )}
-
-      <ClaimDebateStatus debateClaim={debateClaim} published={published} />
-
-      {topics.length > 0 && (
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <RelationChipGroup label="Topics" relations={topics} />
-        </div>
-      )}
-    </article>
-  );
-}
-
-function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
-  if (!published) return null;
-
-  if (debateClaim?.active_debate) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Debate {debateClaim.active_debate.status.replace('_', ' ')}
-      </Text>
-    );
-  }
-
-  return null;
-}
-
-function RelationChipGroup({
-  label,
-  relations,
-  className,
-}: {
-  label: string;
-  relations: Relation[];
-  className?: string;
-}) {
-  if (relations.length === 0) return null;
-
-  return (
-    <div className={className}>
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        {label}
-      </Text>
-      <div className="flex flex-wrap gap-1.5">
-        {relations.map(relation => (
-          <span
-            key={relation.id}
-            className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
-          >
-            <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
-  return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
 }

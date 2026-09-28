@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 
+import { availableBountyCta } from '~/core/bounties/community-adapter';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -44,18 +45,22 @@ function BountyGeoIcon() {
   );
 }
 
-export const CARD_WIDTH_PX = 249;
 export const COMPLETED_CARD_HEIGHT_PX = 143;
 export const IN_PROGRESS_CARD_HEIGHT_PX = 110;
-export const AVAILABLE_CARD_WIDTH_PX = 378;
 export const AVAILABLE_CARD_HEIGHT_PX = 240;
 const CARD_PADDING_PX = 20;
 
-function cardStyle(height: number, width: number = CARD_WIDTH_PX): React.CSSProperties {
-  return { boxSizing: 'border-box', width, height, padding: CARD_PADDING_PX };
+/**
+ * Height is fixed — the rows are meant to line up, and the clamps below are tuned to it. Width is
+ * not: a card fills whatever column the grid gives it (see the grid classes in
+ * `community-bounties-sections`). A fixed width is what put both grids one column short — the
+ * cards asked for more than the content column had and wrapped early.
+ */
+function cardStyle(height: number): React.CSSProperties {
+  return { boxSizing: 'border-box', height, padding: CARD_PADDING_PX };
 }
 
-const CARD_CLASS = 'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-left';
+const CARD_CLASS = 'flex w-full flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-left';
 
 const CARD_INTERACTIVE_CLASS =
   'cursor-pointer transition-colors duration-150 hover:border-grey-03 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
@@ -67,19 +72,17 @@ const CARD_INTERACTIVE_CLASS =
 function BountyCardShell({
   bounty,
   height,
-  width,
   className,
   children,
 }: {
   bounty: SpaceBounty;
   height: number;
-  width?: number;
   className?: string;
   children: React.ReactNode;
 }) {
   const { openSidePanel } = useEntitySidePanel();
 
-  const style = cardStyle(height, width);
+  const style = cardStyle(height);
   const classes = [CARD_CLASS, CARD_INTERACTIVE_CLASS, className].filter(Boolean).join(' ');
 
   const open = () => {
@@ -184,16 +187,27 @@ function BudgetBadge({ budget }: { budget: number | null }) {
   );
 }
 
-export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
+/**
+ * Optional footprint override. Every card defaults to its own Community-tab
+ * size; the bounty board passes one shared size so mixed statuses line up.
+ * Content is clamped/overflow-hidden, so smaller sizes degrade gracefully too.
+ */
+type CardSize = { height?: number };
+
+export function BountyCard({ bounty, height = COMPLETED_CARD_HEIGHT_PX }: { bounty: SpaceBounty } & CardSize) {
+  // Only when stretched past its native height does the footer sink to the
+  // bottom; at the default size the layout is unchanged.
+  const stretched = height > COMPLETED_CARD_HEIGHT_PX;
+
   return (
-    <BountyCardShell bounty={bounty} height={COMPLETED_CARD_HEIGHT_PX}>
+    <BountyCardShell bounty={bounty} height={height}>
       <div className="flex shrink-0">
         <BudgetBadge budget={bounty.budget} />
       </div>
 
       <h3 className={`mt-3 line-clamp-2 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
-      <div className="mt-3 shrink-0">
+      <div className={`shrink-0 ${stretched ? 'mt-auto pt-3' : 'mt-3'}`}>
         <ContributorRow contributors={bounty.contributors} />
       </div>
     </BountyCardShell>
@@ -239,7 +253,7 @@ function InterestButton({
   onClick: () => void;
 }) {
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const openPrivySignIn = usePrivySignIn();
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
 
@@ -254,7 +268,7 @@ function InterestButton({
         event.stopPropagation();
 
         if (!isLoggedIn) {
-          openSignInPrompt('bounty');
+          openPrivySignIn();
           return;
         }
 
@@ -281,6 +295,7 @@ export function AvailableBountyCard({
   isInterestLoading,
   canRegisterInterest,
   onRegisterInterest,
+  height = AVAILABLE_CARD_HEIGHT_PX,
 }: {
   bounty: SpaceBounty;
   isInterested: boolean;
@@ -288,18 +303,25 @@ export function AvailableBountyCard({
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onRegisterInterest: (bounty: SpaceBounty) => void;
-}) {
+} & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX} width={AVAILABLE_CARD_WIDTH_PX}>
+    <BountyCardShell bounty={bounty} height={height}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
-        <InterestButton
-          isInterested={isInterested}
-          isPending={isPending}
-          isInterestLoading={isInterestLoading}
-          canRegisterInterest={canRegisterInterest}
-          onClick={() => onRegisterInterest(bounty)}
-        />
+        {availableBountyCta(bounty) === 'apply' || isInterested ? (
+          <InterestButton
+            isInterested={isInterested}
+            isPending={isPending}
+            isInterestLoading={isInterestLoading}
+            canRegisterInterest={canRegisterInterest}
+            onClick={() => onRegisterInterest(bounty)}
+          />
+        ) : (
+          // The detail page refuses these states; the card must not collect them either.
+          <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>
+            {availableBountyCta(bounty) === 'ended' ? 'Ended' : 'Spots filled'}
+          </span>
+        )}
       </div>
 
       {/* 12px badge row → title, 8px title → description, 20px description → skills. */}
@@ -316,9 +338,12 @@ export function AvailableBountyCard({
   );
 }
 
-export function InProgressBountyCard({ bounty }: { bounty: SpaceBounty }) {
+export function InProgressBountyCard({
+  bounty,
+  height = IN_PROGRESS_CARD_HEIGHT_PX,
+}: { bounty: SpaceBounty } & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={IN_PROGRESS_CARD_HEIGHT_PX} className="justify-between">
+    <BountyCardShell bounty={bounty} height={height} className="justify-between">
       <h3 className={`line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
       <div className="shrink-0">

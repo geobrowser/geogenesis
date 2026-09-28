@@ -41,8 +41,7 @@ const DEFAULT_ASYNC_COMPONENT = /^export\s+default\s+async\s+(?:function\s*([A-Z
 const DEFAULT_IMPORT = /^import\s+(?!type\s)([A-Z]\w*)\s*(?:,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"]/gm;
 
 /** A named import block: `import { A, B as C } from '<specifier>'`, ignoring `import type`. */
-const NAMED_IMPORT_BLOCK =
-  /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+const NAMED_IMPORT_BLOCK = /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
 
 /** `A` or `A as B` inside a named import block, skipping inline `type` specifiers. */
 function parseNamedBindings(block: string): { exported: string; local: string }[] {

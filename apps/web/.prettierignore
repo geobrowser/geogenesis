@@ -2,3 +2,7 @@ node_modules
 .next
 build
 core/gql
+# Pre-built minified analytics bundles. `bun format` runs `prettier --write .`, which expands
+# each of these ~133KB files to tens of thousands of lines — a 40k-line diff from an unrelated
+# command. Same reason they are out of the eslint config.
+public

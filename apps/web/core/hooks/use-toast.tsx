@@ -4,27 +4,46 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-const toastAtom = atom<React.ReactElement<any> | null>(null);
+type ToastPlacement = 'bottom' | 'top';
+type ToastState = { content: React.ReactElement<any>; placement: ToastPlacement } | null;
 
-export function useToast() {
-  const [toast, setToast] = useAtom(toastAtom);
+const toastStateAtom = atom<ToastState>(null);
 
-  React.useEffect(() => {
-    if (toast) {
-      const timeout = setTimeout(() => setToast(null), 5000);
-      return () => clearTimeout(timeout);
+function toastAtomFor(placement: ToastPlacement) {
+  return atom(
+    get => get(toastStateAtom)?.content ?? null,
+    (_get, set, content: React.ReactElement<any> | null) => {
+      set(toastStateAtom, content ? { content, placement } : null);
     }
-  }, [toast, setToast]);
+  );
+}
+
+const toastAtoms = {
+  bottom: toastAtomFor('bottom'),
+  top: toastAtomFor('top'),
+};
+
+export function useToast({ placement = 'bottom' }: { placement?: ToastPlacement } = {}) {
+  const [toast, setToast] = useAtom(toastAtoms[placement]);
 
   return [toast, setToast] as const;
 }
 
 export function Toast() {
-  const [toast] = useToast();
+  const toastState = useAtomValue(toastStateAtom);
+  const clearToast = useSetAtom(toastAtoms.bottom);
+  const toast = toastState?.content ?? null;
+  const placement = toastState?.placement ?? 'bottom';
+
+  React.useEffect(() => {
+    if (!toast) return;
+    const timeout = setTimeout(() => clearToast(null), 5000);
+    return () => clearTimeout(timeout);
+  }, [clearToast, toast]);
 
   return (
     // The live region stays mounted so screen readers reliably announce
@@ -34,7 +53,8 @@ export function Toast() {
       aria-live="polite"
       aria-atomic="true"
       className={cx(
-        'pointer-events-none fixed right-0 bottom-0 left-0 flex w-full justify-center p-4',
+        'pointer-events-none fixed right-0 left-0 flex w-full justify-center',
+        placement === 'top' ? 'top-0 px-4 pt-0.5' : 'bottom-0 p-4',
         Z_LAYER_CLASS.toast
       )}
     >

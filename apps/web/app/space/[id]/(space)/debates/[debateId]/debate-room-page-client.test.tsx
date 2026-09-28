@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
@@ -10,19 +10,27 @@ import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
-import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
+import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   prefetchAllowlist: vi.fn(),
+  warmRelatedClaims: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
+  routePrefetch: vi.fn(),
+  prefetchRematchClaims: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
   endTurnMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
+  startLiveStream: vi.fn(),
+  liveStreamAppend: vi.fn(),
+  liveStreamFinish: vi.fn(),
+  liveStreamRelease: vi.fn(),
+  liveStreamAbort: vi.fn(),
   getRecording: vi.fn(),
   deleteRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
@@ -30,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   mediaRecorderStart: vi.fn(),
   mediaRecorderConstruct: vi.fn(),
   readyMutateAsync: vi.fn(),
+  capturingMutateAsync: vi.fn().mockResolvedValue(undefined),
   liveKitJoinMutateAsync: vi.fn(),
   markJoinedMutateAsync: vi.fn(),
   createLocalTracks: vi.fn(),
@@ -40,11 +49,16 @@ const mocks = vi.hoisted(() => ({
   krispDestroy: vi.fn(),
   roomConnect: vi.fn(),
   roomConstruct: vi.fn(),
+  roomSwitchActiveDevice: vi.fn(),
+  roomRemoteParticipants: new Map<string, unknown>(),
+  roomLocalParticipant: { publishTrack: (...args: unknown[]) => mocks.publishTrack(...args) },
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
   supportsAudioOutputSelection: vi.fn(),
   selectAudioOutput: vi.fn(),
   setThankingDebate: vi.fn(),
+  publishOptOutOffer: { debateId: null as string | null, busy: false, cancelled: false },
+  setPublishOptOutRequest: vi.fn(),
   enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
@@ -60,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
+  debateLoading: false,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
     debateDebugging: false,
@@ -67,7 +82,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace, prefetch: mocks.routePrefetch }),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -102,12 +117,42 @@ vi.mock('~/core/debates/hooks', () => ({
   useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
   useEndDebateTurn: () => ({ mutateAsync: mocks.endTurnMutateAsync, isPending: false }),
-  useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
+  useDebate: () => ({
+    data: mocks.debate,
+    isLoading: mocks.debateLoading,
+    error: null,
+    refetch: mocks.refetchDebate,
+  }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
+  useDebateRematchClaims: (sessionId: string, claimIds: string[], enabled: boolean) => {
+    mocks.prefetchRematchClaims(sessionId, claimIds, enabled);
+    return { data: undefined, isLoading: enabled, error: null };
+  },
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
+  useMarkDebateCapturing: () => ({ mutateAsync: mocks.capturingMutateAsync, isPending: false }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: true,
+    accountKey: 'account-a',
+    getPrivyIdentityToken: async () => 'identity-token',
+  }),
+}));
+
+vi.mock('~/core/debates/recording-stream', () => ({
+  putRecordingPart: vi.fn(),
+  startLiveRecordingStream: (options: { id: string }) => {
+    mocks.startLiveStream(options);
+    return {
+      id: options.id,
+      append: mocks.liveStreamAppend,
+      finish: mocks.liveStreamFinish,
+      release: mocks.liveStreamRelease,
+      abort: mocks.liveStreamAbort,
+    };
+  },
 }));
 
 vi.mock('~/core/debates/recording-upload-queue', () => ({
@@ -123,6 +168,10 @@ vi.mock('~/core/debates/recording-upload-queue', () => ({
 
 vi.mock('~/core/debates/thanking-debate-store', () => ({
   useSetThankingDebate: () => mocks.setThankingDebate,
+  // The publish control the thank-you card draws comes from the upload coordinator, which is a
+  // sibling of this page rather than part of it. `publishOptOutOffer` is what it would be saying.
+  usePublishOptOutOffer: () => mocks.publishOptOutOffer,
+  useSetPublishOptOutRequest: () => mocks.setPublishOptOutRequest,
 }));
 
 vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
@@ -155,19 +204,20 @@ vi.mock('livekit-client', () => ({
       mocks.roomConstruct(options);
     }
 
-    localParticipant = {
-      publishTrack: mocks.publishTrack,
-    };
+    localParticipant = mocks.roomLocalParticipant;
 
     on = mocks.roomOn;
     connect = mocks.roomConnect;
     disconnect = mocks.roomDisconnect;
+    switchActiveDevice = mocks.roomSwitchActiveDevice;
+    remoteParticipants = mocks.roomRemoteParticipants;
   },
   supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
     TrackUnsubscribed: 'trackUnsubscribed',
     ParticipantConnected: 'participantConnected',
+    ParticipantDisconnected: 'participantDisconnected',
     Reconnecting: 'reconnecting',
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
@@ -189,9 +239,9 @@ vi.mock('@livekit/krisp-noise-filter', () => ({
   KrispNoiseFilter: mocks.krispNoiseFilter,
 }));
 
-function emitRoomEvent(event: string, payload?: unknown) {
+function emitRoomEvent(event: string, ...payload: unknown[]) {
   for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
-    if (registeredEvent === event) callback(payload);
+    if (registeredEvent === event) callback(...payload);
   }
 }
 
@@ -258,19 +308,39 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
   usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
 }));
 
+// The same arrangement, for the same reason: the room warms this one too and reads nothing back, so
+// the only question here is whether it asks — with the claim being argued, and only once the debate
+// is actually under way. Its real implementation wants a sync engine this suite does not stand up.
+vi.mock('~/core/debates/use-related-debate-claims', () => ({
+  useRelatedDebateClaims: (options: unknown) => {
+    mocks.warmRelatedClaims(options);
+    return { claimIds: [], spaceId: null, enabled: false, isLoading: false, error: null };
+  },
+}));
+
 beforeEach(() => {
+  mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
+  mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
+  mocks.warmRelatedClaims.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
+  mocks.routePrefetch.mockReset();
+  mocks.prefetchRematchClaims.mockReset();
   mocks.abortMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
   mocks.consentMutateAsync.mockReset();
   mocks.endTurnMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
+  mocks.startLiveStream.mockReset();
+  mocks.liveStreamAppend.mockReset();
+  mocks.liveStreamFinish.mockReset().mockResolvedValue(null);
+  mocks.liveStreamRelease.mockReset().mockResolvedValue(undefined);
+  mocks.liveStreamAbort.mockReset().mockResolvedValue(undefined);
   mocks.getRecording.mockReset();
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockReset();
@@ -313,6 +383,9 @@ beforeEach(() => {
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
+  mocks.roomSwitchActiveDevice.mockReset();
+  mocks.roomSwitchActiveDevice.mockResolvedValue(true);
+  mocks.roomRemoteParticipants = new Map();
   mocks.capture.mockReset();
   // Tests run as an unfocused tab by default so the auto-takeover-on-focus effect stays quiet;
   // focused-tab scenarios opt in per test.
@@ -326,6 +399,7 @@ beforeEach(() => {
   mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
+  mocks.debateLoading = false;
   mocks.rematch = null;
   mocks.featureFlags = {
     debateDebugging: false,
@@ -438,6 +512,77 @@ describe('isDebateInThankYouPeriod', () => {
   });
 });
 
+describe('upcomingTurnLabel', () => {
+  // Only the fields the label reads. The room renders this string verbatim into the count-in
+  // overlay, and the rebuttal branch is covered end to end by the DOM test further down; this
+  // covers the branch a two-round format cannot reach.
+  const countdownAt = (turnIndex: number) =>
+    ({ effectiveStatus: 'in_progress', turnIndex }) as Parameters<typeof upcomingTurnLabel>[1];
+  const debateWith = (turnDurationsMs: number[]) =>
+    ({ turn_durations_ms: turnDurationsMs }) as Parameters<typeof upcomingTurnLabel>[0];
+
+  const threeRounds = debateWith([60_000, 60_000, 45_000, 45_000, 30_000, 30_000]);
+
+  it('names the closing argument when counting into the third round', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(3))).toBe('Closing argument in');
+    expect(upcomingTurnLabel(threeRounds, countdownAt(4))).toBe('Closing argument in');
+  });
+
+  it('still names the rebuttal, which is now the middle round', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(1))).toBe('Rebut in');
+  });
+
+  it('leaves the opening round and the final turn to the generic label', () => {
+    expect(upcomingTurnLabel(threeRounds, countdownAt(0))).toBeNull();
+    // Nothing comes after the last turn, so there is no turn to count into.
+    expect(upcomingTurnLabel(threeRounds, countdownAt(5))).toBeNull();
+  });
+
+  it('reads a debate recorded before the closing round as two rounds', () => {
+    const twoRounds = debateWith([60_000, 60_000, 45_000, 45_000]);
+
+    expect(upcomingTurnLabel(twoRounds, countdownAt(1))).toBe('Rebut in');
+    expect(upcomingTurnLabel(twoRounds, countdownAt(0))).toBeNull();
+  });
+});
+
+/**
+ * Open a device settings menu once the intro connection can no longer close it.
+ *
+ * The intro screen opens its own LiveKit connection, and `devicesLocked` — `ready_at`, or
+ * `roomState` being 'connecting'/'reconnecting' — force-closes any open settings menu
+ * (`debate-pre-join-screen.tsx`, "an open popover or sheet keeps its radios clickable"). That
+ * behaviour is deliberate and has its own test. The problem is the race around it: a menu opened
+ * while the intro connection is still in flight gets shut underneath the test, and every query for
+ * a device radio then fails with `Unable to find role="radio"`.
+ *
+ * It reproduces at about one run in six under CPU contention, and deterministically by holding
+ * `roomConnect` pending across the interaction — which is why it surfaced on CI, on this branch
+ * and on master alike, while passing every time on an idle machine. An earlier attempt read it as
+ * a re-render between two clicks and switched to `findByRole`; waiting longer cannot help, because
+ * the menu is closed and stays closed.
+ *
+ * So wait for the connection to have been attempted *and* for the trigger to be enabled, which is
+ * exactly `devicesLocked === false`.
+ */
+/** As {@link openDeviceSettings}, but focused first — for the tests that assert focus return. */
+async function openDeviceSettingsFocused(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  trigger.focus();
+  fireEvent.click(trigger);
+  return trigger;
+}
+
+async function openDeviceSettings(name: 'Audio settings' | 'Video settings') {
+  await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  const trigger = await screen.findByRole('button', { name });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  return trigger;
+}
+
 describe('DebateRoomPageClient', () => {
   // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
   // Root space's topic tree — about thirteen sequential round trips cold, and the tab stays empty
@@ -447,6 +592,37 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
+  // GEO-2758. The picker that opens when this debate ends offers the claims related to the one
+  // being argued, and finding them is three serial requests. Asked from here, they are answered
+  // long before anyone is waiting on them.
+  it('warms the claims related to the one being argued, once the debate is under way', () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalledWith(
+      expect.objectContaining({ claim: expect.objectContaining({ claim_entity_id: 'claim-entity-1' }), enabled: true })
+    );
+  });
+
+  // A preflight that times out, or a room nobody joins, is a debate that never happens — and a
+  // warm cache for one is a request spent on nothing.
+  it('does not warm them before the debate has started', () => {
+    const now = Date.parse('2026-07-02T00:00:05.000Z');
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      preflight_ends_at: new Date(now + 5_000).toISOString(),
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.warmRelatedClaims).toHaveBeenCalled();
+    expect(mocks.warmRelatedClaims).not.toHaveBeenCalledWith(expect.objectContaining({ enabled: true }));
   });
 
   it('returns through browser history without rendering an already-completed room', async () => {
@@ -494,12 +670,11 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
-  // The session is what keeps both sides "in a flow": it disables every Debate control and keeps
-  // DebateCoordinator routing back into the room the cancellation just emptied.
-  it('leaves the rematch the cancelled recording anchored', async () => {
+  // Declining to publish and wanting another debate are unrelated choices, so the session the
+  // debate anchored outlives the cancellation and the canceller stays where they can act on it.
+  it('keeps the rematch the cancelled recording anchored, and does not eject the canceller', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockResolvedValue(rematchSession('ended'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -510,13 +685,17 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.clearDebateActivity).not.toHaveBeenCalled());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('leaves the rematch on the opponent side too, and never blocks their exit on it', async () => {
+  // The opponent is told the recording is gone, then put back on the thank-you screen: the debate
+  // they already agreed to is still there to accept.
+  it('returns the opponent to the flow after they acknowledge the removal', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('rematch already gone'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -528,11 +707,84 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    // The notice is a dialog over the debate, not a replacement for it. Returning it early
+    // unmounted the screen behind it and left the backdrop showing the app shell.
+    expect(screen.getByText('Debate complete.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // A cold load has no rematch data yet, so the teardown waits for the answer instead of reading
+  // "not loaded" as "still live" — which would leave the canceller sitting on a dead screen.
+  it('tears the room down once an unloaded rematch resolves to expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = null;
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Nothing is decided while the session is unknown.
+    await waitFor(() => expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.rematch = rematchSession('expired');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+  });
+
+  // Cancelling and then deciding against the rematch is the one exit left, and it was gated on
+  // saving a recording that had just been discarded — so it failed every time.
+  it('lets a canceller leave the surviving rematch without persisting a discarded recording', async () => {
+    setHistoryLength(2);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Could not save the local recording. Please try leaving again.')).not.toBeInTheDocument();
+  });
+
+  // The exception that keeps the old teardown honest: there is nothing left to return to, so
+  // cancelling still ends the room rather than stranding the canceller on a dead screen.
+  it('still ends the room when the rematch has already expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -542,24 +794,151 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
-    expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
-    expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
+    // The intro carries mic and camera toggles, reversing GEO-2819's decision not to. The concern
+    // that produced that decision — "muting the person you are about to introduce yourself to is
+    // not a state worth supporting" — is answered by the gate below rather than by the absence of
+    // the control: you can mute the introduction, you cannot carry it into a recorded debate.
+    // Toggling still goes through `enabled` rather than LiveKit's `mute()`, so the recorder never
+    // loses the track it captured at publish time.
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    // The issue asks for this line explicitly, and it has to stay true to when capture starts.
+    // GEO-2819 asked for "this part isn't recorded" in so many words. The sentence is gone from the
+    // copy, but the fact it was there to state is now on the tile the sentence was talking about,
+    // in both of its states — which is the assertion below and the one worth keeping.
+    expect(screen.getByText('Introduce yourselves before debating')).toBeInTheDocument();
     expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
-    expect(screen.getByText('Waiting...')).toBeInTheDocument();
-    expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Debate recording' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalled();
     });
     expect(mocks.requestPersistentStorage).toHaveBeenCalledOnce();
-    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // GEO-2819. The intro is a live two-way call, so the room is joined while the debate is still
+  // `ready` — but `/joined` is not sent, because geo-chat rejects it in that state and nothing is
+  // being timed yet.
+  it('joins the LiveKit room for the intro without reporting the join', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByText('Not recording')).toBeInTheDocument();
+    expect(screen.queryByText('Recording')).not.toBeInTheDocument();
+  });
+
+  // `installRecordingMocks` matters: without it `MediaRecorder` is undefined in jsdom and
+  // `startLocalRecorder` returns on its first line, so this asserted nothing. The debate is also
+  // given a recording window, leaving the status gate as the only thing holding capture back.
+  it('never starts the recorder during the intro', async () => {
+    installRecordingMocks();
+    mocks.debate = {
+      ...readyDebate({ localReady: false, remoteReady: false }),
+      preflight_ends_at: '2026-07-02T00:00:05.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText('Not recording')).toBeInTheDocument());
+    expect(mocks.mediaRecorderConstruct).not.toHaveBeenCalled();
+    expect(mocks.mediaRecorderStart).not.toHaveBeenCalled();
+  });
+
+  it('shows the opponent as present when they were already in the room', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.roomRemoteParticipants = new Map([['user-b', {}]]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Waiting for Bri to join…')).not.toBeInTheDocument());
+    expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
+  });
+
+  it('reports a speaker the live room refuses to route to', async () => {
+    mocks.roomSwitchActiveDevice.mockRejectedValue(new Error('no route'));
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Audio settings');
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+
+    expect(await screen.findByText(/Could not move audio to that speaker/)).toBeInTheDocument();
+  });
+
+  // Swapping a device restarts the preview, which stops the tracks the in-flight connection is
+  // publishing — the reconnect effect only covers a swap once the room is already up.
+  it('closes the device pickers while a connection is settling', async () => {
+    const pendingConnect = deferred<void>();
+    mocks.roomConnect.mockReturnValueOnce(pendingConnect.promise);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeDisabled());
+
+    act(() => pendingConnect.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeEnabled());
+  });
+
+  // `disconnect()` defaults to stopping every published track, and `localTracksRef` still holds
+  // them — a retry from a live room would republish ended tracks and send nothing.
+  it('keeps the published tracks alive when a retry replaces a live room', async () => {
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Video settings');
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
+
+    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
+    expect(mocks.roomDisconnect).toHaveBeenCalledWith(false);
+  });
+
+  // Once ready, the opponent's ready can flip the debate to `connecting` at any moment. The
+  // republish effect only runs while `ready`, so a device swap still settling when that lands
+  // would strand the debate on tracks `ensurePreview` stopped.
+  it('locks the device pickers once this participant is ready', async () => {
+    mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toBeDisabled();
+  });
+
+  it('shows the opponent as still joining until they reach the room', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Waiting for Bri to join…')).toBeInTheDocument();
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    act(() => emitRoomEvent('participantConnected', {}));
+
+    expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('participantDisconnected', {}));
+    expect(await screen.findByText('Bri left the room.')).toBeInTheDocument();
   });
 
   it('blocks readiness while the combined camera and microphone request is pending', async () => {
@@ -578,12 +957,197 @@ describe('DebateRoomPageClient', () => {
         video: true,
       })
     );
-    expect(screen.getByText('Requesting access to your camera and microphone…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.getByText('Requesting camera and mic…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
+    // Still laid out, hidden and inert, so the screen does not jump when access is granted.
+    const reservedReadyButton = screen.getByRole('button', { name: "I'm ready to debate", hidden: true });
+    expect(reservedReadyButton.closest('[inert]')).toHaveClass('invisible');
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+  });
+
+  // GEO-2770. Each view below replaces a full-screen one, so anything else rendered in between
+  // shows as a flash.
+  describe('screen transitions', () => {
+    const connectingDebate = (): Debate => ({
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    });
+
+    it('shows the route loading state while the debate loads', () => {
+      mocks.debate = null;
+      mocks.debateLoading = true;
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('status')).toHaveTextContent('Opening your debate room…');
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
+    });
+
+    it('goes straight from the intro to the recording view when the intro connected', async () => {
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+      await screen.findByRole('button', { name: /Waiting for/ });
+
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while a failed intro reconnects for the debate', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValueOnce(new Error('intro failed'));
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      expect(await screen.findByText('intro failed')).toBeInTheDocument();
+
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('holds a full-screen state while rejoining a debate already under way', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.debate = { ...completedDebate(), status: 'in_progress', completed_at: null };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.ownershipAcquire).toHaveBeenCalledOnce());
+      expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
+
+      await act(async () => ownership.resolve({ acquired: true, waitedForLocalRelease: false }));
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    });
+
+    it('keeps the retry reachable once the debate connection has failed', async () => {
+      mocks.liveKitJoinMutateAsync.mockRejectedValue(new Error('join failed'));
+      mocks.debate = { ...connectingDebate(), status: 'preflight', preflight_ends_at: '2099-07-02T00:00:15.000Z' };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(await screen.findByText('join failed')).toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: 'Connecting to the debate' })).not.toBeInTheDocument();
+    });
+
+    it('holds a full-screen state instead of a blank page while leaving a finished debate', async () => {
+      setHistoryLength(2);
+      mocks.debate = completedDebate();
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+      await waitFor(() => expect(mocks.back).toHaveBeenCalled());
+      expect(screen.getByRole('dialog', { name: 'Leaving the debate' })).toBeInTheDocument();
+    });
+
+    it('keeps the recording surface visible while an idle room walks into the rematch', async () => {
+      setHistoryLength(2);
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('browsing');
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+      const leaveButton = screen.getByRole('button', { name: 'Leave debate' });
+      expect(leaveButton).toBeEnabled();
+      fireEvent.click(leaveButton);
+      await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+      await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    });
+
+    it('holds focus, the scroll lock and a visible label while the holding screen is up', async () => {
+      mocks.debate = completedDebate();
+
+      const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      const holdingScreen = screen.getByRole('dialog', { name: 'Leaving the debate' });
+      // The screens on either side take focus the same way; without this it falls to `body` and
+      // the app shell behind the overlay stays reachable by keyboard.
+      expect(holdingScreen).toHaveFocus();
+      // `aria-modal` does not contain Tab on its own, and the app shell behind is still in the tab
+      // order. Nothing here is focusable, so both directions are swallowed and focus stays put.
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab' })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      expect(fireEvent.keyDown(holdingScreen, { key: 'Tab', shiftKey: true })).toBe(false);
+      expect(holdingScreen).toHaveFocus();
+      // Both neighbours lock too, so the scrollbar never returns between them.
+      expect(document.body.style.overflow).toBe('hidden');
+      // Named on screen, not only to assistive tech: leaving and connecting are otherwise identical.
+      expect(holdingScreen).toHaveTextContent('Leaving the debate');
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      unmount();
+      expect(document.body.style.overflow).toBe('');
+    });
+
+    it('keeps the removal notice reachable when it sits above the holding screen', async () => {
+      const ownership = deferred<{ acquired: boolean; waitedForLocalRelease: boolean }>();
+      mocks.ownershipAcquire.mockReturnValueOnce(ownership.promise);
+      mocks.rematch = rematchSession('browsing');
+      mocks.debate = {
+        ...completedDebate(),
+        status: 'thanking',
+        completed_at: null,
+        rematch_session_id: 'rematch-1',
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-b',
+        recordings: [],
+      };
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      expect(screen.getByRole('dialog', { name: 'Connecting to the debate' })).toBeInTheDocument();
+      const notice = screen.getByRole('dialog', { name: 'Your debate was removed' });
+      // The notice is the top dialog, so it holds focus rather than the holding screen under it.
+      expect(notice).toHaveFocus();
+      fireEvent.keyDown(notice, { key: 'Tab' });
+      expect(notice).toHaveFocus();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
+      await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    });
+
+    it('spends the debate auto-connect when the intro connection lands after the debate starts', async () => {
+      const connecting = deferred<void>();
+      mocks.roomConnect.mockReturnValueOnce(connecting.promise);
+      mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+
+      // The opponent presses ready while this handshake is still running, so the debate has already
+      // left `ready` by the time the intro connection lands.
+      mocks.debate = connectingDebate();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => connecting.resolve());
+      expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+
+      act(() => emitRoomEvent('disconnected', 99));
+
+      // The intro connection carried into the debate, so the drop offers a retry instead of reconnecting.
+      expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeInTheDocument();
+      expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    });
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -607,7 +1171,7 @@ describe('DebateRoomPageClient', () => {
 
     const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
     expect(audioTrigger).toHaveAttribute('data-state', 'closed');
-    fireEvent.click(audioTrigger);
+    await openDeviceSettings('Audio settings');
     const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
     expect(audioSettings).toHaveAttribute('data-side', 'top');
     expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
@@ -626,7 +1190,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
@@ -648,12 +1212,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
 
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
   });
 
@@ -665,7 +1229,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
   it('cleans up acquired tracks when device enumeration fails', async () => {
@@ -686,44 +1250,23 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(audioTrack.stop).toHaveBeenCalled();
     expect(videoTrack.stop).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready to debate" })).not.toBeInTheDocument();
   });
 
+  // GEO-2819 moved the room connection into the intro, so `debateRoomOptions` no longer sees a
+  // speaker chosen afterwards — the live room has to be told. Capture is still never restarted.
   it('changes speaker output without restarting capture and hands the selection to LiveKit', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     const selectedOutput = deferred<MediaDeviceInfo>();
     mocks.selectAudioOutput.mockReturnValueOnce(selectedOutput.promise);
 
-    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
-    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledWith({ deviceId: 'speaker-2' }));
-    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
-
-    mocks.debate = {
-      ...readyDebate({ localReady: true, remoteReady: true }),
-      status: 'connecting',
-      connecting_started_at: '2099-07-02T00:00:00.000Z',
-      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
-    };
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
-    expect(mocks.roomConstruct).not.toHaveBeenCalled();
-
-    act(() =>
-      selectedOutput.resolve({
-        kind: 'audiooutput',
-        deviceId: 'speaker-2',
-        groupId: 'speaker-group-2',
-        label: 'Studio Speakers',
-        toJSON: () => ({}),
-      })
-    );
-
-    await waitFor(() =>
-      expect(mocks.roomConstruct).toHaveBeenCalledWith({
+    expect(mocks.roomConstruct).toHaveBeenCalledWith(
+      expect.objectContaining({
         adaptiveStream: false,
         dynacast: false,
         reconnectPolicy: expect.any(ExtendedReconnectPolicy),
@@ -736,9 +1279,26 @@ describe('DebateRoomPageClient', () => {
           red: true,
           dtx: true,
         },
-        audioOutput: { deviceId: 'speaker-2' },
+        audioOutput: { deviceId: 'default' },
       })
     );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledWith({ deviceId: 'speaker-2' }));
+
+    act(() =>
+      selectedOutput.resolve({
+        kind: 'audiooutput',
+        deviceId: 'speaker-2',
+        groupId: 'speaker-group-2',
+        label: 'Studio Speakers',
+        toJSON: () => ({}),
+      })
+    );
+
+    await waitFor(() => expect(mocks.roomSwitchActiveDevice).toHaveBeenCalledWith('audiooutput', 'speaker-2'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(mocks.roomConstruct).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to a non-editable System default when speaker routing is unsupported', async () => {
@@ -746,12 +1306,12 @@ describe('DebateRoomPageClient', () => {
     mocks.supportsAudioOutputSelection.mockReturnValue(false);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
-    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(await screen.findByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
@@ -759,7 +1319,7 @@ describe('DebateRoomPageClient', () => {
     mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
 
@@ -790,9 +1350,13 @@ describe('DebateRoomPageClient', () => {
     );
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+    await openDeviceSettings('Audio settings');
+    // Awaited, not `getByRole`: the speaker list is populated from `enumerateDevices`, and
+    // selecting a speaker re-renders it while that selection is still pending — so a name can be
+    // briefly absent between two clicks. A synchronous query here made this test fail about one run
+    // in four, on this branch and on master alike.
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Display Speakers' }));
 
     act(() =>
       latestSelection.resolve({
@@ -815,9 +1379,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    trigger.focus();
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettingsFocused('Audio settings');
     const settings = screen.getByRole('dialog', { name: 'Audio settings' });
 
     fireEvent.keyDown(settings, { key: 'Escape' });
@@ -830,8 +1392,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
     await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
 
@@ -846,8 +1407,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -859,7 +1419,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
     const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
     selectedCamera.focus();
 
@@ -878,7 +1438,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     const pendingTracks =
       deferred<
         Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
@@ -888,11 +1448,11 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeDisabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
   it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
@@ -900,7 +1460,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    await openDeviceSettings('Video settings');
 
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     const videos = document.querySelectorAll('video');
@@ -917,7 +1477,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Speak to test your mic')).toBeInTheDocument();
     expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     expect(screen.getByText('Select a microphone')).toBeInTheDocument();
@@ -929,8 +1489,7 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
-    fireEvent.click(trigger);
+    const trigger = await openDeviceSettings('Audio settings');
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Audio settings' }));
@@ -943,8 +1502,8 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
-    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await openDeviceSettings('Audio settings');
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() =>
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },
@@ -977,7 +1536,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await screen.findByRole('button', { name: "I'm ready" });
+    await screen.findByRole('button', { name: "I'm ready to debate" });
     const olderEnumeration = deferred<MediaDeviceInfo[]>();
     mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
       { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -1003,7 +1562,7 @@ describe('DebateRoomPageClient', () => {
       ] as MediaDeviceInfo[])
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    await openDeviceSettings('Audio settings');
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
   });
 
@@ -1012,9 +1571,73 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
+    expect(within(debateVideoTile('remote')).getByText('Ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready to debate too" })).toBeEnabled();
+  });
+
+  it('shows the opponent as not ready rather than showing nothing', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  // The intro's answer to GEO-2819's objection to having these toggles at all: the state is
+  // reachable, and it is not a state a recorded debate can start from.
+  it('holds readiness back until the microphone and the camera are both on', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
+    expect(screen.getByText('Enable audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+
+    expect(screen.getByText('Enable video to start')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+    expect(screen.queryByText('Enable video to start')).not.toBeInTheDocument();
+  });
+
+  // The room orders its tiles by which side of the claim each speaker holds. The intro does not:
+  // it is about your own setup, so you are on the left of it whichever side you are arguing.
+  it('puts you on the left of the intro screen whichever position you hold', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    // The card wrapping your tile takes the first column; the document order is the mobile one,
+    // where your opponent is on top and you sit directly above your own controls.
+    expect(debateVideoTile('local').parentElement).toHaveClass('order-1');
+    expect(debateVideoTile('remote').parentElement).toHaveClass('order-2');
+  });
+
+  // The neutral state is the assurance, so it has to be somewhere the eye already is: on the tile
+  // showing the camera it is talking about.
+  it('puts the not-recording pill in the local tile on the intro screen', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('button', { name: "I'm ready to debate" });
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).queryByText('Not recording')).not.toBeInTheDocument();
   });
 
   it('disables the ready button while waiting for the opponent', async () => {
@@ -1022,8 +1645,254 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
-    expect(screen.getAllByText('Waiting...')).toHaveLength(2);
+    expect(await screen.findByRole('button', { name: 'Waiting for Bri…' })).toBeDisabled();
+    // Your own readiness is the button, not a badge: the bottom-right of your tile is the recording
+    // indicator, and two different places to read "ready" was the state this screen used to be in.
+    expect(within(debateVideoTile('local')).getByText('Not recording')).toBeInTheDocument();
+    expect(within(debateVideoTile('local')).queryByText('Ready')).not.toBeInTheDocument();
+    expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
+  });
+
+  // The intro screen and the debate room own different media elements, and the status flip swaps
+  // one set for the other without touching the LiveKit connection. Bound once at the end of
+  // `connect`, both tiles came up blank on the other side of that swap.
+  it('carries the remote track and the local preview across the ready to connecting swap', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    const introLocalVideo = document.querySelector('video.object-cover') as HTMLVideoElement;
+    expect(introLocalVideo).toBeInstanceOf(HTMLVideoElement);
+    expect(introLocalVideo.srcObject).toBeTruthy();
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(document.body.contains(remoteVideo)).toBe(true);
+    const roomLocalVideo = document.querySelector('video.object-cover') as HTMLVideoElement;
+    expect(roomLocalVideo).not.toBe(introLocalVideo);
+    expect(roomLocalVideo.srcObject).toBeTruthy();
+  });
+
+  it('reports the join on the intro connection rather than reconnecting', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(1));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  // Turn-taking mutes the microphone track for whoever is not speaking. Applied to the intro, that
+  // silenced the introductions and the mic meter along with them.
+  it('keeps the microphone live during the intro', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([audioTrack, videoTrack]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+  });
+
+  /**
+   * The recorder and the self-preview run off a MediaStream captured once, at publish time. For a
+   * camera track LiveKit's `mute()` stops the underlying MediaStreamTrack and `unmute()` acquires a
+   * replacement, which that stream would never see: the opponent's feed would recover while the
+   * recording carried on against an ended track. Toggling has to stay `enabled`-only, which sends
+   * black frames over one track that stays live for the whole recording.
+   */
+  it('turns the camera off without stopping the track the recorder holds', async () => {
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      mute: vi.fn().mockResolvedValue(undefined),
+      unmute: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+    // The room's own camera toggle sits behind the debugging flag, and is the only one left once
+    // the intro's was removed.
+    mocks.featureFlags.debateDebugging = true;
+    mocks.debate = { ...completedDebate(), status: 'in_progress', completed_at: null };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(videoTrack.mediaStreamTrack.enabled).toBe(false));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(videoTrack.mediaStreamTrack.enabled).toBe(true));
+
+    expect(videoTrack.mute).not.toHaveBeenCalled();
+    expect(videoTrack.unmute).not.toHaveBeenCalled();
+    expect(videoTrack.stop).not.toHaveBeenCalled();
+  });
+
+  // Restarting the preview stops the tracks the intro room is publishing, and nothing republishes
+  // them — so the connection is rebuilt around the new devices instead.
+  it('republishes the intro connection when a camera is chosen mid-intro', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Video settings');
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+    // The stale session is let go of first, or LiveKit evicts the new one on duplicate identity.
+    expect(mocks.roomDisconnect.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.roomConnect.mock.invocationCallOrder[1]
+    );
+    // And it settles: the guard that stops this reconnecting on every countdown tick.
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // The budget is spent across the whole connecting window, not per invocation. Depending on the
+  // mutation object made this callback new on every render, and the 500ms countdown tick then
+  // restarted the series twice a second — dozens of requests, one of which can land after the
+  // connecting deadline and cancel the debate from the client side.
+  it('gives up on /joined after a fixed number of attempts rather than once per render', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.markJoinedMutateAsync.mockRejectedValue(new Error('nope'));
+      mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+      mocks.debate = {
+        ...readyDebate({ localReady: true, remoteReady: true }),
+        status: 'connecting',
+        connecting_started_at: '2099-07-02T00:00:00.000Z',
+        connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(3);
+      expect(await screen.findByText(/Could not tell the server you are here/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers when a /joined attempt fails and the next succeeds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.markJoinedMutateAsync.mockRejectedValueOnce(new Error('nope'));
+      mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+      mocks.debate = {
+        ...readyDebate({ localReady: true, remoteReady: true }),
+        status: 'connecting',
+        connecting_started_at: '2099-07-02T00:00:00.000Z',
+        connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+
+      expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(/Could not tell the server you are here/)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The intro can now lose an ownership race, which it never could before — and adding `ready` to
+  // the takeover statuses suppresses the full-screen "already open in another tab" fallback, so
+  // the intro has to carry the affordance itself.
+  it('offers a way back when another tab holds the debate during the intro', async () => {
+    // Unfocused on purpose: a focused tab reclaims by itself, and this is about the case that has
+    // no automatic rescue. Left to the ambient value this passed alone and hung under load.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    const continueHere = await screen.findByRole('button', { name: 'Continue here' });
+
+    mocks.ownershipRequestTakeover.mockResolvedValue(true);
+    fireEvent.click(continueHere);
+
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalled());
+  });
+
+  it('holds readiness back while the connection is still settling', async () => {
+    const pendingConnect = deferred<void>();
+    mocks.roomConnect.mockReturnValueOnce(pendingConnect.promise);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    expect(await screen.findByRole('button', { name: 'Connecting…' })).toBeDisabled();
+
+    act(() => pendingConnect.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+  });
+
+  // Disabling the trigger is not enough: an open picker keeps its radios clickable.
+  it('closes an open device picker when a connection starts', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    await openDeviceSettings('Video settings');
+    expect(screen.getByRole('radio', { name: 'Desk Camera' })).toBeInTheDocument();
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    mocks.roomConnect.mockReturnValueOnce(deferred<void>().promise);
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('radio', { name: 'Desk Camera' })).not.toBeInTheDocument());
   });
 
   it('marks the local participant ready from the pre-screen', async () => {
@@ -1031,7 +1900,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: "I'm ready" }));
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready to debate" }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -1954,8 +2823,11 @@ describe('DebateRoomPageClient', () => {
 
     const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
     expect(heading).toBeInTheDocument();
-    expect(heading.closest('main')).toHaveClass('max-w-[430px]');
-    expect(heading).toHaveClass('mb-5', 'max-w-[390px]', 'text-[1.375rem]', 'leading-[1.1]');
+    // The claim is set exactly as the intro screen sets it — wide band, `text-mainPage` on desktop
+    // — so the headline does not resize under you at the swap. Only the video column is still held
+    // to the room's 430px, which is what `main` used to hold everything to.
+    expect(heading).toHaveClass('mb-5', 'max-w-[900px]', 'text-mainPage', 'md:max-w-[390px]', 'md:text-[1.5rem]');
+    expect(debateVideoTile('local').parentElement).toHaveClass('max-w-[430px]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
@@ -2056,6 +2928,65 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(remoteVideo.muted).toBe(true));
     expectDebateVideoTileInColor('remote');
+  });
+
+  // The pill is driven by the recorder's own `start` event rather than by the debate status, so
+  // what it claims and what is being written to disk cannot drift apart.
+  it('flips the recording pill when the recorder actually starts', async () => {
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(await screen.findByText('Recording')).toBeInTheDocument();
+    expect(screen.queryByText('Not recording')).not.toBeInTheDocument();
+  });
+
+  // It is the local `MediaRecorder` this reports on, so it belongs to the local tile and to no
+  // other. It used to be `fixed` to the top of the viewport, far from either.
+  it('puts the recording pill in the local tile rather than over the screen', async () => {
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    await waitFor(() => expect(within(debateVideoTile('local')).getByText('Recording')).toBeInTheDocument());
+    expect(within(debateVideoTile('remote')).queryByText('Recording')).not.toBeInTheDocument();
+  });
+
+  // A recorder can end without `stopLocalRecorder`: a disconnect stops the local tracks, the
+  // stream goes inactive and it stops itself. `capturing` outlives the modal, so it has to be
+  // cleared from the recorder's own events.
+  it('clears the recording pill when the recorder stops on its own', async () => {
+    const recorders = installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(await screen.findByText('Recording')).toBeInTheDocument();
+
+    act(() => {
+      recorders[0]?.dispatchEvent(new Event('stop'));
+    });
+
+    expect(await screen.findByText('Not recording')).toBeInTheDocument();
+    expect(screen.queryByText('Recording')).not.toBeInTheDocument();
+  });
+
+  it('clears the recording pill when the recorder errors', async () => {
+    const recorders = installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(await screen.findByText('Recording')).toBeInTheDocument();
+
+    act(() => {
+      recorders[0]?.dispatchEvent(new Event('error'));
+    });
+
+    expect(await screen.findByText('Not recording')).toBeInTheDocument();
+    expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
 
   it('enables Krisp by default and records the processed microphone track', async () => {
@@ -2185,7 +3116,7 @@ describe('DebateRoomPageClient', () => {
     const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
     await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -2464,6 +3395,30 @@ describe('DebateRoomPageClient', () => {
 
     pendingClock.resolve({ server_time_ms: Date.parse('2026-07-02T00:00:20.000Z') });
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
+  it('starts capturing during preflight rather than waiting for the recording window to open', async () => {
+    // GEO-2644. The recorder used to be scheduled for `startAtMs`, so the encoder's own warmup
+    // happened at t=0 and every recording began fractionally after the window it is measured
+    // against. Capture has to be running *before* the window opens; the server trims the
+    // pre-window head, so starting early costs nothing and padding the head is what it avoids.
+    installRecordingMocks();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      started_at: null,
+      // Ten seconds after the synchronized clock, so the window is still firmly shut.
+      preflight_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // Recording, but the debate has not started — nothing is uploaded until the window closes.
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
@@ -3074,6 +4029,107 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
   });
 
+  // GEO-2773. The publish opt-out used to be a Cancel button on a bar at the bottom of the screen;
+  // it is a switch on the thank-you card now. The behaviour behind it is deliberately unchanged,
+  // so the switch opens the coordinator's confirmation rather than cancelling on the spot.
+  function thankingDebateAtFinalTurn() {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
+    mocks.createLocalTracks.mockResolvedValue([
+      { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() },
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_durations_ms: [10_000, 10_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:20.000Z',
+      completed_at: null,
+    };
+  }
+
+  // The card lives inside the recording modal, which the room drops when the connection goes idle.
+  // Telling the coordinator the card is carrying the control while it isn't rendered leaves the
+  // viewer with neither: no switch here, and a banner that has stood down for this debate.
+  it('does not claim to carry the publish control once the room has gone idle', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+    // An ownership conflict, which is what drops the room to idle mid-countdown.
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByText('This debate is already open in another tab.');
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+
+    // So the banner has to keep speaking for it.
+    const published = mocks.setThankingDebate.mock.calls.at(-1)?.[0];
+    expect(published?.showsPublishControl ?? false).toBe(false);
+  });
+
+  it('offers the publish switch while the recording can still be pulled back', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const control = await screen.findByRole('switch', { name: 'Publish debate' });
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Publish debate?')).toBeInTheDocument();
+
+    fireEvent.click(control);
+
+    // The request, not the cancellation — the coordinator owns the confirmation and the upload.
+    expect(mocks.setPublishOptOutRequest).toHaveBeenCalledWith('debate-1');
+  });
+
+  // The card's rows are separated by hairlines in the design, and the first one belongs to the
+  // publish row — without it the card would open on a rule with nothing above it.
+  it('rules off the publish row only when there is one', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+
+    const { rerender } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('switch', { name: 'Publish debate' });
+    const card = screen.getByText('Debate again?').closest('section');
+    expect(card?.querySelectorAll('.bg-divider')).toHaveLength(2);
+
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
+    rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull());
+    expect(screen.getByText('Debate again?').closest('section')?.querySelectorAll('.bg-divider')).toHaveLength(1);
+  });
+
+  it('reads as off once the recording has been pulled back, rather than vanishing', async () => {
+    thankingDebateAtFinalTurn();
+    // Nothing left to cancel, because it already was — which the coordinator reports directly
+    // rather than leaving the card to infer it from a debate refetch that may not have landed.
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: true };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const control = await screen.findByRole('switch', { name: 'Publish debate' });
+    expect(control).toHaveAttribute('aria-checked', 'false');
+    expect(control).toBeDisabled();
+  });
+
+  // A debate with no recording behind it has nothing to answer for, and a switch that cannot move
+  // reads as a broken one.
+  it('leaves the publish row off when there is no recording to opt out of', async () => {
+    thankingDebateAtFinalTurn();
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+  });
+
   it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
     const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() };
@@ -3101,7 +4157,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Debate again?')).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "Let's go!" })).toBeEnabled();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
@@ -3172,13 +4228,452 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Debate again?')).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).not.toHaveLength(0);
-    const phaseTimers = screen.getAllByLabelText('Phase timer: 20 seconds remaining');
-    expect(phaseTimers).toHaveLength(2);
-    for (const phaseTimer of phaseTimers) {
-      expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    expect(screen.queryByLabelText('Phase timer: 20 seconds remaining')).not.toBeInTheDocument();
+    const consentButton = screen.getByRole('button', { name: "Let's go!" });
+    expect(consentButton).toHaveTextContent("Let's go!0:20");
+    expect(consentButton).toHaveAccessibleDescription('20 seconds remaining');
+    fireEvent.click(consentButton);
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveTextContent('Waiting...0:20');
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveAccessibleDescription('20 seconds remaining');
+  });
+
+  it('automatically consents shortly before the thank-you countdown ends', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('automatically consents when the debate completes before the thank-you deadline', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
+  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
+  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
+  it('does not finalize a connected early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
+  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
+  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
+  it('does not redirect an idle early-complete rematch before the thank-you deadline', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('redirects an idle room as soon as both debaters have pressed Let\'s go', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Fifteen seconds left, so the session went live on two presses. No tick is advanced here:
+    // the redirect has to come from the session, not from the clock running out.
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('enters the rematch browser as soon as the second Let\'s go lands, mid-countdown', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    // The other side presses it too, with fifteen seconds still on the clock.
+    mocks.debate = { ...mocks.debate, status: 'complete', completed_at: '2026-07-02T00:00:26.000Z' };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+  });
+
+  it('finishes the early rematch exit from Retry save when the first persist failed', async () => {
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Could not save the local recording.'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      // The debate query still lags the rematch session, which is the snapshot that used to send
+      // this retry down the save-only branch and strand the room for good.
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The early exit ran and its save failed, so nothing has navigated yet.
+    const retry = await screen.findByRole('button', { name: 'Retry save' });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('does not carry rematch consent state into a subsequent debate route', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+
+    mocks.debate = {
+      ...mocks.debate,
+      id: 'debate-2',
+      rematch_session_id: 'rematch-2',
+    };
+    mocks.rematch = {
+      ...rematchSession('deciding'),
+      id: 'rematch-2',
+      source_debate_id: 'debate-2',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-2" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not automatically consent after the user starts leaving', async () => {
+    const persistence = deferred<void>();
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
+    persistence.resolve();
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('preserves the rematch opt-out when leaving fails near the automatic-consent boundary', async () => {
+    mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('publishes an existing rematch opt-out before waiting for recording persistence', async () => {
+    const leaveRequest = deferred<void>();
+    const persistence = deferred<void>();
+    setHistoryLength(2);
+    mocks.leaveRematchMutateAsync.mockReturnValue(leaveRequest.promise);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    leaveRequest.resolve();
+    persistence.resolve();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+  });
+
+  it('publishes an opt-out after an in-flight rematch consent succeeds', async () => {
+    const consentRequest = deferred<DebateRematchSession>();
+    const persistence = deferred<void>();
+    mocks.consentMutateAsync.mockReturnValue(consentRequest.promise);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+
+    consentRequest.resolve(rematchSession('deciding', { localConsented: true }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    persistence.resolve();
+  });
+
+  it('does not finalize into the rematch after an already-consented leave fails', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('Could not leave the rematch.'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+  });
+
+  it('does not follow an idle rematch redirect after an explicit leave fails', async () => {
+    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('Could not leave the rematch.'));
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      // Four seconds left, inside `rematchAutoConsentLeadSeconds`. A live session with more than
+      // that on the clock leaves for the picker by itself, so this is the only window in which a
+      // viewer is still on the thank-you screen with one to leave.
+      turn_ends_at: '2026-07-02T00:00:24.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
+
+    act(() => emitRoomEvent('disconnected', 99));
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+  });
+
+  it('retries recording persistence after an already-published opt-out', async () => {
+    const firstPersistence = deferred<void>();
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockReturnValueOnce(firstPersistence.promise).mockResolvedValueOnce(undefined);
+    mocks.leaveRematchMutateAsync.mockResolvedValue(undefined);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await act(async () => {
+      firstPersistence.reject(new Error('Storage unavailable'));
+    });
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
+
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
+    expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce();
+    expect(mocks.abortMutateAsync).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+  });
+
+  it('enters the rematch browser at the thank-you deadline without waiting for a debate refresh', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.routePrefetch).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+    expect(mocks.prefetchRematchClaims).toHaveBeenLastCalledWith('rematch-1', [], true);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   it('disables rematch consent and shows waiting immediately after clicking yes', async () => {
@@ -3198,7 +4693,7 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Yes' }));
+    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
 
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });
@@ -3281,7 +4776,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalled());
@@ -3310,7 +4805,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
@@ -3323,6 +4818,80 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  describe('streaming the recording while it is made (GEO-2955)', () => {
+    const multipart = {
+      filename: 'recordings/debate-1/slot-1/user-a/1.local.webm',
+      uploadId: 'upload-1',
+      partSize: 5 * 1024 * 1024,
+      uploadedPartNumbers: [1, 2],
+    };
+
+    it('streams every timeslice and hands what went out live to the upload queue', async () => {
+      mocks.liveStreamFinish.mockResolvedValue(multipart);
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      expect(mocks.startLiveStream).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.stringMatching(/^user-a:debate-1:\d+$/),
+          metadata: expect.objectContaining({ userId: 'user-a', debateId: 'debate-1', mimeType: 'video/webm' }),
+        })
+      );
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      // The final timeslice reached the stream as well as the in-memory copy.
+      expect(mocks.liveStreamAppend).toHaveBeenCalledWith(expect.any(Blob), expect.any(Number));
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart }));
+      // Once the queue holds the recording, the chunks saved as it was made are released.
+      await waitFor(() => expect(mocks.liveStreamRelease).toHaveBeenCalledOnce());
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+    });
+
+    it('queues an ordinary recording when nothing was streamed', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart: null }));
+    });
+
+    it('discards the streamed parts when the debate is cancelled', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(mocks.liveStreamAbort).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
+
+    it('keeps the saved chunks for recovery when the room unmounts mid-debate', async () => {
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      view.unmount();
+
+      // Neither discarded nor released: the coordinator decides, once the debate settles.
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
   });
 
   it('does not render a cancelled room while cleaning up an active debate', async () => {
@@ -3343,7 +4912,15 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
+    // GEO-2949. The window now runs RECORDING_POST_ROLL_MS past the final turn's deadline, so
+    // the last speaker is not cut mid-sentence. Still recording one millisecond after the old
+    // cut-off is the whole point of the change.
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:10.001Z'));
+    mocks.debate = { ...mocks.debate! };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:15.001Z'));
     mocks.debate = { ...mocks.debate! };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -3379,7 +4956,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -3390,7 +4968,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2'));
-    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
   });
 
   it('enters the rematch browser after the live connection drops before the debate completes', async () => {
@@ -3402,7 +4981,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
 
     mocks.rematch = rematchSession('browsing');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
@@ -3424,7 +5003,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
     mocks.rematch = rematchSession('deciding');
-    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.debate = { ...completedDebateOutsideThankYou(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(screen.getByText('Debate complete.')).toBeInTheDocument());
@@ -3444,7 +5023,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
@@ -3470,7 +5049,7 @@ describe('DebateRoomPageClient', () => {
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    mocks.debate = completedDebate();
+    mocks.debate = completedDebateOutsideThankYou();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(
@@ -3591,7 +5170,9 @@ function debateVideoTile(participant: 'local' | 'remote') {
   return tile;
 }
 
+/** Returns the recorders as they are constructed, so a test can drive `stop` / `error` itself. */
 function installRecordingMocks() {
+  const recorders: EventTarget[] = [];
   vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
   vi.stubGlobal(
     'MediaRecorder',
@@ -3606,6 +5187,7 @@ function installRecordingMocks() {
 
       constructor(stream: MediaStream) {
         super();
+        recorders.push(this);
         mocks.mediaRecorderConstruct(stream);
       }
 
@@ -3626,6 +5208,7 @@ function installRecordingMocks() {
     }
   );
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+  return recorders;
 }
 
 function createLocalAudioTrack() {
@@ -3732,6 +5315,15 @@ function completedDebate(): Debate {
   };
 }
 
+function completedDebateOutsideThankYou(): Debate {
+  return {
+    ...completedDebate(),
+    turn_started_at: '2026-07-02T00:00:00.000Z',
+    turn_ends_at: '2026-07-02T00:00:20.000Z',
+    completed_at: '2026-07-02T00:00:20.000Z',
+  };
+}
+
 function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteReady: boolean }): Debate {
   return {
     ...completedDebate(),
@@ -3753,7 +5345,13 @@ function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteR
   };
 }
 
-function rematchSession(status: DebateRematchSession['status']): DebateRematchSession {
+function rematchSession(
+  status: DebateRematchSession['status'],
+  {
+    localConsented = false,
+    remoteConsented = false,
+  }: { localConsented?: boolean; remoteConsented?: boolean } = {}
+): DebateRematchSession {
   return {
     id: 'rematch-1',
     source_debate_id: 'debate-1',
@@ -3766,7 +5364,7 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        consented_at: null,
+        consented_at: localConsented ? '2026-07-02T00:01:15.000Z' : null,
       },
       {
         user_id: 'user-b',
@@ -3774,7 +5372,7 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        consented_at: null,
+        consented_at: remoteConsented ? '2026-07-02T00:01:15.000Z' : null,
       },
     ],
     decision_expires_at: '2026-07-02T00:01:30.000Z',

@@ -32,12 +32,25 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
+// The real player resolves bylines through react-query. This page suite intentionally stubs
+// the player's data dependencies instead of recreating the app provider tree; byline loading
+// and rendering have focused coverage in the player and hook suites.
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => new Map(),
+}));
+
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
+  useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
+}));
+
+// PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -45,13 +58,20 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
+  useDebateMedia: () => ({ data: undefined, isLoading: false, isError: false }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
-  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // Reached through the player's claim ticker, which asks per space for the rows behind each
+  // claim. This suite's debates carry no claims, so it answers with none.
+  useDebateClaimsBySpaces: () => ({ claims: [], isLoading: false, isError: false }),
+  // The feed resolves an anchor by id when the space listing does not contain it (GEO-2764).
+  // These tests never anchor, so it stays idle.
+  useDebate: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 // The feed orders itself by the explore "Best" ranking. These tests are about readiness and
@@ -59,6 +79,12 @@ vi.mock('~/core/debates/hooks', () => ({
 // they were written against.
 vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
+}));
+
+// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
+// next-navigation and Privy context this suite does not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -79,6 +105,22 @@ vi.mock('~/partials/comments/entity-comments-panel', () => ({
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
+
+// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
+// the grouping and ordering have their own unit tests.
+vi.mock('~/core/debates/use-debate-transcript-claims', async () => {
+  // The real empty value rather than a hand-rolled copy of it. A literal here has to be updated
+  // every time the shape grows a field, and when it isn't, it fails as a runtime TypeError in a
+  // suite that has nothing to do with claims.
+  const { EMPTY_TRANSCRIPT_CLAIMS } = await vi.importActual<typeof import('~/core/debates/transcript-claims')>(
+    '~/core/debates/transcript-claims'
+  );
+
+  return {
+    useDebateTranscriptClaims: () => ({ claims: EMPTY_TRANSCRIPT_CLAIMS, isLoading: false, error: null }),
+  };
+});
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
@@ -112,7 +154,11 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    // Both debaters name themselves on their own tile. The "Winner?" pill used to sit here too;
+    // it moved off the tile entirely when the name row took the bottom-right corner, and winner
+    // voting now happens on the end-of-debate scorecard and in the claims panel.
+    expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));

@@ -39,8 +39,18 @@ type View = 'selectEntity' | 'selectSpace' | 'createEntity';
 // Defaults to true (canonical graph only) unless the user has turned it off; persisted across sessions.
 const SEARCH_CANONICAL_ONLY_KEY = 'geo.search.canonicalOnly';
 
-const readCanonicalOnly = (): boolean =>
-  typeof window === 'undefined' || window.localStorage.getItem(SEARCH_CANONICAL_ONLY_KEY) !== 'false';
+// Guarded because this is a lazy `useState` initialiser and so runs during render: a browser with
+// site data blocked throws `SecurityError` on the `window.localStorage` getter itself, which would
+// take the whole dialog down rather than just lose the preference. Same shape the rest of the app
+// uses for storage — see `core/space/daily-activities-storage.ts`.
+const readCanonicalOnly = (): boolean => {
+  if (typeof window === 'undefined') return true;
+  try {
+    return window.localStorage.getItem(SEARCH_CANONICAL_ONLY_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+};
 
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
@@ -55,13 +65,23 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   // Explicit `true` (not just omitted) when off — useSearch uses this to tell
   // "user asked for unrestricted search" apart from "caller has no opinion",
   // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
-  const autocomplete = useSearch({ enabled: open, includeNonCanonical: canonicalOnly ? false : true });
+  const autocomplete = useSearch({
+    enabled: open,
+    includeNonCanonical: canonicalOnly ? false : true,
+    analyticsSurface: 'global',
+  });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
 
   const toggleCanonicalOnly = useCallback(() => {
     setCanonicalOnly(prev => {
       const next = !prev;
-      if (typeof window !== 'undefined') window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
+        } catch {
+          // Quota or blocked site data — the toggle still works, it just won't persist.
+        }
+      }
       return next;
     });
   }, []);
@@ -257,6 +277,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                               id={`search-result-${i}`}
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
+                              // A real destination, so the row can be opened in a new tab, middle
+                              // clicked, or right clicked like any other link (GEO-2701). The same
+                              // one cmdk pushes on a plain click.
+                              href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
                               result={result}
                               active={i === selectedIndex}
                               onChooseSpace={() => setOpenSpacesIndex(i)}
@@ -312,6 +336,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             <SpaceContent
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
+                              href={NavUtils.toEntity(space.spaceId, selectedEntity.id)}
                               entityId={selectedEntity.id}
                               space={space}
                             />

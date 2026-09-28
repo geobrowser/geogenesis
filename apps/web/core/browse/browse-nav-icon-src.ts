@@ -6,6 +6,8 @@ export const BROWSE_NAV_ICON = {
   exploreOutline: '/browse-nav/explore-outline.svg',
   governance: '/browse-nav/governance.svg',
   governanceFilled: '/browse-nav/governance-filled.svg',
+  bounties: '/browse-nav/bounties.svg',
+  bountiesFilled: '/browse-nav/bounties-filled.svg',
   docs: '/browse-nav/docs.svg',
   docsFilled: '/browse-nav/docs-filled.svg',
 } as const;

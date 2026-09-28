@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -17,15 +16,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { SpaceTopicDialog } from '~/partials/space-page/space-topic-dialog';
 import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
@@ -37,6 +32,7 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
+import { EntityPageTitle } from './entity-page-title';
 
 type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
@@ -75,6 +71,8 @@ export function EditableSpaceHeading({
   addSubspaceComponent,
   nameAccessoryComponent,
   actionsComponent,
+  keepSpaceActions = false,
+  fallbackName,
 }: {
   spaceId: string;
   entityId: string;
@@ -83,13 +81,32 @@ export function EditableSpaceHeading({
   nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
+  /** Keeps the history and overflow controls on routes below the space's own page. */
+  keepSpaceActions?: boolean;
+  /**
+   * Shown in browse mode when the scoped store has no name yet — the same prop
+   * `EditableHeading` takes, for the same reason and with the same rule.
+   *
+   * `useName` reads the sync store, which hydrates over the network once the
+   * page is mounted, so the heading rendered as a zero-width space for the
+   * length of that request and every space looked like it had failed to load
+   * its own title.
+   */
+  fallbackName?: string | null;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
-  const isSpacePage = path === NavUtils.toSpace(spaceId);
+  // History and the overflow menu are a space's own controls, so they show on
+  // the space's own page and not on an entity inside it.
+  //
+  // A profile keeps them on every one of its tabs (GEO-2859). Its header is
+  // rendered once above all of them rather than per page, so gating on the exact
+  // Overview path made them appear and vanish as the reader moved between tabs
+  // of the same profile — with nothing else in the row changing.
+  const isSpacePage = path === NavUtils.toSpace(spaceId) || keepSpaceActions;
 
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const [overlayMode, dispatch] = React.useReducer(overlayReducer, 'closed');
@@ -137,42 +154,33 @@ export function EditableSpaceHeading({
 
   return (
     <>
-      <div className="relative flex items-center justify-between">
-        {isEditing ? (
-          <div className="grow">
-            <PageStringField
-              variant="mainPage"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onChange={onNameChange}
-            />
-            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
-            <Spacer height={3.5} />
-          </div>
-        ) : (
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <Truncate maxLines={3} shouldTruncate className="w-auto! min-w-0">
-                <Text as="h1" variant="mainPage">
-                  {name ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </Truncate>
-              {nameAccessoryComponent ? (
-                <span className="mt-[9px] inline-flex shrink-0">{nameAccessoryComponent}</span>
-              ) : null}
-            </div>
-            <Spacer height={12} />
-          </div>
-        )}
+      {/* Wraps rather than squeezing: a long name beside Edit profile, a vote
+          pair, history and the overflow menu has nowhere to go on a phone, and
+          `justify-between` would have compressed the controls into each other.
+          Only engages when it has to, so nothing changes on a wide screen. */}
+      <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <EntityPageTitle
+          // Browse falls back to the server's name; edit must not. A fallback in
+          // the textarea reads as a stored name that isn't there, and one
+          // keystroke would commit it — see `EditableHeading`, which draws the
+          // same line for the same reason.
+          value={isEditing ? (name ?? '') : (name ?? fallbackName ?? '')}
+          isEditing={isEditing}
+          onChange={onNameChange}
+          accessory={nameAccessoryComponent}
+          className="min-w-0 grow"
+        />
         {(actionsComponent || isSpacePage) && (
-          <div className="inline-flex items-center gap-4">
+          <div className="inline-flex shrink-0 items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
               <>
                 {isEditing && (
+                  // Matches the entity row's link; only the label is new.
                   <Link
                     href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-                    className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+                    aria-label="Create new entity"
+                    className="stroke-grey-04 transition-colors duration-75 hover:stroke-text mobile:hidden"
                   >
                     <Create />
                   </Link>

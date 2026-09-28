@@ -32,7 +32,7 @@ export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placehold
   };
 
   return (
-    <form
+    <form data-geo-analytics-label="Assistant message"
       onSubmit={event => {
         event.preventDefault();
         if (canSend) onSubmit();

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import Image from 'next/image';
 
-import { getImagePathAtLevel, isRenderableImageSrc } from '~/core/utils/utils';
+import { getImagePathAtLevel, isOptimizableImageSrc, isRenderableImageSrc } from '~/core/utils/utils';
 
 type FallbackImageProps = {
   value: string;
@@ -30,8 +30,12 @@ const STAGES: { level: number; unoptimized: boolean }[] = [
 export function FallbackImage({ value, sizes, className, priority = false }: FallbackImageProps) {
   const [stage, setStage] = React.useState(0);
 
-  const { level, unoptimized } = STAGES[stage];
+  const { level, unoptimized: stageUnoptimized } = STAGES[stage];
   const src = getImagePathAtLevel(value, level);
+  // Stage 0 is the optimizer fast path, which is only ours to take for hosts we control. A
+  // foreign host skips straight to being served as-is (GEO-2984); the remaining stages are
+  // already unoptimized, so the gateway walk is unaffected.
+  const unoptimized = stageUnoptimized || !isOptimizableImageSrc(src);
 
   // Callers wrap us in a neutral placeholder, so rendering nothing degrades to an
   // empty thumbnail.

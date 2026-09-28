@@ -9,6 +9,7 @@ import {
   getEntityTiebreakerBatch,
   getNameValuesBatch,
 } from '~/core/io/queries';
+import { timeoutSignal } from '~/core/timeout-signal';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 import { RelationPropertyMeta, ResolvedEntity } from './import-generation';
@@ -25,17 +26,6 @@ const BATCH_CONCURRENCY = 4;
 /** Yield to the browser so scroll/paint/input events can be processed. */
 function yieldToMain(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, 0));
-}
-
-/** Create an AbortSignal that times out after `ms` milliseconds. */
-function timeoutSignal(ms: number): AbortSignal {
-  if (typeof AbortSignal.timeout === 'function') {
-    return AbortSignal.timeout(ms);
-  }
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ms);
-  controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
-  return controller.signal;
 }
 
 type ResolutionGuard = {
@@ -249,9 +239,6 @@ async function resolveNames(params: {
       roundBatches.push(uniqueNames.slice(start, start + BATCH_SIZE));
     }
 
-    const roundNum = Math.floor(i / (BATCH_SIZE * BATCH_CONCURRENCY)) + 1;
-    const namesInRound = roundBatches.reduce((n, b) => n + b.length, 0);
-    const tRound = performance.now();
 
     const batchResults = await Promise.allSettled(
       roundBatches.map(async batch => {

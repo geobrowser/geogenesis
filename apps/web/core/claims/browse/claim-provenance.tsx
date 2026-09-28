@@ -1,0 +1,184 @@
+'use client';
+
+import * as React from 'react';
+
+import { personProfileOpened } from '~/core/analytics';
+import {
+  AUTHORS_PROPERTY_ID,
+  DEBATE_CLAIMS_PROPERTY_ID,
+  SOURCES_PROPERTY_ID,
+  TEXT_BLOCK_TYPE_ID,
+} from '~/core/debates/ontology';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { ID } from '~/core/id';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
+import { NavUtils } from '~/core/utils/utils';
+
+import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Text } from '~/design-system/text';
+
+import { getClaimSources } from './claim-sources';
+
+/**
+ * Where a claim came from.
+ *
+ * A claim lifted from somewhere else carries a `Sources` relation pointing at it, which is the
+ * cheap half of this. That source is not always a debate — an article can carry claims too — so
+ * the sentence names it by its own type rather than asserting one.
+ *
+ * The speakers are the expensive half, and only debates have them: attribution rides the *text
+ * block's* `Authors` relation rather than the claim's, so it takes a second hop back through the
+ * blocks that quoted the claim. With find-or-create one claim can be quoted by both debaters of the
+ * same debate, so every block for the source is read and every distinct author named. Without a
+ * speaker the row still names the source.
+ *
+ * Renders nothing for a claim authored directly in a space — there is nothing to point at, and a
+ * row that is empty more often than not is worse than no row.
+ */
+export function ClaimProvenance({
+  claimId,
+  claimRelations,
+  spaceId,
+}: {
+  claimId: string;
+  claimRelations: Relation[];
+  spaceId: string;
+}) {
+  // Every source, in relation order, deduped by target. A claim used to carry exactly one `Sources`
+  // relation because every debate minted its own Claim; with find-or-create a transcript claim that
+  // already exists in the space is linked to the existing entity, which then collects one `Sources`
+  // per debate that stated it. The first is rendered as the primary source and the rest listed, so
+  // no debate is hidden behind another.
+  const sources = React.useMemo(() => getClaimSources(claimRelations), [claimRelations]);
+  const source = sources[0] ?? null;
+  const otherSources = sources.slice(1);
+
+  // Only asked for once we know there is a source to attribute the claim to, and constrained to
+  // blocks belonging to *that* source. A claim can be quoted by more than one transcript — the same
+  // sentence surfacing in a later debate is the ordinary case, not an edge one — and a lookup keyed
+  // on the claim alone would take whichever block came back first and hang someone else's name on
+  // it. Both clauses have to hold: relations given as an array are AND-ed. All of the source's
+  // blocks are read, not the first: both debaters of one debate can quote the same claim.
+  const { entities: blocks } = useQueryEntities({
+    where: {
+      types: [{ id: { equals: TEXT_BLOCK_TYPE_ID } }],
+      relations: [
+        { typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } },
+        { typeOf: { id: { equals: SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: source?.id ?? '' } } },
+      ],
+    },
+    first: 20,
+    enabled: source !== null,
+  });
+
+  const speakerSpaceIds = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const block of blocks) {
+      for (const relation of block.relations) {
+        if (relation.isDeleted === true || !ID.equals(relation.type.id, AUTHORS_PROPERTY_ID)) continue;
+        const key = ID.uuidToHex(relation.toEntity.id);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(relation.toEntity.id);
+      }
+    }
+    return out;
+  }, [blocks]);
+
+  // `Sources` points wherever the claim came from, which is not always a debate — a claim pulled
+  // from an article carries that article. The relation only gives an id and a name, so the type
+  // has to be read off the entity itself to name the source in the sentence below.
+  const { entity: sourceEntity } = useQueryEntity({ id: source?.id ?? '', enabled: source !== null });
+  const sourceKind = sourceEntity?.types.find(type => type.name)?.name?.toLowerCase() ?? 'source';
+
+  const { profilesBySpaceId } = useProfilesBySpaceIds(speakerSpaceIds, speakerSpaceIds.length > 0);
+  const speakers = speakerSpaceIds
+    .map(id => ({ id, profile: profilesBySpaceId.get(id) }))
+    .filter(speaker => Boolean(speaker.profile?.name));
+
+  if (!source) return null;
+
+  return (
+    <section
+      aria-label="Where this claim came from"
+      className="flex items-center gap-2.5 rounded-lg border border-dashed border-grey-02 bg-grey-01 px-4 py-3"
+    >
+      {speakers.length > 0 && (
+        <span className="flex shrink-0 -space-x-2">
+          {speakers.map(speaker => (
+            <span key={speaker.id} className="block size-6 overflow-hidden rounded-full bg-grey-02">
+              <Avatar avatarUrl={speaker.profile?.avatarUrl} value={speaker.id} size={24} />
+            </span>
+          ))}
+        </span>
+      )}
+      {/* Two lines rather than one sentence. Debate names are built from both debaters and the
+          claim, so they run long — inlined, the attribution and the title wrapped into a single
+          run-on block where "Preston Mantel in Preston Mantel vs. …" read as a stutter. Splitting
+          them puts the person on one line and what they said it in on the next. */}
+      <div className="flex min-w-0 flex-col">
+        <Text as="span" variant="metadata" color="grey-04">
+          {speakers.length > 0 ? (
+            <>
+              {/* Not "First stated by": relation order says nothing about chronology, and a claim
+                  authored in the space by hand and reused by one debate carries a single Sources
+                  relation while predating that debate. */}
+              Stated by{' '}
+              {speakers.map((speaker, index) => (
+                <React.Fragment key={speaker.id}>
+                  {index > 0 ? (index === speakers.length - 1 ? ' and ' : ', ') : null}
+                  {/* Linked when the profile resolves to one. `profileLink` is nullable — a speaker
+                      whose personal space has no front-page entity has nowhere to go, and a link to
+                      nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from
+                      breaking across lines. */}
+                  {speaker.profile?.profileLink ? (
+                    <Link
+                      href={speaker.profile.profileLink}
+                      onClick={() =>
+                        personProfileOpened(speaker.profile!.spaceId, speaker.profile!.id, {
+                          interaction_surface: 'claim_provenance',
+                        })
+                      }
+                      className="whitespace-nowrap text-text hover:underline"
+                    >
+                      {speaker.profile.name}
+                    </Link>
+                  ) : (
+                    <span className="whitespace-nowrap text-text">{speaker.profile?.name}</span>
+                  )}
+                </React.Fragment>
+              ))}
+            </>
+          ) : (
+            `From the ${sourceKind}`
+          )}
+        </Text>
+        <Link href={NavUtils.toEntity(spaceId, source.id)} className="truncate text-metadata text-text hover:underline">
+          {source.name ?? `this ${sourceKind}`}
+        </Link>
+        {otherSources.length > 0 && (
+          <span className="truncate">
+            <Text as="span" variant="metadata" color="grey-04">
+              Also in{' '}
+            </Text>
+            {otherSources.map((other, index) => (
+              <React.Fragment key={other.id}>
+                {index > 0 ? (
+                  <Text as="span" variant="metadata" color="grey-04">
+                    ,{' '}
+                  </Text>
+                ) : null}
+                <Link href={NavUtils.toEntity(spaceId, other.id)} className="text-metadata text-text hover:underline">
+                  {other.name ?? `this ${sourceKind}`}
+                </Link>
+              </React.Fragment>
+            ))}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}

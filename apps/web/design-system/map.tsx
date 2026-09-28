@@ -22,7 +22,7 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
 
   const lat = GeoPoint.clampLatForMap(latitude);
   const lng = GeoPoint.clampLngForMap(longitude);
-  const center: [number, number] = [lng, lat];
+  const center = React.useMemo<[number, number]>(() => [lng, lat], [lng, lat]);
 
   // Initialize map once on mount
   useEffect(() => {
@@ -58,6 +58,10 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
         markerRef.current = null;
       }
     };
+    // Mount only: this creates the map and tears it down. `center` is read for the initial view,
+    // and depending on it would rebuild the whole map every time the coordinates moved — which is
+    // what the effect below exists to avoid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update map when coordinates change
@@ -72,7 +76,7 @@ export const Map = ({ latitude = 0, longitude = 0 }: MapProps) => {
       mapRef.current.setZoom(DEFAULT_ZOOM);
       markerRef.current.setLngLat(center);
     }
-  }, [latitude, longitude]);
+  }, [center, latitude, longitude]);
 
   return (
     <div className="h-[200px] w-full rounded transition-all duration-200 ease-in-out">

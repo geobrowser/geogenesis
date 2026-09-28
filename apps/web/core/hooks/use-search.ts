@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
+import { type SearchAnalyticsSurface, searchSubmitted } from '~/core/analytics';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -15,6 +16,7 @@ import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
 import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
+import { isSearchCancellation } from './search-cancellation';
 import { useDebouncedValue } from './use-debounced-value';
 import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
@@ -48,6 +50,15 @@ interface SearchOptions {
    *   genuinely wants that specific restriction lifted.
    */
   includeNonCanonical?: boolean;
+  /**
+   * Extra spaces to make eligible, for a caller that knows where the thing it is
+   * searching for lives. Appended to the scoped spaces rather than replacing
+   * them, and ignored when the search is already scoped to one space or has
+   * asked for unrestricted results.
+   */
+  alsoSearchSpaceIds?: string[];
+  /** Stable analytics classification for the surface. Inferred for shared entity pickers; false disables tracking. */
+  analyticsSurface?: SearchAnalyticsSurface | false;
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -58,9 +69,16 @@ type SearchPage = {
   offset: number;
   serverCount: number;
   total: number;
+  succeeded: boolean;
 };
 
-const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, serverCount: 0, total: 0 });
+const emptySearchPage = (offset: number, succeeded = true): SearchPage => ({
+  rows: [],
+  offset,
+  serverCount: 0,
+  total: 0,
+  succeeded,
+});
 
 function normalizeTypeId(id: string): string {
   return id.replace(/-/g, '');
@@ -95,6 +113,8 @@ export function useSearch({
   enabled,
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
   includeNonCanonical,
+  alsoSearchSpaceIds,
+  analyticsSurface,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -105,6 +125,7 @@ export function useSearch({
   const additionalSpaceIds = selectSearchAdditionalSpaceIds({
     filterBySpace,
     includeNonCanonical,
+    alsoSearchSpaceIds,
     globalAdditionalSpaceIds,
   });
 
@@ -117,6 +138,19 @@ export function useSearch({
     (Boolean(restrictToFilterTypes) && !filterByTypes?.length);
 
   const shouldSearch = (enabled ?? debouncedQuery !== '') && !searchBlocked;
+  const searchQueryKey = [
+    'search',
+    // The capped query, so typing past the cap stops minting keys for a request that cannot
+    // change. `debouncedQuery` stays the raw text everywhere it describes what was typed.
+    cappedQuery,
+    filterTypeKey,
+    filterBySpace,
+    Boolean(waitForFilterTypes),
+    Boolean(restrictToFilterTypes),
+    additionalSpaceIds,
+    pageSize,
+    includeNonCanonical,
+  ] as const;
 
   const {
     data: resultPages,
@@ -127,19 +161,7 @@ export function useSearch({
     fetchNextPage,
   } = useInfiniteQuery({
     enabled: shouldSearch,
-    queryKey: [
-      'search',
-      // The capped query, so typing past the cap stops minting keys for a request that cannot
-      // change. `debouncedQuery` stays the raw text everywhere it describes what was typed.
-      cappedQuery,
-      filterTypeKey,
-      filterBySpace,
-      Boolean(waitForFilterTypes),
-      Boolean(restrictToFilterTypes),
-      additionalSpaceIds,
-      pageSize,
-      includeNonCanonical,
-    ],
+    queryKey: searchQueryKey,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
       try {
@@ -156,7 +178,7 @@ export function useSearch({
           if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
-          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1 };
+          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
         }
 
         const page = await E.findFuzzyPage({
@@ -188,19 +210,28 @@ export function useSearch({
           ? page.results
           : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-        return { rows, offset: pageParam, serverCount: page.serverCount, total: page.total };
+        return {
+          rows,
+          offset: pageParam,
+          serverCount: page.serverCount,
+          total: page.total,
+          succeeded: true,
+        };
       } catch (error) {
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
         // cache the empty page under the canceled queryKey — leaving popovers
-        // stuck on "No matches" when the key changes mid-fetch (e.g.
-        // `additionalSpaceIds` settles after mount, or React StrictMode
-        // double-mounts in dev).
-        if (signal.aborted || (error as { name?: string })?.name === 'AbortError') {
+        // stuck on "No matches" until the query text changes, which is what made
+        // typing a trailing space look like it fixed the search.
+        //
+        // See `isSearchCancellation` for why the obvious two checks were not
+        // enough: an abort from a deduplicated inner fetch leaves this signal
+        // untouched and arrives wrapped by Effect.
+        if (isSearchCancellation(error, signal)) {
           throw error;
         }
         console.error(error);
-        return emptySearchPage(pageParam);
+        return emptySearchPage(pageParam, false);
       }
     },
     getNextPageParam: lastPage => {
@@ -219,9 +250,16 @@ export function useSearch({
   });
 
   const emptyPagePumpCountRef = React.useRef(0);
+  const lastPage = resultPages?.pages.at(-1);
+  const shouldPumpEmptyPage =
+    lastPage !== undefined &&
+    lastPage.rows.length === 0 &&
+    hasNextPage === true &&
+    lastPage.serverCount >= pageSize &&
+    !isFetchingNextPage &&
+    emptyPagePumpCountRef.current < EMPTY_PAGE_PUMP_LIMIT;
 
   React.useEffect(() => {
-    const lastPage = resultPages?.pages.at(-1);
     if (!lastPage) {
       emptyPagePumpCountRef.current = 0;
       return;
@@ -232,17 +270,11 @@ export function useSearch({
       return;
     }
 
-    if (
-      lastPage.serverCount < pageSize ||
-      isFetchingNextPage ||
-      emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT
-    ) {
-      return;
-    }
+    if (!shouldPumpEmptyPage) return;
 
     emptyPagePumpCountRef.current += 1;
     void fetchNextPage();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, pageSize, resultPages]);
+  }, [fetchNextPage, hasNextPage, lastPage, shouldPumpEmptyPage]);
 
   const results = React.useMemo(() => {
     const seen = new Set<string>();
@@ -254,6 +286,58 @@ export function useSearch({
     }
     return rows;
   }, [resultPages]);
+
+  const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
+  const analyticsAttemptRef = React.useRef({ key: '', startedAt: 0, emitted: false });
+
+  React.useEffect(() => {
+    if (analyticsAttemptRef.current.key === analyticsSearchKey) return;
+
+    analyticsAttemptRef.current = {
+      key: analyticsSearchKey,
+      startedAt: searchClock(),
+      emitted: false,
+    };
+  }, [analyticsSearchKey]);
+
+  React.useEffect(() => {
+    const attempt = analyticsAttemptRef.current;
+    const pages = resultPages?.pages;
+    if (
+      attempt.key !== analyticsSearchKey ||
+      attempt.emitted ||
+      analyticsSurface === false ||
+      cappedQuery.trim() === '' ||
+      query !== debouncedQuery ||
+      !shouldSearch ||
+      isFetching ||
+      shouldPumpEmptyPage ||
+      !pages?.length ||
+      pages.some(page => !page.succeeded)
+    ) {
+      return;
+    }
+
+    attempt.emitted = true;
+    searchSubmitted({
+      queryText: cappedQuery,
+      resultCount: results.length,
+      latencyMs: searchClock() - attempt.startedAt,
+      surface: analyticsSurface ?? (filterBySpace ? 'space' : 'entity'),
+    });
+  }, [
+    analyticsSearchKey,
+    analyticsSurface,
+    cappedQuery,
+    debouncedQuery,
+    filterBySpace,
+    isFetching,
+    resultPages,
+    results.length,
+    query,
+    shouldPumpEmptyPage,
+    shouldSearch,
+  ]);
 
   const isQuerySyncing = query !== debouncedQuery;
   const isWaitingForFilterTypes = shouldSearch === false && searchBlocked && (enabled ?? debouncedQuery !== '');
@@ -271,6 +355,10 @@ export function useSearch({
     query,
     onQueryChange: setQuery,
   };
+}
+
+function searchClock() {
+  return typeof performance === 'undefined' ? Date.now() : performance.now();
 }
 
 function isArrayEmpty<T>(array: T[]): boolean {

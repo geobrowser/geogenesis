@@ -1,6 +1,13 @@
+import { act, renderHook } from '@testing-library/react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createDebateAttentionStore, createDebatePresenceStore } from './debate-attention';
+import {
+  createDebateAttentionStore,
+  createDebateConnectionPresenceStore,
+  createDebateVisibilityStore,
+  useDebatePresence,
+} from './debate-attention';
 
 describe('debate attention', () => {
   let focused: boolean;
@@ -121,7 +128,7 @@ describe('debate attention', () => {
 describe('debate presence', () => {
   let focused: boolean;
   let visibilityState: DocumentVisibilityState;
-  let store: ReturnType<typeof createDebatePresenceStore>;
+  let store: ReturnType<typeof createDebateVisibilityStore>;
   let unsubscribe: (() => void) | undefined;
 
   beforeEach(() => {
@@ -140,7 +147,7 @@ describe('debate presence', () => {
   });
 
   function subscribe() {
-    store = createDebatePresenceStore(window, document);
+    store = createDebateVisibilityStore(window, document);
     unsubscribe = store.subscribe(vi.fn());
   }
 
@@ -157,20 +164,59 @@ describe('debate presence', () => {
     expect(store.getSnapshot()).toBe(true);
   });
 
-  it('drops when the tab is hidden and returns when it is shown again', () => {
+  // GEO-2836. Hiding the tab starts a countdown rather than reporting a departure, because most
+  // hides are not departures — the viewer looks something up and comes back.
+  it('holds presence through a brief hide and drops once the grace expires', () => {
     subscribe();
     expect(store.getSnapshot()).toBe(true);
 
     visibilityState = 'hidden';
     document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(59_000);
+    expect(store.getSnapshot()).toBe(true);
+
+    vi.advanceTimersByTime(1_000);
     expect(store.getSnapshot()).toBe(false);
+  });
+
+  it('cancels the grace when the tab comes back, and starts a fresh one on the next hide', () => {
+    subscribe();
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(30_000);
 
     visibilityState = 'visible';
     document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(60_000);
     expect(store.getSnapshot()).toBe(true);
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(59_000);
+    expect(store.getSnapshot()).toBe(true);
+
+    vi.advanceTimersByTime(1_000);
+    expect(store.getSnapshot()).toBe(false);
   });
 
-  it('drops on pagehide and reconciles from the back-forward cache', () => {
+  // A tab that wakes for a moment every so often — a throttled timer, a background render — must
+  // still expire. Restarting the deadline on each `visibilitychange` would let it live forever.
+  it('does not extend the deadline for repeated hidden visibilitychange events', () => {
+    subscribe();
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(30_000);
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(30_000);
+
+    expect(store.getSnapshot()).toBe(false);
+  });
+
+  // The one departure we can be sure of, so it skips the grace entirely: nobody should be offered
+  // a debate by someone who has already closed the tab.
+  it('drops on pagehide without waiting for the grace, and reconciles from the back-forward cache', () => {
     subscribe();
 
     window.dispatchEvent(new Event('pagehide'));
@@ -178,6 +224,16 @@ describe('debate presence', () => {
 
     window.dispatchEvent(new Event('pageshow'));
     expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('drops on pagehide while a hide grace is already running', () => {
+    subscribe();
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(store.getSnapshot()).toBe(false);
   });
 
   it('reconciles when listeners return after a gap', () => {
@@ -189,5 +245,115 @@ describe('debate presence', () => {
     unsubscribe = store.subscribe(vi.fn());
 
     expect(store.getSnapshot()).toBe(false);
+  });
+});
+
+describe('debate connection presence (GEO-2849)', () => {
+  let visibilityState: DocumentVisibilityState;
+  let store: ReturnType<typeof createDebateConnectionPresenceStore>;
+  let unsubscribe: (() => void) | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    visibilityState = 'visible';
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+  });
+
+  afterEach(() => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function subscribe() {
+    store = createDebateConnectionPresenceStore(window, document);
+    unsubscribe = store.subscribe(vi.fn());
+  }
+
+  // The whole point of the change. On a video call every participant's tab is hidden at once, and
+  // keying presence on visibility made them all vanish from each other's matchmaking. A hidden tab
+  // is still here.
+  it('stays present while the tab is hidden, however long', () => {
+    subscribe();
+    expect(store.getSnapshot()).toBe(true);
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(60 * 60 * 1000);
+
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('drops on pagehide, which is the real departure signal', () => {
+    subscribe();
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(store.getSnapshot()).toBe(false);
+  });
+
+  it('comes back on pageshow, so a bfcache restore is not stranded as absent', () => {
+    subscribe();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(store.getSnapshot()).toBe(false);
+
+    window.dispatchEvent(new Event('pageshow'));
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('is present from the first read, before any event fires', () => {
+    subscribe();
+    expect(store.getSnapshot()).toBe(true);
+  });
+});
+
+// GEO-2849 was reversed on 2026-09-23: presence reads visibility again, with a longer grace than
+// polling uses. These two facts are the whole change, and both are a one-line edit away from being
+// undone by accident — the store the hook picks, and the number. Pinned here for that reason, and
+// asserted through the hook rather than the store so a swap back cannot pass.
+describe('useDebatePresence is visibility on a three-minute grace', () => {
+  let visibilityState: DocumentVisibilityState;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    visibilityState = 'visible';
+    vi.spyOn(document, 'hasFocus').mockImplementation(() => true);
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function hide() {
+    visibilityState = 'hidden';
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+
+  it('keeps a hidden tab present well past the sixty seconds polling uses, then drops it', () => {
+    const { result } = renderHook(() => useDebatePresence());
+    expect(result.current).toBe(true);
+
+    hide();
+    // The old grace. Dropping here would mean the hook is reading the polling store.
+    act(() => vi.advanceTimersByTime(179_000));
+    expect(result.current).toBe(true);
+
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(result.current).toBe(false);
+  });
+
+  // The regression that motivated the reversal: a tab that is merely open must not stay present
+  // forever. Under the connection store this stayed true for any duration.
+  it('does not treat an open-but-hidden tab as present indefinitely', () => {
+    const { result } = renderHook(() => useDebatePresence());
+
+    hide();
+    act(() => vi.advanceTimersByTime(60 * 60_000));
+
+    expect(result.current).toBe(false);
   });
 });

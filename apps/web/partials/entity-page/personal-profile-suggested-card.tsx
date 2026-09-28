@@ -264,7 +264,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
       createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [displayName, entityId, isMyPersonalSpaceRoute, router, setEditable, setCreatePostFlow, spaceId]);
+  }, [displayName, entityId, isMyPersonalSpaceRoute, router, setCreatePostFlow, spaceId]);
 
   if (!visible) {
     return null;

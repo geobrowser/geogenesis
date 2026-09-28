@@ -1,3 +1,5 @@
+import type * as React from 'react';
+
 export interface CommentEntity {
   id: string;
   name: string | null;
@@ -46,9 +48,36 @@ export interface CreateCommentParams {
   text: string;
   targetEntityId: string;
   targetSpaceId: string;
-  /** All ancestor comments from immediate parent up to the root, each with its space */
+  /**
+   * The reply chain ordered [immediate parent, ..., root]; omit for a top-level comment on the
+   * page entity. The hook maps index 0 (the immediate parent) to the SDK's `replyTo` target.
+   */
   ancestorComments?: Array<{ id: string; spaceId: string }>;
 }
 
-export type CommentSortOrder = 'newest' | 'oldest';
+/**
+ * How the thread orders its top level.
+ *
+ * `best` and `top` both read the rows' vote counts and differ in what they reward: `best` takes the
+ * net score, so a divisive row falls; `top` takes upvotes alone, so a row lots of people backed
+ * stays up regardless of how many pushed back. `newest`/`oldest` are the thread's original orders.
+ */
+export type CommentSortOrder = 'best' | 'top' | 'newest' | 'oldest';
 export type CommentFilter = 'all' | 'editors';
+
+/**
+ * A non-comment row rendered in the same time-ordered list as the comments.
+ *
+ * The claim page's activity feed puts debates alongside comments on one thread, and the two are
+ * ordered together rather than stacked in blocks. Rather than teach the comment list what a debate
+ * is, the host hands it already-rendered content plus the one field the ordering needs.
+ */
+export interface CommentActivityRow {
+  id: string;
+  /** ISO timestamp, compared against each comment's `createdAt` to place the row. */
+  createdAt: string;
+  /** The entity whose votes rank this row, and the space they were cast in. */
+  entityId: string;
+  spaceId: string;
+  content: React.ReactNode;
+}

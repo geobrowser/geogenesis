@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate } from '~/core/debates/api';
+import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -15,17 +15,27 @@ const mocks = vi.hoisted(() => ({
   processedIds: null as string[] | null,
   mediaLoading: false,
   mediaError: false,
-  mediaMutate: vi.fn(),
-  fetch: vi.fn(),
-  share: vi.fn(),
-  canShare: vi.fn(),
-  createObjectURL: vi.fn(() => 'blob:https://geo.test/social-video'),
-  revokeObjectURL: vi.fn(),
-  downloadClick: vi.fn(),
   entityVoteProps: [] as Array<Record<string, unknown>>,
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  /** Claims extracted from the transcript, as the count badge sees them. */
+  claimsCount: 0,
+  hubOpen: vi.fn(),
+  hubClose: vi.fn(),
+  /** Whether the debates hub is already showing. */
+  hubIsOpen: false,
+  openPrivySignIn: vi.fn(),
+  /** What the feed asked to happen once Privy finishes. */
+  privyOnComplete: undefined as undefined | (() => void),
+  /** Privy's answer, which is the authority on whether anyone is signed in. */
+  authenticated: true,
+  /** False while Privy is still restoring the session. */
+  authReady: true,
+  /** The anchor fetched by id when it is not in the space listing (GEO-2764). */
+  anchorDebate: null as ReturnType<typeof completedDebate> | null,
+  anchorLoading: false,
+  anchorError: null as Error | null,
 }));
 
 type ObserverRecord = {
@@ -37,13 +47,14 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
-  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
+  useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
 }));
 
 vi.mock('./use-debates-best-order', async () => {
@@ -58,19 +69,19 @@ vi.mock('./use-debates-best-order', async () => {
   };
 });
 
-vi.mock('~/core/debates/use-debate-votes', () => ({
-  useDebateVotes: () => ({
-    sharePercentFor: () => null,
-    isMyPick: () => false,
-    hasVoted: false,
-    isVoting: false,
-    castVote: vi.fn(),
-  }),
-}));
-
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
+
+// PrefetchLink hydrates the entity it points at on hover, so it reaches for the sync engine and
+// the router. Stubbing those keeps the real anchor — and therefore the real hrefs — under test.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
+}));
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+});
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
@@ -84,8 +95,8 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('./debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
-    <div data-testid={`player-${debate.id}`} data-active={active} />
+  DebateFeedPlayer: ({ debate, active, preload }: { debate: Debate; active: boolean; preload?: boolean }) => (
+    <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />
   ),
 }));
 
@@ -100,7 +111,19 @@ vi.mock('./debate-scroll-hint', () => ({
 vi.mock('./debate-claims-panel', () => ({
   DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
 }));
-vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
+vi.mock('./share-dialog', () => ({
+  DebateShareDialog: () => null,
+}));
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({
+    isOpen: mocks.hubIsOpen,
+    activeTab: 'lobby' as const,
+    open: mocks.hubOpen,
+    close: mocks.hubClose,
+    toggle: vi.fn(),
+    setTab: vi.fn(),
+  }),
+}));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
@@ -109,25 +132,41 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: mocks.claimsCount },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
+// Reaches for next-navigation and Privy context the feed's tests do not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: (onComplete?: () => void) => {
+    mocks.privyOnComplete = onComplete;
+    return mocks.openPrivySignIn;
+  },
+}));
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
+  // Not mock fns, so `resetAllMocks` does not restore them.
+  mocks.authenticated = true;
+  mocks.authReady = true;
+  mocks.hubIsOpen = false;
   observers = [];
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
+  mocks.anchorDebate = null;
+  mocks.anchorLoading = false;
+  mocks.anchorError = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
+  mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
-  mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
-  mocks.fetch.mockResolvedValue(videoResponse());
-  mocks.canShare.mockReturnValue(false);
-  mocks.mediaMutate.mockImplementation((variables, options) => {
-    if (variables.request.kind === 'social_video') {
-      options.onSuccess({ upload: { url: `https://video.test/${variables.debateId}.mp4` } });
-    }
-  });
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -156,15 +195,6 @@ beforeEach(() => {
       disconnect() {}
     }
   );
-  vi.stubGlobal('fetch', mocks.fetch);
-  Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
-  Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
-  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: mocks.createObjectURL });
-  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: mocks.revokeObjectURL });
-  Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
-    configurable: true,
-    value: mocks.downloadClick,
-  });
 });
 
 afterEach(() => {
@@ -173,13 +203,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('DebatesBrowseFeed video sharing', () => {
+describe('DebatesBrowseFeed header links', () => {
+  // Both name something that has a page, and neither was reachable.
+  it('links the space chip to the space and the claim title to its entity', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    // Inside the h2, not instead of it: the ref, the line clamp and the overflow measurement all
+    // stay on the element they were written for.
+    expect(within(heading).getByRole('link', { name: 'Debates are useful' })).toHaveAttribute(
+      'href',
+      '/space/space-1/claim-entity-debate-1'
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveAttribute('href', '/space/space-1');
+  });
+
+  // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
+  // refuse to shrink, pushing the topics off the row instead of ellipsing the name.
+  it('keeps the space link shrinkable so the name still truncates', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveClass('min-w-0');
+  });
+});
+
+describe('DebatesBrowseFeed layout and scroll nudge', () => {
   it('uses the full-screen responsive layout and design copy', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
+    // The feed carried its own back arrow on mobile because it covers the navbar there. The
+    // browser's own back is the way out now, so nothing in the feed should offer a second one.
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
     // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.
@@ -209,17 +266,84 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(() => render(<DebatesBrowseFeed spaceId="space-1" />)).not.toThrow();
   });
 
-  it('clamps long claims and lets mobile users expand them', () => {
+  /**
+   * jsdom has no layout, so the heading's measurements are supplied. The numbers are the ones
+   * Chromium reports for the real type scale at 390px: a 24px face on 24px leading, where one
+   * rendered line of glyphs is 26px of content inside a 24px box.
+   */
+  function stubHeadingMetrics({ contentHeight, clampedHeight }: { contentHeight: number; clampedHeight: number }) {
+    const isHeading = (el: HTMLElement) => el.tagName === 'H2';
     const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
-      return this.tagName === 'H2' ? 72 : 0;
+      return isHeading(this) ? contentHeight : 0;
     });
     const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
-      return this.tagName === 'H2' ? 48 : 0;
+      return isHeading(this) ? clampedHeight : 0;
     });
+    const original = window.getComputedStyle.bind(window);
+    // Proxied rather than spread: a spread `CSSStyleDeclaration` is a plain object, and Testing
+    // Library's accessible-name computation calls `getPropertyValue` on whatever this returns.
+    const computed = vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
+      const style = original(el, pseudo);
+      if (!(el instanceof HTMLElement) || !isHeading(el)) return style;
+      return new Proxy(style, {
+        get(target, property) {
+          if (property === 'lineHeight') return '24px';
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    });
+    return () => {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      computed.mockRestore();
+    };
+  }
+
+  /**
+   * GEO-2756. The old check was `scrollHeight > clientHeight`, and the claim title's leading is
+   * tighter than its glyphs — so every title measured two pixels over its own box and the control
+   * was offered permanently. It only ever showed on mobile, which is where it was reported, because
+   * the button is `hidden md:inline-flex` and `md` here is `max-width: 767px`.
+   */
+  it('offers no expand control for a claim that fits', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 26, clampedHeight: 24 });
+
+    try {
+      const claim = 'Bitcoin is money';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      const heading = screen.getByRole('heading', { name: claim });
+      expect(heading).toHaveClass('line-clamp-2');
+      // No tooltip either: it repeated a title the reader can already see in full.
+      expect(heading).not.toHaveAttribute('title');
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it('offers no expand control for a claim that exactly fills the clamp', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 50, clampedHeight: 48 });
+
+    try {
+      const claim = 'A claim that wraps onto a second line and stops there';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it('clamps long claims and lets mobile users expand them', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 74, clampedHeight: 48 });
 
     try {
       const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
@@ -238,8 +362,7 @@ describe('DebatesBrowseFeed video sharing', () => {
       expect(heading).toHaveClass('md:line-clamp-none');
       expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
-      scrollHeight.mockRestore();
-      clientHeight.mockRestore();
+      restore();
     }
   });
 
@@ -268,6 +391,87 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getByText('Entity page')).toBeInTheDocument();
     // An ordinary entity page renders here and does want the chrome.
     expect(store.get(debateFullscreenActiveAtom)).toBe(false);
+  });
+
+  // GEO-2764. `list_space_debates` is `LIMIT 50` with no pagination, so a watchable debate can be
+  // past the window and simply absent from the listing. Resolving the anchor from that listing
+  // silently rendered the ordinary entity page instead of the feed.
+  it('plays an anchor that is past the space listing window', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = completedDebate('debate-99', 'Past the window', '2026-07-01T00:00:00.000Z');
+    mocks.processedIds = ['debate-1', 'debate-99'];
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-debate-99')).toBeInTheDocument();
+    // And it takes over the chrome, which the fallback path deliberately does not.
+    expect(store.get(debateFullscreenActiveAtom)).toBe(true);
+  });
+
+  // Being navigated to is not a reason to play a debate with no video: the directly-fetched anchor
+  // goes through the same media gate as everything in the listing.
+  it('still falls back when the fetched anchor has no processed video', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = completedDebate('debate-99', 'Past the window', '2026-07-01T00:00:00.000Z');
+    mocks.processedIds = ['debate-1'];
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+  });
+
+  // Falling back while the direct fetch is still in flight is the bug itself, one race later.
+  it('waits for the anchor fetch rather than falling back mid-flight', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorLoading = true;
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+  });
+
+  // GEO-2785. A hidden debate reads as 404 on every by-id route, so the anchor fetch fails with a
+  // definitive answer rather than an ambiguous one. That has to fall back to the entity page: the
+  // transient-error path below deliberately HOLDS the feed, and holding it for a debate that is
+  // deliberately gone would strand the visitor on an error for content we chose to hide.
+  it('falls back when the anchor is gone (404), rather than holding on an error', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorError = new GeoChatRequestError('404 Not Found', 'debate_not_found', 404);
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+  });
+
+  // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it
+  // must NOT fall back -- that would misreport a blip as "this debate has no video".
+  it('holds the feed on a non-404 anchor error instead of falling back', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorError = new GeoChatRequestError('500 Internal Server Error', null, 500);
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+  });
+
+  // A debate that genuinely is not watchable anywhere still reaches the entity page.
+  it('falls back when the anchor cannot be resolved at all', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
   });
 
   it('nudges only when there is something below to scroll to', () => {
@@ -304,7 +508,7 @@ describe('DebatesBrowseFeed video sharing', () => {
     const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
     assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
     expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
-    expect(card.querySelectorAll('[aria-label="Comments"]').length).toBeGreaterThan(0);
+    expect(card.querySelectorAll('[aria-label^="Comments"]').length).toBeGreaterThan(0);
 
     expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
   });
@@ -339,216 +543,13 @@ describe('DebatesBrowseFeed video sharing', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
     expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
   });
-
-  it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(4_999);
-    expect(mocks.mediaMutate).not.toHaveBeenCalled();
-
-    await advance(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledWith(
-      { debateId: 'debate-1', request: { kind: 'social_video' } },
-      expect.any(Object)
-    );
-    expect(mocks.mediaMutate.mock.calls.every(([variables]) => variables.request.kind !== 'social_preview_image')).toBe(
-      true
-    );
-    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
-      { debateId: 'debate-2', request: expect.anything() },
-      expect.anything()
-    );
-  });
-
-  it('cancels a fast-scroll dwell and starts a fresh five-second dwell for the new active debate', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(3_000);
-    activateDebate('Adjacent debate');
-    await advance(4_999);
-    expect(mocks.mediaMutate).not.toHaveBeenCalled();
-
-    await advance(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledWith(
-      { debateId: 'debate-2', request: { kind: 'social_video' } },
-      expect.any(Object)
-    );
-  });
-
-  it('aborts an in-flight preparation and revokes a ready blob when scrolling away', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    let downloadSignal: AbortSignal | undefined;
-    mocks.fetch.mockImplementationOnce((_url, init) => {
-      downloadSignal = init.signal;
-      return new Promise(() => undefined);
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    expect(downloadSignal).toBeDefined();
-    activateDebate('Adjacent debate');
-    expect(downloadSignal?.aborted).toBe(true);
-
-    cleanup();
-    mocks.fetch.mockResolvedValue(videoResponse());
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-    await advance(5_000);
-    await flushPromises();
-    expect(mocks.createObjectURL).toHaveBeenCalled();
-
-    activateDebate('Adjacent debate');
-    expect(mocks.revokeObjectURL).toHaveBeenCalledWith('blob:https://geo.test/social-video');
-  });
-
-  it('does not start an MP4 download when the artifact URL arrives after deactivation', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    let videoRequestOptions: { onSuccess: (response: { upload: { url: string } }) => void } | undefined;
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind === 'social_video') videoRequestOptions = options;
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    expect(videoRequestOptions).toBeDefined();
-    activateDebate('Adjacent debate');
-    videoRequestOptions?.onSuccess({ upload: { url: 'https://video.test/debate-1.mp4' } });
-    await flushPromises();
-
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
-  it('keeps both preparing controls focusable, unavailable, and explained by a tooltip', async () => {
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video (preparing)' });
-    expect(shareButtons).toHaveLength(2);
-    for (const button of shareButtons) {
-      expect(button).toHaveAttribute('aria-disabled', 'true');
-      expect(button).not.toBeDisabled();
-    }
-
-    fireEvent.focus(shareButtons[0]);
-    await advance(300);
-    expect(screen.getAllByText('Preparing video for sharing… You can share soon.').length).toBeGreaterThan(0);
-  });
-
-  it('turns preparation failure into an enabled retry that starts immediately while active', async () => {
-    let requestCount = 0;
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind !== 'social_video') return;
-      requestCount += 1;
-      if (requestCount === 1) options.onError(new Error('Video unavailable'));
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    const retryButtons = screen.getAllByRole('button', { name: 'Retry debate video preparation' });
-    expect(retryButtons).toHaveLength(2);
-    expect(retryButtons[0]).toHaveAttribute('aria-disabled', 'false');
-
-    fireEvent.click(retryButtons[0]);
-    expect(requestCount).toBe(2);
-  });
-
-  it('shares only the claim title and prepared MP4 from either ready control', async () => {
-    mocks.canShare.mockReturnValue(true);
-    mocks.share.mockResolvedValue(undefined);
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video' });
-    expect(shareButtons).toHaveLength(2);
-    expect(shareButtons.every(button => button.getAttribute('aria-disabled') === 'false')).toBe(true);
-    fireEvent.focus(shareButtons[0]);
-    await advance(300);
-    expect(screen.queryByText('Share the debate video.')).not.toBeInTheDocument();
-
-    fireEvent.click(shareButtons[1]);
-    const file = mocks.share.mock.calls[0]?.[0].files[0] as File;
-    expect(file).toBeInstanceOf(File);
-    expect(file.name).toBe('debate-debate-1-social.mp4');
-    expect(mocks.share).toHaveBeenCalledWith({ title: 'Debates are useful', files: [file] });
-    expect(mocks.share.mock.calls[0]?.[0]).not.toHaveProperty('url');
-    expect(mocks.share.mock.calls[0]?.[0]).not.toHaveProperty('text');
-  });
-
-  it('downloads the prepared MP4 when native file sharing is unsupported', async () => {
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Download debate video' })[0]);
-
-    expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
-    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
-    expect(downloadLink.href).toBe('blob:https://geo.test/social-video');
-    expect(downloadLink.download).toBe('debate-debate-1-social.mp4');
-    expect(mocks.share).not.toHaveBeenCalled();
-  });
-
-  it('keeps cancellation silent and a real handoff failure retryable without redownloading', async () => {
-    mocks.canShare.mockReturnValue(true);
-    mocks.share
-      .mockRejectedValueOnce(new DOMException('Cancelled', 'AbortError'))
-      .mockRejectedValueOnce(new Error('Share service unavailable'))
-      .mockResolvedValueOnce(undefined);
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Share debate video' })[0]);
-    await flushPromises();
-    expect(screen.queryByRole('button', { name: /try sharing/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Share debate video' })[0]);
-    await flushPromises();
-    const retryButtons = screen.getAllByRole('button', { name: 'Try sharing debate video again' });
-    expect(retryButtons).toHaveLength(2);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(retryButtons[1]);
-    await flushPromises();
-    expect(mocks.share).toHaveBeenCalledTimes(3);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('prevents duplicate handoffs across the horizontal and vertical controls', async () => {
-    mocks.canShare.mockReturnValue(true);
-    let resolveShare: (() => void) | undefined;
-    mocks.share.mockReturnValue(new Promise<void>(resolve => (resolveShare = resolve)));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video' });
-    fireEvent.click(shareButtons[0]);
-    fireEvent.click(shareButtons[1]);
-
-    expect(mocks.share).toHaveBeenCalledTimes(1);
-    const sharingButtons = screen.getAllByRole('button', { name: 'Sharing debate video' });
-    expect(sharingButtons).toHaveLength(2);
-    expect(sharingButtons.every(button => button.getAttribute('aria-disabled') === 'true')).toBe(true);
-    fireEvent.focus(sharingButtons[0]);
-    await advance(300);
-    expect(screen.queryByText('Opening sharing options…')).not.toBeInTheDocument();
-
-    resolveShare?.();
-    await flushPromises();
-  });
 });
 
 describe('DebatesBrowseFeed comments', () => {
   it('shows the comment count and opens the comments panel for the clicked debate', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    const commentButtons = screen.getAllByRole('button', { name: 'Comments' });
+    const commentButtons = screen.getAllByRole('button', { name: /^Comments/ });
     expect(commentButtons.length).toBeGreaterThan(0);
     expect(screen.getAllByText('7').length).toBeGreaterThan(0);
 
@@ -556,17 +557,105 @@ describe('DebatesBrowseFeed comments', () => {
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
   });
 
+  // "Join a debate" is no longer one of the feed's own panels: it opens the shared hub, which is
+  // cross-space and carries the filters, counts and ranking the feed's panel never had.
+  it('opens the debates hub on Lobby instead of a feed panel', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+  });
+
+  // Every control in the hub needs an account, so a signed-out viewer goes straight to the login
+  // rather than a panel that refuses them at each step.
+  it('sends a signed-out viewer to sign in instead of opening the hub', () => {
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
+  // Without the marker the pointerdown closed it and the click reopened it — a visible flicker,
+  // and a toggle that never appeared to work.
+  it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute('data-debates-hub-opener');
+  });
+
+  // `useSmartAccount` reads null while the account restores and after an init failure as well as
+  // when signed out, so gating on it sent a signed-in viewer back through a login that clears
+  // their half-finished onboarding. Privy is asked instead, and it is not asked until it is ready.
+  // Signing in is a detour the viewer did not ask for, so the press survives it rather than
+  // returning them to the feed to press the same button again.
+  it('opens the hub once sign-in completes, without a second press', () => {
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+
+    act(() => mocks.privyOnComplete?.());
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+  });
+
+  it('does nothing until Privy has restored the session', () => {
+    mocks.authReady = false;
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the button is a one-way door: pressing it again did nothing and the only way out was
+  // the panel's own close control.
+  it('closes the hub when the button is pressed a second time', () => {
+    mocks.hubIsOpen = true;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubClose).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // Both would otherwise stack over the same feed, the hub on top of a panel nobody can see past.
+  it('closes an open feed panel when the hub takes over', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('lobby');
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
+  });
+
   it('closes the claims panel when comments open, and vice versa', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
@@ -582,7 +671,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the comments panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -593,7 +682,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the claims panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -610,7 +699,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
     const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
     assert(adjacent, 'Expected a section for the adjacent debate');
 
-    fireEvent.click(within(adjacent).getAllByRole('button', { name: 'Comments' })[0]);
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Comments/ })[0]);
 
     expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
@@ -694,19 +783,6 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
   });
 });
 
-async function advance(milliseconds: number) {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(milliseconds);
-  });
-}
-
-async function flushPromises() {
-  await act(async () => {
-    await Promise.resolve();
-    await Promise.resolve();
-  });
-}
-
 function activateDebate(claim: string) {
   const section = screen.getByRole('heading', { name: claim }).closest('section');
   if (!section) throw new Error(`Could not find debate section for ${claim}`);
@@ -723,13 +799,6 @@ function activateDebate(claim: string) {
       ],
       observer.instance
     );
-  });
-}
-
-function videoResponse() {
-  return new Response(new Uint8Array([1, 2, 3]), {
-    status: 200,
-    headers: { 'content-length': '3', 'content-type': 'video/mp4' },
   });
 }
 
@@ -855,5 +924,54 @@ describe('DebatesBrowseFeed ordering', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
+  });
+});
+
+// Each debate needs two signed recording URLs, and until they land the player shows a
+// "Loading…" placeholder instead of a <video>. Fetching them only once a card is active is
+// what makes arriving at a debate feel glitchy (GEO-2895) — so the NEXT one preloads.
+describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+      completedDebate('debate-3', 'Third claim', '2026-07-02T00:03:10.000Z'),
+    ];
+  });
+
+  // Asserted relationally rather than by debate id: the feed renders in ranked order
+  // (useDebatesBestOrder), so which debate lands first is not this test's business.
+  function playersInRenderOrder() {
+    return screen.getAllByTestId(/^player-/).map(el => ({
+      id: el.getAttribute('data-testid'),
+      active: el.getAttribute('data-active') === 'true',
+      preload: el.getAttribute('data-preload') === 'true',
+    }));
+  }
+
+  it('preloads the debate immediately after the active one, and only that one', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+    const activeIndex = players.findIndex(p => p.active);
+
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    expect(players[activeIndex + 1]?.preload).toBe(true);
+
+    // Every other card loads nothing: not the active one (already loading because it is
+    // active), and not two ahead — a vertical one-at-a-time feed would otherwise fetch
+    // recordings most viewers never reach.
+    players.forEach((p, i) => {
+      if (i !== activeIndex + 1) expect(p.preload).toBe(false);
+    });
+  });
+
+  it('preloading never makes a card active — it loads without autoplaying off-screen', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+
+    expect(players.filter(p => p.active)).toHaveLength(1);
+    for (const p of players) {
+      if (p.preload) expect(p.active).toBe(false);
+    }
   });
 });

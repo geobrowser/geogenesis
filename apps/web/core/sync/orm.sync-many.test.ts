@@ -107,6 +107,37 @@ describe('E.syncMany pagination', () => {
     expect(result.merged.map(e => e.id)).toEqual(['entity-c']);
   });
 
+  it('forwards empty-name inclusion and cancellation to exhaustive page reads', async () => {
+    const signal = new AbortController().signal;
+    vi.mocked(getAllEntities).mockReturnValue(Effect.succeed({ entities: [], endCursor: null, hasNextPage: false }));
+
+    await E.syncMany({ store, cache, where: {}, first: 9, includeEmptyNames: true, signal });
+
+    expect(vi.mocked(getAllEntities)).toHaveBeenCalledWith(expect.objectContaining({ filter: {} }), signal);
+  });
+
+  it('forwards empty-name inclusion and cancellation to sorted page reads', async () => {
+    const signal = new AbortController().signal;
+    vi.mocked(getEntitiesOrderedByPropertyConnection).mockReturnValue(
+      Effect.succeed({ entities: [], endCursor: null, hasNextPage: false })
+    );
+
+    await E.syncMany({
+      store,
+      cache,
+      where: {},
+      first: 9,
+      includeEmptyNames: true,
+      signal,
+      sort: { propertyId: 'score-property', direction: 'desc' },
+    });
+
+    expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: {} }),
+      signal
+    );
+  });
+
   it('hydrates large id.in queries in bounded batches while preserving requested order', async () => {
     const ids = Array.from({ length: 117 }, (_, index) => `entity-${index}`);
     vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
@@ -147,7 +178,8 @@ describe('E.syncMany pagination', () => {
     });
 
     expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).toHaveBeenCalledWith(
-      expect.objectContaining({ includeWithoutValue: true })
+      expect.objectContaining({ includeWithoutValue: true }),
+      undefined
     );
   });
 });

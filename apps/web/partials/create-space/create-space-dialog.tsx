@@ -175,6 +175,9 @@ export function CreateSpaceDialog() {
     if (autoRunFired) return;
     autoRunFired = true;
     createSpaces(spaceType);
+    // `createSpaces` is declared in the component body, so it is a new function every render and
+    // naming it would re-run this on each one. `autoRunFired` already makes it fire once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType]);
 
   if (!address) return null;
@@ -496,8 +499,8 @@ function StepConfigureGovernance() {
     : DEFAULT_VOTING_SETTINGS_SNAPSHOT;
 
   const [state, setState] = React.useState<VotingSettingsFormState>(() => snapshotToFormState(initialSnapshot));
-  // Grace period and the new-member fast-path toggle aren't in the form; carry whatever
-  // the draft started with through unchanged. (Universal support is now an exposed field.)
+  // Grace period isn't in the form; carry whatever the draft started with through unchanged.
+  // (Universal support and the new-member fast-path switch are both exposed fields now.)
   const hidden = React.useMemo(() => snapshotToHidden(initialSnapshot), [initialSnapshot]);
 
   const parsed = parseVotingSettingsForm(state, hidden, NEW_SPACE_INITIAL_EDITOR_COUNT);

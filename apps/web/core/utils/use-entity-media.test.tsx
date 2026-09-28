@@ -15,10 +15,21 @@ const mocks = vi.hoisted(() => ({
   gates: new Map<string, Promise<void>>(),
   /** Entities whose requests reject once released. */
   failing: new Set<string>(),
+  /** Rows standing in for the local store, so a test can supply a tombstone. */
+  localRelations: [] as {
+    type: { id: string };
+    fromEntity: { id: string };
+    toEntity: { id: string };
+    spaceId: string;
+    isDeleted?: boolean;
+  }[],
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useRelation: () => null,
+  useRelation: ({ includeDeleted = false, selector }: { includeDeleted?: boolean; selector?: (r: never) => boolean }) =>
+    mocks.localRelations.find(
+      r => selector?.(r as never) && (includeDeleted ? true : Boolean(r.isDeleted) === false)
+    ) ?? null,
   useValues: () => [],
 }));
 
@@ -43,7 +54,7 @@ vi.mock('effect', () => ({
   },
 }));
 
-const { useEntityMedia } = await import('./use-entity-media');
+const { findMediaUrlValue, useEntityAvatarUrl, useEntityMedia } = await import('./use-entity-media');
 const { ContentIds } = await import('@geoprotocol/geo-sdk/lite');
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -56,6 +67,25 @@ beforeEach(() => {
   mocks.relationsByEntity = {};
   mocks.gates = new Map();
   mocks.failing = new Set();
+  mocks.localRelations = [];
+});
+
+describe('findMediaUrlValue', () => {
+  const WEB_URL = 'https://chat.example/debates/1/media/artifacts/final_video/content';
+  const value = (propertyId: string, value: string) => ({ value, property: { id: propertyId } });
+
+  it('reads an http(s) URL from the Web URL property', () => {
+    expect(findMediaUrlValue([value('width', '1080'), value(ContentIds.WEB_URL_PROPERTY, WEB_URL)])).toBe(WEB_URL);
+  });
+
+  it('ignores http(s) values on any other property', () => {
+    expect(findMediaUrlValue([value('some-source-property', 'https://example.com/article')])).toBeUndefined();
+  });
+
+  it('prefers an ipfs:// value from any property', () => {
+    const values = [value(ContentIds.WEB_URL_PROPERTY, WEB_URL), value('unlabelled', 'ipfs://bafylegacy')];
+    expect(findMediaUrlValue(values)).toBe('ipfs://bafylegacy');
+  });
 });
 
 /** Holds every request for `entityId` until the returned function is called. */
@@ -176,5 +206,78 @@ describe('useEntityMedia', () => {
     const { result } = renderHook(() => useEntityMedia(undefined, 'space-1'), { wrapper });
 
     expect(result.current.isResolving).toBe(false);
+  });
+});
+
+describe('a locally removed image', () => {
+  // The network lookup is cached for five minutes and outlives the relation
+  // disappearing, so the fetched fallback keeps serving a URL the user deleted —
+  // it came back every time the edit-profile modal was reopened.
+  it('stops resolving once only a deletion is left', async () => {
+    mocks.relationsByEntity[`entity-a:${ContentIds.AVATAR_PROPERTY}`] = 'ipfs://avatar-a';
+
+    const { result, rerender } = renderHook(() => useEntityAvatarUrl('entity-a', 'space-1'), { wrapper });
+    await waitFor(() => expect(result.current).toBe('ipfs://avatar-a'));
+
+    mocks.localRelations = [
+      {
+        type: { id: ContentIds.AVATAR_PROPERTY },
+        fromEntity: { id: 'entity-a' },
+        toEntity: { id: 'image-1' },
+        spaceId: 'space-1',
+        isDeleted: true,
+      },
+    ];
+    rerender();
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('keeps resolving while a live relation is still there', async () => {
+    mocks.relationsByEntity[`entity-a:${ContentIds.AVATAR_PROPERTY}`] = 'ipfs://avatar-a';
+    mocks.localRelations = [
+      {
+        type: { id: ContentIds.AVATAR_PROPERTY },
+        fromEntity: { id: 'entity-a' },
+        toEntity: { id: 'old-image' },
+        spaceId: 'space-1',
+        isDeleted: true,
+      },
+      {
+        type: { id: ContentIds.AVATAR_PROPERTY },
+        fromEntity: { id: 'entity-a' },
+        toEntity: { id: 'new-image' },
+        spaceId: 'space-1',
+      },
+    ];
+
+    const { result } = renderHook(() => useEntityAvatarUrl('entity-a', 'space-1'), { wrapper });
+
+    await waitFor(() => expect(result.current).toBe('ipfs://avatar-a'));
+  });
+});
+
+describe('useEntityMedia and a locally removed image', () => {
+  // The combined hook has its own fetch and its own state, so the guard the
+  // single-purpose hooks gained has to be applied here too — ranking rows and
+  // block media read this one.
+  it('stops resolving once only a deletion is left', async () => {
+    mocks.relationsByEntity[`entity-a:${ContentIds.AVATAR_PROPERTY}`] = 'ipfs://avatar-a';
+
+    const { result, rerender } = renderHook(() => useEntityMedia('entity-a', 'space-1'), { wrapper });
+    await waitFor(() => expect(result.current.avatarUrl).toBe('ipfs://avatar-a'));
+
+    mocks.localRelations = [
+      {
+        type: { id: ContentIds.AVATAR_PROPERTY },
+        fromEntity: { id: 'entity-a' },
+        toEntity: { id: 'image-1' },
+        spaceId: 'space-1',
+        isDeleted: true,
+      },
+    ];
+    rerender();
+
+    expect(result.current.avatarUrl).toBeUndefined();
   });
 });

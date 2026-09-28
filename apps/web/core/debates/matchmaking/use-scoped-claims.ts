@@ -21,6 +21,14 @@ export type ClaimSpaceScope = {
 export type ScopedClaims = {
   /** Pages that answer the scope in force, or none. Never the previous scope's. */
   pages: MatchmakingClaimsResponse[];
+  /**
+   * Rows the server has returned for the key in force — zero while the previous key's are held.
+   *
+   * Not `pages.length` summed: `pages` keeps the last answer through a filter change on purpose, so
+   * a caller measuring whether a page *landed* would read the previous question's total as this
+   * one's. `useTaggedClaims` masks its own count the same way, so the two paths agree.
+   */
+  fetched: number;
   /** The facets riding page one, on the same terms. */
   facets: MatchmakingFacets | undefined;
   /**
@@ -31,6 +39,22 @@ export type ScopedClaims = {
   facetsSettled: boolean;
   /** Nothing this query could return is showable, so it was never asked. */
   unusable: boolean;
+  /**
+   * The facets in hand answer a filter the viewer has since moved on from.
+   *
+   * They keep being rendered — blanking the menu under the cursor is worse than a beat of staleness
+   * — but their *counts* are the part that is provably wrong: a topic facet is co-occurrence, so a
+   * stale one can show an option counted above the selection itself, which is impossible for a
+   * real answer.
+   *
+   * Callers cover the numbers while this is true, though deliberately not the instant it goes
+   * true. `HubMultiFilterMenu` waits out a grace period first, which means a short pending spell
+   * shows the previous counts rather than a placeholder. That is the trade, and it is the right
+   * way round: a wrong number needs to be read to mislead, and nobody reads one inside a couple of
+   * hundred milliseconds, whereas a placeholder flashing in and out is noticed every single time
+   * and was the complaint that led here. The skeleton is for a wait long enough to be seen.
+   */
+  countsPending: boolean;
   /** Already masked: a sentinel rendered on this can't page a corpus the caller can't show. */
   hasNextPage: boolean;
   isLoading: boolean;
@@ -38,6 +62,8 @@ export type ScopedClaims = {
   fetchNextPage: () => void;
   refetch: () => void;
   error: unknown;
+  /** The failure behind an attempt still in flight, for the states worth naming before the retries run out. */
+  failureReason: unknown;
 };
 
 /**
@@ -96,16 +122,53 @@ export function useScopedMatchmakingClaims(
   const facetsSettled =
     !scope.pending && (unusable || (facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData));
 
+  // Placeholder data is the previous key's answer, and since GEO-2696 a topic facet is narrowed by
+  // the topic selection — so on a filter change the held counts don't merely lag, they describe a
+  // question the viewer is no longer asking.
+  //
+  // Not while unusable, for the same reason `facetsSettled` treats it as an answer: the query is
+  // deliberately never made, so nothing is on its way. React Query still hands back the previous
+  // key's rows through `placeholderData` when the key moves under a disabled query, and no request
+  // will ever replace them — so reading that as "pending" would leave the counts waiting forever
+  // on a request that was never going to happen. The callers in that state have client-derived
+  // counts that are already current: the hub's Featured source, and a rematch selection with no
+  // browsable space.
+  const countsPending = !unusable && (claimsQuery.isPlaceholderData || claimsQuery.isLoading);
+
+  /**
+   * Rows the server has returned for *this* key, which is not the same question as what is drawn.
+   *
+   * `pages` deliberately keeps the previous key's rows through a filter change — narrowing should
+   * narrow rather than blank and refill. A count cannot: a caller measuring whether a page *landed*
+   * would read the previous question's total as this one's, and the real first page then arrives
+   * smaller and is never evaluated. The tagged query masks its own count for the same reason; this
+   * is that rule on the index path, so the two agree.
+   */
+  const fetched = React.useMemo(
+    () =>
+      masked || claimsQuery.isPlaceholderData
+        ? 0
+        : (claimsQuery.data?.pages.reduce((total, page) => total + page.claims.length, 0) ?? 0),
+    [claimsQuery.data, claimsQuery.isPlaceholderData, masked]
+  );
+
   return {
     pages,
+    fetched,
     facets,
     facetsSettled,
     unusable,
+    countsPending,
     hasNextPage: !masked && Boolean(claimsQuery.hasNextPage),
     isLoading: claimsQuery.isLoading,
     isFetchingNextPage: claimsQuery.isFetchingNextPage,
     fetchNextPage: claimsQuery.fetchNextPage,
     refetch: claimsQuery.refetch,
     error: claimsQuery.error,
+    // The failure behind an attempt still in flight. Forwarded for the same reason the hub's other
+    // lists forward it: this read waits a warming-up refusal out over about ninety seconds, and
+    // react-query calls all of that loading — so without it the tab shows a skeleton for the whole
+    // window instead of saying the account is still being set up.
+    failureReason: claimsQuery.failureReason,
   };
 }

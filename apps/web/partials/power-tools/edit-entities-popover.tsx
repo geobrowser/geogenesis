@@ -927,6 +927,7 @@ export function EditEntitiesPopover({
     newPropertyImageFile,
     newPropertyInitialValue,
     newPropertyName,
+    newPropertyOnly,
     newPropertyId,
     newPropertyValueType,
     onApplyNewProperty,
@@ -981,6 +982,10 @@ export function EditEntitiesPopover({
     if (open && removePropertyOnly) {
       setPropertiesMarkedForRemoval(new Set(initialPropertiesMarkedForRemoval));
     }
+    // Snapshots the initial set when the popover opens, deliberately. Following
+    // `initialPropertiesMarkedForRemoval` would re-snapshot whenever it changed and throw away
+    // whatever the reader had ticked since opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, removePropertyOnly]);
 
   // Only reset Add-mode inputs when the target column changes. Do not clear while on "New property"

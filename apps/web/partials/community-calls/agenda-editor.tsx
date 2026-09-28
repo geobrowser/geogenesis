@@ -245,6 +245,9 @@ export function AgendaEditor({
         );
       });
     };
+    // Unmount only: the cleanup flushes whatever edit is still pending. Depending on the ids it
+    // closes over would tear down and re-register this on every change, flushing drafts early.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {

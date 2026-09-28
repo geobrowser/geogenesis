@@ -430,7 +430,6 @@ export const Web2URLExtension = Extension.create({
                                 // If mark exists, check if it needs mode update
                                 if (hasWeb2Mark) {
                                   // Get existing mark to check its mode
-                                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                   let existingMark: any = null;
                                   newTr.doc.nodesBetween(from, to, node => {
                                     if (node.isText) {

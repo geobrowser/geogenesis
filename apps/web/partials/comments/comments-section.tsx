@@ -7,56 +7,68 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { personProfileOpened } from '~/core/analytics';
+import { mergeActivityRows } from '~/core/claims/browse/claim-activity-order';
+import { ClaimCommentPositionBadge } from '~/core/claims/browse/claim-comment-position';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
 import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
 import type { DebateVoteRecord } from '~/core/debates/vote-tally';
+import {
+  type ProposalCommentAttribution,
+  proposalAttributionLabel,
+} from '~/core/governance/proposal-comment-attribution';
+import { useProposalCommentAttribution } from '~/core/governance/use-proposal-comment-attribution';
 import { useComments } from '~/core/hooks/use-comments';
-import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
+import { useSpaceRoles } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
+import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
-import { Minus } from '~/design-system/icons/minus';
-import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ActivityPostsProvider } from './activity-posts';
 import {
-  avatarBottomInRowPx,
   type CommentDensity,
   PAGE_DENSITY,
   PANEL_DENSITY,
+  THREAD_LEVEL_BRANCH_SEGMENT,
+  THREAD_SEGMENT_DIM,
+  THREAD_SEGMENT_DIM_STROKE,
+  THREAD_SEGMENT_HI,
+  THREAD_SEGMENT_HI_STROKE,
+  avatarBottomInRowPx,
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';
-import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
+import { getRelativeTime } from './comment-time';
+import { ThreadAvatar } from './thread-avatar';
+import { ThreadCollapseToggle, ThreadListSpine, ThreadParentSpine, branchPointerBlurProps } from './thread-branch';
+import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
+
+const NO_REPLIES: never[] = [];
+/** Stable identity, so a host that passes no rows doesn't rebuild the merge every render. */
+const NO_ACTIVITY_ROWS: CommentActivityRow[] = [];
+/** Stable identity for the unranked case, so the score subscriptions aren't rebuilt each render. */
+const EMPTY_SCORE_TARGETS: Array<{ entityId: string; spaceId: string }> = [];
 
 function useCommentDensity(): CommentDensity {
   return React.useContext(CommentDensityContext);
 }
-const COMMENT_THREAD_LINE_HIT_PX = 20;
-
-const THREAD_LEVEL_BRANCH_SEGMENT = 'thread-level-branch-segment';
-
-const THREAD_SEGMENT_DIM = 'bg-grey-02';
-const THREAD_SEGMENT_DIM_STROKE = 'stroke-[var(--color-grey-02)]';
-const THREAD_SEGMENT_HI = 'bg-grey-03';
-const THREAD_SEGMENT_HI_STROKE = 'stroke-[var(--color-grey-03)]';
 
 type BranchFocus = { kind: 'parent-thread'; threadCommentId: string } | { kind: 'row-connectors'; commentId: string };
 
@@ -130,6 +142,44 @@ function CommentVoteBadge({ authorSpaceId }: { authorSpaceId: string }) {
   );
 }
 
+/**
+ * Author space id → where that person stands on the proposal being commented on. Context for the
+ * same reason as the debate map above: the badge would otherwise be threaded through every nesting
+ * level of CommentList. Empty for entities that aren't proposals.
+ */
+const ProposalAttributionContext = React.createContext<Map<string, ProposalCommentAttribution>>(new Map());
+
+/**
+ * Who is speaking, on a proposal (GEO-2907): whether they are an editor or a member of the space,
+ * and if an editor, how they voted.
+ *
+ * Nothing is drawn until the lookup answers. A badge that appears as "Editor" and becomes "Editor ·
+ * Rejected" a beat later reads as the page correcting itself about a person, and an absent badge is
+ * honest where a half-built one is not.
+ */
+function ProposalAttributionBadge({ authorSpaceId }: { authorSpaceId: string }) {
+  const attribution = React.useContext(ProposalAttributionContext).get(uuidToHex(authorSpaceId));
+  const label = proposalAttributionLabel(attribution);
+  if (!label) return null;
+
+  // The vote is a state, not a decoration, so it carries the same accept/reject colours the
+  // proposal's own vote bars do. A role with no vote behind it stays neutral.
+  const tone =
+    attribution?.vote === 'ACCEPT'
+      ? 'bg-successTertiary text-resultSuccess'
+      : attribution?.vote === 'REJECT'
+        ? 'bg-errorTertiary text-resultError'
+        : 'bg-divider text-grey-04';
+
+  return (
+    <span className={cx('inline-flex shrink-0 items-center rounded-full px-2 py-0.5', tone)}>
+      <Text variant="footnote" as="span">
+        {label}
+      </Text>
+    </span>
+  );
+}
+
 function replySubtreeContainsCommentId(node: CommentWithReplies, targetId: string): boolean {
   const replies = Array.isArray(node.replies) ? node.replies : [];
   for (const reply of replies) {
@@ -156,44 +206,79 @@ function rowDefersConnectorHighlightToNestedRow(row: CommentWithReplies, focus: 
   return false;
 }
 
-function branchPointerBlurProps(
-  clearFocus: () => void
-): Pick<React.HTMLAttributes<HTMLElement>, 'onPointerLeave' | 'onBlur'> {
-  return {
-    onPointerLeave: e => {
-      const next = e.relatedTarget;
-      // relatedTarget is EventTarget | null; only Node is valid for Element.contains().
-      if (next instanceof Node && e.currentTarget.contains(next)) return;
-      clearFocus();
-    },
-    onBlur: e => {
-      const next = e.relatedTarget;
-      if (next instanceof Node && e.currentTarget.contains(next)) return;
-      clearFocus();
-    },
-  };
-}
-
-export type CommentSectionVariant = 'page' | 'panel';
+export type CommentSectionVariant = 'page' | 'panel' | 'tab';
 
 interface CommentSectionProps {
   entityId: string;
   spaceId: string;
+  /** Logical graph type used to segment successful comment events without inspecting comment text. */
+  targetEntityType?: string;
   /**
    * 'page' (default) is the entity page treatment. 'panel' matches the side
    * panel design: no built-in heading (the host supplies one), compact rows,
-   * and the avatar + "Join the conversation..." composer.
+   * and the avatar + "Join the conversation..." composer. 'tab' keeps the
+   * page treatment but omits the page-section top padding because the tab
+   * layout already supplies its own gap.
    */
   variant?: CommentSectionVariant;
+  /**
+   * Rows for other entities, ordered into the same list as the comments.
+   *
+   * The claim page uses this to put the debates held on a claim in its thread, so the reader sees
+   * one account of what happened rather than a gallery above a comment list. The host renders them;
+   * this component only orders them.
+   */
+  activityRows?: CommentActivityRow[];
+  /** Heading noun. "Comments" unless the list holds more than comments. */
+  title?: string;
+  /**
+   * The number beside the heading, where the host knows something the rendered list does not.
+   *
+   * The claim page's Activity count includes what is nested under each debate — its extracted
+   * claims and every comment in that tree — which this component never sees. Omitted elsewhere, and
+   * the rendered rows speak for themselves.
+   */
+  totalOverride?: number;
+  /**
+   * A comment appearing or disappearing inside this section, for the host that owns
+   * {@link totalOverride}.
+   *
+   * Paired with it deliberately: the host is the only thing that can move a number it computed, and
+   * this component is the only thing that knows a comment was written. The delta is signed — `-1`
+   * when a publish is rejected and its optimistic row goes away.
+   *
+   * This used to be counted here instead, in component state, which broke in both directions: the
+   * count was lost whenever the section remounted (leaving the heading behind the list it was
+   * drawing), and kept when the section was reused for another record (leaving the heading ahead of
+   * one it had never seen).
+   */
+  onActivityPublish?: (delta: number) => void;
+  /**
+   * Where the sort starts. Threads default to most-recent; the claim page's activity feed opens on
+   * Best, because there the list is a record of an argument rather than a running conversation.
+   */
+  defaultSortOrder?: CommentSortOrder;
 }
 
-export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
+export function CommentSection({
+  entityId,
+  spaceId,
+  targetEntityType = 'entity',
+  variant = 'page',
+  activityRows = NO_ACTIVITY_ROWS,
+  title = 'Comments',
+  totalOverride,
+  onActivityPublish,
+  defaultSortOrder = 'newest',
+}: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
-  const { createComment, editComment } = useCreateComment(entityId);
+  const { publishComment, editComment } = usePublishComment(entityId, spaceId, {
+    targetEntityType,
+    interactionSurface: variant === 'panel' ? 'comments_panel' : 'entity_page',
+  });
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const promptSignIn = usePrivySignIn();
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
@@ -211,9 +296,9 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   const requireSignInToComment = React.useCallback(
     (replyToCommentId?: string) => {
       setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
-      openSignInPrompt('comment');
+      promptSignIn();
     },
-    [entityId, openSignInPrompt, setPendingComposer]
+    [entityId, promptSignIn, setPendingComposer]
   );
 
   React.useEffect(() => {
@@ -226,12 +311,44 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     setComposerExpanded(true);
   }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
-  const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  // Both roles from one request, so a badge cannot show half of someone's standing.
+  const {
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoading: isLoadingRoles,
+    isError: isRolesError,
+  } = useSpaceRoles(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
   // so entity pages without any don't pay for the lookup.
   const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
+  // Resolves to an empty map unless this entity is a Proposal. Reuses the editor set gathered just
+  // above rather than asking the same question twice.
+  const proposalAttribution = useProposalCommentAttribution({
+    entityId,
+    spaceId,
+    editorSpaceIds,
+    memberSpaceIds,
+    isLoadingRoles,
+    isRolesError,
+    enabled: totalCount > 0,
+  });
 
-  const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
+  const [sortOrder, setSortOrder] = useState<CommentSortOrder>(defaultSortOrder);
+
+  // Vote counts for the top level, so Best and Top can order it. Read from the cache each row's own
+  // `EntityVoteButtons` fills rather than fetched here — see `useEntityResponseScores`. A comment's
+  // votes live in its author's personal space, not this thread's, which is why each row carries its
+  // own space rather than inheriting the page's.
+  const scoreTargets = React.useMemo(
+    () => [
+      ...comments.map(comment => ({ entityId: comment.id, spaceId: comment.spaceId })),
+      ...activityRows.map(row => ({ entityId: row.entityId, spaceId: row.spaceId })),
+    ],
+    [activityRows, comments]
+  );
+  const isRanked = sortOrder === 'best' || sortOrder === 'top';
+  const scoresById = useEntityResponseScores(isRanked ? scoreTargets : EMPTY_SCORE_TARGETS);
+  const scoreFor = React.useCallback((row: { id: string }) => scoresById.get(uuidToHex(row.id)) ?? null, [scoresById]);
   const [filter, setFilter] = useState<CommentFilter>('all');
 
   React.useEffect(() => {
@@ -268,37 +385,34 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     setSessionNewIds((prev: string[]) => (prev.includes(id) ? prev : [id, ...prev]));
   }, []);
 
+  // Comments published from anywhere in this section are reported to whoever supplied
+  // `totalOverride`, because that number is a server aggregate over debates and extracted claims as
+  // well as comments and nothing in the comment caches can move it. Deliberately not counted here:
+  // this component is remounted and reused across records, and a count kept in its own state was
+  // lost on the first and carried onto the second. See `activity-posts.tsx`.
+  const adjustActivityPosts = React.useCallback((delta: number) => onActivityPublish?.(delta), [onActivityPublish]);
+
   // Fire-and-forget: the input boxes close/clear synchronously. The optimistic row appears
-  // in the cache immediately (via useCreateComment) with a "Publishing…" tag; sessionNewIds
+  // in the cache immediately (via usePublishComment) with a "Publishing…" tag; sessionNewIds
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
       if (!smartAccount) return;
 
-      void createComment({
+      void publishComment({
         text,
-        targetSpaceId: spaceId,
         ancestorComments,
-        onOptimistic: markSessionNew,
-      }).then(result => {
-        if (!result || result.published) return;
-        enqueuePendingAction({
-          id: `comment:${entityId}:${result.id}`,
-          label: 'your comment',
-          requires: 'personalSpace',
-          run: () =>
-            createComment({
-              text,
-              targetSpaceId: spaceId,
-              ancestorComments,
-              commentId: result.id,
-            }).then(published => {
-              if (!published?.published) throw new Error('Comment could not be published');
-            }),
-        });
+        onOptimistic: commentId => {
+          markSessionNew(commentId);
+          adjustActivityPosts(1);
+        },
+        // `useCreateComment` takes the optimistic row back out on a failed publish, so the heading
+        // gives back what it counted. Reported rather than read off the returned value, because a
+        // publish retained for a personal space that does not exist yet fails later than that value.
+        onFailed: () => adjustActivityPosts(-1),
       });
     },
-    [createComment, smartAccount, spaceId, entityId, enqueuePendingAction, markSessionNew]
+    [adjustActivityPosts, markSessionNew, publishComment, smartAccount]
   );
 
   const handleEditComment = React.useCallback(
@@ -338,6 +452,10 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
     [sortOrder, sessionNewIds]
   );
 
+  // As a set, because the activity merge tests every comment against it. Same source as the pin
+  // inside `sortWithSessionPinned` — one idea, read two ways, rather than two lists to keep in step.
+  const sessionNewIdSet = React.useMemo(() => new Set(sessionNewIds), [sessionNewIds]);
+
   const filteredComments = React.useMemo(() => {
     let result = comments;
     if (filter === 'editors') {
@@ -348,68 +466,80 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
 
   return (
     <CommentDensityContext.Provider value={density}>
-      <CommentBranchHighlightProvider>
-        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', !isPanel && 'pt-10')}>
-          {!isPanel && (
-            <>
-              <div className="text-mediumTitle">Comments ({totalCount})</div>
-              <Spacer height={16} />
-            </>
-          )}
-          <TopLevelCommentInput
-            onSubmit={handleCreateComment}
-            isLoggedIn={isLoggedIn}
-            onSignInRequired={requireSignInToComment}
-            expanded={composerExpanded}
-            onExpandedChange={setComposerExpanded}
-            variant={variant}
-            viewerAvatarUrl={viewerAvatarUrl}
-            viewerAvatarSeed={viewerAvatarSeed}
-          />
-          {totalCount > 0 && (
-            <>
-              <Spacer height={16} />
-              <CommentFilters
-                sortOrder={sortOrder}
-                onSortChange={setSortOrder}
-                filter={filter}
-                onFilterChange={setFilter}
-              />
-            </>
-          )}
-          {isLoading ? (
-            <div className="py-4">
-              <Text variant="body" color="grey-04">
-                Loading comments...
-              </Text>
-            </div>
-          ) : (
-            filteredComments.length > 0 && (
+      {/* Every composer inside — the one below and the inline ones on the activity rows — reports a
+          publish here, because the heading's number is an aggregate none of them can otherwise move. */}
+      <ActivityPostsProvider onAdjust={adjustActivityPosts}>
+        <CommentBranchHighlightProvider>
+          <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
+            {!isPanel && (
+              <>
+                <div className="text-mediumTitle">
+                  {title} ({totalOverride == null ? totalCount + activityRows.length : totalOverride})
+                </div>
+                <Spacer height={16} />
+              </>
+            )}
+            <TopLevelCommentInput
+              onSubmit={handleCreateComment}
+              isLoggedIn={isLoggedIn}
+              onSignInRequired={requireSignInToComment}
+              expanded={composerExpanded}
+              onExpandedChange={setComposerExpanded}
+              variant={variant}
+              viewerAvatarUrl={viewerAvatarUrl}
+              viewerAvatarSeed={viewerAvatarSeed}
+            />
+            {totalCount + activityRows.length > 0 && (
               <>
                 <Spacer height={16} />
-                <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
-                  <CommentList
-                    comments={filteredComments}
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    onReply={handleCreateComment}
-                    onEdit={handleEditComment}
-                    personalSpaceId={personalSpaceId}
-                    editorSpaceIds={editorSpaceIds}
-                    isThreadCollapsed={isThreadCollapsed}
-                    toggleThreadCollapsed={toggleThreadCollapsed}
-                    sortReplies={sortWithSessionPinned}
-                    isLoggedIn={isLoggedIn}
-                    onSignInRequired={requireSignInToComment}
-                    pendingReplyToId={pendingReplyToId}
-                    onPendingReplyConsumed={() => setPendingReplyToId(null)}
-                  />
-                </DebateVoteBadgeContext.Provider>
+                <CommentFilters
+                  sortOrder={sortOrder}
+                  onSortChange={setSortOrder}
+                  filter={filter}
+                  onFilterChange={setFilter}
+                />
               </>
-            )
-          )}
-        </div>
-      </CommentBranchHighlightProvider>
+            )}
+            {isLoading ? (
+              <div className="py-4">
+                <Text variant="body" color="grey-04">
+                  Loading comments...
+                </Text>
+              </div>
+            ) : (
+              (filteredComments.length > 0 || activityRows.length > 0) && (
+                <>
+                  <Spacer height={16} />
+                  <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
+                    <ProposalAttributionContext.Provider value={proposalAttribution}>
+                      <CommentList
+                        comments={filteredComments}
+                        activityRows={activityRows}
+                        activityOrder={sortOrder}
+                        activityPinnedIds={sessionNewIdSet}
+                        activityScoreFor={scoreFor}
+                        entityId={entityId}
+                        spaceId={spaceId}
+                        onReply={handleCreateComment}
+                        onEdit={handleEditComment}
+                        personalSpaceId={personalSpaceId}
+                        editorSpaceIds={editorSpaceIds}
+                        isThreadCollapsed={isThreadCollapsed}
+                        toggleThreadCollapsed={toggleThreadCollapsed}
+                        sortReplies={sortWithSessionPinned}
+                        isLoggedIn={isLoggedIn}
+                        onSignInRequired={requireSignInToComment}
+                        pendingReplyToId={pendingReplyToId}
+                        onPendingReplyConsumed={() => setPendingReplyToId(null)}
+                      />
+                    </ProposalAttributionContext.Provider>
+                  </DebateVoteBadgeContext.Provider>
+                </>
+              )
+            )}
+          </div>
+        </CommentBranchHighlightProvider>
+      </ActivityPostsProvider>
     </CommentDensityContext.Provider>
   );
 }
@@ -448,6 +578,15 @@ function collectCommentAuthorSpaceIds(comments: CommentWithReplies[]): string[] 
 // Sub-components
 // ---------------------------------------------------------------------------
 
+/** The order the options are offered in, which is also the order of preference they imply. */
+const SORT_ORDERS: CommentSortOrder[] = ['best', 'top', 'newest', 'oldest'];
+const SORT_LABELS: Record<CommentSortOrder, string> = {
+  best: 'Best',
+  top: 'Top',
+  newest: 'New',
+  oldest: 'Old',
+};
+
 function CommentFilters({
   sortOrder,
   onSortChange,
@@ -462,11 +601,13 @@ function CommentFilters({
   return (
     <div className="flex items-center gap-2">
       <Dropdown
-        trigger={<Text variant="smallButton">{sortOrder === 'newest' ? 'Most recent' : 'Oldest'}</Text>}
-        options={[
-          { label: 'Most recent', value: 'newest', disabled: false, onClick: () => onSortChange('newest') },
-          { label: 'Oldest', value: 'oldest', disabled: false, onClick: () => onSortChange('oldest') },
-        ]}
+        trigger={<Text variant="smallButton">{SORT_LABELS[sortOrder]}</Text>}
+        options={SORT_ORDERS.map(value => ({
+          label: SORT_LABELS[value],
+          value,
+          disabled: false,
+          onClick: () => onSortChange(value),
+        }))}
       />
       <Dropdown
         trigger={<Text variant="smallButton">{filter === 'all' ? 'All' : 'Editors replies'}</Text>}
@@ -479,7 +620,7 @@ function CommentFilters({
   );
 }
 
-/** Top-level pill-style input matching the design ("Start the discussion...") */
+/** Top-level pill-style input matching the design ("Join the conversation...") */
 function TopLevelCommentInput({
   onSubmit,
   isLoggedIn,
@@ -518,12 +659,7 @@ function TopLevelCommentInput({
           onClick={openComposer}
           className="flex w-full items-center gap-3 border-b border-grey-02 pb-3 text-left"
         >
-          <span
-            className="relative shrink-0 overflow-hidden rounded-full"
-            style={{ width: density.avatarPx, height: density.avatarPx }}
-          >
-            <Avatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} size={density.avatarPx} />
-          </span>
+          <ThreadAvatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} sizePx={density.avatarPx} />
           <span className={cx(density.bodyClass, 'min-w-0 flex-1 truncate text-grey-04')}>
             Join the conversation...
           </span>
@@ -536,7 +672,10 @@ function TopLevelCommentInput({
         onClick={openComposer}
         className="w-full rounded-lg border border-grey-02 px-4 py-3 text-left text-body text-grey-04 hover:border-text"
       >
-        Start the discussion...
+        {/* Same invitation the panel composer gives. The page variant said "Start the discussion",
+            which is the wrong offer on a thread that already holds debates and the claims from
+            them — there is a discussion, and the reader is being asked to join it. */}
+        Join the conversation...
       </button>
     );
   }
@@ -547,6 +686,7 @@ function TopLevelCommentInput({
         onSubmit(text);
         onExpandedChange(false);
       }}
+      analyticsLabel="New comment"
       placeholder=""
       autoFocus
       onCancel={() => onExpandedChange(false)}
@@ -554,14 +694,17 @@ function TopLevelCommentInput({
   );
 }
 
-function CommentInput({
+/** Exported for the Escape test: this composer renders inside the proposal review sheet. */
+export function CommentInput({
   onSubmit,
+  analyticsLabel = 'Comment',
   placeholder,
   autoFocus = false,
   onCancel,
   initialValue = '',
 }: {
   onSubmit: (text: string) => void;
+  analyticsLabel?: string;
   placeholder: string;
   autoFocus?: boolean;
   onCancel?: () => void;
@@ -593,6 +736,13 @@ function CommentInput({
       handleSubmit();
     }
     if (e.key === 'Escape' && onCancel) {
+      // Marked handled, like the submit branch above. This composer renders inside the proposal review
+      // sheet, whose window listener closes it on any Escape it sees undefaulted — so without this,
+      // cancelling a draft also navigated off the proposal, taking the draft with it. Every layer above
+      // (the comments panel, the entity side panel, the sheet) already respects `defaultPrevented`; this
+      // is the one handler that acted without saying so.
+      e.preventDefault();
+      e.stopPropagation();
       onCancel();
     }
   };
@@ -614,6 +764,8 @@ function CommentInput({
     <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
       <textarea
         ref={textareaRef}
+        data-geo-analytics-label={analyticsLabel}
+        aria-label={analyticsLabel}
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -652,6 +804,10 @@ function CommentInput({
 
 function CommentList({
   comments,
+  activityRows = NO_ACTIVITY_ROWS,
+  activityOrder = 'newest',
+  activityScoreFor,
+  activityPinnedIds,
   entityId,
   spaceId,
   onReply,
@@ -670,6 +826,19 @@ function CommentList({
   parentCommentId,
 }: {
   comments: CommentWithReplies[];
+  /** Ordered into the top level alongside the comments; ignored at any other depth. */
+  activityRows?: CommentActivityRow[];
+  activityOrder?: CommentSortOrder;
+  /** Looks up a top-level row's votes, for the ranked orders. */
+  activityScoreFor?: (row: { id: string }) => { positive: number; negative: number } | null;
+  /**
+   * Comments written in this session, which stay at the top of the merged list however it is sorted.
+   *
+   * Passed in rather than re-derived, because the pin at every other nesting level comes from the
+   * same state inside `sortWithSessionPinned`; this merge is the one place that re-sorts a list
+   * which has already been pinned, so it is the one place that has to know.
+   */
+  activityPinnedIds?: ReadonlySet<string>;
   entityId: string;
   spaceId: string;
   onReply: (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => void;
@@ -728,31 +897,46 @@ function CommentList({
     };
   }, [listLayoutKey, updateLastReplyTop]);
 
+  // Above the early return, because it is a hook: `depth` is a prop, so a list rendered at depth 0
+  // on one pass and deeper on the next would change how many hooks this component calls and React
+  // would throw. Cheap enough to read on every render.
+  const density = useCommentDensity();
+
   if (depth === 0) {
+    // Activity rows only exist at the top level — a debate is not a reply to a comment — so the
+    // merge lives inside this branch and the recursive one below is untouched.
+    const merged = mergeActivityRows(comments, activityRows, activityOrder, activityScoreFor, activityPinnedIds);
+
     return (
       <div>
-        {comments.map((comment, index) => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            entityId={entityId}
-            spaceId={spaceId}
-            onReply={onReply}
-            onEdit={onEdit}
-            personalSpaceId={personalSpaceId}
-            editorSpaceIds={editorSpaceIds}
-            isThreadCollapsed={isThreadCollapsed}
-            toggleThreadCollapsed={toggleThreadCollapsed}
-            sortReplies={sortReplies}
-            isLoggedIn={isLoggedIn}
-            onSignInRequired={onSignInRequired}
-            pendingReplyToId={pendingReplyToId}
-            onPendingReplyConsumed={onPendingReplyConsumed}
-            isLast={index === comments.length - 1}
-            depth={depth}
-            ancestors={ancestors}
-          />
-        ))}
+        {merged.map((entry, index) =>
+          entry.kind === 'extra' ? (
+            <div key={`activity:${entry.row.id}`} className={cx('py-4', index > 0 && 'border-t border-divider')}>
+              {entry.row.content}
+            </div>
+          ) : (
+            <CommentItem
+              key={entry.row.id}
+              comment={entry.row}
+              entityId={entityId}
+              spaceId={spaceId}
+              onReply={onReply}
+              onEdit={onEdit}
+              personalSpaceId={personalSpaceId}
+              editorSpaceIds={editorSpaceIds}
+              isThreadCollapsed={isThreadCollapsed}
+              toggleThreadCollapsed={toggleThreadCollapsed}
+              sortReplies={sortReplies}
+              isLoggedIn={isLoggedIn}
+              onSignInRequired={onSignInRequired}
+              pendingReplyToId={pendingReplyToId}
+              onPendingReplyConsumed={onPendingReplyConsumed}
+              isLast={index === merged.length - 1}
+              depth={depth}
+              ancestors={ancestors}
+            />
+          )
+        )}
       </div>
     );
   }
@@ -764,7 +948,6 @@ function CommentList({
   // The elbow lands on the reply avatar's vertical centre, so its geometry
   // follows the density's avatar size rather than the 32px avatar these paths
   // were originally drawn against.
-  const density = useCommentDensity();
   const spineOffsetPx = threadSpineOffsetPx(density);
   const armCenterPx = threadArmCenterPx(density);
   const armY = armCenterPx - 0.5;
@@ -779,32 +962,18 @@ function CommentList({
   return (
     <div className="comment-branch-list-root relative" ref={containerRef}>
       {/* Single continuous vertical line from top to just before the last reply's curve */}
-      {lastReplyTop != null && parentCommentId != null && (
-        <button
-          type="button"
-          aria-expanded={!isThreadCollapsed(parentCommentId)}
-          aria-label={isThreadCollapsed(parentCommentId) ? 'Expand comment thread' : 'Collapse comment thread'}
-          onClick={() => toggleThreadCollapsed(parentCommentId)}
-          onPointerEnter={() => hi.setParentThreadFocus(parentCommentId)}
-          onFocus={() => hi.setParentThreadFocus(parentCommentId)}
-          onPointerDown={() => hi.pressSpineForListParent(parentCommentId)}
-          {...branchLeave}
-          className="comment-branch-hit comment-branch-parent-hit comment-branch-spine-hit absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
-          style={{
-            left: `calc(${-spineOffsetPx}px + 0.5px)`,
-            top: 0,
-            height: `${lastReplyTop}px`,
-            width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
-          }}
-        >
-          <span
-            className={cx(
-              THREAD_LEVEL_BRANCH_SEGMENT,
-              'w-px shrink-0 transition-colors',
-              listSpineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
-            )}
-          />
-        </button>
+      {parentCommentId != null && (
+        <ThreadListSpine
+          reachPx={spineOffsetPx}
+          heightPx={lastReplyTop}
+          lit={listSpineLit}
+          collapsed={isThreadCollapsed(parentCommentId)}
+          onToggle={() => toggleThreadCollapsed(parentCommentId)}
+          onFocusBranch={() => hi.setParentThreadFocus(parentCommentId)}
+          onPressBranch={() => hi.pressSpineForListParent(parentCommentId)}
+          onClearFocus={hi.clearFocus}
+          label={{ expand: 'Expand comment thread', collapse: 'Collapse comment thread' }}
+        />
       )}
       {comments.map((comment, index) => {
         const isLastReply = index === comments.length - 1;
@@ -1007,13 +1176,16 @@ function CommentItem({
   }, [comment.createdAt]);
 
   const density = useCommentDensity();
-  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  // Memoised: the empty branch was a new array each render, and `sortedReplies` below is keyed on it.
+  const replies = React.useMemo(
+    () => (Array.isArray(comment.replies) ? comment.replies : NO_REPLIES),
+    [comment.replies]
+  );
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -threadSpineOffsetPx(density);
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
   const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? density.avatarCenterPx : nestedSpineLeftPx;
-  const threadLineStrokeCenterNudgePx = 0.5;
   /** X of thread line relative to body inner left (vote row). */
   const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - density.bodyInsetPx;
   const commentRef = React.useRef<HTMLDivElement>(null);
@@ -1028,6 +1200,10 @@ function CommentItem({
   const expandedHeaderBlankCollapsesThread = !isEditing;
 
   const parentThreadLeave = branchPointerBlurProps(hi.clearFocus);
+  const recordAuthorOpen = React.useCallback(
+    () => personProfileOpened(comment.author.spaceId, null, { interaction_surface: 'comment_author' }),
+    [comment.author.spaceId]
+  );
 
   // Measure the distance from the avatar bottom to where the nested replies container starts
   React.useLayoutEffect(() => {
@@ -1041,6 +1217,9 @@ function CommentItem({
       // The spine starts below the avatar, so drop that much off its length.
       setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
+    // `density.avatarPx` rather than `density`: the object is rebuilt each render, and the pixel is
+    // the only part of it this measurement reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (
@@ -1049,27 +1228,35 @@ function CommentItem({
         className="flex shrink-0 items-center justify-center"
         style={{ width: density.avatarPx, height: density.avatarPx }}
       >
-        <a
+        <ThreadAvatar
           href={NavUtils.toSpace(comment.author.spaceId)}
-          className="relative shrink-0 overflow-hidden rounded-full"
-          style={{ width: density.avatarPx, height: density.avatarPx }}
-        >
-          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={density.avatarPx} />
-        </a>
+          // The same name printed beside it: a linked face with an empty `alt` has no accessible name.
+          label={comment.author.name ?? 'Anonymous'}
+          onClick={recordAuthorOpen}
+          avatarUrl={comment.author.avatarUrl}
+          value={comment.author.address}
+          sizePx={density.avatarPx}
+        />
       </div>
       {/* Single line, no wrapping: a wrapped header doubles the row height, and
           because the avatar is centred against it the body ends up stranded far
           below the name. A long name truncates instead. */}
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
-        <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+        <a
+          href={NavUtils.toSpace(comment.author.spaceId)}
+          onClick={recordAuthorOpen}
+          className="min-w-0 truncate hover:underline"
+        >
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
+        <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
         {/* While publishing, this stands in for the timestamp — a just-posted
             comment has no meaningful age yet, and showing both read as noise. */}
         <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
           {comment.isPublishing ? 'Publishing…' : relativeTime}
         </span>
         <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
+        <ProposalAttributionBadge authorSpaceId={comment.author.spaceId} />
         {comment.resolved && (
           <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1120,6 +1307,7 @@ function CommentItem({
       {isEditing ? (
         <CommentInput
           onSubmit={handleEdit}
+          analyticsLabel="Edit comment"
           placeholder="Edit your comment..."
           autoFocus
           onCancel={() => setIsEditing(false)}
@@ -1139,24 +1327,15 @@ function CommentItem({
       {!isEditing && (
         <div className="relative mt-2 flex items-center gap-4">
           {showThreadToggle && showBranchCollapseButton && (
-            <button
-              type="button"
-              aria-expanded
-              aria-label="Collapse comment thread"
-              onClick={() => toggleThreadCollapsed(comment.id)}
-              onPointerEnter={() => hi.setParentThreadFocus(comment.id)}
-              onFocus={() => hi.setParentThreadFocus(comment.id)}
-              onPointerDown={() => hi.pressSpineForListParent(comment.id)}
-              {...parentThreadLeave}
-              className="comment-branch-parent-hit pointer-events-auto absolute top-1/2 z-[2] flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-grey-02 bg-bg text-grey-04 hover:bg-grey-01"
-              style={{
-                left: `calc(${threadToggleLeftInBodyPx}px + ${threadLineStrokeCenterNudgePx}px)`,
-              }}
-            >
-              <span className="inline-flex scale-[0.55] leading-none">
-                <Minus color="grey-04" />
-              </span>
-            </button>
+            <ThreadCollapseToggle
+              collapsed={false}
+              leftPx={threadToggleLeftInBodyPx}
+              label={{ expand: 'Expand comment thread', collapse: 'Collapse comment thread' }}
+              onToggle={() => toggleThreadCollapsed(comment.id)}
+              onFocusBranch={() => hi.setParentThreadFocus(comment.id)}
+              onPressBranch={() => hi.pressSpineForListParent(comment.id)}
+              onClearFocus={hi.clearFocus}
+            />
           )}
           <EntityVoteButtons entityId={comment.id} spaceId={comment.spaceId} />
           <button
@@ -1192,6 +1371,7 @@ function CommentItem({
         <div className="mt-3">
           <CommentInput
             onSubmit={handleReply}
+            analyticsLabel="Reply to comment"
             placeholder={`Reply to ${comment.author.name ?? 'comment'}...`}
             autoFocus
             onCancel={() => setIsReplying(false)}
@@ -1231,30 +1411,33 @@ function CommentItem({
         <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
           <div className="flex shrink-0 items-center justify-center" style={{ width: density.avatarPx }}>
             {showThreadToggle && (
-              <button
-                type="button"
-                aria-expanded={false}
-                aria-label={hasReplies ? 'Expand comment thread' : 'Expand comment'}
-                onClick={() => toggleThreadCollapsed(comment.id)}
-                className="z-[2] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-grey-02 bg-bg text-grey-04 hover:bg-grey-01"
-              >
-                <span className="inline-flex scale-[0.55] leading-none">
-                  <Plus color="grey-04" />
-                </span>
-              </button>
+              <ThreadCollapseToggle
+                collapsed
+                label={{
+                  expand: hasReplies ? 'Expand comment thread' : 'Expand comment',
+                  collapse: hasReplies ? 'Collapse comment thread' : 'Collapse comment',
+                }}
+                onToggle={() => toggleThreadCollapsed(comment.id)}
+              />
             )}
           </div>
           <div
             className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
             style={{ minHeight: density.headerMinHeightPx }}
           >
-            <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+            <a
+              href={NavUtils.toSpace(comment.author.spaceId)}
+              onClick={recordAuthorOpen}
+              className="min-w-0 truncate hover:underline"
+            >
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
+            <ClaimCommentPositionBadge authorSpaceId={comment.author.spaceId} />
             <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
               {comment.isPublishing ? 'Publishing…' : relativeTime}
             </span>
             <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
+            <ProposalAttributionBadge authorSpaceId={comment.author.spaceId} />
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"
@@ -1269,33 +1452,18 @@ function CommentItem({
         </div>
       ) : hasReplies ? (
         <div className="thread-branch-hover-root relative">
-          {parentLineHeight != null && parentLineHeight > 0 && (
-            <button
-              type="button"
-              aria-label="Collapse comment thread"
-              onClick={() => toggleThreadCollapsed(comment.id)}
-              onPointerEnter={() => hi.setParentThreadFocus(comment.id)}
-              onFocus={() => hi.setParentThreadFocus(comment.id)}
-              onPointerDown={() => hi.pressSpineForListParent(comment.id)}
-              {...parentThreadLeave}
-              className="comment-branch-parent-hit comment-branch-parent-spine absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
-              style={{
-                left: `${density.avatarCenterPx}px`,
-                // Starts just below the avatar it descends from.
-                top: `${avatarBottomInRowPx(density)}px`,
-                height: `${parentLineHeight}px`,
-                width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
-              }}
-            >
-              <span
-                className={cx(
-                  THREAD_LEVEL_BRANCH_SEGMENT,
-                  'w-px shrink-0 transition-colors',
-                  parentSpineLineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
-                )}
-              />
-            </button>
-          )}
+          <ThreadParentSpine
+            leftPx={density.avatarCenterPx}
+            // Starts just below the avatar it descends from.
+            topPx={avatarBottomInRowPx(density)}
+            heightPx={parentLineHeight}
+            lit={parentSpineLineLit}
+            label="Collapse comment thread"
+            onToggle={() => toggleThreadCollapsed(comment.id)}
+            onFocusBranch={() => hi.setParentThreadFocus(comment.id)}
+            onPressBranch={() => hi.pressSpineForListParent(comment.id)}
+            onClearFocus={hi.clearFocus}
+          />
           {expandedHeaderRow}
           <div className="comment-body-slot mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}
@@ -1311,21 +1479,4 @@ function CommentItem({
       )}
     </div>
   );
-}
-
-function getRelativeTime(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffSeconds < 60) return 'just now';
-  if (diffMinutes < 60) return `${diffMinutes} mins`;
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''}`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
-  return date.toLocaleDateString();
 }

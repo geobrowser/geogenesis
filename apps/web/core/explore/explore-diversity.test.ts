@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import {
   EPISODE_TYPE_ID,
+  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
   NEWS_STORY_TYPE_ID,
   TWEET_TYPE_ID,
@@ -12,14 +14,17 @@ import {
   EXPLORE_DIVERSITY_MAX_RUN,
   EXPLORE_DIVERSITY_WINDOW_SIZE,
   applyDiversityCap,
+  applyPerSpaceQuota,
+  applyTargetMix,
   exploreItemTypeKey,
+  largestWindowShare,
   longestTypeRun,
+  targetMixAppliesTo,
 } from './explore-diversity';
-import {
-  decodeExploreWindowCursor,
-  encodeExploreWindowCursor,
-  nextExploreWindowCursor,
-} from './explore-window-cursor';
+import { decodeExploreWindowCursor, encodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
+
+/** Type keys are compared hyphenless, the same normalisation exploreItemTypeKey applies. */
+const normIdForTest = (id: string) => id.replace(/-/g, '').toLowerCase();
 
 type Item = { id: string; types: { id: string }[] };
 
@@ -46,16 +51,29 @@ describe('exploreItemTypeKey', () => {
   it('is stable across relation order', () => {
     // `types` comes from relations, whose order is not meaningful. Two identical entities
     // must not land in different diversity buckets because the rows came back swapped.
-    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(
-      key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID))
-    );
+    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID, CLAIM_TYPE_ID)));
   });
 
   it('classifies a multi-typed claim as its more specific type', () => {
-    // Claim is declared last in EXPLORE_ENTITY_TYPES, so it loses every tie. That is the
-    // useful direction: such an item can break a claim run instead of extending one.
+    // Claim classifies last, so it loses every tie. That is the useful direction: such an item can
+    // break a claim run instead of extending one.
+    //
+    // It used to lose ties by being declared last in EXPLORE_ENTITY_TYPES, which made this
+    // behaviour a side effect of menu order — GEO-2790 moved Claim to the top of the menu and
+    // inverted it. The priority is stated separately now, and the test below guards the split.
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).not.toBe(key(item('b', CLAIM_TYPE_ID)));
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('c', EPISODE_TYPE_ID)));
+  });
+
+  it('classifies independently of the order the menu lists types in', () => {
+    // The invariant that keeps the two apart. Claim leads the dropdown so the boxes a reader
+    // arrives with read first; it must still lose classification ties to a more specific type, or
+    // the diversity cap starts extending claim runs instead of breaking them — the exact failure
+    // this module exists to prevent.
+    expect(EXPLORE_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(
+      EXPLORE_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID)
+    );
+    expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('b', EPISODE_TYPE_ID)));
   });
 
   it('is case- and hyphen-insensitive, matching the ids the feed actually returns', () => {
@@ -94,9 +112,7 @@ describe('applyDiversityCap', () => {
     expect(expectedBreaks).toBe(5);
     expect(news.length).toBeGreaterThanOrEqual(expectedBreaks);
     // The measured 100% is now at most 77%, which is the floor a run cap alone can reach.
-    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(
-      EXPLORE_PAGE_SIZE - expectedBreaks
-    );
+    expect(firstScreenAfter.length - news.length).toBeLessThanOrEqual(EXPLORE_PAGE_SIZE - expectedBreaks);
   });
 
   it('caps runs across the whole window, not just the first page', () => {
@@ -287,5 +303,194 @@ describe('paging the reordered window end to end', () => {
 
     expect(cursor).toBeNull();
     expect(ids(served)).toEqual(ids(window));
+  });
+});
+
+describe('the per-space quota', () => {
+  const item = (spaceId: string, id: string) => ({ spaceId, entityId: id });
+  const spaceOf = (i: { spaceId: string }) => i.spaceId;
+
+  it('holds one space to the quota on the screen the reader sees, when supply allows', () => {
+    // Six spaces, as measured in the live 66-row window, with enough supply that a 22-slot
+    // page can be filled at 5 each. The dominant space arrives holding 20 of the first 22.
+    const rows = [
+      ...Array.from({ length: 20 }, (_, n) => item('rel', `rel${n}`)),
+      ...Array.from({ length: 8 }, (_, n) => item('crypto', `c${n}`)),
+      ...Array.from({ length: 6 }, (_, n) => item('world', `w${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('ai', `a${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('us', `u${n}`)),
+      ...Array.from({ length: 5 }, (_, n) => item('health', `h${n}`)),
+    ];
+    expect(largestWindowShare(rows.slice(0, 22), spaceOf, 22)).toBe(20);
+
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 5, 22);
+    expect(largestWindowShare(ordered.slice(0, 22), spaceOf, 22)).toBeLessThanOrEqual(5);
+    expect(ordered).toHaveLength(rows.length);
+    expect(new Set(ordered.map(r => r.entityId))).toEqual(new Set(rows.map(r => r.entityId)));
+  });
+
+  it('fills the screen rather than honouring the quota, when supply will not stretch', () => {
+    // The live shape on 2026-09-10, and the reason the default is 5 and not 4: six spaces
+    // holding 38/14/6/4/3/1 of a 66-row window. At a quota of 4 the most a page can draw is
+    // sum(min(count, 4)) = 20, two short of the 22 it needs — so the quota *cannot* hold and
+    // the only question is whether the reader gets a short screen or a repeated space.
+    // They get the full screen.
+    const supply: Array<[string, number]> = [
+      ['rel', 38],
+      ['crypto', 14],
+      ['world', 6],
+      ['ai', 4],
+      ['us', 3],
+      ['health', 1],
+    ];
+    const rows = supply.flatMap(([space, n]) => Array.from({ length: n }, (_, i) => item(space, `${space}${i}`)));
+
+    const atFour = applyPerSpaceQuota(rows, spaceOf, 4, 22);
+    expect(atFour.slice(0, 22)).toHaveLength(22);
+    expect(largestWindowShare(atFour.slice(0, 22), spaceOf, 22)).toBeGreaterThan(4);
+
+    // At 5 it fits: sum(min(count, 5)) = 23 >= 22.
+    const atFive = applyPerSpaceQuota(rows, spaceOf, 5, 22);
+    expect(largestWindowShare(atFive.slice(0, 22), spaceOf, 22)).toBeLessThanOrEqual(5);
+  });
+
+  it('drops nothing when one space is all there is', () => {
+    // Every remaining item over quota: emit the best of them rather than stalling or
+    // truncating the feed. A single-space graph must still get a feed.
+    const rows = Array.from({ length: 9 }, (_, n) => item('only', `o${n}`));
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 4, 20);
+    expect(ordered.map(r => r.entityId)).toEqual(rows.map(r => r.entityId));
+  });
+
+  it('leaves a already-diverse ranking in its ranked order', () => {
+    // The quota must be inert when it does not bind — "Best" still has to mean best.
+    const rows = [item('a', '1'), item('b', '2'), item('c', '3'), item('a', '4'), item('b', '5')];
+    expect(applyPerSpaceQuota(rows, spaceOf, 4, 20).map(r => r.entityId)).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  it('defers rather than reorders wholesale', () => {
+    // Relative order within a space is the ranking, and it must survive.
+    const rows = [...Array.from({ length: 6 }, (_, n) => item('rel', `rel${n}`)), item('other', 'x')];
+    const ordered = applyPerSpaceQuota(rows, spaceOf, 4, 20);
+    expect(ordered.filter(r => r.spaceId === 'rel').map(r => r.entityId)).toEqual([
+      'rel0',
+      'rel1',
+      'rel2',
+      'rel3',
+      'rel4',
+      'rel5',
+    ]);
+  });
+
+  it('is unaffected by the type cap being inert, which is today', () => {
+    // Every row one type, as measured: applyDiversityCap is a no-op and the space quota is
+    // the only thing doing any work. Composed in the order fetchExploreFeed uses.
+    const rows = Array.from({ length: 24 }, (_, n) => ({
+      ...item(n % 3 === 0 ? 'rel' : 'rel', `r${n}`),
+      types: [{ id: CLAIM_TYPE_ID }],
+    }));
+    const typed = applyDiversityCap(rows, exploreItemTypeKey);
+    expect(typed).toHaveLength(rows.length);
+    expect(applyPerSpaceQuota(typed, spaceOf, 4, 20)).toHaveLength(rows.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyTargetMix — GEO-2950
+//
+// The run cap and the target mix bound different things, and the measurement that
+// prompted this is the proof: the same window rendered 4.1 claims per 10 before the
+// cap and 1.8 after it. These assert the property the cap cannot give — a share.
+// ---------------------------------------------------------------------------
+describe('applyTargetMix', () => {
+  const CLAIM = normIdForTest(CLAIM_TYPE_ID);
+  const DEBATE = normIdForTest(DEBATE_TYPE_ID);
+  const NEWS = normIdForTest(NEWS_STORY_TYPE_ID);
+  const keyOf = (item: { key: string }) => item.key;
+  const build = (counts: Record<string, number>) =>
+    Object.entries(counts).flatMap(([key, n]) => Array.from({ length: n }, (_, i) => ({ key, id: `${key}-${i}` })));
+  const per10 = (items: { key: string }[], key: string, take: number) =>
+    Math.round((items.slice(0, take).filter(i => i.key === key).length * 10 * 10) / take) / 10;
+
+  /**
+   * A real rank-ordered window, captured from production on 2026-09-17 (featured spaces, the
+   * default three types) — C=Claim, D=Debate, N=News story.
+   *
+   * Recorded rather than invented because a block fixture (27 C, then 13 D, then 26 N) is the run
+   * cap's BEST case and made an earlier version of these tests assert the opposite of reality.
+   * What matters here is the interleaving, and that it opens with eight consecutive debates: the
+   * highest-ranked items are debates, which is why the rendered page skews to them.
+   *
+   * Not byte-identical to what production serves — this window was fetched without the
+   * server-side debate-tag gate on claims, so it holds claims Explore would drop. Same ordering
+   * mechanics, slightly richer in claims.
+   */
+  const PRODUCTION_WINDOW = 'DDDDDDDDCNDCCNNCNNNCNCDCCNNCDCNCCCCCNCCNNCNNDNNCNNCDCCCCCNNNNNNNCC';
+  const fromSequence = (seq: string) =>
+    [...seq].map((c, i) => ({ key: c === 'C' ? CLAIM : c === 'D' ? DEBATE : NEWS, id: `${c}-${i}` }));
+
+  it('hits 6:3:1 on a page when supply allows', () => {
+    const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
+    expect(per10(out, CLAIM, 22)).toBeCloseTo(6, 0);
+    expect(per10(out, DEBATE, 22)).toBeCloseTo(3, 0);
+    expect(per10(out, NEWS, 22)).toBeCloseTo(1, 0);
+  });
+
+  it('beats the run cap on the metric that was reported', () => {
+    // Same input, both strategies. The cap is not wrong — it optimises a different thing —
+    // but on claim share it is the regression Preston saw.
+    const window = fromSequence(PRODUCTION_WINDOW);
+    const capped = applyDiversityCap(window, keyOf);
+    const mixed = applyTargetMix(window, keyOf);
+    // On this window the cap serves 2.7 claims per 10 and the mix serves 5.9.
+    expect(per10(mixed, CLAIM, 22)).toBeGreaterThan(per10(capped, CLAIM, 22));
+    expect(per10(capped, CLAIM, 22)).toBeLessThan(4);
+  });
+
+  it('interleaves rather than emitting blocks', () => {
+    const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
+    // A naive 6:3:1 cycle would open with six consecutive claims.
+    expect(longestTypeRun(out.slice(0, 22), keyOf)).toBeLessThanOrEqual(3);
+  });
+
+  it('renormalises when a type is unticked', () => {
+    // No News story selected: 6:3 over the two present, not 6:3 with a hole where News was.
+    const out = applyTargetMix(build({ [CLAIM]: 30, [DEBATE]: 20 }), keyOf);
+    expect(per10(out, CLAIM, 20)).toBeCloseTo(6.7, 0);
+    expect(per10(out, DEBATE, 20)).toBeCloseTo(3.3, 0);
+  });
+
+  it('degrades to rank order when a type runs dry, without dropping or shortening', () => {
+    // Debates are the scarce input — ~82 exist in the entire feed.
+    const window = build({ [CLAIM]: 40, [DEBATE]: 2, [NEWS]: 10 });
+    const out = applyTargetMix(window, keyOf);
+    expect(out).toHaveLength(window.length);
+    expect(new Set(out.map(i => i.id)).size).toBe(window.length);
+  });
+
+  it('preserves rank order within a type', () => {
+    const out = applyTargetMix(build({ [CLAIM]: 10, [DEBATE]: 5, [NEWS]: 2 }), keyOf);
+    const claims = out.filter(i => i.key === CLAIM).map(i => i.id);
+    expect(claims).toEqual([...claims].sort((a, b) => Number(a.split('-')[1]) - Number(b.split('-')[1])));
+  });
+
+  it('is a pure function of the input, so the window cursor stays valid', () => {
+    const window = fromSequence(PRODUCTION_WINDOW);
+    expect(applyTargetMix(window, keyOf)).toEqual(applyTargetMix(window, keyOf));
+  });
+});
+
+describe('targetMixAppliesTo', () => {
+  it('applies to the default selection', () => {
+    expect(targetMixAppliesTo([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID])).toBe(true);
+  });
+  it('does not apply to a single type — there is no ratio to hit', () => {
+    expect(targetMixAppliesTo([CLAIM_TYPE_ID])).toBe(false);
+  });
+  it('does not apply when a selected type has no target share', () => {
+    expect(targetMixAppliesTo([CLAIM_TYPE_ID, DEBATE_TYPE_ID, '972d201ad78045689e01543f67b26bee'])).toBe(false);
+  });
+  it('does not apply with no type filter at all (the activity feed)', () => {
+    expect(targetMixAppliesTo(undefined)).toBe(false);
   });
 });

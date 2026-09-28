@@ -1,0 +1,179 @@
+'use client';
+
+import * as Popover from '@radix-ui/react-popover';
+import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { Effect } from 'effect';
+import pluralize from 'pluralize';
+
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { type ActiveResponseDirection, type ResponseKind } from '~/core/responses/entity-response';
+import { useEntityResponders } from '~/core/responses/use-entity-responders';
+
+import { Skeleton } from '~/design-system/skeleton';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
+
+import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
+import { MemberRow } from '~/partials/space-page/space-member-row';
+
+import { CLAIM_RESPONSE_OBJECT_TYPE } from './claim-response-summary';
+
+/**
+ * The people on one side of a claim: a stack of faces that opens the full list when pressed.
+ *
+ * `ClaimResponderAvatars` reports everyone who responded regardless of direction, which is right
+ * for a single stack beside a score and wrong under a split — used on both sides it shows the same
+ * people agreeing and disagreeing. The responder rows already carry a `direction`, so this filters
+ * on it.
+ *
+ * Same query key as that component, so wherever both are on screen they share one fetch.
+ */
+export function ClaimSideResponders({
+  entityId,
+  spaceId,
+  responseKind,
+  direction,
+  label,
+  totalResponders,
+  viewerDirection,
+  viewerSpaceId,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  direction: ActiveResponseDirection;
+  /** Names the side in the claim's own vocabulary, for the panel's title and the trigger's label. */
+  label: string;
+  /** The authoritative count for this side, which can exceed the faces the query returns. */
+  totalResponders: number;
+  /** The side the viewer holds right now, optimistic included, and the space identifying them. */
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
+}) {
+  // Held rather than left to Radix so the profile lookup below is deferred until the list is
+  // actually opened — a page of claim cards would otherwise fetch every side's profiles up front.
+  const [open, setOpen] = React.useState(false);
+
+  // Above whatever the sides are drawn inside, not merely above the page. Radix's default portal
+  // leaves this at the content's own `z-100` on `document.body`, which loses to the entity side
+  // panel and to the debates hub — see the same note on `ClaimResponders`, where the faces stopped
+  // opening anything at all.
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
+
+  const { responders } = useEntityResponders({
+    entityId,
+    spaceId,
+    objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+    responseKind,
+    viewerSpaceId,
+    optimisticViewerResponse: viewerDirection,
+  });
+
+  const sideSpaceIds = React.useMemo(() => {
+    return responders.filter(responder => responder.direction === direction).map(responder => responder.userId);
+  }, [direction, responders]);
+
+  if (sideSpaceIds.length === 0) return null;
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger
+        aria-label={`${totalResponders} ${pluralize('person', totalResponders)} ${label.toLowerCase()}`}
+        className="inline-flex cursor-pointer items-center rounded"
+      >
+        <RankingAggregatedSubmitterAvatars
+          submitterSpaceIds={sideSpaceIds}
+          // The aggregate count can be ahead of the responder rows; taking the larger keeps the
+          // "+N" honest rather than letting it go negative.
+          totalCount={Math.max(totalResponders, sideSpaceIds.length)}
+          size={12}
+        />
+      </Popover.Trigger>
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            side="bottom"
+            align="start"
+            sideOffset={8}
+            avoidCollisions
+            // Same as the responder cluster's: clear of the fixed navbar, and retired when the
+            // trigger scrolls out of the panel it belongs to rather than floating over the header.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
+            className="z-100 origin-top-left"
+          >
+            {open ? <ResponderList spaceIds={sideSpaceIds} label={label} totalCount={totalResponders} /> : null}
+          </Popover.Content>
+        </Popover.Portal>
+      )}
+    </Popover.Root>
+  );
+}
+
+/**
+ * The list itself: the space editors and members popover pattern — same scroll cap, same divided
+ * rows, same counted footer — so a reader meets one list shape in the app rather than two that do
+ * the same job differently — except that the count is a title above the rows, not a footer.
+ *
+ * Narrower than those, though. They hang off a page header with the width to spare; this hangs off a
+ * count inside a card, and at 356px it arrived as a slab wider than the column that opened it. A row
+ * is a 32px avatar and a display name, so the box only ever needed to be about that wide.
+ */
+function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; label: string; totalCount: number }) {
+  const { data: profiles, isLoading } = useQuery({
+    queryKey: ['claim-side-responder-profiles', spaceIds],
+    queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(spaceIds)),
+    staleTime: 30_000,
+  });
+
+  // People with a profile picture first, so the top of the list is faces rather than generated
+  // placeholders. Stable within each group, so the order the responders came in otherwise holds.
+  const sortedProfiles = React.useMemo(
+    () => (profiles ? [...profiles].sort((a, b) => Number(Boolean(b.avatarUrl)) - Number(Boolean(a.avatarUrl))) : []),
+    [profiles]
+  );
+
+  return (
+    <div className="z-10 w-[248px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
+      {/* A title over the list rather than a counted footer under it: it says what the list is
+          before the reader scrolls it. The verb agrees with the count — "1 person agrees",
+          "6 people agree". */}
+      <p className="p-2 text-smallButton text-text">
+        {totalCount} {pluralize('person', totalCount)}{' '}
+        {totalCount === 1 ? pluralize(label.toLowerCase()) : label.toLowerCase()}
+      </p>
+      {/* Contained, so a wheel past the end of the list does not chain through to the page behind. */}
+      {/* Inset, so each row's hover sits inside the box as a rounded highlight — the browse sidebar's
+          own rows, in shape and colour. */}
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain p-1">
+        {isLoading || !profiles ? (
+          <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />
+        ) : (
+          sortedProfiles.map(profile => (
+            <MemberRow
+              key={profile.id}
+              user={profile}
+              analyticsSurface="claim_response_list"
+              className="rounded-lg transition-colors hover:bg-grey-01"
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ResponderRowSkeletons({ count = 5 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="flex items-center gap-2 p-2">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      ))}
+    </>
+  );
+}

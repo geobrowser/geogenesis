@@ -31,8 +31,7 @@ type RelationOp = {
   position?: string;
 };
 
-const toHex = (bytes: Uint8Array) =>
-  Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+const toHex = (bytes: Uint8Array) => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 
 const templateOps = () => generateNewSpaceTemplateOps({ spaceId: SPACE_ID, spaceHomeEntityId: SPACE_HOME_ENTITY_ID });
 
@@ -77,14 +76,15 @@ describe('generateNewSpaceTemplateOps', () => {
     const multiType = blockFilters().filter(parsed => typeFilters(parsed).length > 1);
 
     expect(multiType).toHaveLength(1);
-    expect(multiType[0].mode).toBe('OR');
+    expect(multiType[0].modesByColumn[SystemIds.TYPES_PROPERTY]).toBe('OR');
   });
 
   it('leaves the single-type blocks in AND mode', () => {
     const singleType = blockFilters().filter(parsed => typeFilters(parsed).length === 1);
 
     expect(singleType.length).toBeGreaterThan(0);
-    expect(singleType.every(parsed => parsed.mode === 'AND')).toBe(true);
+    // Absent entries default to AND, so no block may carry an OR override.
+    expect(singleType.every(parsed => Object.values(parsed.modesByColumn).every(mode => mode !== 'OR'))).toBe(true);
   });
 
   it('scopes every block to the new space', () => {

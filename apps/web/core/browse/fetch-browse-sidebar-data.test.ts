@@ -73,6 +73,7 @@ describe('fetchBrowseSidebarData', () => {
     ]);
     expect(mocks.fetchFeaturedSpaces).toHaveBeenCalledOnce();
     expect(mocks.getSpaces).toHaveBeenCalledWith({ spaceIds: [DOCUMENTATION_SPACE_ID], limit: 1 });
+    expect(result.featuredError).toBeFalsy();
   });
 
   it('reuses a supplied in-flight featured-space traversal', async () => {
@@ -115,10 +116,22 @@ describe('fetchBrowseSidebarData', () => {
     expect(result.featured).toEqual([]);
     expect(result.editorOf.map(row => row.id)).toEqual(['editor-space']);
     expect(result.personalSpaceId).toBe('personal-space');
+    expect(result.featuredError).toBe(true);
     expect(consoleError).toHaveBeenCalledWith(
       'Unable to load Featured spaces for the Browse sidebar',
       expect.any(Error)
     );
+    consoleError.mockRestore();
+  });
+
+  it('flags a featured-space failure on the signed-out (onboarding) path so it is not read as empty', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.fetchFeaturedSpaces.mockRejectedValue(new Error('indexer unavailable'));
+
+    const result = await fetchBrowseSidebarData(undefined);
+
+    expect(result.featured).toEqual([]);
+    expect(result.featuredError).toBe(true);
     consoleError.mockRestore();
   });
 

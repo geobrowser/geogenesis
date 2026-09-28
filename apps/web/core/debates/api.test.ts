@@ -4,15 +4,20 @@ import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
 
 import {
   GeoChatRequestError,
+  GeoChatSessionError,
   blockDebateUser,
   completeLocalRecordingUpload,
   createDebateRequest,
+  createScheduledDebate,
   dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  getRematchLiveKitToken,
+  isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
+  listDebatePeople,
   listMatchmakingClaims,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
@@ -107,6 +112,30 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+
+  it('reads Retry-After from a 429 as seconds or an HTTP date, without retrying the request', async () => {
+    const rateLimited = (retryAfter: string) =>
+      new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Too many requests' } }), {
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter },
+      });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(rateLimited('7'))
+      .mockResolvedValueOnce(rateLimited(new Date(Date.now() + 30_000).toUTCString()));
+    vi.stubGlobal('fetch', fetch);
+    const notify = () => notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', true, vi.fn(), 'user-a');
+
+    await expect(notify()).rejects.toMatchObject({ status: 429, retryAfterMs: 7_000 });
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    const error = await notify().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeGreaterThan(28_000);
+    expect((error as GeoChatRequestError).retryAfterMs).toBeLessThanOrEqual(30_000);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -367,6 +396,77 @@ describe('debate queue readiness', () => {
   });
 });
 
+// GEO-2725 opened both matchmaking reads to signed-out viewers. The risk in doing that is the
+// mirror of the case below: a blanket `auth: 'optional'` would also treat a signed-in viewer's
+// failed token exchange as "no account" and fetch anonymously, and that answer would be cached
+// under their account key — leaving viewer-relative fields like `can_challenge` quietly wrong.
+describe('matchmaking read authentication', () => {
+  const okResponse = (body: unknown) =>
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('reads people anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+
+    // Passed but never consulted: with no account there is no exchange to make, which is what
+    // keeps this path anonymous rather than merely tokenless.
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listDebatePeople(getPrivyIdentityToken, null)).resolves.toEqual({ people: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/people',
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in people request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebatePeople(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads matchmaking claims anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, null)).resolves.toEqual({
+      claims: [],
+      next_cursor: null,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/matchmaking/claims'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in claims request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, 'user-a')).rejects.toThrow(
+      'Identity token unavailable'
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('debate claim hydration authentication', () => {
   it('does not silently downgrade a signed-in claim request to anonymous access', async () => {
     resetGeoChatSession();
@@ -386,6 +486,101 @@ describe('debate claim hydration authentication', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  /**
+   * GEO-2724. `ClaimDebateButton` renders per entity row and asks only for its own claim, so a table
+   * of fifty claim entities made fifty requests to an endpoint that takes all fifty ids — each one
+   * sending geo-chat to the Knowledge Graph, which is the load it answers 503 to.
+   */
+  it('collapses concurrent single-claim reads for one space into one request', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ claims: [{ claim_entity_id: 'claim-1' }, { claim_entity_id: 'claim-2' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const [first, second] = await Promise.all([
+      listDebateClaims('space-1', ['claim-1']),
+      listDebateClaims('space-1', ['claim-2']),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/debate-claims?claim_ids=claim-1%2Cclaim-2',
+      expect.objectContaining({ headers: {} })
+    );
+    // Each caller is answered with what it asked for, not the union. A superset would be a real
+    // behaviour change: `claims-page-client` derives its active debates from every row in its
+    // response and would pick up a sibling's.
+    expect(first.claims.map(claim => claim.claim_entity_id)).toEqual(['claim-1']);
+    expect(second.claims.map(claim => claim.claim_entity_id)).toEqual(['claim-2']);
+  });
+
+  /** A fresh `Response` per call: these tests make more than one request, and a body reads once. */
+  function stubFreshJson(body: unknown) {
+    const fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        )
+      );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  const claimRequests = (fetch: ReturnType<typeof vi.fn>) =>
+    fetch.mock.calls.filter(([url]) => String(url).includes('/debate-claims'));
+
+  /**
+   * The coalescing above is what makes this necessary: callers that each capped themselves at fifty
+   * still add up past the cap once their ids are merged for a space, and geo-chat answers a longer
+   * list with `400 too_many_claim_ids` — "at most 50 claim IDs may be requested".
+   *
+   * That failure is worse than one request: `debateQueryNetworkOptions` sets `retry: false`, so the
+   * rejection is permanent for its key, and the hub's readiness gate reads `isError` across every
+   * batch — one over-long request left every response pill on the tab dead until a refetch.
+   *
+   * Fifty is the server's number, written out rather than read from the constant, so that the two
+   * cannot be wrong together the way they were.
+   */
+  it('splits a coalesced batch at the cap geo-chat actually enforces', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+    const ids = Array.from({ length: 120 }, (_, index) => `claim-${index}`);
+
+    await Promise.all(ids.map(claimId => listDebateClaims('space-1', [claimId])));
+
+    const sent = claimRequests(fetch).map(([url]) => new URL(String(url)).searchParams.get('claim_ids')!.split(','));
+    expect(sent.every(chunk => chunk.length <= 50)).toBe(true);
+    // Every id still asked for, once.
+    expect(sent.flat().sort()).toEqual([...ids].sort());
+  });
+
+  it('keeps a whole-space read out of the id batch', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+
+    // No ids means every claim in the space. Folding that into a batch of ids, or answering it from
+    // one, would silently narrow it.
+    await Promise.all([listDebateClaims('space-1', []), listDebateClaims('space-1', ['claim-1'])]);
+
+    expect(claimRequests(fetch)).toHaveLength(2);
+  });
+
+  it('never answers one account from another account\u2019s response', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+    const getPrivyIdentityToken = vi.fn().mockResolvedValue('token');
+
+    // Readiness is per viewer, so two identities asking about the same claim are asking different
+    // questions and must not share a response.
+    await Promise.all([
+      listDebateClaims('space-1', ['claim-1'], getPrivyIdentityToken, 'user-a'),
+      listDebateClaims('space-1', ['claim-1'], getPrivyIdentityToken, 'user-b'),
+    ]);
+
+    expect(claimRequests(fetch)).toHaveLength(2);
+  });
+
   it('keeps anonymous claim browsing available without an authorization header', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ claims: [] }), {
@@ -403,13 +598,63 @@ describe('debate claim hydration authentication', () => {
   });
 });
 
+describe('rematch voice tokens', () => {
+  it('mints a token for the session with an authenticated bodyless POST', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          token: 'jwt',
+          url: 'wss://livekit.test',
+          room_name: 'geo-rematch-session-1',
+          participant_slot: 2,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).resolves.toEqual({
+      token: 'jwt',
+      url: 'wss://livekit.test',
+      room_name: 'geo-rematch-session-1',
+      participant_slot: 2,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/debate-rematches/session-1/livekit-token', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
+  });
+
+  // The dock reads the code to decide between rendering nothing and offering a retry, so it has to
+  // survive the request layer intact.
+  it('surfaces the backend refusal code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'livekit_not_configured', message: 'No LiveKit' } }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      status: 503,
+      code: 'livekit_not_configured',
+    });
+  });
+});
+
 describe('claim response indexing notifications', () => {
   it('posts the indexed response snapshot and accepts an empty success response', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
 
     await expect(
-      notifyClaimResponseIndexed('space-1', 'claim-1', 'veracity', false, vi.fn(), 'user-a')
+      notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', false, vi.fn(), 'user-a')
     ).resolves.toBeUndefined();
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/response-indexed', {
@@ -418,7 +663,7 @@ describe('claim response indexing notifications', () => {
         Authorization: 'Bearer access-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ response_kind: 'veracity', position: false }),
+      body: JSON.stringify({ response_kind: 'stance', position: false }),
       signal: undefined,
     });
   });
@@ -488,6 +733,53 @@ describe('turn yields', () => {
         body: JSON.stringify({ ended_at_ms: 1_784_542_272_505 }),
       })
     );
+  });
+});
+
+describe('a refused session exchange', () => {
+  /**
+   * The seam every other test on this branch assumes and none of them touched.
+   *
+   * The retries, the poll and the hub's setup message all key off `isAccountWarmingUp`, and they
+   * were tested against a `GeoChatSessionError` built by hand. So unwrapping the throw in
+   * `createGeoChatSession` would have left all of them green while putting the original bug back:
+   * a real refusal would arrive as a plain `GeoChatRequestError`, classify as an ordinary failure,
+   * and the hub would go back to saying something went wrong. This asks the real endpoint.
+   */
+  it('is classified as an account geo-chat has not registered yet', async () => {
+    window.localStorage.clear();
+    resetGeoChatSession();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'account_not_found', message: 'Unknown account' } }), {
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    const error = await getGeoChatSession(vi.fn().mockResolvedValue('privy-token'), 'user-a').catch(
+      (thrown: unknown) => thrown
+    );
+
+    expect(isAccountWarmingUp(error)).toBe(true);
+    expect(error).toMatchObject({ name: 'GeoChatSessionError', status: 401, code: 'account_not_found' });
+  });
+
+  /**
+   * And the other 401, from the other side of the same seam. A resource refusing the stored session
+   * is a session the server has stopped accepting — `debate-gateway` resets it — and waiting that
+   * out re-offers rejected credentials for ninety seconds before saying the account is being set up.
+   */
+  it('is not what a resource refusing the stored session means', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401, statusText: 'Unauthorized' })));
+
+    const error = await getDebateActivity(vi.fn(), 'user-a').catch((thrown: unknown) => thrown);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(isAccountWarmingUp(error)).toBe(false);
   });
 });
 
@@ -682,5 +974,47 @@ describe('geo-chat session sharing', () => {
 
     await result;
     expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
+  });
+});
+
+describe('GeoChatSessionError', () => {
+  it('keeps the Retry-After delay of the error it wraps', () => {
+    const wrapped = new GeoChatSessionError(new GeoChatRequestError('Too many requests', 'rate_limited', 429, 1_500));
+    expect(wrapped.retryAfterMs).toBe(1_500);
+  });
+});
+
+describe('scheduled debate limit', () => {
+  it("keeps geo-chat's message and code on a refused invitation", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'too_many_open_invitations',
+              message:
+                'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
+
+    const body = {
+      opponent_user_id: 'user-b',
+      scheduled_start_at: '2026-09-26T10:00:00.000Z',
+      scheduled_end_at: '2026-09-26T10:30:00.000Z',
+    };
+    const error = await createScheduledDebate(body, vi.fn(), 'user-a').catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'too_many_open_invitations',
+      message:
+        'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+    });
   });
 });

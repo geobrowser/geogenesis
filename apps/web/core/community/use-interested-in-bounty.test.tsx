@@ -10,13 +10,17 @@ import { INTERESTED_IN_RELATION_TYPE_ID } from '~/core/constants';
 
 import { useInterestedBountyIds, useInterestedInBounty } from './use-interested-in-bounty';
 
-const PERSONAL_SPACE_ID = 'personal-space-id';
+const PERSONAL_SPACE_ID = 'aaaa0000000000000000000000000001';
+const PERSON_ENTITY_ID = 'bbbb0000000000000000000000000002';
 
 const mocks = vi.hoisted(() => ({
-  personalSpaceId: 'personal-space-id' as string | null,
+  personalSpaceId: 'aaaa0000000000000000000000000001' as string | null,
   isRegistered: true,
-  setRelation: vi.fn(),
-  deleteRelation: vi.fn(),
+  profile: { id: 'bbbb0000000000000000000000000002', spaceId: 'aaaa0000000000000000000000000001', name: 'Alice' } as {
+    id: string;
+    spaceId: string;
+    name: string | null;
+  } | null,
   publishFails: false,
   makeProposal: vi.fn(),
   relationsByToEntityIds: vi.fn(),
@@ -26,10 +30,12 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.isRegistered }),
 }));
 
-vi.mock('~/core/sync/use-mutate', () => ({
-  useMutate: () => ({
-    storage: { relations: { set: mocks.setRelation, delete: mocks.deleteRelation } },
-  }),
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } }, isLoading: false }),
+}));
+
+vi.mock('~/core/hooks/use-geo-profile', () => ({
+  useGeoProfile: () => ({ profile: mocks.profile, isLoading: false, isFetched: true }),
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({
@@ -42,6 +48,7 @@ vi.mock('~/core/hooks/use-publish', () => ({
   }),
 }));
 
+vi.mock('~/core/bounties/constants', () => ({ CURRENT_BOUNTY_SPACE_IDS: ['dao-1'] }));
 vi.mock('~/core/io/queries', () => ({
   getRelationsByToEntityIds: (...args: unknown[]) => mocks.relationsByToEntityIds(...args),
 }));
@@ -56,9 +63,8 @@ const interestArgs = { bountyId: 'bounty-1', bountyName: 'Write docs', bountySpa
 beforeEach(() => {
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
   mocks.isRegistered = true;
+  mocks.profile = { id: PERSON_ENTITY_ID, spaceId: PERSONAL_SPACE_ID, name: 'Alice' };
   mocks.publishFails = false;
-  mocks.setRelation.mockReset();
-  mocks.deleteRelation.mockReset();
   mocks.makeProposal.mockReset();
   mocks.relationsByToEntityIds.mockReset();
   mocks.relationsByToEntityIds.mockReturnValue(Effect.succeed([]));
@@ -69,42 +75,24 @@ afterEach(() => {
 });
 
 describe('useInterestedInBounty', () => {
-  it('writes the relation from the personal space system entity', async () => {
+  // The standardized geogenesis shape: personal-space system entity → bounty,
+  // published into the personal space, with the bounty's space as toSpaceId.
+  it('writes the relation from the personal-space entity into the personal space, with toSpaceId', async () => {
     const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
 
     await act(async () => {
       await result.current.registerInterest(interestArgs);
     });
 
-    const relation = mocks.setRelation.mock.calls[0][0];
+    const args = mocks.makeProposal.mock.calls[0][0];
+    expect(args.spaceId).toBe(PERSONAL_SPACE_ID);
+    expect(args.relations).toHaveLength(1);
+    const relation = args.relations[0];
     expect(relation.fromEntity.id).toBe(PERSONAL_SPACE_ID);
     expect(relation.toEntity.id).toBe('bounty-1');
     expect(relation.spaceId).toBe(PERSONAL_SPACE_ID);
     expect(relation.toSpaceId).toBe('bounty-space');
     expect(relation.type.id).toBe(INTERESTED_IN_RELATION_TYPE_ID);
-  });
-
-  it('keeps the relation when the publish succeeds', async () => {
-    const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
-
-    await act(async () => {
-      await result.current.registerInterest(interestArgs);
-    });
-
-    expect(mocks.setRelation).toHaveBeenCalledTimes(1);
-    expect(mocks.deleteRelation).not.toHaveBeenCalled();
-  });
-
-  it('rolls the relation back when the publish fails', async () => {
-    mocks.publishFails = true;
-    const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
-
-    await act(async () => {
-      await result.current.registerInterest(interestArgs);
-    });
-
-    const written = mocks.setRelation.mock.calls[0][0];
-    expect(mocks.deleteRelation).toHaveBeenCalledWith(written);
   });
 
   it('ignores a second registration for a bounty already submitted', async () => {
@@ -145,7 +133,6 @@ describe('useInterestedInBounty', () => {
       await result.current.registerInterest(interestArgs);
     });
 
-    expect(mocks.setRelation).not.toHaveBeenCalled();
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 });
@@ -161,9 +148,18 @@ describe('useInterestedBountyIds', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
   });
 
-  it('collects the bounty ids the viewer already registered interest in', async () => {
+  it("collects the viewer's bounty ids across row shapes, ignoring other curators", async () => {
     mocks.relationsByToEntityIds.mockReturnValue(
-      Effect.succeed([{ toEntityId: 'bounty-1' }, { toEntityId: 'bounty-3' }])
+      Effect.succeed([
+        // Current shape: authored in the viewer's personal space.
+        { toEntityId: 'bounty-1', spaceId: PERSONAL_SPACE_ID, fromEntityId: PERSONAL_SPACE_ID },
+        // Legacy geogenesis shape: the viewer's space entity, written into the bounty's DAO space.
+        { toEntityId: 'bounty-3', spaceId: 'dao-1', fromEntityId: PERSONAL_SPACE_ID },
+        // Someone else's row — must not read as the viewer's interest.
+        { toEntityId: 'bounty-2', spaceId: 'other-space', fromEntityId: 'other-person' },
+        // Spoof: authored FROM the viewer's entity, but in a stranger's space — not the viewer's.
+        { toEntityId: 'bounty-2', spaceId: 'attacker-space', fromEntityId: PERSONAL_SPACE_ID },
+      ])
     );
 
     const { result } = renderHook(() => useInterestedBountyIds(['bounty-1', 'bounty-2', 'bounty-3']), { wrapper });
@@ -173,16 +169,12 @@ describe('useInterestedBountyIds', () => {
     expect([...result.current.interestedIds].sort()).toEqual(['bounty-1', 'bounty-3']);
   });
 
-  it('scopes the query to the personal space and the interested-in relation type', async () => {
+  it('queries by relation type without a space scope (legacy rows live outside the personal space)', async () => {
     const { result } = renderHook(() => useInterestedBountyIds(['bounty-1']), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mocks.relationsByToEntityIds).toHaveBeenCalledWith(
-      ['bounty-1'],
-      INTERESTED_IN_RELATION_TYPE_ID,
-      PERSONAL_SPACE_ID
-    );
+    expect(mocks.relationsByToEntityIds).toHaveBeenCalledWith(['bounty-1'], INTERESTED_IN_RELATION_TYPE_ID);
   });
 
   it('stays idle without a personal space', () => {

@@ -12,6 +12,7 @@ type CreatePersonalSpaceArgs = {
   spaceName: string;
   spaceImage?: string;
   topicId?: string;
+  onRegistered?: (spaceId: string) => void;
 };
 
 export function useCreatePersonalSpace() {
@@ -19,15 +20,26 @@ export function useCreatePersonalSpace() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async ({ spaceName, spaceImage, topicId }: CreatePersonalSpaceArgs): Promise<string | null> => {
+    mutationFn: async ({
+      spaceName,
+      spaceImage,
+      topicId,
+      onRegistered,
+    }: CreatePersonalSpaceArgs): Promise<string | null> => {
       if (!smartAccount) return null;
 
       const walletAddress = smartAccount.account.address;
 
-      // Onboarding is idempotent: if the account already has a registered space, return it
-      // without republishing its content.
+      // Return an already-registered space without republishing.
       const existingSpaceId = await readRegisteredSpaceId(walletAddress);
-      if (existingSpaceId) return existingSpaceId;
+      if (existingSpaceId) {
+        try {
+          onRegistered?.(existingSpaceId);
+        } catch (error) {
+          console.error('[CREATE_SPACE] onRegistered callback failed', error);
+        }
+        return existingSpaceId;
+      }
 
       return createPersonalSpaceOnChain({
         smartAccount,
@@ -36,6 +48,7 @@ export function useCreatePersonalSpace() {
         spaceName,
         spaceAvatarUri: spaceImage,
         topicId,
+        onRegistered,
       });
     },
     onSuccess: spaceId => {

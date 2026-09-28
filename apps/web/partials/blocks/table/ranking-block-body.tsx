@@ -54,6 +54,11 @@ function buildMyRankingActionButton(state: RankingBlockState) {
   // A rolled-off ballot is treated as absent (useRankingSubmissions blanks
   // `mySubmission`), so `showEditRankingButton` clears on roll-off and this
   // naturally falls back to the fresh "Add my ranking" call to action.
+  //
+  // That coupling is why GEO-2871 is not a one-line fix: the blanking is what
+  // produces this CTA, and it is also what loses the author's previous ballot
+  // when they re-rank. Whatever replaces it has to keep the prompt while keeping
+  // the ranking.
   return showEditRankingButton ? (
     <Button
       variant="secondary"

@@ -16,7 +16,9 @@ import { Entity, Property, Relation, Value } from '../types';
 import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { cloneCursorPageCheckpoint, collectCursorPages, createCursorPageCheckpoint } from './collect-cursor-pages';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
+import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames, stableStringify } from './store';
 import { GeoEventStream } from './stream';
@@ -83,6 +85,11 @@ function localEntityLatestTimestamp(entity: Entity): string {
   return latest;
 }
 
+/** Store lookups can miss with either nullish spelling; never narrow only one of them. */
+function isMaterializedEntity(entity: Entity | null | undefined): entity is Entity {
+  return entity != null;
+}
+
 /**
  * Prepend unpublished local entities that match the query filter but are not yet in the server page
  */
@@ -96,7 +103,7 @@ function mergeUnpublishedLocalEntities(
   const localIds = getUnpublishedLocalEntityIds().filter(id => !serverIdSet.has(id));
   if (localIds.length === 0) return serverEntities;
 
-  const localEntities = localIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+  const localEntities = localIds.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
   if (localEntities.length === 0) return serverEntities;
 
@@ -127,7 +134,10 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
 
-  const { isFetched } = useQuery({
+  // `error` as well as `isFetched`. A caller that gates on a hydration failure cannot see one
+  // otherwise — and a failed hydration leaves whatever the store already held, so "no error" and
+  // "answered from cache" look identical from outside.
+  const { isFetched, error } = useQuery({
     enabled: Boolean(id) && enabled,
     queryKey: GeoStore.queryKey(id),
     queryFn: async () => {
@@ -138,25 +148,19 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
       }
 
       /**
-       * We explicitly don't query by space id here and let the sync
-       * engine handle filtering it as the hook receives events
+       * Batched rather than one request per entity. This hook is reached from ~48 call sites via
+       * `useQueryEntity`, so a page rendering 42 rows used to issue 42 singular `Entity` requests
+       * for data one `EntitiesBatch` returns — see `hydrate-entity-batcher.ts`.
+       *
+       * The query key stays per entity, so caching, retries and error state remain per row; only
+       * the request underneath is shared. Space id is still not queried here — the sync engine
+       * filters by space as it receives events.
        */
-      const { merged, remote } = await E.syncOne({ id, store, cache });
-
-      if (merged) {
-        stream.emit({
-          type: GeoEventStream.ENTITIES_SYNCED,
-          entities: [merged],
-          remoteEntities: remote ? [remote] : [],
-        });
-        return merged;
-      }
-
-      return null;
+      return hydrateEntityBatched({ id, store, cache, stream });
     },
   });
 
-  return { isFetched };
+  return { isFetched, error };
 }
 
 type HydrateEntitiesOptions = {
@@ -207,7 +211,7 @@ export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEnti
  */
 export function useQueryEntity({ id, spaceId, includeDeleted = false, enabled = true }: QueryEntityOptions) {
   const { store } = useSyncEngine();
-  const { isFetched } = useHydrateEntity({ id, enabled });
+  const { isFetched, error } = useHydrateEntity({ id, enabled });
 
   const entity = useSelector(
     reactive,
@@ -224,6 +228,10 @@ export function useQueryEntity({ id, spaceId, includeDeleted = false, enabled = 
   return {
     entity,
     isLoading: !isFetched && Boolean(id) && enabled,
+    // Surfaced so a caller can tell a hydration failure from an entity that simply is not there:
+    // `entity` still answers from the store either way, so the failure is not inferable from an
+    // absence. The rematch picker's discovery gate was reading an `error` this hook never returned.
+    error,
   };
 }
 
@@ -280,6 +288,14 @@ type QueryEntitiesOptions = {
    * the reactive store while the remote query is still in flight.
    */
   deferUntilFetched?: boolean;
+  /**
+   * Warm the next cursor page once this one resolves. On by default, which is right for anything
+   * with a "Next" control behind it.
+   *
+   * Off for a caller that is deliberately bounded — one that asks for a fixed number of rows and
+   * exposes no way to page — where the prefetch doubles the payload for a page nothing ever reads.
+   */
+  prefetchNextPage?: boolean;
 
   /**
    * When true, prepends unpublished local entities that match `where` to the
@@ -313,6 +329,7 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
+  prefetchNextPage = true,
   includeUnpublishedLocal = false,
   sort,
   orderBy,
@@ -366,7 +383,7 @@ export function useQueryEntities({
   // useQuery call inside the data block will deduplicate against this entry.
   // Skip while showing placeholder data — the endCursor is from the prior
   // page in that window and would seed the wrong anchor.
-  const prefetchEndCursor = !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
+  const prefetchEndCursor = prefetchNextPage && !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
   // Stringify ref-unstable inputs (callers like useCollection rebuild `where`
   // inline each render) so the effect only re-runs when the semantic key
   // changes, not on every render.
@@ -390,6 +407,10 @@ export function useQueryEntities({
         return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
       },
     });
+    // `prefetchKeyTail` is a memoised signature of `where`/`first`/`sort`/`orderBy`, so it stands
+    // in for all four — depending on them directly would re-prefetch whenever a caller passed an
+    // equal-but-new filter object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, prefetchEndCursor, prefetchKeyTail, cache, store, stream]);
 
   const results = useSelector(
@@ -414,7 +435,7 @@ export function useQueryEntities({
       // must fall through to the server-filtered `data.ids`.
       if (where?.id?.in && !sort && Object.keys(where).length === 1) {
         const ids = where.id.in;
-        const entities = ids.map(id => store.getEntity(id)).filter((e): e is Entity => e != null);
+        const entities = ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
         return first !== undefined ? entities.slice(0, first) : entities;
       }
 
@@ -422,7 +443,7 @@ export function useQueryEntities({
       // from the server-returned ids; store.getEntity still picks up local
       // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
-        const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+        const serverEntities = data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
 
         // Cursor-anchored fetches of later pages arrive as (after, offset:
         // undefined), so a missing offset alone does not mean page one.
@@ -468,6 +489,110 @@ export function useQueryEntities({
     refetch,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
+  };
+}
+
+type QueryAllEntitiesOptions = {
+  where: WhereCondition;
+  pageSize?: number;
+  enabled?: boolean;
+  orderBy?: EntitiesOrderBy[];
+  /** Skip the query layer's default non-empty-name filter when unnamed entities are meaningful. */
+  includeEmptyNames?: boolean;
+};
+
+/**
+ * Fetches a complete cursor connection before exposing its entities.
+ *
+ * Use this only when the caller explicitly needs the whole connection and can activate it lazily.
+ * Summary/list screens should use a server count plus a bounded page, or `useQueryEntities` with
+ * pagination; exhausting a broad relation filter during initial render scales with the graph.
+ */
+export function useQueryAllEntities({
+  where,
+  pageSize = 100,
+  enabled = true,
+  orderBy,
+  includeEmptyNames = false,
+}: QueryAllEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+  const querySignature = `${stableStringify(where)}:${pageSize}:${stableStringify(orderBy ?? null)}:${includeEmptyNames}`;
+  const progressRef = React.useRef({ signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() });
+  const resetProgress = React.useCallback(() => {
+    progressRef.current = { signature: querySignature, checkpoint: createCursorPageCheckpoint<string>() };
+  }, [querySignature]);
+
+  const { data, isFetched, isLoading, isFetching, error, refetch: refetchQuery } = useQuery({
+    enabled,
+    queryKey: ['store', 'all-entities', stableStringify(where), pageSize, orderBy ?? null, includeEmptyNames],
+    queryFn: async ({ signal }) => {
+      if (progressRef.current.signature !== querySignature) {
+        resetProgress();
+      }
+
+      const checkpoint = cloneCursorPageCheckpoint(progressRef.current.checkpoint);
+      let ids: string[];
+      try {
+        ids = await collectCursorPages(async after => {
+          const page = await E.syncMany({
+            store,
+            cache,
+            where,
+            first: pageSize,
+            after,
+            orderBy,
+            includeEmptyNames,
+            signal,
+          });
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
+
+          return {
+            items: page.merged.map(entity => entity.id),
+            endCursor: page.endCursor,
+            hasNextPage: page.hasNextPage,
+          };
+        }, checkpoint);
+      } catch (cause) {
+        // Automatic retries resume this attempt. An execution cancelled by a newer refetch cannot
+        // overwrite that newer execution's progress with its stale checkpoint.
+        if (!signal.aborted) progressRef.current = { signature: querySignature, checkpoint };
+        throw cause;
+      }
+
+      if (!signal.aborted) resetProgress();
+
+      return { ids: [...new Set(ids)] };
+    },
+  });
+
+  // A user retry or a later background refetch is a new snapshot, not another automatic attempt.
+  React.useEffect(() => {
+    if (error) resetProgress();
+  }, [error, resetProgress]);
+  const refetch = React.useCallback(() => {
+    resetProgress();
+    return refetchQuery();
+  }, [refetchQuery, resetProgress]);
+
+  const entities = useSelector(
+    reactive,
+    () => {
+      if (!enabled || !data) return [];
+      return data.ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
+    },
+    equal
+  );
+
+  return {
+    entities,
+    /** Cached results remain usable when a later background refresh fails. */
+    dataAvailable: !enabled || data !== undefined,
+    isLoading: !isFetched && enabled && isLoading,
+    isFetching: enabled && isFetching,
+    isFetched: isFetched && enabled,
+    error,
+    refetch,
   };
 }
 
