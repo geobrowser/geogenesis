@@ -745,7 +745,7 @@ function StepInterestedIn({
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const isCreateProfile = selectedTopicIds.length > 0 || featuredSpaces.length === 0;
+  const isCreateProfile = selectedTopicIds.length > 0;
   const primaryLabel = isCreateProfile ? 'Create profile' : 'Skip for now';
 
   return (
