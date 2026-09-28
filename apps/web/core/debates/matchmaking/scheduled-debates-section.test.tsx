@@ -21,6 +21,13 @@ const mocks = vi.hoisted(() => ({
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
   records: new Map<string, { debatesArgued: number; positions: number }>(),
   matchContextIds: [] as string[],
+  graphPeople: [] as {
+    user_id: string;
+    profile_space_id: string;
+    display_name: string | null;
+    avatar_cid: string | null;
+  }[],
+  graphLookupIds: [] as string[],
 }));
 
 const ADA = {
@@ -42,6 +49,13 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
 
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people } }),
+}));
+
+vi.mock('./use-geo-chat-user-summaries', () => ({
+  useGeoChatUserSummaries: (ids: string[]) => {
+    mocks.graphLookupIds = ids;
+    return mocks.graphPeople;
+  },
 }));
 
 // The People tab's stats pipeline is its own suite; here it only has to say what it was asked for
@@ -145,6 +159,8 @@ afterEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.records = new Map();
   mocks.matchContextIds = [];
+  mocks.graphPeople = [];
+  mocks.graphLookupIds = [];
 });
 
 describe('answering in the tab', () => {
@@ -224,13 +240,13 @@ describe('naming the other person', () => {
   });
 
   // The whole point of scheduling: whoever invited you is usually not online to be on the roster.
-  it('names an offline requester from the request itself', () => {
+  it('names an offline requester from the graph', () => {
     setup({ answerable: [request()], people: [ADA] });
 
     expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', NavUtils.toSpace(ADA.profile_space_id));
   });
 
-  it("prefers the request's record of them over the roster's", () => {
+  it("prefers the graph's record of them over the roster's", () => {
     mocks.people = [{ ...ADA, display_name: 'Ada (stale)' }];
     setup({ answerable: [request()], people: [ADA] });
 
@@ -285,11 +301,13 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
-  it("collects every request's participants for naming", () => {
-    mocks.requests = [request({ people: [ADA] }), request({ request_id: 'request-2' })];
+  it('looks up everyone but the viewer in the graph', () => {
+    mocks.requests = [request(), request({ request_id: 'request-2' })];
+    mocks.graphPeople = [ADA];
 
     const { result } = renderHook(() => useScheduledContent(true));
 
+    expect(mocks.graphLookupIds).toEqual(['user-them', 'user-them']);
     expect(result.current.people).toEqual([ADA]);
   });
 

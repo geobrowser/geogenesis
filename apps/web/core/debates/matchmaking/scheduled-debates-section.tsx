@@ -23,6 +23,7 @@ import { HubPillButton } from './hub-pill-button';
 import { PersonMatches } from './person-disagreements';
 import { PersonRecordLine } from './person-record-line';
 import { PersonSpaceIcons } from './person-space-icons';
+import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { type PersonMatchContext, usePersonMatchContext } from './use-person-match-context';
 
 /**
@@ -116,7 +117,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
-  /** Who the requests' participants are, as geo-chat reports them. Empty on an older geo-chat. */
+  /** Who the requests' other participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the other returned. */
   requestsError: Error | null;
@@ -156,7 +157,17 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
-  const people = React.useMemo(() => (rows ?? []).flatMap(request => request.people ?? []), [rows]);
+  // Everyone but the viewer, who is never the one a row names.
+  const otherUserIds = React.useMemo(
+    () =>
+      (rows ?? []).flatMap(request =>
+        request.participants
+          .map(participant => participant.user_id)
+          .filter(userId => !viewerId || !sameId(userId, viewerId))
+      ),
+    [rows, viewerId]
+  );
+  const people = useGeoChatUserSummaries(otherUserIds, enabled);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
@@ -169,8 +180,9 @@ function opponentOf(request: ScheduledDebateRequest | undefined, viewerId: strin
 }
 
 /**
- * Names come from the request itself. The roster is only a fallback for a geo-chat that predates
- * `people`: it covers people who are online, and whoever invited you usually is not.
+ * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
+ * roster is only a fallback while that loads: it covers people who are online, and whoever invited
+ * you usually is not.
  */
 function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
   const roster = useDebatePeople(enabled);
@@ -178,7 +190,7 @@ function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipant
   return React.useMemo(() => {
     const byId = new Map<string, DebateParticipantSummary>();
     for (const person of roster.data?.people ?? []) byId.set(normalizeId(person.user_id), person);
-    // Written second so the request's own record wins over the roster's.
+    // Written second so the graph's record wins over the roster's.
     for (const person of requestPeople) byId.set(normalizeId(person.user_id), person);
     return (userId: string | null) => (userId ? (byId.get(normalizeId(userId)) ?? null) : null);
   }, [requestPeople, roster.data]);
@@ -364,7 +376,7 @@ function OpponentRecord({
   );
 }
 
-/** A link only where the request or roster resolved them; a bare name is not a dead link. */
+/** A link only where the graph or roster resolved them; a bare name is not a dead link. */
 function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
   const profileSpaceId = opponent && validateSpaceId(opponent.profile_space_id) ? opponent.profile_space_id : null;
   const label = shortName(opponent);

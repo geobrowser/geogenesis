@@ -1624,11 +1624,6 @@ export type ScheduledDebateRequest = {
   /** Set once everyone accepted. The room outlives the request. */
   room_id: string | null;
   participants: ScheduledDebateParticipant[];
-  /**
-   * Who the participants are, so the other debater can be named and linked even when they are
-   * offline. Optional: a geo-chat that predates it sends only ids, and the roster is the fallback.
-   */
-  people?: DebateParticipantSummary[];
   /** Whether the viewer is the one holding this up. */
   viewer_must_answer: boolean;
 };
