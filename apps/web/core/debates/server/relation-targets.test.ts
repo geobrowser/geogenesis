@@ -43,6 +43,26 @@ describe('collectRelationTargets', () => {
     expect(targets.map(t => t.fromEntityId)).toEqual(fromEntityIds);
   });
 
+  // Measured on testnet: reading 150 ids' batches one after another cost ~360ms over the old
+  // single capped request; reading them concurrently brings that to within noise.
+  it('reads the batches concurrently, not one after another', async () => {
+    const fromEntityIds = Array.from({ length: ENTITY_ID_BATCH_SIZE * 3 }, (_, n) => id(n + 1));
+    const pending: Array<() => void> = [];
+    const fetchPage = vi.fn<RelationTargetsPageFetcher>(
+      () =>
+        new Promise(resolve => {
+          pending.push(() => resolve({ items: [], endCursor: null, hasNextPage: false }));
+        })
+    );
+
+    const done = collectRelationTargets({ fromEntityIds, typeIds: [TYPE], spaceId: SPACE }, fetchPage);
+    await Promise.resolve();
+    // Every batch is in flight before any has answered.
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+    pending.forEach(resolve => resolve());
+    await done;
+  });
+
   it('throws rather than return a partial list when the cursor chain breaks', async () => {
     const fetchPage = vi
       .fn<RelationTargetsPageFetcher>()

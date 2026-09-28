@@ -82,10 +82,11 @@ export async function collectRelationTargets(
   request: RelationTargetsRequest,
   fetchPage: RelationTargetsPageFetcher = fetchPageFromGraph
 ): Promise<RelationTarget[]> {
-  const targets: RelationTarget[] = [];
+  const chunks: RelationTargetsRequest[] = [];
   for (let start = 0; start < request.fromEntityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-    const chunk = { ...request, fromEntityIds: request.fromEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE) };
-    targets.push(...(await collectCursorPages(after => fetchPage(chunk, after))));
+    chunks.push({ ...request, fromEntityIds: request.fromEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE) });
   }
-  return targets;
+  // Chunks are independent, so they are read concurrently; pages within a chunk cannot be.
+  const results = await Promise.all(chunks.map(chunk => collectCursorPages(after => fetchPage(chunk, after))));
+  return results.flat();
 }
