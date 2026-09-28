@@ -32,6 +32,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Toggle } from '~/design-system/toggle';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { CopyOwnAvailabilityLinkButton } from '~/partials/availability/copy-availability-link';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
@@ -300,6 +301,7 @@ export function NavbarActions() {
           error={scheduleError}
           onRetry={() => refetchSchedule()}
           onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+          headerAction={<CopyOwnAvailabilityLinkButton />}
           openerRef={avatarTriggerRef}
         />
       ) : null}

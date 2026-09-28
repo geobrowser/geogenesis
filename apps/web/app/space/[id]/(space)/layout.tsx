@@ -30,6 +30,8 @@ import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/persona
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
 import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
+import { CopyAvailabilityLinkMenuItem } from '~/partials/availability/copy-availability-link-menu-item';
+import { SharedAvailabilityLauncher } from '~/partials/availability/shared-availability';
 import { ProfileActions } from '~/partials/profile/profile-actions';
 import { ProfileRail } from '~/partials/profile/profile-rail';
 import { AddDataPanel } from '~/partials/space-page/add-data-panel';
@@ -177,6 +179,13 @@ export default async function Layout(props0: LayoutProps) {
               contentMaxWidth={isProfile ? ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH : undefined}
               coverSize={isProfile ? PROFILE_COVER_SIZE : undefined}
             />
+            {/* Opens their bookable week when the profile is reached through an availability link. */}
+            {isProfile && (
+              <SharedAvailabilityLauncher
+                profileSpaceId={spaceId}
+                fallbackName={props.space?.entity?.name ?? null}
+              />
+            )}
             <SpaceHeaderContentGate
               serverHasSidebar={hasSidebar}
               isExternalTopic={isExternalTopic}
@@ -193,6 +202,7 @@ export default async function Layout(props0: LayoutProps) {
                   spaceId={spaceId}
                   entityId={props.id}
                   keepSpaceActions={isProfile}
+                  menuItems={isProfile ? <CopyAvailabilityLinkMenuItem profileSpaceId={spaceId} /> : undefined}
                   // The name the server already read, until the store has one.
                   fallbackName={props.space?.entity?.name ?? null}
                   nameAccessoryComponent={

@@ -10,6 +10,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { CopyOwnAvailabilityLinkButton } from '~/partials/availability/copy-availability-link';
 
 import { hubAnalyticsAttributes } from './hub-analytics';
 
@@ -91,6 +92,7 @@ function Banner() {
         error={isError}
         onRetry={() => refetch()}
         onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+        headerAction={<CopyOwnAvailabilityLinkButton />}
         openerRef={openerRef}
       />
     </div>
