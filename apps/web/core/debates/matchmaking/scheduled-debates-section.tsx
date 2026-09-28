@@ -15,6 +15,7 @@ import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-use
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
@@ -213,12 +214,12 @@ function UpcomingRow({
   popoverPortal: HTMLElement | null;
 }) {
   return (
-    <Row
+    <ScheduleCard
       opponent={opponent}
       context={context}
       popoverPortal={popoverPortal}
       when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
-      note={
+      status={
         room.others_present
           ? `${shortName(opponent)} is waiting for you now`
           : room.joinable
@@ -226,7 +227,7 @@ function UpcomingRow({
             : `Opens at ${formatTime(room.opens_at)}`
       }
       urgent={room.others_present}
-      action={
+      actions={
         room.joinable && (
           <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
             Join debate
@@ -253,13 +254,13 @@ function ScheduledRow({
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
   return (
-    <Row
+    <ScheduleCard
       opponent={opponent}
       context={context}
       popoverPortal={popoverPortal}
-      when={formatDebateTime(request.scheduled_start_at)}
-      note={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
-      below={
+      when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
+      status={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
+      actions={
         request.viewer_must_answer && (
           // Decline first, Accept primary on the right: the order every other request card uses.
           <div className="grid grid-cols-2 gap-2">
@@ -276,48 +277,61 @@ function ScheduledRow({
   );
 }
 
-/** The hub's pill, as a link. `HubPillButton` renders a button, which this cannot be. */
+/** The hub's pill, as a full-width link. `HubPillButton` renders a button, which this cannot be. */
 const JOIN_PILL =
-  'inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-text px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90';
+  'inline-flex h-7 w-full items-center justify-center rounded-full bg-text px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90';
 
-/** One shape for both kinds of row: who, when, one line of why, and at most one action. */
-function Row({
+/**
+ * One shape for both kinds of card, laid out like the instant request card: a header carrying the
+ * time and where things stand, the other debater in the same inset strip the request cards use,
+ * then the actions.
+ *
+ * The time leads because it is what a scheduled request is *about* — the one thing an instant
+ * request never has — so it gets the header to itself rather than a footnote under the name.
+ */
+function ScheduleCard({
   opponent,
   context,
   popoverPortal,
   when,
-  note,
+  status,
   urgent = false,
-  action,
-  below,
+  actions,
 }: {
   opponent: DebateParticipantSummary | null;
   context: PersonMatchContext;
   popoverPortal: HTMLElement | null;
   when: string;
-  note: string;
+  status: string;
   urgent?: boolean;
-  action?: React.ReactNode;
-  below?: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
-      <div className="flex items-center gap-3">
-        <Face opponent={opponent} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Name opponent={opponent} />
-          {opponent && <OpponentRecord opponent={opponent} context={context} popoverPortal={popoverPortal} />}
-          <Text as="span" variant="footnote" color="grey-04" className="truncate">
+    <article className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
+      {/* The time on its own line, with where things stand under it: side by side, a slot and a
+          sentence crowd each other out at this width, and it was the status that lost. */}
+      <div className="flex items-start gap-2">
+        <DateIcon className="mt-0.5 shrink-0 text-text" />
+        <div className="flex min-w-0 flex-col">
+          <Text as="span" variant="metadataMedium">
             {when}
           </Text>
-          <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'} className="truncate">
-            {note}
+          <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'}>
+            {status}
           </Text>
         </div>
-        {action}
       </div>
-      {below}
-    </div>
+
+      <div className="flex items-center gap-3 rounded-lg bg-grey-01 px-3 py-3">
+        <Face opponent={opponent} />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <Name opponent={opponent} />
+          {opponent && <OpponentRecord opponent={opponent} context={context} popoverPortal={popoverPortal} />}
+        </div>
+      </div>
+
+      {actions}
+    </article>
   );
 }
 
@@ -428,15 +442,32 @@ export function formatDebateTime(iso: string, now = new Date()) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
 
-  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
-  const day =
-    days === 0
-      ? 'Today'
-      : days === 1
-        ? 'Tomorrow'
-        : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${formatDay(at, now)} at ${formatTime(iso)}`;
+}
 
-  return `${day} at ${formatTime(iso)}`;
+function formatDay(at: Date, now: Date) {
+  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
+  return days === 0
+    ? 'Today'
+    : days === 1
+      ? 'Tomorrow'
+      : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** `Tomorrow, 11:00 – 11:30 AM`: the day once, then the slot. Falls back to the start alone. */
+export function formatDebateSlot(startIso: string, endIso: string, now = new Date()) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return formatDebateTime(startIso, now);
+  }
+  const from = formatTime(startIso);
+  const to = formatTime(endIso);
+  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
+  const period = /\s?([AP]M)$/i;
+  const fromPeriod = from.match(period)?.[1];
+  const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
+  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
 }
 
 function startOfDay(at: Date) {

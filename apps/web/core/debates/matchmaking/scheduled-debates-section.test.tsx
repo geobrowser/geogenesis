@@ -90,7 +90,7 @@ vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
 
-const { ScheduledDebatesSection, useScheduledContent } = await import('./scheduled-debates-section');
+const { ScheduledDebatesSection, formatDebateSlot, useScheduledContent } = await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
@@ -360,5 +360,22 @@ describe('a schedule that could not be read', () => {
 
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
     expect(screen.getByText(/Could not read your upcoming debates/)).toBeInTheDocument();
+  });
+});
+
+describe('the slot in the header', () => {
+  const now = new Date(2026, 8, 28, 9, 0);
+  const at = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute).toISOString();
+
+  it('names the day once and shares the period', () => {
+    expect(formatDebateSlot(at(11), at(11, 30), now)).toMatch(/^Tomorrow, 11:00 – 11:30\s?AM$/);
+  });
+
+  it('keeps both periods when the slot crosses noon', () => {
+    expect(formatDebateSlot(at(11, 45), at(12, 15), now)).toMatch(/^Tomorrow, 11:45\s?AM – 12:15\s?PM$/);
+  });
+
+  it('falls back to the start alone when the end is unusable', () => {
+    expect(formatDebateSlot(at(11), 'not a time', now)).toMatch(/^Tomorrow at 11:00\s?AM$/);
   });
 });
