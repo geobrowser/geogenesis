@@ -1,5 +1,6 @@
 import * as Effect from 'effect/Effect';
 
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
   type ApiProposalListItem,
   convertVoteOption,
@@ -8,10 +9,10 @@ import {
   mapProposalStatus,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import type { Profile } from '~/core/types';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import { buildGovernanceHomeProposalTitle } from './build-governance-home-proposal-title';
 import {
@@ -22,6 +23,7 @@ import {
 } from './fetch-active-proposals-in-editor-spaces';
 
 const PAGE_SIZE = 50;
+const MY_PROPOSALS_SPACE_CONCURRENCY = 8;
 
 const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
 
@@ -77,15 +79,18 @@ export async function getMyGovernanceProposals(opts: {
     return { proposals: [], hasMore: false };
   }
 
-  const allRows: ApiProposalListItem[] = [];
-  for (const spaceId of effectiveSpaceIds) {
-    const rows = await fetchProposalsForSpaceByGovernanceFilters({
+  const perSpaceRows = await mapWithConcurrency(effectiveSpaceIds, MY_PROPOSALS_SPACE_CONCURRENCY, spaceId =>
+    fetchProposalsForSpaceByGovernanceFilters({
       spaceId,
       memberSpaceId,
       proposalType: undefined,
       category,
       status,
-    });
+    })
+  );
+
+  const allRows: ApiProposalListItem[] = [];
+  for (const rows of perSpaceRows) {
     for (const p of rows) {
       if (!sameMemberSpaceId(p.proposedBy, memberSpaceId)) continue;
       if (!matchesGovernanceCategory(p.actions[0]?.actionType, category)) continue;
@@ -124,37 +129,37 @@ export async function getMyGovernanceProposals(opts: {
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
   const targetProfilesBySpaceId = new Map(uniqueTargetIds.map((id, i) => [id, profilesForTargets[i]]));
 
-  const proposals: MyGovernanceProposalRow[] = [];
+  const proposals: MyGovernanceProposalRow[] = await Promise.all(
+    pageSlice.map(async p => {
+      const type = mapApiActionsToProposalType(p.actions);
+      const createdBy = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
+      const targetId = p.actions[0]?.targetId;
+      const targetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
+      const displayTitle = await buildGovernanceHomeProposalTitle(type, p.proposalId, p.name, createdBy);
 
-  for (const p of pageSlice) {
-    const type = mapApiActionsToProposalType(p.actions);
-    const createdBy = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
-    const targetId = p.actions[0]?.targetId;
-    const targetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
-    const displayTitle = await buildGovernanceHomeProposalTitle(type, p.proposalId, p.name, createdBy);
-
-    proposals.push({
-      id: p.proposalId,
-      version: p.proposalVersion,
-      spaceId: p.spaceId,
-      name: p.name,
-      displayTitle,
-      type,
-      startTime: p.timing.startTime,
-      submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
-      endTime: p.timing.endTime,
-      status: mapProposalStatus(p.status),
-      canExecute: getApiProposalCanExecute(p),
-      proposalVotes: {
-        totalCount: p.votes.total,
-        yesCount: p.votes.yes,
-        noCount: p.votes.no,
-      },
-      userVote: p.userVote ? convertVoteOption(p.userVote) : undefined,
-      createdBy,
-      targetProfile,
-    });
-  }
+      return {
+        id: p.proposalId,
+        version: p.proposalVersion,
+        spaceId: p.spaceId,
+        name: p.name,
+        displayTitle,
+        type,
+        startTime: p.timing.startTime,
+        submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
+        endTime: p.timing.endTime,
+        status: mapProposalStatus(p.status),
+        canExecute: getApiProposalCanExecute(p),
+        proposalVotes: {
+          totalCount: p.votes.total,
+          yesCount: p.votes.yes,
+          noCount: p.votes.no,
+        },
+        userVote: p.userVote ? convertVoteOption(p.userVote) : undefined,
+        createdBy,
+        targetProfile,
+      };
+    })
+  );
 
   return {
     proposals,
