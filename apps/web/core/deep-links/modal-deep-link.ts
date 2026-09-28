@@ -3,7 +3,7 @@
  *
  *     /explore?modal=signin&via=marketing              GEO-2727
  *     /explore?modal=debates&modalTarget=people        GEO-2746
- *     /space/<id>?modal=availability&modalTarget=<id>  a person's bookable week
+ *     /space/<id>?modal=availability                   a person's bookable week
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment

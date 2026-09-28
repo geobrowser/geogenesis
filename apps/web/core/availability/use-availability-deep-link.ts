@@ -1,25 +1,21 @@
 'use client';
 
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
+import { usePathSegments } from '~/core/hooks/use-path-segments';
 
-import { AVAILABILITY_MODAL } from './availability-deep-link';
+import { AVAILABILITY_MODAL, profileSpaceIdFromPath } from './availability-deep-link';
 
 /**
- * Hands the person a `?modal=availability` link names to `open`, once. No auth gate: the week
- * itself asks a signed-out recipient to sign in, which keeps the link working for exactly the
- * people it is sent to.
+ * Hands `onArrive` the space a `?modal=availability` link landed on, once — or `null` when it
+ * landed anywhere but a space's own root, which only a hand-edited link does. Cleared either way, so
+ * a bad link does not keep firing on refresh.
+ *
+ * No auth gate: the week itself asks a signed-out recipient to sign in, which keeps the link
+ * working for exactly the people it is sent to.
  */
-export function useAvailabilityDeepLink(open: (profileSpaceId: string) => void) {
+export function useAvailabilityDeepLink(onArrive: (profileSpaceId: string | null) => void) {
   const link = useDeepLinkParams(AVAILABILITY_MODAL);
-  const profileSpaceId = link.target;
+  const profileSpaceId = profileSpaceIdFromPath(usePathSegments());
 
-  useDeepLinkEffect({
-    ...link,
-    // Without a person there is nobody's week to open, and the trigger stays rather than being
-    // cleared for nothing.
-    enabled: profileSpaceId !== null,
-    run: () => {
-      if (profileSpaceId) open(profileSpaceId);
-    },
-  });
+  useDeepLinkEffect({ ...link, run: () => onArrive(profileSpaceId) });
 }

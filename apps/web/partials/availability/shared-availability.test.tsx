@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,7 +14,12 @@ let profile: { isPending: boolean; isError: boolean; data?: unknown } = { isPend
 const signIn = vi.fn();
 let signInCallbacks: { onComplete?: () => void; onError?: () => void } = {};
 let personalSpaceId: string | null = null;
-let search = 'modal=availability&modalTarget=profile-space';
+let search = 'modal=availability';
+let pathname = '/space/profile-space';
+const personSpace = { type: 'PERSONAL', entity: { name: 'Ada L.', types: [{ id: SystemIds.PERSON_TYPE }] } };
+// `undefined` is still loading, `null` a space that does not exist.
+let spaceQuery: { space: unknown; isError: boolean } = { space: personSpace, isError: false };
+const setToast = vi.fn();
 let signInOptions: { redirectTo?: string } | undefined;
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -28,12 +34,13 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   },
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
-vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: { entity: { name: 'Ada L.' } } }) }));
+vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => spaceQuery }));
+vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
 vi.mock('./own-schedule-modal', () => ({
   OwnScheduleModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
 }));
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/space/profile-space',
+  usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(search),
 }));
 // The booking modal has its own tests; these are about what gets handed to it.
@@ -67,7 +74,10 @@ beforeEach(() => {
   auth.ready = true;
   auth.authenticated = true;
   profile = { isPending: true, isError: false };
-  search = 'modal=availability&modalTarget=profile-space';
+  search = 'modal=availability';
+  pathname = '/space/profile-space';
+  spaceQuery = { space: personSpace, isError: false };
+  setToast.mockClear();
   personalSpaceId = null;
   signInOptions = undefined;
   signInCallbacks = {};
@@ -76,10 +86,16 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   signIn.mockClear();
+  onNotAPerson.mockClear();
   vi.restoreAllMocks();
 });
 
-const renderModal = () => render(<SharedAvailabilityModal open profileSpaceId="profile-space" onClose={() => {}} />);
+const onNotAPerson = vi.fn();
+
+const renderModal = () =>
+  render(
+    <SharedAvailabilityModal open profileSpaceId="profile-space" onClose={() => {}} onNotAPerson={onNotAPerson} />
+  );
 
 describe('SharedAvailabilityModal', () => {
   it('asks a signed-out recipient to sign in, naming the person', async () => {
@@ -92,7 +108,7 @@ describe('SharedAvailabilityModal', () => {
     expect(signIn).toHaveBeenCalledOnce();
     // The trigger is gone from the URL by now, so a new account coming back from onboarding needs
     // the link itself to land on the week again.
-    expect(signInOptions?.redirectTo).toBe('/space/profile-space?modal=availability&modalTarget=profile-space');
+    expect(signInOptions?.redirectTo).toBe('/space/profile-space?modal=availability');
   });
 
   it('does not flash "sign in" before Privy is ready', () => {
@@ -142,6 +158,37 @@ describe('SharedAvailabilityModal', () => {
     expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
   });
 
+  it('holds the sign-in prompt until the space is known to be a person', () => {
+    auth.authenticated = false;
+    spaceQuery = { space: undefined, isError: false };
+    renderModal();
+
+    expect(screen.getByText('Loading availability…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('gives up on a space that is not a person, or does not exist', () => {
+    auth.authenticated = false;
+    spaceQuery = { space: { type: 'DAO', entity: { name: 'Crypto', types: [] } }, isError: false };
+    const { unmount } = renderModal();
+    expect(onNotAPerson).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/Sign in to see when Crypto/)).not.toBeInTheDocument();
+    unmount();
+
+    onNotAPerson.mockClear();
+    spaceQuery = { space: null, isError: false };
+    renderModal();
+    expect(onNotAPerson).toHaveBeenCalledOnce();
+  });
+
+  it('does not call a failed space read "not a person"', () => {
+    spaceQuery = { space: undefined, isError: true };
+    renderModal();
+
+    expect(onNotAPerson).not.toHaveBeenCalled();
+    expect(screen.getByText('Couldn’t load their availability.')).toBeInTheDocument();
+  });
+
   it('says so when the profile cannot be resolved', () => {
     profile = { isPending: false, isError: true };
     renderModal();
@@ -159,7 +206,7 @@ describe('AvailabilityDeepLink', () => {
   });
 
   it('opens the named week, clears the trigger on arrival, and closes', async () => {
-    search = 'modal=availability&modalTarget=profile-space&tab=claims';
+    search = 'modal=availability&tab=claims';
     profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
     const replaceState = vi.spyOn(window.history, 'replaceState');
     render(<AvailabilityDeepLink />);
@@ -171,12 +218,22 @@ describe('AvailabilityDeepLink', () => {
     expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
   });
 
-  it('leaves a link that names nobody alone', () => {
-    search = 'modal=availability';
+  it('only acts on a profile root, and says so anywhere else', () => {
+    pathname = '/space/profile-space/some-entity';
     const replaceState = vi.spyOn(window.history, 'replaceState');
     render(<AvailabilityDeepLink />);
 
     expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
-    expect(replaceState).not.toHaveBeenCalled();
+    expect(setToast).toHaveBeenCalledOnce();
+    // Cleared anyway, so a bad link does not keep firing on refresh.
+    expect(replaceState).toHaveBeenCalledWith(null, '', '/space/profile-space/some-entity');
+  });
+
+  it('closes with a toast when the space turns out not to be a person', () => {
+    spaceQuery = { space: { type: 'DAO', entity: { name: 'Crypto', types: [] } }, isError: false };
+    render(<AvailabilityDeepLink />);
+
+    expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+    expect(setToast).toHaveBeenCalledOnce();
   });
 });

@@ -34,9 +34,7 @@ describe('CopyOwnAvailabilityLinkButton', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(
-      `${window.location.origin}/space/my-space?modal=availability&modalTarget=my-space`
-    );
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/my-space?modal=availability`);
     expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
   });
 
@@ -59,9 +57,7 @@ describe('CopyAvailabilityLinkMenuItem', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(
-      `${window.location.origin}/space/their-space?modal=availability&modalTarget=their-space`
-    );
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/their-space?modal=availability`);
     expect(setToast).toHaveBeenCalledOnce();
   });
 

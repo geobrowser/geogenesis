@@ -2,13 +2,15 @@
 
 import * as React from 'react';
 
-import { toAvailability } from '~/core/availability/availability-deep-link';
+import { NOT_A_PERSON_MESSAGE, toAvailability } from '~/core/availability/availability-deep-link';
 import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
+import { useSetToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { Spaces } from '~/core/utils/space';
 
 import { OwnScheduleModal } from './own-schedule-modal';
 import { Notice } from './peer-availability';
@@ -23,11 +25,25 @@ import { PeerAvailabilityBookingModal } from './peer-availability-booking-modal'
  */
 export function AvailabilityDeepLink() {
   const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
-  useAvailabilityDeepLink(setProfileSpaceId);
+  const setToast = useSetToast();
+  const notAPerson = React.useCallback(() => setToast(<span>{NOT_A_PERSON_MESSAGE}</span>), [setToast]);
+  useAvailabilityDeepLink(spaceId => (spaceId ? setProfileSpaceId(spaceId) : notAPerson()));
+  // Stable, since the modal fires it from an effect.
+  const dismissNotAPerson = React.useCallback(() => {
+    setProfileSpaceId(null);
+    notAPerson();
+  }, [notAPerson]);
 
   if (!profileSpaceId) return null;
 
-  return <SharedAvailabilityModal open profileSpaceId={profileSpaceId} onClose={() => setProfileSpaceId(null)} />;
+  return (
+    <SharedAvailabilityModal
+      open
+      profileSpaceId={profileSpaceId}
+      onClose={() => setProfileSpaceId(null)}
+      onNotAPerson={dismissNotAPerson}
+    />
+  );
 }
 
 /**
@@ -44,10 +60,13 @@ export function SharedAvailabilityModal({
   open,
   profileSpaceId,
   onClose,
+  onNotAPerson,
 }: {
   open: boolean;
   profileSpaceId: string;
   onClose: () => void;
+  /** The space loaded and is not a person's. Only a hand-edited link gets here. */
+  onNotAPerson: () => void;
 }) {
   const { ready, authenticated } = useGeoChatAuth();
   // Privy's login renders outside this dialog, and a Radix modal makes everything outside it inert —
@@ -60,10 +79,19 @@ export function SharedAvailabilityModal({
     // goes through onboarding and is sent back here afterwards, and should land on the week again.
     redirectTo: toAvailability(profileSpaceId),
   });
-  const profile = useDebateProfile(profileSpaceId, open);
+  // Whether this is a person at all, and the only name there is for a signed-out recipient — who is
+  // who this link is mostly for. `null` is a space that does not exist, which is not a person either.
+  const { space, isError: spaceError } = useSpace(profileSpaceId);
+  const spaceKnown = space !== undefined;
+  const isPerson = Spaces.isPersonProfileSpace(space);
+
+  React.useEffect(() => {
+    if (spaceKnown && !isPerson) onNotAPerson();
+  }, [spaceKnown, isPerson, onNotAPerson]);
+
+  // Nothing to ask geo-chat about a space that is not a person.
+  const profile = useDebateProfile(profileSpaceId, open && isPerson);
   const { personalSpaceId } = usePersonalSpaceId();
-  // The only name there is for a signed-out recipient, who is who this link is mostly for.
-  const { space } = useSpace(profileSpaceId);
   const person = profile.data?.user;
   const name = person?.display_name || space?.entity?.name || null;
   // The personal space answers first, from the wallet; geo-chat's own say-so covers the rest.
@@ -75,7 +103,10 @@ export function SharedAvailabilityModal({
 
   const notice = (() => {
     // Before Privy knows, "sign in" would flash at people who already are.
-    if (!ready) return <Notice className="flex-1">Loading availability…</Notice>;
+    if (spaceError) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
+    // Not a word about signing in until this is known to be a person: signing in to be told the
+    // link was never anybody's would be the worst way to find out.
+    if (!ready || !isPerson) return <Notice className="flex-1">Loading availability…</Notice>;
     if (!authenticated) {
       return (
         <Notice
