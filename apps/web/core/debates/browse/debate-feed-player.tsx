@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
@@ -91,6 +92,8 @@ type DebateFeedPlayerProps = {
    * fight the viewer's own scrubbing and re-open GEO-2828's seek storm.
    */
   initialSeekSeconds?: number | null;
+  /** Told whenever this card's playback state changes — the linked debate's card on its own page. */
+  onPlaybackState?: (state: DebatePagePlayerState) => void;
 };
 
 export function DebateFeedPlayer({
@@ -101,6 +104,7 @@ export function DebateFeedPlayer({
   onOpenClaims,
   onPlaybackRequest,
   initialSeekSeconds = null,
+  onPlaybackState,
 }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
@@ -217,6 +221,11 @@ export function DebateFeedPlayer({
       suspend();
     }
   }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
+
+  const hasError = error != null;
+  React.useEffect(() => {
+    onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError });
+  }, [onPlaybackState, ready, playing, autoplayBlocked, hasError]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.

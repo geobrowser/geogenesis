@@ -25,6 +25,13 @@ const mocks = vi.hoisted(() => ({
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
   anchorError: null as Error | null,
+  /** What the stub player reports through `onPlaybackState`. */
+  playerState: { ready: false, playing: false, autoplayBlocked: false, error: false },
+  captured: [] as Array<{ event: string; properties: Record<string, unknown> }>,
+}));
+
+vi.mock('~/core/analytics', () => ({
+  capture: (event: string, properties: Record<string, unknown> = {}) => mocks.captured.push({ event, properties }),
 }));
 
 type ObserverRecord = {
@@ -82,11 +89,26 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   },
 }));
 
-vi.mock('./debate-feed-player', () => ({
-  DebateFeedPlayer: ({ debate, active, preload }: { debate: Debate; active: boolean; preload?: boolean }) => (
-    <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />
-  ),
-}));
+vi.mock('./debate-feed-player', async () => {
+  const React = await import('react');
+  return {
+    DebateFeedPlayer: ({
+      debate,
+      active,
+      preload,
+      onPlaybackState,
+    }: {
+      debate: Debate;
+      active: boolean;
+      preload?: boolean;
+      onPlaybackState?: (state: typeof mocks.playerState) => void;
+    }) => {
+      const state = JSON.stringify(mocks.playerState);
+      React.useEffect(() => onPlaybackState?.(JSON.parse(state)), [onPlaybackState, state]);
+      return <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />;
+    },
+  };
+});
 
 // Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
 // lifecycle is covered by debate-scroll-hint.test.tsx.
@@ -133,6 +155,8 @@ beforeEach(() => {
   mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
+  mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
+  mocks.captured.length = 0;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -851,5 +875,72 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
     for (const p of players) {
       if (p.preload) expect(p.active).toBe(false);
     }
+  });
+});
+
+describe('DebatesBrowseFeed visit outcome (GEO-3074)', () => {
+  const outcomes = () =>
+    mocks.captured.filter(call => call.event === 'debate_page_outcome').map(call => call.properties);
+
+  it('records a play of the linked debate once, and nothing more on leaving', () => {
+    mocks.playerState = { ready: true, playing: true, autoplayBlocked: false, error: false };
+    const view = render(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />
+    );
+    view.unmount();
+
+    expect(outcomes()).toEqual([expect.objectContaining({ debate_id: 'debate-1', outcome: 'played' })]);
+  });
+
+  it('records a refused autoplay when the visitor leaves the page', () => {
+    mocks.playerState = { ready: true, playing: false, autoplayBlocked: true, error: false };
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />);
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+
+    expect(outcomes()).toEqual([
+      expect.objectContaining({ outcome: 'not_played', reason: 'autoplay_blocked', left_via: 'pagehide' }),
+    ]);
+  });
+
+  it('names the lookup that was still loading', () => {
+    mocks.mediaLoading = true;
+    mocks.processedIds = [];
+    const view = render(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />
+    );
+    view.unmount();
+
+    expect(outcomes()).toEqual([
+      expect.objectContaining({ reason: 'loading', detail: 'media_readiness', shown_ms: null }),
+    ]);
+  });
+
+  it.each([
+    [
+      'gone (404)',
+      () => (mocks.anchorError = new GeoChatRequestError('404 Not Found', 'debate_not_found', 404)),
+      'not_found',
+    ],
+    ['listed without a processed video', () => (mocks.processedIds = []), 'not_processed'],
+  ])('records a fallback for a debate that is %s', (_, arrange, detail) => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    const anchorId = detail === 'not_found' ? 'debate-99' : 'debate-1';
+    arrange();
+    const view = render(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId={anchorId} fallback={<div>Entity page</div>} />
+    );
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    view.unmount();
+
+    expect(outcomes()).toEqual([expect.objectContaining({ reason: 'unavailable', detail })]);
+  });
+
+  it('records nothing on the Debates tab, which is not a visit to one debate', () => {
+    const view = render(<DebatesBrowseFeed spaceId="space-1" />);
+    view.unmount();
+
+    expect(outcomes()).toEqual([]);
   });
 });
