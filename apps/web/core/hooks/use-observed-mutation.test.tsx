@@ -24,7 +24,7 @@ function wrapper({ children }: { children: ReactNode }) {
 it('captures before asynchronous onMutate, counts retries once and preserves callback variables', async () => {
   const execute = vi.fn().mockRejectedValueOnce(new Error('retry')).mockResolvedValue('created');
   const onSuccess = vi.fn();
-  const { result } = renderHook(
+  const { result, rerender } = renderHook(
     () => {
       const getContext = useActionContext('debate_matchmaking', 'claim', 'claim');
       const mutation = useMutation({
@@ -41,6 +41,11 @@ it('captures before asynchronous onMutate, counts retries once and preserves cal
     },
     { wrapper }
   );
+  const mutate = result.current.mutate;
+  const mutateAsync = result.current.mutateAsync;
+  rerender();
+  expect(result.current.mutate).toBe(mutate);
+  expect(result.current.mutateAsync).toBe(mutateAsync);
   window.history.replaceState({}, '', '/explore');
   enterActionContext(
     snapshotActionContext('debate_claim_ticker', 'claim', 'claim', {

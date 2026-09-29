@@ -2,7 +2,7 @@
 
 import type { UseMutationResult } from '@tanstack/react-query';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import type { ActionContext, ActionKind } from '~/core/action-context';
 import { runObservedAction } from '~/core/analytics-operations';
@@ -16,9 +16,12 @@ export function useObservedMutation<TData, TError, TVariables, TContext>(
   getContext: (variables: TVariables) => ActionContext
 ): UseMutationResult<TData, TError, TVariables, TContext> {
   const { mutateAsync: execute } = mutation;
+  const latestContext = useRef(getContext);
+  latestContext.current = getContext;
   const mutateAsync = useCallback<typeof execute>(
-    (variables, options) => runObservedAction(action, getContext(variables), () => execute(variables, options)),
-    [action, execute, getContext]
+    (variables, options) =>
+      runObservedAction(action, latestContext.current(variables), () => execute(variables, options)),
+    [action, execute]
   );
   const mutate = useCallback<typeof mutation.mutate>(
     (variables, options) => {
