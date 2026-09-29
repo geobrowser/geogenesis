@@ -8,7 +8,7 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
+import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
@@ -37,16 +37,19 @@ export function DebatesHubWorkspace() {
   const { ready, authenticated } = useGeoChatAuth();
 
   const searchParams = useSearchParams();
-  const seedApplied = React.useRef(false);
+
+  const appliedList = React.useRef<ClaimsTabVariant | null | undefined>(undefined);
   React.useEffect(() => {
-    if (seedApplied.current || !searchParams) return;
-    seedApplied.current = true;
+    if (!searchParams) return;
 
     const asked = fromClaimsFilterSearch(
       new URLSearchParams(searchParams.toString()),
       LIST_OPTIONS.map(option => option.value)
     ).list;
-    if (asked) setList(asked);
+    if (appliedList.current === asked) return;
+    appliedList.current = asked;
+
+    setList(asked ?? DEFAULT_WORKSPACE_LIST);
   }, [searchParams]);
   const options = React.useMemo(
     () => (authenticated ? LIST_OPTIONS : LIST_OPTIONS.filter(option => SIGNED_OUT_LISTS.includes(option.value))),

@@ -12,6 +12,7 @@ import { DebatesHubWorkspace } from './hub-workspace';
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
 vi.mock('./claims-tab', () => ({
+  DEFAULT_WORKSPACE_LIST: 'lobby',
   ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
     const logged = React.useRef(false);
     React.useEffect(() => {
@@ -56,6 +57,50 @@ afterEach(cleanup);
 /**
  * Privy reports `ready: false, authenticated: false` until it restores the session.
  */
+describe('when the URL changes without a remount', () => {
+  function renderWithSearch(initial: string) {
+    mocks.search = initial;
+    const view = render(<DebatesHubWorkspace />);
+    /** A same-route navigation: new params, same mounted component. */
+    return (next: string) => {
+      mocks.search = next;
+      view.rerender(<DebatesHubWorkspace />);
+    };
+  }
+
+  it('follows the URL to the list it names', () => {
+    const navigate = renderWithSearch('');
+    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
+
+    navigate('list=positions');
+
+    expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
+  });
+
+  // The other direction. Lobby is omitted from the query as the workspace default.
+  it('follows a bare URL back to Lobby', () => {
+    const navigate = renderWithSearch('list=positions');
+    expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
+
+    navigate('');
+
+    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
+  });
+
+  // The picker changes the list without touching the query.
+  it('leaves a list the viewer picked alone while the URL is unchanged', () => {
+    const navigate = renderWithSearch('list=positions');
+
+    fireEvent.click(picker('My positions'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+    expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
+
+    navigate('list=positions');
+
+    expect(screen.getByTestId('claims-tab-explore')).toBeInTheDocument();
+  });
+});
+
 describe('before Privy has restored the session', () => {
   it('draws no list at all rather than coercing one to Explore', () => {
     mocks.ready = false;
