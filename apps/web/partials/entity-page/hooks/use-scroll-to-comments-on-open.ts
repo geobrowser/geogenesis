@@ -6,6 +6,14 @@ import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-acti
 
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
+/**
+ * An attribute selector rather than `#entity-comments`, for the case this hook scopes its lookup for:
+ * the same id earlier in the document, on the page behind the panel. Browsers handle both forms (checked
+ * in Chromium and WebKit), but jsdom's `#id` fast path returns null for a scoped query once the id
+ * appears earlier in the document, which would leave that case untestable.
+ */
+const ANCHOR_SELECTOR = `[id="${ENTITY_COMMENTS_ANCHOR_ID}"]`;
+
 /** How long to wait for the section to render at all: the panel first loads the entity, then the body. */
 const WAIT_FOR_SECTION_MS = 10_000;
 
@@ -52,7 +60,7 @@ export function useScrollToCommentsOnOpen(container: HTMLElement | null, request
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const align = () => {
-      const anchor = container.querySelector<HTMLElement>(`#${ENTITY_COMMENTS_ANCHOR_ID}`);
+      const anchor = container.querySelector<HTMLElement>(ANCHOR_SELECTOR);
       if (!anchor) return;
       const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
       if (Math.abs(container.scrollTop - top) > 1) container.scrollTop = top;
