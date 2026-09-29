@@ -24,15 +24,10 @@ import {
 import { hasProcessedVideo } from '../playback-utils';
 import { applyClaimReusePolicy } from './claim-reuse';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
+import { geoChatBaseUrl } from './geo-chat-base-url';
 import { loadMotionTopics } from './motion-topics';
 
 const debatePublishSettlementMs = 60_000;
-
-function geoChatBaseUrl() {
-  const base =
-    process.env.GEO_CHAT_API_BASE_URL || process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080';
-  return base.replace(/\/+$/, '');
-}
 
 /**
  * The public host published media URLs are built from. Published URLs are written on-chain and
