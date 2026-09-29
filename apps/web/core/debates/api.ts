@@ -1669,6 +1669,26 @@ export async function createScheduledDebate(
   });
 }
 
+/**
+ * Moves a pending request to a new time. geo-chat flips who has to answer, so the other debater is
+ * asked to accept the new time and emailed that it moved. It caps a request at five moves and
+ * refuses one that is no longer pending, both as `409 reschedule_refused`.
+ */
+export async function rescheduleScheduledDebate(
+  requestId: string,
+  body: { scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/reschedule`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** The second answer books the room, and the `recorded` outcome carries its id. */
 export async function respondToScheduledDebate(
   requestId: string,

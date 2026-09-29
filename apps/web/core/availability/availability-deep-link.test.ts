@@ -6,6 +6,7 @@ import {
   AVAILABILITY_MODAL,
   availabilityLinkUrl,
   profileSpaceIdFromPath,
+  rescheduleRequestIdFromTarget,
   toAvailability,
 } from './availability-deep-link';
 
@@ -27,5 +28,24 @@ describe('availability deep link', () => {
   it('round-trips through the shared reader', () => {
     const params = new URL(availabilityLinkUrl('abc123', 'https://geo.example')).searchParams;
     expect(requestsModal(params, AVAILABILITY_MODAL)).toBe(true);
+  });
+
+  // What a scheduling email's "Choose different time" links to: the other person's week, moving the
+  // request the email is about.
+  it('names the request to move in modalTarget', () => {
+    const requestId = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+    expect(toAvailability('abc123', { rescheduleRequestId: requestId })).toBe(
+      `/space/abc123?modal=availability&modalTarget=${requestId}`
+    );
+    expect(toAvailability('abc123', { rescheduleRequestId: null })).toBe('/space/abc123?modal=availability');
+  });
+
+  it('only reads a request id as something to reschedule', () => {
+    expect(rescheduleRequestIdFromTarget('6676b145-0970-4c1c-bfbc-7497d9721b39')).toBe(
+      '6676b145-0970-4c1c-bfbc-7497d9721b39'
+    );
+    expect(rescheduleRequestIdFromTarget(null)).toBeNull();
+    expect(rescheduleRequestIdFromTarget('people')).toBeNull();
+    expect(rescheduleRequestIdFromTarget('6676b1450970')).toBeNull();
   });
 });
