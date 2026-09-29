@@ -86,9 +86,7 @@ describe('usePrivySignIn', () => {
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
-  // `AnalyticsUserIdentifier` already reports restores, as restores. Recording one here as a
-  // manual login double-counted it and mislabelled it — and since this hook is now mounted
-  // app-wide for the sign-in deep link, that would have been every page load with a live session.
+  // PrivyAuthTracker owns auth events. This hook only snapshots attribution at the press.
   it('starts tracking only when sign-in is requested', () => {
     const { result } = renderHook(() => usePrivySignIn());
 

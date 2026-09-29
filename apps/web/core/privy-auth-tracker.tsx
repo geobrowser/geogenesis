@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 
 import { cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 
-/** One observer for the app lifetime, independent of the control that opened Privy. */
+/** Owns login and restore events for the app lifetime, independent of login controls. */
 export function PrivyAuthTracker() {
   usePrivyLogin({
     onComplete: completePrivyAuth,

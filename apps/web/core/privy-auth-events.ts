@@ -1,6 +1,6 @@
 'use client';
 
-import { type AnalyticsProperties, trackPrivyAuth } from './analytics';
+import { type AnalyticsProperties, restorePrivySession, trackPrivyAuth } from './analytics';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
 
@@ -23,10 +23,15 @@ export function resetPrivyAuthSession() {
 }
 
 export function completePrivyAuth(params: Completion, properties?: AnalyticsProperties) {
-  // Restores are reported by AnalyticsUserIdentifier. They never consume an in-flight attempt.
-  if (params.wasAlreadyAuthenticated || !params.user.id) return;
+  if (!params.user.id) return;
   if (completedUserId === params.user.id) return;
   completedUserId = params.user.id;
+  // Privy reports boot restores explicitly. A first ready+authenticated render can also be a
+  // fresh login, so identity observers must not infer a second auth event from that state.
+  if (params.wasAlreadyAuthenticated) {
+    restorePrivySession(params.user);
+    return;
+  }
   const attemptProperties = properties ?? attribution;
   cancelPrivyAuth();
 
