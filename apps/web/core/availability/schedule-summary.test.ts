@@ -54,6 +54,21 @@ describe('summarizeSchedule', () => {
     expect(summarizeSchedule([weekly(4, '22:00', '24:00')])).toBe('Fri 10pm – 12am');
   });
 
+  // Midnight at the end is the next day's 12am. Sharing the start's suffix would print `9 – 12am`,
+  // which reads as 9pm.
+  it('keeps the start suffix when a morning window runs to midnight', () => {
+    expect(summarizeSchedule([weekly(0, '09:00', '24:00')])).toBe('Mon 9am – 12am');
+  });
+
+  // `12 – 12am` reads as a zero-length window.
+  it('says all day for a block that spans the whole day', () => {
+    expect(summarizeSchedule([weekly(5, '00:00', '24:00'), weekly(6, '00:00', '24:00')])).toBe('Sat, Sun all day');
+  });
+
+  it('still drops a shared suffix for a window that starts at midnight', () => {
+    expect(summarizeSchedule([weekly(2, '00:00', '03:00')])).toBe('Wed 12 – 3am');
+  });
+
   // Past three groups a line stops being scannable.
   it('falls back to a count when the week has too many patterns', () => {
     const blocks = [

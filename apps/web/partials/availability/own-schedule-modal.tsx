@@ -15,10 +15,13 @@ export function OwnScheduleModal({
   open,
   onOpenChange,
   openerRef,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   openerRef?: React.RefObject<HTMLElement | null>;
+  /** After Save hands the week off, before the dialog closes and returns focus to `openerRef`. */
+  onSaved?: () => void;
 }) {
   // `blocks` stays undefined until the read answers, and is passed straight through: the modal has
   // to tell "not read yet" from "an empty week" to avoid saving the latter over the former.
@@ -32,7 +35,10 @@ export function OwnScheduleModal({
       blocks={blocks}
       error={isError}
       onRetry={() => refetch()}
-      onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+      onSave={nextBlocks => {
+        saveSchedule.mutate(nextBlocks);
+        onSaved?.();
+      }}
       openerRef={openerRef}
       headerAction={<CopyOwnAvailabilityLinkButton />}
     />

@@ -31,22 +31,38 @@ const SET_SCHEDULE_BANNER_ID = 'debatesSetSchedule';
  * Behind `ClientOnly` because the dismissed state only exists in the browser: server-rendering the
  * banner would flash it back up for everyone who has already closed it.
  */
-export function SetScheduleBanner() {
+type Props = {
+  /**
+   * The header's calendar button. Both ways the banner leaves — dismissed, or retired by a save —
+   * take the focused control with it, so focus moves up here rather than dropping to the page.
+   */
+  scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
+};
+
+export function SetScheduleBanner(props: Props) {
   return (
     <ClientOnly>
-      <Banner />
+      <Banner {...props} />
     </ClientOnly>
   );
 }
 
-function Banner() {
+function Banner({ scheduleButtonRef }: Props) {
   const { authenticated } = useGeoChatAuth();
-  const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
+  const { dismissed, remember } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
   // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). Only whether one is
   // set is read here; the modal reads and saves the week itself.
   const { data, isSet } = useDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
+  // Where the dialog returns focus on close. The banner's own button, unless the dialog saved: the
+  // save retires the banner moments later, and focus parked on its button would go with it.
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+
+  const handleDismiss = () => {
+    scheduleButtonRef?.current?.focus();
+    remember();
+  };
 
   // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
   // modal it opens has nothing to resolve to.
@@ -81,13 +97,23 @@ function Banner() {
         ref={openerRef}
         type="button"
         {...hubAnalyticsAttributes('Open schedule', 'open_debate_schedule')}
-        onClick={() => setModalOpen(true)}
+        onClick={() => {
+          returnFocusRef.current = openerRef.current;
+          setModalOpen(true);
+        }}
         className="mt-4 rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90"
       >
         Set my schedule
       </button>
 
-      <OwnScheduleModal open={modalOpen} onOpenChange={setModalOpen} openerRef={openerRef} />
+      <OwnScheduleModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        openerRef={returnFocusRef}
+        onSaved={() => {
+          if (scheduleButtonRef?.current) returnFocusRef.current = scheduleButtonRef.current;
+        }}
+      />
     </div>
   );
 }

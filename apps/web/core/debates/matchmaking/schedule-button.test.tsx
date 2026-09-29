@@ -96,6 +96,14 @@ describe('ScheduleButton', () => {
     ).toBeInTheDocument();
   });
 
+  // The hub hands this ref to the banner, which sends focus here when it leaves.
+  it('attaches a passed ref to its button', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    render(<ScheduleButton ref={ref} />);
+
+    expect(ref.current).toBe(screen.getByRole('button', { name: 'Set your debate schedule' }));
+  });
+
   it('does not render signed out', () => {
     mocks.authenticated = false;
     render(<ScheduleButton />);

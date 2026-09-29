@@ -104,3 +104,56 @@ describe('SetScheduleBanner', () => {
     await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
   });
 });
+
+// Both ways the banner leaves take the focused control with it. Focus goes up to the header's
+// calendar — the schedule's standing home — rather than dropping to the page.
+describe('SetScheduleBanner focus hand-off', () => {
+  function Harness() {
+    const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
+    return (
+      <>
+        <button ref={scheduleButtonRef} type="button">
+          Header calendar
+        </button>
+        <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
+      </>
+    );
+  }
+
+  const setupWithHeader = () => ({ user: userEvent.setup(), ...render(<Harness />) });
+
+  it('moves focus to the header calendar when dismissed', async () => {
+    const { user } = setupWithHeader();
+    await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+
+    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Header calendar' })).toHaveFocus();
+  });
+
+  it('returns focus to the header calendar after a save, which then retires the banner', async () => {
+    const { user, rerender } = setupWithHeader();
+    await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const header = screen.getByRole('button', { name: 'Header calendar' });
+    await waitFor(() => expect(header).toHaveFocus());
+
+    // The save lands and the banner retires. Focus was never on it, so nothing is lost.
+    mocks.isSet = true;
+    rerender(<Harness />);
+    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(header).toHaveFocus();
+  });
+
+  // Cancel does not retire anything, so focus goes back where it came from, as any dialog's does.
+  it('still returns focus to its own button on Cancel', async () => {
+    const { user } = setupWithHeader();
+    const opener = await screen.findByRole('button', { name: 'Set my schedule' });
+    await user.click(opener);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+});

@@ -246,6 +246,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
   const requestCount = useRequestsTabCount({ authenticated, activity, requests });
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  // Shared so the banner can hand focus up to the header's calendar when it leaves.
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
   // leave Requests scrolled to the same offset.
@@ -264,7 +266,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           Debates
         </Text>
         <div className="flex min-w-0 items-center gap-1">
-          <ScheduleButton />
+          <ScheduleButton ref={scheduleButtonRef} />
           <AvailabilityToggle />
           {onClose ? (
             <button
@@ -281,7 +283,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </div>
       </div>
 
-      <SetScheduleBanner />
+      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would

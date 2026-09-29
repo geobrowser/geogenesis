@@ -43,16 +43,24 @@ export function summarizeSchedule(blocks: AvailabilityBlock[]): string | null {
   return [...groups].map(([hours, weekdays]) => `${formatDays(weekdays)} ${hours}`).join(' · ');
 }
 
+const MINUTES_PER_DAY = 24 * 60;
+
 /**
  * `6 – 8pm` when both ends share a half of the day, `10am – 12pm` when they do not. The spaced dash
  * matches the calendar's own block labels, and the shared suffix is dropped as `formatDebateSlot`
  * does.
+ *
+ * An end of midnight is the *next* day's 12am, so it never shares a suffix with the start: dropping
+ * it would turn 9am-to-midnight into `9 – 12am`, which reads as 9pm. And a block that runs the whole
+ * day is said as such — `12am – 12am` reads as no time at all.
  */
 function formatRange(start: number, end: number) {
+  if (start === 0 && end === MINUTES_PER_DAY) return 'all day';
+
   const from = formatTime(start);
-  const to = formatTime(end % (24 * 60));
-  const suffix = to.slice(-2);
-  return `${from.endsWith(suffix) ? from.slice(0, -2) : from} – ${to}`;
+  const to = formatTime(end % MINUTES_PER_DAY);
+  const sharesSuffix = end < MINUTES_PER_DAY && from.slice(-2) === to.slice(-2);
+  return `${sharesSuffix ? from.slice(0, -2) : from} – ${to}`;
 }
 
 /** `Every day`, `Mon–Fri`, `Sat, Sun`, `Mon, Wed–Fri`: runs of three or more collapse to a range. */

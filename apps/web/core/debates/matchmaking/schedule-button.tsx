@@ -27,11 +27,13 @@ import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
  * still has something quiet asking. Set, the tooltip reads the week back in one line, so
  * checking it does not mean opening the grid.
  */
-export function ScheduleButton() {
+export function ScheduleButton({ ref }: { ref?: React.RefObject<HTMLButtonElement | null> }) {
   const { authenticated } = useGeoChatAuth();
   const { blocks, isSet, data } = useDebateSchedule();
   const [modalOpen, setModalOpen] = React.useState(false);
-  const openerRef = React.useRef<HTMLButtonElement | null>(null);
+  const ownRef = React.useRef<HTMLButtonElement | null>(null);
+  // The hub passes its own, so the banner below can send focus here when it retires.
+  const openerRef = ref ?? ownRef;
 
   // Keyed to the Privy account: signed out there is no schedule to read or save.
   if (!authenticated) return null;
