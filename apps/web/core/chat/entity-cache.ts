@@ -50,6 +50,21 @@ function ingestToolOutput(cache: EntityCache, toolType: string, output: unknown)
     return;
   }
 
+  if (toolType === 'tool-geoQuery' && Array.isArray(record.rows)) {
+    for (const raw of record.rows) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      const id = normalizeId(r.id);
+      if (!id) continue;
+      addEntry(cache, {
+        id,
+        name: typeof r.name === 'string' ? r.name : null,
+        spaceId: normalizeId(r.spaceId),
+      });
+    }
+    return;
+  }
+
   if (toolType === 'tool-getEntity') {
     const id = normalizeId(record.id);
     if (!id) return;

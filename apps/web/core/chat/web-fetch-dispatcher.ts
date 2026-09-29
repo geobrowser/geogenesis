@@ -68,19 +68,39 @@ export function useWebFetchDispatcher(
   addToolResultRef: React.RefObject<AddWebFetchResultFn | null>
 ) {
   const dispatchedRef = React.useRef(new Set<string>());
-  const cancelledRef = React.useRef(false);
-  const abortRef = React.useRef<AbortController | null>(null);
+  const controllers = React.useRef(new Map<string, AbortController>());
 
   React.useEffect(() => {
-    cancelledRef.current = false;
-    abortRef.current = new AbortController();
+    const active = controllers.current;
+    const dispatched = dispatchedRef.current;
     return () => {
-      cancelledRef.current = true;
-      abortRef.current?.abort();
+      for (const [id, controller] of active) {
+        controller.abort();
+        dispatched.delete(id);
+      }
+      active.clear();
     };
   }, []);
 
   React.useEffect(() => {
+    const pending = new Set(
+      messages.flatMap(message =>
+        message.role === 'assistant'
+          ? message.parts.flatMap(part =>
+              part.type === WEB_FETCH_TOOL_PART && isToolUIPart(part) && part.state === 'input-available'
+                ? [part.toolCallId]
+                : []
+            )
+          : []
+      )
+    );
+    for (const [id, controller] of controllers.current) {
+      if (!pending.has(id)) {
+        controller.abort();
+        controllers.current.delete(id);
+      }
+    }
+
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
@@ -93,22 +113,18 @@ export function useWebFetchDispatcher(
         const input = (part as { input?: unknown }).input as WebFetchInput | undefined;
         const toolCallId = part.toolCallId;
         const url = typeof input?.url === 'string' ? input.url : '';
+        const controller = new AbortController();
+        controllers.current.set(toolCallId, controller);
+        const signal = controller.signal;
 
         enqueue(async () => {
-          if (cancelledRef.current) return;
-          if (!url) {
-            addToolResultRef.current?.({
-              tool: 'webFetch',
-              toolCallId,
-              output: { error: 'invalid_url' } as WebFetchOutput,
-            });
-            return;
+          try {
+            if (signal.aborted) return;
+            const output = url ? await fetchWebFetch({ url }, signal) : ({ error: 'invalid_url' } as WebFetchOutput);
+            if (!signal.aborted) addToolResultRef.current?.({ tool: 'webFetch', toolCallId, output });
+          } finally {
+            if (controllers.current.get(toolCallId) === controller) controllers.current.delete(toolCallId);
           }
-          const signal = (abortRef.current ??= new AbortController()).signal;
-          const output = await fetchWebFetch({ url }, signal);
-          // StrictMode's second mount resets cancelledRef before in-flight aborts settle.
-          if (signal.aborted) return;
-          addToolResultRef.current?.({ tool: 'webFetch', toolCallId, output });
         });
       }
     }

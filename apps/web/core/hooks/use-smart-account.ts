@@ -161,9 +161,10 @@ export function useSmartAccount() {
         // Queue-wait bounded: sendTransaction callers sit under
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
-        sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-          enqueueFor(eoaAddress, () => withSubmissionRetry(() => zeroDevAccount.sendTransaction(...args)), {
+        sendTransaction: ({ signal, ...args }) =>
+          enqueueFor(eoaAddress, () => withSubmissionRetry(() => zeroDevAccount.sendTransaction(args), signal), {
             maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
+            signal,
           }),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
         // outer timeout, only error-triggered retries, so a long queue wait should

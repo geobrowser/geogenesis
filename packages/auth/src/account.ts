@@ -5,7 +5,8 @@ import { type Account, type Address, type Hex, createPublicClient, http } from '
 // `.account.address`, `.sendTransaction({to,data,value})`, `.sendUserOperation({calls})`.
 export type GeoWalletClient = {
   account: { address: Address };
-  sendTransaction: (args: { to: Address; data: Hex; value?: bigint }) => Promise<Hex>;
+  /** The app's queue observes signal before submission; an already submitted transaction cannot be undone. */
+  sendTransaction: (args: { to: Address; data: Hex; value?: bigint; signal?: AbortSignal }) => Promise<Hex>;
   sendUserOperation: (args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }) => Promise<Hex>;
   /** `timeout` bounds a single wait so the caller — not viem's ~120s default — owns the total budget. */
   waitForUserOperationReceipt: (args: { hash: Hex; timeout?: number }) => Promise<{ success: boolean }>;

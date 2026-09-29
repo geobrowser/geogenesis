@@ -12,6 +12,7 @@ type SendTxArgs = {
   to: `0x${string}`;
   data: `0x${string}`;
   value?: bigint;
+  signal?: AbortSignal;
 };
 
 function sanitizeErrorMessage(error: unknown) {
@@ -45,7 +46,7 @@ export function useSmartAccountTransaction() {
   // without re-running on every render — `useRankingComposeAccess` fires its
   // membership check from an effect keyed on the callback it builds from this.
   const sendTransaction = useCallback(
-    ({ to, data, value = 0n }: SendTxArgs) =>
+    ({ to, data, value = 0n, signal }: SendTxArgs) =>
       Effect.gen(function* () {
         const cachedAccounts = queryClient
           .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
@@ -63,10 +64,12 @@ export function useSmartAccountTransaction() {
 
         const hash = yield* Effect.tryPromise({
           try: async () => {
+            signal?.throwIfAborted();
             return await account.sendTransaction({
               to,
               value,
               data,
+              ...(signal ? { signal } : {}),
             });
           },
           catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),

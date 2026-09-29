@@ -96,4 +96,27 @@ describe('fetchActiveMemberRequest', () => {
       isVotingEnded: false,
     });
   });
+
+  it('propagates lookup failures when deciding whether a new request can be signed', async () => {
+    const failure = new Error('gateway unavailable');
+    restFetchMock.mockReturnValue(Effect.fail(failure));
+    await expect(fetchActiveMemberRequest(SPACE, MEMBER_DASHLESS, { throwOnError: true })).rejects.toBe(failure);
+  });
+
+  it('propagates invalid responses instead of reporting no pending request', async () => {
+    restFetchMock.mockReturnValue(Effect.succeed({ proposals: 'invalid' }));
+    await expect(fetchActiveMemberRequest(SPACE, MEMBER_DASHLESS, { throwOnError: true })).rejects.toThrow();
+  });
+
+  it('still returns null for a successful empty lookup in strict mode and forwards cancellation', async () => {
+    mockProposals([]);
+    const controller = new AbortController();
+    await expect(
+      fetchActiveMemberRequest(SPACE, MEMBER_DASHLESS, {
+        throwOnError: true,
+        signal: controller.signal,
+      })
+    ).resolves.toBeNull();
+    expect(restFetchMock).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+  });
 });

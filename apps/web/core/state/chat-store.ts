@@ -50,8 +50,30 @@ export const HISTORY_CAP = 10;
 // Split atoms: the in-flight chat changes constantly (every settled message);
 // the archive list rarely. Combining them would re-serialize all archived
 // chats on every keystroke turn-end.
-export const currentChatAtom = atomWithStorage<PersistedChat | null>('geo:chat:current', null);
-export const chatHistoryAtom = atomWithStorage<PersistedChat[]>('geo:chat:history', []);
+//
+// `getOnInit` so the stored value is there on the first client render. Without
+// it `atomWithStorage` starts at the initial value and only reads localStorage
+// afterwards — and the widget's restore effect runs once, on mount, so it saw
+// `null`, restored nothing, and marked itself hydrated. The persist effect then
+// found zero messages and wrote `null` back over the saved chat. That is the
+// reload-loses-the-conversation bug: the chat was on disk the whole time, read
+// a beat too late, then overwritten. Same reasoning as
+// `pendingPersonalSpaceAtom`. Safe during SSR — jotai's default storage
+// try/catches `window.localStorage` and falls back to the initial value.
+const readStorageOnInit = { getOnInit: true } as const;
+
+export const currentChatAtom = atomWithStorage<PersistedChat | null>(
+  'geo:chat:current',
+  null,
+  undefined,
+  readStorageOnInit
+);
+export const chatHistoryAtom = atomWithStorage<PersistedChat[]>(
+  'geo:chat:history',
+  [],
+  undefined,
+  readStorageOnInit
+);
 
 function isQuotaError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
