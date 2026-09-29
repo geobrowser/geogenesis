@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   },
   debateStatus: { data: undefined, isLoading: false } as { data: string | undefined; isLoading: boolean },
   replace: vi.fn(),
+  access: { status: 'admitted' } as { status: string; opens_at?: string },
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace, push: vi.fn() }) }));
@@ -26,7 +27,7 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
   useDebateRoom: () => ({
     data: {
       room_id: 'room-1',
-      access: { status: 'admitted' },
+      access: mocks.access,
       starts_at: '2026-09-24T13:00:00.000Z',
       opens_at: '2026-09-24T12:50:00.000Z',
       scheduled_end_at: null,
@@ -59,9 +60,22 @@ afterEach(() => {
   mocks.session = { data: undefined, isLoading: true };
   mocks.debateStatus = { data: undefined, isLoading: false };
   mocks.replace.mockReset();
+  mocks.access = { status: 'admitted' };
 });
 
 describe('DebateRoomPageClient', () => {
+  // Someone early has nothing to do here yet, so the notice says when and sends them somewhere useful.
+  it('tells an early arrival when the room opens and offers Explore', () => {
+    mocks.access = { status: 'not_yet_open', opens_at: '2026-09-24T12:50:00.000Z' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(
+      screen.getByText(/^The debate room opens 10 minutes early at .+\. In the meantime explore Geo\.$/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore');
+    expect(screen.queryByText(/picker for/)).not.toBeInTheDocument();
+  });
+
   // Mounting the picker on a used room flashed its claims, then bounced into the finished debate.
   it('says a room whose debate is over has already had it', () => {
     mocks.session = converted;

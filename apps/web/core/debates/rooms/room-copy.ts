@@ -56,8 +56,8 @@ export const ROOM_JOIN_PROMPT = {
 
 /** Shown to someone who arrived before the door unlocked. */
 export const ROOM_NOT_YET_OPEN = {
-  title: 'The room isn’t open yet',
-  opensAt: (opensAt: string) => `You can join from ${opensAt}.`,
+  message: (opensAt: string) => `The debate room opens 10 minutes early at ${opensAt}. In the meantime explore Geo.`,
+  explore: 'Explore',
 } as const;
 
 /** Under a disabled Request debate in a room, while the opponent has not arrived. */
