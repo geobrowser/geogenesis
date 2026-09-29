@@ -124,7 +124,7 @@ describe('PeerAvailabilityView', () => {
       const legend = within(screen.getByRole('list', { name: 'Legend' }));
 
       expect(legend.getByText('You’re both free')).toBeInTheDocument();
-      expect(legend.getByText('Only Ada is free')).toBeInTheDocument();
+      expect(legend.getByText('Ada is free')).toBeInTheDocument();
     });
 
     it('drops the mutual key for a viewer with no schedule of their own', () => {
@@ -132,7 +132,14 @@ describe('PeerAvailabilityView', () => {
       const legend = within(screen.getByRole('list', { name: 'Legend' }));
 
       expect(legend.queryByText('You’re both free')).not.toBeInTheDocument();
-      expect(legend.getByText('Only Ada is free')).toBeInTheDocument();
+      expect(legend.getByText('Ada is free')).toBeInTheDocument();
+    });
+
+    it('names them by first name only', () => {
+      setup({ slots: [slot(13, false)] }, 'Ada Lovelace');
+      const legend = within(screen.getByRole('list', { name: 'Legend' }));
+
+      expect(legend.getByText('Ada is free')).toBeInTheDocument();
     });
 
     it('is not drawn over an empty week', () => {

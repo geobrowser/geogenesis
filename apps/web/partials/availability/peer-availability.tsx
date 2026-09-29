@@ -16,6 +16,8 @@ import { usePeerSchedule } from '~/core/debates/hooks';
 
 import { Text } from '~/design-system/text';
 
+import { firstName } from '~/partials/profile/claim-response-tag';
+
 /**
  * How many slots a day shows before the expander.
  *
@@ -31,6 +33,7 @@ const SLOTS_PER_DAY = 4;
  */
 const MUTUAL_SLOT = 'border-solid border-green bg-successTertiary text-text';
 const PEER_ONLY_SLOT = 'border-dashed border-grey-03 bg-white text-text';
+const SELECTED_SLOT = 'border-solid border-text bg-text text-white';
 
 /**
  * Supplied by a caller that can act on a picked time, which turns the footer on. Absent, the week
@@ -55,7 +58,7 @@ export type PeerAvailabilityBooking = {
  *
  * ## It shows their week, not the overlap
  *
- * The grid is *their* availability; the viewer's own picks solid over dashed, never whether a
+ * The grid is *their* availability; the viewer's own picks green over dashed, never whether a
  * slot appears. Intersecting would leave a shared-link recipient with no schedule of their own
  * seeing nothing, which is the case this exists for.
  *
@@ -545,7 +548,7 @@ function SlotChip({
 
   // The visible chip carries the day in its column and free-vs-not in its border, neither of which
   // survives into an accessible name: without this every chip is a bare time that recurs on all
-  // seven days, and the solid/dashed distinction the view exists to draw is invisible.
+  // seven days, and the green/dashed distinction the view exists to draw is invisible.
   const label = [
     `${dayLabel} at ${slot.label}`,
     showPeerTime ? `${slot.peerLabel} for ${peerName}` : null,
@@ -570,11 +573,9 @@ function SlotChip({
       onClick={onSelect}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
-        selected
-          ? 'border-solid border-text bg-text text-white'
-          : slot.viewerIsFree === true
-            ? cx(MUTUAL_SLOT, 'hover:border-text')
-            : cx(PEER_ONLY_SLOT, 'hover:border-text'),
+        selected ? SELECTED_SLOT : slot.viewerIsFree === true ? MUTUAL_SLOT : PEER_ONLY_SLOT,
+        // Here rather than in the shared looks, which the legend's static swatches also wear.
+        !selected && 'hover:border-text',
         past && 'cursor-not-allowed opacity-40'
       )}
     >
@@ -588,13 +589,13 @@ function SlotChip({
   );
 }
 
-/** What solid and dashed mean, drawn with the chips' own classes. */
+/** What green and dashed mean, drawn with the chips' own classes. */
 function Legend({ peerName, showMutual }: { peerName: string; showMutual: boolean }) {
   return (
     <ul aria-label="Legend" className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
       {/* With no week of your own nothing can be mutual, and the hint above already says so. */}
       {showMutual && <LegendItem swatch={MUTUAL_SLOT}>You&rsquo;re both free</LegendItem>}
-      <LegendItem swatch={PEER_ONLY_SLOT}>Only {peerName} is free</LegendItem>
+      <LegendItem swatch={PEER_ONLY_SLOT}>{firstName(peerName) ?? peerName} is free</LegendItem>
     </ul>
   );
 }
