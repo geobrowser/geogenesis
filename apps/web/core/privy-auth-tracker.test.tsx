@@ -9,7 +9,7 @@ import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './priv
 import { PrivyAuthTracker } from './privy-auth-tracker';
 
 type Completion = Parameters<typeof completePrivyAuth>[0];
-type Handlers = { onComplete?: (args: Completion) => void; onError?: () => void };
+type Handlers = { onComplete?: (args: Completion) => void; onError?: (error: string) => void };
 const mocks = vi.hoisted(() => ({
   listeners: new Set<Handlers>(),
   authenticated: false,
@@ -123,11 +123,24 @@ describe('PrivyAuthTracker', () => {
     expect(mocks.trackPrivyAuth).toHaveBeenCalledTimes(2);
   });
 
-  it('forgets attribution after dismissal or failure', () => {
+  it('keeps attribution through an invalid code and successful retry', () => {
+    render(<PrivyAuthTracker />);
+    beginPrivyAuth({ link_source: 'explore_email_capture' });
+    act(() => {
+      for (const listener of mocks.listeners) listener.onError?.('invalid_credentials');
+    });
+    broadcast(completion('retried-code'));
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('retried-code'), {
+      link_source: 'explore_email_capture',
+      auth_flow: 'manual_login',
+    });
+  });
+
+  it('forgets attribution after dismissal', () => {
     render(<PrivyAuthTracker />);
     beginPrivyAuth({ link_source: 'abandoned' });
     act(() => {
-      for (const listener of mocks.listeners) listener.onError?.();
+      for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
     });
     broadcast(completion('after-cancel'));
     expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('after-cancel'), {

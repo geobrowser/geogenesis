@@ -8,7 +8,14 @@ import { cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './pri
 
 /** One observer for the app lifetime, independent of the control that opened Privy. */
 export function PrivyAuthTracker() {
-  usePrivyLogin({ onComplete: completePrivyAuth, onError: cancelPrivyAuth });
+  usePrivyLogin({
+    onComplete: completePrivyAuth,
+    onError: error => {
+      // Invalid codes and transient failures leave the modal open for a retry. Keep the
+      // initiating attribution until dismissal; the next login press also replaces it.
+      if (error === 'exited_auth_flow') cancelPrivyAuth();
+    },
+  });
   useLogout({ onSuccess: resetPrivyAuthSession });
   const { ready, authenticated } = usePrivy();
   const wasAuthenticated = useRef(false);

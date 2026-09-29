@@ -47,7 +47,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   optionsRef.current = options;
 
   // Privy fires `onComplete` on session restoration too, not just on a login someone asked for —
-  // opening a second tab is enough (see the note in `core/wallet/wallet.tsx`). So the consumer's
+  // opening a second tab is enough. So the consumer's
   // callback is armed here and only fires for a sign-in this hook actually started. Without it,
   // loading the feed in a new tab would open the hub with nobody having pressed anything.
   const requestedRef = React.useRef(false);

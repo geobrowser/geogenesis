@@ -33,9 +33,9 @@ export function Providers({ children }: Props) {
   return (
     <CookiesProvider>
       <LazyPrivyProvider>
+        <PrivyAuthTracker />
         <ReactQueryProvider>
           <LazyWalletProvider>
-            <PrivyAuthTracker />
             <EmbeddedWalletSync />
             <AnalyticsUserIdentifier />
             <SentryUserIdentifier />
