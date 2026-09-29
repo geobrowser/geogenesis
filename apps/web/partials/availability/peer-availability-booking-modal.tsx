@@ -21,20 +21,32 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
  * The bookable week. Separate from the modal so the mutation, and the query client it needs, only
  * enter the tree where booking is turned on.
  */
-export function PeerAvailabilityBookingModal({ userId, onClose, rescheduleRequestId = null, ...props }: Props) {
+export function PeerAvailabilityBookingModal({ open, userId, onClose, rescheduleRequestId = null, ...props }: Props) {
   const propose = useCreateScheduledDebate();
   const reschedule = useRescheduleScheduledDebate();
   const mutation = rescheduleRequestId ? reschedule : propose;
+  const requestedStart = mutation.data?.scheduled_start_at ?? null;
+  const handleClose = () => {
+    onClose();
+    // Otherwise the next person's week opens already showing the last one's outcome.
+    mutation.reset();
+  };
+  const closeAfterSuccess = React.useEffectEvent(handleClose);
+
+  React.useEffect(() => {
+    if (!open || !requestedStart) return;
+
+    // Leave the successful request banner visible briefly before returning to the caller.
+    const timeout = window.setTimeout(() => closeAfterSuccess(), 1000);
+    return () => window.clearTimeout(timeout);
+  }, [open, requestedStart]);
 
   return (
     <PeerAvailabilityModal
       {...props}
+      open={open}
       userId={userId}
-      onClose={() => {
-        onClose();
-        // Otherwise the next person's week opens already showing the last one's outcome.
-        mutation.reset();
-      }}
+      onClose={handleClose}
       booking={{
         mode: rescheduleRequestId ? 'reschedule' : 'request',
         onRequest: startsAt => {
@@ -44,7 +56,7 @@ export function PeerAvailabilityBookingModal({ userId, onClose, rescheduleReques
         },
         pending: mutation.isPending,
         error: mutation.error?.message ?? null,
-        requestedStart: mutation.data?.scheduled_start_at ?? null,
+        requestedStart,
       }}
     />
   );
