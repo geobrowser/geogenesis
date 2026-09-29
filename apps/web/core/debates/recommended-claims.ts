@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from './claim-picker-page';
-import { PARTICIPANTS_PROPERTY_ID } from './ontology';
+import { LEGACY_PARTICIPANTS_PROPERTY_ID, PARTICIPANTS_PROPERTY_ID } from './ontology';
 
 /** A curated "Recommended claims" page: claims a curator has picked out for a specific pairing. */
 export const RECOMMENDED_CLAIMS_TYPE_ID = '2f8a7be40c5242368bac78511bf0b47f';
@@ -23,6 +23,14 @@ export const RECOMMENDED_CLAIMS_SPACE_IDS = [
   // Preston
   'f3dab79cb5a3d9d1759656dd5361d1c6',
 ];
+
+/**
+ * Pages curated before the switch name their debaters with the retired Participants property, so
+ * either counts until they are migrated.
+ */
+function isParticipantsProperty(typeId: string): boolean {
+  return ID.equals(typeId, PARTICIPANTS_PROPERTY_ID) || ID.equals(typeId, LEGACY_PARTICIPANTS_PROPERTY_ID);
+}
 
 /** One data block from a recommended page — a named group of claims. */
 export type RecommendedClaimSection = {
@@ -75,7 +83,7 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
       .filter(page => page.spaces.some(spaceId => RECOMMENDED_CLAIMS_SPACE_IDS.some(id => ID.equals(id, spaceId))))
       .filter(page => {
         const participants = page.relations
-          .filter(relation => relation.type.id === PARTICIPANTS_PROPERTY_ID && relation.isDeleted !== true)
+          .filter(relation => isParticipantsProperty(relation.type.id) && relation.isDeleted !== true)
           .map(relation => relation.toEntity.id);
 
         return participantSpaceIds.every(spaceId => participants.some(participant => ID.equals(participant, spaceId)));

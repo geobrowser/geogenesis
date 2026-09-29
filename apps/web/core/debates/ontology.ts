@@ -65,19 +65,17 @@ export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
  * way" and so cannot be filtered as one set: a data block of "debates I was in" would have to union
  * two relations and know which side to look on. This is the side-agnostic membership.
  *
- * The Geo space's Participants property, shared with the rest of its curated ontology (Recommended
- * claims pages carry it too), so one query finds participants on any of them. It renders in the
- * browser; the SDK's `SystemIds.PARTICIPANTS_PROPERTY` it replaced is defined in a personal space
- * and did not.
+ * The SDK's `SystemIds.PARTICIPANTS_PROPERTY`, a Relation property in the Geo space. Every published
+ * debate carries it, and Recommended claims pages use it to name the debaters they're curated for.
  */
-export const PARTICIPANTS_PROPERTY_ID = '7169d65aa8b94addb6cc23c19c9fc0dd';
+export const PARTICIPANTS_PROPERTY_ID = SystemIds.PARTICIPANTS_PROPERTY; // 0b9b1a35…
 
 /**
- * The Participants property debates were published with before `PARTICIPANTS_PROPERTY_ID`. Debates
- * published until then carry only this one, so a reader that counts debates by participant has to
- * accept both until they are backfilled — then this can go.
+ * A second Participants property, being retired in favour of `PARTICIPANTS_PROPERTY_ID`. Recommended
+ * claims pages were curated with it, so their reader accepts both until those pages are migrated —
+ * then this can go.
  */
-export const LEGACY_PARTICIPANTS_PROPERTY_ID = SystemIds.PARTICIPANTS_PROPERTY; // 0b9b1a35…
+export const LEGACY_PARTICIPANTS_PROPERTY_ID = '7169d65aa8b94addb6cc23c19c9fc0dd';
 
 /**
  * Vote (TYPE) — one viewer's pick of who won a debate. Lives in the voter's personal

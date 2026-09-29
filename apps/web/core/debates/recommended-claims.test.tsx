@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
-import { PARTICIPANTS_PROPERTY_ID } from './ontology';
+import { LEGACY_PARTICIPANTS_PROPERTY_ID, PARTICIPANTS_PROPERTY_ID } from './ontology';
 import { RECOMMENDED_CLAIMS_TYPE_ID, useRecommendedClaimSections } from './recommended-claims';
 
 const CURATOR_SPACE = 'f3dab79cb5a3d9d1759656dd5361d1c6';
@@ -55,7 +55,8 @@ function page({
   spaces = [CURATOR_SPACE],
   participants = [ME, OPPONENT],
   blockIds = ['block-1'],
-}: { spaces?: string[]; participants?: string[]; blockIds?: string[] } = {}) {
+  participantsProperty = PARTICIPANTS_PROPERTY_ID,
+}: { spaces?: string[]; participants?: string[]; blockIds?: string[]; participantsProperty?: string } = {}) {
   return {
     id: 'page-1',
     name: 'Recommended claims',
@@ -63,7 +64,7 @@ function page({
     types: [{ id: RECOMMENDED_CLAIMS_TYPE_ID }],
     relations: [
       ...participants.map((spaceId, index) => ({
-        type: { id: PARTICIPANTS_PROPERTY_ID },
+        type: { id: participantsProperty },
         toEntity: { id: spaceId },
         position: `a${index}`,
       })),
@@ -114,6 +115,16 @@ describe('useRecommendedClaimSections', () => {
     expect(result.current.sections).toEqual([
       { id: 'block-1', name: 'Geopolitics & chips', claimIds: ['claim-a', 'claim-b'] },
     ]);
+  });
+
+  // Pages curated before the switch name their debaters with the retired Participants property.
+  // Until they are migrated they must still match, or their curated tabs quietly disappear.
+  it('still matches a page curated with the retired Participants property', () => {
+    mocks.pages = [page({ participantsProperty: LEGACY_PARTICIPANTS_PROPERTY_ID })];
+
+    const { result } = renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
+
+    expect(result.current.sections.map(section => section.id)).toEqual(['block-1']);
   });
 
   // A page curated for a different pairing that happens to include one debater is not a

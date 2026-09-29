@@ -1,8 +1,6 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LEGACY_PARTICIPANTS_PROPERTY_ID, PARTICIPANTS_PROPERTY_ID } from '~/core/debates/ontology';
-
 import { EXCLUDED_CURATOR_SPACE_IDS } from './curator-leaderboard-exclusions';
 import { fetchCuratorLeaderboard } from './fetch-curator-leaderboard';
 
@@ -19,8 +17,6 @@ const mocks = vi.hoisted(() => ({
   debates: [] as { id: string }[],
   debateParticipants: [] as { fromEntityId: string; toEntityId: string }[],
   profileSpaceIds: [] as string[][],
-  /** The query each connection was built with, by label (first page). */
-  queries: {} as Record<string, string>,
 }));
 
 // The real query plumbing is covered by community-graphql.test.ts; these stubs stand in for the
@@ -45,8 +41,7 @@ vi.mock('./community-graphql', async importOriginal => {
           throw new Error(`unstubbed community query: "${label}"`);
       }
     },
-    collectConnection: async (label: string, buildQuery: (after: string | null) => string) => {
-      mocks.queries[label] = buildQuery(null);
+    collectConnection: async (label: string) => {
       switch (label) {
         case 'submitted to ranking block relations':
           return { nodes: mocks.rankingRelations, truncated: false, totalCount: mocks.rankingRelations.length };
@@ -85,7 +80,6 @@ beforeEach(() => {
   mocks.votes = [];
   mocks.debates = [];
   mocks.debateParticipants = [];
-  mocks.queries = {};
   mocks.profileSpaceIds = [];
 });
 
@@ -165,20 +159,6 @@ describe('fetchCuratorLeaderboard exclusions', () => {
     const result = await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
 
     expect(result.rows.find(row => row.curatorSpaceId === KEEPER)?.debates).toBe(1);
-  });
-
-  /**
-   * Debates published before the switch to the Geo Participants property carry only the SDK one
-   * until they are backfilled; dropping it would quietly take those debates off the board.
-   */
-  it('reads participants from both the current and the legacy Participants property', async () => {
-    mocks.debates = [{ id: 'debate-1' }];
-
-    await fetchCuratorLeaderboard({ spaceId: SPACE, period: 'all' });
-
-    const query = mocks.queries['debate participant relations'];
-    expect(query).toContain(PARTICIPANTS_PROPERTY_ID);
-    expect(query).toContain(LEGACY_PARTICIPANTS_PROPERTY_ID);
   });
 
   /**
