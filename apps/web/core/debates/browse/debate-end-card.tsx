@@ -18,6 +18,7 @@ import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranki
 
 import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
+import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type EndCardData = ReturnType<typeof useDebateEndCard>;
 
@@ -218,6 +219,7 @@ function DebaterColumn({
 }) {
   const { participant, name, claimCount, split, responderSpaceIds } = debater;
   const side = responsePositionLabel(participant.position);
+  const openProfile = useOpenDebaterProfile(participant, { interactionSurface: 'debate_end_card' });
   // Nothing rather than "0 claims" while the transcript is still saying which claims are theirs.
   const countLabel = claimCount === null ? null : `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
 
@@ -272,10 +274,19 @@ function DebaterColumn({
   return (
     <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2 @max-md:gap-1.5">
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
+        {/* The same link to the person as their name on the tile and on each claim they made: their
+            profile, in the side panel. The side chip stays outside it, as it does on the tile. */}
+        <button
+          type="button"
+          onClick={openProfile}
+          title={`Open ${name}`}
+          className="flex min-w-0 cursor-pointer items-center gap-1.5 text-left hover:underline"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          </span>
+          <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
+        </button>
         <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
       </div>
 
