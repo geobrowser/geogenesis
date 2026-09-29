@@ -422,9 +422,11 @@ export function EntityVoteButtons({
    * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
    * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
    *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
+   * `DebateVotePill` does the same, in its own render path. It draws this control for the debate
+   * overlay and shares these handlers, so pressing a held side there means "remove" too — it went
+   * without the guard until the surfaces were brought in line, which is the whole of what this
+   * ticket was. The guard sits on each render path rather than in `handlePositiveResponse` because
+   * the overlay wants it under a different set of attributes, not because one of them is exempt.
    */
   const voteButtonProps = (onPress: () => void, title: string) => ({
     onClick: () => {
