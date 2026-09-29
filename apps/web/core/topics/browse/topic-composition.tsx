@@ -31,23 +31,9 @@ export function useTopicComposition(topicId: string, spaceId: string, spaceIds: 
 }
 
 /**
- * A compact summary of every entity type offered by the Topic Explore feed.
+ * Per-type counts for a topic space's own feed. It has no summary bar; the counts only feed the
+ * type picker.
  */
-export function TopicComposition({
-  topicId,
-  spaceId,
-  spaceIds,
-}: {
-  topicId: string;
-  spaceId: string;
-  spaceIds: string[] | undefined;
-}) {
-  const { counts, isLoading } = useTopicComposition(topicId, spaceId, spaceIds);
-
-  return <TopicCompositionBar counts={counts} isLoading={isLoading} />;
-}
-
-/** The composition summary for a topic space: what the space's own feed holds, per type. */
 export function useSpaceTopicComposition(spaceId: string) {
   const { data, isLoading } = useQuery({
     queryKey: ['topic', 'space-composition', ID.uuidToHex(spaceId)],
@@ -64,16 +50,19 @@ export function useSpaceTopicComposition(spaceId: string) {
 }
 
 /**
- * The bar and legend alone, fed counts by whichever population it summarises — a topic's tagged
- * entities or a topic space's contents.
+ * A compact summary of every entity type offered by the Topic Explore feed.
  */
-export function TopicCompositionBar({
-  counts,
-  isLoading,
+export function TopicComposition({
+  topicId,
+  spaceId,
+  spaceIds,
 }: {
-  counts: TopicFeedCompositionCounts | null;
-  isLoading: boolean;
+  topicId: string;
+  spaceId: string;
+  spaceIds: string[] | undefined;
 }) {
+  const { counts, isLoading } = useTopicComposition(topicId, spaceId, spaceIds);
+
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];
 

@@ -17,6 +17,10 @@ import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
  * The space *is* the topic here, so membership is the scope and no Topics relation is required.
  * Topic selections from the filter still narrow it, AND-composed like the topic page's.
  *
+ * Claims need the `Debate` tag, as on Explore and unlike a topic page. A topic's claims are the
+ * ones somebody tagged with it; a space's are everything imported into it — tens of thousands in
+ * the large topic spaces against a few dozen debates — so ungated they bury the rest of the feed.
+ *
  * Ranked through the ordinary Explore paths rather than the Topic page's complete-population
  * index: that index downloads the whole population to sort it, which is fine for the entities one
  * topic names and not for a space holding tens of thousands.
@@ -45,6 +49,7 @@ export async function GET(request: Request) {
       memberOrEditorSpaceIds,
       typeIds,
       requireName: true,
+      requireDebateTagOnClaims: true,
       entityFilter: topicsRelationFilter(selectedTopicIds),
     });
     return NextResponse.json(result);

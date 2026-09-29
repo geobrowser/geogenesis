@@ -101,12 +101,17 @@ type BuildSpaceTabsParams = {
   isTopicSpace?: boolean;
 };
 
-/** The leading system tabs every space opens with: Overview, or Explore then Overview. */
+/**
+ * The leading system tabs every space opens with: Overview, or Explore then Overview.
+ *
+ * On a topic space Explore stands alone before a rule, the way it does on a topic page: it is the
+ * topic's feed, and everything after the rule is the space's.
+ */
 function leadingSpaceTabs(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
   return isTopicSpace
     ? [
         { label: 'Explore', href: overviewHref },
-        { label: 'Overview', href: `/space/${spaceId}/overview` },
+        { label: 'Overview', href: `/space/${spaceId}/overview`, dividerBefore: true },
       ]
     : [{ label: 'Overview', href: overviewHref }];
 }

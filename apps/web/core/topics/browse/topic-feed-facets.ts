@@ -22,12 +22,18 @@ type TopicFacetArgs = {
   signal?: AbortSignal;
 };
 
-function scopedFeedFilter(spaceIds: string[], typeIds: readonly string[], entityFilter: EntityFilter | undefined) {
+function scopedFeedFilter(
+  spaceIds: string[],
+  typeIds: readonly string[],
+  entityFilter: EntityFilter | undefined,
+  requireDebateTagOnClaims = false
+) {
   return buildExploreFeedFilter({
     spaceIds,
     time: 'all',
     typeIds,
     requireName: true,
+    requireDebateTagOnClaims,
     includeEntityScopeInFilter: true,
     entityFilter,
   });
@@ -72,12 +78,14 @@ async function fetchFacetsForPopulation({
   typeIds,
   entityFilter,
   excludedTopicId,
+  requireDebateTagOnClaims,
   signal,
 }: {
   spaceIds: string[];
   typeIds: readonly string[];
   entityFilter: EntityFilter | undefined;
   excludedTopicId: string;
+  requireDebateTagOnClaims?: boolean;
   signal?: AbortSignal;
 }): Promise<TopicFeedFacet[]> {
   const facets = await Effect.runPromise(
@@ -87,7 +95,7 @@ async function fetchFacetsForPopulation({
       variables: {
         filter: {
           typeId: { is: TOPICS_PROPERTY_ID },
-          fromEntity: scopedFeedFilter(spaceIds, typeIds, entityFilter),
+          fromEntity: scopedFeedFilter(spaceIds, typeIds, entityFilter, requireDebateTagOnClaims),
         } satisfies RelationFilter,
         groupBy: ['TO_ENTITY_ID'],
       },
@@ -126,6 +134,8 @@ export async function fetchSpaceTopicFeedFacets({
     typeIds,
     entityFilter: topicsRelationFilter(selectedTopicIds),
     excludedTopicId: spaceTopicId,
+    // The feed's own gate, so a topic is offered only with the claims the feed will actually show.
+    requireDebateTagOnClaims: true,
     signal,
   });
 }
@@ -191,7 +201,13 @@ export async function fetchSpaceTopicCompositionCounts({
   spaceId: string;
   signal?: AbortSignal;
 }): Promise<TopicFeedCompositionCounts> {
-  const filter = buildExploreFeedFilter({ spaceIds: [spaceId], time: 'all', requireName: true });
+  // Same Debate-tag gate as the feed, so the Claims count is the claims a reader can scroll to.
+  const filter = buildExploreFeedFilter({
+    spaceIds: [spaceId],
+    time: 'all',
+    requireName: true,
+    requireDebateTagOnClaims: true,
+  });
   const totals = await Effect.runPromise(
     graphql({
       query: spaceTopicCountDocument,

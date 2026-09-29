@@ -38,6 +38,8 @@ describe('buildSpaceTabs', () => {
       isTopicSpace: true,
     });
 
+    expect(tabs.find(tab => tab.label === 'Overview')?.dividerBefore).toBe(true);
+    expect(tabs.filter(tab => tab.dividerBefore)).toHaveLength(1);
     expect(tabs.map(tab => [tab.label, tab.href])).toEqual([
       ['Explore', overviewHref],
       ['Overview', `${overviewHref}/overview`],

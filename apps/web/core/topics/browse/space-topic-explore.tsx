@@ -4,15 +4,16 @@ import * as React from 'react';
 
 import { EntityFeed } from '~/partials/feed/entity-feed';
 
-import { TopicCompositionBar, useSpaceTopicComposition } from './topic-composition';
+import { useSpaceTopicComposition } from './topic-composition';
 import { MAX_TOPIC_FEED_SELECTED_TOPICS } from './topic-feed-params';
 import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 /**
  * The topic page's Explore tab, for a space whose home entity is a Topic.
  *
- * Same composition bar, same feed surface, same type and topic filters as `TopicPageView` — the
- * difference is only in what counts as belonging. A topic page gathers every entity tagged with
+ * Same feed surface and the same type and topic filters as `TopicPageView`, without the
+ * composition bar: the space header already sits above it. The one real difference is what
+ * counts as belonging. A topic page gathers every entity tagged with
  * the topic across the curated graph; a topic space already *is* its topic's collection, so this
  * shows everything of the feed types that lives in the space, tagged or not.
  */
@@ -28,30 +29,27 @@ export function SpaceTopicExplore({ spaceId, spaceTopicId }: { spaceId: string; 
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <TopicCompositionBar counts={counts} isLoading={isLoading} />
-      <EntityFeed
-        key={spaceId}
-        apiEndpoint="/api/topics/space/feed"
-        initialSort="best"
-        showSortFilter
-        showTimeFilter={false}
-        showSpaceFilter={false}
-        showTypeFilter
-        initialTypeIds={TOPIC_FEED_ENTITY_TYPE_IDS}
-        typeOptions={TOPIC_FEED_ENTITY_TYPES}
-        typeCounts={typeCounts}
-        typeCountsPending={isLoading}
-        selectTypesWithResultsByDefault
-        persistTypeSelection={false}
-        topicFacetEndpoint="/api/topics/space/facets"
-        showTopicFilter
-        fixedParams={fixedParams}
-        maxTopicSelections={MAX_TOPIC_FEED_SELECTED_TOPICS}
-        dividerBeforeFeed
-        feedTopSpacingClassName="mt-5"
-        titleOpensSidePanel
-      />
-    </div>
+    <EntityFeed
+      key={spaceId}
+      apiEndpoint="/api/topics/space/feed"
+      initialSort="best"
+      showSortFilter
+      showTimeFilter={false}
+      showSpaceFilter={false}
+      showTypeFilter
+      initialTypeIds={TOPIC_FEED_ENTITY_TYPE_IDS}
+      typeOptions={TOPIC_FEED_ENTITY_TYPES}
+      typeCounts={typeCounts}
+      typeCountsPending={isLoading}
+      selectTypesWithResultsByDefault
+      persistTypeSelection={false}
+      topicFacetEndpoint="/api/topics/space/facets"
+      showTopicFilter
+      fixedParams={fixedParams}
+      maxTopicSelections={MAX_TOPIC_FEED_SELECTED_TOPICS}
+      dividerBeforeFeed
+      feedTopSpacingClassName="mt-5"
+      titleOpensSidePanel
+    />
   );
 }
