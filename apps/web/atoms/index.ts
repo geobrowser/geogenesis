@@ -12,6 +12,11 @@ export type EntitySidePanelTarget = {
   openedFromReviewEdits?: boolean;
   /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
   forceRequestedSpace?: boolean;
+  /**
+   * Open scrolled to the entity's comments — a claim's Activity — rather than at the top. The panel's
+   * stand-in for the full page's `#entity-comments`; see `useScrollToCommentsOnOpen`.
+   */
+  scrollToComments?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
@@ -187,8 +192,8 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
- * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people who share
- * a free slot with the viewer alongside online ones. Outside the tab for the same reason as the
+ * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
+ * time this week alongside online ones. Outside the tab for the same reason as the
  * spaces filter above.
  */
 export const debatesHubPeopleOnlineOnlyAtom = atom(false);

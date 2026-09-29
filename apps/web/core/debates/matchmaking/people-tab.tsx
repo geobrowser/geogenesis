@@ -96,9 +96,9 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  *
- * With "Online only" off, the default, offline people who share a free slot with the viewer are
- * listed too, ranked by matches alongside everyone online, each with those times and a Schedule
- * button in place of the request (GEO-2937).
+ * With "Online only" off, the default, offline people with free time this week are listed too,
+ * ranked by matches alongside everyone online, each with any times they share with the viewer and a
+ * Schedule button in place of the request (GEO-2937).
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
@@ -119,9 +119,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
-  // Held here rather than in the row. Rows follow live data: someone who goes offline with no shared
-  // time left, or whose last shared time passes, drops out of the list, and a dialog inside their
-  // row would vanish mid-read.
+  // Held here rather than in the row. Rows follow live data: someone whose free time runs out, or
+  // who is blocked, drops out of the list, and a dialog inside their row would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{
     userId: string;
     name: string;
@@ -165,8 +164,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         const start = Date.parse(slot.start);
         return start > now && start < weekEnds;
       });
-      // Every shared time already past: nothing left to schedule in this window.
-      if (upcoming.length === 0 && !candidate.truncated) continue;
+      // Kept with no shared times left: geo-chat lists everyone with free time, and Schedule
+      // still opens their week, where the viewer can book outside their own hours.
       byUser.set(key, {
         slots: upcoming.slice(0, INLINE_SLOTS),
         truncated: candidate.truncated || upcoming.length > INLINE_SLOTS,
@@ -199,7 +198,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     isLoading: positionsLoading,
     isPlaceholderData: positionsArePlaceholderData,
     error: positionsError,
-  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId);
+  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId, { onlyViewerClaims: true });
   const matchAnalysis = React.useMemo(
     () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
     [positionsByClaim, viewerProfileSpaceId]
