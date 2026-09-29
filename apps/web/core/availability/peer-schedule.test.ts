@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
-import { formatOffset, formatViewerInstant, peerScheduleDays, toPeerSchedule } from './peer-schedule';
+import {
+  formatOffset,
+  formatViewerInstant,
+  peerScheduleDays,
+  toPeerSchedule,
+  viewerInputInstant,
+  viewerInputValue,
+} from './peer-schedule';
 
 const response = (overrides: Partial<ScheduleOverlapResponse> = {}): ScheduleOverlapResponse => ({
   with: 'user-peer',
@@ -352,5 +359,41 @@ describe('formatViewerInstant', () => {
 
   it('passes an unparseable instant through rather than printing Invalid Date', () => {
     expect(formatViewerInstant('not-a-date', 'UTC')).toBe('not-a-date');
+  });
+});
+
+describe('viewerInputInstant', () => {
+  const read = (value: string, zone: string) => viewerInputInstant(value, zone)?.toISOString() ?? null;
+
+  it('reads the wall clock in the viewer zone', () => {
+    expect(read('2026-09-22T09:00', 'Asia/Kathmandu')).toBe('2026-09-22T03:15:00.000Z');
+    expect(read('2026-09-22T09:00', 'America/New_York')).toBe('2026-09-22T13:00:00.000Z');
+  });
+
+  // New York springs forward at 2am on 2026-03-08, so 2:30 never happens that day.
+  it('moves a skipped time forward by the jump, as new Date(local) does', () => {
+    // 3:30am EDT.
+    expect(read('2026-03-08T02:30', 'America/New_York')).toBe('2026-03-08T07:30:00.000Z');
+  });
+
+  // And falls back at 2am on 2026-11-01, so 1:30 happens twice; the first is in EDT.
+  it('takes the earlier of a repeated time', () => {
+    expect(read('2026-11-01T01:30', 'America/New_York')).toBe('2026-11-01T05:30:00.000Z');
+  });
+
+  it.each(['', '2026-09-22', 'not-a-date'])('rejects %j', value => {
+    expect(viewerInputInstant(value, 'UTC')).toBeNull();
+  });
+});
+
+describe('viewerInputValue', () => {
+  it('writes the wall clock in the viewer zone', () => {
+    expect(viewerInputValue(Date.parse('2026-09-21T15:00:00Z'), 'Asia/Kathmandu')).toBe('2026-09-21T20:45');
+  });
+
+  // 00:30Z is the first 2:30am in Berlin on the night the clocks go back.
+  it('round-trips through viewerInputInstant', () => {
+    const at = Date.parse('2026-10-25T00:30:00Z');
+    expect(viewerInputInstant(viewerInputValue(at, 'Europe/Berlin'), 'Europe/Berlin')?.getTime()).toBe(at);
   });
 });

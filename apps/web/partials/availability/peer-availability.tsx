@@ -11,6 +11,8 @@ import {
   formatOffset,
   formatViewerInstant,
   peerScheduleDays,
+  viewerInputInstant,
+  viewerInputValue,
 } from '~/core/availability/peer-schedule';
 import { usePeerSchedule } from '~/core/debates/hooks';
 
@@ -338,8 +340,9 @@ function SendRequest({
 }
 
 /**
- * A time of the viewer's own, for a week that offers none. `datetime-local` reads as local wall
- * clock, so it is converted to an instant before it leaves here.
+ * A time of the viewer's own, for a week that offers none. `datetime-local` carries no zone, so it
+ * is read in the grid's zone, like every other time here, and converted to an instant before it
+ * leaves.
  */
 function RequestAnyway({
   booking,
@@ -355,7 +358,7 @@ function RequestAnyway({
   notBefore: number;
 }) {
   const [local, setLocal] = React.useState('');
-  const picked = local ? new Date(local) : null;
+  const picked = viewerInputInstant(local, viewerTimezone);
   // geo-chat refuses a past start, so one never leaves here.
   const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
 
@@ -372,7 +375,7 @@ function RequestAnyway({
         <input
           type="datetime-local"
           aria-label="Time to request"
-          min={localInputValue(notBefore)}
+          min={viewerInputValue(notBefore, viewerTimezone)}
           value={local}
           onChange={event => setLocal(event.target.value)}
           className="rounded border border-grey-02 px-2 py-1 text-footnote"
@@ -386,13 +389,6 @@ function RequestAnyway({
       )}
     </div>
   );
-}
-
-/** `datetime-local` wants the viewer's own wall clock, with no zone and no seconds. */
-function localInputValue(at: number) {
-  const date = new Date(at);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /**

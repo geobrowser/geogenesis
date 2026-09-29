@@ -499,9 +499,43 @@ describe('a week with nothing in it', () => {
     await user.click(screen.getByRole('button', { name: 'Send request' }));
 
     expect(book.onRequest).toHaveBeenCalledTimes(1);
-    expect(new Date((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0]).getTime()).toBe(
-      new Date('2026-09-22T09:00').getTime()
+    // Read in the viewer's zone, UTC here, whatever zone the machine running this is in.
+    expect(new Date((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0]).toISOString()).toBe(
+      '2026-09-22T09:00:00.000Z'
     );
+  });
+
+  // The header says every time is in the viewer's zone, and the confirmation is formatted in it, so
+  // a typed time has to mean the same zone. Kathmandu's +5:45 is nobody's machine zone.
+  describe('in a viewer zone other than the browser one', () => {
+    const viewerTimezone = 'Asia/Kathmandu';
+
+    it('reads the typed time in that zone', async () => {
+      const book = booking();
+      const { user } = setupBooking(book, { viewerTimezone, peerHasSchedule: false, slots: [] });
+
+      await user.type(screen.getByLabelText('Time to request'), '2026-09-22T09:00');
+      await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+      expect(new Date((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0]).toISOString()).toBe(
+        '2026-09-22T03:15:00.000Z'
+      );
+    });
+
+    it('bounds the input at now in that zone', () => {
+      setupBooking(booking(), { viewerTimezone, peerHasSchedule: false, slots: [] });
+      // NOW is 15:00Z, which is 20:45 in Kathmandu.
+      expect(screen.getByLabelText('Time to request')).toHaveAttribute('min', '2026-09-21T20:45');
+    });
+
+    it('confirms the time that was typed', () => {
+      setupBooking(booking({ requestedStart: '2026-09-22T03:15:00.000Z' }), {
+        viewerTimezone,
+        peerHasSchedule: false,
+        slots: [],
+      });
+      expect(screen.getByText(/^Requested /).textContent).toContain('9:00');
+    });
   });
 
   it('stays read-only without a booking caller', () => {

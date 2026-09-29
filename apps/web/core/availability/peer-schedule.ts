@@ -175,18 +175,30 @@ function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string 
   return Array.from({ length: PEER_SCHEDULE_DAYS }, (_, offset) => isoDate(addDays(first, offset)));
 }
 
-/** Midnight in `zone` on the UTC date, where the server's walk begins. A DST jump over midnight
- * leaves neither candidate on it, and the day then opens at the end of the gap. */
+/** Midnight in `zone` on the UTC date, where the server's walk begins. */
 function windowStart(now: Date, zone: string | undefined): Date {
   const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
-  const midnightUtc = Date.UTC(year, month - 1, day);
-  const first = midnightUtc - zoneOffsetMinutes(new Date(midnightUtc), zone) * 60_000;
-  const second = midnightUtc - zoneOffsetMinutes(new Date(first), zone) * 60_000;
-
-  const isMidnight = (instant: number) => wallMinutes(zonedParts(new Date(instant), zone)) === midnightUtc / 60_000;
-  const real = [first, second].filter(isMidnight);
-  return new Date(real.length > 0 ? Math.min(...real) : Math.max(first, second));
+  return wallClockInstant(Date.UTC(year, month - 1, day), zone);
 }
+
+/**
+ * The instant a wall clock in `zone` names, with the wall clock given as if it were UTC.
+ *
+ * Tried with the zone's offset a day either side, since no zone changes offset twice in two days.
+ * A wall clock the clocks go back over has two instants, and resolves to the earlier; one a DST
+ * jump skipped has none, and moves forward by the jump — both what `new Date(local)` does.
+ */
+function wallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
+  const candidates = [-DAY_MS, DAY_MS].map(
+    shift => wallAsUtc - zoneOffsetMinutes(new Date(wallAsUtc + shift), zone) * 60_000
+  );
+
+  const isWall = (instant: number) => wallMinutes(zonedParts(new Date(instant), zone)) === wallAsUtc / 60_000;
+  const real = candidates.filter(isWall);
+  return new Date(real.length > 0 ? Math.min(...real) : Math.max(...candidates));
+}
+
+const DAY_MS = 86_400_000;
 
 function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
@@ -270,6 +282,27 @@ export function formatViewerInstant(iso: string, viewerTimezone: string | undefi
   if (Number.isNaN(at.getTime())) return iso;
   const zone = usableZone(viewerTimezone);
   return at.toLocaleString(undefined, zone ? { timeZone: zone } : undefined);
+}
+
+/**
+ * A `datetime-local` value for an instant, as the wall clock in the grid's zone — the one a typed
+ * time is read back in by `viewerInputInstant`.
+ */
+export function viewerInputValue(at: number, viewerTimezone: string | undefined): string {
+  const { date, minutes } = zonedParts(new Date(at), usableZone(viewerTimezone));
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+/**
+ * A `datetime-local` value read as a wall clock in the grid's zone rather than the browser's, so a
+ * typed time means what the chips and the confirmation say it means. `null` for anything else.
+ */
+export function viewerInputInstant(value: string, viewerTimezone: string | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  return wallClockInstant(Date.UTC(year, month - 1, day, hour, minute), usableZone(viewerTimezone));
 }
 
 /** `+5:30 hrs`, or `same time as you` at zero. For the header, beside both zone names. */
