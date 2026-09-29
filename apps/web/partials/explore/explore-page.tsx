@@ -64,10 +64,9 @@ export function ExplorePage({
           apiEndpoint="/api/explore/feed"
           initialTime="month"
           initialSort="best"
-          showSortFilter
           // No space or type menus: the feed spans every space the reader may see, and the server
           // decides which types it holds (Debate and Claim — see `DEFAULT_EXPLORE_TYPE_IDS`).
-          showSpaceFilter={false}
+          showSortFilter
           dividerBeforeFeed
           titleOpensSidePanel
           claimCardVariant="debate-panel-mobile"

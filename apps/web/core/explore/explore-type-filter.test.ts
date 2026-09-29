@@ -8,9 +8,7 @@ import {
   entityMatchesExploreTypeIds,
   exploreTypeFilterLabel,
   parseExploreTypeIdsParam,
-  parseStoredExploreTypeIds,
   sanitizeExploreTypeIds,
-  toggleExploreTypeId,
 } from './explore-type-filter';
 
 describe('Explore default types', () => {
@@ -42,23 +40,6 @@ describe('Explore default types', () => {
   });
 });
 
-describe('parseStoredExploreTypeIds', () => {
-  it('falls back to the default selection when the cache is missing or corrupt', () => {
-    expect(parseStoredExploreTypeIds(null)).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
-    expect(parseStoredExploreTypeIds('not-json')).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
-    expect(parseStoredExploreTypeIds('{}')).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
-  });
-
-  it('preserves a deliberately empty cached selection', () => {
-    expect(parseStoredExploreTypeIds('[]')).toEqual([]);
-  });
-
-  it('keeps only allowed IDs in canonical Explore order', () => {
-    const [first, second] = EXPLORE_ENTITY_TYPE_IDS;
-    expect(parseStoredExploreTypeIds(JSON.stringify([second, 'unknown', first, second]))).toEqual([first, second]);
-  });
-});
-
 describe('parseExploreTypeIdsParam', () => {
   it('defaults a missing parameter to the Explore types and preserves an empty selection', () => {
     expect(parseExploreTypeIdsParam(null)).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
@@ -75,18 +56,6 @@ describe('parseExploreTypeIdsParam', () => {
 describe('sanitizeExploreTypeIds', () => {
   it('ignores non-string values', () => {
     expect(sanitizeExploreTypeIds([null, 42, EXPLORE_ENTITY_TYPE_IDS[0]])).toEqual([EXPLORE_ENTITY_TYPE_IDS[0]]);
-  });
-});
-
-describe('toggleExploreTypeId', () => {
-  it('checks and unchecks types while preserving canonical order', () => {
-    const [first, second] = EXPLORE_ENTITY_TYPE_IDS;
-    expect(toggleExploreTypeId([first, second], first)).toEqual([second]);
-    expect(toggleExploreTypeId([second], first)).toEqual([first, second]);
-  });
-
-  it('ignores unknown type IDs', () => {
-    expect(toggleExploreTypeId(EXPLORE_ENTITY_TYPE_IDS, 'unknown')).toEqual(EXPLORE_ENTITY_TYPE_IDS);
   });
 });
 

@@ -870,8 +870,7 @@ export async function fetchExploreFeed(args: {
   // scans a window and applies the whitelist here — and past the ranked depth where tagged claims
   // run thin, a Claim-only selection matches nothing in a 30-row window while the connection still
   // reports another page. Measured over the eleven spaces that hold tagged claims: at offset 600 a
-  // gated window held 0 claims against 13 ungated. Claim is one of the three default types, so
-  // unticking the other two is all it takes.
+  // gated window held 0 claims against 13 ungated, which a Claim-only `typeIds` request reaches.
   //
   // So the scan continues here, where one round trip covers it, rather than being handed back to a
   // client that will only ask again. Bounded because the alternative is unbounded: the ranked

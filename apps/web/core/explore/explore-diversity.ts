@@ -1,7 +1,7 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE, NEWS_STORY_TYPE_ID } from './explore-constants';
 
 /**
  * Read-time diversity cap for the "Best" feed (GEO-2690).
@@ -302,12 +302,11 @@ export function longestTypeRun<T>(items: readonly T[], keyOf: (item: T) => strin
  * SUPPLY IS THE CEILING, NOT THIS CONSTANT. There are ~82 debate entities in the whole feed, so
  * 3-per-10 holds for roughly 270 ranked items and must thin after that. {@link applyTargetMix}
  * degrades by falling back to rank order rather than serving a short page.
- *
- * News story has since been dropped from Explore altogether, so the cycle is 6 claims to 3 debates.
  */
 export const EXPLORE_TARGET_MIX: ReadonlyArray<{ typeId: string; share: number }> = [
   { typeId: CLAIM_TYPE_ID, share: 6 },
   { typeId: DEBATE_TYPE_ID, share: 3 },
+  { typeId: NEWS_STORY_TYPE_ID, share: 1 },
 ];
 
 /** True when every selected type has a target share, so the mix is meaningful for this request. */
@@ -320,8 +319,8 @@ export function targetMixAppliesTo(typeIds: readonly string[] | undefined): bool
 /**
  * Reorder a ranked list toward {@link EXPLORE_TARGET_MIX}, preserving rank order within a type.
  *
- * Shares are renormalised over the types actually present, so a request for one type is not left
- * with a gap the ratio cannot fill.
+ * Shares are renormalised over the types actually present, so unticking News story turns 6:3:1
+ * into 6:3 rather than leaving a gap the ratio cannot fill.
  *
  * Selection is by largest *deficit* — the type furthest below the share it should hold by now —
  * which spreads each type through the page instead of emitting it in blocks. A 6:3:1 cycle comes
