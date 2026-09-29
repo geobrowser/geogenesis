@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import React from 'react';
 
@@ -61,7 +61,10 @@ vi.mock('~/design-system/prefetch-link', async () => {
   };
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.router.replace.mockClear();
+});
 
 describe('EditableTabGroup active indicator', () => {
   it('keeps one row-owned indicator outside the active sortable tab', async () => {
@@ -172,5 +175,47 @@ describe('EditableTabGroup divider', () => {
 
     expect(document.querySelectorAll(dividerSelector)).toHaveLength(1);
     expect(screen.getByText('Governance')).toBeInTheDocument();
+  });
+});
+
+describe('EditableTabGroup deleting the open tab', () => {
+  const editableTabs: EditableTab[] = [
+    {
+      relation: {
+        id: 'relation-1',
+        entityId: 'relation-entity-1',
+        spaceId: 'space-1',
+        position: '1',
+      } as EditableTab['relation'],
+      entityId: 'tab-1',
+      name: 'Authored tab',
+      href: '/space/space-1?tabId=tab-1',
+    },
+  ];
+
+  async function deleteOpenTab(props: { closedTabHref?: string }) {
+    render(
+      <EditableTabGroup
+        entityId="space-entity"
+        spaceId="space-1"
+        editableTabs={editableTabs}
+        overviewHref="/space/space-1"
+        {...props}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tab actions' }));
+    fireEvent.click(await screen.findByText('Delete tab'));
+  }
+
+  it('lands on the page content, which a topic space keeps apart from its bare URL', async () => {
+    await deleteOpenTab({ closedTabHref: '/space/space-1/overview' });
+
+    expect(mocks.router.replace).toHaveBeenCalledWith('/space/space-1/overview', { scroll: false });
+  });
+
+  it('falls back to the bare URL everywhere else', async () => {
+    await deleteOpenTab({});
+
+    expect(mocks.router.replace).toHaveBeenCalledWith('/space/space-1', { scroll: false });
   });
 });
