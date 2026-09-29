@@ -436,15 +436,19 @@ describe('booking a slot', () => {
 });
 
 describe('what the footer has to say', () => {
+  // In the grid's zone rather than the browser's, so the footer cannot contradict the chip.
   it('names the picked time in the viewer zone only', async () => {
     const { user } = setupBooking(booking(), {
-      viewerTimezone: 'UTC',
+      viewerTimezone: 'America/New_York',
       peerTimezone: 'Asia/Tokyo',
       slots: [slot(16)],
     });
-    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+    // 16:00Z is noon in New York.
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /12pm/ }));
 
-    expect(screen.getByText(new Date('2026-09-21T16:00:00Z').toLocaleString())).toBeInTheDocument();
+    expect(
+      screen.getByText(new Date('2026-09-21T16:00:00Z').toLocaleString(undefined, { timeZone: 'America/New_York' }))
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Ada.s time:/)).not.toBeInTheDocument();
   });
 

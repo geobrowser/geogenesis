@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
-import { formatOffset, peerScheduleDays, toPeerSchedule } from './peer-schedule';
+import { formatOffset, formatViewerInstant, peerScheduleDays, toPeerSchedule } from './peer-schedule';
 
 const response = (overrides: Partial<ScheduleOverlapResponse> = {}): ScheduleOverlapResponse => ({
   with: 'user-peer',
@@ -334,5 +334,23 @@ describe('formatOffset', () => {
     [-300, '−5 hrs'],
   ])('formats %i as %s', (minutes, expected) => {
     expect(formatOffset(minutes)).toBe(expected);
+  });
+});
+
+describe('formatViewerInstant', () => {
+  const instant = '2026-09-21T16:00:00Z';
+
+  it('formats in the viewer zone, not the browser zone', () => {
+    expect(formatViewerInstant(instant, 'Asia/Tokyo')).toBe(
+      new Date(instant).toLocaleString(undefined, { timeZone: 'Asia/Tokyo' })
+    );
+  });
+
+  it.each(['', 'local', 'Not/AZone'])('falls back to the browser zone for %j', zone => {
+    expect(formatViewerInstant(instant, zone)).toBe(new Date(instant).toLocaleString());
+  });
+
+  it('passes an unparseable instant through rather than printing Invalid Date', () => {
+    expect(formatViewerInstant('not-a-date', 'UTC')).toBe('not-a-date');
   });
 });

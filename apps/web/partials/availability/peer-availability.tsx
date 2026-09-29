@@ -9,6 +9,7 @@ import {
   type PeerDaySlot,
   type PeerSchedule,
   formatOffset,
+  formatViewerInstant,
   peerScheduleDays,
 } from '~/core/availability/peer-schedule';
 import { usePeerSchedule } from '~/core/debates/hooks';
@@ -173,7 +174,17 @@ export function PeerAvailabilityView({
         // Availability is a preference, not a gate, so a caller that can book is offered a time of
         // its own rather than a wall (GEO-2938).
         <Empty
-          action={booking && <RequestAnyway booking={booking} clock={clock} peerName={name} notBefore={notBefore} />}
+          action={
+            booking && (
+              <RequestAnyway
+                booking={booking}
+                clock={clock}
+                peerName={name}
+                viewerTimezone={schedule.viewerTimezone}
+                notBefore={notBefore}
+              />
+            )
+          }
         >
           {schedule.peerHasSchedule
             ? `${name} has no times free in the next 7 days.`
@@ -203,6 +214,7 @@ export function PeerAvailabilityView({
               startsAt={selectedStart}
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
               peerName={name}
+              viewerTimezone={schedule.viewerTimezone}
             />
           )}
         </>
@@ -218,20 +230,24 @@ function BookingFooter({
   startsAt,
   viewerIsFree,
   peerName,
+  viewerTimezone,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
   peerName: string;
+  viewerTimezone: string;
 }) {
-  if (booking.requestedStart) return <BookedHint booking={booking} peerName={peerName} />;
+  if (booking.requestedStart) {
+    return <BookedHint booking={booking} peerName={peerName} viewerTimezone={viewerTimezone} />;
+  }
 
   return (
     <div className="flex shrink-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
-          {startsAt ? formatIn(startsAt) : 'Pick a time above.'}
+          {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : 'Pick a time above.'}
         </Text>
         <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
       </div>
@@ -254,19 +270,27 @@ function BookingFooter({
 }
 
 /** What the footer says once the server has accepted the time. */
-function BookedHint({ booking, peerName }: { booking: PeerAvailabilityBooking; peerName: string }) {
+function BookedHint({
+  booking,
+  peerName,
+  viewerTimezone,
+}: {
+  booking: PeerAvailabilityBooking;
+  peerName: string;
+  viewerTimezone: string;
+}) {
   if (!booking.requestedStart) return null;
+  const requested = formatViewerInstant(booking.requestedStart, viewerTimezone);
   if (booking.mode === 'reschedule') {
     return (
       <Hint>
-        Proposed {formatIn(booking.requestedStart)} instead. {peerName} has to accept the new time before the room is
-        booked.
+        Proposed {requested} instead. {peerName} has to accept the new time before the room is booked.
       </Hint>
     );
   }
   return (
     <Hint>
-      Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
+      Requested {requested}. {peerName} has to accept before the room is booked.
     </Hint>
   );
 }
@@ -321,11 +345,13 @@ function RequestAnyway({
   booking,
   clock,
   peerName,
+  viewerTimezone,
   notBefore,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   peerName: string;
+  viewerTimezone: string;
   notBefore: number;
 }) {
   const [local, setLocal] = React.useState('');
@@ -333,7 +359,9 @@ function RequestAnyway({
   // geo-chat refuses a past start, so one never leaves here.
   const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
 
-  if (booking.requestedStart) return <BookedHint booking={booking} peerName={peerName} />;
+  if (booking.requestedStart) {
+    return <BookedHint booking={booking} peerName={peerName} viewerTimezone={viewerTimezone} />;
+  }
 
   return (
     <div className="mt-3 flex flex-col items-center gap-2">
@@ -365,13 +393,6 @@ function localInputValue(at: number) {
   const date = new Date(at);
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-/** Always the viewer's own zone, which is what `toLocaleString` does by default. */
-function formatIn(iso: string) {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return iso;
-  return at.toLocaleString();
 }
 
 /**

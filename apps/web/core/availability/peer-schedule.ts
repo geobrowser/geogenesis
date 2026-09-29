@@ -261,6 +261,17 @@ function formatterFor(zone: string | undefined): Intl.DateTimeFormat {
   return formatter;
 }
 
+/**
+ * An instant in full, in the same zone the grid draws the viewer's week in — so a footer naming the
+ * picked time can never disagree with the chip it came from, whatever zone the browser is in.
+ */
+export function formatViewerInstant(iso: string, viewerTimezone: string | undefined): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const zone = usableZone(viewerTimezone);
+  return at.toLocaleString(undefined, zone ? { timeZone: zone } : undefined);
+}
+
 /** `+5:30 hrs`, or `same time as you` at zero. For the header, beside both zone names. */
 export function formatOffset(minutes: number): string {
   if (minutes === 0) return 'same time as you';
