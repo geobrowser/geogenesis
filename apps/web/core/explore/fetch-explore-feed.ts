@@ -4,7 +4,12 @@ import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import type { DebateMediaResponse } from '~/core/debates/api';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { hasProcessedVideo } from '~/core/debates/playback-utils';
+import { geoChatBaseUrl } from '~/core/debates/server/geo-chat-base-url';
 import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
+import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -39,6 +44,7 @@ import { exploreRelationIndexDocument } from './explore-relation-index-document'
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
+import { leadWithPlayableDebate } from './lead-with-playable-debate';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -682,6 +688,11 @@ export async function fetchExploreFeed(args: {
   /** Additional server-side scope shared by Best, Top and New. */
   entityFilter?: EntityFilter;
   /**
+   * GEO-3070. Best opens on the highest-ranked debate whose video plays. Explore's own feed only:
+   * a space's activity log and a topic's feed keep their ranked order.
+   */
+  leadWithPlayableDebate?: boolean;
+  /**
    * Complete population branches for a contextual feed. When supplied, Best and New order this
    * full population from a compact index rather than applying one expensive combined predicate.
    */
@@ -923,6 +934,16 @@ export async function fetchExploreFeed(args: {
     ordered = orderWindow(page.entities);
   }
 
+  // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
+  // from that window is reordered the same way, so the lead debate is served once and nothing it
+  // displaced is skipped; later windows are ranked further down and left as they are.
+  if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
+    ordered = await leadWithPlayableDebate(ordered, {
+      isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+    });
+  }
+
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
   const slice = ordered.slice(windowOffset, windowOffset + pageSize);
@@ -940,4 +961,21 @@ export async function fetchExploreFeed(args: {
           endCursor: page.endCursor,
         }),
   };
+}
+
+/**
+ * Whether geo-chat has a processed video for a published Debate, asked server-side.
+ *
+ * Its own request rather than `getDebateMedia`: that lives in a `'use client'` module, which a route
+ * handler cannot call. Same endpoint and the same `hasProcessedVideo` rule the Explore card plays
+ * by, so the lead slot never holds a debate the card would then refuse to play. A Debate entity's id
+ * is its geo-chat debate id, hyphenated.
+ */
+async function debateHasProcessedVideo(entityId: string, signal: AbortSignal): Promise<boolean> {
+  const response = await fetch(`${geoChatBaseUrl()}/debates/${ID.hexToUuid(entityId)}/media`, {
+    signal,
+    cache: 'no-store',
+  });
+  if (!response.ok) return false;
+  return hasProcessedVideo((await response.json()) as DebateMediaResponse);
 }
