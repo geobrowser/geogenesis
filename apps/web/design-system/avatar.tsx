@@ -1,6 +1,6 @@
 import BoringAvatar from 'boring-avatars';
 
-import { NativeGeoImage } from './geo-image';
+import { GeoImage } from './geo-image';
 import { colors } from './theme/colors';
 
 interface Props {
@@ -35,16 +35,21 @@ export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12
     />
   );
 
+  // The image fills its own positioned box so `fill` works regardless of whether the caller's
+  // wrapper is `relative` (many aren't).
   return avatarUrl ? (
-    <NativeGeoImage
-      value={avatarUrl}
-      alt={alt}
-      className="h-full w-full object-cover"
-      loading={priority ? 'eager' : 'lazy'}
-      fetchPriority={priority ? 'high' : undefined}
-      decoding="async"
-      fallback={generated}
-    />
+    <span className="relative block h-full w-full overflow-hidden">
+      <GeoImage
+        value={avatarUrl}
+        alt={alt}
+        fill
+        sizes={`${size}px`}
+        lqip={size >= 48}
+        priority={priority}
+        className="object-cover"
+        fallback={generated}
+      />
+    </span>
   ) : (
     generated
   );

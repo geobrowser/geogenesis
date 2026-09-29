@@ -10,15 +10,16 @@ import { useRef, useState } from 'react';
 import cx from 'classnames';
 
 import { IMAGE_ACCEPT, MAX_IMAGE_SIZE_BYTES, VALID_IMAGE_TYPES } from '~/core/constants';
-import { createGeoImage } from '~/core/sdk/geo-client';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { createGeoImage } from '~/core/sdk/geo-client';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { NavUtils, getImagePath } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Context } from '~/design-system/icons/context';
@@ -330,7 +331,6 @@ function ImageNodeChildren({
   };
 
   const hasImage = Boolean(storedImageUrl);
-  const imageSrc = hasImage ? getImagePath(storedImageUrl) : '';
   const uploadedBytes = Math.floor((uploadProgress / 100) * uploadFileSize);
 
   return (
@@ -389,7 +389,7 @@ function ImageNodeChildren({
       {/* Image content or upload UI */}
       {hasImage ? (
         <div className="relative">
-          <img src={imageSrc} alt={localName} className="w-full rounded-lg" />
+          <NativeGeoImage value={storedImageUrl} alt={localName} className="w-full rounded-lg" />
         </div>
       ) : isEditing ? (
         <div

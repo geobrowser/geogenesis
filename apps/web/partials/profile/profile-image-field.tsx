@@ -4,8 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
-
+import { GeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
 
 import { ACCEPTED_PROFILE_IMAGE_ATTR, type ProfileImageKind, validateProfileImage } from './profile-edit-rules';
@@ -47,8 +46,8 @@ const COPY: Record<ProfileImageKind, { empty: string; hint: string; label: strin
 export function ProfileImageField({ kind, src, disabled = false, onPick, onRemove, onReject }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = React.useState(false);
-  const { src: resolvedSrc, onError } = useImageWithFallback(src);
   const copy = COPY[kind];
+  const isLocalPreview = Boolean(src && (src.startsWith('blob:') || src.startsWith('data:')));
 
   const accept = React.useCallback(
     (file: File | undefined) => {
@@ -93,13 +92,17 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
         className={cx(
           frameClassName,
           'group',
-          resolvedSrc ? 'bg-grey-01' : 'border border-dashed border-grey-02 bg-bg',
+          src ? 'bg-grey-01' : 'border border-dashed border-grey-02 bg-bg',
           isDragging && 'border-solid border-ctaPrimary bg-ctaTertiary',
           disabled && 'opacity-60'
         )}
       >
-        {resolvedSrc ? (
-          <img src={resolvedSrc} onError={onError} alt="" className="h-full w-full object-cover" />
+        {src ? (
+          isLocalPreview ? (
+            <img src={src} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <GeoImage value={src} alt="" fill sizes={kind === 'banner' ? '100vw' : '88px'} className="object-cover" />
+          )
         ) : (
           <button
             type="button"
@@ -115,7 +118,7 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
 
         {/* An 88px circle is too small to carry two overlay buttons, so the avatar
             puts its pair alongside the frame instead (below). */}
-        {resolvedSrc && kind === 'banner' && (
+        {src && kind === 'banner' && (
           <div
             className={cx(
               'absolute inset-0 flex items-center justify-center gap-2 bg-text/40 transition-opacity',
@@ -144,7 +147,7 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
           button, and repeating it here put two controls with the same name and the
           same action next to each other — two tab stops a screen reader cannot
           tell apart. */}
-      {kind === 'avatar' && resolvedSrc && (
+      {kind === 'avatar' && src && (
         <div className="flex items-center gap-3 pb-2">
           <button
             type="button"

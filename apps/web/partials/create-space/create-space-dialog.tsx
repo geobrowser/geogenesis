@@ -11,7 +11,6 @@ import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { type VotingSettingsInput } from '~/core/hooks/use-deploy-space';
-import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
@@ -21,6 +20,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FindEntity } from '~/design-system/find-entity';
+import { GeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
@@ -619,21 +619,10 @@ type CreateSpaceImagePreviewProps = {
 };
 
 const CreateSpaceImagePreview = ({ image, height, width, onRemove }: CreateSpaceImagePreviewProps) => {
-  const { src, onError } = useImageWithFallback(image);
-
   return (
     <>
-      <div
-        style={{
-          backgroundImage: `url(${src})`,
-          height,
-          width,
-          backgroundSize: 'cover',
-          backgroundRepeat: 'no-repeat',
-        }}
-      >
-        {/* Hidden img to trigger fallback if needed */}
-        <img src={src} onError={onError} alt="" style={{ display: 'none' }} />
+      <div className="relative overflow-hidden" style={{ height, width }}>
+        <GeoImage value={image} alt="" fill sizes={`${Math.max(width, 48)}px`} className="object-cover" />
       </div>
       <div className="absolute top-0 right-0 p-1.5 opacity-0 transition-opacity duration-200 ease-in-out group-hover:opacity-100">
         <SquareButton disabled={image === ''} onClick={onRemove} icon={<Trash />} />
