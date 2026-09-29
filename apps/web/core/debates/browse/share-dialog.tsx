@@ -72,37 +72,46 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
-  // The sheet's own success metric.
-  const captureShare = (method: ShareMethod) => {
+  // Preserve synchronous user activation and the handler's original errors.
+  const handoffShare = (method: ShareMethod, handoff: () => void) => {
     const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
-    if (method === 'copy_link' || method === 'download') operation.succeeded({ method });
-    else operation.failed('unknown');
+    try {
+      handoff();
+      if (method === 'download') operation.succeeded({ method });
+      else operation.failed('unknown');
+    } catch (error) {
+      operation.failed('unavailable');
+      throw error;
+    }
     try {
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
     } catch {}
   };
 
   const onReddit = () => {
-    openComposer(
-      `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+    handoffShare('reddit', () =>
+      openComposer(
+        `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+      )
     );
-    captureShare('reddit');
   };
 
   const onX = () => {
     const url = shareUrl();
     const text = shareMessage(X_TWEET_MAX - url.length - 1);
-    openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
-    captureShare('x');
+    handoffShare('x', () =>
+      openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
+    );
   };
 
   const onLinkedIn = () => {
     // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
     // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
-    openComposer(
-      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
+    handoffShare('linkedin', () =>
+      openComposer(
+        `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
+      )
     );
-    captureShare('linkedin');
   };
 
   const onCopy = async () => {
@@ -161,7 +170,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                   ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
                   onClick={() => {
                     if (download.status === 'ready') {
-                      captureShare('download');
+                      handoffShare('download', download.download);
+                      return;
                     } else if (download.status === 'error') {
                       setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
                     }

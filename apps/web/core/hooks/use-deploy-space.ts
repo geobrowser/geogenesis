@@ -7,7 +7,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
-import { snapshotActionContext } from '~/core/action-context';
+import type { ActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { geo } from '~/core/sdk/geo-client';
@@ -26,6 +27,7 @@ import { GEOGENESIS } from '~/core/wallet/geo-chain';
 export type VotingSettingsInput = Parameters<typeof getCreateDaoSpaceCalldata>[0]['votingSettings'];
 
 type DeployArgs = {
+  attribution?: ActionContext;
   type: SpaceType;
   spaceName: string;
   spaceImage?: string;
@@ -76,6 +78,7 @@ async function runWriteEffect<A>(effect: Effect.Effect<A, Error>): Promise<A> {
 }
 
 export function useDeploySpace() {
+  const getContext = useActionContext('create_space', 'space_draft', '', { overlay: 'modal' });
   const { smartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
@@ -138,14 +141,9 @@ export function useDeploySpace() {
 
   return {
     deploy: async (args: DeployArgs) => {
-      const draftId = crypto.randomUUID();
-      const operation = observeOperation(
-        'create_space',
-        'space_draft',
-        draftId,
-        undefined,
-        snapshotActionContext('create_space', 'space_draft', draftId)
-      );
+      const attribution =
+        args.attribution ?? getContext({ target_type: 'space_draft', target_id: crypto.randomUUID() });
+      const operation = observeOperation('create_space', 'space_draft', attribution.target_id, undefined, attribution);
       try {
         const id = await mutateAsync(args);
         if (id) operation.succeeded({ created_space_id: id });
