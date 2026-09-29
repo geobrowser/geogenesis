@@ -18,7 +18,7 @@ import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -48,7 +48,13 @@ export function RequestsTab() {
   );
 }
 
-const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
+const NO_SCHEDULED: ScheduledContent = {
+  answerable: [],
+  upcoming: [],
+  people: [],
+  requestsError: null,
+  roomsError: null,
+};
 
 function ScheduledRequestsTab() {
   return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
@@ -68,7 +74,9 @@ function RequestsTabBody({
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  // Through the same expiry filter as the received side, so a lapsed request leaves at its expiry
+  // rather than sitting on an "Expired" card until the server says so.
+  const outbound = useLiveRequest(requestsQuery.data?.outbound ?? activity?.outbound_request);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),
@@ -97,11 +105,7 @@ function RequestsTabBody({
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
   // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
+  const challenge = useLiveRequest(activity?.challenge);
   const currentUserId = useCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
