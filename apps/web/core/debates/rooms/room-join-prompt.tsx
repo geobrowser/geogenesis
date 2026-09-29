@@ -10,12 +10,14 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { UpcomingDebateRoom } from '../api';
-import { useRequestCountdown } from '../matchmaking/use-request-countdown';
+import { useServerClock } from '../matchmaking/use-request-countdown';
 import { ROOM_JOIN_PROMPT } from './room-copy';
 import { useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
 
 const MINUTE_MS = 60_000;
+/** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
+const TICK_MS = 15_000;
 
 /**
  * The offer to join a scheduled debate (GEO-2941), never a redirect. Shown at the top of whatever
@@ -27,16 +29,10 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   const [joining, setJoining] = React.useState(false);
   const [, startJoining] = React.useTransition();
   const opponent = useUpcomingRoomOpponent(room);
-  const { remainingMs } = useRequestCountdown(room.starts_at);
+  const now = useNow();
 
   const opponentName = opponent?.display_name || ROOM_JOIN_PROMPT.unnamedOpponent;
-  const starting = room.due || remainingMs <= 0;
-  const when = starting
-    ? ROOM_JOIN_PROMPT.startingNow
-    : ROOM_JOIN_PROMPT.startsAt(
-        formatTime(room.starts_at),
-        Number.isFinite(remainingMs) ? `${Math.ceil(remainingMs / MINUTE_MS)} min` : null
-      );
+  const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
 
   return (
     <div className="pointer-events-none fixed top-[calc(env(safe-area-inset-top,0px)+3.5rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
@@ -60,9 +56,6 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           <Text as="p" variant="metadataMedium" className="truncate">
             {ROOM_JOIN_PROMPT.title}
           </Text>
-          <Text as="p" variant="footnote" color="grey-04" className="truncate">
-            {ROOM_JOIN_PROMPT.opponent(opponentName)} · {when}
-          </Text>
           <p className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <span
               aria-hidden
@@ -79,6 +72,11 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
                 : ROOM_JOIN_PROMPT.opponentNotJoined(opponentName)}
             </Text>
           </p>
+          {schedule && (
+            <Text as="p" variant="footnote" color="grey-04" className="mt-0.5 truncate">
+              {schedule}
+            </Text>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
           <button
@@ -105,9 +103,28 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   );
 }
 
-function formatTime(iso: string) {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? 'the scheduled time'
-    : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+/**
+ * Minutes to the start, or since it. The first minute either side reads as starting now rather than
+ * "in 0 mins" or "0 mins ago". `null` for an unparseable start, which has nothing honest to say.
+ */
+export function scheduleLabel(untilStartMs: number): string | null {
+  if (!Number.isFinite(untilStartMs)) return null;
+  if (untilStartMs > 0) return ROOM_JOIN_PROMPT.scheduledIn(Math.ceil(untilStartMs / MINUTE_MS));
+  const elapsedMinutes = Math.floor(-untilStartMs / MINUTE_MS);
+  return elapsedMinutes < 1 ? ROOM_JOIN_PROMPT.startingNow : ROOM_JOIN_PROMPT.scheduledAgo(elapsedMinutes);
+}
+
+/** The server's clock where it has synced, so a skewed laptop does not misreport the start. */
+function useNow() {
+  const clock = useServerClock();
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const read = () => (clock ? clock.now() : Date.now());
+    setNow(read());
+    const interval = setInterval(() => setNow(read()), TICK_MS);
+    return () => clearInterval(interval);
+  }, [clock]);
+
+  return now;
 }

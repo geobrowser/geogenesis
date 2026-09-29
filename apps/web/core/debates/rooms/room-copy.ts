@@ -47,11 +47,10 @@ export function roomPresenceNote(state: DebateRoomPresenceState, opponentName: s
  */
 export const ROOM_JOIN_PROMPT = {
   title: 'Your debate room is open',
-  opponent: (opponentName: string) => `with ${opponentName}`,
-  startsAt: (startsAt: string, startsIn: string | null) =>
-    startsIn ? `Starts at ${startsAt} · in ${startsIn}` : `Starts at ${startsAt}`,
+  scheduledIn: (minutes: number) => `Scheduled in ${minutes} ${minutes === 1 ? 'min' : 'mins'}`,
+  scheduledAgo: (minutes: number) => `Scheduled for ${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`,
   startingNow: 'Starting now',
-  opponentJoined: (opponentName: string) => `${opponentName} is in the room`,
+  opponentJoined: (opponentName: string) => `${opponentName} is waiting`,
   opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
   unnamedOpponent: 'Your opponent',
   join: 'Join debate',

@@ -605,15 +605,15 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    expect(await screen.findByText('Your opponent is in the room')).toBeInTheDocument();
+    expect(await screen.findByText('Your opponent is waiting')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
   // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
   // cannot disagree about what is happening.
   it.each([
-    ['someone is already inside', { others_present: true, due: true }, 'Your opponent is in the room'],
-    ['the start has passed', { others_present: false, due: true }, /Starting now$/],
+    ['someone is already inside', { others_present: true, due: true }, 'Your opponent is waiting'],
+    ['the start has passed', { others_present: false, due: true }, /^Scheduled for \d+ mins? ago$/],
     ['nobody has arrived', { others_present: false, due: false }, 'Your opponent hasn’t joined yet'],
   ])('says the right thing when %s', async (_label, row, expected) => {
     mocks.pathname = '/space/space-1/claims';
