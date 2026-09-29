@@ -202,7 +202,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     isLoading: positionsLoading,
     isPlaceholderData: positionsArePlaceholderData,
     error: positionsError,
-  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId);
+  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId, { onlyViewerClaims: true });
   const matchAnalysis = React.useMemo(
     () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
     [positionsByClaim, viewerProfileSpaceId]

@@ -11,6 +11,7 @@ import type { ParticipantPosition, PendingParticipantPosition } from './particip
 import {
   applyPendingPositions,
   fetchParticipantPositions,
+  fetchPositionsOnViewerClaims,
   groupParticipantPositions,
   isParticipantPositionsQueryKey,
   participantPositionsQueryKey,
@@ -161,6 +162,69 @@ describe('fetchParticipantPositions', () => {
   });
 });
 
+describe('fetchPositionsOnViewerClaims', () => {
+  const THIRD = '019fedae72b67ab2927adf044d57c568';
+  const stance = (userId: string, objectId: string, voteType = 0) => ({
+    userId,
+    objectId,
+    spaceId: 'space-1',
+    voteType,
+    voteKind: 1,
+  });
+
+  // A claim the viewer never answered cannot be a match, so it is never asked for.
+  it('reads the viewer first, then only others on the claims the viewer answered', async () => {
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        lastPage([stance(LOCAL.profile_space_id, 'claim-1'), stance(LOCAL.profile_space_id, 'claim-2', 1)])
+      )
+      .mockResolvedValueOnce(lastPage([stance(REMOTE.profile_space_id, 'claim-1', 1)]));
+
+    const positions = await fetchPositionsOnViewerClaims(
+      LOCAL.profile_space_id,
+      [LOCAL.profile_space_id, REMOTE.profile_space_id, THIRD],
+      undefined,
+      fetchPage
+    );
+
+    expect(fetchPage.mock.calls.map(call => call[0])).toEqual([
+      {
+        userId: { in: [LOCAL.profile_space_id] },
+        objectType: { is: 0 },
+        voteType: { in: [0, 1] },
+        voteKind: { in: [1] },
+      },
+      {
+        userId: { in: [REMOTE.profile_space_id, THIRD] },
+        objectId: { in: ['claim-1', 'claim-2'] },
+        objectType: { is: 0 },
+        voteType: { in: [0, 1] },
+        voteKind: { in: [1] },
+      },
+    ]);
+    expect(positions.map(position => [position.profileSpaceId, position.claimId, position.position])).toEqual([
+      [LOCAL.profile_space_id, 'claim-1', true],
+      [LOCAL.profile_space_id, 'claim-2', false],
+      [REMOTE.profile_space_id, 'claim-1', false],
+    ]);
+  });
+
+  it('asks nothing more when the viewer has answered nothing', async () => {
+    const fetchPage = vi.fn().mockResolvedValueOnce(lastPage([]));
+
+    await expect(
+      fetchPositionsOnViewerClaims(
+        LOCAL.profile_space_id,
+        [LOCAL.profile_space_id, REMOTE.profile_space_id],
+        undefined,
+        fetchPage
+      )
+    ).resolves.toEqual([]);
+    expect(fetchPage).toHaveBeenCalledOnce();
+  });
+});
+
 describe('participantSidesOn', () => {
   // geo-chat validates a request against the claim's home space, and the card publishes there; a
   // response in some other space that merely cites the claim is not a side on this claim.
@@ -256,6 +320,31 @@ describe('useParticipantPositions holding its list', () => {
 
     expect(result.current.byClaim.size).toBe(1);
     expect(result.current.isPlaceholderData).toBe(true);
+  });
+
+  it('scopes the read to the viewer’s claims only when asked, under its own key', async () => {
+    mocks.attention = true;
+    const filters: unknown[] = [];
+    mocks.graphql.mockImplementation(({ variables }: { variables: { filter: unknown } }) => {
+      filters.push(variables.filter);
+      return Effect.succeed(lastPage([row(LOCAL.profile_space_id, 'claim-1')]));
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(
+      () => useParticipantPositions([LOCAL, REMOTE], LOCAL.profile_space_id, { onlyViewerClaims: true }),
+      { wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children) }
+    );
+
+    await waitFor(() => expect(filters).toHaveLength(2));
+    expect(filters[1]).toMatchObject({
+      userId: { in: [REMOTE.profile_space_id] },
+      objectId: { in: ['claim-1'] },
+    });
+    await waitFor(() => expect(result.current.byClaim.size).toBe(1));
+    // The unscoped key stays free for callers that need every claim, like the rematch page.
+    expect(
+      client.getQueryData(participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]))
+    ).toBeUndefined();
   });
 });
 

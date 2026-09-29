@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
   positionsByClaim: new Map() as ParticipantPositionsByClaim,
   positionParticipants: [] as Array<{ profile_space_id: string }>,
+  positionOptions: undefined as { onlyViewerClaims?: boolean } | undefined,
   positionsFetching: false,
   positionsPlaceholderData: false,
   claimEntities: [] as ClaimPickerEntity[],
@@ -165,8 +166,13 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 
 vi.mock('../participant-positions', () => ({
-  useParticipantPositions: (participants: Array<{ profile_space_id: string }>) => {
+  useParticipantPositions: (
+    participants: Array<{ profile_space_id: string }>,
+    _viewer: string | null,
+    options?: { onlyViewerClaims?: boolean }
+  ) => {
     mocks.positionParticipants = participants;
+    mocks.positionOptions = options;
     return {
       byClaim: mocks.positionsByClaim,
       isLoading: false,
@@ -374,6 +380,16 @@ describe('PeopleTab', () => {
       { profile_space_id: mocks.personalSpaceId },
       { profile_space_id: PROFILE_SPACE_IDS['user-them'] },
     ]);
+  });
+
+  // Match counts only compare people with the viewer, so the tab reads others' positions on the
+  // viewer's claims alone rather than everything everyone listed has ever answered.
+  it('reads positions scoped to the claims the viewer has answered', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(mocks.positionOptions).toEqual({ onlyViewerClaims: true });
   });
 
   it('shows the number of distinct claims where the viewer and a person hold opposite positions', () => {
