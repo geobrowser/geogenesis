@@ -8,7 +8,6 @@ import { usePathname } from 'next/navigation';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { readTypes } from '~/core/database/entities';
-import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -142,7 +141,6 @@ export function TopicPageView({
   const pathname = usePathname();
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
-  const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
   const fullTopicSpaceIds = useTopicSpaceScope(spaceId);
   const topicSpaceIds = React.useMemo(
     () => limitTopicFeedSpaceIds(fullTopicSpaceIds, spaceId),
@@ -233,12 +231,6 @@ export function TopicPageView({
 
   const systemTabs = [
     { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },
-    {
-      label: 'Comments',
-      href: `${overviewHref}/comments`,
-      sidePanelKey: 'comments',
-      badge: commentCountLoading ? undefined : String(commentCount),
-    },
     // Sits on the authored side of the rule, at the head of the tabs this topic wrote for itself —
     // it is one of them, not one of the product's record tabs, and it is addressed like one. No
     // `sidePanelKey`: the panel selects it by tab id, which is what `StaticTab` falls back to, so

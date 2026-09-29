@@ -65,9 +65,6 @@ vi.mock('next/navigation', () => ({
   usePathname: () => mocks.pathname,
   useSearchParams: () => new URLSearchParams(),
 }));
-vi.mock('~/core/hooks/use-entity-comment-count', () => ({
-  useEntityCommentCount: () => ({ count: 7, isLoading: false }),
-}));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
     mocks.tabs = props;
@@ -266,22 +263,16 @@ describe('TopicPageView explore feed', () => {
     expect(mocks.composition?.spaceIds).toEqual(mocks.feed?.spaceIds);
   });
 
-  it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {
+  it('keeps Explore as the built-in tab so authored tabs can follow it', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toEqual([
       { label: 'Explore', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
-      {
-        label: 'Comments',
-        href: '/space/space-1/topic-1/comments',
-        sidePanelKey: 'comments',
-        badge: '7',
-      },
     ]);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore']);
   });
 
-  it('keeps comments out of Explore and renders them only on the Comments tab', () => {
+  it('keeps comments out of Explore while preserving direct comments links', () => {
     const { rerender } = render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
@@ -482,7 +473,7 @@ describe('TopicPageView Overview tab', () => {
     expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
     // The rule rides Overview instead. Two would claim the row splits in two places.
     expect(mocks.tabs?.divideBeforeAuthored).toBe(false);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments', 'Overview']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Overview']);
   });
 
   it('shows it to an editor with an empty body, since that is the only way to start one', () => {
