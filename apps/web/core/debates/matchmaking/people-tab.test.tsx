@@ -13,7 +13,7 @@ import type { DebateChallenge, DebatePerson, SchedulablePeopleResponse } from '.
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -316,7 +316,8 @@ beforeEach(() => {
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
   mocks.personProfileOpened.mockReset();
-  mocks.schedulable = undefined;
+  // Offline people are listed by default, so the baseline is a settled answer with nobody in it.
+  mocks.schedulable = { viewer_timezone: 'UTC', viewer_has_schedule: true, truncated: false, people: [] };
   mocks.useSchedulablePeople.mockReset();
   mocks.useSchedulablePeople.mockImplementation(() => ({
     data: mocks.schedulable,
@@ -603,7 +604,7 @@ describe('PeopleTab', () => {
     mocks.people = [];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
 
     cleanup();
@@ -646,7 +647,7 @@ describe('PeopleTab', () => {
 
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
 
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
     // Clearing a search that excluded nobody would put the same empty list back.
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
@@ -1512,17 +1513,28 @@ describe('Online only', () => {
     };
   }
 
-  function renderWithOfflineShown() {
-    const store = createStore();
-    store.set(debatesHubPeopleOnlineOnlyAtom, false);
-    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
-  }
-
-  it('is on by default and asks for nobody offline', () => {
+  it('is off by default, so offline people are listed alongside online ones', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'false');
+    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(true);
+  });
+
+  it('asks for nobody offline once turned on', () => {
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [slotIn(26)])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
 
     expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'true');
     expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByText('Ona')).not.toBeInTheDocument();
   });
 
   it('is absent without scheduling, since offline people could only be scheduled', () => {
@@ -1532,7 +1544,7 @@ describe('Online only', () => {
     expect(screen.queryByRole('switch', { name: 'Online only' })).not.toBeInTheDocument();
   });
 
-  it('adds offline people after online ones, with a Schedule button instead of a request', () => {
+  it('puts offline people after online ones at equal matches, with a Schedule button instead of a request', () => {
     mocks.people = [person('user-them', 'Arturas')];
     mocks.schedulable = {
       viewer_timezone: 'UTC',
@@ -1542,14 +1554,50 @@ describe('Online only', () => {
     };
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
-
-    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(true);
     const rows = screen.getAllByRole('listitem');
     expect(within(rows[0]).getByText('Arturas')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Ona')).toBeInTheDocument();
     expect(within(rows[1]).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
+  });
+
+  it('ranks everyone by matches, so an offline person with more matches sits above an online one', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const ona = '019fedae-72b6-7ab2-927a-df044d57c577';
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: ona, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: true, ...context },
+          { profileSpaceId: ona, claimId: 'claim-2', position: false, ...context },
+        ],
+      ],
+    ]);
+    mocks.people = [person('user-them', 'Arturas')];
+    const offline = schedulable('user-away', 'Ona', [slotIn(26)]);
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...offline, user: { ...offline.user, profile_space_id: ona } }],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const onaRow = screen.getByText('Ona').closest('li')!;
+    const arturasRow = screen.getByText('Arturas').closest('li')!;
+    expect(onaRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(onaRow).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
+    expect(within(arturasRow).getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
   });
 
   it('keeps someone on the live roster in their online row rather than listing them twice', () => {
@@ -1560,7 +1608,7 @@ describe('Online only', () => {
       truncated: false,
       people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByText('Arturas')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
@@ -1576,7 +1624,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-away', 'Ona', [past, ...upcoming])],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
@@ -1605,7 +1653,7 @@ describe('Online only', () => {
         slots: [{ ...picked, viewerIsFree: true }],
       },
     });
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0]);
 
@@ -1617,7 +1665,7 @@ describe('Online only', () => {
   it('asks the viewer to set availability rather than implying nobody matches', () => {
     mocks.people = [];
     mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
   });
@@ -1630,7 +1678,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-past', 'Ona', [slotIn(-3), slotIn(-2)]), schedulable('user-none', 'Idris', [])],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('Ona')).toBeInTheDocument();
     expect(screen.getByText('Idris')).toBeInTheDocument();
@@ -1639,7 +1687,7 @@ describe('Online only', () => {
     expect(screen.queryByRole('button', { name: 'More times for Idris' })).not.toBeInTheDocument();
   });
 
-  it('ranks offline people who share a time above those who share none, by matches within each', () => {
+  it('ranks someone who shares no time by matches too, below a sharer only when matches tie', () => {
     const viewer = mocks.personalSpaceId!;
     const mei = '019fedae-72b6-7ab2-927a-df044d57c5aa';
     const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
@@ -1659,7 +1707,7 @@ describe('Online only', () => {
         withProfile(schedulable('user-them', 'Arturas', []), PROFILE_SPACE_IDS['user-them']),
       ],
     };
-    // Arturas disagrees with the viewer twice, Mei once, Vytautas never.
+    // Arturas and Mei each disagree with the viewer once; Vytautas never.
     mocks.positionsByClaim = new Map([
       [
         'claim-1',
@@ -1670,22 +1718,15 @@ describe('Online only', () => {
           { profileSpaceId: PROFILE_SPACE_IDS['user-other'], claimId: 'claim-1', position: true, ...context },
         ],
       ],
-      [
-        'claim-2',
-        [
-          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
-          { profileSpaceId: PROFILE_SPACE_IDS['user-them'], claimId: 'claim-2', position: true, ...context },
-        ],
-      ],
     ]);
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    // More matches does not lift someone with no shared time above people who can be booked inside
-    // both people's hours, and matches still rank people within each group.
+    // Matches come first (#2614), so sharing no time does not sink Arturas below Vytautas. Among
+    // equal matches the server's shared-times-first order decides, so Mei leads Arturas.
     expect(screen.getAllByText(/^(Mei|Vytautas|Arturas)$/).map(name => name.textContent)).toEqual([
       'Mei',
-      'Vytautas',
       'Arturas',
+      'Vytautas',
     ]);
   });
 
@@ -1697,7 +1738,7 @@ describe('Online only', () => {
       error: null,
       refetch: vi.fn(),
     }));
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('Arturas')).toBeInTheDocument();
   });
@@ -1713,7 +1754,6 @@ describe('Online only', () => {
       refetch: vi.fn(),
     }));
     const store = createStore();
-    store.set(debatesHubPeopleOnlineOnlyAtom, false);
     store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 

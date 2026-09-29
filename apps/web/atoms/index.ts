@@ -187,11 +187,11 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
- * The People tab's "Online only" switch (GEO-2937). Off adds offline people with free time this
- * week, those sharing a slot with the viewer first. Outside the tab for the same reason as the
+ * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
+ * time this week alongside online ones. Outside the tab for the same reason as the
  * spaces filter above.
  */
-export const debatesHubPeopleOnlineOnlyAtom = atom(true);
+export const debatesHubPeopleOnlineOnlyAtom = atom(false);
 
 /**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
@@ -256,7 +256,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
-  set(debatesHubPeopleOnlineOnlyAtom, true);
+  set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

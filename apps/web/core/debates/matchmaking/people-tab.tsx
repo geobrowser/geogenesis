@@ -73,11 +73,6 @@ const INLINE_SLOTS = 3;
 
 type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
 
-/** Whether an offline row offers any time the viewer is free too, drawn or behind "More times". */
-function hasSharedTimes(schedule: PersonSchedule): boolean {
-  return schedule.slots.length > 0 || schedule.truncated;
-}
-
 /**
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
  * them like anyone else. Not requestable: nobody here can take a request right now.
@@ -101,8 +96,9 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  *
- * With "Online only" off, offline people with free time this week follow, each with any times they
- * share with the viewer and a Schedule button in place of the request (GEO-2937).
+ * With "Online only" off, the default, offline people with free time this week are listed too,
+ * ranked by matches alongside everyone online, each with any times they share with the viewer and a
+ * Schedule button in place of the request (GEO-2937).
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
@@ -123,8 +119,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
-  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
-  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  // Held here rather than in the row. Rows follow live data: someone whose free time runs out, or
+  // who is blocked, drops out of the list, and a dialog inside their row would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{
     userId: string;
     name: string;
@@ -317,30 +313,21 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       );
     }
 
-    // Online people first: they can be asked now. Then offline people who share a time with the
-    // viewer, who can be booked inside both people's hours, ahead of those who share none. The
-    // server's order breaks ties (roster order online, soonest shared slot offline), so equal
-    // matches stay stable as live updates land.
+    // Online and offline people share one list ordered by matches. Among equal matches the online
+    // person goes first, since they can be asked now; the server's order breaks the remaining ties
+    // (roster order online, soonest shared slot offline), so rows stay stable as live updates land.
     return filtered
-      .map((person, index) => {
-        const schedule = schedulesByUser.get(normId(person.user_id));
-        return {
-          person,
-          index,
-          online: person.online ? 1 : 0,
-          sharesTime: !schedule || hasSharedTimes(schedule) ? 1 : 0,
-          matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
-        };
-      })
+      .map((person, index) => ({
+        person,
+        index,
+        online: person.online ? 1 : 0,
+        matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
+      }))
       .sort(
-        (left, right) =>
-          right.online - left.online ||
-          right.sharesTime - left.sharesTime ||
-          right.matchCount - left.matchCount ||
-          left.index - right.index
+        (left, right) => right.matchCount - left.matchCount || right.online - left.online || left.index - right.index
       )
       .map(({ person }) => person);
-  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, schedulesByUser, searchedPeople]);
+  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -795,7 +782,7 @@ function SharedTimes({
   schedule: PersonSchedule;
   onPick: (start: string | undefined, opener: HTMLElement) => void;
 }) {
-  if (!hasSharedTimes(schedule)) return null;
+  if (schedule.slots.length === 0 && !schedule.truncated) return null;
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
