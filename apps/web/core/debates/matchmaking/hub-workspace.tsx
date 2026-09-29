@@ -13,6 +13,7 @@ import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
+import { useHubFilterOwner } from './use-hub-filter-owner';
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
@@ -34,7 +35,7 @@ const SIGNED_OUT_LISTS: ClaimsTabVariant[] = ['explore'];
 export function DebatesHubWorkspace() {
   const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
 
-  const { ready, authenticated } = useGeoChatAuth();
+  const { ready, authenticated, accountKey } = useGeoChatAuth();
 
   const searchParams = useSearchParams();
 
@@ -57,6 +58,8 @@ export function DebatesHubWorkspace() {
   );
 
   const shown = options.some(option => option.value === list) ? list : 'explore';
+
+  const filtersReconciled = useHubFilterOwner(accountKey ?? null, ready);
 
   const showList = React.useCallback((tab: DebatesHubTab) => {
     if (tab === 'explore' || tab === 'positions' || tab === 'lobby') setList(tab);
@@ -81,7 +84,7 @@ export function DebatesHubWorkspace() {
 
       <div className="flex gap-8 px-4">
         <div className="min-w-0 flex-1">
-          {!ready ? (
+          {!ready || !filtersReconciled ? (
             <HubSkeleton />
           ) : shown === 'lobby' ? (
             <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
