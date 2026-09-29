@@ -6,7 +6,9 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
-import { type SearchAnalyticsSurface, searchSubmitted } from '~/core/analytics';
+import { useActionContext } from '~/core/action-context-provider';
+import { type SearchAnalyticsSurface, searchQueryId, searchSubmitted } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -287,18 +289,29 @@ export function useSearch({
     return rows;
   }, [resultPages]);
 
+  const getContext = useActionContext('search', 'search_query', searchQueryId(cappedQuery));
   const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
-  const analyticsAttemptRef = React.useRef({ key: '', startedAt: 0, emitted: false });
+  const analyticsAttemptRef = React.useRef<{
+    key: string;
+    startedAt: number;
+    emitted: boolean;
+    operation?: ReturnType<typeof observeOperation>;
+  }>({ key: '', startedAt: 0, emitted: false });
 
   React.useEffect(() => {
     if (analyticsAttemptRef.current.key === analyticsSearchKey) return;
 
+    const context = getContext();
     analyticsAttemptRef.current = {
       key: analyticsSearchKey,
       startedAt: searchClock(),
+      operation:
+        shouldSearch && analyticsSurface !== false && cappedQuery.trim() !== ''
+          ? observeOperation('search', 'search_query', context.target_id, undefined, context)
+          : undefined,
       emitted: false,
     };
-  }, [analyticsSearchKey]);
+  }, [analyticsSearchKey, analyticsSurface, cappedQuery, getContext, shouldSearch]);
 
   React.useEffect(() => {
     const attempt = analyticsAttemptRef.current;
@@ -312,13 +325,19 @@ export function useSearch({
       !shouldSearch ||
       isFetching ||
       shouldPumpEmptyPage ||
-      !pages?.length ||
-      pages.some(page => !page.succeeded)
+      !pages?.length
     ) {
       return;
     }
 
     attempt.emitted = true;
+    // Both canonical and legacy search events belong to the initiating actor.
+    if (!attempt.operation?.isCurrent()) return;
+    if (pages.some(page => !page.succeeded)) {
+      attempt.operation.failed('unavailable');
+      return;
+    }
+    attempt.operation.succeeded({ result_count: results.length });
     searchSubmitted({
       queryText: cappedQuery,
       resultCount: results.length,

@@ -1,3 +1,4 @@
+import { type ActionContext, type ActionKind } from './action-context';
 import { analyticsContextRevision, capture } from './analytics';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
@@ -40,15 +41,59 @@ export function queueTimeoutMetrics(error: unknown): { queue_wait_ms: number; qu
 
 export type OperationContext = { opportunity_id: string; presentation_instance_id: string };
 
+// Canonical outcomes accept only the IDs, fixed categories and measurements used
+// by our producers. Legacy outcome bags may also contain human-readable labels.
+const CANONICAL_OUTCOME_FIELDS = new Set([
+  'vote_direction',
+  'vote_kind',
+  'mutation_kind',
+  'vote_action',
+  'previous_vote_direction',
+  'response_kind',
+  'response_action',
+  'entity_id',
+  'space_id',
+  'object_type',
+  'user_operation_hash',
+  'vote_id',
+  'winner_id',
+  'previous_winner_id',
+  'ranking_id',
+  'rank_id',
+  'item_count',
+  'content_id',
+  'target_entity_ids',
+  'value_count',
+  'relation_count',
+  'comment_id',
+  'created_space_id',
+  'result_count',
+  'method',
+  'edit_scope',
+  'edit_action',
+  'queue_wait_ms',
+  'queue_depth',
+  'failure_code',
+]);
+
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */
 export function observeOperation(
-  action: 'vote' | 'ranking' | 'publish',
+  action: ActionKind,
   targetType: string,
   targetId: string,
-  opportunity?: OperationContext
+  opportunity?: OperationContext,
+  attribution?: ActionContext
 ) {
   const operationId = crypto.randomUUID();
-  const contextRevision = analyticsContextRevision();
+  const readRevision = () => {
+    try {
+      return analyticsContextRevision();
+    } catch {
+      return null;
+    }
+  };
+  const contextRevision = readRevision();
+  const isCurrent = () => readRevision() === contextRevision;
   const context = {
     measurement_version: 'growth-v2',
     operation_id: operationId,
@@ -58,37 +103,82 @@ export function observeOperation(
     ...opportunity,
   };
   const emitted = new Set<string>();
+  let completed = false;
   const emit = (event: string, phase: string, properties: Record<string, unknown>) => {
     if (emitted.has(`${event}:${phase}`)) return;
     // Source reconciliation owns completion after logout/account switch. Never
     // assign an earlier actor's asynchronous result to the current account.
-    if (analyticsContextRevision() !== contextRevision) return;
+    if (!isCurrent()) return;
     emitted.add(`${event}:${phase}`);
     try {
-      capture(event, { ...properties, ...context });
+      capture(event, {
+        ...properties,
+        ...context,
+        // Only canonical completions carry page/surface attribution. Legacy events
+        // keep their original target type and opportunity/display IDs for existing consumers.
+        ...(event === 'action_completed' ? { ...attribution, action_context_version: 'v1' } : {}),
+      });
     } catch {
       /* Never fail a product action. */
     }
   };
+  const complete = (outcome: 'succeeded' | 'failed' | 'unknown', properties: Record<string, unknown> = {}) => {
+    if (completed) return;
+    completed = true;
+    const canonical = Object.fromEntries(
+      Object.entries(properties).filter(([key]) => CANONICAL_OUTCOME_FIELDS.has(key))
+    );
+    if (attribution) emit('action_completed', 'complete', { ...canonical, outcome });
+  };
   if (opportunity) emit('action_attempted', 'attempt', {});
   return {
     operationId,
+    isCurrent,
+    succeeded(properties: Record<string, unknown> = {}) {
+      complete('succeeded', properties);
+    },
     /** `metrics` is numbers only, so no provider text or payload can reach analytics. */
     failed(
       code: 'rejected' | 'unavailable' | 'invalid_input' | 'publish_failed' | 'unknown',
       metrics?: Record<string, number>
     ) {
-      emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
-        ...metrics,
-        failure_code: code,
-      });
+      if (completed) return;
+      complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: code });
+      if (['vote', 'ranking', 'publish'].includes(action))
+        emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
+          ...metrics,
+          failure_code: code,
+        });
     },
     outcome(
       event: 'vote_cast' | 'ranking_submitted',
       phase: 'submitted' | 'indexed',
       properties: Record<string, unknown>
     ) {
+      if (phase === 'submitted') complete('succeeded', properties);
       emit(event, phase, { ...properties, outcome_phase: phase });
     },
   };
+}
+
+/** Observe an async application operation without changing its result or errors. */
+export async function runObservedAction<T>(
+  action: ActionKind,
+  context: ActionContext,
+  run: () => Promise<T>
+): Promise<T> {
+  const operation = observeOperation(action, context.target_type, context.target_id, undefined, context);
+  try {
+    const result = await run();
+    operation.succeeded();
+    return result;
+  } catch (error) {
+    operation.failed(classifyOperationFailure(error));
+    throw error;
+  }
+}
+
+/** Synchronous actions (navigation, local editing, message dispatch). */
+export function recordAction(action: ActionKind, context: ActionContext, properties: Record<string, unknown> = {}) {
+  observeOperation(action, context.target_type, context.target_id, undefined, context).succeeded(properties);
 }
