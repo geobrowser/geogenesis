@@ -938,8 +938,8 @@ export type SchedulablePerson = {
   user: DebateParticipantSummary;
   online: boolean;
   /**
-   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Can include
-   * slots already past today.
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Can
+   * include slots already past today.
    */
   slots: ScheduleOverlapSlot[];
   /** More overlap exists than `limit` returned. */
@@ -956,7 +956,10 @@ export type SchedulablePeopleResponse = {
   truncated: boolean;
 };
 
-/** Everyone, online or not, with availability saved; those sharing a free slot with the viewer first (GEO-2937). */
+/**
+ * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
+ * first (GEO-2937).
+ */
 export async function listSchedulablePeople(
   { days, limit }: { days: number; limit: number },
   getPrivyIdentityToken: GetPrivyIdentityToken,

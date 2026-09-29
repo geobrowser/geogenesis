@@ -178,7 +178,7 @@ export function useDebatePeople(enabled: boolean) {
 const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;
 
-/** Everyone who shares a free slot with the viewer, online or not (GEO-2937). */
+/** Everyone with free time this week, online or not, shared slots first (GEO-2937). */
 export function useSchedulablePeople(enabled: boolean) {
   const days = SCHEDULABLE_DAYS;
   const limit = SCHEDULABLE_SLOTS;
