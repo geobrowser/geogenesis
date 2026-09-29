@@ -35,7 +35,6 @@ export async function POST(request: Request) {
       spaceTopicId,
       selectedTopicIds,
       typeIds,
-      signal: request.signal,
     });
     return NextResponse.json({ topics });
   } catch (error) {

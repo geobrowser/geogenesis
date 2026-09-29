@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.json(await fetchSpaceTopicCompositionCounts({ spaceId, signal: request.signal }));
+    return NextResponse.json(await fetchSpaceTopicCompositionCounts({ spaceId }));
   } catch (error) {
     console.error('space topic feed composition', error);
     return NextResponse.json(emptyTopicFeedCompositionCounts(), { status: 500 });

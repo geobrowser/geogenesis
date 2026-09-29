@@ -7,6 +7,7 @@ import { claimsRequireDebateTagFilter } from '~/core/explore/explore-debate-tag-
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
 import {
+  clearSpaceTopicCaches,
   emptyTopicFeedCompositionCounts,
   fetchSpaceTopicCompositionCounts,
   fetchSpaceTopicFeedFacets,
@@ -85,6 +86,7 @@ const spaceIds = ['11111111111111111111111111111111'];
 
 beforeEach(() => {
   mocks.calls = [];
+  clearSpaceTopicCaches();
 });
 
 describe('fetchTopicFeedFacets', () => {
@@ -210,6 +212,20 @@ describe('fetchSpaceTopicFeedFacets', () => {
     expect(mocks.calls[0]?.variables.filter.fromEntity.and[1]).toEqual(topicsRelationFilter([TOPIC_A]));
   });
 
+  it('shares one aggregate between identical requests, whatever order their ids arrive in', async () => {
+    const request = { spaceId, spaceTopicId: PAGE_TOPIC, selectedTopicIds: [TOPIC_A, TOPIC_C] };
+    await fetchSpaceTopicFeedFacets({ ...request, typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID] });
+    await fetchSpaceTopicFeedFacets({
+      ...request,
+      selectedTopicIds: [TOPIC_C, TOPIC_A],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+    });
+    expect(mocks.calls.filter(call => call.operation === 'RelationFacetByFilter')).toHaveLength(1);
+
+    await fetchSpaceTopicFeedFacets({ ...request, typeIds: [CLAIM_TYPE_ID] });
+    expect(mocks.calls.filter(call => call.operation === 'RelationFacetByFilter')).toHaveLength(2);
+  });
+
   it('skips an empty type selection', async () => {
     await expect(
       fetchSpaceTopicFeedFacets({ spaceId, spaceTopicId: PAGE_TOPIC, selectedTopicIds: [], typeIds: [] })
@@ -230,5 +246,14 @@ describe('fetchSpaceTopicCompositionCounts', () => {
       spaceIds: { in: spaceIds },
       filter: claimsRequireDebateTagFilter(spaceIds),
     });
+  });
+
+  it('runs the count query once for concurrent visitors to the same space', async () => {
+    await Promise.all([
+      fetchSpaceTopicCompositionCounts({ spaceId: spaceIds[0] }),
+      fetchSpaceTopicCompositionCounts({ spaceId: spaceIds[0] }),
+    ]);
+
+    expect(mocks.calls).toHaveLength(1);
   });
 });

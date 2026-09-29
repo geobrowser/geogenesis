@@ -1,15 +1,22 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
+import type { Metadata } from 'next';
+
 import { notFound, redirect } from 'next/navigation';
 
 import { Spaces } from '~/core/utils/space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
+import { generateSpaceMetadata } from '../space-metadata';
 import { SpaceOverviewBody } from '../space-overview-body';
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  return generateSpaceMetadata((await props.params).id);
 }
 
 /**

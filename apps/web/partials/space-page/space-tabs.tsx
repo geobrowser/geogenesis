@@ -111,9 +111,14 @@ function leadingSpaceTabs(spaceId: string, overviewHref: string, isTopicSpace: b
   return isTopicSpace
     ? [
         { label: 'Explore', href: overviewHref },
-        { label: 'Overview', href: `/space/${spaceId}/overview`, dividerBefore: true },
+        { label: 'Overview', href: spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace), dividerBefore: true },
       ]
     : [{ label: 'Overview', href: overviewHref }];
+}
+
+/** The space's authored page: the bare URL, except on a topic space, where Explore has it. */
+function spaceOverviewPageHref(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
+  return isTopicSpace ? `/space/${spaceId}/overview` : overviewHref;
 }
 
 export type PersonRecordCounts = {
@@ -378,6 +383,7 @@ export function SpaceTabs({
         systemTabsBefore={systemTabsBefore}
         systemTabsAfter={systemTabsAfter}
         overviewHref={overviewHref}
+        closedTabHref={spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace)}
       />
     );
   }

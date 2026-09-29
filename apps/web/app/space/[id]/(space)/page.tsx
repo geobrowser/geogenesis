@@ -8,11 +8,9 @@ import { notFound } from 'next/navigation';
 
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
-import { Entities } from '~/core/utils/entity';
 import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
@@ -30,6 +28,7 @@ import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-g
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { generateSpaceMetadata } from './space-metadata';
 import { SpaceOverviewBody, SpaceTopicExploreBody } from './space-overview-body';
 
 interface Props {
@@ -38,30 +37,7 @@ interface Props {
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
-  const params = await props.params;
-  const spaceId = params.id;
-
-  if (!IdUtils.isValid(spaceId)) {
-    return { title: 'Not Found' };
-  }
-
-  const space = await cachedFetchSpace(spaceId);
-  const entity = space?.entity;
-
-  if (!entity) {
-    return {
-      title: `Space ${spaceId}`,
-      description: 'No entity found for this space.',
-    };
-  }
-
-  const entityName = entity.name ?? null;
-  const description = firstLine(Entities.description(entity.values ?? []));
-
-  return {
-    title: entityName ?? spaceId,
-    description,
-  };
+  return generateSpaceMetadata((await props.params).id);
 }
 
 export default async function SpacePage(props0: Props) {

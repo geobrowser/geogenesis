@@ -7,12 +7,33 @@ import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
 import { decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
+import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 
 import { spaceTopicCountDocument } from './space-topic-count-document';
 import { topicFeedFilter, topicFeedPopulationScopes, topicsRelationFilter } from './topic-feed-filter';
 import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
+
+/**
+ * Server-side caches for the topic-space reads, which are identical across visitors and take
+ * seconds each on the large spaces. The 60s matches the client's `staleTime` for the same data.
+ */
+const SPACE_TOPIC_CACHE_TTL_MS = 60_000;
+const spaceTopicFacetsCache = createPromiseTtlCache<TopicFeedFacet[]>({
+  ttlMs: SPACE_TOPIC_CACHE_TTL_MS,
+  maxEntries: 64,
+});
+const spaceTopicCountsCache = createPromiseTtlCache<TopicFeedCompositionCounts>({
+  ttlMs: SPACE_TOPIC_CACHE_TTL_MS,
+  maxEntries: 64,
+});
+
+/** For tests: forget every cached topic-space read. */
+export function clearSpaceTopicCaches() {
+  spaceTopicFacetsCache.clear();
+  spaceTopicCountsCache.clear();
+}
 
 type TopicFacetArgs = {
   spaceIds: string[];
@@ -119,25 +140,33 @@ export async function fetchSpaceTopicFeedFacets({
   spaceTopicId,
   selectedTopicIds,
   typeIds,
-  signal,
 }: {
   spaceId: string;
   spaceTopicId: string;
   selectedTopicIds: readonly string[];
   typeIds: readonly string[];
-  signal?: AbortSignal;
 }): Promise<TopicFeedFacet[]> {
   if (typeIds.length === 0) return [];
 
-  return fetchFacetsForPopulation({
-    spaceIds: [spaceId],
-    typeIds,
-    entityFilter: topicsRelationFilter(selectedTopicIds),
-    excludedTopicId: spaceTopicId,
-    // The feed's own gate, so a topic is offered only with the claims the feed will actually show.
-    requireDebateTagOnClaims: true,
-    signal,
-  });
+  // Every visitor's first load asks the same question, and the aggregate takes seconds on a large
+  // space. No request signal reaches the load: it is shared, so one reader leaving cannot cancel
+  // it for the others.
+  const key = JSON.stringify([
+    normId(spaceId),
+    normId(spaceTopicId),
+    selectedTopicIds.map(normId).sort(),
+    typeIds.map(normId).sort(),
+  ]);
+  return spaceTopicFacetsCache.get(key, () =>
+    fetchFacetsForPopulation({
+      spaceIds: [spaceId],
+      typeIds,
+      entityFilter: topicsRelationFilter(selectedTopicIds),
+      excludedTopicId: spaceTopicId,
+      // The feed's own gate, so a topic is offered only with the claims the feed will actually show.
+      requireDebateTagOnClaims: true,
+    })
+  );
 }
 
 export type TopicFeedCompositionCounts = { typeCounts: Record<string, number> };
@@ -196,11 +225,14 @@ export async function fetchTopicFeedCompositionCounts({
  */
 export async function fetchSpaceTopicCompositionCounts({
   spaceId,
-  signal,
 }: {
   spaceId: string;
-  signal?: AbortSignal;
 }): Promise<TopicFeedCompositionCounts> {
+  // Shared across visitors for the same reason, and with the same caveat, as the facets above.
+  return spaceTopicCountsCache.get(normId(spaceId), () => loadSpaceTopicCompositionCounts(spaceId));
+}
+
+async function loadSpaceTopicCompositionCounts(spaceId: string): Promise<TopicFeedCompositionCounts> {
   // Same Debate-tag gate as the feed, so the Claims count is the claims a reader can scroll to.
   const filter = buildExploreFeedFilter({
     spaceIds: [spaceId],
@@ -213,7 +245,6 @@ export async function fetchSpaceTopicCompositionCounts({
       query: spaceTopicCountDocument,
       decoder: data => data,
       variables: { spaceIds: { in: [spaceId] }, filter },
-      signal,
     })
   );
 
