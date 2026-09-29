@@ -26,13 +26,27 @@ const JOIN_SPACE_TOOL_PART = 'tool-joinSpace';
 
 export type AddJoinSpaceResultFn = (args: { tool: string; toolCallId: string; output: unknown }) => void;
 
+export type JoinSpaceTarget = { spaceId: string; spaceName: string | undefined };
+
+export type ConfirmJoinSpaceFn = (target: JoinSpaceTarget, signal?: AbortSignal) => Promise<boolean>;
+
 export type JoinSpaceDeps = {
   hasAccount: boolean;
   personalSpaceId: string | null;
   isRegistered: boolean;
   queryClient: QueryClient;
   tx: SendSpaceTransaction;
+  confirm: ConfirmJoinSpaceFn;
 };
+
+function untilAborted(signal?: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (!signal) return;
+    const abort = () => reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+}
 
 /**
  * Runs the same checks the explicit Join buttons go through (useRequestToBeMember
@@ -94,6 +108,13 @@ export async function resolveJoinSpace(
       return { ok: false, error: 'already_requested', spaceId, spaceName };
     }
 
+    const confirmed = await Promise.race([
+      deps.confirm({ spaceId: normalizedSpaceId, spaceName }, signal),
+      untilAborted(signal),
+    ]);
+    signal?.throwIfAborted();
+    if (!confirmed) return { ok: false, error: 'declined', spaceId, spaceName };
+
     await requestSpaceMembership({
       spaceId: normalizedSpaceId,
       personalSpaceId: normalizedPersonalSpaceId,
@@ -111,7 +132,8 @@ export async function resolveJoinSpace(
 
 export function useJoinSpaceDispatcher(
   messages: UIMessage[],
-  addToolResultRef: React.RefObject<AddJoinSpaceResultFn | null>
+  addToolResultRef: React.RefObject<AddJoinSpaceResultFn | null>,
+  confirm: ConfirmJoinSpaceFn
 ) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -141,8 +163,8 @@ export function useJoinSpaceDispatcher(
   }, []);
 
   const deps = React.useMemo<JoinSpaceDeps>(
-    () => ({ hasAccount: Boolean(smartAccount), personalSpaceId, isRegistered, queryClient, tx }),
-    [smartAccount, personalSpaceId, isRegistered, queryClient, tx]
+    () => ({ hasAccount: Boolean(smartAccount), personalSpaceId, isRegistered, queryClient, tx, confirm }),
+    [smartAccount, personalSpaceId, isRegistered, queryClient, tx, confirm]
   );
 
   React.useEffect(() => {

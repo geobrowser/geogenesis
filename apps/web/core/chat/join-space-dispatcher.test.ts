@@ -65,9 +65,12 @@ function deps(space: Space | null, overrides: Record<string, unknown> = {}) {
     isRegistered: true,
     queryClient,
     tx: vi.fn(() => Effect.succeed('0xhash')),
+    confirm: vi.fn(async () => true),
     ...overrides,
   } as Parameters<typeof resolveJoinSpace>[0];
 }
+
+const hookConfirm = vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => true);
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -82,6 +85,7 @@ beforeEach(() => {
   requestSpaceMembership.mockReset().mockResolvedValue(undefined);
   getSpaceAccessById.mockReset().mockReturnValue(Effect.succeed({ isEditor: false, isMember: false, canEdit: false }));
   fetchActiveMemberRequest.mockReset().mockResolvedValue(null);
+  hookConfirm.mockReset().mockResolvedValue(true);
   hookDeps.queryClient = deps(daoSpace()).queryClient;
 });
 
@@ -101,6 +105,14 @@ describe('resolveJoinSpace', () => {
     const dashed = 'c9f267dc-1b7a-4f3d-8e2a-5b6c7d8e9f01';
     const result = await resolveJoinSpace(deps(daoSpace()), dashed);
     expect(result).toMatchObject({ ok: true, spaceId: SPACE_ID });
+  });
+
+  it('asks the user to confirm the space as resolved by id, after every guard and before signing', async () => {
+    const confirm = vi.fn(async () => true);
+    await resolveJoinSpace(deps(daoSpace(), { confirm }), 'c9f267dc-1b7a-4f3d-8e2a-5b6c7d8e9f01');
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({ spaceId: SPACE_ID, spaceName: 'Crypto' }, undefined);
+    expect(confirm.mock.invocationCallOrder[0]).toBeGreaterThan(fetchActiveMemberRequest.mock.invocationCallOrder[0]);
+    expect(confirm.mock.invocationCallOrder[0]).toBeLessThan(requestSpaceMembership.mock.invocationCallOrder[0]);
   });
 
   // Each of these must stop before the transaction — a signature the user did
@@ -136,10 +148,28 @@ describe('resolveJoinSpace', () => {
       expect(requestSpaceMembership).not.toHaveBeenCalled();
     });
 
-    it('when the user is already a member', async () => {
+    it('when the user is already a member, without asking them anything', async () => {
       getSpaceAccessById.mockReturnValue(Effect.succeed({ isEditor: false, isMember: true, canEdit: true }));
-      const result = await resolveJoinSpace(deps(daoSpace()), SPACE_ID);
+      const confirm = vi.fn(async () => true);
+      const result = await resolveJoinSpace(deps(daoSpace(), { confirm }), SPACE_ID);
       expect(result).toMatchObject({ ok: false, error: 'already_member' });
+      expect(confirm).not.toHaveBeenCalled();
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
+
+    it('when the user declines the confirmation', async () => {
+      const result = await resolveJoinSpace(deps(daoSpace(), { confirm: vi.fn(async () => false) }), SPACE_ID);
+      expect(result).toEqual({ ok: false, error: 'declined', spaceId: SPACE_ID, spaceName: 'Crypto' });
+      expect(requestSpaceMembership).not.toHaveBeenCalled();
+    });
+
+    it('when cancelled while the confirmation is still open', async () => {
+      const confirm = vi.fn(() => new Promise<boolean>(() => {}));
+      const controller = new AbortController();
+      const pending = resolveJoinSpace(deps(daoSpace(), { confirm }), SPACE_ID, controller.signal);
+      await waitFor(() => expect(confirm).toHaveBeenCalled());
+      controller.abort();
+      expect(await pending).toMatchObject({ ok: false });
       expect(requestSpaceMembership).not.toHaveBeenCalled();
     });
 
@@ -217,9 +247,30 @@ const pendingMessages = (toolCallId = 'join-1'): UIMessage[] => [
 ];
 
 describe('useJoinSpaceDispatcher cancellation', () => {
+  it('withdraws an open confirmation when the tool call is removed, and signs nothing', async () => {
+    const opened = deferred<AbortSignal | undefined>();
+    hookConfirm.mockImplementation((_target, signal) => {
+      opened.resolve(signal as AbortSignal | undefined);
+      return new Promise<boolean>(() => {});
+    });
+    const addResult = { current: vi.fn() };
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult, hookConfirm), {
+      initialProps: { messages: pendingMessages() },
+    });
+    const signal = await opened.promise;
+    expect(signal?.aborted).toBe(false);
+    hook.rerender({ messages: [] });
+    expect(signal?.aborted).toBe(true);
+    await act(async () => {
+      await waitForFlush();
+    });
+    expect(requestSpaceMembership).not.toHaveBeenCalled();
+    expect(addResult.current).not.toHaveBeenCalled();
+  });
+
   it('dispatches an active request once across renders', async () => {
     const addResult = { current: vi.fn() };
-    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult, hookConfirm), {
       initialProps: { messages: pendingMessages() },
     });
     await act(async () => {
@@ -246,7 +297,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
       void enqueue(() => blocker.promise);
       const addResult = { current: vi.fn() };
       const messages = pendingMessages();
-      const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+      const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult, hookConfirm), {
         initialProps: { messages },
       });
       hook.rerender({
@@ -276,7 +327,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
     const blocker = deferred<void>();
     void enqueue(() => blocker.promise);
     const addResult = { current: vi.fn() };
-    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult));
+    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult, hookConfirm));
     act(() => hook.result.current());
     await act(async () => {
       blocker.resolve();
@@ -290,7 +341,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
     const lookup = deferred<null>();
     fetchActiveMemberRequest.mockReturnValue(lookup.promise);
     const addResult = { current: vi.fn() };
-    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult, hookConfirm), {
       initialProps: { messages: pendingMessages() },
     });
     await waitFor(() => expect(fetchActiveMemberRequest).toHaveBeenCalled());
@@ -307,7 +358,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
     const tx = deferred<void>();
     requestSpaceMembership.mockReturnValue(tx.promise);
     const addResult = { current: vi.fn() };
-    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult), {
+    const hook = renderHook(({ messages }) => useJoinSpaceDispatcher(messages, addResult, hookConfirm), {
       initialProps: { messages: pendingMessages() },
     });
     await waitFor(() => expect(requestSpaceMembership).toHaveBeenCalled());
@@ -321,7 +372,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
 
   it('cancels on unmount and still dispatches once under StrictMode', async () => {
     const addResult = { current: vi.fn() };
-    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult), {
+    const hook = renderHook(() => useJoinSpaceDispatcher(pendingMessages(), addResult, hookConfirm), {
       wrapper: ({ children }) => React.createElement(React.StrictMode, null, children),
     });
     await act(async () => {
@@ -335,7 +386,7 @@ describe('useJoinSpaceDispatcher cancellation', () => {
     addResult.current.mockClear();
     const blocker = deferred<void>();
     void enqueue(() => blocker.promise);
-    const unmounted = renderHook(() => useJoinSpaceDispatcher(pendingMessages('join-2'), addResult));
+    const unmounted = renderHook(() => useJoinSpaceDispatcher(pendingMessages('join-2'), addResult, hookConfirm));
     unmounted.unmount();
     await act(async () => {
       blocker.resolve();

@@ -20,7 +20,7 @@ import { useGeoQueryDispatcher } from '~/core/chat/geo-query-dispatcher';
 import { useImportDispatcher } from '~/core/chat/import-dispatcher';
 import { useFileAttachment } from '~/core/chat/import/use-file-attachment';
 import type { InjectType } from '~/core/chat/inject-types';
-import { useJoinSpaceDispatcher } from '~/core/chat/join-space-dispatcher';
+import { type ConfirmJoinSpaceFn, useJoinSpaceDispatcher } from '~/core/chat/join-space-dispatcher';
 import {
   COMPACT_AT_INPUT_TOKENS,
   CONTEXT_USAGE_DATA_TYPE,
@@ -58,6 +58,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
+import type { JoinConfirmationRequest } from './chat-join-confirmation';
 import { ChatPanel } from './chat-panel';
 import { markLastTurnInterrupted } from './interrupted';
 import { scrubUnsettledToolParts } from './scrub-unsettled-tool-parts';
@@ -571,7 +572,26 @@ export function ChatWidget() {
   } = useFileAttachment(currentSpaceId);
   useWebFetchDispatcher(messages, addToolResultRef);
   useSearchImagesDispatcher(messages, addToolResultRef);
-  const cancelPendingJoins = useJoinSpaceDispatcher(messages, addToolResultRef);
+  const [joinConfirmation, setJoinConfirmation] = React.useState<JoinConfirmationRequest | null>(null);
+  const confirmJoinSpace = React.useCallback<ConfirmJoinSpaceFn>(
+    (target, signal) =>
+      new Promise<boolean>(resolve => {
+        if (signal?.aborted) {
+          resolve(false);
+          return;
+        }
+        const settle = (confirmed: boolean) => {
+          signal?.removeEventListener('abort', withdraw);
+          setJoinConfirmation(null);
+          resolve(confirmed);
+        };
+        const withdraw = () => settle(false);
+        signal?.addEventListener('abort', withdraw, { once: true });
+        setJoinConfirmation({ target, onConfirm: () => settle(true), onDecline: () => settle(false) });
+      }),
+    []
+  );
+  const cancelPendingJoins = useJoinSpaceDispatcher(messages, addToolResultRef, confirmJoinSpace);
 
   // Bridge the gap between status='ready' and the SDK's auto-resubmit firing —
   // otherwise the input flips back to "send" between successive tool calls.
@@ -1269,6 +1289,7 @@ export function ChatWidget() {
           onAttachFile={currentSpaceId ? attachFile : undefined}
           attachment={attachment}
           onRemoveAttachment={removeAttachment}
+          joinConfirmation={joinConfirmation}
         />
       ) : (
         <motion.button

@@ -24,6 +24,7 @@ import { Menu, MenuItem } from '~/design-system/menu';
 
 import { type AttachmentState, ChatAttachment } from './chat-attachment';
 import { ChatInput } from './chat-input';
+import { ChatJoinConfirmation, type JoinConfirmationRequest } from './chat-join-confirmation';
 import { ChatMessages } from './chat-messages';
 import { ChatWelcome } from './chat-welcome';
 
@@ -53,6 +54,7 @@ type Props = {
   onAttachFile?: (file: File) => void;
   attachment?: AttachmentState | null;
   onRemoveAttachment?: () => void;
+  joinConfirmation?: JoinConfirmationRequest | null;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -79,6 +81,7 @@ export function ChatPanel({
   onAttachFile,
   attachment,
   onRemoveAttachment,
+  joinConfirmation,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -275,6 +278,7 @@ export function ChatPanel({
         <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
       )}
 
+      {joinConfirmation ? <ChatJoinConfirmation request={joinConfirmation} /> : null}
       {attachment && onRemoveAttachment ? (
         <ChatAttachment attachment={attachment} onRemove={onRemoveAttachment} />
       ) : null}

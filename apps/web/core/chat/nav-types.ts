@@ -40,6 +40,7 @@ export type JoinSpaceOutput =
         // `request_pending` read to the closer as "your request is now pending"
         // and got reported as a fresh request we never made.
         | 'already_requested'
+        | 'declined'
         | 'request_failed';
       spaceId?: string;
       spaceName?: string;
