@@ -75,15 +75,39 @@ export function useGeoQueryDispatcher(
   addToolResultRef: React.RefObject<AddGeoQueryResultFn | null>
 ) {
   const dispatchedRef = React.useRef(new Set<string>());
-  const abortRef = React.useRef<AbortController | null>(null);
+  const controllers = React.useRef(new Map<string, AbortController>());
 
   React.useEffect(() => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-    return () => controller.abort();
+    const active = controllers.current;
+    const dispatched = dispatchedRef.current;
+    return () => {
+      for (const [id, controller] of active) {
+        controller.abort();
+        dispatched.delete(id);
+      }
+      active.clear();
+    };
   }, []);
 
   React.useEffect(() => {
+    const pending = new Set(
+      messages.flatMap(message =>
+        message.role === 'assistant'
+          ? message.parts.flatMap(part =>
+              part.type === GEO_QUERY_TOOL_PART && isToolUIPart(part) && part.state === 'input-available'
+                ? [part.toolCallId]
+                : []
+            )
+          : []
+      )
+    );
+    for (const [id, controller] of controllers.current) {
+      if (!pending.has(id)) {
+        controller.abort();
+        controllers.current.delete(id);
+      }
+    }
+
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
@@ -95,18 +119,24 @@ export function useGeoQueryDispatcher(
 
         const input = ((part as { input?: unknown }).input ?? {}) as GeoQueryInput;
         const toolCallId = part.toolCallId;
+        const controller = new AbortController();
+        controllers.current.set(toolCallId, controller);
+        const signal = controller.signal;
 
         enqueue(async () => {
-          const signal = abortRef.current?.signal;
-          if (!signal || signal.aborted) return;
-          let output: GeoQueryOutput;
           try {
-            output = await fetchGeoQuery(input, signal);
-          } catch (err) {
-            console.error('[chat/geo-query-dispatcher] tool execution threw', err);
-            output = { error: 'lookup_failed' };
+            if (signal.aborted) return;
+            let output: GeoQueryOutput;
+            try {
+              output = await fetchGeoQuery(input, signal);
+            } catch (err) {
+              console.error('[chat/geo-query-dispatcher] tool execution threw', err);
+              output = { error: 'lookup_failed' };
+            }
+            if (!signal.aborted) addToolResultRef.current?.({ tool: 'geoQuery', toolCallId, output });
+          } finally {
+            if (controllers.current.get(toolCallId) === controller) controllers.current.delete(toolCallId);
           }
-          addToolResultRef.current?.({ tool: 'geoQuery', toolCallId, output });
         });
       }
     }

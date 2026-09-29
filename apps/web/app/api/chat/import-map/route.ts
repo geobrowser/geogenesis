@@ -29,6 +29,7 @@ import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';
 
 import { hydrateRelationValueTypes } from '~/partials/import/import-generation';
 
+import { clientClosedResponse } from '../client-closed';
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
@@ -1222,6 +1223,7 @@ export async function POST(req: Request) {
       }
       return jsonError(504, 'Mapping took too long');
     }
+    if (req.signal?.aborted) return clientClosedResponse();
     console.error('[chat/import-map] generation failed', err);
     return jsonError(502, 'Mapping failed');
   }

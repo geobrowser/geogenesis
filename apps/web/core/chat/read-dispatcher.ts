@@ -763,7 +763,7 @@ export function useReadDispatcher(
   searchSpaceIds: string[]
 ) {
   const dispatchedRef = React.useRef(new Set<string>());
-  const cancelledRef = React.useRef(false);
+  const controllers = React.useRef(new Map<string, AbortController>());
   const searchSpaceIdsRef = React.useRef(searchSpaceIds);
 
   React.useEffect(() => {
@@ -771,13 +771,36 @@ export function useReadDispatcher(
   }, [searchSpaceIds]);
 
   React.useEffect(() => {
-    cancelledRef.current = false;
+    const active = controllers.current;
+    const dispatched = dispatchedRef.current;
     return () => {
-      cancelledRef.current = true;
+      for (const [id, controller] of active) {
+        controller.abort();
+        dispatched.delete(id);
+      }
+      active.clear();
     };
   }, []);
 
   React.useEffect(() => {
+    const pending = new Set(
+      messages.flatMap(message =>
+        message.role === 'assistant'
+          ? message.parts.flatMap(part =>
+              isToolUIPart(part) && readToolNameFromPart(part.type) !== null && part.state === 'input-available'
+                ? [part.toolCallId]
+                : []
+            )
+          : []
+      )
+    );
+    for (const [id, controller] of controllers.current) {
+      if (!pending.has(id)) {
+        controller.abort();
+        controllers.current.delete(id);
+      }
+    }
+
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
@@ -791,31 +814,33 @@ export function useReadDispatcher(
 
         const input = (part as { input?: unknown }).input ?? {};
         const toolCallId = part.toolCallId;
+        const controller = new AbortController();
+        controllers.current.set(toolCallId, controller);
+        const signal = controller.signal;
 
         enqueue(async () => {
-          if (cancelledRef.current) return;
-          const ctx: ReadCtx = { store: geoStore, cache: queryClient, searchSpaceIds: searchSpaceIdsRef.current };
           try {
-            const result = await executeReadTool(
-              {
-                toolName,
-                toolCallId,
-                input: input as GetEntityInput & SearchGraphInput & ListSpacesInput,
-              } as ReadToolCall,
-              ctx
-            );
-            addToolResultRef.current?.({
-              tool: toolName,
-              toolCallId,
-              output: result.output,
-            });
-          } catch (err) {
-            console.error('[chat/read-dispatcher] tool execution threw', toolName, err);
-            addToolResultRef.current?.({
-              tool: toolName,
-              toolCallId,
-              output: { error: 'lookup_failed' } as GetEntityOutput,
-            });
+            if (signal.aborted) return;
+            const ctx: ReadCtx = { store: geoStore, cache: queryClient, searchSpaceIds: searchSpaceIdsRef.current };
+            let output: unknown;
+            try {
+              const result = await executeReadTool(
+                {
+                  toolName,
+                  toolCallId,
+                  input: input as GetEntityInput & SearchGraphInput & ListSpacesInput,
+                } as ReadToolCall,
+                ctx
+              );
+              output = result.output;
+            } catch (err) {
+              if (signal.aborted) return;
+              console.error('[chat/read-dispatcher] tool execution threw', toolName, err);
+              output = { error: 'lookup_failed' } as GetEntityOutput;
+            }
+            if (!signal.aborted) addToolResultRef.current?.({ tool: toolName, toolCallId, output });
+          } finally {
+            if (controllers.current.get(toolCallId) === controller) controllers.current.delete(toolCallId);
           }
         });
       }

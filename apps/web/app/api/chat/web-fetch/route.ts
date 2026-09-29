@@ -15,6 +15,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { clientClosedResponse } from '../client-closed';
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
@@ -92,13 +93,13 @@ function rateLimitResponse(reset: number) {
   return jsonError(429, 'Rate limit exceeded.', { 'Retry-After': retryAfter.toString() });
 }
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response> {
+async function fetchWithTimeout(url: string, signal: AbortSignal, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     return await fetch(url, {
       ...init,
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, signal]),
       headers: { 'User-Agent': SUB_AGENT_USER_AGENT, ...(init?.headers ?? {}) },
     });
   } finally {
@@ -111,16 +112,18 @@ type FxResponse = { code?: unknown; tweet?: FxTweet };
 async function fetchViaFxTwitter(
   user: string,
   statusId: string,
-  originalUrl: string
+  originalUrl: string,
+  signal: AbortSignal
 ): Promise<{ summary: string; sources: Source[] } | null> {
   const url = `${FX_TWITTER_BASE}/${encodeURIComponent(user)}/status/${encodeURIComponent(statusId)}`;
   try {
-    const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+    const res = await fetchWithTimeout(url, signal, { headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as FxResponse;
     if (body?.code !== 200 || !body.tweet) return null;
     return summarizeFxTweet(body.tweet, originalUrl);
   } catch (err) {
+    if (signal.aborted) return null;
     console.error('[chat/web-fetch] fxtwitter failed', err);
     return null;
   }
@@ -130,10 +133,13 @@ async function fetchViaFxTwitter(
 // containing a <p>; strip tags to recover plain text.
 type OEmbedResponse = { html?: unknown; author_name?: unknown; author_url?: unknown; url?: unknown };
 
-async function fetchViaOEmbed(originalUrl: string): Promise<{ summary: string; sources: Source[] } | null> {
+async function fetchViaOEmbed(
+  originalUrl: string,
+  signal: AbortSignal
+): Promise<{ summary: string; sources: Source[] } | null> {
   const url = `${OEMBED_BASE}?url=${encodeURIComponent(originalUrl)}&omit_script=true&dnt=true`;
   try {
-    const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } });
+    const res = await fetchWithTimeout(url, signal, { headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const body = (await res.json()) as OEmbedResponse;
     if (typeof body.html !== 'string') return null;
@@ -148,6 +154,7 @@ async function fetchViaOEmbed(originalUrl: string): Promise<{ summary: string; s
       ],
     };
   } catch (err) {
+    if (signal.aborted) return null;
     console.error('[chat/web-fetch] oembed failed', err);
     return null;
   }
@@ -190,7 +197,10 @@ function collectFetchSources(steps: StepLike[], fallbackUrl: string): Source[] {
   return sources;
 }
 
-async function fetchViaAnthropic(targetUrl: URL): Promise<{ summary: string; sources: Source[] } | null> {
+async function fetchViaAnthropic(
+  targetUrl: URL,
+  signal: AbortSignal
+): Promise<{ summary: string; sources: Source[] } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HAIKU_TIMEOUT_MS);
   try {
@@ -209,7 +219,7 @@ async function fetchViaAnthropic(targetUrl: URL): Promise<{ summary: string; sou
       toolChoice: 'auto',
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       stopWhen: stepCountIs(MAX_TOOL_STEPS),
-      abortSignal: controller.signal,
+      abortSignal: AbortSignal.any([controller.signal, signal]),
       providerOptions: {
         anthropic: { disableParallelToolUse: true },
       },
@@ -222,6 +232,7 @@ async function fetchViaAnthropic(targetUrl: URL): Promise<{ summary: string; sou
     const sources = collectFetchSources(result.steps as unknown as StepLike[], targetUrl.toString());
     return { summary, sources };
   } catch (err) {
+    if (signal.aborted) return null;
     console.error('[chat/web-fetch] anthropic webFetch failed', err);
     return null;
   } finally {
@@ -269,33 +280,41 @@ export async function POST(req: Request) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const primary = await fetchViaFxTwitter(parsed.xPath.user, parsed.xPath.statusId, parsed.url.toString());
+    const primary = await fetchViaFxTwitter(
+      parsed.xPath.user,
+      parsed.xPath.statusId,
+      parsed.url.toString(),
+      req.signal
+    );
     if (primary) {
       return new Response(JSON.stringify(primary), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    const fallback = await fetchViaOEmbed(parsed.url.toString());
+    if (req.signal.aborted) return clientClosedResponse();
+    const fallback = await fetchViaOEmbed(parsed.url.toString(), req.signal);
     if (fallback) {
       return new Response(JSON.stringify(fallback), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (req.signal.aborted) return clientClosedResponse();
     return new Response(JSON.stringify({ error: 'not_accessible' }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const result = await fetchViaAnthropic(parsed.url);
+  const result = await fetchViaAnthropic(parsed.url, req.signal);
   if (result) {
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+  if (req.signal.aborted) return clientClosedResponse();
   return new Response(JSON.stringify({ error: 'not_accessible' }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
