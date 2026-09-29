@@ -9,6 +9,7 @@ import {
   mergeActionScope,
   pageContext,
   snapshotActionContext,
+  subscribeToActionPageViews,
 } from './action-context';
 import { capture } from './analytics';
 import { equals } from './id/normalize';
@@ -19,6 +20,8 @@ const MeasurementContext = React.createContext<React.RefObject<HTMLElement | nul
 const seen = new Set<string>();
 const instances = new Map<string, string>();
 let seenPage = '';
+const getPageViewId = () => pageContext().page_view_id;
+const getServerPageViewId = () => '';
 const IMPRESSION_COMPONENTS = new Set<ActionComponent>([
   'explore_feed_card',
   'debate_player',
@@ -26,6 +29,11 @@ const IMPRESSION_COMPONENTS = new Set<ActionComponent>([
   'debate_end_card',
   'debate_claims_panel',
 ]);
+
+/** Read inherited attribution when a reusable component supplies optional overrides. */
+export function useActionScope() {
+  return React.useContext(Context);
+}
 
 /** Scopes follow React portals, so a modal preserves its underlying page/list. */
 export function ActionContextProvider({ value, children }: { value: ActionScope; children: React.ReactNode }) {
@@ -83,7 +91,7 @@ export function ActionSurface({
   const parent = React.useContext(Context);
   const depth = React.useContext(DepthContext) + 1;
   const ref = React.useRef<HTMLElement>(null);
-  const pageId = pageContext().page_view_id;
+  const pageId = React.useSyncExternalStore(subscribeToActionPageViews, getPageViewId, getServerPageViewId);
   const key = [
     pageId,
     value.component,

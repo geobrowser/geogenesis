@@ -3,9 +3,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider, ActionSurface, useActionContext } from './action-context-provider';
+import { pageViewed } from './analytics';
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
-vi.mock('./analytics', () => ({ capture }));
+vi.mock('./analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('./analytics')>()),
+  capture,
+}));
 afterEach(async () => {
   await new Promise(resolve => setTimeout(resolve, 0));
   cleanup();
@@ -96,4 +100,50 @@ it('preserves a nested list position over the outer surface click capture', () =
     })
   );
   expect(action.mock.calls[0][0]).not.toHaveProperty('target_type_ids');
+});
+
+it('measures a retained card again when the page tracker reports query-only navigation', () => {
+  window.history.replaceState({}, '', '/explore?tab=claims');
+  let notify!: IntersectionObserverCallback;
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        notify = callback;
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  const action = vi.fn();
+  render(
+    <ActionSurface value={{ component: 'explore_feed_card', target_id: 'claim', target_type: 'claim' }}>
+      <Control action={action} />
+    </ActionSurface>
+  );
+  const show = () =>
+    act(() =>
+      notify([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver)
+    );
+  show();
+  const first = capture.mock.calls[0][1];
+  window.history.replaceState({}, '', '/explore?tab=debates');
+  // Next retains the card subtree; no manual rerender or remount here.
+  act(() => pageViewed());
+  show();
+  expect(capture).toHaveBeenCalledTimes(2);
+  const second = capture.mock.calls[1][1];
+  expect(second.page_view_id).not.toBe(first.page_view_id);
+  expect(second.presentation_instance_id).not.toBe(first.presentation_instance_id);
+  expect(second.page_path).toBe('/explore');
+  fireEvent.click(screen.getByText('Agree'));
+  expect(action).toHaveBeenCalledWith(
+    expect.objectContaining({
+      page_view_id: second.page_view_id,
+      presentation_instance_id: second.presentation_instance_id,
+    })
+  );
+  show();
+  expect(capture).toHaveBeenCalledTimes(2);
 });

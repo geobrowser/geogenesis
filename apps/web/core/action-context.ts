@@ -102,12 +102,32 @@ export function mergeActionScope(parent: ActionScope, value: ActionScope): Actio
   };
 }
 
-let page: { path: string; id: string } | undefined;
+let page: { key: string; id: string } | undefined;
+const pageViewListeners = new Set<() => void>();
+
+/** Surfaces can survive a Next navigation without rendering. The existing page
+ * tracker notifies them once it has reported the new view; no UI is remounted. */
+export function subscribeToActionPageViews(listener: () => void) {
+  pageViewListeners.add(listener);
+  return () => {
+    pageViewListeners.delete(listener);
+  };
+}
+
+export function notifyActionPageView() {
+  for (const listener of [...pageViewListeners]) listener();
+}
 let replayContext: ActionContext | undefined;
 let eventContext: { context: ActionContext; depth: number } | undefined;
 
-export function pageContext(path = typeof window === 'undefined' ? '/' : window.location.pathname) {
-  if (page?.path !== path) page = { path, id: crypto.randomUUID() };
+export function pageContext(
+  path = typeof window === 'undefined' ? '/' : window.location.pathname,
+  search = typeof window === 'undefined' ? '' : window.location.search
+) {
+  // Match PageViewTracker's pathname + searchParams identity. Query text stays
+  // inside this cache key and never becomes an action-description field.
+  const key = `${path}?${new URLSearchParams(search).toString()}`;
+  if (page?.key !== key) page = { key, id: crypto.randomUUID() };
   const segments = path.split('/').filter(Boolean);
   const isId = (value?: string) => !!value && /^(?:[a-f\d]{32}|[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(value);
   let pageType = segments[0] || 'home';

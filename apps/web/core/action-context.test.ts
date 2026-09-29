@@ -88,3 +88,16 @@ it('retains metadata when graph IDs differ only in UUID formatting', () => {
   expect(context.target_type_ids).toEqual(['claim-type']);
   expect(context.origin_entity_ids).toEqual([debate]);
 });
+
+it('uses query navigation for view identity without putting query text into attribution', () => {
+  window.history.replaceState({}, '', '/explore?tab=claims&q=private-search');
+  const first = pageContext();
+  expect(pageContext().page_view_id).toBe(first.page_view_id);
+  window.history.replaceState({}, '', '/explore?tab=debates&q=private-search');
+  const second = pageContext();
+  expect(second.page_view_id).not.toBe(first.page_view_id);
+  expect(second.page_path).toBe('/explore');
+  expect(JSON.stringify(second)).not.toContain('private-search');
+  window.history.replaceState({}, '', '/explore?tab=debates&q=private-search#anchor');
+  expect(pageContext().page_view_id).toBe(second.page_view_id);
+});

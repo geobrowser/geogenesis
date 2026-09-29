@@ -58,6 +58,7 @@ export function observeOperation(
     }
   };
   const contextRevision = readRevision();
+  const isCurrent = () => readRevision() === contextRevision;
   const context = {
     ...attribution,
     measurement_version: 'growth-v2',
@@ -74,7 +75,7 @@ export function observeOperation(
     if (emitted.has(`${event}:${phase}`)) return;
     // Source reconciliation owns completion after logout/account switch. Never
     // assign an earlier actor's asynchronous result to the current account.
-    if (readRevision() !== contextRevision) return;
+    if (!isCurrent()) return;
     emitted.add(`${event}:${phase}`);
     try {
       capture(event, {
@@ -98,6 +99,7 @@ export function observeOperation(
   if (opportunity) emit('action_attempted', 'attempt', {});
   return {
     operationId,
+    isCurrent,
     succeeded(properties: Record<string, unknown> = {}) {
       complete('succeeded', properties);
     },

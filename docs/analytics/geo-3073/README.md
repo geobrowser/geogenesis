@@ -33,7 +33,7 @@ The entity route layout supplies the page's actual entity and its claim/topic/pe
 
 ## Visibility
 
-Only Explore-style cards, the debate player, ticker claims, end card, and claims panel emit `component_impression`. At least 50% of the measured element must intersect the viewport and the document must be visible. A display is keyed by page view, component, target, list and position; rerenders and remounts reuse its ID and do not add another impression. Returning to a page creates a new view. The feed's original article roots and existing refs are preserved so measurement does not change card layout or `:last-child` styling.
+Only Explore-style cards, the debate player, ticker claims, end card, and claims panel emit `component_impression`. At least 50% of the measured element must intersect the viewport and the document must be visible. A display is keyed by page view, component, target, list and position; rerenders and remounts reuse its ID and do not add another impression. Returning to a page or changing its query parameters creates a new view, matching `PageViewTracker`. Query text stays in the internal cache key; `page_path` remains pathname-only. Retained surfaces subscribe to the tracker so their display IDs refresh without remounting the UI. The feed's original article roots and existing refs are preserved so measurement does not change card layout or `:last-child` styling.
 
 `presentation_instance_id` links actions to their displayed component. The playback instance is separate and uses the existing playback measurement's ID; `playback_position_ms` is on the debate timeline. Ticker and end-card actions have distinct component names. Rounds and speakers are deliberately absent from action records: derive them from published claim timing and debate turns, or from the action's playback position for non-claim actions.
 
@@ -65,3 +65,14 @@ This draft does **not** assert that all ticket acceptance criteria are complete:
 - Main entity feeds, person record feeds, topic coverage, space claims, profile galleries, ranking/data-block Explore views, and debate claim lists pass positions. Paginated lists currently use the displayed page's one-based position. Arbitrary future experiments must pass their variant; current card and video variants are included.
 
 Keep GEO-3073 In Progress through review. Move it to Done only when the user confirms merging, and retain these rollout dependencies in the ticket so a draft is not mistaken for production verification.
+
+
+## Copilot follow-up verification
+
+The [review follow-up](copilot-review.md) records the finding-by-finding decisions, scoped audit and mutation-test evidence. The source report has a synthetic SQL regression that runs the actual report against fixture CTEs, with no production tables or credentials:
+
+```sh
+python3 scripts/analytics/test-origins.py --url https://play.clickhouse.com/
+```
+
+Supply a local ClickHouse HTTP endpoint instead when available. This test is opt-in and is not a network dependency of the web test suite.

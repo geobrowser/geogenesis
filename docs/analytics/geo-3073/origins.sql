@@ -4,12 +4,12 @@
 SELECT toDate(event_time) AS day, source_id,
        uniqExact(JSONExtractString(properties_json, 'operation_id')) AS actions
 FROM analytics.events_canonical
-ARRAY JOIN arrayDistinct(arrayFilter(id -> id != '', arrayConcat(
+ARRAY JOIN arrayDistinct(arrayFilter(id -> id != '', arrayMap(id -> lower(replaceAll(id, '-', '')), arrayConcat(
   JSONExtract(properties_json, 'origin_entity_ids', 'Array(String)'),
   [JSONExtractString(properties_json, 'debate_id')],
   if(JSONExtractString(properties_json, 'target_type') = 'debate',
      [JSONExtractString(properties_json, 'target_id')], [])
-))) AS source_id
+)))) AS source_id
 WHERE app = 'genesis' AND environment = 'production'
   AND event_name = 'action_completed' AND event_time >= now() - INTERVAL 30 DAY
   AND NOT JSONExtractBool(properties_json, 'is_internal')

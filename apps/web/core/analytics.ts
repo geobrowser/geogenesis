@@ -3,7 +3,7 @@
 import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
-import { pageContext } from './action-context';
+import { notifyActionPageView, pageContext } from './action-context';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
@@ -294,6 +294,7 @@ export function pageViewed(properties: AnalyticsProperties = {}) {
       ...properties,
     },
   });
+  notifyActionPageView();
 }
 
 export function identify(user: AnalyticsIdentity, traits: AnalyticsProperties = {}) {

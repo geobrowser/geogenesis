@@ -10,12 +10,15 @@ import { useSearch } from './use-search';
 const mocks = vi.hoisted(() => ({
   findFuzzyPage: vi.fn(),
   searchSubmitted: vi.fn(),
+  capture: vi.fn(),
+  revision: vi.fn(() => 0),
 }));
 
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   searchSubmitted: mocks.searchSubmitted,
-  capture: vi.fn(),
+  capture: mocks.capture,
+  analyticsContextRevision: mocks.revision,
 }));
 vi.mock('../database/result', () => ({ mergeSearchResult: vi.fn() }));
 vi.mock('../sync/orm', () => ({ E: { findFuzzyPage: mocks.findFuzzyPage } }));
@@ -41,16 +44,20 @@ type SearchResponse = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(complete => {
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((complete, fail) => {
     resolve = complete;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
   mocks.findFuzzyPage.mockReset();
   mocks.searchSubmitted.mockReset();
+  mocks.capture.mockReset();
+  mocks.revision.mockReturnValue(0);
 });
 
 afterEach(() => {
@@ -215,4 +222,34 @@ describe('useSearch analytics', () => {
     await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledTimes(2));
     expect(mocks.searchSubmitted).toHaveBeenCalledOnce();
   });
+});
+
+it.each(['success', 'failure'] as const)('suppresses a %s search outcome after an identity change', async outcome => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+  const pending = deferred<SearchResponse>();
+  mocks.findFuzzyPage.mockReturnValue(pending.promise);
+  const { result } = renderHook(() => useSearch({ initialQuery: 'knowledge graph' }), { wrapper });
+  await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledOnce());
+  mocks.revision.mockReturnValue(1);
+  await act(async () => {
+    if (outcome === 'success') pending.resolve({ results: [], rawCount: 0, serverCount: 0, total: 0 });
+    else pending.reject(new Error('unavailable'));
+  });
+  await waitFor(() => expect(result.current.isFetching).toBe(false));
+  expect(mocks.capture).not.toHaveBeenCalled();
+  expect(mocks.searchSubmitted).not.toHaveBeenCalled();
+});
+
+it('completes one operation for an unchanged identity after an async search', async () => {
+  const pending = deferred<SearchResponse>();
+  mocks.findFuzzyPage.mockReturnValue(pending.promise);
+  renderHook(() => useSearch({ initialQuery: 'knowledge graph' }), { wrapper });
+  await waitFor(() => expect(mocks.findFuzzyPage).toHaveBeenCalledOnce());
+  await act(async () => pending.resolve({ results: [], rawCount: 0, serverCount: 0, total: 0 }));
+  await waitFor(() => expect(mocks.capture).toHaveBeenCalledOnce());
+  expect(mocks.capture).toHaveBeenCalledWith(
+    'action_completed',
+    expect.objectContaining({ outcome: 'succeeded', result_count: 0 })
+  );
+  expect(mocks.searchSubmitted).toHaveBeenCalledOnce();
 });
