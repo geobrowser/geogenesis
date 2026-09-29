@@ -7,7 +7,8 @@ import cx from 'classnames';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
-import { useParticipantBylines } from '~/core/debates/participant-bylines';
+import { useParticipantProfiles } from '~/core/debates/participant-bylines';
+import type { ParticipantProfile } from '~/core/debates/participant-profile';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -140,11 +141,10 @@ export function DebateFeedPlayer({
     endScrub,
   } = controller;
   const showBylines = !reducedOverlays;
-  const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
-  const bylineFor = (participant: DebateParticipant | null) => {
-    if (!showBylines) return null;
+  const profiles = useParticipantProfiles(debate.participants, active || preload);
+  const profileFor = (participant: DebateParticipant | null) => {
     const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
-    return spaceId ? (bylines.get(spaceId) ?? null) : null;
+    return spaceId ? (profiles.get(spaceId) ?? null) : null;
   };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
@@ -499,7 +499,8 @@ export function DebateFeedPlayer({
       <DebaterVideo
         inert={endCardShown}
         participant={slot1Participant}
-        byline={bylineFor(slot1Participant)}
+        profile={profileFor(slot1Participant)}
+        showByline={showBylines}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
@@ -559,7 +560,8 @@ export function DebateFeedPlayer({
       <DebaterVideo
         inert={endCardShown}
         participant={slot2Participant}
-        byline={bylineFor(slot2Participant)}
+        profile={profileFor(slot2Participant)}
+        showByline={showBylines}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
@@ -700,7 +702,8 @@ export function DebateFeedPlayer({
 
 function DebaterVideo({
   participant,
-  byline,
+  profile,
+  showByline,
   src,
   videoRef,
   audible,
@@ -723,7 +726,8 @@ function DebaterVideo({
   inert = false,
 }: {
   participant: DebateParticipant | null;
-  byline: string | null;
+  profile: ParticipantProfile | null;
+  showByline: boolean;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
@@ -765,7 +769,8 @@ function DebaterVideo({
   scrubber?: React.ReactNode;
   scrimClassName?: string;
 }) {
-  const name = participant ? speakerLabel(participant) : 'Debater';
+  const name = profile?.name ?? (participant ? speakerLabel(participant) : 'Debater');
+  const byline = showByline ? profile?.byline : null;
 
   const muted = !audible || mutedByUser;
 
@@ -1198,7 +1203,11 @@ function DebaterVideo({
           className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+            <Avatar
+              avatarUrl={profile?.avatarUrl ?? participant?.avatar_cid}
+              value={participant?.profile_space_id}
+              size={20}
+            />
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-2">
