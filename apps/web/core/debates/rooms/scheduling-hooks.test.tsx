@@ -15,8 +15,8 @@ import {
   useScheduledDebates,
 } from './scheduling-hooks';
 
-const capture = vi.hoisted(() => vi.fn());
-vi.mock('~/core/analytics', () => ({ capture, analyticsContextRevision: () => 0 }));
+const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: { current: 0 } }));
+vi.mock('~/core/analytics', () => ({ capture, analyticsContextRevision: () => revision.current }));
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
@@ -29,6 +29,7 @@ const listing = (requestId: string) => ({ requests: [{ request_id: requestId } a
 
 afterEach(() => {
   capture.mockClear();
+  revision.current = 0;
   focusManager.setFocused(undefined);
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -201,4 +202,78 @@ describe('scheduling analytics', () => {
       })
     );
   });
+
+  // An answer that lands after a sign-out or account switch belongs to the account that asked, which
+  // is no longer the one analytics would file it under.
+  it('drops a sent request whose account changed before geo-chat answered', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockImplementation(() => settleAfterSwitch(sent));
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }));
+
+    expect(capture).not.toHaveBeenCalledWith('debate_scheduled_request_sent', expect.anything());
+  });
+
+  it('drops a refused request whose account changed before geo-chat answered', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockImplementation(() =>
+      settleAfterSwitch(new GeoChatRequestError('no', 'slot_taken', 409), true)
+    );
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() =>
+      result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }).catch(() => undefined)
+    );
+
+    expect(capture).not.toHaveBeenCalledWith('debate_scheduled_request_failed', expect.anything());
+  });
+
+  it('drops a moved or refused reschedule whose account changed before geo-chat answered', async () => {
+    const move = vi.spyOn(api, 'rescheduleScheduledDebate').mockImplementation(() => settleAfterSwitch(sent));
+    const { result } = renderHook(() => useRescheduleScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', startsAt, minutes: 30 }));
+    move.mockImplementation(() => settleAfterSwitch(new GeoChatRequestError('no', 'slot_taken', 409), true));
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', startsAt, minutes: 30 }).catch(() => undefined));
+
+    expect(capture).not.toHaveBeenCalledWith('debate_scheduled_request_sent', expect.anything());
+    expect(capture).not.toHaveBeenCalledWith('debate_scheduled_request_failed', expect.anything());
+  });
+
+  it('reports a clashing acceptance as a failed join_debate, while the Requests tab still gets the clash', async () => {
+    const clash = {
+      outcome: 'conflict' as const,
+      conflicting_request_id: 'other',
+      conflicting_start_at: startsAt.toISOString(),
+      conflicting_end_at: startsAt.toISOString(),
+    };
+    vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue(clash);
+    const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync({ requestId: 'req-1', accepted: true })).resolves.toEqual(clash);
+    });
+
+    expect(capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({ action_kind: 'join_debate', outcome: 'failed', failure_code: 'conflict' })
+    );
+    expect(capture).not.toHaveBeenCalledWith('action_completed', expect.objectContaining({ outcome: 'succeeded' }));
+  });
+
+  it('drops an answer whose account changed before geo-chat recorded it', async () => {
+    vi.spyOn(api, 'respondToScheduledDebate').mockImplementation(() =>
+      settleAfterSwitch({ outcome: 'recorded', ...sent })
+    );
+    const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted: false }));
+
+    expect(capture).not.toHaveBeenCalledWith('debate_scheduled_request_answered', expect.anything());
+  });
 });
+
+/** Geo-chat's answer, arriving after the analytics identity has moved on. */
+function settleAfterSwitch<T>(value: T, reject = false): Promise<never> {
+  revision.current += 1;
+  return (reject ? Promise.reject(value) : Promise.resolve(value)) as Promise<never>;
+}

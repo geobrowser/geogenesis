@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AvailabilityBlock } from './blocks';
 import type { PeerSchedule } from './peer-schedule';
-import { debateAvailabilityViewed, debateScheduleSaved } from './schedule-analytics';
+import { debateAvailabilityLinkOpened, debateAvailabilityViewed, debateScheduleSaved } from './schedule-analytics';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics', () => ({ capture }));
@@ -67,5 +67,19 @@ describe('schedule analytics', () => {
       free_minutes: 210,
       mutual_free_minutes: 180,
     });
+  });
+
+  // `via` is URL text anyone can edit, so analytics gets a fixed vocabulary rather than the text.
+  it.each([
+    ['share', 'share'],
+    [null, 'none'],
+    ['someone@example.com', 'other'],
+  ] as const)('records a link that came via %s as %s', (via, linkSource) => {
+    debateAvailabilityLinkOpened({ viewer: 'signed_out', peer: 'bookable', rescheduling: false, via });
+
+    expect(capture).toHaveBeenCalledWith(
+      'debate_availability_link_opened',
+      expect.objectContaining({ link_source: linkSource })
+    );
   });
 });

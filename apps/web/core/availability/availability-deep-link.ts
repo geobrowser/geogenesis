@@ -70,6 +70,16 @@ export const NOT_A_PERSON_MESSAGE = 'This link doesn’t point to a person’s a
  */
 const AVAILABILITY_LINK_VIA = 'share';
 
+/**
+ * A link's `via` as analytics may record it. The URL is anyone's to edit, so only a value this app
+ * writes passes through; anything else is `other` rather than whatever text it carried. Scheduling
+ * emails (geo-chat's `debate_emails.rs`) send none, so they read as `none`.
+ */
+export function availabilityLinkSource(via: string | null): typeof AVAILABILITY_LINK_VIA | 'other' | 'none' {
+  if (!via) return 'none';
+  return via === AVAILABILITY_LINK_VIA ? AVAILABILITY_LINK_VIA : 'other';
+}
+
 /** Absolute, for a clipboard. `origin` defaults to the page's own. */
 export function availabilityLinkUrl(profileSpaceId: string, origin = window.location.origin): string {
   return new URL(toAvailability(profileSpaceId, { via: AVAILABILITY_LINK_VIA }), origin).toString();

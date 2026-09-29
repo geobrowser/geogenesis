@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { useActionContext } from '~/core/action-context-provider';
+import { snapshotAnalyticsRevision } from '~/core/analytics-operations';
 import {
   type ScheduledRequestAnalytics,
   debateScheduledRequestAnswered,
@@ -26,6 +27,9 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
 
 /** Backstop for an event refetch that failed past the gateway's retries; the socket stays ready. */
 const SCHEDULED_POLL_MS = 60_000;
+
+/** Whether an async result still belongs to the account that started it. */
+type AnalyticsRevision = ReturnType<typeof snapshotAnalyticsRevision>;
 
 /** A slot as geo-chat takes it: an instant and a length become a start and an end. */
 function slotPayload(startsAt: Date, minutes: number) {
@@ -62,7 +66,8 @@ export function useCreateScheduledDebate() {
   const mutation = useMutation<
     ScheduledDebateRequest,
     Error,
-    { opponentUserId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics }
+    { opponentUserId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics },
+    AnalyticsRevision
   >({
     mutationFn: ({ opponentUserId, startsAt, minutes }) =>
       createScheduledDebate(
@@ -71,12 +76,18 @@ export function useCreateScheduledDebate() {
         accountKey
       ),
     // Analytics here rather than at the call site: a shared link's modal can be closed while the
-    // request is in flight, and a caller's own callbacks die with it.
-    onSuccess: (request, { startsAt, analytics }) => {
-      debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
+    // request is in flight, and a caller's own callbacks die with it. Outliving the caller also means
+    // outliving the account that sent it, hence the revision taken at the start.
+    onMutate: snapshotAnalyticsRevision,
+    onSuccess: (request, { startsAt, analytics }, isCurrent) => {
+      if (isCurrent()) {
+        debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
+      }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
-    onError: (error, { analytics }) => debateScheduledRequestFailed({ mode: 'request', error, analytics }),
+    onError: (error, { analytics }, isCurrent) => {
+      if (isCurrent?.()) debateScheduledRequestFailed({ mode: 'request', error, analytics });
+    },
   });
   // The canonical action (GEO-3073), beside the instant challenge's `start_debate`. A geo-chat user
   // is all a booking knows about the other side, which also keeps these apart from challenges.
@@ -93,15 +104,21 @@ export function useRescheduleScheduledDebate() {
   return useMutation<
     ScheduledDebateRequest,
     Error,
-    { requestId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics }
+    { requestId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics },
+    AnalyticsRevision
   >({
     mutationFn: ({ requestId, startsAt, minutes }) =>
       rescheduleScheduledDebate(requestId, slotPayload(startsAt, minutes), getPrivyIdentityToken, accountKey),
-    onSuccess: (request, { startsAt, analytics }) => {
-      debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
+    onMutate: snapshotAnalyticsRevision,
+    onSuccess: (request, { startsAt, analytics }, isCurrent) => {
+      if (isCurrent()) {
+        debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
+      }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
-    onError: (error, { analytics }) => debateScheduledRequestFailed({ mode: 'reschedule', error, analytics }),
+    onError: (error, { analytics }, isCurrent) => {
+      if (isCurrent?.()) debateScheduledRequestFailed({ mode: 'reschedule', error, analytics });
+    },
   });
 }
 
@@ -110,18 +127,28 @@ export function useRespondToScheduledDebate() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  const mutation = useMutation<ScheduledDebateResponseResult, Error, { requestId: string; accepted: boolean }>({
+  const mutation = useMutation<
+    ScheduledDebateResponseResult,
+    Error,
+    { requestId: string; accepted: boolean },
+    AnalyticsRevision
+  >({
     mutationFn: ({ requestId, accepted }) =>
       respondToScheduledDebate(requestId, accepted, getPrivyIdentityToken, accountKey),
-    onSuccess: (result, { requestId, accepted }) => {
-      debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome });
+    onMutate: snapshotAnalyticsRevision,
+    onSuccess: (result, { requestId, accepted }, isCurrent) => {
+      if (isCurrent()) debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
     },
   });
-  const accept = useObservedMutation(mutation, 'join_debate', ({ requestId }) =>
-    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  const accept = useObservedMutation(
+    mutation,
+    'join_debate',
+    ({ requestId }) => getContext({ target_type: 'scheduled_debate_request', target_id: requestId }),
+    // A clash is geo-chat refusing the acceptance: no room was booked, so no one joined anything.
+    result => (result.outcome === 'conflict' ? 'conflict' : null)
   );
   // Only an acceptance is a `join_debate`. Declining is not an action in GEO-3073's vocabulary; the
   // instant request cards' decline is not observed either.

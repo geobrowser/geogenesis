@@ -96,8 +96,9 @@ export function SharedAvailabilityModal({
   const signIn = usePrivySignIn(() => setSigningIn(false), {
     onError: () => setSigningIn(false),
     // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
-    // goes through onboarding and is sent back here afterwards, and should land on the week again.
-    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId }),
+    // goes through onboarding and is sent back here afterwards, and should land on the week again —
+    // still carrying the `via` it came with, or that second arrival loses its attribution.
+    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId, via: via ?? undefined }),
   });
   // Whether this is a person at all, and the only name there is for a signed-out recipient — who is
   // who this link is mostly for. `null` is a space that does not exist, which is not a person either.

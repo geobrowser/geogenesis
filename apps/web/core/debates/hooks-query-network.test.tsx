@@ -321,9 +321,12 @@ describe('useSaveDebateSchedule analytics', () => {
   it('records the saved week, and whether it is the first one, from the cache before the write', () => {
     mocks.queryClient.getQueryData.mockReturnValue({ is_set: false });
     const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'hub_banner' }));
-    const options = result.current as unknown as { onSuccess: (response: typeof saved) => void };
+    const options = result.current as unknown as {
+      onMutate: () => () => boolean;
+      onSuccess: (response: typeof saved, blocks: unknown, isCurrent: () => boolean) => void;
+    };
 
-    options.onSuccess(saved);
+    options.onSuccess(saved, [], options.onMutate());
 
     expect(mocks.debateScheduleSaved).toHaveBeenCalledWith(
       [expect.objectContaining({ kind: 'recurring', weekday: 0, start: 540, end: 720 })],
@@ -334,11 +337,29 @@ describe('useSaveDebateSchedule analytics', () => {
   it('calls a save over an existing schedule an edit', () => {
     mocks.queryClient.getQueryData.mockReturnValue({ is_set: true });
     const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'navbar' }));
-    (result.current as unknown as { onSuccess: (response: typeof saved) => void }).onSuccess(saved);
+    (
+      result.current as unknown as {
+        onSuccess: (response: typeof saved, blocks: unknown, isCurrent: () => boolean) => void;
+      }
+    ).onSuccess(saved, [], () => true);
 
     expect(mocks.debateScheduleSaved).toHaveBeenLastCalledWith(expect.any(Array), {
       surface: 'navbar',
       isFirstSchedule: false,
     });
+  });
+
+  it('stays quiet when the account changed between Save and the answer, and still stores the week', () => {
+    mocks.debateScheduleSaved.mockClear();
+    mocks.queryClient.setQueryData.mockClear();
+    const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'navbar' }));
+    (
+      result.current as unknown as {
+        onSuccess: (response: typeof saved, blocks: unknown, isCurrent: () => boolean) => void;
+      }
+    ).onSuccess(saved, [], () => false);
+
+    expect(mocks.debateScheduleSaved).not.toHaveBeenCalled();
+    expect(mocks.queryClient.setQueryData).toHaveBeenCalled();
   });
 });

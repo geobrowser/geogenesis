@@ -515,11 +515,17 @@ function DayColumn({
               // day can be put back.
               aria-label={expanded ? `Show less on ${dayLabel}` : `+${hidden} more times on ${dayLabel}`}
               aria-expanded={expanded}
-              {...debateActionAnalyticsAttributes(
-                'peer-availability',
-                expanded ? 'Show fewer times' : 'Show more times',
-                'expand_peer_availability_day'
-              )}
+              {...(expanded
+                ? debateActionAnalyticsAttributes(
+                    'peer-availability',
+                    'Show fewer times',
+                    'collapse_peer_availability_day'
+                  )
+                : debateActionAnalyticsAttributes(
+                    'peer-availability',
+                    'Show more times',
+                    'expand_peer_availability_day'
+                  ))}
               onClick={() => setExpanded(current => !current)}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"
             >

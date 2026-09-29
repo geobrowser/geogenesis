@@ -1,6 +1,7 @@
 import { capture } from '~/core/analytics';
 import { geoChatErrorProperties } from '~/core/debates/api';
 
+import { availabilityLinkSource } from './availability-deep-link';
 import type { AvailabilityBlock } from './blocks';
 import type { PeerSchedule } from './peer-schedule';
 
@@ -184,6 +185,6 @@ export function debateAvailabilityLinkOpened({
     viewer,
     peer: peer ?? 'unknown',
     rescheduling,
-    link_source: via ?? 'none',
+    link_source: availabilityLinkSource(via),
   });
 }

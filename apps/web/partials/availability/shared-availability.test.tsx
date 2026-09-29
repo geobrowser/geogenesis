@@ -317,6 +317,17 @@ describe('AvailabilityDeepLink', () => {
     expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', '');
   });
 
+  // A new account is sent round onboarding and back through this URL; without `via` that second
+  // arrival would read as a link nobody shared.
+  it('keeps the link source through the sign-in redirect', () => {
+    search = 'modal=availability&via=share';
+    auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    expect(signInOptions?.redirectTo).toBe('/space/profile-space?modal=availability&via=share');
+  });
+
   it('attributes a booking to the link, and a reschedule to the email that sent it', () => {
     profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
     const { unmount } = render(<AvailabilityDeepLink />);
