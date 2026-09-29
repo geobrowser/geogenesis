@@ -50,7 +50,11 @@ const mocks = vi.hoisted(() => ({
   storeRelations: [] as Relation[],
 }));
 
-vi.mock('~/core/analytics', () => ({ profileUpdated: mocks.profileUpdated }));
+vi.mock('~/core/analytics', () => ({
+  profileUpdated: mocks.profileUpdated,
+  analyticsContextRevision: () => 0,
+  capture: vi.fn(),
+}));
 
 vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
 vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));

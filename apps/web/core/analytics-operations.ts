@@ -51,7 +51,11 @@ export function observeOperation(
 ) {
   const operationId = crypto.randomUUID();
   const readRevision = () => {
-    try { return analyticsContextRevision(); } catch { return null; }
+    try {
+      return analyticsContextRevision();
+    } catch {
+      return null;
+    }
   };
   const contextRevision = readRevision();
   const context = {
