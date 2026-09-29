@@ -21,7 +21,6 @@ const mocks = vi.hoisted(() => ({
   feed: null as Record<string, unknown> | null,
   composition: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
-  pathname: '/space/space-1/topic-1',
   /**
    * Deliberately not 3.
    *
@@ -59,10 +58,6 @@ vi.mock('~/partials/entity-page/editable-entity-page', () => ({
     mocks.typesEditor = props;
     return <div data-testid="types-editor" />;
   },
-}));
-vi.mock('next/navigation', () => ({
-  usePathname: () => mocks.pathname,
-  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
@@ -169,7 +164,6 @@ beforeEach(() => {
   mocks.feed = null;
   mocks.composition = null;
   mocks.tabs = null;
-  mocks.pathname = '/space/space-1/topic-1';
   mocks.topicSpaceIds = ['11111111111111111111111111111111'];
   mocks.typesEditor = null;
   mocks.blocks = [];
@@ -267,16 +261,12 @@ describe('TopicPageView explore feed', () => {
     expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore']);
   });
 
-  it.each(['', '/comments', '/coverage', '/subtopics'])(
-    'renders Explore without comments on the topic route with suffix "%s"',
-    suffix => {
-      mocks.pathname = `/space/space-1/topic-1${suffix}`;
-      render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+  it('renders Explore without comments by default', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-      expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
-      expect(screen.queryByTestId('comments')).toBeNull();
-    }
-  );
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(screen.queryByTestId('comments')).toBeNull();
+  });
 
   it('renders Explore for a stale Comments selection in the side panel', () => {
     mocks.panel = { activeTabId: null, activeSystemTab: 'comments' };
@@ -517,10 +507,11 @@ describe('TopicPageView Overview tab', () => {
   });
 
   // The other half of that rule: being *somewhere else* must not conjure the tab back.
-  it('still hides it from a reader who is on any other tab', () => {
-    mocks.pathname = '/space/space-1/topic-1/comments';
+  it('hides an empty Overview while reading an authored tab', () => {
+    mocks.authoredTabId = 'tab-1';
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
+    expect(screen.getByTestId('editor')).toBeInTheDocument();
     expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
   });
 
