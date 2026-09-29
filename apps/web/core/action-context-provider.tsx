@@ -112,18 +112,20 @@ export function ActionSurface({
     value.list_id ?? parent.list_id,
     value.item_position ?? parent.item_position,
   ].join(':');
-  if (seenPage !== pageId) {
+  if (pageId && seenPage !== pageId) {
     seen.clear();
     instances.clear();
     seenPage = pageId;
   }
-  if (!instances.has(key)) instances.set(key, crypto.randomUUID());
-  const instance = instances.get(key)!;
+  // The server/hydration snapshot has no page ID. Do not retain entities across requests.
+  if (pageId && !instances.has(key)) instances.set(key, crypto.randomUUID());
+  const instance = pageId ? instances.get(key) : undefined;
   const context = { ...mergeActionScope(parent, value), ...value, presentation_instance_id: instance };
   const latest = React.useRef(context);
   latest.current = context;
   React.useEffect(() => {
     if (
+      !pageId ||
       !trackImpression ||
       !IMPRESSION_COMPONENTS.has(value.component) ||
       !measurementNode ||
@@ -185,37 +187,49 @@ export function ActionSurface({
   );
 }
 
-/** Preserve the feed's existing article root, refs and :last-child selectors. */
-export function ActionSurfaceArticle({ ref: forwardedRef, onClickCapture, ...props }: React.ComponentProps<'article'>) {
+/** Share measurement and capture behavior while preserving each surface's existing DOM root. */
+function useActionSurfaceRoot<T extends HTMLElement>(
+  forwardedRef: React.Ref<T> | undefined,
+  onClickCapture: React.MouseEventHandler<T> | undefined
+) {
   const measurement = React.useContext(MeasurementContext);
   const context = React.useContext(Context);
   const depth = React.useContext(DepthContext);
   const attach = React.useCallback(
-    (node: HTMLElement | null) => {
+    (node: T | null) => {
       measurement?.(node);
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef) forwardedRef.current = node;
     },
     [measurement, forwardedRef]
   );
-  return (
-    <article
-      {...props}
-      ref={attach}
-      onClickCapture={event => {
-        if (context.component && context.target_id && context.target_type)
-          enterActionContext(
-            {
-              ...pageContext(),
-              ...context,
-              component: context.component,
-              target_id: context.target_id,
-              target_type: context.target_type,
-            },
-            depth
-          );
-        onClickCapture?.(event);
-      }}
-    />
-  );
+  return {
+    ref: attach,
+    onClickCapture: (event: React.MouseEvent<T>) => {
+      if (context.component && context.target_id && context.target_type)
+        enterActionContext(
+          {
+            ...pageContext(),
+            ...context,
+            component: context.component,
+            target_id: context.target_id,
+            target_type: context.target_type,
+          },
+          depth
+        );
+      onClickCapture?.(event);
+    },
+  };
+}
+
+/** Preserve the feed's existing article root, refs and :last-child selectors. */
+export function ActionSurfaceArticle({ ref, onClickCapture, ...props }: React.ComponentProps<'article'>) {
+  const root = useActionSurfaceRoot(ref, onClickCapture);
+  return <article {...props} {...root} />;
+}
+
+/** Preserve div roots used for scroll geometry and ResizeObserver measurements. */
+export function ActionSurfaceDiv({ ref, onClickCapture, ...props }: React.ComponentProps<'div'>) {
+  const root = useActionSurfaceRoot(ref, onClickCapture);
+  return <div {...props} {...root} />;
 }

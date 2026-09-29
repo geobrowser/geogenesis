@@ -505,7 +505,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
               responseKind ?? 'curation'
             )
           );
-      const operation = observeOperation('vote', attribution.target_type, entityId, undefined, attribution);
+      const operation = observeOperation('vote', 'entity', entityId, undefined, attribution);
       // Keyed by the space the vote is sent from, which can differ from the reactive one
       // (a vote replayed before personalSpaceId resolves).
       const votingPersonalSpaceId = readRegisteredSpace().personalSpaceId;

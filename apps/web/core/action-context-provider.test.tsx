@@ -2,13 +2,17 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import * as React from 'react';
 
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import {
   ActionContextProvider,
   ActionSurface,
   ActionSurfaceArticle,
+  ActionSurfaceDiv,
   useActionContext,
+  useActionScope,
 } from './action-context-provider';
 import { pageViewed } from './analytics';
 
@@ -156,7 +160,7 @@ it('measures a retained card again when the page tracker reports query-only navi
 });
 
 // The child swaps its own root after data resolves; the enclosing surface stays mounted.
-it.each(['asChild', 'contents'] as const)(
+it.each(['asChild', 'div', 'contents'] as const)(
   'follows a replaced %s measurement root without counting it twice',
   async mode => {
     window.history.replaceState({}, '', `/explore/replacement-${mode}`);
@@ -177,10 +181,10 @@ it.each(['asChild', 'contents'] as const)(
       }
     );
     const action = vi.fn();
-    const forwardedRef = React.createRef<HTMLElement>();
+    const forwardedRef = React.createRef<HTMLDivElement>();
     function ReplacingChild() {
       const [revision, setRevision] = React.useState(0);
-      const Article = mode === 'asChild' ? ActionSurfaceArticle : 'article';
+      const Article = mode === 'asChild' ? ActionSurfaceArticle : mode === 'div' ? ActionSurfaceDiv : 'article';
       return (
         <Article key={revision} ref={forwardedRef} data-testid="measured-root">
           <button onClick={() => setRevision(value => value + 1)}>Replace root</button>
@@ -190,7 +194,7 @@ it.each(['asChild', 'contents'] as const)(
     }
     render(
       <ActionSurface
-        asChild={mode === 'asChild'}
+        asChild={mode !== 'contents'}
         className={mode === 'contents' ? 'contents' : undefined}
         value={{ component: 'explore_feed_card', target_id: 'claim', target_type: 'claim' }}
       >
@@ -235,3 +239,69 @@ it.each(['asChild', 'contents'] as const)(
     expect(capture).toHaveBeenCalledTimes(1);
   }
 );
+
+it('does not allocate or retain per-entity display IDs during repeated server renders', () => {
+  const uuid = vi.spyOn(crypto, 'randomUUID');
+  const writes = vi.spyOn(Map.prototype, 'set');
+  function Probe() {
+    const scope = useActionScope();
+    return <span data-display={scope.presentation_instance_id}>Card</span>;
+  }
+  for (let index = 0; index < 20; index++) {
+    const html = renderToString(
+      <ActionSurface value={{ component: 'explore_feed_card', target_type: 'entity', target_id: `ssr-leak-${index}` }}>
+        <Probe />
+      </ActionSurface>
+    );
+    expect(html).not.toContain('data-display');
+  }
+  expect(uuid).not.toHaveBeenCalled();
+  expect(writes.mock.calls.filter(([key]) => typeof key === 'string' && key.includes('ssr-leak-'))).toEqual([]);
+});
+
+it('allocates a client display after hydration and joins its impression to actions', async () => {
+  window.history.replaceState({}, '', '/explore/hydration');
+  let notify!: IntersectionObserverCallback;
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        notify = callback;
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  const action = vi.fn();
+  const error = vi.fn();
+  const tree = (
+    <ActionSurface asChild value={{ component: 'explore_feed_card', target_id: 'claim', target_type: 'claim' }}>
+      <ActionSurfaceDiv>
+        <Control action={action} />
+      </ActionSurfaceDiv>
+    </ActionSurface>
+  );
+  const container = document.createElement('div');
+  container.innerHTML = renderToString(tree);
+  document.body.append(container);
+  let root: ReturnType<typeof hydrateRoot> | undefined;
+  try {
+    await act(async () => {
+      root = hydrateRoot(container, tree, { onRecoverableError: error });
+    });
+    act(() =>
+      notify([{ isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry], {} as IntersectionObserver)
+    );
+    expect(error).not.toHaveBeenCalled();
+    expect(capture).toHaveBeenCalledOnce();
+    const display = capture.mock.calls[0][1].presentation_instance_id;
+    expect(display).toEqual(expect.any(String));
+    expect(display).not.toBe('');
+    fireEvent.click(screen.getByText('Agree'));
+    expect(action).toHaveBeenCalledWith(expect.objectContaining({ presentation_instance_id: display }));
+  } finally {
+    await act(async () => root?.unmount());
+    container.remove();
+  }
+});

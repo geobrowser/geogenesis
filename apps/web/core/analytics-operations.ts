@@ -95,13 +95,11 @@ export function observeOperation(
   const contextRevision = readRevision();
   const isCurrent = () => readRevision() === contextRevision;
   const context = {
-    ...attribution,
     measurement_version: 'growth-v2',
-    action_context_version: 'v1',
     operation_id: operationId,
     action_kind: action,
-    target_type: attribution?.target_type ?? targetType,
-    target_id: attribution?.target_id ?? targetId,
+    target_type: targetType,
+    target_id: targetId,
     ...opportunity,
   };
   const emitted = new Set<string>();
@@ -116,11 +114,9 @@ export function observeOperation(
       capture(event, {
         ...properties,
         ...context,
-        // Legacy ranking opportunities have their own display ID. Preserve it on
-        // legacy events, but join canonical actions to the visible ActionSurface.
-        ...(event === 'action_completed' && attribution?.presentation_instance_id
-          ? { presentation_instance_id: attribution.presentation_instance_id }
-          : {}),
+        // Only canonical completions carry page/surface attribution. Legacy events
+        // keep their original target type and opportunity/display IDs for existing consumers.
+        ...(event === 'action_completed' ? { ...attribution, action_context_version: 'v1' } : {}),
       });
     } catch {
       /* Never fail a product action. */

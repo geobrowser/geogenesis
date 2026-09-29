@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { ActionSurface } from '~/core/action-context-provider';
+import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
@@ -307,7 +307,7 @@ export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTicker
   if (!props.window.claim.spaceId) return null;
   return (
     <ActionSurface
-      className="contents"
+      asChild
       trackImpression={props.opacity === undefined || props.opacity > 0}
       value={{ component: 'debate_claim_ticker', target_id: props.window.claim.id, target_type: 'claim' }}
     >
@@ -338,7 +338,7 @@ function DebateClaimTickerCardBody({
   if (!claim.spaceId) return null;
 
   return (
-    <div
+    <ActionSurfaceDiv
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
@@ -382,7 +382,7 @@ function DebateClaimTickerCardBody({
         onAnswered={onAnswered}
       />
       <TickerClaimText text={claim.text} />
-    </div>
+    </ActionSurfaceDiv>
   );
 }
 

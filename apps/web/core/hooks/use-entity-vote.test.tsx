@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 
 import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 import {
@@ -134,6 +135,59 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
+
+it.each(['success', 'rejected', 'unknown'] as const)(
+  'keeps the legacy entity target for a claim vote with %s outcome',
+  async outcome => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    if (outcome !== 'success')
+      mocks.runEffectEither.mockResolvedValue({
+        _tag: 'Left',
+        left: new Error(outcome === 'rejected' ? 'User rejected' : 'receipt timeout'),
+      });
+    const { wrapper: QueryWrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      {
+        wrapper: ({ children }) => (
+          <QueryWrapper>
+            <ActionContextProvider
+              value={{
+                component: 'debate_claim_ticker',
+                debate_id: 'debate',
+                target_id: 'claim-1',
+                target_type: 'claim',
+              }}
+            >
+              {children}
+            </ActionContextProvider>
+          </QueryWrapper>
+        ),
+      }
+    );
+    await act(async () => {
+      await result.current.submitResponseAsync('positive').catch(() => {});
+    });
+    const legacy = mocks.capture.mock.calls.filter(([event]) =>
+      ['vote_cast', 'action_failed', 'action_outcome_unknown'].includes(event)
+    );
+    expect(legacy.length).toBeGreaterThan(0);
+    for (const [, properties] of legacy) {
+      expect(properties).toMatchObject({ target_type: 'entity', target_id: 'claim-1' });
+      expect(properties).not.toHaveProperty('debate_id');
+      expect(properties).not.toHaveProperty('component');
+    }
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        target_type: 'claim',
+        target_id: 'claim-1',
+        debate_id: 'debate',
+        component: 'debate_claim_ticker',
+      })
+    );
+  }
+);
 
 describe('useEntityResponse indexing reconciliation', () => {
   it.each(['positive', 'negative', 'clear'] as const)(

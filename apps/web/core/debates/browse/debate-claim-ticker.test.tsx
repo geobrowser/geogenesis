@@ -202,7 +202,7 @@ describe('DebateClaimTickerCard', () => {
   it('fades with its window rather than holding at full strength', () => {
     const { container } = renderCard({ opacity: 0.4 });
 
-    expect(container.firstElementChild?.firstElementChild).toHaveStyle({ opacity: '0.4' });
+    expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
   });
 
   // The card above the newest one dissolves into the video; the newest sits at full strength. In
@@ -500,7 +500,8 @@ describe('DebateClaimTickerStack', () => {
 
   /** jsdom lays nothing out, so the list's geometry is stated outright. */
   function layOut(list: HTMLElement) {
-    const cards = [...list.children] as HTMLElement[];
+    // Only real card boxes have geometry; display:contents wrappers keep jsdom's zeros.
+    const cards = [...list.querySelectorAll<HTMLElement>('[class*="backdrop-blur-"]')];
     cards.forEach((card, index) => {
       Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 });
       Object.defineProperty(card, 'offsetHeight', { configurable: true, value: 90 });
@@ -639,6 +640,47 @@ describe('DebateClaimTickerStack', () => {
     expect(list.scrollTop).toBe(0);
     // Still added, and at the bottom — it is only the view that stays put.
     expect(screen.getByText(/And one more thing/)).toBeInTheDocument();
+  });
+
+  it('observes the real card box and follows its growth only while pinned to the bottom', () => {
+    const observers: { elements: Set<Element>; callback: ResizeObserverCallback }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        elements = new Set<Element>();
+        constructor(callback: ResizeObserverCallback) {
+          observers.push({ elements: this.elements, callback });
+        }
+        observe = (element: Element) => this.elements.add(element);
+        unobserve = (element: Element) => this.elements.delete(element);
+        disconnect = () => this.elements.clear();
+      }
+    );
+    try {
+      const { container } = renderStack({ open: true });
+      const list = listOf(container);
+      const card = list.querySelector<HTMLElement>('[class*="backdrop-blur-"]')!;
+      let height = 400;
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => height });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+      fireEvent.scroll(list, { target: { scrollTop: 200 } });
+      const resize = () =>
+        act(() => {
+          for (const observer of observers)
+            if (observer.elements.has(card))
+              observer.callback([{ target: card } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+        });
+      height = 500;
+      resize();
+      expect(list.scrollTop).toBe(500);
+      expect(card.parentElement).toBe(list);
+      fireEvent.scroll(list, { target: { scrollTop: 50 } });
+      height = 600;
+      resize();
+      expect(list.scrollTop).toBe(50);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   // The other half of the same bargain: someone watching the newest claim keeps watching it.

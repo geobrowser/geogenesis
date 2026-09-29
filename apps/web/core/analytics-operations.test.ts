@@ -257,3 +257,59 @@ describe('canonical outcome field boundary', () => {
     expect(completed()[0][1]).toMatchObject(fields);
   });
 });
+
+describe('legacy event context isolation', () => {
+  const attribution = {
+    component: 'debate_claim_ticker' as const,
+    target_id: 'claim',
+    target_type: 'claim',
+    page_path: '/explore',
+    page_type: 'explore',
+    page_view_id: 'view',
+    debate_id: 'enclosing-debate',
+    overlay: 'modal' as const,
+    presentation_instance_id: 'surface',
+    list_id: 'claims',
+    item_position: 2,
+  };
+  const opportunity = { opportunity_id: 'opportunity', presentation_instance_id: 'legacy-display' };
+  const legacyContext = {
+    measurement_version: 'growth-v2',
+    operation_id: expect.any(String),
+    action_kind: 'vote',
+    target_type: 'entity',
+    target_id: 'claim',
+    ...opportunity,
+  };
+  it.each(['vote_cast', 'ranking_submitted'] as const)(
+    'keeps %s and attempts unchanged while enriching only the canonical completion',
+    event => {
+      const operation = observeOperation('vote', 'entity', 'claim', opportunity, attribution);
+      operation.outcome(event, 'submitted', { entity_id: 'claim', target_name: 'Legacy label' });
+      operation.outcome(event, 'indexed', { entity_id: 'claim', target_name: 'Legacy label' });
+      expect(capture).toHaveBeenCalledWith('action_attempted', legacyContext);
+      for (const phase of ['submitted', 'indexed'])
+        expect(capture).toHaveBeenCalledWith(event, {
+          ...legacyContext,
+          entity_id: 'claim',
+          target_name: 'Legacy label',
+          outcome_phase: phase,
+        });
+      expect(capture).toHaveBeenCalledWith(
+        'action_completed',
+        expect.objectContaining({ ...attribution, action_context_version: 'v1', outcome: 'succeeded' })
+      );
+    }
+  );
+  it.each(['rejected', 'unknown'] as const)('preserves claim attribution on legacy %s failures', code => {
+    observeOperation('vote', 'entity', 'claim', opportunity, attribution).failed(code);
+    expect(capture).toHaveBeenCalledWith(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', {
+      ...legacyContext,
+      failure_code: code,
+    });
+    expect(capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({ ...attribution, outcome: code === 'unknown' ? 'unknown' : 'failed' })
+    );
+  });
+});
