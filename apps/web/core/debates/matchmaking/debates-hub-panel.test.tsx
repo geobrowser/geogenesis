@@ -104,6 +104,7 @@ vi.mock('../hooks', () => ({
 
 vi.mock('./hooks', () => ({
   useMatchmakingScope: () => true,
+  useSchedulablePeople: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] }, isLoading: false, error: null }),
   useDebatePeople: () => ({
     data: mocks.peopleError ? undefined : { people: mocks.people },

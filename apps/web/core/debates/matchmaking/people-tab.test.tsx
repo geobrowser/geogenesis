@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
-import type { DebateChallenge, DebatePerson } from '../api';
+import type { DebateChallenge, DebatePerson, SchedulablePeopleResponse } from '../api';
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -54,6 +54,8 @@ const mocks = vi.hoisted(() => ({
     data: undefined as unknown,
   },
   usePeerSchedule: vi.fn(),
+  schedulable: undefined as SchedulablePeopleResponse | undefined,
+  useSchedulablePeople: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
@@ -114,6 +116,7 @@ vi.mock('./hooks', () => ({
     refetch: mocks.peopleRefetch,
   }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+  useSchedulablePeople: (enabled: boolean) => mocks.useSchedulablePeople(enabled),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -307,6 +310,14 @@ beforeEach(() => {
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
   mocks.personProfileOpened.mockReset();
+  mocks.schedulable = undefined;
+  mocks.useSchedulablePeople.mockReset();
+  mocks.useSchedulablePeople.mockImplementation(() => ({
+    data: mocks.schedulable,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }));
 });
 
 /**
@@ -1464,5 +1475,178 @@ describe('PeopleTab filters', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Online only', () => {
+  /** A 30-minute slot `hours` from now, on the half hour, spelled as chrono does: no milliseconds. */
+  function slotIn(hours: number) {
+    const start = new Date(Date.now() + hours * 3_600_000);
+    start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+    const wire = (at: Date) => at.toISOString().replace('.000Z', 'Z');
+    return { start: wire(start), end: wire(new Date(start.getTime() + 30 * 60_000)) };
+  }
+
+  function schedulable(userId: string, name: string, slots: Array<{ start: string; end: string }>, truncated = false) {
+    return {
+      user: { user_id: userId, profile_space_id: `profile-${userId}`, display_name: name, avatar_cid: null },
+      online: false,
+      slots,
+      truncated,
+    };
+  }
+
+  function renderWithOfflineShown() {
+    const store = createStore();
+    store.set(debatesHubPeopleOnlineOnlyAtom, false);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+  }
+
+  it('is on by default and asks for nobody offline', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(false);
+  });
+
+  it('is absent without scheduling, since offline people could only be scheduled', () => {
+    mocks.peerAvailability = false;
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('switch', { name: 'Online only' })).not.toBeInTheDocument();
+  });
+
+  it('adds offline people after online ones, with a Schedule button instead of a request', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [slotIn(26)])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
+
+    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(true);
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('Arturas')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Ona')).toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
+  });
+
+  it('keeps someone on the live roster in their online row rather than listing them twice', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+    };
+    renderWithOfflineShown();
+
+    expect(screen.getAllByText('Arturas')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  it('shows upcoming shared times only, capped, with the rest behind More times', () => {
+    const past = slotIn(-2);
+    const upcoming = [slotIn(25), slotIn(26), slotIn(27), slotIn(28)];
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [past, ...upcoming])],
+    };
+    renderWithOfflineShown();
+
+    expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+  });
+
+  it('opens their week on the time that was picked', async () => {
+    const picked = slotIn(26);
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [picked])],
+    };
+    mocks.usePeerSchedule.mockReturnValue({
+      enabled: true,
+      isPending: false,
+      isError: false,
+      schedule: {
+        userId: 'user-away',
+        viewerTimezone: 'UTC',
+        peerTimezone: 'UTC',
+        viewerHasSchedule: true,
+        peerHasSchedule: true,
+        theirWeekKnown: true,
+        slots: [{ ...picked, viewerIsFree: true }],
+      },
+    });
+    renderWithOfflineShown();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0]);
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
+    expect(within(screen.getByRole('dialog')).getByRole('button', { pressed: true })).toBeInTheDocument();
+  });
+
+  it('asks the viewer to set availability rather than implying nobody matches', () => {
+    mocks.people = [];
+    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    renderWithOfflineShown();
+
+    expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+  });
+
+  it('leaves out someone whose shared times have all passed', () => {
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [slotIn(-3), slotIn(-2)])],
+    };
+    renderWithOfflineShown();
+
+    expect(screen.queryByText('Ona')).not.toBeInTheDocument();
+  });
+
+  it('keeps the online list up while offline people load', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    }));
+    renderWithOfflineShown();
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+  });
+
+  it('keeps a remembered space while offline people are still loading', () => {
+    const offlineSpace = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.records = new Map([[person('user-them', 'Arturas').profile_space_id, record()]]);
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    }));
+    const store = createStore();
+    store.set(debatesHubPeopleOnlineOnlyAtom, false);
+    store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
   });
 });
