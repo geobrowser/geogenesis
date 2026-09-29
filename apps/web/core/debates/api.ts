@@ -994,6 +994,24 @@ export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIde
   });
 }
 
+/**
+ * Saves the zone this browser is in, so emails geo-chat sends while the person is away render in
+ * it. geo-chat prefers the zone on saved availability and falls back to this one, then to UTC.
+ */
+export async function reportBrowserTimezone(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  timezone: string
+) {
+  return geoChatRequest<void>('/me/timezone', {
+    method: 'PUT',
+    body: { timezone },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function updateDebateAvailability(
   availableToDebate: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
