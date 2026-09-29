@@ -8,6 +8,8 @@ import { Effect, Either } from 'effect';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { useActionContext } from '~/core/action-context-provider';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -25,6 +27,7 @@ interface UseRequestToBeMemberArgs {
 }
 
 export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArgs) {
+  const getContext = useActionContext('join_space_button', 'space', spaceId ?? '');
   const { dispatch } = useStatusBar();
 
   const { smartAccount } = useSmartAccount();
@@ -75,7 +78,8 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     }
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]);
 
-  const { mutate, mutateAsync, status } = useMutation({ mutationFn: handleRequestToBeMember });
+  const mutation = useMutation({ mutationFn: handleRequestToBeMember });
+  const { mutate, mutateAsync, status } = useObservedMutation(mutation, 'join_space', () => getContext());
 
   return {
     requestToBeMember: mutate,

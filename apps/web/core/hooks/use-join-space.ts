@@ -29,7 +29,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const promptSignIn = usePrivySignIn();
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const enqueuePendingAction = useEnqueuePendingAction('join_space_button');
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
   const queueJoinRequest = React.useCallback(() => {

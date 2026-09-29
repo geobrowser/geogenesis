@@ -13,10 +13,12 @@ import {
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   type Debate,
@@ -1130,10 +1132,11 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = N
 }
 
 export function useCreateDebateRematchRequest(sessionId: string) {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: { source_space_id: string; claim_id: string; format_id: string }) =>
       createDebateRematchRequest(sessionId, request, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
@@ -1142,13 +1145,17 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'claim', target_id: request.claim_id })
+  );
 }
 
 export function useAcceptDebateRematchRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (requestId: string) => acceptDebateRematchRequest(requestId, getPrivyIdentityToken, accountKey),
     // Same window as the hub's accept: the debate is created inside this round trip and announced to
     // this tab over its own socket, so the id-keyed intent below is taken too late to stop the
@@ -1169,6 +1176,9 @@ export function useAcceptDebateRematchRequest() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'join_debate', requestId =>
+    getContext({ target_type: 'debate_request', target_id: requestId })
+  );
 }
 
 export function useRejectDebateRematchRequest() {
@@ -1232,10 +1242,11 @@ export function useDebateProfile(
 }
 
 export function useCreateDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
@@ -1251,13 +1262,17 @@ export function useCreateDebateChallenge() {
       });
     },
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  );
 }
 
 export function useAcceptDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
@@ -1266,6 +1281,9 @@ export function useAcceptDebateChallenge() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'join_debate', challengeId =>
+    getContext({ target_type: 'debate_challenge', target_id: challengeId })
+  );
 }
 
 export function useRejectDebateChallenge() {

@@ -34,6 +34,8 @@ describe('publication outcome instrumentation', () => {
         setProposals: vi.fn(),
         activeSpaceMetadata: { type: 'PERSONAL' },
         publishedEdit,
+        getPublishContext: () => ({}),
+        observeOperation: () => ({ succeeded: vi.fn(), failed: vi.fn() }),
         makeProposal: vi.fn(
           options =>
             new Promise((resolve, reject) => {

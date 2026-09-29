@@ -6,6 +6,8 @@ import { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { entityActionScope } from '~/core/action-entity-context';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { isHiddenEntity } from '~/core/moderation/hidden';
@@ -80,6 +82,14 @@ export default async function ProfileLayout(props: Props) {
   const { children } = props;
   const result = await cachedFetchEntityPage(entityId, spaceId);
   const entityTypes = result?.entity?.types ?? [];
+  const targetContext = entityActionScope(result?.entity);
+  const pageType = entityBrowseViewFromTypes(entityTypes);
+  const actionContext = {
+    ...targetContext,
+    page_entity_id: entityId,
+    page_entity_type: pageType ?? targetContext.target_type ?? 'entity',
+    page_type: pageType ?? targetContext.target_type ?? 'entity',
+  };
 
   // Mounted here rather than per page: every entity surface below this — the generic page, a
   // claim, a topic, a profile, and each of the type-owned record tabs — hangs off this one layout,
@@ -88,59 +98,61 @@ export default async function ProfileLayout(props: Props) {
 
   if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
     return (
-      <>
+      <ActionContextProvider value={actionContext}>
         {stickyHeader}
         {children}
-      </>
+      </ActionContextProvider>
     );
   }
 
   const profile = await getProfilePage(entityId, spaceId);
 
   return (
-    <EntityStoreProvider id={entityId} spaceId={spaceId}>
-      {stickyHeader}
-      <RouteEditorProvider
-        id={profile.id}
-        spaceId={spaceId}
-        initialBlocks={profile.blocks}
-        initialBlockRelations={profile.blockRelations}
-        initialTabs={profile.tabs}
-        initialCollectionItems={profile.initialCollectionItems}
-      >
-        <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            <EditableHeading spaceId={spaceId} entityId={entityId} />
-            <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
-            <div className="flex items-center gap-4 text-text">
-              <EntityPageMetadataHeader spaceId={spaceId} />
-              {/* The route's entity id, not `profile.id` — the store provider, title and metadata
+    <ActionContextProvider value={actionContext}>
+      <EntityStoreProvider id={entityId} spaceId={spaceId}>
+        {stickyHeader}
+        <RouteEditorProvider
+          id={profile.id}
+          spaceId={spaceId}
+          initialBlocks={profile.blocks}
+          initialBlockRelations={profile.blockRelations}
+          initialTabs={profile.tabs}
+          initialCollectionItems={profile.initialCollectionItems}
+        >
+          <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
+          <EntityPageContentContainer>
+            <div className="space-y-2">
+              <EditableHeading spaceId={spaceId} entityId={entityId} />
+              <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
+              <div className="flex items-center gap-4 text-text">
+                <EntityPageMetadataHeader spaceId={spaceId} />
+                {/* The route's entity id, not `profile.id` — the store provider, title and metadata
                   header are all keyed on it, and history/menu/votes must act on the same entity. */}
-              <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+                <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+              </div>
             </div>
-          </div>
 
-          <Spacer height={40} />
+            <Spacer height={40} />
 
-          <PersonalProfileSuggestedTaskSync entityId={entityId} spaceId={spaceId} />
-          <PersonalProfileSuggestedCard spaceId={spaceId} entityId={entityId} />
+            <PersonalProfileSuggestedTaskSync entityId={entityId} spaceId={spaceId} />
+            <PersonalProfileSuggestedCard spaceId={spaceId} entityId={entityId} />
 
-          <React.Suspense fallback={null}>
-            <EntityTabs
-              entityId={entityId}
-              spaceId={spaceId}
-              initialTabRelations={profile.tabRelations}
-              tabEntities={profile.tabEntities}
-            />
-          </React.Suspense>
+            <React.Suspense fallback={null}>
+              <EntityTabs
+                entityId={entityId}
+                spaceId={spaceId}
+                initialTabRelations={profile.tabRelations}
+                tabEntities={profile.tabEntities}
+              />
+            </React.Suspense>
 
-          <Spacer height={20} />
+            <Spacer height={20} />
 
-          {children}
-        </EntityPageContentContainer>
-      </RouteEditorProvider>
-    </EntityStoreProvider>
+            {children}
+          </EntityPageContentContainer>
+        </RouteEditorProvider>
+      </EntityStoreProvider>
+    </ActionContextProvider>
   );
 }
 

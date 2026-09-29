@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
@@ -26,6 +27,12 @@ export function CopyOwnAvailabilityLinkButton() {
 
 function OwnLinkButton() {
   const { personalSpaceId } = usePersonalSpaceId();
+  // This control only appears in the schedule modal, which uses raw Radix primitives.
+  const getContext = useActionContext('share_dialog', 'space', personalSpaceId ?? '', {
+    overlay: 'modal',
+    overlay_entity_id: personalSpaceId ?? undefined,
+    overlay_entity_type: 'space',
+  });
   const [state, setState] = React.useState<'idle' | 'copied' | 'failed'>('idle');
 
   React.useEffect(() => {
@@ -43,7 +50,7 @@ function OwnLinkButton() {
       data-geo-analytics-intent="copy_availability_link"
       onClick={async () => {
         try {
-          await copyAvailabilityLink(personalSpaceId);
+          await copyAvailabilityLink(personalSpaceId, getContext());
           setState('copied');
         } catch {
           setState('failed');
