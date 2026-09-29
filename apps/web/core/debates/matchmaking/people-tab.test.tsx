@@ -604,7 +604,7 @@ describe('PeopleTab', () => {
     mocks.people = [];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or has upcoming availability.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
 
     cleanup();
@@ -647,7 +647,7 @@ describe('PeopleTab', () => {
 
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
 
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or has upcoming availability.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
     // Clearing a search that excluded nobody would put the same empty list back.
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
@@ -1662,12 +1662,36 @@ describe('Online only', () => {
     expect(within(screen.getByRole('dialog')).getByRole('button', { pressed: true })).toBeInTheDocument();
   });
 
-  it('asks the viewer to set availability rather than implying nobody matches', () => {
+  it('shows offline people and an optional availability notice when the viewer has no schedule', async () => {
     mocks.people = [];
-    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    mocks.schedulable = {
+      viewer_timezone: '',
+      viewer_has_schedule: false,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [])],
+    };
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
+    expect(screen.getByText(/You haven’t set your availability yet/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody is online or has upcoming availability.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule a debate with Ona' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
+  });
+
+  it('removes the setup notice once availability has been saved', () => {
+    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    const { rerender } = render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+
+    mocks.schedulable = { ...mocks.schedulable, viewer_has_schedule: true };
+    rerender(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('button', { name: 'Set availability' })).not.toBeInTheDocument();
   });
 
   it('keeps someone with no upcoming shared times, schedulable but with no times drawn', () => {

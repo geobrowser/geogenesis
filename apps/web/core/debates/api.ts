@@ -950,7 +950,7 @@ export type SchedulablePerson = {
 /** What `/matchmaking/schedulable-people` answers. */
 export type SchedulablePeopleResponse = {
   viewer_timezone: string;
-  /** False means the viewer has no availability saved, and `people` is then always empty. */
+  /** False means the viewer has no availability saved; people are still listed without shared slots. */
   viewer_has_schedule: boolean;
   people: SchedulablePerson[];
   /** The server's candidate scan was capped. */

@@ -445,7 +445,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         {viewerHasNoSchedule ? <SetAvailabilityNotice /> : null}
         {showOffline && schedulableQuery.error ? (
           <Text as="p" variant="footnote" color="grey-04" className="pb-2">
-            Couldn&rsquo;t load who&rsquo;s free at your times.{' '}
+            Couldn&rsquo;t load people available to schedule.{' '}
             <button type="button" className="underline" onClick={() => void schedulableQuery.refetch()}>
               Retry
             </button>
@@ -473,7 +473,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                 ? 'Nobody available matches that search.'
                 : 'Nobody available matches those filters.'
               : showOffline
-                ? 'Nobody is online or free at the same times as you.'
+                ? 'Nobody is online or has upcoming availability.'
                 : 'Nobody is available to debate right now.'
           }
           // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
@@ -826,8 +826,7 @@ function formatSlot(iso: string, now: Date = new Date()): string {
 }
 
 /**
- * Shown with "Online only" off when the viewer has no availability saved: geo-chat then matches
- * nobody, and the list would otherwise read as nobody being free (GEO-2937, GEO-2936).
+ * An optional setup reminder alongside offline people when the viewer has no availability saved.
  */
 function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
@@ -838,7 +837,8 @@ function SetAvailabilityNotice() {
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
       <Text as="p" variant="footnote">
-        Set your availability to see offline people you can schedule a debate with.
+        You haven&rsquo;t set your availability yet. You can still schedule with offline people; setting yours helps
+        find shared times.
       </Text>
       <HubPillButton
         analyticsLabel="Set availability"
