@@ -14,10 +14,12 @@ import { cookies } from 'next/headers';
 import type { GeoQueryRow } from '~/core/chat/geo-query-types';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { clientClosedResponse } from '../client-closed';
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { SINGLE_QUERY_TIMEOUT_MS, runGeoGraphql } from './graphql';
+import { checkQuery } from './query-guard';
 import { GEO_QUERY_SYSTEM_PROMPT } from './system-prompt';
 
 const anthropic = createAnthropic({
@@ -276,6 +278,13 @@ export async function POST(req: Request) {
             'Your query arrived empty because the document you were writing ran past the output limit and was cut off mid-call. Send a shorter one — fewer aliases, fewer fields.',
         };
       }
+      const guard = checkQuery(query, variables);
+      if (!guard.ok) {
+        if (process.env.NODE_ENV !== 'production' || process.env.CHAT_DEBUG === '1') {
+          console.warn('[chat/geo-query] refused a query before it ran:', guard.error);
+        }
+        return { error: guard.error };
+      }
       // A query that outruns the loop budget takes the answer turn down with
       // it, so it may only have whatever is left of that budget.
       const remaining = TOOL_LOOP_BUDGET_MS - (Date.now() - startedAt);
@@ -361,6 +370,7 @@ export async function POST(req: Request) {
       }
       return jsonError(504, 'Query took too long');
     }
+    if (req.signal?.aborted) return clientClosedResponse();
     console.error('[chat/geo-query] generation failed', err);
     return jsonError(502, 'Query failed');
   }
