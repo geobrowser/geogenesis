@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
+import { authAttemptForAction, currentAuthAttempt, readAuthAttempt, trackAuthOnboarding } from './auth-attempt';
 import { useTrackedLogin } from './hooks/use-tracked-login';
 import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 import { PrivyAuthTracker } from './privy-auth-tracker';
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   logout: undefined as undefined | (() => void),
   login: vi.fn(),
   trackPrivyAuth: vi.fn(),
+  capture: vi.fn(),
   restorePrivySession: vi.fn(),
   identifyPrivyUser: vi.fn(),
 }));
@@ -42,7 +44,7 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 vi.mock('./analytics', () => ({
   trackPrivyAuth: mocks.trackPrivyAuth,
-  capture: vi.fn(),
+  capture: mocks.capture,
   restorePrivySession: mocks.restorePrivySession,
   identifyPrivyUser: mocks.identifyPrivyUser,
   reconcileAnonymousAnalyticsIdentity: vi.fn(),
@@ -253,6 +255,78 @@ describe('PrivyAuthTracker', () => {
     broadcast(completion('signup-once'));
     expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
   });
+  it.each([
+    { name: 'signup after logout and remount', isNewUser: true, logout: true },
+    { name: 'signup already completed in this session', isNewUser: true, logout: false },
+    { name: 'login already completed in this session', isNewUser: false, logout: false },
+  ])('settles a new attempt despite duplicate $name telemetry', ({ name, isNewUser, logout }) => {
+    const tracker = render(<PrivyAuthTracker />);
+    const args = completion(`repeat-${name}`, isNewUser);
+    broadcast(args);
+    if (logout) {
+      act(() => mocks.logout?.());
+      tracker.unmount();
+      render(<PrivyAuthTracker />);
+    }
+    const attempt = beginPrivyAuth({
+      component: 'entity_vote_buttons',
+      auth_control: 'upvote',
+      auth_intent: 'vote',
+      auth_continuation: 'queued',
+      target_id: 'claim',
+      target_type: 'entity',
+    });
+    mocks.capture.mockClear();
+    broadcast(args);
+    broadcast(args);
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
+    expect(currentAuthAttempt()).toMatchObject({ id: attempt.id, outcome: 'signed_in', endedAt: expect.any(Number) });
+    expect(authAttemptForAction('vote', 'claim', attempt.id)?.id).toBe(attempt.id);
+    trackAuthOnboarding('start', 'viewed');
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'auth_onboarding_progress',
+      expect.objectContaining({ auth_attempt_id: attempt.id })
+    );
+    for (const event of ['auth_attempt_completed', 'auth_identity_linked']) {
+      const rows = mocks.capture.mock.calls.filter(
+        ([name, props]) => name === event && props.auth_attempt_id === attempt.id
+      );
+      expect(rows).toHaveLength(1);
+    }
+    beginPrivyAuth({ auth_control: 'later' });
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('signed_in');
+    expect(mocks.capture).not.toHaveBeenCalledWith(
+      'auth_action_completed',
+      expect.objectContaining({ auth_attempt_id: attempt.id, outcome: 'cancelled' })
+    );
+  });
+
+  it('does not fabricate an attempt for a duplicate signup without a new press', () => {
+    render(<PrivyAuthTracker />);
+    const args = completion('duplicate-without-press');
+    broadcast(args);
+    act(() => mocks.logout?.());
+    mocks.capture.mockClear();
+    broadcast(args);
+    expect(currentAuthAttempt()).toBeUndefined();
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
+
+  it('keeps an active attempt pending through repeated session restores', () => {
+    render(<PrivyAuthTracker />);
+    const args = { ...completion('repeated-restore', false), wasAlreadyAuthenticated: true };
+    broadcast(args);
+    const attempt = beginPrivyAuth({ auth_control: 'sign_in' });
+    mocks.capture.mockClear();
+    broadcast(args);
+    expect(currentAuthAttempt()?.id).toBe(attempt.id);
+    expect(currentAuthAttempt()?.outcome).toBeUndefined();
+    expect(mocks.restorePrivySession).toHaveBeenCalledOnce();
+    expect(mocks.trackPrivyAuth).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
+
   it('still completes the latest control when persistent storage stops accepting writes', () => {
     render(<PrivyAuthTracker />);
     beginPrivyAuth({ auth_control: 'old' });
