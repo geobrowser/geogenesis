@@ -45,7 +45,7 @@ import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
-import { HubPillButton } from './hub-pill-button';
+import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
@@ -730,7 +730,7 @@ function PersonRow({
             }
             title="See times"
             // An icon rather than text: the stats beside it need the width in a narrow panel.
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            className={HUB_ICON_BUTTON_CLASS_NAME}
           >
             <Calendar />
           </button>

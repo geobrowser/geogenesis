@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { summarizeSchedule } from '~/core/availability/schedule-summary';
 import { useDebateSchedule, useGeoChatAuth } from '~/core/debates/hooks';
 
@@ -11,6 +13,7 @@ import { Tooltip } from '~/design-system/tooltip';
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { hubAnalyticsAttributes } from './hub-analytics';
+import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 
 /**
  * The standing way into your debate schedule: a calendar beside the "I'm available" switch in the
@@ -20,8 +23,8 @@ import { hubAnalyticsAttributes } from './hub-analytics';
  * right now and this for later. The banner under the header only introduces it, and dismissing the
  * banner leaves this behind.
  *
- * Unset, it carries a dot in the banner's purple, so a viewer who closed the banner without setting
- * anything still has something quiet asking. Set, the tooltip reads the week back in one line, so
+ * Unset, it carries a brand-purple dot, so a viewer who closed the banner without setting anything
+ * still has something quiet asking. Set, the tooltip reads the week back in one line, so
  * checking it does not mean opening the grid.
  */
 export function ScheduleButton() {
@@ -58,9 +61,11 @@ export function ScheduleButton() {
             ref={openerRef}
             type="button"
             aria-label={label}
-            {...hubAnalyticsAttributes('Open schedule', 'open_debate_schedule')}
+            // Same intent as the banner's button, but its own label, so the two entry points can be
+            // told apart in the click data.
+            {...hubAnalyticsAttributes('Schedule calendar', 'open_debate_schedule')}
             onClick={() => setModalOpen(true)}
-            className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            className={cx(HUB_ICON_BUTTON_CLASS_NAME, 'relative')}
           >
             <Calendar />
             {showUnsetDot ? (

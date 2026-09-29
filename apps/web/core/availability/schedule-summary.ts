@@ -1,6 +1,4 @@
-import { type AvailabilityBlock, type RecurringBlock, formatTime, mergeBlocks } from './blocks';
-
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+import { type AvailabilityBlock, type RecurringBlock, WEEKDAY_LABELS, formatTime, mergeBlocks } from './blocks';
 
 /**
  * Past this many distinct day groups a one-line summary stops being scannable — "Mon 9am · Tue 10am
@@ -9,8 +7,8 @@ const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const MAX_GROUPS = 3;
 
 /**
- * One line describing a saved week, for places too small to draw the grid: `Mon–Fri 6–8pm · Sat
- * 10am–12pm`. Null when there is nothing to describe.
+ * One line describing a saved week, for places too small to draw the grid: `Mon–Fri 6 – 8pm · Sat
+ * 10am – 12pm`. Null when there is nothing to describe.
  *
  * Only recurring blocks are summarised. One-off dates and exceptions are real availability, but
  * "free next Thursday" in a summary of the week reads as though it repeats, so a schedule made only
@@ -45,12 +43,16 @@ export function summarizeSchedule(blocks: AvailabilityBlock[]): string | null {
   return [...groups].map(([hours, weekdays]) => `${formatDays(weekdays)} ${hours}`).join(' · ');
 }
 
-/** `6–8pm` when both ends share a half of the day, `10am–12pm` when they do not. */
+/**
+ * `6 – 8pm` when both ends share a half of the day, `10am – 12pm` when they do not. The spaced dash
+ * matches the calendar's own block labels, and the shared suffix is dropped as `formatDebateSlot`
+ * does.
+ */
 function formatRange(start: number, end: number) {
   const from = formatTime(start);
   const to = formatTime(end % (24 * 60));
   const suffix = to.slice(-2);
-  return from.endsWith(suffix) ? `${from.slice(0, -2)}–${to}` : `${from}–${to}`;
+  return `${from.endsWith(suffix) ? from.slice(0, -2) : from} – ${to}`;
 }
 
 /** `Every day`, `Mon–Fri`, `Sat, Sun`, `Mon, Wed–Fri`: runs of three or more collapse to a range. */

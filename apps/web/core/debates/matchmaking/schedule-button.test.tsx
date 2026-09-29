@@ -42,7 +42,7 @@ describe('ScheduleButton', () => {
     render(<ScheduleButton />);
 
     const button = screen.getByRole('button', { name: 'Set your debate schedule' });
-    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub Open schedule');
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub Schedule calendar');
     expect(within(button).getByTestId('schedule-unset-dot')).toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe('ScheduleButton', () => {
     } as unknown as typeof ResizeObserver;
 
     await user.hover(screen.getByRole('button', { name: 'Edit your debate schedule' }));
-    expect((await screen.findAllByText('Mon–Fri 6–8pm')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Mon–Fri 6 – 8pm')).length).toBeGreaterThan(0);
   });
 
   it('opens the schedule editor', async () => {

@@ -24,6 +24,7 @@ import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
+import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
@@ -272,7 +273,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               data-geo-analytics-intent="close_debates_hub"
               aria-label="Close debates"
               onClick={onClose}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+              className={HUB_ICON_BUTTON_CLASS_NAME}
             >
               <CloseSmall />
             </button>
