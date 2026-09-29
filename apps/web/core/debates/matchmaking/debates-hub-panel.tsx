@@ -398,7 +398,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         )}
       </motion.div>
 
-      <ExpandToWorkspaceLink />
+      {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
   );
 }
@@ -414,8 +414,8 @@ function workspaceListFor(tab: DebatesHubTab): string | null {
   return null;
 }
 
-function ExpandToWorkspaceLink() {
-  const { activeTab, close } = useDebatesHub();
+function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
+  const { close } = useDebatesHub();
 
   const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
   const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);

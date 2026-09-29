@@ -727,6 +727,48 @@ describe('the way out to the full-screen hub', () => {
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe(list);
   });
 
+  // Hidden with the tabs: the link reads filter atoms that are still the previous account's until reset.
+  it('is not offered while the panel is holding its tabs back', () => {
+    mocks.ready = false;
+    renderOpen('explore');
+
+    expect(screen.queryByTestId('claims-tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /open full screen/i })).not.toBeInTheDocument();
+  });
+
+  // Link the list on screen, not the stored tab — signed out that can be Explore while storage still says Lobby.
+  describe('signed out, where the tab on screen is not the tab in storage', () => {
+    it('carries what Explore is showing, not the stored tab’s empty atoms', () => {
+      mocks.authenticated = false;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'lobby' });
+      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      render(
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      );
+
+      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('nuclear');
+    });
+
+    it('names Explore, not the list the viewer cannot see', () => {
+      mocks.authenticated = false;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'positions' });
+      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      render(
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      );
+
+      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('explore');
+    });
+  });
+
   it('omits Lobby from the URL, which is the workspace default', () => {
     renderOpen('lobby');
 
