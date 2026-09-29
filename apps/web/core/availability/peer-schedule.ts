@@ -42,7 +42,7 @@ export type PeerSchedule = {
   slots: PeerSlot[];
 };
 
-/** One 30-minute chip, resolved into both people's wall clocks. */
+/** One 30-minute chip, labelled in the viewer's wall clock. */
 export type PeerDaySlot = {
   /** Absolute instant, kept so a later scheduling half has something unambiguous to send. */
   start: string;
@@ -55,8 +55,6 @@ export type PeerDaySlot = {
   minutes: number;
   /** `9:30am`, in the viewer's zone. */
   label: string;
-  /** The same instant in theirs. */
-  peerLabel: string;
   /** Their wall clock minus the viewer's, at this instant. Signed, and DST-correct. */
   offsetMinutes: number;
 };
@@ -133,7 +131,6 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
         viewerIsFree: instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree,
         minutes: viewer.minutes,
         label: formatTime(viewer.minutes),
-        peerLabel: formatTime(peer.minutes),
         offsetMinutes: wallMinutes(peer) - wallMinutes(viewer),
       });
     }
@@ -273,12 +270,3 @@ export function formatOffset(minutes: number): string {
   const rest = whole % 60;
   return `${sign}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''} hr${hours === 1 && !rest ? '' : 's'}`;
 }
-
-/**
- * When a chip is worth carrying their local time as well.
- *
- * Three hours is where "that works for me" stops implying anything about them: below it both
- * people are inside the same rough part of the day, above it a comfortable slot is somebody's
- * night, which is the usual reason a proposed time comes back refused.
- */
-export const LARGE_OFFSET_MINUTES = 3 * 60;

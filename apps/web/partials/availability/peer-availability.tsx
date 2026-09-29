@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import {
-  LARGE_OFFSET_MINUTES,
   type PeerDay,
   type PeerDaySlot,
   type PeerSchedule,
@@ -144,7 +143,8 @@ export function PeerAvailabilityView({
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
   // A week crossing a DST boundary holds two genuinely different offsets, so the header names one
-  // only when every slot agrees. Each chip decides for itself whether to carry their local time.
+  // only when every slot agrees. The header is the only place their zone appears: every time in
+  // the modal is the viewer's own, since a second clock on each chip read as noise.
   const offsets = new Set(days.flatMap(day => day.slots).map(slot => slot.offsetMinutes));
   const uniformOffset = offsets.size === 1 ? [...offsets][0] : null;
 
@@ -173,17 +173,7 @@ export function PeerAvailabilityView({
         // Availability is a preference, not a gate, so a caller that can book is offered a time of
         // its own rather than a wall (GEO-2938).
         <Empty
-          action={
-            booking && (
-              <RequestAnyway
-                booking={booking}
-                clock={clock}
-                peerName={name}
-                peerTimezone={schedule.peerTimezone}
-                notBefore={notBefore}
-              />
-            )
-          }
+          action={booking && <RequestAnyway booking={booking} clock={clock} peerName={name} notBefore={notBefore} />}
         >
           {schedule.peerHasSchedule
             ? `${name} has no times free in the next 7 days.`
@@ -213,7 +203,6 @@ export function PeerAvailabilityView({
               startsAt={selectedStart}
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
               peerName={name}
-              peerTimezone={schedule.peerTimezone}
             />
           )}
         </>
@@ -229,32 +218,21 @@ function BookingFooter({
   startsAt,
   viewerIsFree,
   peerName,
-  peerTimezone,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
   peerName: string;
-  peerTimezone?: string | null;
 }) {
   if (booking.requestedStart) return <BookedHint booking={booking} peerName={peerName} />;
-
-  const theirTime = startsAt && peerTimezone ? formatIn(startsAt, peerTimezone) : null;
 
   return (
     <div className="flex shrink-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col">
-          <Text as="span" variant="footnote" color="grey-04">
-            {startsAt ? `Your time: ${formatIn(startsAt)}` : 'Pick a time above.'}
-          </Text>
-          {theirTime && (
-            <Text as="span" variant="footnote" color="grey-04">
-              {peerName}&rsquo;s time: {theirTime}
-            </Text>
-          )}
-        </div>
+        <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
+          {startsAt ? formatIn(startsAt) : 'Pick a time above.'}
+        </Text>
         <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
       </div>
 
@@ -343,13 +321,11 @@ function RequestAnyway({
   booking,
   clock,
   peerName,
-  peerTimezone,
   notBefore,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   peerName: string;
-  peerTimezone?: string | null;
   notBefore: number;
 }) {
   const [local, setLocal] = React.useState('');
@@ -375,11 +351,6 @@ function RequestAnyway({
         />
         <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
       </div>
-      {startsAt && peerTimezone && (
-        <Text as="span" variant="footnote" color="grey-04">
-          {peerName}&rsquo;s time: {formatIn(startsAt, peerTimezone)}
-        </Text>
-      )}
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
@@ -396,11 +367,11 @@ function localInputValue(at: number) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-/** `undefined` zone means the viewer's own, which is what `toLocaleString` does by default. */
-function formatIn(iso: string, timeZone?: string | null) {
+/** Always the viewer's own zone, which is what `toLocaleString` does by default. */
+function formatIn(iso: string) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
-  return at.toLocaleString(undefined, timeZone ? { timeZone } : undefined);
+  return at.toLocaleString();
 }
 
 /**
@@ -542,16 +513,11 @@ function SlotChip({
   past?: boolean;
   onSelect: () => void;
 }) {
-  // Per slot rather than per week: a week spanning a DST change carries two offsets, and one can
-  // sit on the far side of the threshold from the other.
-  const showPeerTime = Math.abs(slot.offsetMinutes) >= LARGE_OFFSET_MINUTES;
-
   // The visible chip carries the day in its column and free-vs-not in its border, neither of which
   // survives into an accessible name: without this every chip is a bare time that recurs on all
   // seven days, and the green/dashed distinction the view exists to draw is invisible.
   const label = [
     `${dayLabel} at ${slot.label}`,
-    showPeerTime ? `${slot.peerLabel} for ${peerName}` : null,
     slot.viewerIsFree === null
       ? `${peerName} is free`
       : slot.viewerIsFree
@@ -579,12 +545,7 @@ function SlotChip({
         past && 'cursor-not-allowed opacity-40'
       )}
     >
-      <span>{slot.label}</span>
-      {showPeerTime && (
-        <span className={cx('block', selected ? 'text-white/70' : 'text-grey-04')}>
-          {slot.peerLabel} <span className="sr-only">their time</span>
-        </span>
-      )}
+      {slot.label}
     </button>
   );
 }

@@ -171,17 +171,6 @@ describe('PeerAvailabilityView', () => {
       expect(monday.getByRole('button', { name: /2pm/ }).className).toContain('hover:border-text');
       for (const label of ['You’re both free', 'Ada is free']) expect(swatch(label).className).not.toMatch(/hover:/);
     });
-
-    // grey-04 on the black selected fill is unreadable, so their time lightens with the chip.
-    it('keeps their local time legible on a picked chip', async () => {
-      const { user } = setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
-      const chip = screen.getByRole('button', { name: /9am, 10pm for Ada/ });
-      const theirTime = within(chip).getByText('10pm', { exact: false });
-
-      expect(theirTime).toHaveClass('text-grey-04');
-      await user.click(chip);
-      expect(theirTime).not.toHaveClass('text-grey-04');
-    });
   });
 
   describe('legend', () => {
@@ -245,9 +234,9 @@ describe('PeerAvailabilityView', () => {
       expect(screen.getByRole('group', { name: 'Today Sep 21' })).toBeInTheDocument();
     });
 
-    it('carries their local time into the name when the offset is large', () => {
+    it('names the time in the viewer zone only, even across a large offset', () => {
       setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
-      expect(screen.getByRole('button', { name: /9am, 10pm for Ada, you are both free/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /9am, you are both free/ })).toBeInTheDocument();
     });
   });
 
@@ -368,34 +357,24 @@ describe('PeerAvailabilityView', () => {
       straddling({ slots: [{ start: '2026-10-23T17:00:00Z', end: '2026-10-23T17:30:00Z', viewerIsFree: true }] });
       expect(screen.getByText(/Ada is in Europe\/Berlin, \+6 hrs\./)).toBeInTheDocument();
     });
-
-    it('labels each chip from its own offset', () => {
-      straddling();
-      // Same 17:00Z wall clock for the viewer either side of the boundary; Berlin moves.
-      expect(screen.getByRole('button', { name: /1pm.*7pm/s })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /1pm.*6pm/s })).toBeInTheDocument();
-    });
   });
 
-  describe('their local time on a chip', () => {
-    it('is carried when the offset is large', () => {
+  // A second clock on every chip read as noise, so the viewer's own is the only one shown.
+  describe('times on a chip', () => {
+    it('shows only the viewer time when the peer is far east', () => {
       setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
       // 13:00Z is 9am in New York and 10pm in Tokyo.
-      expect(screen.getByRole('button', { name: /9am.*10pm/s })).toBeInTheDocument();
-    });
-
-    // Only ever tested eastward before, so `Math.abs` could be deleted with every test still green.
-    it('is carried when the peer is west of the viewer', () => {
-      // A Tokyo viewer is already on the 22nd at the fixed NOW, so the slot has to be too.
-      setup({ viewerTimezone: 'Asia/Tokyo', peerTimezone: 'America/New_York', slots: [slot(13, true, 22)] });
-      // 13:00Z is 10pm in Tokyo and 9am in New York: an offset of -13 hours.
-      expect(screen.getByRole('button', { name: /10pm, 9am for Ada/ })).toBeInTheDocument();
-    });
-
-    it('is left off when both are in the same part of the day', () => {
-      setup({ viewerTimezone: 'America/New_York', peerTimezone: 'America/Chicago', slots: [slot(13)] });
       const chip = screen.getByRole('button', { name: /9am/ });
       expect(chip.textContent).toBe('9am');
+      expect(chip.getAttribute('aria-label')).not.toMatch(/10pm/);
+    });
+
+    it('shows only the viewer time when the peer is far west', () => {
+      // A Tokyo viewer is already on the 22nd at the fixed NOW, so the slot has to be too.
+      setup({ viewerTimezone: 'Asia/Tokyo', peerTimezone: 'America/New_York', slots: [slot(13, true, 22)] });
+      const chip = screen.getByRole('button', { name: /10pm/ });
+      expect(chip.textContent).toBe('10pm');
+      expect(chip.getAttribute('aria-label')).not.toMatch(/9am/);
     });
   });
 
@@ -457,7 +436,7 @@ describe('booking a slot', () => {
 });
 
 describe('what the footer has to say', () => {
-  it('names both zones for the picked time', async () => {
+  it('names the picked time in the viewer zone only', async () => {
     const { user } = setupBooking(booking(), {
       viewerTimezone: 'UTC',
       peerTimezone: 'Asia/Tokyo',
@@ -465,8 +444,8 @@ describe('what the footer has to say', () => {
     });
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
 
-    expect(screen.getByText(/^Your time:/)).toBeInTheDocument();
-    expect(screen.getByText(/Ada.s time:/)).toBeInTheDocument();
+    expect(screen.getByText(new Date('2026-09-21T16:00:00Z').toLocaleString())).toBeInTheDocument();
+    expect(screen.queryByText(/Ada.s time:/)).not.toBeInTheDocument();
   });
 
   it('says an outside-your-week slot is a one-off', async () => {

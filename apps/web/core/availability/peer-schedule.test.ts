@@ -274,11 +274,11 @@ describe('peerScheduleDays', () => {
   });
 
   describe('timezones', () => {
-    it('labels each chip in both zones', () => {
+    it('labels each chip in the viewer zone and keeps the offset', () => {
       const result = days({ their_slots: their(['2026-09-21T17:00:00Z', '2026-09-21T17:30:00Z']) });
 
       // 17:00Z is 1pm in New York (UTC-4 in September) and 7pm in Berlin (UTC+2).
-      expect(result[0].slots[0]).toMatchObject({ label: '1pm', peerLabel: '7pm', offsetMinutes: 360 });
+      expect(result[0].slots[0]).toMatchObject({ label: '1pm', offsetMinutes: 360 });
     });
 
     it('handles a half-hour zone without hand-rolling an offset', () => {
@@ -287,7 +287,7 @@ describe('peerScheduleDays', () => {
         now
       );
 
-      expect(result[0].slots[0]).toMatchObject({ label: '1pm', peerLabel: '10:30pm', offsetMinutes: 570 });
+      expect(result[0].slots[0]).toMatchObject({ label: '1pm', offsetMinutes: 570 });
     });
 
     it('re-resolves the offset across a DST boundary rather than reusing one', () => {
@@ -307,8 +307,8 @@ describe('peerScheduleDays', () => {
       const before = result.find(day => day.date === '2026-10-23')?.slots[0];
       const after = result.find(day => day.date === '2026-10-26')?.slots[0];
 
-      expect(before).toMatchObject({ label: '1pm', peerLabel: '7pm', offsetMinutes: 360 });
-      expect(after).toMatchObject({ label: '1pm', peerLabel: '6pm', offsetMinutes: 300 });
+      expect(before).toMatchObject({ label: '1pm', offsetMinutes: 360 });
+      expect(after).toMatchObject({ label: '1pm', offsetMinutes: 300 });
     });
 
     it('falls back to the browser zone for one Intl will not take', () => {
