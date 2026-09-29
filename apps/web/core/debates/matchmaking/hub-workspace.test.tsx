@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebatesHubWorkspace } from './hub-workspace';
@@ -10,9 +12,13 @@ import { DebatesHubWorkspace } from './hub-workspace';
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
 vi.mock('./claims-tab', () => ({
-  ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => (
-    <div data-testid={`claims-tab-${variant ?? 'explore'}`}>{scopePicker}</div>
-  ),
+  ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
+    // `ClaimsTab` seeds itself from the URL once, behind a ref that only a fresh instance resets.
+    React.useEffect(() => {
+      mocks.mounts.push(variant ?? 'explore');
+    }, []);
+    return <div data-testid={`claims-tab-${variant ?? 'explore'}`}>{scopePicker}</div>;
+  },
 }));
 
 vi.mock('./lobby-tab', () => ({
@@ -21,18 +27,21 @@ vi.mock('./lobby-tab', () => ({
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
 
-const mocks = vi.hoisted(() => ({ authenticated: true }));
+const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, search: '', mounts: [] as string[] }));
 
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'user-a' }),
+  useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
 }));
 
 // The picker reads it on arrival; these cases are about the picker itself.
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mocks.search) }));
 
 // The picker is a popover, which measures itself. jsdom has no layout and no observer to report it.
 beforeEach(() => {
+  mocks.ready = true;
   mocks.authenticated = true;
+  mocks.search = '';
+  mocks.mounts = [];
   window.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
@@ -41,6 +50,29 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/**
+ * Privy reports `ready: false, authenticated: false` until it restores the session.
+ */
+describe('before Privy has restored the session', () => {
+  it('draws no list at all rather than coercing one to Explore', () => {
+    mocks.ready = false;
+    mocks.search = 'list=positions&spaces=space-a';
+    render(<DebatesHubWorkspace />);
+
+    expect(screen.queryByTestId('claims-tab-explore')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('claims-tab-positions')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-tab')).not.toBeInTheDocument();
+  });
+
+  it('draws the list the URL named once it is ready', async () => {
+    mocks.search = 'list=positions&spaces=space-a';
+    render(<DebatesHubWorkspace />);
+
+    expect(await screen.findByTestId('claims-tab-positions')).toBeInTheDocument();
+    expect(screen.queryByTestId('claims-tab-explore')).not.toBeInTheDocument();
+  });
+});
 
 /** The closed trigger, named for whichever list is showing. `getAllBy` — the open menu repeats it. */
 const picker = (label: string) => screen.getAllByRole('button', { name: label })[0];
@@ -72,6 +104,18 @@ describe('choosing which claim list the workspace shows', () => {
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
     expect(screen.queryByTestId('lobby-tab')).toBeNull();
+  });
+
+  it('remounts the tab when the list changes, rather than reusing the instance', () => {
+    render(<DebatesHubWorkspace />);
+
+    fireEvent.click(picker('Lobby'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+    fireEvent.click(picker('Explore'));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+
+    expect(mocks.mounts).toContain('explore');
+    expect(mocks.mounts).toContain('positions');
   });
 
   it('gives Lobby its own component, not a ClaimsTab variant', () => {

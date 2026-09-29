@@ -11,6 +11,7 @@ import { fromClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
+import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
 import type { DebatesHubTab } from '~/atoms';
 
@@ -33,7 +34,7 @@ const SIGNED_OUT_LISTS: ClaimsTabVariant[] = ['explore'];
 export function DebatesHubWorkspace() {
   const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
 
-  const { authenticated } = useGeoChatAuth();
+  const { ready, authenticated } = useGeoChatAuth();
 
   const searchParams = useSearchParams();
   const seedApplied = React.useRef(false);
@@ -77,10 +78,12 @@ export function DebatesHubWorkspace() {
 
       <div className="flex gap-8 px-4">
         <div className="min-w-0 flex-1">
-          {shown === 'lobby' ? (
+          {!ready ? (
+            <HubSkeleton />
+          ) : shown === 'lobby' ? (
             <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
           ) : (
-            <ClaimsTab variant={shown} layout="workspace" scopePicker={picker} />
+            <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
           )}
         </div>
 
