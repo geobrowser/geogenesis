@@ -8,12 +8,11 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { snapshotActionContext } from '~/core/action-context';
-import { recordAction } from '~/core/analytics-operations';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
@@ -61,6 +60,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 };
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
+  const trackSelection = useSearchResultAction({ overlay: 'modal' });
   const router = useRouter();
   const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
@@ -119,12 +119,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     scrollRef: resultsScrollRef,
   });
 
-  useKey('Enter', () => {
-    if (!hasResults) return;
+  useKey('Enter', event => {
+    // cmdk handles Enter on its selected item; only handle the input fallback here.
+    if (event.defaultPrevented || !hasResults) return;
 
     const result = autocomplete.results[selectedIndex];
 
     if (result) {
+      trackSelection(result, selectedIndex, 'search_results');
       router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
       autocomplete.onQueryChange('');
       setOpenSpacesIndex(null);
@@ -269,14 +271,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                               hydrate([result.id]);
                             }}
                             onSelect={() => {
-                              recordAction(
-                                'search_result',
-                                snapshotActionContext('search', 'entity', result.id, {
-                                  overlay: 'modal',
-                                  item_position: i + 1,
-                                  list_id: 'search_results',
-                                })
-                              );
+                              trackSelection(result, i, 'search_results');
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);
@@ -337,14 +332,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         <div>
                           <Command.Item
                             onSelect={() => {
-                              recordAction(
-                                'search_result',
-                                snapshotActionContext('search', 'entity', selectedEntity.id, {
-                                  overlay: 'modal',
-                                  item_position: i + 1,
-                                  list_id: 'search_spaces',
-                                })
-                              );
+                              trackSelection(selectedEntity, i, 'search_spaces');
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);

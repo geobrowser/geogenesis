@@ -77,7 +77,15 @@ export function observeOperation(
     if (readRevision() !== contextRevision) return;
     emitted.add(`${event}:${phase}`);
     try {
-      capture(event, { ...properties, ...context });
+      capture(event, {
+        ...properties,
+        ...context,
+        // Legacy ranking opportunities have their own display ID. Preserve it on
+        // legacy events, but join canonical actions to the visible ActionSurface.
+        ...(event === 'action_completed' && attribution?.presentation_instance_id
+          ? { presentation_instance_id: attribution.presentation_instance_id }
+          : {}),
+      });
     } catch {
       /* Never fail a product action. */
     }

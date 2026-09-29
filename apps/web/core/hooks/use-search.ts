@@ -6,7 +6,8 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
-import { type ActionContext, snapshotActionContext } from '~/core/action-context';
+import { type ActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 import { type SearchAnalyticsSurface, searchQueryId, searchSubmitted } from '~/core/analytics';
 import { observeOperation, recordAction } from '~/core/analytics-operations';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
@@ -289,6 +290,7 @@ export function useSearch({
     return rows;
   }, [resultPages]);
 
+  const getContext = useActionContext('search', 'search_query', searchQueryId(cappedQuery));
   const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
   const analyticsAttemptRef = React.useRef<{
     key: string;
@@ -303,10 +305,10 @@ export function useSearch({
     analyticsAttemptRef.current = {
       key: analyticsSearchKey,
       startedAt: searchClock(),
-      context: snapshotActionContext('search', 'search_query', searchQueryId(cappedQuery)),
+      context: getContext(),
       emitted: false,
     };
-  }, [analyticsSearchKey, cappedQuery]);
+  }, [analyticsSearchKey, cappedQuery, getContext]);
 
   React.useEffect(() => {
     const attempt = analyticsAttemptRef.current;

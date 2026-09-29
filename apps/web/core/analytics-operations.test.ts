@@ -125,3 +125,34 @@ describe('canonical action outcomes', () => {
     ]);
   });
 });
+
+it('links canonical ranking actions to the surface without changing legacy opportunity IDs', () => {
+  const context = {
+    component: 'explore_feed_card' as const,
+    target_id: 'r',
+    target_type: 'ranking',
+    page_path: '/explore',
+    page_type: 'explore',
+    page_view_id: 'view',
+    presentation_instance_id: 'surface',
+  };
+  const operation = observeOperation(
+    'ranking',
+    'ranking',
+    'r',
+    {
+      opportunity_id: 'opportunity',
+      presentation_instance_id: 'legacy-display',
+    },
+    context
+  );
+  operation.outcome('ranking_submitted', 'submitted', {});
+  expect(capture).toHaveBeenCalledWith(
+    'action_completed',
+    expect.objectContaining({ presentation_instance_id: 'surface' })
+  );
+  expect(capture).toHaveBeenCalledWith(
+    'ranking_submitted',
+    expect.objectContaining({ presentation_instance_id: 'legacy-display' })
+  );
+});

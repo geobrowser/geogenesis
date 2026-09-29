@@ -1,3 +1,5 @@
+import { equals } from './id/normalize';
+
 /** Shared, text-free attribution contract. IDs refer to graph entities, never labels. */
 export const ACTION_COMPONENTS = [
   'entity_vote_buttons',
@@ -90,9 +92,19 @@ export const ACTION_CONTEXT_FIELDS = [
 
 export type ActionScope = Partial<Omit<ActionContext, 'page_path' | 'page_view_id'>>;
 
+/** Entity metadata only belongs to the entity that supplied it. */
+export function mergeActionScope(parent: ActionScope, value: ActionScope): ActionScope {
+  const changedTarget = value.target_id && parent.target_id && !equals(value.target_id, parent.target_id);
+  return {
+    ...parent,
+    ...(changedTarget ? { target_type: undefined, target_type_ids: undefined, origin_entity_ids: undefined } : {}),
+    ...value,
+  };
+}
+
 let page: { path: string; id: string } | undefined;
 let replayContext: ActionContext | undefined;
-let eventContext: ActionContext | undefined;
+let eventContext: { context: ActionContext; depth: number } | undefined;
 
 export function pageContext(path = typeof window === 'undefined' ? '/' : window.location.pathname) {
   if (page?.path !== path) page = { path, id: crypto.randomUUID() };
@@ -132,7 +144,8 @@ export function snapshotActionContext(
   targetType: string,
   targetId: string,
   scope: ActionScope = {},
-  overrides: ActionScope = {}
+  overrides: ActionScope = {},
+  options: { scopeDepth?: number; ignoreEventContext?: boolean } = {}
 ): ActionContext {
   const runtime = typeof window === 'undefined' ? undefined : (window.lytics ?? window.geoAnalytics);
   let identity: Record<string, unknown> = {};
@@ -141,24 +154,32 @@ export function snapshotActionContext(
   } catch {
     /* Telemetry cannot block an action. */
   }
-  const liveContext = {
-    ...pageContext(),
-    action_session_id: typeof identity.session_id === 'string' ? identity.session_id : undefined,
-    action_anonymous_id: typeof identity.anonymous_id === 'string' ? identity.anonymous_id : undefined,
-    ...scope,
-    ...eventContext,
-    ...overrides,
-  };
+  const event = options.ignoreEventContext ? undefined : eventContext;
+  // A child scope (for example a claim row inside a panel) wins over its parent's
+  // capture handler. A deeper clicked surface still reaches hooks built above it.
+  const scopes =
+    event && event.depth < (options.scopeDepth ?? 0)
+      ? [event.context, scope, overrides]
+      : [scope, event?.context ?? {}, overrides];
+  const liveContext = Object.assign(
+    {
+      ...pageContext(),
+      action_session_id: typeof identity.session_id === 'string' ? identity.session_id : undefined,
+      action_anonymous_id: typeof identity.anonymous_id === 'string' ? identity.anonymous_id : undefined,
+    },
+    ...scopes
+  );
   const source = replayContext ?? liveContext;
+  const metadata = [...(replayContext ? [scope, overrides, replayContext] : scopes)]
+    .reverse()
+    .filter(candidate => !candidate.target_id || equals(candidate.target_id, targetId));
   const context: ActionContext = {
     ...source,
     component: source.component ?? component,
     target_id: targetId,
     target_type: targetType,
-    origin_entity_ids:
-      source.target_id === targetId
-        ? (source.origin_entity_ids ?? overrides.origin_entity_ids ?? scope.origin_entity_ids)
-        : (overrides.origin_entity_ids ?? scope.origin_entity_ids),
+    target_type_ids: metadata.find(candidate => candidate.target_type_ids !== undefined)?.target_type_ids,
+    origin_entity_ids: metadata.find(candidate => candidate.origin_entity_ids !== undefined)?.origin_entity_ids,
   };
   // A runtime allowlist as well as a type: structural typing must not admit text or emails.
   return Object.fromEntries(
@@ -181,9 +202,12 @@ export function withActionContext<T>(context: ActionContext, run: () => T): T {
 
 /** The capture phase also supports handlers built above a surface. Async work
  * takes its own snapshot before this event-scoped value is cleared. */
-export function enterActionContext(context: ActionContext) {
-  eventContext = context;
-  queueMicrotask(() => {
-    if (eventContext === context) eventContext = undefined;
-  });
+export function enterActionContext(context: ActionContext, depth = 0) {
+  const event = { context, depth };
+  eventContext = event;
+  // Native capture and bubble listeners can have a microtask checkpoint between
+  // them. Clear in the next task so React's bubble handler can still snapshot it.
+  setTimeout(() => {
+    if (eventContext === event) eventContext = undefined;
+  }, 0);
 }

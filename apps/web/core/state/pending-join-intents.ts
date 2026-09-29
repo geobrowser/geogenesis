@@ -1,9 +1,11 @@
 'use client';
+
 import * as React from 'react';
 
 import { atom, useSetAtom, useStore } from 'jotai';
 
-import { type ActionContext, snapshotActionContext, withActionContext } from '~/core/action-context';
+import { type ActionContext, withActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 
 /**
  * Space ids a signed-out user asked to join before authenticating.
@@ -13,17 +15,18 @@ const pendingJoinContextsAtom = atom<Record<string, ActionContext>>({});
 
 /** Record that a signed-out user asked to join `spaceId` (no optimistic UI — just the intent). */
 export function useAddPendingJoinIntent() {
+  const getContext = useActionContext('join_space_button', 'space', '');
   const store = useStore();
   const setIntents = useSetAtom(pendingJoinIntentsAtom);
   return React.useCallback(
     (spaceId: string) => {
       store.set(pendingJoinContextsAtom, prev => ({
         ...prev,
-        [spaceId]: snapshotActionContext('join_space_button', 'space', spaceId),
+        [spaceId]: getContext({ target_type: 'space', target_id: spaceId }),
       }));
       setIntents(prev => (prev.includes(spaceId) ? prev : [...prev, spaceId]));
     },
-    [setIntents, store]
+    [setIntents, store, getContext]
   );
 }
 

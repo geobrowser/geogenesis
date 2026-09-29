@@ -1,4 +1,5 @@
 'use client';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -296,15 +297,16 @@ export function EntitySidePanelSurface({
     forceRequestedSpace,
   });
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const entityContext = entityActionScope(entity);
 
   return (
     <ActionContextProvider
       value={{
-        ...entityActionScope(entity),
+        ...entityContext,
         component: undefined,
         overlay: 'entity_side_panel',
         overlay_entity_id: entityId,
-        overlay_entity_type: entityActionScope(entity).target_type ?? 'entity',
+        overlay_entity_type: entityContext.target_type ?? 'entity',
       }}
     >
       <EntitySidePanelEditModeProvider

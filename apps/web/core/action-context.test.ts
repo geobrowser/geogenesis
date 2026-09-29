@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { enterActionContext, pageContext, snapshotActionContext, withActionContext } from './action-context';
+
+afterEach(() => new Promise<void>(resolve => setTimeout(resolve, 0)));
 
 const space = '11111111111111111111111111111111';
 const claim = '22222222222222222222222222222222';
@@ -41,6 +43,8 @@ describe('action context', () => {
     enterActionContext({ ...outer, component: 'debate_claim_ticker' });
     expect(snapshotActionContext('entity_vote_buttons', 'claim', claim).component).toBe('debate_claim_ticker');
     await Promise.resolve();
+    expect(snapshotActionContext('entity_vote_buttons', 'claim', claim).component).toBe('debate_claim_ticker');
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(snapshotActionContext('entity_vote_buttons', 'claim', claim).component).toBe('entity_vote_buttons');
   });
   it('shares a view id for rerenders and gives a return visit a new id', () => {
@@ -62,4 +66,25 @@ it('copies origin IDs and drops unreviewed text from a description', () => {
   expect(context.origin_entity_ids).toEqual(['debate']);
   expect(context).not.toHaveProperty('email');
   expect(context).not.toHaveProperty('comment');
+});
+
+it('never assigns a different target the parent entity type IDs or sources', () => {
+  const context = snapshotActionContext('entity_vote_buttons', 'claim', claim, {
+    target_id: debate,
+    target_type_ids: ['debate-type'],
+    origin_entity_ids: ['parent-source'],
+  });
+  expect(context).not.toHaveProperty('target_type_ids');
+  expect(context).not.toHaveProperty('origin_entity_ids');
+});
+
+it('retains metadata when graph IDs differ only in UUID formatting', () => {
+  const id = '4c81561d-1f95-4131-9cdd-dd20ab831ba2';
+  const context = snapshotActionContext('entity_vote_buttons', 'claim', id.replaceAll('-', ''), {
+    target_id: id,
+    target_type_ids: ['claim-type'],
+    origin_entity_ids: [debate],
+  });
+  expect(context.target_type_ids).toEqual(['claim-type']);
+  expect(context.origin_entity_ids).toEqual([debate]);
 });

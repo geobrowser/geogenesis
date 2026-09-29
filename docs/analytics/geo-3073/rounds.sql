@@ -20,6 +20,10 @@ WITH actions AS (
     AND event_name = 'action_completed' AND event_time >= now() - INTERVAL 30 DAY
     AND NOT JSONExtractBool(properties_json, 'is_internal')
     AND NOT JSONExtractBool(properties_json, 'is_automated')
+    AND coalesce(privy_user_id, user_id, '') NOT IN (
+      SELECT coalesce(privy_user_id, user_id, '') FROM analytics.privy_account_labels
+      WHERE active AND exclude_from_metrics AND coalesce(privy_user_id, user_id, '') != ''
+    )
 ), locations AS (
   SELECT a.day, a.operation_id, a.component, m.debate_id, m.start_ms AS position_ms
   FROM actions a INNER JOIN claim_moments m ON a.target_id = m.claim_id

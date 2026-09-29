@@ -1,4 +1,5 @@
 'use client';
+
 import * as React from 'react';
 
 import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
@@ -44,7 +45,7 @@ const COLLAPSED_CLAIM_COUNT = 3;
 export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody>[0]) {
   return (
     <ActionSurface
-      className="flex"
+      className="contents"
       value={{
         component: 'debate_claims_panel',
         target_id: props.debate.id,

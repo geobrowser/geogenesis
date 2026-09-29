@@ -1,4 +1,5 @@
 'use client';
+
 import { useChat } from '@ai-sdk/react';
 
 import * as React from 'react';

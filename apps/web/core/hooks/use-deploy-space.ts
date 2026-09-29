@@ -1,4 +1,5 @@
 'use client';
+
 import { getCreateDaoSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation, useQueryClient } from '@tanstack/react-query';

@@ -2,11 +2,12 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { ActionSurface, useActionContext } from './action-context-provider';
+import { ActionContextProvider, ActionSurface, useActionContext } from './action-context-provider';
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock('./analytics', () => ({ capture }));
-afterEach(() => {
+afterEach(async () => {
+  await new Promise(resolve => setTimeout(resolve, 0));
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -63,4 +64,36 @@ it('joins one foreground visible impression to actions and retains its id on rem
   expect(capture).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByText('Agree'));
   expect(action.mock.calls[1][0].presentation_instance_id).toBe(impression.presentation_instance_id);
+});
+
+it('preserves a nested list position over the outer surface click capture', () => {
+  const action = vi.fn();
+  render(
+    <ActionSurface
+      value={{
+        component: 'debate_claims_panel',
+        target_id: 'debate',
+        target_type: 'debate',
+        list_id: 'explore',
+        item_position: 10,
+        target_type_ids: ['debate-type'],
+      }}
+    >
+      <ActionContextProvider
+        value={{ target_id: 'claim', target_type: 'claim', list_id: 'debate_claims', item_position: 2 }}
+      >
+        <Control action={action} />
+      </ActionContextProvider>
+    </ActionSurface>
+  );
+  fireEvent.click(screen.getByText('Agree'));
+  expect(action).toHaveBeenCalledWith(
+    expect.objectContaining({
+      component: 'debate_claims_panel',
+      target_id: 'claim',
+      list_id: 'debate_claims',
+      item_position: 2,
+    })
+  );
+  expect(action.mock.calls[0][0]).not.toHaveProperty('target_type_ids');
 });

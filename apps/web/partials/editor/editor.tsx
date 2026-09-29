@@ -1,4 +1,5 @@
 'use client';
+
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
@@ -150,7 +151,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
         knownDataBlockIdsRef.current.add(blockId);
         recordAction(
           'edit',
-          { ...getEditContext(), component: 'data_block', target_id: blockId, target_type: 'data_block' },
+          getEditContext({ component: 'data_block', target_id: blockId, target_type: 'data_block' }),
           { edit_scope: 'local_draft', edit_action: 'block_created' }
         );
         capture('content_created', {
@@ -494,7 +495,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       try {
         await runObservedAction(
           'share',
-          { ...getEditContext(), target_type: 'data_block', target_id: blockId, component: 'share_dialog' },
+          getEditContext({ target_type: 'data_block', target_id: blockId, component: 'share_dialog' }),
           () => navigator.clipboard.writeText(buildBlockLink(window.location.href, blockId))
         );
         setToast(<div className="text-button">Link copied</div>);

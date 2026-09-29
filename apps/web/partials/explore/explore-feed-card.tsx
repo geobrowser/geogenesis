@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { ActionSurface, ActionSurfaceArticle } from '~/core/action-context-provider';
+import { entityActionType } from '~/core/action-entity-context';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
@@ -95,11 +96,7 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
-  const targetType = isDebateEntity(props.item.types)
-    ? 'debate'
-    : props.item.types.some(type => normId(type.id) === CLAIM_TYPE)
-      ? 'claim'
-      : 'entity';
+  const targetType = entityActionType(props.item.types);
   return (
     <ActionSurface
       asChild
@@ -107,6 +104,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         component: 'explore_feed_card',
         target_id: props.item.entityId,
         target_type: targetType,
+        target_type_ids: props.item.types.map(type => type.id),
         item_position: props.itemPosition,
         list_id: props.listId ?? 'entity_feed',
         variant: props.claimCardVariant ?? 'default',

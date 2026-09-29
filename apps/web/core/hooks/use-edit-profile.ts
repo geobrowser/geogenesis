@@ -1,4 +1,5 @@
 'use client';
+
 import { ContentIds, IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 

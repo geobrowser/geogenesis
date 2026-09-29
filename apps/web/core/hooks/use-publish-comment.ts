@@ -53,7 +53,8 @@ export function usePublishComment(
 
   const publishComment = React.useCallback(
     async ({ text, ancestorComments, onOptimistic, onFailed }: PublishCommentInput) => {
-      const operation = observeOperation('comment', targetEntityType, targetEntityId, undefined, getContext());
+      const attribution = getContext();
+      let operation = observeOperation('comment', targetEntityType, targetEntityId, undefined, attribution);
       const recordIfPublished = (result: Awaited<ReturnType<typeof createComment>>) => {
         if (!result?.published) return false;
 
@@ -114,6 +115,8 @@ export function usePublishComment(
         label: 'your comment',
         requires: 'personalSpace',
         run: async () => {
+          // Bind the operation to the now-authenticated actor, preserving the original surface.
+          operation = observeOperation('comment', targetEntityType, targetEntityId, undefined, attribution);
           const published = await createComment({
             text,
             targetSpaceId,

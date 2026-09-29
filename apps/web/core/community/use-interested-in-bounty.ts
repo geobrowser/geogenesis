@@ -1,11 +1,12 @@
 'use client';
+
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { snapshotActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 import { observeOperation } from '~/core/analytics-operations';
 import { CURRENT_BOUNTY_SPACE_IDS } from '~/core/bounties/constants';
 import { buildExpressInterestOps } from '~/core/bounties/interest-ops';
@@ -83,6 +84,7 @@ type ProposeInterestArgs = {
  * handed straight to `makeProposal`, like the rest of the bounty writes.
  */
 export function useInterestedInBounty() {
+  const getContext = useActionContext('bounty_interest', 'bounty', '');
   const { makeProposal } = usePublish();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
@@ -105,7 +107,7 @@ export function useInterestedInBounty() {
         'bounty',
         bountyId,
         undefined,
-        snapshotActionContext('bounty_interest', 'bounty', bountyId)
+        getContext({ target_type: 'bounty', target_id: bountyId })
       );
       submittedBountyIds.current.add(bountyId);
       setPendingBountyId(bountyId);
@@ -138,7 +140,7 @@ export function useInterestedInBounty() {
         setPendingBountyId(null);
       }
     },
-    [isRegistered, makeProposal, personalSpaceId, queryClient]
+    [getContext, isRegistered, makeProposal, personalSpaceId, queryClient]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };

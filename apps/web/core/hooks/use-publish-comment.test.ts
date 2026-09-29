@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { usePublishComment } from './use-publish-comment';
 
 const mocks = vi.hoisted(() => ({
+  revision: vi.fn(() => 0),
+  capture: vi.fn(),
   commentCreated: vi.fn(),
   commentEdited: vi.fn(),
   createComment: vi.fn(),
@@ -13,8 +15,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/analytics', () => ({
-  analyticsContextRevision: () => 0,
-  capture: vi.fn(),
+  analyticsContextRevision: mocks.revision,
+  capture: mocks.capture,
   commentCreated: mocks.commentCreated,
   commentEdited: mocks.commentEdited,
 }));
@@ -34,6 +36,8 @@ vi.mock('~/core/state/pending-actions', () => ({
 
 describe('usePublishComment', () => {
   beforeEach(() => {
+    mocks.revision.mockReturnValue(0);
+    mocks.capture.mockReset();
     mocks.commentCreated.mockReset();
     mocks.commentEdited.mockReset();
     mocks.createComment.mockReset();
@@ -162,6 +166,8 @@ describe('usePublishComment', () => {
  */
 describe('usePublishComment reporting a failure', () => {
   beforeEach(() => {
+    mocks.revision.mockReturnValue(0);
+    mocks.capture.mockReset();
     mocks.commentCreated.mockReset();
     mocks.createComment.mockReset();
     mocks.enqueuePendingAction.mockReset();
@@ -312,4 +318,29 @@ describe('usePublishComment reporting a failure', () => {
 
     expect(onFailed).not.toHaveBeenCalled();
   });
+});
+
+it('records a deferred comment after sign-in with its original page', async () => {
+  mocks.capture.mockReset();
+  mocks.enqueuePendingAction.mockReset();
+  mocks.revision.mockReturnValue(0);
+  mocks.createComment
+    .mockReset()
+    .mockResolvedValueOnce({ id: 'comment', published: false })
+    .mockResolvedValueOnce({ id: 'comment', published: true });
+  window.history.replaceState({}, '', '/explore');
+  const { result } = renderHook(() => usePublishComment('claim', 'space'));
+  await act(() => result.current.publishComment({ text: 'comment' }));
+  mocks.revision.mockReturnValue(1);
+  window.history.replaceState({}, '', '/elsewhere');
+  await act(() => mocks.enqueuePendingAction.mock.calls[0][0].run());
+  expect(mocks.capture).toHaveBeenCalledExactlyOnceWith(
+    'action_completed',
+    expect.objectContaining({
+      page_path: '/explore',
+      target_id: 'claim',
+      outcome: 'succeeded',
+      comment_id: 'comment',
+    })
+  );
 });

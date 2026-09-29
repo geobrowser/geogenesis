@@ -1,3 +1,4 @@
+-- Attribute use to the component that was displayed; descendant controls can have their own component name.
 -- The day is the impression's day, even if an action completes after midnight.
 WITH events AS (
   SELECT event_time, event_name,
@@ -14,10 +15,10 @@ WITH events AS (
       WHERE active AND exclude_from_metrics AND coalesce(privy_user_id, user_id, '') != ''
     )
 ), displays AS (
-  SELECT display_id, component, minIf(event_time, event_name = 'component_impression') AS first_seen,
+  SELECT display_id, anyIf(component, event_name = 'component_impression') AS component, minIf(event_time, event_name = 'component_impression') AS first_seen,
          countIf(event_name = 'component_impression') > 0 AS seen,
          countIf(event_name = 'action_completed') > 0 AS used
-  FROM events WHERE display_id != '' GROUP BY display_id, component
+  FROM events WHERE display_id != '' GROUP BY display_id
 )
 SELECT toDate(first_seen) AS day, component, count() AS impressions,
        countIf(used) AS displays_with_action,
