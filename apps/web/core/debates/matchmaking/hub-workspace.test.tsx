@@ -12,7 +12,15 @@ import { DebatesHubWorkspace } from './hub-workspace';
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
 vi.mock('./claims-tab', () => ({
+  // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
+  // back to Lobby. Mirrored because this file mocks the module wholesale.
   DEFAULT_WORKSPACE_LIST: 'lobby',
+  VARIANT_ATOMS: {
+    explore: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
+    positions: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
+    lobby: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
+  },
+  takeUrlSeed: () => null,
   ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
     const logged = React.useRef(false);
     React.useEffect(() => {

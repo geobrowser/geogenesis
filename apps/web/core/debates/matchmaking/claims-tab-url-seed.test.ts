@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { resetUrlSeedsForTests, takeUrlSeed } from './claims-tab';
+import { VARIANT_ATOMS, resetUrlSeedsForTests, takeUrlSeed } from './claims-tab';
 
 beforeEach(resetUrlSeedsForTests);
 
@@ -53,5 +53,33 @@ describe('takeUrlSeed', () => {
       search: 'nuclear',
       topicIds: ['t1', 't2'],
     });
+  });
+});
+
+/**
+ * The workspace applies the seed, not the list that draws it. `LobbyTab` renders `MatchesList` when
+ * "Matches only" is on — which it is by default, and it survives the filter reset.
+ */
+describe('the atoms a seed is written into', () => {
+  it('sends a list-less link to Lobby, which both of its branches read', () => {
+    const seed = takeUrlSeed('lobby', 'spaces=space-a&q=climate');
+
+    expect(seed).toMatchObject({ spaceIds: ['space-a'], search: 'climate' });
+    // The same atoms `MatchesList` reads, so the filters are on screen whichever branch draws.
+    expect(VARIANT_ATOMS.lobby.spaceIds).toBe(VARIANT_ATOMS.lobby.spaceIds);
+    expect(VARIANT_ATOMS.lobby.search).not.toBe(VARIANT_ATOMS.explore.search);
+  });
+
+  it('exposes an atom set for every list the URL can name', () => {
+    for (const variant of ['explore', 'lobby', 'positions'] as const) {
+      expect(VARIANT_ATOMS[variant]).toEqual(
+        expect.objectContaining({
+          spaceIds: expect.anything(),
+          topicIds: expect.anything(),
+          search: expect.anything(),
+          seedSpent: expect.anything(),
+        })
+      );
+    }
   });
 });

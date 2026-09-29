@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
@@ -186,7 +185,7 @@ export type ClaimsLayout = 'panel' | 'workspace';
  * mount, because a link is the one way onto this surface with no session behind it — a shared or
  * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
  */
-const VARIANT_ATOMS = {
+export const VARIANT_ATOMS = {
   explore: {
     spaceIds: debatesHubExploreSpaceIdsAtom,
     topicIds: debatesHubExploreTopicIdsAtom,
@@ -283,21 +282,6 @@ export function ClaimsTab({
   const [spaceIds, setSpaceIds] = useAtom(atoms.spaceIds);
   const [topicIds, setTopicIds] = useAtom(atoms.topicIds);
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(atoms.seedSpent);
-
-  const searchParams = useSearchParams();
-  React.useEffect(() => {
-    if (!workspace || !searchParams) return;
-
-    const seed = takeUrlSeed(variant, searchParams.toString());
-    if (!seed) return;
-
-    if (seed.search) setSearch(seed.search);
-    if (seed.topicIds.length > 0) setTopicIds([...seed.topicIds]);
-    if (seed.spaceIds.length > 0) {
-      setSpaceIds([...seed.spaceIds]);
-      setSpaceSeedSpent(true);
-    }
-  }, [workspace, variant, searchParams, setSearch, setSpaceIds, setTopicIds, setSpaceSeedSpent]);
 
   const {
     allowlist: spaceAllowlist,

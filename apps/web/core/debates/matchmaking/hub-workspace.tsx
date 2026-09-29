@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 
+import { useStore } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST } from './claims-tab';
+import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, takeUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
@@ -38,6 +39,7 @@ export function DebatesHubWorkspace() {
   const { ready, authenticated, accountKey } = useGeoChatAuth();
 
   const searchParams = useSearchParams();
+  const store = useStore();
 
   const appliedList = React.useRef<ClaimsTabVariant | null | undefined>(undefined);
   React.useEffect(() => {
@@ -50,8 +52,20 @@ export function DebatesHubWorkspace() {
     if (appliedList.current === asked) return;
     appliedList.current = asked;
 
-    setList(asked ?? DEFAULT_WORKSPACE_LIST);
-  }, [searchParams]);
+    const opened = asked ?? DEFAULT_WORKSPACE_LIST;
+    setList(opened);
+
+    const seed = takeUrlSeed(opened, searchParams.toString());
+    if (!seed) return;
+
+    const atoms = VARIANT_ATOMS[opened];
+    if (seed.search) store.set(atoms.search, seed.search);
+    if (seed.topicIds.length > 0) store.set(atoms.topicIds, [...seed.topicIds]);
+    if (seed.spaceIds.length > 0) {
+      store.set(atoms.spaceIds, [...seed.spaceIds]);
+      store.set(atoms.seedSpent, true);
+    }
+  }, [searchParams, store]);
   const options = React.useMemo(
     () => (authenticated ? LIST_OPTIONS : LIST_OPTIONS.filter(option => SIGNED_OUT_LISTS.includes(option.value))),
     [authenticated]
