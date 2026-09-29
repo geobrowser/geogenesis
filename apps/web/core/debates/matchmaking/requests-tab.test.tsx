@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   rejectChallenge: vi.fn(),
   currentUserId: 'user-me' as string | null,
   peerAvailability: false,
-  scheduled: { answerable: [], upcoming: [], requestsError: null, roomsError: null } as ScheduledContent,
+  scheduled: { answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null } as ScheduledContent,
 }));
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
@@ -308,6 +308,19 @@ describe('RequestsTab', () => {
     expect(screen.getAllByText(/^Expires in/)).toHaveLength(2);
   });
 
+  // Drawn from the same expiry filter as the received side, so a lapsed request does not sit on an
+  // "Expired" card until the server gets round to saying so.
+  it('drops a sent request once it expires', () => {
+    mocks.outbound = {
+      ...request('request-2', SPACE_A, 'Chips are better than fries'),
+      expires_at: '2020-01-01T00:00:00.000Z',
+    };
+    render(<RequestsTab />);
+
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+  });
+
   it('narrows to one side with the status filter', () => {
     mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
     render(<RequestsTab />);
@@ -412,7 +425,13 @@ describe('RequestsTab', () => {
 /**
  * Dense is the workspace rail.
  */
-const EMPTY_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
+const EMPTY_SCHEDULED: ScheduledContent = {
+  answerable: [],
+  upcoming: [],
+  people: [],
+  requestsError: null,
+  roomsError: null,
+};
 
 describe('dense (workspace rail) visibility', () => {
   beforeEach(() => {

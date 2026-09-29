@@ -9,6 +9,8 @@ import dynamic from 'next/dynamic';
 import { CookiesProvider } from 'react-cookie';
 
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
+import { NotificationRegistration } from './notifications/hooks';
+import { PrivyAuthTracker } from './privy-auth-tracker';
 import { ReactQueryProvider } from './query-client';
 import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
@@ -32,10 +34,12 @@ export function Providers({ children }: Props) {
   return (
     <CookiesProvider>
       <LazyPrivyProvider>
+        <PrivyAuthTracker />
         <ReactQueryProvider>
           <LazyWalletProvider>
             <EmbeddedWalletSync />
             <AnalyticsUserIdentifier />
+            <NotificationRegistration />
             <SentryUserIdentifier />
             <JotaiProvider store={store}>
               <SyncEngineProvider>

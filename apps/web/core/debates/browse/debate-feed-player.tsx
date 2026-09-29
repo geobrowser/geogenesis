@@ -22,8 +22,11 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { CONTROL_CIRCLE_CLASS } from './player-controls';
+import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 /**
@@ -67,6 +70,18 @@ type DebateFeedPlayerProps = {
    */
   preload?: boolean;
   /**
+   * Opens the claims panel — the same panel the claims pill under the player opens. With a
+   * debater's space id, at that debater's claims. The end card offers it; without it the card's
+   * ways into the claims are simply not drawn.
+   */
+  onOpenClaims?: (participantSpaceId?: string) => void;
+  /**
+   * Asks for this debate to become the active one. Replay on the end card calls it when the debate
+   * is not the active one yet, and holds the replay until it is. A row whose own click capture
+   * already hands playback over (the explore row) can leave it out.
+   */
+  onPlaybackRequest?: () => void;
+  /**
    * Start here, in seconds, the first time this debate becomes playable — from a link that named a
    * moment, such as a claim row saying where it was said.
    *
@@ -82,6 +97,8 @@ export function DebateFeedPlayer({
   active,
   preload = false,
   reducedOverlays = false,
+  onOpenClaims,
+  onPlaybackRequest,
   initialSeekSeconds = null,
 }: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
@@ -226,6 +243,45 @@ export function DebateFeedPlayer({
   );
 
   const showReplay = ready && playbackEnded;
+  // The end card is where an ended debate lands, except on a compact gallery tile — which has no
+  // room for it and keeps the plain centred replay.
+  const endCardShown = showReplay && !reducedOverlays;
+  // Loaded while the debate is the active one, so its numbers are there when the video ends rather
+  // than drawing empty bars and filling them in.
+  const endCard = useDebateEndCard(debate, active && ready && !reducedOverlays, endCardShown);
+
+  /*
+   * Replay from the end card, held until this player may play.
+   *
+   * In a row of cards only one holds playback, and pressing Replay on another first hands playback
+   * over — which `active` reports a render later. Playing at once would run this debate beside the
+   * one still holding playback; dropping the press made Replay take two taps, because an ended
+   * debate does not resume by itself once it is handed playback. So the press asks for playback,
+   * is kept, and is carried out the moment playback arrives. It lapses if the debate stops being
+   * ended in the meantime.
+   */
+  const [replayPending, setReplayPending] = React.useState(false);
+  const replayFromEndCard = () => {
+    if (active) {
+      playFromStart();
+      return;
+    }
+    setReplayPending(true);
+    onPlaybackRequest?.();
+  };
+  // An effect event, so the effect runs on the three facts that decide it rather than on every render
+  // for a `playFromStart` that is a fresh function each time.
+  const replayNow = React.useEffectEvent(() => playFromStart());
+  React.useEffect(() => {
+    if (!replayPending) return;
+    if (!playbackEnded) {
+      setReplayPending(false);
+      return;
+    }
+    if (!active) return;
+    setReplayPending(false);
+    replayNow();
+  }, [active, playbackEnded, replayPending]);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
@@ -441,6 +497,7 @@ export function DebateFeedPlayer({
       )}
     >
       <DebaterVideo
+        inert={endCardShown}
         participant={slot1Participant}
         byline={bylineFor(slot1Participant)}
         src={urls.slot1}
@@ -500,6 +557,7 @@ export function DebateFeedPlayer({
         }
       />
       <DebaterVideo
+        inert={endCardShown}
         participant={slot2Participant}
         byline={bylineFor(slot2Participant)}
         src={urls.slot2}
@@ -591,7 +649,7 @@ export function DebateFeedPlayer({
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-      {subtitle && !roundCard && (!reducedOverlays || (active && playing && mutedByUser)) && (
+      {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
@@ -602,7 +660,7 @@ export function DebateFeedPlayer({
       {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
           desktop retains its persistent corner play/pause control while playback is in progress. */}
-      {(showReplay || showPausedGlyph) && (
+      {((showReplay && !endCardShown) || showPausedGlyph) && (
         <button
           type="button"
           aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
@@ -628,6 +686,8 @@ export function DebateFeedPlayer({
       >
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
+
+      {endCardShown && <DebateEndCard card={endCard} onOpenClaims={onOpenClaims} onReplay={replayFromEndCard} />}
 
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -660,6 +720,7 @@ function DebaterVideo({
   topLeft,
   scrubber,
   scrimClassName = 'h-14',
+  inert = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -669,6 +730,11 @@ function DebaterVideo({
   countdown: TurnState;
   /** The round, beside this tile's timer for as long as this tile's turn runs. */
   roundBadge?: RoundCue | null;
+  /**
+   * Out of reach entirely: covered by the end card, so nothing on it — the play/pause surface, the
+   * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
+   */
+  inert?: boolean;
   /**
    * How much of this tile's bottom band the round card has taken, 0–1.
    *
@@ -905,6 +971,7 @@ function DebaterVideo({
       // above it. The turn overlays move between the tiles as the turn does, and "on the right
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
+      inert={inert}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
@@ -1202,10 +1269,7 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx(
-        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
-        className
-      )}
+      className={cx(CONTROL_CIRCLE_CLASS, className)}
     >
       {children}
     </button>

@@ -8,10 +8,6 @@ import cx from 'classnames';
 
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
-import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
-import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
-import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
-import { EXPLORE_TYPE_FILTER_STORAGE_KEY, parseStoredExploreTypeIds } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { normId } from '~/core/utils/norm-id';
@@ -66,24 +62,10 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'all', label: 'All time' },
 ];
 
-export type SpaceOption = { value: string; label: string };
-
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
-  /** Space options for the space dropdown. Required when `lockedSpaceId` is not set. */
-  initialSpaceOptions?: SpaceOption[];
-  /**
-   * The spaces this reader belongs to — joined, or with a membership still pending. The filter
-   * opens on whichever of them are on offer, and on nothing at all when there are none, which is
-   * the unfiltered feed a reader with no memberships already saw (GEO-2789).
-   *
-   * Undefined means the caller has no membership data to give — the activity feed, which pins its
-   * own space and draws no menu. There is nothing to wait for in that case, so it reads as the
-   * fallback rather than holding the feed: every space this reader may see.
-   */
-  memberSpaceIds?: string[];
-  /** When set, the feed is pinned to this space. No space dropdown is rendered. */
+  /** When set, the feed is pinned to this space. */
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
   initialTime?: ExploreTime;
@@ -93,13 +75,11 @@ type EntityFeedProps = {
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
   showSortFilter?: boolean;
-  /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
+  /** Whether to render the type checklist. Defaults to false. */
   showTypeFilter?: boolean;
-  /** Whether the space picker is shown and sent. Topic feeds use their own curated scope. */
-  showSpaceFilter?: boolean;
-  /** Initial type selection. Explore defaults to its three primary types; Topic feeds start broad. */
+  /** Initial type selection. */
   initialTypeIds?: readonly string[];
-  /** Type checklist options. Defaults to the standard Explore set. */
+  /** Type checklist options. */
   typeOptions?: readonly { id: string; label: string }[];
   /** Counts for this contextual feed's unfiltered population, shown beside each type. */
   typeCounts?: readonly { id: string; count: number }[];
@@ -107,8 +87,6 @@ type EntityFeedProps = {
   typeCountsPending?: boolean;
   /** Start contextual feeds on only the types whose population count is non-zero. */
   selectTypesWithResultsByDefault?: boolean;
-  /** Restore and save the Explore route's type choice. Disable for contextual feeds. */
-  persistTypeSelection?: boolean;
   /** Optional Topic facet shown beside the type picker. */
   topicOptions?: HubFilterOption<string>[];
   /** Optional endpoint that counts and prunes Topic options against this feed's current filters. */
@@ -193,26 +171,22 @@ async function fetchTopicFacets(
 }
 
 /**
- * Generic entity-feed surface: time + (optional) space dropdowns, auth-aware infinite
- * scroll, skeleton loaders. Explore and activity are both thin wrappers around this.
+ * Generic entity-feed surface: sort, time, type and topic filters, auth-aware infinite scroll,
+ * skeleton loaders. Explore, activity and Topic feeds are thin wrappers around this.
  */
 export function EntityFeed({
   apiEndpoint,
-  initialSpaceOptions = [],
-  memberSpaceIds,
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
   showTimeFilter = true,
   showSortFilter = false,
   showTypeFilter = false,
-  showSpaceFilter = true,
-  initialTypeIds = DEFAULT_EXPLORE_TYPE_IDS,
-  typeOptions = EXPLORE_ENTITY_TYPES,
+  initialTypeIds = [],
+  typeOptions = [],
   typeCounts,
   typeCountsPending = false,
   selectTypesWithResultsByDefault = false,
-  persistTypeSelection = true,
   topicOptions = [],
   topicFacetEndpoint,
   showTopicFilter = false,
@@ -225,33 +199,14 @@ export function EntityFeed({
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
-  // Seeded on the first render rather than by the hook's effect. Both sides are server props on
-  // this surface, so the answer is already in hand — and starting empty would subscribe the feed to
-  // the unfiltered query, fire that request, and only then narrow, showing the wide feed in
-  // between. The hook's effect still runs and arrives at the same answer, which it then skips.
-  const [spaceIds, setSpaceIds] = React.useState<string[]>(() =>
-    memberSpaceSelection(
-      initialSpaceOptions.map(option => option.value),
-      memberSpaceIds === undefined ? null : new Set(memberSpaceIds)
-    )
-  );
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
-  // Seeded with the default rather than every type, so the first paint is what the effect below
-  // will settle on for a reader with nothing stored — the common case. Starting from all twelve
-  // showed a wider feed for a frame and then narrowed it.
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
   const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
-  const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter || !persistTypeSelection);
-  const shouldPersistTypeSelectionRef = React.useRef(false);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
-  // A locked space is the whole filter and there is no menu to reconcile it with; otherwise it is
-  // whatever is ticked, and nothing ticked means every space the reader may see.
-  const requestedSpaceIds = React.useMemo(
-    () => (showSpaceFilter ? (lockedSpaceId ? [lockedSpaceId] : spaceIds) : []),
-    [lockedSpaceId, showSpaceFilter, spaceIds]
-  );
+  // A locked space is the whole filter; otherwise every space the reader may see.
+  const requestedSpaceIds = React.useMemo(() => (lockedSpaceId ? [lockedSpaceId] : []), [lockedSpaceId]);
   const spaceIdsKey = requestedSpaceIds.join(',');
   const nonEmptyTypeIds = React.useMemo(() => {
     if (!typeCounts || typeCountsPending) return null;
@@ -291,7 +246,7 @@ export function EntityFeed({
       showTypeFilter ? typeIdsKey : null,
       fixedParamsKey,
     ],
-    enabled: Boolean(topicFacetEndpoint && typeSelectionLoaded),
+    enabled: Boolean(topicFacetEndpoint),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
@@ -324,24 +279,7 @@ export function EntityFeed({
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
   const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
-  const showFilterRow =
-    showSortFilter ||
-    timeRangeApplies ||
-    (showSpaceFilter && lockedSpaceId == null) ||
-    showTypeFilter ||
-    topicFilterVisible;
-
-  React.useEffect(() => {
-    if (!showTypeFilter || !persistTypeSelection) return;
-    let stored: string | null = null;
-    try {
-      stored = window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY);
-    } catch {
-      // Site data blocked — the filter starts at its default rather than the feed failing to mount.
-    }
-    setSelectedTypeIds(parseStoredExploreTypeIds(stored));
-    setTypeSelectionLoaded(true);
-  }, [persistTypeSelection, showTypeFilter]);
+  const showFilterRow = showSortFilter || timeRangeApplies || showTypeFilter || topicFilterVisible;
 
   React.useEffect(() => {
     if (
@@ -356,21 +294,9 @@ export function EntityFeed({
     if (!typeSelectionTouchedRef.current) setSelectedTypeIds(nonEmptyTypeIds);
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, showTypeFilter]);
 
-  React.useEffect(() => {
-    if (!showTypeFilter || !persistTypeSelection || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current)
-      return;
-    shouldPersistTypeSelectionRef.current = false;
-    try {
-      window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
-    } catch {
-      // Quota or blocked site data — the choice holds for this session, it just won't be restored.
-    }
-  }, [persistTypeSelection, selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
-
   const toggleType = React.useCallback(
     (typeId: string) => {
       typeSelectionTouchedRef.current = true;
-      shouldPersistTypeSelectionRef.current = true;
       setSelectedTypeIds(current => {
         const selected = new Set(current);
         if (selected.has(typeId)) selected.delete(typeId);
@@ -383,7 +309,6 @@ export function EntityFeed({
 
   const toggleAllTypes = React.useCallback(() => {
     typeSelectionTouchedRef.current = true;
-    shouldPersistTypeSelectionRef.current = true;
     setSelectedTypeIds(current => {
       const currentSet = new Set(current.map(normId));
       const allVisibleSelected =
@@ -438,7 +363,6 @@ export function EntityFeed({
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
-    enabled: typeSelectionLoaded,
   });
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
@@ -465,75 +389,8 @@ export function EntityFeed({
     return flat;
   }, [data?.pages]);
 
-  // The space filter, defaulted and driven the same way the debates side panel's is (GEO-2789), by
-  // the same hook — so the two surfaces cannot drift on what "your spaces" means or on what a tick
-  // does. `count` is left off: the feed has no per-space totals to offer, and the menu draws a row
-  // without one rather than a zero.
-  const offeredSpaces = React.useMemo(
-    () => initialSpaceOptions.map(option => ({ id: option.value, name: option.label, count: 0 })),
-    [initialSpaceOptions]
-  );
-
-  // The prop is what the viewer's spaces were when the page was *rendered*, which for someone who
-  // has just signed up is before they had any: their personal space takes 30s-3min to land and the
-  // membership requests behind their sign-up picks are fired after it, so the server answers with
-  // an empty set and the filter opens on nothing — the unfiltered feed, over every featured space
-  // (GEO-2815). Nothing then moved it, because a server prop cannot: the requests landed a minute
-  // later and only a hard refresh re-rendered the page that computes it.
-  //
-  // So the prop seeds the first paint and the live query takes over the moment it answers. Same
-  // value, same helper, same sidebar payload the server read — this is the client's copy of it,
-  // shared with the debates surfaces rather than fetched again, and it refreshes when a membership
-  // request is published (see `requestSpaceMembership`).
-  //
-  // `useMemberSpaceDefault` is already written for a late answer: its seed is spent on a match, so
-  // an empty first answer leaves it armed and the real one applies when it arrives. A viewer who
-  // touches the filter before then forfeits it, which is the behaviour that makes this a default
-  // rather than a policy.
-  const {
-    memberSpaceIds: liveMemberSpaceIds,
-    isSettlingMemberships,
-    isLoading: memberSpacesLoading,
-  } = useClaimSpaceAllowlist(showSpaceFilter && lockedSpaceId == null);
-
-  // The union of the two, not the live one in place of the prop. Neither is reliably the fresher:
-  // the prop was computed during *this* render of the page, while the live value can be a cache
-  // entry up to a minute old that the sidebar filled on another route — so a reader who joined a
-  // space and navigated here would have had the space in the prop and missing from the cache, and
-  // preferring the cache would seed the default without it. Both lists answer "spaces that are
-  // mine", so a union can only be too generous, and too generous means one extra box ticked in a
-  // menu the reader can edit.
-  const memberSpaces = React.useMemo(() => {
-    if (liveMemberSpaceIds === null && memberSpaceIds === undefined) return null;
-    return new Set([...(liveMemberSpaceIds ?? []), ...(memberSpaceIds ?? [])]);
-  }, [liveMemberSpaceIds, memberSpaceIds]);
-
-  const { onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
-    offeredSpaces,
-    spaceIds,
-    setSpaceIds,
-    memberSpaceIds: memberSpaces,
-    // The *options* are a server prop and are never half-arrived. The viewer's spaces are, and the
-    // seed is spent on the first non-empty match — so reporting anything but the truth here spends
-    // it on a fraction of the answer. Sign-up sends one membership proposal per picked space and
-    // they land seconds apart: a reader who picked three spaces would otherwise be pinned to
-    // whichever indexed first, with the other two silently dropped.
-    pending: memberSpacesLoading || isSettlingMemberships,
-  });
-  // The hook's `facetSpaces` is deliberately unused. It keeps a *selected* option visible after a
-  // count drops it and orders by that count — neither of which applies to a fixed server-rendered
-  // list, where ordering by a count these rows do not have would replace featured-first with
-  // alphabetical-by-id. `initialSpaceOptions` is already a `HubFilterOption`, so the menu takes it
-  // as it stands.
-
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
-  const spaceLabel = pickerLabel(
-    spaceIds.length,
-    'Any space',
-    () => initialSpaceOptions.find(option => option.value === spaceIds[0])?.label ?? 'Any space',
-    count => `${count} spaces`
-  );
   const topicLabel = pickerLabel(
     selectedTopicIds.length,
     'Any topic',
@@ -617,19 +474,8 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {(showSpaceFilter && lockedSpaceId == null) || showTypeFilter || topicFilterVisible ? (
+          {showTypeFilter || topicFilterVisible ? (
             <div className="ml-auto flex items-center gap-3">
-              {showSpaceFilter && lockedSpaceId == null ? (
-                <HubMultiFilterMenu
-                  label={spaceLabel}
-                  options={initialSpaceOptions}
-                  values={spaceIds}
-                  onToggle={onSpaceToggle}
-                  onClear={onSpacesClear}
-                  clearLabel="Any space"
-                  showImages={false}
-                />
-              ) : null}
               {showTypeFilter ? (
                 <ExploreTypeFilterMenu
                   selectedTypeIds={visibleSelectedTypeIds}
@@ -663,7 +509,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || !typeSelectionLoaded ? (
+        ) : isLoading ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />

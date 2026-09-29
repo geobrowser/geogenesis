@@ -105,6 +105,15 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
 
+/** `ids` in consecutive batches of at most `ENTITY_ID_BATCH_SIZE`, for `id: { in }` style filters. */
+export function batchEntityIds(ids: readonly string[]): string[][] {
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += ENTITY_ID_BATCH_SIZE) {
+    batches.push(ids.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  }
+  return batches;
+}
+
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
 // automatically...
@@ -135,7 +144,7 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
  * host anyway, so firing twenty of those at once trades a queue we control for one we do
  * not. Six keeps a 300-id call to a single wave.
  */
-const ENTITY_ID_BATCH_CONCURRENCY = 6;
+export const ENTITY_ID_BATCH_CONCURRENCY = 6;
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);
@@ -480,7 +489,8 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
-const RELATIONS_PAGE_SIZE = 500;
+/** Rows per `relationsConnection` page. The API rejects `first: 1000`; 500 is the largest page it serves. */
+export const RELATIONS_PAGE_SIZE = 500;
 
 /**
  * Backlink rows for a set of target entities. The id list is chunked under the

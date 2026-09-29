@@ -4,11 +4,18 @@ import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
-import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
+import type { DebateMediaResponse } from '~/core/debates/api';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { hasProcessedVideo } from '~/core/debates/playback-utils';
+import { geoChatBaseUrl } from '~/core/debates/server/geo-chat-base-url';
+import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
+import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
+import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
@@ -33,9 +40,12 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import type { ExploreCompleteIndexNode } from './explore-index-selection';
+import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
+import { leadWithPlayableDebate } from './lead-with-playable-debate';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -68,13 +78,14 @@ export type ExploreFeedResult = {
 /**
  * One disjoint branch of a contextual feed's complete population.
  *
- * Topic feeds use separate direct-entity and Debate branches because the generic predicate's OR
- * across those relation shapes is much slower. Each branch must include every entity that belongs
- * to the feed for its supplied types; the results are merged and ranked here.
+ * Each scope must include every entity that belongs to the feed for its supplied types; the
+ * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
  */
 export type ExploreCompletePopulationScope = {
   typeIds: readonly string[];
   entityFilter: EntityFilter;
+  /** Optional relation entry point. Source entities still satisfy the full feed predicate. */
+  relationFilter?: RelationFilter;
 };
 
 // Entities we never want to surface in any feed.
@@ -150,18 +161,6 @@ type ExploreEntitiesPageResponse = {
 
 type EntitiesConnectionShape = {
   nodes?: unknown[];
-  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
-} | null;
-
-export type ExploreCompleteIndexNode = {
-  id?: string | null;
-  typeIds?: Array<string | null> | null;
-  rankingScore?: string | number | null;
-  createdAt?: string | number | null;
-};
-
-type CompleteIndexConnection = {
-  nodes?: ExploreCompleteIndexNode[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
@@ -310,45 +309,57 @@ async function fetchExploreEntitiesPage(args: {
 
 const COMPLETE_INDEX_PAGE_SIZE = 500;
 
-async function fetchCompleteIndexScope(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  entityFilter: EntityFilter;
-}): Promise<ExploreCompleteIndexNode[]> {
-  const rows: ExploreCompleteIndexNode[] = [];
-  let after: string | null = null;
+async function fetchCompleteIndexScope(
+  args: ExploreCompletePopulationScope & {
+    spaceIds: string[];
+    time: ExploreTime;
+    requireName?: boolean;
+    requireDebateTagOnClaims?: boolean;
+  }
+): Promise<ExploreCompleteIndexNode[]> {
+  const filter = buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: Boolean(args.relationFilter) });
 
-  while (true) {
-    const page: CompleteIndexConnection = await Effect.runPromise(
+  // Both entry points exhaust the same cursor contract. A malformed cursor must reject the
+  // population promise (and evict it from the cache), never cache a partial count or loop forever.
+  return collectCursorPages<ExploreCompleteIndexNode>(async after => {
+    if (args.relationFilter) {
+      const page = await Effect.runPromise(
+        graphql({
+          query: exploreRelationIndexDocument,
+          decoder: response => response.relationsConnection ?? null,
+          variables: {
+            first: COMPLETE_INDEX_PAGE_SIZE,
+            after: after ?? null,
+            filter: { and: [args.relationFilter, { fromEntity: filter }] },
+          },
+        })
+      );
+      return {
+        items: (page?.nodes ?? []).flatMap(node => (node?.fromEntity ? [node.fromEntity] : [])),
+        endCursor: page?.pageInfo?.endCursor ?? null,
+        hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+      };
+    }
+
+    const page = await Effect.runPromise(
       graphql({
         query: exploreCompleteIndexDocument,
-        decoder: (data: { entitiesConnection?: CompleteIndexConnection }) => data.entitiesConnection ?? null,
+        decoder: response => response.entitiesConnection ?? null,
         variables: {
           limit: COMPLETE_INDEX_PAGE_SIZE,
-          after,
-          filter: buildExploreFeedFilter({
-            spaceIds: args.spaceIds,
-            time: args.time,
-            typeIds: args.typeIds,
-            requireName: args.requireName,
-            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-            entityFilter: args.entityFilter,
-          }),
+          after: after ?? null,
+          filter,
           spaceIds: { in: args.spaceIds },
           typeIds: { in: [...args.typeIds] },
         },
       })
     );
-
-    rows.push(...(page?.nodes ?? []));
-    if (!page?.pageInfo?.hasNextPage || !page.pageInfo.endCursor) break;
-    after = page.pageInfo.endCursor;
-  }
-
-  return rows;
+    return {
+      items: page?.nodes ?? [],
+      endCursor: page?.pageInfo?.endCursor ?? null,
+      hasNextPage: page?.pageInfo?.hasNextPage ?? false,
+    };
+  });
 }
 
 function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
@@ -367,16 +378,14 @@ type CompletePopulationIndexArgs = {
   scopes: readonly ExploreCompletePopulationScope[];
 };
 
-type CompletePopulationCacheEntry = {
-  expiresAtMs: number;
-  promise: Promise<ExploreCompleteIndexNode[]>;
-};
-
 /** Matches the Topic facet/composition query freshness while bounding stale feed membership. */
 const COMPLETE_POPULATION_CACHE_TTL_MS = 60_000;
 /** Each entry may hold a whole Topic population, so keep the per-instance cache deliberately small. */
 const COMPLETE_POPULATION_CACHE_MAX_ENTRIES = 24;
-const completePopulationCache = new Map<string, CompletePopulationCacheEntry>();
+const completePopulationCache = createPromiseTtlCache<ExploreCompleteIndexNode[]>({
+  ttlMs: COMPLETE_POPULATION_CACHE_TTL_MS,
+  maxEntries: COMPLETE_POPULATION_CACHE_MAX_ENTRIES,
+});
 
 function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
   return JSON.stringify({
@@ -405,6 +414,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
           requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           entityFilter: scope.entityFilter,
+          relationFilter: scope.relationFilter,
         })
       )
   );
@@ -442,36 +452,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
 export async function fetchCompleteExplorePopulationIndex(
   args: CompletePopulationIndexArgs
 ): Promise<ExploreCompleteIndexNode[]> {
-  const key = completePopulationCacheKey(args);
-  const now = Date.now();
-  const cached = completePopulationCache.get(key);
-  if (cached && cached.expiresAtMs > now) {
-    // Refresh insertion order so the size bound evicts the least recently used population.
-    completePopulationCache.delete(key);
-    completePopulationCache.set(key, cached);
-    return cached.promise;
-  }
-  if (cached) completePopulationCache.delete(key);
-
-  for (const [cachedKey, entry] of completePopulationCache) {
-    if (entry.expiresAtMs <= now) completePopulationCache.delete(cachedKey);
-  }
-
-  const promise = buildCompletePopulationIndex(args);
-  const entry = { expiresAtMs: now + COMPLETE_POPULATION_CACHE_TTL_MS, promise };
-  completePopulationCache.set(key, entry);
-  while (completePopulationCache.size > COMPLETE_POPULATION_CACHE_MAX_ENTRIES) {
-    const oldestKey = completePopulationCache.keys().next().value;
-    if (typeof oldestKey !== 'string') break;
-    completePopulationCache.delete(oldestKey);
-  }
-
-  try {
-    return await promise;
-  } catch (error) {
-    if (completePopulationCache.get(key)?.promise === promise) completePopulationCache.delete(key);
-    throw error;
-  }
+  return completePopulationCache.get(completePopulationCacheKey(args), () => buildCompletePopulationIndex(args));
 }
 
 /**
@@ -657,6 +638,14 @@ export async function fetchExploreFeed(args: {
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
+  /**
+   * Drop any entity carrying one of these types, in every sort, whatever else it carries.
+   *
+   * Applied to the rows rather than sent to the query: `typeIds` matches an entity with *any*
+   * selected type, so it cannot express "and none of these", and adding a negated type predicate to
+   * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
+   */
+  excludeTypeIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -668,6 +657,11 @@ export async function fetchExploreFeed(args: {
   requireDebateTagOnClaims?: boolean;
   /** Additional server-side scope shared by Best, Top and New. */
   entityFilter?: EntityFilter;
+  /**
+   * GEO-3070. Best opens on the highest-ranked debate whose video plays. Explore's own feed only:
+   * a space's activity log and a topic's feed keep their ranked order.
+   */
+  leadWithPlayableDebate?: boolean;
   /**
    * Complete population branches for a contextual feed. When supplied, Best and New order this
    * full population from a compact index rather than applying one expensive combined predicate.
@@ -815,8 +809,14 @@ export async function fetchExploreFeed(args: {
                 entityFilter: args.entityFilter,
               });
 
+  const excludeTypeIds = args.excludeTypeIds ?? [];
+
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
-    const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
+    const builtRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
+    const allRows =
+      excludeTypeIds.length > 0
+        ? builtRows.filter(row => !entityMatchesExploreTypeIds(row, excludeTypeIds))
+        : builtRows;
 
     // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
     // sorts already came back filtered, so re-checking them would be redundant — and worse than
@@ -865,8 +865,7 @@ export async function fetchExploreFeed(args: {
   // scans a window and applies the whitelist here — and past the ranked depth where tagged claims
   // run thin, a Claim-only selection matches nothing in a 30-row window while the connection still
   // reports another page. Measured over the eleven spaces that hold tagged claims: at offset 600 a
-  // gated window held 0 claims against 13 ungated. Claim is one of the three default types, so
-  // unticking the other two is all it takes.
+  // gated window held 0 claims against 13 ungated, which a Claim-only `typeIds` request reaches.
   //
   // So the scan continues here, where one round trip covers it, rather than being handed back to a
   // client that will only ask again. Bounded because the alternative is unbounded: the ranked
@@ -905,6 +904,16 @@ export async function fetchExploreFeed(args: {
     ordered = orderWindow(page.entities);
   }
 
+  // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
+  // from that window is reordered the same way, so the lead debate is served once and nothing it
+  // displaced is skipped; later windows are ranked further down and left as they are.
+  if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
+    ordered = await leadWithPlayableDebate(ordered, {
+      isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+    });
+  }
+
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
   const slice = ordered.slice(windowOffset, windowOffset + pageSize);
@@ -922,4 +931,21 @@ export async function fetchExploreFeed(args: {
           endCursor: page.endCursor,
         }),
   };
+}
+
+/**
+ * Whether geo-chat has a processed video for a published Debate, asked server-side.
+ *
+ * Its own request rather than `getDebateMedia`: that lives in a `'use client'` module, which a route
+ * handler cannot call. Same endpoint and the same `hasProcessedVideo` rule the Explore card plays
+ * by, so the lead slot never holds a debate the card would then refuse to play. A Debate entity's id
+ * is its geo-chat debate id, hyphenated.
+ */
+async function debateHasProcessedVideo(entityId: string, signal: AbortSignal): Promise<boolean> {
+  const response = await fetch(`${geoChatBaseUrl()}/debates/${ID.hexToUuid(entityId)}/media`, {
+    signal,
+    cache: 'no-store',
+  });
+  if (!response.ok) return false;
+  return hasProcessedVideo((await response.json()) as DebateMediaResponse);
 }

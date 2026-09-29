@@ -15,14 +15,19 @@ function dedupePreserveOrder(ids: string[]): string[] {
   });
 }
 
-/** Resolves submitter personal space ids from relation `to_space` or the rank entity's home space. */
-export function useResolvedRankingSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): string[] {
+/**
+ * Home space of each rank entity that didn't carry one on its relation.
+ */
+export function useRankEntitySpaceById(refs: AggregatedRankingSubmitterRef[]): {
+  rankEntitySpaceById: Map<string, string>;
+  isResolvingSpaces: boolean;
+} {
   const rankEntityIdsNeedingSpace = React.useMemo(
     () => refs.filter(ref => !ref.spaceId).map(ref => ref.rankEntityId),
     [refs]
   );
 
-  const { entities } = useQueryEntities({
+  const { entities, isLoading } = useQueryEntities({
     enabled: rankEntityIdsNeedingSpace.length > 0,
     where: { id: { in: rankEntityIdsNeedingSpace } },
     first: rankEntityIdsNeedingSpace.length || undefined,
@@ -38,6 +43,13 @@ export function useResolvedRankingSubmitterSpaceIds(refs: AggregatedRankingSubmi
     }
     return map;
   }, [entities]);
+
+  return React.useMemo(() => ({ rankEntitySpaceById, isResolvingSpaces: isLoading }), [rankEntitySpaceById, isLoading]);
+}
+
+/** Resolves submitter personal space ids from relation `to_space` or the rank entity's home space. */
+export function useResolvedRankingSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): string[] {
+  const { rankEntitySpaceById } = useRankEntitySpaceById(refs);
 
   return React.useMemo(
     () =>

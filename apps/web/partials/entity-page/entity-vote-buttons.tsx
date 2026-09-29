@@ -1,6 +1,5 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 
@@ -10,10 +9,11 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useStore } from 'jotai';
 
-import { personProfileOpened, trackPrivyAuth } from '~/core/analytics';
+import { personProfileOpened } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -175,10 +175,8 @@ export function EntityVoteButtons({
     });
   }
 
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      trackPrivyAuth(args, { auth_flow: 'manual_login' });
-
+  const { login } = useTrackedLogin({
+    onComplete: () => {
       const direction = pendingSignInDirectionRef.current;
       if (direction !== undefined) {
         pendingSignInDirectionRef.current = undefined;

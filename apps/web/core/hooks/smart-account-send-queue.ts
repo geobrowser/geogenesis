@@ -1,4 +1,4 @@
-import { reportError } from '~/core/telemetry/logger';
+import { reportError, reportEvent } from '~/core/telemetry/logger';
 
 /**
  * Per-EOA send serialization. The kernel client computes the nonce at submit time, so
@@ -11,12 +11,26 @@ import { reportError } from '~/core/telemetry/logger';
  */
 const sendChainByAddress = new Map<string, Promise<unknown>>();
 
+/** Sends enqueued and not yet settled, per address. Reported as queue depth. */
+const pendingCountByAddress = new Map<string, number>();
+
+/** Last slow-start warning per address, for throttling. */
+const lastWaitWarningAtByAddress = new Map<string, number>();
+const WAIT_WARNING_THROTTLE_MS = 60_000;
+
 /**
  * Thrown when a send waited so long behind earlier sends that we abandon it before it
  * starts. Nothing was submitted, so retrying cannot duplicate an on-chain op.
  */
 export class QueuedSendTimeoutError extends Error {
-  constructor(waitedMs: number) {
+  /**
+   * @param waitedMs time from enqueue to the turn arriving
+   * @param queueDepth sends already queued ahead of this one when it was enqueued
+   */
+  constructor(
+    readonly waitedMs: number,
+    readonly queueDepth: number
+  ) {
     super(
       `Transaction timed out after ${Math.round(waitedMs / 1000)}s waiting for an earlier ` +
         'transaction to confirm. Nothing was submitted — it is safe to retry.'
@@ -37,6 +51,10 @@ export class QueuedSendTimeoutError extends Error {
  * a publish was rejected as "timed out" at 45s having never been submitted, every time
  * inclusion was slow. Any change to RECEIPT_DEADLINE_MS must move this too, and
  * useSmartAccountTransaction's outer timeout must stay above both combined.
+ *
+ * Accepted as a fixed bound (GEO-3037): a timeout is reported to Sentry, warned about at
+ * half the budget, and offered to the user as a retry. Changing the queue shape for rapid
+ * voting is tracked separately.
  */
 export const MAX_QUEUE_WAIT_MS = 120_000;
 
@@ -123,26 +141,63 @@ export const withSubmissionRetry = async <T>(task: () => Promise<T>): Promise<T>
   throw lastError;
 };
 
+/** Resolves once every send queued at call time has settled. Never rejects. */
+export const waitForQueuedSends = (): Promise<void> => Promise.all(sendChainByAddress.values()).then(() => undefined);
+
 export const enqueueFor = <T>(
   address: string,
   task: () => Promise<T>,
   { maxQueueWaitMs }: { maxQueueWaitMs?: number } = {}
 ): Promise<T> => {
   const enqueuedAt = Date.now();
+  const queueDepth = pendingCountByAddress.get(address) ?? 0;
+  pendingCountByAddress.set(address, queueDepth + 1);
+
   const guarded = () => {
     const waited = Date.now() - enqueuedAt;
     if (maxQueueWaitMs !== undefined && waited > maxQueueWaitMs) {
-      return Promise.reject(new QueuedSendTimeoutError(waited));
+      const error = new QueuedSendTimeoutError(waited, queueDepth);
+      // Reported here rather than by callers so every bounded send is covered. A burst
+      // reports once per abandoned send; the waitedMs spread shows the cascade.
+      reportError(error, {
+        tags: { area: 'smart-account', phase: 'queue', outcome: 'queue-timeout' },
+        contexts: { queue: { waitedMs: waited, queueDepth, maxQueueWaitMs } },
+      });
+      return Promise.reject(error);
+    }
+    if (maxQueueWaitMs !== undefined && waited > maxQueueWaitMs / 2) {
+      warnSlowQueueStart(address, waited, queueDepth, maxQueueWaitMs);
     }
     return task();
   };
   const prev = sendChainByAddress.get(address) ?? Promise.resolve();
   // A failed send must not block the next one, so the stored continuation swallows
   // the error (the caller still sees it via the returned promise).
-  const run = prev.then(guarded, guarded);
+  const run = prev.then(guarded, guarded).finally(() => {
+    const remaining = (pendingCountByAddress.get(address) ?? 1) - 1;
+    if (remaining > 0) pendingCountByAddress.set(address, remaining);
+    else pendingCountByAddress.delete(address);
+  });
   sendChainByAddress.set(
     address,
     run.catch(() => undefined)
   );
   return run;
 };
+
+/** Leading indicator: a send started, but past half its budget. The next one may not. */
+const warnSlowQueueStart = (address: string, waitedMs: number, queueDepth: number, maxQueueWaitMs: number) => {
+  const now = Date.now();
+  const lastWarnedAt = lastWaitWarningAtByAddress.get(address);
+  if (lastWarnedAt !== undefined && now - lastWarnedAt < WAIT_WARNING_THROTTLE_MS) return;
+  lastWaitWarningAtByAddress.set(address, now);
+  reportEvent({
+    name: 'smart-account.queue-wait-high',
+    level: 'warning',
+    tags: { area: 'smart-account', phase: 'queue', outcome: 'queue-wait-high' },
+    extra: { waitedMs, queueDepth, maxQueueWaitMs },
+  });
+};
+
+/** Test-only: pending sends per address. */
+export const queueDepthFor = (address: string): number => pendingCountByAddress.get(address) ?? 0;

@@ -2,32 +2,42 @@
 
 import * as React from 'react';
 
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { sameId } from '~/core/debates/rooms/room-presence';
+import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
+import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
-import { NavUtils, validateSpaceId } from '~/core/utils/utils';
+import { normId } from '~/core/utils/norm-id';
 
-import { Avatar } from '~/design-system/avatar';
+import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
-import { HubPillButton } from './hub-pill-button';
+import { HubCardList, hubCardMotion } from './hub-motion';
+import { HubPillButton, hubPillClassName } from './hub-pill-button';
+import { RequestParties } from './request-parties';
+import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
+import { useRequestCountdown } from './use-request-countdown';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, requestsError, roomsError } = content;
+  const { answerable, upcoming, people, requestsError, roomsError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
-  const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0);
+  const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
+
+  // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
+  const viewer = lookUp(viewerId);
 
   if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
 
@@ -51,7 +61,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId }) => (
-            <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} />
+            <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} viewer={viewer} />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </Section>
@@ -60,15 +70,19 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       {(answerable.length > 0 || requestsError) && (
         <Section label="Scheduled">
           {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
-          {answerable.map(request => (
-            <ScheduledRow
-              key={request.request_id}
-              request={request}
-              opponent={lookUp(opponentOf(request, viewerId))}
-              busy={respond.isPending}
-              onAnswer={answer}
-            />
-          ))}
+          {/* The instant cards' list, so one that expires folds away the way theirs do. */}
+          <HubCardList>
+            {answerable.map(request => (
+              <ScheduledRow
+                key={request.request_id}
+                request={request}
+                opponent={lookUp(opponentOf(request, viewerId))}
+                viewer={viewer}
+                busy={respond.isPending}
+                onAnswer={answer}
+              />
+            ))}
+          </HubCardList>
           {conflict && (
             <Text as="p" variant="footnote" color="red-01">
               {conflict}
@@ -87,6 +101,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
+  /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
+  people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the other returned. */
   requestsError: Error | null;
   roomsError: Error | null;
@@ -102,10 +118,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
 
   const rows = requests.data?.requests;
 
-  const answerable = React.useMemo(
-    () => (rows ?? []).filter(request => request.status === 'pending' && !request.room_id),
-    [rows]
-  );
+  const answerable = useOpenScheduledRequests(rows);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
   const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
@@ -116,55 +129,72 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
         .filter(room => !finishedRoomIds.has(room.room_id))
         .map(room => ({
           room,
-          opponentUserId: opponentOf(
-            // The room's id is dashless here and dashed on the request, so these never match as written.
-            (rows ?? []).find(request => request.room_id && sameId(request.room_id, room.room_id)),
-            viewerId
-          ),
+          opponentUserId: opponentOf(requestForRoom(rows, room.room_id), viewerId),
         })),
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
-  return { answerable, upcoming, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
+  // The viewer included: their own side of the strip needs a face too.
+  const participantIds = React.useMemo(
+    () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
+    [rows]
+  );
+  const people = useGeoChatUserSummaries(participantIds, enabled);
+
+  return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
 
-/** `null` whenever the answer would be a guess, so nothing reads the viewer as their own opponent. */
-function opponentOf(request: ScheduledDebateRequest | undefined, viewerId: string | null) {
-  if (!request || !viewerId) return null;
-  if (!request.participants.some(participant => sameId(participant.user_id, viewerId))) return null;
-  return request.participants.find(participant => !sameId(participant.user_id, viewerId))?.user_id ?? null;
-}
-
-/** Names come from the roster, which only covers people who are online. */
-function useParticipantLookup(enabled: boolean) {
-  const people = useDebatePeople(enabled);
+/**
+ * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
+ * roster is only a fallback while that loads: it covers people who are online, and whoever invited
+ * you usually is not.
+ */
+function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
+  const roster = useDebatePeople(enabled);
 
   return React.useMemo(() => {
     const byId = new Map<string, DebateParticipantSummary>();
-    for (const person of people.data?.people ?? []) byId.set(normalizeId(person.user_id), person);
-    return (userId: string | null) => (userId ? (byId.get(normalizeId(userId)) ?? null) : null);
-  }, [people.data]);
-}
-
-function normalizeId(userId: string) {
-  return userId.replace(/-/g, '').toLowerCase();
+    for (const person of roster.data?.people ?? []) byId.set(normId(person.user_id), person);
+    // The graph's record wins, field by field: where it has no name or face, the roster's stays.
+    // `||` rather than `??`, because an empty name is as missing as a null one — `speakerLabel`
+    // reads it that way too.
+    for (const person of requestPeople) {
+      const key = normId(person.user_id);
+      const online = byId.get(key);
+      byId.set(key, {
+        ...person,
+        display_name: person.display_name || online?.display_name || null,
+        avatar_cid: person.avatar_cid || online?.avatar_cid || null,
+      });
+    }
+    return (userId: string | null) => (userId ? (byId.get(normId(userId)) ?? null) : null);
+  }, [requestPeople, roster.data]);
 }
 
 /** An open room says so and offers the way in; one that is not yet open says when. */
-function UpcomingRow({ room, opponent }: { room: UpcomingDebateRoom; opponent: DebateParticipantSummary | null }) {
+function UpcomingRow({
+  room,
+  opponent,
+  viewer,
+}: {
+  room: UpcomingDebateRoom;
+  opponent: DebateParticipantSummary | null;
+  viewer: DebateParticipantSummary | null;
+}) {
   return (
-    <Row
+    <ScheduleCard
       opponent={opponent}
+      viewer={viewer}
       when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
-      note={
+      status={
         room.others_present
-          ? `${shortName(opponent)} is waiting for you now`
+          ? `${opponentName(opponent)} is waiting for you now`
           : room.joinable
             ? 'The room is open'
             : `Opens at ${formatTime(room.opens_at)}`
       }
       urgent={room.others_present}
-      action={
+      actions={
         room.joinable && (
           <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
             Join debate
@@ -178,20 +208,29 @@ function UpcomingRow({ room, opponent }: { room: UpcomingDebateRoom; opponent: D
 function ScheduledRow({
   request,
   opponent,
+  viewer,
   busy,
   onAnswer,
+  ref,
 }: {
+  /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
+  ref?: React.Ref<HTMLElement>;
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
+  viewer: DebateParticipantSummary | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
+  const expiry = useScheduledExpiry(request.scheduled_start_at);
+
   return (
-    <Row
+    <ScheduleCard
+      ref={ref}
       opponent={opponent}
-      when={formatDebateTime(request.scheduled_start_at)}
-      note={request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'}
-      below={
+      viewer={viewer}
+      when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
+      status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
+      actions={
         request.viewer_must_answer && (
           // Decline first, Accept primary on the right: the order every other request card uses.
           <div className="grid grid-cols-2 gap-2">
@@ -208,78 +247,81 @@ function ScheduledRow({
   );
 }
 
-/** The hub's pill, as a link. `HubPillButton` renders a button, which this cannot be. */
-const JOIN_PILL =
-  'inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-text px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90';
+/**
+ * When an unanswered request lapses: at its start. Counted down in the final hour, where the
+ * instant cards' "Expires in 12m" reads naturally; before that, a minute count days long would not.
+ */
+function useScheduledExpiry(startIso: string) {
+  const countdown = useRequestCountdown(startIso);
+  return countdown.remainingMs <= HOUR_MS ? countdown.label : 'Expires at start';
+}
 
-/** One shape for both kinds of row: who, when, one line of why, and at most one action. */
-function Row({
+const HOUR_MS = 60 * 60_000;
+
+/** The hub's pill, as a full-width link. `HubPillButton` renders a button, which this cannot be. */
+const JOIN_PILL = hubPillClassName('primary', 'w-full');
+
+/**
+ * One shape for both kinds of card, laid out like the instant request card: a header carrying the
+ * time and where things stand, the other debater in the same inset strip the request cards use,
+ * then the actions.
+ *
+ * The time leads because it is what a scheduled request is *about* — the one thing an instant
+ * request never has — so it gets the header to itself rather than a footnote under the name.
+ */
+function ScheduleCard({
   opponent,
+  viewer,
   when,
-  note,
+  status,
   urgent = false,
-  action,
-  below,
+  actions,
+  ref,
 }: {
+  ref?: React.Ref<HTMLElement>;
   opponent: DebateParticipantSummary | null;
+  viewer: DebateParticipantSummary | null;
   when: string;
-  note: string;
+  status: string;
   urgent?: boolean;
-  action?: React.ReactNode;
-  below?: React.ReactNode;
+  actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-grey-02 p-3">
-      <div className="flex items-center gap-3">
-        <Face opponent={opponent} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Name opponent={opponent} />
-          <Text as="span" variant="footnote" color="grey-04" className="truncate">
+    <motion.article
+      ref={ref}
+      {...hubCardMotion}
+      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+    >
+      {/* The time on its own line, with where things stand under it: side by side, a slot and a
+          sentence crowd each other out at this width, and it was the status that lost. */}
+      <div className="flex items-start gap-2">
+        <DateIcon className="mt-0.5 shrink-0 text-text" />
+        <div className="flex min-w-0 flex-col">
+          <Text as="span" variant="metadataMedium">
             {when}
           </Text>
-          <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'} className="truncate">
-            {note}
+          <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'}>
+            {status}
           </Text>
         </div>
-        {action}
       </div>
-      {below}
-    </div>
+
+      {/* The same "You vs Them" strip every other request card uses. No positions: a scheduled
+          debate is not about a claim yet, so there is no side to show. */}
+      <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />
+
+      {actions}
+    </motion.article>
   );
 }
 
-function Face({ opponent }: { opponent: DebateParticipantSummary | null }) {
-  return (
-    <div className="shrink-0">
-      <Avatar avatarUrl={opponent?.avatar_cid ?? null} value={opponent?.profile_space_id ?? 'scheduled'} size={32} />
-    </div>
-  );
-}
-
-/** A link only where the roster resolved them; a bare name is not a dead link. */
-function Name({ opponent }: { opponent: DebateParticipantSummary | null }) {
-  const href =
-    opponent && validateSpaceId(opponent.profile_space_id) ? NavUtils.toSpace(opponent.profile_space_id) : null;
-  const label = shortName(opponent);
-
-  if (!href) {
-    return (
-      <Text as="span" variant="metadataMedium" className="truncate">
-        {label}
-      </Text>
-    );
-  }
-
-  return (
-    <Link href={href} className="truncate text-metadataMedium hover:underline">
-      {label}
-    </Link>
-  );
-}
-
-function shortName(opponent: DebateParticipantSummary | null) {
-  return opponent?.display_name || 'Your opponent';
-}
+/** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
+const UNKNOWN_OPPONENT: DebateParticipantSummary = {
+  user_id: '',
+  profile_space_id: '',
+  display_name: UNNAMED_OPPONENT,
+  avatar_cid: null,
+};
 
 function ReadFailed({ children }: { children: React.ReactNode }) {
   return (
@@ -305,15 +347,32 @@ export function formatDebateTime(iso: string, now = new Date()) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
 
-  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
-  const day =
-    days === 0
-      ? 'Today'
-      : days === 1
-        ? 'Tomorrow'
-        : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${formatDay(at, now)} at ${formatTime(iso)}`;
+}
 
-  return `${day} at ${formatTime(iso)}`;
+function formatDay(at: Date, now: Date) {
+  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
+  return days === 0
+    ? 'Today'
+    : days === 1
+      ? 'Tomorrow'
+      : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** `Tomorrow, 11:00 – 11:30 AM`: the day once, then the slot. Falls back to the start alone. */
+export function formatDebateSlot(startIso: string, endIso: string, now = new Date()) {
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return formatDebateTime(startIso, now);
+  }
+  const from = formatTime(startIso);
+  const to = formatTime(endIso);
+  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
+  const period = /\s?([AP]M)$/i;
+  const fromPeriod = from.match(period)?.[1];
+  const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
+  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
 }
 
 function startOfDay(at: Date) {

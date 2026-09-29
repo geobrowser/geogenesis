@@ -10,13 +10,14 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
-import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { geoNotificationsApiUrl } from '~/core/notifications/api';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
@@ -31,12 +32,13 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Toggle } from '~/design-system/toggle';
 
-import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/dialog';
+import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -99,10 +101,10 @@ export function NavbarActions() {
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
-  // Read here rather than inside the modal so the week is usually cached by the time the menu is
+  // Read here as well as inside the modal so the week is usually cached by the time the menu is
   // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
   // "Loading your schedule" rather than a wrong one.
-  const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
+  useDebateSchedule();
 
   // A re-resolve mid-session (see below) would swap the avatar for the skeleton, unmounting the node
   // the dialogs below return focus to. The last resolved identity stands in for that window, and is
@@ -115,7 +117,6 @@ export function NavbarActions() {
     if (!isUserLoading && resolvedAddress)
       lastIdentity.current = { address: resolvedAddress, profile: resolvedProfile };
   }, [isUserLoading, resolvedAddress, resolvedProfile]);
-  const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
@@ -268,6 +269,10 @@ export function NavbarActions() {
                 >
                   Set my schedule
                 </button>
+                {/* GEO-3029. Needs a personal space to register against, and the service configured. */}
+                {personalSpaceId && geoNotificationsApiUrl() ? (
+                  <EmailNotificationsMenuItem className={PROFILE_MENU_DIVIDED_ACTION_CLASS} />
+                ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
                 <div className="border-t border-grey-02">
@@ -292,14 +297,10 @@ export function NavbarActions() {
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
       {hasOpenedSchedule ? (
-        <AvailabilityModal
+        <OwnScheduleModal
           key="availability-modal"
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
-          blocks={scheduleBlocks}
-          error={scheduleError}
-          onRetry={() => refetchSchedule()}
-          onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
           openerRef={avatarTriggerRef}
         />
       ) : null}

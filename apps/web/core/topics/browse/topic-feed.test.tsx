@@ -2,7 +2,7 @@ import { cleanup, render } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TopicFeed } from './topic-feed';
+import { SpaceTopicFeed, TopicFeed } from './topic-feed';
 import { MAX_TOPIC_FEED_SELECTED_TOPICS } from './topic-feed-params';
 import { TOPIC_FEED_ENTITY_TYPES, TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
@@ -18,12 +18,10 @@ vi.mock('~/partials/feed/entity-feed', () => ({
   },
 }));
 
-vi.mock('./topic-composition', () => ({
-  useTopicComposition: () => ({
-    counts: { typeCounts: mocks.typeCounts },
-    isLoading: false,
-  }),
-}));
+vi.mock('./topic-composition', () => {
+  const composition = () => ({ counts: { typeCounts: mocks.typeCounts }, isLoading: false });
+  return { useTopicComposition: composition, useSpaceTopicComposition: composition };
+});
 
 afterEach(cleanup);
 
@@ -43,14 +41,12 @@ describe('TopicFeed', () => {
       initialSort: 'best',
       showSortFilter: true,
       showTimeFilter: false,
-      showSpaceFilter: false,
       showTypeFilter: true,
       initialTypeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
       typeOptions: TOPIC_FEED_ENTITY_TYPES,
       typeCounts: TOPIC_FEED_ENTITY_TYPES.map((type, index) => ({ id: type.id, count: index + 1 })),
       typeCountsPending: false,
       selectTypesWithResultsByDefault: true,
-      persistTypeSelection: false,
       topicFacetEndpoint: '/api/topics/facets',
       showTopicFilter: true,
       fixedParams: {
@@ -60,6 +56,21 @@ describe('TopicFeed', () => {
       },
       maxTopicSelections: MAX_TOPIC_FEED_SELECTED_TOPICS,
       titleOpensSidePanel: true,
+    });
+  });
+
+  it("gives a topic space the same feed, scoped to the space's own endpoints", () => {
+    mocks.typeCounts = { [TOPIC_FEED_ENTITY_TYPE_IDS[0]]: 3 };
+    render(<SpaceTopicFeed spaceId="space-1" spaceTopicId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    expect(mocks.feed).toMatchObject({
+      apiEndpoint: '/api/topics/space/feed',
+      topicFacetEndpoint: '/api/topics/space/facets',
+      fixedParams: { spaceId: 'space-1', spaceTopicId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' },
+      initialTypeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+      typeCounts: TOPIC_FEED_ENTITY_TYPES.map((type, index) => ({ id: type.id, count: index === 0 ? 3 : 0 })),
+      selectTypesWithResultsByDefault: true,
+      showTopicFilter: true,
     });
   });
 });
