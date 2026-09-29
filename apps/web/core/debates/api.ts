@@ -1669,6 +1669,26 @@ export async function createScheduledDebate(
   });
 }
 
+/**
+ * Moves a pending request to a new time. geo-chat flips who has to answer, so the other debater is
+ * asked to accept the new time and emailed that it moved. It caps a request at five moves and
+ * refuses one that is no longer pending, both as `409 reschedule_refused`.
+ */
+export async function rescheduleScheduledDebate(
+  requestId: string,
+  body: { scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/reschedule`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** The second answer books the room, and the `recorded` outcome carries its id. */
 export async function respondToScheduledDebate(
   requestId: string,
@@ -2134,6 +2154,15 @@ export class GeoChatSessionError extends GeoChatRequestError {
  */
 export function isGeoChatRefusal(error: unknown) {
   return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * `/debate-profiles/:spaceId` for a person geo-chat has never seen — they have not signed in to
+ * debate. By its code rather than its status: a 404 alone is also what a deployment without the
+ * route answers (see `isMatchmakingUnavailable`), and that is a failure, not a fact about them.
+ */
+export function isDebateProfileMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'user_not_found';
 }
 
 /**

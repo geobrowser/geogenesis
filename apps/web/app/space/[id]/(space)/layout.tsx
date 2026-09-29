@@ -20,6 +20,7 @@ import { sortRelations } from '~/core/utils/utils';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
+import { CopyAvailabilityLinkMenuItem } from '~/partials/availability/copy-availability-link-menu-item';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
@@ -193,6 +194,7 @@ export default async function Layout(props0: LayoutProps) {
                   spaceId={spaceId}
                   entityId={props.id}
                   keepSpaceActions={isProfile}
+                  menuItems={isProfile ? <CopyAvailabilityLinkMenuItem profileSpaceId={spaceId} /> : undefined}
                   // The name the server already read, until the store has one.
                   fallbackName={props.space?.entity?.name ?? null}
                   nameAccessoryComponent={

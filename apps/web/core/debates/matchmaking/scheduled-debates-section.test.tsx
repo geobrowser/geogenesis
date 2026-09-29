@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   requestsError: null as Error | null,
   roomsError: null as Error | null,
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
+  graphPeople: [] as {
+    user_id: string;
+    profile_space_id: string;
+    display_name: string | null;
+    avatar_cid: string | null;
+  }[],
+  graphLookupIds: [] as string[],
 }));
 
 const ADA = {
@@ -42,17 +49,25 @@ vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people } }),
 }));
 
+vi.mock('./use-geo-chat-user-summaries', () => ({
+  useGeoChatUserSummaries: (ids: string[]) => {
+    mocks.graphLookupIds = ids;
+    return mocks.graphPeople;
+  },
+}));
+
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
 
-const { ScheduledDebatesSection, useScheduledContent } = await import('./scheduled-debates-section');
+const { ScheduledDebatesSection, formatDebateSlot, useScheduledContent } = await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
   status: 'pending',
-  scheduled_start_at: '2026-09-24T13:00:00Z',
-  scheduled_end_at: '2026-09-24T13:30:00Z',
+  // Far out: a request expires when its start arrives, and these are about everything else.
+  scheduled_start_at: '2099-09-24T13:00:00Z',
+  scheduled_end_at: '2099-09-24T13:30:00Z',
   invited_by_user_id: 'user-them',
   created_by_admin: false,
   proposed_by_user_id: 'user-them',
@@ -79,6 +94,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+  people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
 }) => ({
@@ -88,6 +104,7 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
+        people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
       }}
@@ -111,6 +128,8 @@ afterEach(() => {
   mocks.requestsError = null;
   mocks.roomsError = null;
   mocks.finishedRoomIds = new Set();
+  mocks.graphPeople = [];
+  mocks.graphLookupIds = [];
 });
 
 describe('answering in the tab', () => {
@@ -128,10 +147,27 @@ describe('answering in the tab', () => {
     expect(mocks.respond.mock.calls[0][0]).toEqual({ requestId: 'request-1', accepted: true });
   });
 
+  it('says it expires when it starts', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByText('Waiting on your answer · Expires at start')).toBeInTheDocument();
+  });
+
+  it('counts down in the last hour before it expires', () => {
+    const soon = new Date(Date.now() + 12 * 60_000 - 1_000).toISOString();
+    setup({
+      answerable: [
+        request({ scheduled_start_at: soon, scheduled_end_at: new Date(Date.now() + 42 * 60_000).toISOString() }),
+      ],
+    });
+
+    expect(screen.getByText('Waiting on your answer · Expires in 12m')).toBeInTheDocument();
+  });
+
   it('offers no answer on one the viewer is not holding up', () => {
     setup({ answerable: [request({ viewer_must_answer: false })] });
 
-    expect(screen.getByText('Waiting on their answer')).toBeInTheDocument();
+    expect(screen.getByText('Waiting on their answer · Expires at start')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
@@ -189,6 +225,48 @@ describe('naming the other person', () => {
     expect(screen.queryByRole('link', { name: 'Your opponent' })).not.toBeInTheDocument();
   });
 
+  // The whole point of scheduling: whoever invited you is usually not online to be on the roster.
+  it('names an offline requester from the graph', () => {
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', NavUtils.toSpace(ADA.profile_space_id));
+  });
+
+  it("prefers the graph's record of them over the roster's", () => {
+    mocks.people = [{ ...ADA, display_name: 'Ada (stale)' }];
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText('Ada (stale)')).not.toBeInTheDocument();
+  });
+
+  // A graph entry fills gaps rather than overwriting: a profile without a name must not turn an
+  // online person's roster name into their raw space id.
+  it("keeps the roster's name and face where the graph has none", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: null, avatar_cid: null }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText(ADA.profile_space_id)).not.toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
+  // The profile schema allows empty strings, and an empty name is as missing as a null one.
+  it("keeps the roster's name and face where the graph's are empty", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: '', avatar_cid: '' }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
+  it('puts the viewer on the left of the strip, as every request card does', () => {
+    setup({ answerable: [request()], people: [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }] });
+
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Me' })).not.toBeInTheDocument();
+  });
+
   it('never reads the viewer as their own opponent', () => {
     mocks.people = [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }];
     mocks.viewerId = 'user-me';
@@ -221,12 +299,33 @@ describe('pairing a room with the request that booked it', () => {
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
 
+  it('looks up both sides in the graph, the viewer included', () => {
+    mocks.requests = [request(), request({ request_id: 'request-2' })];
+    mocks.graphPeople = [ADA];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
+    expect(result.current.people).toEqual([ADA]);
+  });
+
   it('leaves the opponent unknown when no request owns the room', () => {
     mocks.rooms = [room()];
 
     const { result } = renderHook(() => useScheduledContent(true));
 
     expect(result.current.upcoming[0].opponentUserId).toBeNull();
+  });
+
+  // geo-chat's sweeper expires an unanswered request once its start arrives, but only every minute.
+  it('drops a pending request whose start has passed', () => {
+    mocks.requests = [
+      request({ scheduled_start_at: '2020-01-01T13:00:00Z', scheduled_end_at: '2020-01-01T13:30:00Z' }),
+    ];
+
+    const { result } = renderHook(() => useScheduledContent(true));
+
+    expect(result.current.answerable).toHaveLength(0);
   });
 
   it('keeps an accepted request out of the answerable list', () => {
@@ -270,5 +369,22 @@ describe('a schedule that could not be read', () => {
 
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
     expect(screen.getByText(/Could not read your upcoming debates/)).toBeInTheDocument();
+  });
+});
+
+describe('the slot in the header', () => {
+  const now = new Date(2026, 8, 28, 9, 0);
+  const at = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute).toISOString();
+
+  it('names the day once and shares the period', () => {
+    expect(formatDebateSlot(at(11), at(11, 30), now)).toMatch(/^Tomorrow, 11:00 – 11:30\s?AM$/);
+  });
+
+  it('keeps both periods when the slot crosses noon', () => {
+    expect(formatDebateSlot(at(11, 45), at(12, 15), now)).toMatch(/^Tomorrow, 11:45\s?AM – 12:15\s?PM$/);
+  });
+
+  it('falls back to the start alone when the end is unusable', () => {
+    expect(formatDebateSlot(at(11), 'not a time', now)).toMatch(/^Tomorrow at 11:00\s?AM$/);
   });
 });

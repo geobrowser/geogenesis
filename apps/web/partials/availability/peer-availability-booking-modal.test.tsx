@@ -10,6 +10,7 @@ import { GeoChatRequestError } from '~/core/debates/api';
 
 const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
+  reschedule: vi.fn(),
   reset: vi.fn(),
   pending: false,
   error: null as Error | null,
@@ -24,6 +25,13 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     error: mocks.error,
     data: mocks.data,
   }),
+  useRescheduleScheduledDebate: () => ({
+    mutate: mocks.reschedule,
+    reset: mocks.reset,
+    isPending: mocks.pending,
+    error: mocks.error,
+    data: mocks.data,
+  }),
 }));
 
 // The week itself is covered by peer-availability.test.tsx; this suite is about what the modal
@@ -32,9 +40,15 @@ vi.mock('./peer-availability', () => ({
   PeerAvailability: ({
     booking,
   }: {
-    booking?: { onRequest: (startsAt: string) => void; error: string | null; requestedStart: string | null };
+    booking?: {
+      mode?: string;
+      onRequest: (startsAt: string) => void;
+      error: string | null;
+      requestedStart: string | null;
+    };
   }) => (
     <>
+      <output aria-label="mode">{booking?.mode ?? ''}</output>
       <button type="button" onClick={() => booking?.onRequest('2026-09-24T13:00:00.000Z')}>
         pick
       </button>
@@ -49,6 +63,7 @@ const { PeerAvailabilityBookingModal } = await import('./peer-availability-booki
 afterEach(() => {
   cleanup();
   mocks.mutate = vi.fn();
+  mocks.reschedule = vi.fn();
   mocks.reset = vi.fn();
   mocks.pending = false;
   mocks.error = null;
@@ -115,5 +130,44 @@ describe('a refused invitation', () => {
     screen.getByLabelText('Close').click();
     expect(onClose).toHaveBeenCalled();
     expect(mocks.reset).toHaveBeenCalled();
+  });
+});
+
+// A scheduling email's "Choose different time" (GEO-2933). Declining and booking afresh would tell the
+// proposer "declined, find someone else" before a second invite from the same person arrived.
+describe('choosing a different time for an existing request', () => {
+  const REQUEST_ID = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+
+  it('moves that request to the picked slot and proposes nothing new', async () => {
+    const user = userEvent.setup();
+    render(
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'pick' }));
+
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.reschedule).toHaveBeenCalledTimes(1);
+    const sent = mocks.reschedule.mock.calls[0][0];
+    expect(sent.requestId).toBe(REQUEST_ID);
+    expect(sent.startsAt.toISOString()).toBe('2026-09-24T13:00:00.000Z');
+    expect(sent.minutes).toBe(30);
+    expect(screen.getByLabelText('mode')).toHaveTextContent('reschedule');
+  });
+
+  it('books a new request when no request is named', async () => {
+    const { user } = setup();
+
+    await user.click(screen.getByRole('button', { name: 'pick' }));
+
+    expect(mocks.reschedule).not.toHaveBeenCalled();
+    expect(mocks.mutate).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('mode')).toHaveTextContent('request');
   });
 });

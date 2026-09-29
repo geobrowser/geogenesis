@@ -87,6 +87,16 @@ export function useRequestCountdown(expiresAt: string): RequestCountdown {
 }
 
 /**
+ * One request that is still pending and unexpired, or `null`: the single-request form of
+ * {@link useUnexpiredRequests}, for the outbound request and the claimless challenge.
+ */
+export function useLiveRequest<T extends { expires_at: string; status: string }>(request: T | null | undefined) {
+  const pending = request?.status === 'pending' ? request : null;
+  const live = useUnexpiredRequests(React.useMemo(() => (pending ? [pending] : []), [pending]));
+  return live[0] ?? null;
+}
+
+/**
  * Filters out requests whose `expires_at` has passed, re-evaluating exactly when the next one
  * expires. Every surface that shows requests (list, empty state, badges, the coordinator's popup)
  * must derive from this same filter so none of them disagree about a dead request while waiting

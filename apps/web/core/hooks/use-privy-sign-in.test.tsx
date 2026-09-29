@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   privyOnComplete: undefined as undefined | ((args: unknown) => void),
   /** Privy's exit path: a failed attempt, or the viewer dismissing the modal. */
   privyOnError: undefined as undefined | ((error: unknown) => void),
-  trackPrivyAuth: vi.fn(),
+  beginPrivyAuth: vi.fn(),
   setStep: vi.fn(),
 }));
 
@@ -35,7 +35,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
-vi.mock('~/core/analytics', () => ({ trackPrivyAuth: mocks.trackPrivyAuth }));
+vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
 vi.mock('~/partials/onboarding/dialog', async () => {
   const { atom } = await import('jotai');
@@ -86,19 +86,17 @@ describe('usePrivySignIn', () => {
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
-  // `AnalyticsUserIdentifier` already reports restores, as restores. Recording one here as a
-  // manual login double-counted it and mislabelled it — and since this hook is now mounted
-  // app-wide for the sign-in deep link, that would have been every page load with a live session.
-  it('records a login only for a sign-in it started', () => {
+  // PrivyAuthTracker owns auth events. This hook only snapshots attribution at the press.
+  it('starts tracking only when sign-in is requested', () => {
     const { result } = renderHook(() => usePrivySignIn());
 
     act(() => mocks.privyOnComplete?.({}));
-    expect(mocks.trackPrivyAuth).not.toHaveBeenCalled();
+    expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
 
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
-    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).toMatchObject({ auth_flow: 'manual_login' });
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined);
   });
 
   // The deep link strips its own params as it opens the dialog, so the render that sees the
@@ -120,8 +118,7 @@ describe('usePrivySignIn', () => {
 
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).toMatchObject({
-      auth_flow: 'manual_login',
+    expect(mocks.beginPrivyAuth.mock.calls[0]?.[0]).toMatchObject({
       link_source: 'marketing',
     });
   });
@@ -139,7 +136,7 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).not.toHaveProperty('link_source');
+    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(undefined);
   });
 
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion

@@ -160,3 +160,45 @@ describe('useUnexpiredRequests', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+describe('useLiveRequest', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mocks.serverTimeMs = new Date('2026-08-05T12:00:00.000Z').getTime();
+    vi.setSystemTime(new Date('2026-08-05T12:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+  });
+
+  async function live(request: { status: string; expires_at: string } | null | undefined) {
+    const { useLiveRequest } = await import('./use-request-countdown');
+    const { result } = renderHook(() => useLiveRequest(request));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    return result;
+  }
+
+  it('keeps a pending request until it expires', async () => {
+    const result = await live({ status: 'pending', expires_at: '2026-08-05T12:00:10.000Z' });
+    expect(result.current).not.toBeNull();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(11_000);
+    });
+
+    expect(result.current).toBeNull();
+  });
+
+  it('drops one the server has already answered', async () => {
+    expect((await live({ status: 'accepted', expires_at: '2026-08-05T12:30:00.000Z' })).current).toBeNull();
+  });
+
+  it('answers null for no request at all', async () => {
+    expect((await live(null)).current).toBeNull();
+    expect((await live(undefined)).current).toBeNull();
+  });
+});

@@ -73,6 +73,7 @@ export function EditableSpaceHeading({
   actionsComponent,
   keepSpaceActions = false,
   fallbackName,
+  menuItems,
 }: {
   spaceId: string;
   entityId: string;
@@ -93,6 +94,12 @@ export function EditableSpaceHeading({
    * its own title.
    */
   fallbackName?: string | null;
+  /**
+   * Extra overflow-menu items after the copy actions, e.g. a profile's availability link. A node
+   * rather than a render prop, since the space layout passing it is a server component — so each
+   * item closes the menu itself, with `MenuItem`'s `closeOnSelect`.
+   */
+  menuItems?: React.ReactNode;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
@@ -221,7 +228,7 @@ export function EditableSpaceHeading({
                   open={isContextMenuOpen}
                   onOpenChange={open => dispatch({ type: 'SET_MENU_OPEN', open })}
                   trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-                  className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+                  className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[200px]' : 'max-w-[320px]')}
                 >
                   {isCreatingNewVersion && (
                     <CreateNewVersionInSpace
@@ -244,6 +251,7 @@ export function EditableSpaceHeading({
                       <MenuItem onClick={onCopyEntityId}>
                         <p>Copy Entity ID</p>
                       </MenuItem>
+                      {menuItems}
                       <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                         <p>Create in space</p>
                       </MenuItem>
