@@ -118,6 +118,29 @@ describe('PeerAvailabilityView', () => {
     });
   });
 
+  describe('legend', () => {
+    it('keys both slot styles', () => {
+      setup({ slots: [slot(13, true), slot(14, false)] });
+      const legend = within(screen.getByRole('list', { name: 'Legend' }));
+
+      expect(legend.getByText('You’re both free')).toBeInTheDocument();
+      expect(legend.getByText('Only Ada is free')).toBeInTheDocument();
+    });
+
+    it('drops the mutual key for a viewer with no schedule of their own', () => {
+      setup({ viewerHasSchedule: false, slots: [slot(13, false)] });
+      const legend = within(screen.getByRole('list', { name: 'Legend' }));
+
+      expect(legend.queryByText('You’re both free')).not.toBeInTheDocument();
+      expect(legend.getByText('Only Ada is free')).toBeInTheDocument();
+    });
+
+    it('is not drawn over an empty week', () => {
+      setup({ slots: [] });
+      expect(screen.queryByRole('list', { name: 'Legend' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('what a screen reader gets', () => {
     it('says whose availability a slot is, since the border style cannot', () => {
       setup({ slots: [slot(13, true), slot(14, false)] });

@@ -26,6 +26,13 @@ import { Text } from '~/design-system/text';
 const SLOTS_PER_DAY = 4;
 
 /**
+ * Chip looks, shared with the legend so the key can never drift from what it describes. Green for
+ * a time you both have free, since that is the one worth picking; dashed for theirs alone.
+ */
+const MUTUAL_SLOT = 'border-solid border-green bg-successTertiary text-text';
+const PEER_ONLY_SLOT = 'border-dashed border-grey-03 bg-white text-text';
+
+/**
  * Supplied by a caller that can act on a picked time, which turns the footer on. Absent, the week
  * stays read-only and no CTA renders.
  */
@@ -188,6 +195,7 @@ export function PeerAvailabilityView({
               the times you both have free.
             </Hint>
           )}
+          <Legend peerName={name} showMutual={schedule.viewerHasSchedule} />
           <WeekGrid
             days={days}
             peerName={name}
@@ -513,7 +521,8 @@ function DayColumn({
 /**
  * One 30-minute slot. Selection lives in the view, so picking one clears the last.
  *
- * Dashed and muted means only they are free; it stays a perfectly ordinary, pickable slot.
+ * Green means you are both free; dashed means only they are, and it stays a perfectly ordinary,
+ * pickable slot.
  */
 function SlotChip({
   slot,
@@ -561,20 +570,43 @@ function SlotChip({
       onClick={onSelect}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
-        slot.viewerIsFree === true
-          ? 'border-solid border-grey-02 bg-[#F6F6F6] text-text hover:bg-grey-01'
-          : 'border-dashed border-grey-02 bg-transparent text-grey-04 hover:text-text',
-        selected && 'border-solid border-text bg-[#EFE2FF] text-text',
+        selected
+          ? 'border-solid border-text bg-text text-white'
+          : slot.viewerIsFree === true
+            ? cx(MUTUAL_SLOT, 'hover:border-text')
+            : cx(PEER_ONLY_SLOT, 'hover:border-text'),
         past && 'cursor-not-allowed opacity-40'
       )}
     >
       <span>{slot.label}</span>
       {showPeerTime && (
-        <span className="block text-grey-04">
+        <span className={cx('block', selected ? 'text-white/70' : 'text-grey-04')}>
           {slot.peerLabel} <span className="sr-only">their time</span>
         </span>
       )}
     </button>
+  );
+}
+
+/** What solid and dashed mean, drawn with the chips' own classes. */
+function Legend({ peerName, showMutual }: { peerName: string; showMutual: boolean }) {
+  return (
+    <ul aria-label="Legend" className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
+      {/* With no week of your own nothing can be mutual, and the hint above already says so. */}
+      {showMutual && <LegendItem swatch={MUTUAL_SLOT}>You&rsquo;re both free</LegendItem>}
+      <LegendItem swatch={PEER_ONLY_SLOT}>Only {peerName} is free</LegendItem>
+    </ul>
+  );
+}
+
+function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-1.5">
+      <span aria-hidden className={cx('h-3 w-5 shrink-0 rounded-sm border', swatch)} />
+      <Text as="span" variant="footnote" color="grey-04">
+        {children}
+      </Text>
+    </li>
   );
 }
 
