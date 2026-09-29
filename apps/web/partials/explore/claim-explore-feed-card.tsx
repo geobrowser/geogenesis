@@ -22,12 +22,13 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { NavUtils } from '~/core/utils/utils';
 
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
-
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
 /**
@@ -162,8 +163,7 @@ export function ClaimExploreFeedCard({
     indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
   });
 
-  // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
-  // action at all. Checking only the server seed would keep the button hidden after this card's
+  // Read the live comment cache before deciding whether the row has a third action at all. Checking only the server seed would keep the button hidden after this card's
   // optional composer publishes the first comment; rendering a button that returns null would leave
   // PositionRow in its three-column layout with an empty final column.
   // What the claim page's Activity heading says: its debates, the claims extracted from them, and
@@ -334,13 +334,11 @@ export function ClaimExploreFeedCard({
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (
-                <EntityCommentsButton
-                  commentsInCount={commentsInCount}
+                <ClaimActivityLink
                   entityId={item.entityId}
                   spaceId={item.spaceId}
-                  targetEntityType="claim"
-                  count={activityCount}
-                  className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+                  count={liveCommentCount}
+                  measuresActivity={commentsInCount != null}
                 />
               ) : undefined
             }
@@ -370,6 +368,45 @@ export function ClaimExploreFeedCard({
         ) : null}
       </div>
     </article>
+  );
+}
+
+/**
+ * The count beside the pills, and the way through to the claim page's Activity section.
+ *
+ * A link rather than the global comments panel. The panel lists only the comments filed directly on
+ * the claim, while the number here is the claim's whole activity — its debates, the claims extracted
+ * from them, and every comment under those — so opening the panel showed a shorter list than the
+ * count promised, without the debates it was counting. The page's Activity section is the one place
+ * that draws all of it, and `CommentSection` scrolls to `#entity-comments` on arrival.
+ *
+ * Navigates even where the title opens the side panel: this asks for the claim's activity, which the
+ * page lays out in full. Being a real anchor also keeps cmd-click and "copy link" working.
+ */
+function ClaimActivityLink({
+  entityId,
+  spaceId,
+  count,
+  measuresActivity,
+}: {
+  entityId: string;
+  spaceId: string;
+  count: number;
+  /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
+  measuresActivity: boolean;
+}) {
+  return (
+    <Link
+      href={`${NavUtils.toEntity(spaceId, entityId)}#entity-comments`}
+      entityId={entityId}
+      spaceId={spaceId}
+      aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
+      data-geo-analytics-label="Open claim activity"
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+    >
+      <ExploreCommentsIcon />
+      <span className="text-[14px] font-normal tabular-nums">{count}</span>
+    </Link>
   );
 }
 
