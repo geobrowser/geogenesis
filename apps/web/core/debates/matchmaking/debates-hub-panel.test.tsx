@@ -21,6 +21,7 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPeopleOnlineOnlyAtom,
   debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
@@ -246,6 +247,7 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -295,7 +297,7 @@ describe('DebatesHubPanel', () => {
    */
   it('covers every filter atom on every surface', () => {
     const exported = Object.keys(atomsModule).filter(name =>
-      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent)Atom$/.test(name)
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly)Atom$/.test(name)
     );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
