@@ -47,7 +47,7 @@ import { Text } from '~/design-system/text';
 import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
-import { useScrollToCommentsOnOpen } from '~/partials/entity-page/use-scroll-to-comments-on-open';
+import { useScrollToCommentsOnOpen } from '~/partials/entity-page/hooks/use-scroll-to-comments-on-open';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
 
 import {
@@ -265,6 +265,12 @@ function EntitySidePanelBody({
   );
 }
 
+/** Inside the tab provider, because the scroll first returns the panel to its overview tab. */
+function ScrollToCommentsOnOpen({ container, request }: { container: HTMLElement | null; request: object | null }) {
+  useScrollToCommentsOnOpen(container, request);
+  return null;
+}
+
 export function EntitySidePanelSurface({
   entityId,
   requestedSpaceId,
@@ -297,7 +303,6 @@ export function EntitySidePanelSurface({
   onClose: () => void;
 }) {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
-  useScrollToCommentsOnOpen(scrollElement, scrollToCommentsRequest);
   const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
   const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId, {
     preferRequestedSpace,
@@ -322,6 +327,7 @@ export function EntitySidePanelSurface({
           data-mobile-sheet-scroll
         >
           <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
+            <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
               entityId={entityId}

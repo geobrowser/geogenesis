@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 
-/** The id `CommentSection` puts on its wrapper — the same anchor the full page scrolls to. */
-export const COMMENTS_ANCHOR_ID = 'entity-comments';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 /** How long to wait for the section to render at all: the panel first loads the entity, then the body. */
 const WAIT_FOR_SECTION_MS = 10_000;
@@ -17,8 +18,12 @@ const HOLD_POSITION_MS = 2_000;
  * The full page does this from `#entity-comments` in the URL, which the panel has no URL to carry, so
  * the request travels on the panel's target instead and each new target is one request.
  *
- * Two things make a one-off scroll land in the wrong place, and this handles both:
+ * Three things make a one-off scroll land in the wrong place, and this handles them:
  *
+ *  - The panel may be on another tab. It keeps its tab per entity, so a reader who opened a claim's
+ *    Debates and then clicks that claim's activity count is still on Debates, where there is no
+ *    Activity to scroll to. Each request returns the panel to the overview first — which is why this
+ *    runs inside `EntitySidePanelActiveTabProvider`.
  *  - The section is not there when the panel opens. The panel loads the entity first and only then
  *    renders the body, so this waits for the anchor to appear rather than looking once.
  *  - What sits above it keeps growing after it appears. On a claim, the hero and the Debates/Claims
@@ -34,15 +39,20 @@ const HOLD_POSITION_MS = 2_000;
  * panel has its own `#entity-comments`.
  */
 export function useScrollToCommentsOnOpen(container: HTMLElement | null, request: object | null) {
+  // The setter alone: it is stable, where the context value changes with every tab switch and would
+  // restart the scroll each time.
+  const selectTab = useEntitySidePanelActiveTab()?.setActiveTabId;
+
   React.useEffect(() => {
     if (!container || !request) return;
+    selectTab?.(null);
 
     let found = false;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const align = () => {
-      const anchor = container.querySelector<HTMLElement>(`#${COMMENTS_ANCHOR_ID}`);
+      const anchor = container.querySelector<HTMLElement>(`#${ENTITY_COMMENTS_ANCHOR_ID}`);
       if (!anchor) return;
       const top = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
       if (Math.abs(container.scrollTop - top) > 1) container.scrollTop = top;
@@ -86,5 +96,5 @@ export function useScrollToCommentsOnOpen(container: HTMLElement | null, request
     align();
 
     return stop;
-  }, [container, request]);
+  }, [container, request, selectTab]);
 }

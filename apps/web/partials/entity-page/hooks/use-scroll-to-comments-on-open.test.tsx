@@ -5,7 +5,14 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COMMENTS_ANCHOR_ID, useScrollToCommentsOnOpen } from './use-scroll-to-comments-on-open';
+import {
+  EntitySidePanelActiveTabProvider,
+  useEntitySidePanelActiveTab,
+} from '~/core/state/entity-side-panel-active-tab';
+
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
+
+import { useScrollToCommentsOnOpen } from './use-scroll-to-comments-on-open';
 
 /**
  * jsdom does no layout, so each element reports the offset it is given here: the anchor's `top` is
@@ -27,7 +34,7 @@ function Harness({ request, showSection, offset }: { request: object | null; sho
       <div>
         {showSection ? (
           <div
-            id={COMMENTS_ANCHOR_ID}
+            id={ENTITY_COMMENTS_ANCHOR_ID}
             ref={el => {
               if (el && container) placeAnchor(el, container, () => offsetRef.current);
             }}
@@ -104,5 +111,32 @@ describe('useScrollToCommentsOnOpen', () => {
     await flushObservers();
 
     expect(getByTestId('scroll').scrollTop).toBe(0);
+  });
+
+  it('returns the panel to its overview tab, where the Activity section lives', async () => {
+    const probe: { tabs: ReturnType<typeof useEntitySidePanelActiveTab> } = { tabs: null };
+    function TabProbe() {
+      probe.tabs = useEntitySidePanelActiveTab();
+      return null;
+    }
+
+    function Panel({ request }: { request: object | null }) {
+      return (
+        <EntitySidePanelActiveTabProvider entityId="claim-1" spaceId="space-1">
+          <TabProbe />
+          <Harness request={request} showSection={false} offset={0} />
+        </EntitySidePanelActiveTabProvider>
+      );
+    }
+
+    const { rerender } = render(<Panel request={null} />);
+    act(() => probe.tabs?.setActiveSystemTab('debates'));
+    expect(probe.tabs?.activeSystemTab).toBe('debates');
+
+    rerender(<Panel request={{}} />);
+    await flushObservers();
+
+    expect(probe.tabs?.activeSystemTab).toBeNull();
+    expect(probe.tabs?.activeTabId).toBeNull();
   });
 });

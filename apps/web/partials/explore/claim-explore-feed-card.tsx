@@ -18,16 +18,14 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { isModifiedClick } from '~/core/utils/is-modified-click';
-import { NavUtils } from '~/core/utils/utils';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -165,9 +163,10 @@ export function ClaimExploreFeedCard({
     indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
   });
 
-  // Read the live comment cache before deciding whether the row has a third action at all. Checking only the server seed would keep the button hidden after this card's
-  // optional composer publishes the first comment; rendering a button that returns null would leave
-  // PositionRow in its three-column layout with an empty final column.
+  // Read the live comment cache before deciding whether the row has a third action at all. Checking
+  // only the server seed would keep the pill hidden after this card's optional composer publishes the
+  // first comment; rendering a pill that returns null would leave PositionRow in its three-column
+  // layout with an empty final column.
   // What the claim page's Activity heading says: its debates, the claims extracted from them, and
   // every comment in that tree — not only the comments filed directly on the claim. The two read
   // from one query so a reader who opens the card is not told a different number. Falls back to the
@@ -337,8 +336,7 @@ export function ClaimExploreFeedCard({
             positionRowEndSlot={
               liveCommentCount > 0 ? (
                 <ClaimActivityLink
-                  entityId={item.entityId}
-                  spaceId={item.spaceId}
+                  item={item}
                   count={liveCommentCount}
                   measuresActivity={commentsInCount != null}
                   opensSidePanel={titleOpensSidePanel}
@@ -384,53 +382,40 @@ export function ClaimExploreFeedCard({
  *
  * Where it opens follows the title, through `opensSidePanel`: on Explore the side panel, scrolled to
  * Activity (see `useScrollToCommentsOnOpen`); everywhere else the claim page at `#entity-comments`,
- * which `CommentSection` scrolls to on arrival. Either way it stays a real anchor to the page and only
- * unmodified left clicks are intercepted, so cmd-click and "copy link" still reach the page — the same
- * rule as `ExploreCardEntityLink`.
+ * which `CommentSection` scrolls to on arrival. It is the title's own link pointed at a position, so it
+ * inherits the title's rules rather than restating them: a real anchor, modified clicks left to the
+ * browser, and the side-panel opener mark only where it opens the panel.
  */
 function ClaimActivityLink({
-  entityId,
-  spaceId,
+  item,
   count,
   measuresActivity,
   opensSidePanel,
 }: {
-  entityId: string;
-  spaceId: string;
+  item: ExploreFeedItem;
   count: number;
   /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
   measuresActivity: boolean;
   opensSidePanel: boolean;
 }) {
-  const { openSidePanel } = useEntitySidePanel();
-
-  const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!opensSidePanel || isModifiedClick(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    // `openedWithMainViewEditing: false` — Explore has no editor behind it, as for the title.
-    openSidePanel(entityId, spaceId, false, { scrollToComments: true });
-  };
-
   return (
-    <Link
-      href={`${NavUtils.toEntity(spaceId, entityId)}#entity-comments`}
-      entityId={entityId}
-      spaceId={spaceId}
-      onClick={onClick}
+    <ExploreCardEntityLink
+      item={item}
+      opensSidePanel={opensSidePanel}
+      section={ACTIVITY_SECTION}
       aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
       data-geo-analytics-label="Open claim activity"
-      // Exempts the pill from the open panel's outside-pointerdown close, so clicking it with a panel
-      // already open switches the panel rather than closing and rebuilding it — see
-      // `ExploreCardEntityLink`. Only where it is an opener.
-      {...(opensSidePanel ? { 'data-entity-side-panel-opener': '' } : {})}
+      data-geo-analytics-intent="open_claim_activity"
       className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
     >
       <ExploreCommentsIcon />
       <span className="text-[14px] font-normal tabular-nums">{count}</span>
-    </Link>
+    </ExploreCardEntityLink>
   );
 }
+
+/** Module-level so the link's click handler is not rebuilt on every render. */
+const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollToComments: true } };
 
 /**
  * The share, the split and who answered — or an invitation where nobody has.
