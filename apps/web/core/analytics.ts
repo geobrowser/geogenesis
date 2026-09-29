@@ -201,14 +201,7 @@ export function capture(eventName: string, properties: AnalyticsProperties = {})
     properties: {
       app: appName,
       ...route,
-      is_automated:
-        typeof navigator !== 'undefined' &&
-        (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
-      is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
-      is_internal:
-        internalAccount ||
-        process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
-        (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+      ...trafficProperties(),
       ...properties,
     },
   });
@@ -731,6 +724,19 @@ function analyticsRuntime() {
   return window.lytics || window.geoAnalytics;
 }
 
+function trafficProperties() {
+  return {
+    is_automated:
+      typeof navigator !== 'undefined' &&
+      (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
+    is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
+    is_internal:
+      internalAccount ||
+      process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
+      (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+  };
+}
+
 function privyIdentityProperties(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
   const teamIds = (process.env.NEXT_PUBLIC_ANALYTICS_TEAM_ACCOUNT_IDS ?? '').split(',').map(id => id.trim());
   internalAccount = !!user.id && teamIds.includes(user.id);
@@ -740,14 +746,7 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     user_id: user.id,
     privy_user_id: user.id,
     auth_provider: 'privy',
-    is_internal:
-      internalAccount ||
-      process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
-      (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
-    is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
-    is_automated:
-      typeof navigator !== 'undefined' &&
-      (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
+    ...trafficProperties(),
     privy_user_created_at: formatDate(user.createdAt),
     has_privy_email: Boolean(user.email),
     has_privy_phone: Boolean(user.phone),

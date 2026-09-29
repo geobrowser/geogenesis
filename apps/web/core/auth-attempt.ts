@@ -2,6 +2,7 @@
 
 import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
 import { type AnalyticsProperties, capture } from './analytics';
+import { equals } from './id/normalize';
 
 const PREFIX = 'geo:auth-attempt:v1:';
 const POINTER = 'geo:auth-attempt:active';
@@ -16,6 +17,7 @@ export type AuthAttempt = {
   actionSucceeded?: boolean;
 };
 let memory: AuthAttempt | undefined;
+const unpersisted = new Map<string, AuthAttempt>();
 const fields = new Set<string>([
   ...ACTION_CONTEXT_FIELDS,
   'auth_control',
@@ -55,11 +57,12 @@ export function authProperties(properties: AnalyticsProperties = {}): AnalyticsP
     ...clean,
     action_context_version: 'v1',
     auth_attribution_version: 'v1',
-    measurement_version: 'growth-v2',
   };
 }
 function read(id: string | null): AuthAttempt | undefined {
   if (!id) return;
+  const pending = unpersisted.get(id);
+  if (pending && Date.now() - pending.startedAt < TTL) return pending;
   try {
     const value = JSON.parse(localStorage.getItem(PREFIX + id) ?? 'null');
     if (
@@ -78,9 +81,9 @@ export function readAuthAttempt(id: string) {
   return read(id);
 }
 
-function emit(event: string, properties: AnalyticsProperties) {
+export function captureAuthEvent(event: string, properties: AnalyticsProperties) {
   try {
-    capture(event, properties);
+    capture(event, { ...properties, measurement_version: 'growth-v2' });
   } catch {
     /* Never block authentication or a queued action. */
   }
@@ -90,17 +93,24 @@ function save(attempt: AuthAttempt, activate = true) {
   if (activate || memory?.id === attempt.id) memory = attempt;
   try {
     localStorage.setItem(PREFIX + attempt.id, JSON.stringify(attempt));
-    if (activate) sessionStorage.setItem(POINTER, attempt.id);
+    unpersisted.delete(attempt.id);
   } catch {
-    /* Keep in-memory attribution when storage is blocked. */
+    unpersisted.set(attempt.id, attempt);
+  }
+  if (activate) {
+    try {
+      sessionStorage.setItem(POINTER, attempt.id);
+    } catch {
+      /* The in-memory pointer remains authoritative for this tab. */
+    }
   }
 }
 /** Prefer this tab's attempt. A new tab can inherit only an unambiguous active attempt. */
 export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | undefined {
+  if (memory && Date.now() - memory.startedAt < TTL) return read(memory.id);
   try {
     const own = read(sessionStorage.getItem(POINTER));
     if (own) return own;
-    if (memory && Date.now() - memory.startedAt < TTL) return memory;
     if (!recoverFromOtherTab) return;
     const active: AuthAttempt[] = [];
     for (const key of Object.keys(localStorage)) {
@@ -121,6 +131,9 @@ export function attemptProperties(attempt: AuthAttempt): AnalyticsProperties {
   return { ...attempt.properties, auth_attempt_id: attempt.id };
 }
 export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
+  for (const [id, attempt] of unpersisted) {
+    if (Date.now() - attempt.startedAt >= TTL) unpersisted.delete(id);
+  }
   try {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith(PREFIX) && !read(key.slice(PREFIX.length))) localStorage.removeItem(key);
@@ -136,7 +149,7 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
     properties: authProperties(properties),
   };
   save(attempt);
-  emit('auth_attempt_started', attemptProperties(attempt));
+  captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
   return attempt;
 }
 export function openAuthAttempt() {
@@ -144,7 +157,7 @@ export function openAuthAttempt() {
   if (!attempt || attempt.endedAt || attempt.openedAt !== undefined) return;
   attempt.openedAt = Date.now();
   save(attempt);
-  emit('auth_prompt_viewed', attemptProperties(attempt));
+  captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
 export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
@@ -152,14 +165,14 @@ export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, 
   attempt.outcome = outcome;
   save(attempt);
   if ((outcome === 'closed' || outcome === 'superseded') && attempt.properties.auth_continuation === 'queued') {
-    emit('auth_action_completed', {
+    captureAuthEvent('auth_action_completed', {
       ...attemptProperties(attempt),
       outcome: 'cancelled',
       failure_code: outcome,
       operation_id: `cancel:${attempt.id}`,
     });
   }
-  emit('auth_attempt_completed', {
+  captureAuthEvent('auth_attempt_completed', {
     ...attemptProperties(attempt),
     outcome,
     auth_duration_ms: Math.max(0, attempt.endedAt - (attempt.openedAt ?? attempt.startedAt)),
@@ -178,6 +191,7 @@ export function recoverAuthAttempt(properties?: AnalyticsProperties) {
 
 export function resetAuthAttempt() {
   memory = undefined;
+  unpersisted.clear();
   try {
     sessionStorage.removeItem(POINTER);
   } catch {
@@ -200,7 +214,7 @@ export function marketingAuthProperties(search: string): AnalyticsProperties {
 export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed' | 'dismissed' | 'failed') {
   const attempt = currentAuthAttempt();
   if (!attempt || !['signed_up', 'signed_in'].includes(attempt.outcome ?? '')) return;
-  emit('auth_onboarding_progress', { ...attemptProperties(attempt), onboarding_step: step, outcome });
+  captureAuthEvent('auth_onboarding_progress', { ...attemptProperties(attempt), onboarding_step: step, outcome });
 }
 
 /** Join only the intended action on the same target, never all later account activity. */
@@ -209,7 +223,7 @@ export function authAttemptForAction(action: string, targetId: string, attemptId
   if (!attempt || !['signed_up', 'signed_in'].includes(attempt.outcome ?? '')) return;
   if (!attemptId && attempt.properties.auth_continuation !== 'resume') return;
   if (attempt.actionSucceeded || attempt.properties.auth_intent !== action) return;
-  if (!attemptId && String(attempt.properties.target_id).replaceAll('-', '') !== targetId.replaceAll('-', '')) return;
+  if (!attemptId && !equals(String(attempt.properties.target_id), targetId)) return;
   return attempt;
 }
 
@@ -222,5 +236,5 @@ export function completeAuthAction(
     attempt.actionSucceeded = true;
     save(attempt, false);
   }
-  emit('auth_action_completed', { ...attemptProperties(attempt), outcome, operation_id: operationId });
+  captureAuthEvent('auth_action_completed', { ...attemptProperties(attempt), outcome, operation_id: operationId });
 }

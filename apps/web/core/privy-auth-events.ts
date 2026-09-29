@@ -1,9 +1,10 @@
 'use client';
 
-import { type AnalyticsProperties, capture, restorePrivySession, trackPrivyAuth } from './analytics';
+import { type AnalyticsProperties, restorePrivySession, trackPrivyAuth } from './analytics';
 import {
   attemptProperties,
   beginAuthAttempt,
+  captureAuthEvent,
   currentAuthAttempt,
   finishAuthAttempt,
   recoverAuthAttempt,
@@ -43,17 +44,9 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
 
   if (params.isNewUser) {
     if (signedUpUserIds.has(params.user.id)) return;
-    try {
-      if (localStorage.getItem(`geo:signup-recorded:${params.user.id}`)) return;
-    } catch {
-      /* Storage is optional. */
-    }
+    // The runtime owns durable delivery and lifecycle deduplication. Do not mark a signup
+    // delivered in separate storage before it has reached that queue.
     signedUpUserIds.add(params.user.id);
-    try {
-      localStorage.setItem(`geo:signup-recorded:${params.user.id}`, '1');
-    } catch {
-      /* Stable operation ID also deduplicates delivery. */
-    }
   }
   const attempt = currentAuthAttempt(true);
   const active = attempt && !attempt.endedAt ? attempt : recoverAuthAttempt(properties);
@@ -65,5 +58,5 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
     auth_flow: 'manual_login',
   });
   finishAuthAttempt(params.isNewUser ? 'signed_up' : 'signed_in', active);
-  capture('auth_identity_linked', { ...attribution, user_id: params.user.id });
+  captureAuthEvent('auth_identity_linked', { ...attribution, user_id: params.user.id });
 }

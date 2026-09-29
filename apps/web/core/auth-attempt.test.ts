@@ -8,6 +8,7 @@ import {
   finishAuthAttempt,
   marketingAuthProperties,
   openAuthAttempt,
+  readAuthAttempt,
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
@@ -93,6 +94,28 @@ describe('durable sign-in attempts', () => {
     expect(
       marketingAuthProperties('?marketing_page=https://site.test?email=x&marketing_cta=person@example.com&token=secret')
     ).toEqual({});
+  });
+  it('keeps the latest attempt and terminal outcome when storage fills after a previous login', () => {
+    const old = beginAuthAttempt(entry);
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    try {
+      const latest = beginAuthAttempt(entry);
+      expect(currentAuthAttempt()?.id).toBe(latest.id);
+      expect(readAuthAttempt(old.id)?.outcome).toBe('superseded');
+      finishAuthAttempt('signed_up');
+      expect(currentAuthAttempt()?.outcome).toBe('signed_up');
+      completeAuthAction(latest, 'succeeded', 'operation');
+      expect(authAttemptForAction('vote', 'claim-1', latest.id)).toBeUndefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('matches resumed entity IDs using the shared case-insensitive UUID normalization', () => {
+    const attempt = beginAuthAttempt({ ...entry, auth_continuation: 'resume', target_id: 'ABC-123' });
+    finishAuthAttempt('signed_in');
+    expect(authAttemptForAction('vote', 'abc123')?.id).toBe(attempt.id);
   });
   it('continues when storage is blocked', () => {
     const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

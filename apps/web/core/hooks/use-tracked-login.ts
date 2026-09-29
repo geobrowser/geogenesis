@@ -28,7 +28,7 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
       return withActionContext(context, () => params?.onComplete?.(args));
     },
     onError: error => {
-      if (!requested.current) return;
+      if (!requested.current || currentAuthAttempt()?.id !== requested.current.auth_attempt_id) return;
       if (error === 'exited_auth_flow') requested.current = null;
       params?.onError?.(error);
     },

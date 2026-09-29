@@ -253,6 +253,44 @@ describe('PrivyAuthTracker', () => {
     broadcast(completion('signup-once'));
     expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
   });
+  it('still completes the latest control when persistent storage stops accepting writes', () => {
+    render(<PrivyAuthTracker />);
+    beginPrivyAuth({ auth_control: 'old' });
+    const onComplete = vi.fn();
+    const control = renderHook(() => useTrackedLogin({ onComplete }));
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota exceeded');
+    });
+    try {
+      act(() => control.result.current.login({ auth_control: 'latest' }));
+      broadcast(completion('storage-full'));
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ auth_control: 'latest' })
+      );
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('delivers dismissal only to the latest initiating control', () => {
+    render(<PrivyAuthTracker />);
+    const first = vi.fn();
+    const second = vi.fn();
+    const controls = renderHook(() => ({
+      first: useTrackedLogin({ onError: first }),
+      second: useTrackedLogin({ onError: second }),
+    }));
+    act(() => controls.result.current.first.login());
+    act(() => controls.result.current.second.login());
+    act(() => {
+      for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
+    });
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledExactlyOnceWith('exited_auth_flow');
+  });
+
   it('runs only the control belonging to the completing attempt', () => {
     render(<PrivyAuthTracker />);
     const first = vi.fn();

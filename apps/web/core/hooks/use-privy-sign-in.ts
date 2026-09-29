@@ -46,37 +46,18 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
-  // Privy fires `onComplete` on session restoration too, not just on a login someone asked for —
-  // opening a second tab is enough. So the consumer's
-  // callback is armed here and only fires for a sign-in this hook actually started. Without it,
-  // loading the feed in a new tab would open the hub with nobody having pressed anything.
-  const requestedRef = React.useRef(false);
-
+  // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
-    onComplete: () => {
-      // Keep UI actions scoped to the initiating control. Analytics completion is owned by
-      // PrivyAuthTracker, which stays mounted even if this control disappears during login.
-      if (!requestedRef.current) return;
-      requestedRef.current = false;
-
-      onCompleteRef.current?.();
-    },
-    // Privy calls this when the attempt fails and when the viewer dismisses the modal. Leaving
-    // the flag set would hand an abandoned press to whatever completion arrived next — a restore,
-    // or a login started somewhere else on the page — which is the same unbidden replay the
-    // arming exists to prevent, just later.
+    onComplete: () => onCompleteRef.current?.(),
     onError: error => {
       // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
-      if (error !== 'exited_auth_flow' || !requestedRef.current) return;
-      requestedRef.current = false;
-      optionsRef.current?.onError?.();
+      if (error === 'exited_auth_flow') optionsRef.current?.onError?.();
     },
   });
 
   return React.useCallback(
     (properties?: AnalyticsProperties | React.SyntheticEvent) => {
       prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
-      requestedRef.current = true;
       const configured = optionsRef.current?.analytics;
       return login({
         ...(typeof configured === 'function' ? configured() : configured),
