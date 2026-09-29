@@ -7,6 +7,7 @@ import {
   type ScheduledDebateResponseResult,
   createScheduledDebate,
   listScheduledDebates,
+  rescheduleScheduledDebate,
   respondToScheduledDebate,
 } from '../api';
 import { useDebateVisibility } from '../debate-attention';
@@ -43,6 +44,26 @@ export function useCreateScheduledDebate() {
       createScheduledDebate(
         {
           opponent_user_id: opponentUserId,
+          scheduled_start_at: startsAt.toISOString(),
+          scheduled_end_at: new Date(startsAt.getTime() + minutes * 60_000).toISOString(),
+        },
+        getPrivyIdentityToken,
+        accountKey
+      ),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) }),
+  });
+}
+
+/** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
+export function useRescheduleScheduledDebate() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation<ScheduledDebateRequest, Error, { requestId: string; startsAt: Date; minutes: number }>({
+    mutationFn: ({ requestId, startsAt, minutes }) =>
+      rescheduleScheduledDebate(
+        requestId,
+        {
           scheduled_start_at: startsAt.toISOString(),
           scheduled_end_at: new Date(startsAt.getTime() + minutes * 60_000).toISOString(),
         },

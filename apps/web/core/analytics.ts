@@ -504,14 +504,11 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
   }
 
   const loginAccount = params.loginAccount;
-  const authFlow = properties.auth_flow;
-  const isManualLoginFlow = authFlow === 'manual_login';
   const authProperties = cleanProperties({
     ...identity,
     ...(params.isNewUser ? privySignupProperties(params.user) : {}),
     source: 'privy',
     auth_provider: 'privy',
-    auth_flow: isManualLoginFlow ? 'manual_login' : 'session_restore',
     is_new_user: params.isNewUser,
     was_already_authenticated: params.wasAlreadyAuthenticated,
     login_method: params.loginMethod,
@@ -520,9 +517,10 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     login_wallet_chain_type: loginAccount?.chainType,
     login_wallet_connector_type: loginAccount?.connectorType,
     ...properties,
+    auth_flow: params.wasAlreadyAuthenticated ? 'session_restore' : 'manual_login',
   });
 
-  if (params.wasAlreadyAuthenticated && !isManualLoginFlow) {
+  if (params.wasAlreadyAuthenticated) {
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
