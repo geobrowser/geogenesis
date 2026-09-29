@@ -53,14 +53,27 @@ afterEach(() => {
 describe('DebateRoomJoinPrompt', () => {
   it('says the room is open, whether the opponent is in, then when it was scheduled', () => {
     mocks.opponent = ALEX;
-    render(<DebateRoomJoinPrompt room={room()} onNotNow={vi.fn()} />);
+    const { container } = render(<DebateRoomJoinPrompt room={room()} onNotNow={vi.fn()} />);
 
-    const lines = screen.getByRole('status').querySelectorAll('p');
+    const lines = container.querySelectorAll('p');
     expect([...lines].map(line => line.textContent)).toEqual([
       'Your debate room is open',
       'Alex hasn’t joined yet',
       'Scheduled in 8 mins',
     ]);
+  });
+
+  // The time line re-renders every minute; inside the live region a screen reader would read out
+  // each tick for as long as the banner is up.
+  it('announces the room and the arrival, but not the minute-by-minute time', () => {
+    mocks.opponent = ALEX;
+    render(<DebateRoomJoinPrompt room={room()} onNotNow={vi.fn()} />);
+
+    const live = screen.getByRole('status');
+    expect(live).toHaveTextContent('Your debate room is open');
+    expect(live).toHaveTextContent('Alex hasn’t joined yet');
+    expect(live).not.toHaveTextContent('Scheduled in 8 mins');
+    expect(screen.getByText('Scheduled in 8 mins')).toBeInTheDocument();
   });
 
   it('says when the opponent is already in the room', () => {
