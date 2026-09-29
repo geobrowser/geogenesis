@@ -121,6 +121,13 @@ export function attemptProperties(attempt: AuthAttempt): AnalyticsProperties {
   return { ...attempt.properties, auth_attempt_id: attempt.id };
 }
 export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(PREFIX) && !read(key.slice(PREFIX.length))) localStorage.removeItem(key);
+    }
+  } catch {
+    /* Storage is optional. */
+  }
   const previous = currentAuthAttempt();
   if (previous && !previous.endedAt) finishAuthAttempt('superseded', previous);
   const attempt: AuthAttempt = {

@@ -8,7 +8,10 @@ WITH excluded AS (
   SELECT DISTINCT JSONExtractString(properties_json, 'auth_attempt_id') AS id
   FROM analytics.events_canonical
   WHERE app = 'genesis' AND event_time >= now() - INTERVAL 31 DAY
-    AND coalesce(privy_user_id, user_id, '') IN (SELECT account_id FROM excluded)
+    AND (coalesce(privy_user_id, user_id, '') IN (SELECT account_id FROM excluded)
+      OR JSONExtractBool(properties_json, 'is_internal')
+      OR JSONExtractBool(properties_json, 'is_test')
+      OR JSONExtractBool(properties_json, 'is_automated'))
 ), events AS (
   SELECT *, JSONExtractString(properties_json, 'auth_attempt_id') AS attempt_id
   FROM analytics.events_canonical

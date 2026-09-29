@@ -40,7 +40,11 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
           ? { target_id: String(properties.target_id), target_type: String(properties.target_type) }
           : undefined
       );
-      const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties });
+      // A caller supplies the fallback component; inherited/clicked surfaces must
+      // agree with the component on the signed-in action (for example an Explore card).
+      const component =
+        context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
+      const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component });
       requested.current = { ...context, auth_attempt_id: attempt?.id };
       login();
       return attempt;
