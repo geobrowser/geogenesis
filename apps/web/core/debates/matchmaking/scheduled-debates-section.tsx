@@ -166,13 +166,15 @@ function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipant
     const byId = new Map<string, DebateParticipantSummary>();
     for (const person of roster.data?.people ?? []) byId.set(normId(person.user_id), person);
     // The graph's record wins, field by field: where it has no name or face, the roster's stays.
+    // `||` rather than `??`, because an empty name is as missing as a null one — `speakerLabel`
+    // reads it that way too.
     for (const person of requestPeople) {
       const key = normId(person.user_id);
       const online = byId.get(key);
       byId.set(key, {
         ...person,
-        display_name: person.display_name ?? online?.display_name ?? null,
-        avatar_cid: person.avatar_cid ?? online?.avatar_cid ?? null,
+        display_name: person.display_name || online?.display_name || null,
+        avatar_cid: person.avatar_cid || online?.avatar_cid || null,
       });
     }
     return (userId: string | null) => (userId ? (byId.get(normId(userId)) ?? null) : null);

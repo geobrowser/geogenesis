@@ -57,6 +57,15 @@ describe('useGeoChatUserSummaries', () => {
     ]);
   });
 
+  // Empty is absent, so nothing downstream has to tell '' from null.
+  it('reports an empty name or avatar as none', async () => {
+    mocks.profiles = new Map([[SPACE, { name: '', avatarUrl: '' }]]);
+
+    expect(await summaries()).toEqual([
+      { user_id: PAGE, profile_space_id: SPACE, display_name: null, avatar_cid: null },
+    ]);
+  });
+
   // The batch loader can reject; waiting forever would cost them their profile link.
   it('emits them anyway once profiles have settled without one', async () => {
     mocks.profilesLoading = false;

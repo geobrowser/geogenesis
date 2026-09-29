@@ -44,8 +44,9 @@ export function useGeoChatUserSummaries(userIds: string[], enabled: boolean): De
       summaries.push({
         user_id: userId,
         profile_space_id: spaceId,
-        display_name: profile?.name ?? null,
-        avatar_cid: profile?.avatarUrl ?? null,
+        // Empty is absent: the profile schema allows '', and nothing downstream should have to care.
+        display_name: profile?.name || null,
+        avatar_cid: profile?.avatarUrl || null,
       });
     }
     return summaries;

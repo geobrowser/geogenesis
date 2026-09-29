@@ -251,6 +251,15 @@ describe('naming the other person', () => {
     expect(screen.getByAltText('Ada')).toBeInTheDocument();
   });
 
+  // The profile schema allows empty strings, and an empty name is as missing as a null one.
+  it("keeps the roster's name and face where the graph's are empty", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: '', avatar_cid: '' }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
   it('puts the viewer on the left of the strip, as every request card does', () => {
     setup({ answerable: [request()], people: [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }] });
 
