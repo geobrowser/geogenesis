@@ -192,8 +192,8 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
- * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people who share
- * a free slot with the viewer alongside online ones. Outside the tab for the same reason as the
+ * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
+ * time this week alongside online ones. Outside the tab for the same reason as the
  * spaces filter above.
  */
 export const debatesHubPeopleOnlineOnlyAtom = atom(false);
