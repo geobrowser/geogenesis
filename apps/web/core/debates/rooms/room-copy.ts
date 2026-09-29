@@ -42,14 +42,18 @@ export function roomPresenceNote(state: DebateRoomPresenceState, opponentName: s
 }
 
 /**
- * The join prompt's urgency turns on `due` and `others_present`, both of which the server supplies
- * on the upcoming-rooms row.
+ * The banner that tells someone elsewhere on Geo their room has opened. Whether the opponent is in
+ * comes from the server's `others_present` on the upcoming-rooms row.
  */
 export const ROOM_JOIN_PROMPT = {
-  title: 'Your scheduled debate',
-  waitingNow: 'Someone is waiting for you now',
-  startingNow: 'Your debate is starting now',
-  scheduled: (startsAt: string) => `Your debate starts at ${startsAt}`,
+  title: 'Your debate room is open',
+  opponent: (opponentName: string) => `with ${opponentName}`,
+  startsAt: (startsAt: string, startsIn: string | null) =>
+    startsIn ? `Starts at ${startsAt} · in ${startsIn}` : `Starts at ${startsAt}`,
+  startingNow: 'Starting now',
+  opponentJoined: (opponentName: string) => `${opponentName} is in the room`,
+  opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
+  unnamedOpponent: 'Your opponent',
   join: 'Join debate',
   notNow: 'Not now',
 } as const;

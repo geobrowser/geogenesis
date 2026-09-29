@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { sameId } from '~/core/debates/rooms/room-presence';
+import { opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
@@ -128,11 +128,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
         .filter(room => !finishedRoomIds.has(room.room_id))
         .map(room => ({
           room,
-          opponentUserId: opponentOf(
-            // The room's id is dashless here and dashed on the request, so these never match as written.
-            (rows ?? []).find(request => request.room_id && sameId(request.room_id, room.room_id)),
-            viewerId
-          ),
+          opponentUserId: opponentOf(requestForRoom(rows, room.room_id), viewerId),
         })),
     [finishedRoomIds, roomList, rows, viewerId]
   );
@@ -145,13 +141,6 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
   const people = useGeoChatUserSummaries(participantIds, enabled);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
-}
-
-/** `null` whenever the answer would be a guess, so nothing reads the viewer as their own opponent. */
-function opponentOf(request: ScheduledDebateRequest | undefined, viewerId: string | null) {
-  if (!request || !viewerId) return null;
-  if (!request.participants.some(participant => sameId(participant.user_id, viewerId))) return null;
-  return request.participants.find(participant => !sameId(participant.user_id, viewerId))?.user_id ?? null;
 }
 
 /**

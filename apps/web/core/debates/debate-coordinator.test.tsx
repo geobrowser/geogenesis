@@ -91,6 +91,9 @@ vi.mock('./rooms/hooks', () => ({
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
+// The banner names the opponent from the request that booked the room; that read is its own concern.
+vi.mock('./rooms/room-opponent', () => ({ useUpcomingRoomOpponent: () => null }));
+
 vi.mock('./debate-attention', () => ({
   useDebatePresence: () => true,
   useDebateAttention: () => mocks.hasAttention,
@@ -602,16 +605,16 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    expect(await screen.findByText('Someone is waiting for you now')).toBeInTheDocument();
+    expect(await screen.findByText('Your opponent is in the room')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
   // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
   // cannot disagree about what is happening.
   it.each([
-    ['someone is already inside', { others_present: true, due: true }, 'Someone is waiting for you now'],
-    ['the start has passed', { others_present: false, due: true }, 'Your debate is starting now'],
-    ['it is merely open', { others_present: false, due: false }, /^Your debate starts at /],
+    ['someone is already inside', { others_present: true, due: true }, 'Your opponent is in the room'],
+    ['the start has passed', { others_present: false, due: true }, /Starting now$/],
+    ['nobody has arrived', { others_present: false, due: false }, 'Your opponent hasn’t joined yet'],
   ])('says the right thing when %s', async (_label, row, expected) => {
     mocks.pathname = '/space/space-1/claims';
     mocks.upcomingRooms = [upcomingRoom(row)];
@@ -630,7 +633,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(screen.queryByText('Your scheduled debate')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Your debate room is open')).not.toBeInTheDocument());
   });
 
   // GEO-2941 bans automatic redirects into the debate-again flow, and a room's session is the exact
