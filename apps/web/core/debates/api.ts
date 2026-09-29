@@ -933,11 +933,15 @@ export async function getScheduleOverlaps(
   });
 }
 
-/** One person the viewer shares availability with (geo-chat#137, GEO-2937). */
+/** One person the viewer could schedule with, whether or not they share a time (geo-chat#137, GEO-2937). */
 export type SchedulablePerson = {
   user: DebateParticipantSummary;
   online: boolean;
-  /** Shared 30-minute slots, soonest first, capped by `limit`. Can include slots already past today. */
+  /**
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Only
+   * times still ahead when geo-chat answered (geo-chat#165), though they can pass before the next
+   * fetch.
+   */
   slots: ScheduleOverlapSlot[];
   /** More overlap exists than `limit` returned. */
   truncated: boolean;
@@ -953,7 +957,10 @@ export type SchedulablePeopleResponse = {
   truncated: boolean;
 };
 
-/** Everyone, online or not, who shares at least one free slot with the viewer (GEO-2937). */
+/**
+ * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
+ * first (GEO-2937).
+ */
 export async function listSchedulablePeople(
   { days, limit }: { days: number; limit: number },
   getPrivyIdentityToken: GetPrivyIdentityToken,

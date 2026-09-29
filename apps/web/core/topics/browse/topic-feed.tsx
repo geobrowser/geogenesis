@@ -37,14 +37,12 @@ export function TopicFeed({
       initialSort="best"
       showSortFilter
       showTimeFilter={false}
-      showSpaceFilter={false}
       showTypeFilter
       initialTypeIds={TOPIC_FEED_ENTITY_TYPE_IDS}
       typeOptions={TOPIC_FEED_ENTITY_TYPES}
       typeCounts={typeCounts}
       typeCountsPending={typeCountsLoading}
       selectTypesWithResultsByDefault
-      persistTypeSelection={false}
       topicFacetEndpoint={spaceIds ? '/api/topics/facets' : undefined}
       showTopicFilter
       fixedParams={fixedParams}

@@ -54,6 +54,7 @@ import {
   threadSpineOffsetPx,
 } from './comment-density';
 import { getRelativeTime } from './comment-time';
+import { ENTITY_COMMENTS_ANCHOR_ID } from './entity-comments-anchor';
 import { ThreadAvatar } from './thread-avatar';
 import { ThreadCollapseToggle, ThreadListSpine, ThreadParentSpine, branchPointerBlurProps } from './thread-branch';
 import type { CommentActivityRow, CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
@@ -353,8 +354,8 @@ export function CommentSection({
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.location.hash !== '#entity-comments') return;
-    const el = document.getElementById('entity-comments');
+    if (window.location.hash !== `#${ENTITY_COMMENTS_ANCHOR_ID}`) return;
+    const el = document.getElementById(ENTITY_COMMENTS_ANCHOR_ID);
     if (el) {
       requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     }
@@ -470,7 +471,10 @@ export function CommentSection({
           publish here, because the heading's number is an aggregate none of them can otherwise move. */}
       <ActivityPostsProvider onAdjust={adjustActivityPosts}>
         <CommentBranchHighlightProvider>
-          <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}>
+          <div
+            id={ENTITY_COMMENTS_ANCHOR_ID}
+            className={cx('flex w-full min-w-0 flex-col', variant === 'page' && 'pt-10')}
+          >
             {!isPanel && (
               <>
                 <div className="text-mediumTitle">

@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
   positionsByClaim: new Map() as ParticipantPositionsByClaim,
   positionParticipants: [] as Array<{ profile_space_id: string }>,
+  positionOptions: undefined as { onlyViewerClaims?: boolean } | undefined,
   positionsFetching: false,
   positionsPlaceholderData: false,
   claimEntities: [] as ClaimPickerEntity[],
@@ -165,8 +166,13 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 
 vi.mock('../participant-positions', () => ({
-  useParticipantPositions: (participants: Array<{ profile_space_id: string }>) => {
+  useParticipantPositions: (
+    participants: Array<{ profile_space_id: string }>,
+    _viewer: string | null,
+    options?: { onlyViewerClaims?: boolean }
+  ) => {
     mocks.positionParticipants = participants;
+    mocks.positionOptions = options;
     return {
       byClaim: mocks.positionsByClaim,
       isLoading: false,
@@ -375,6 +381,16 @@ describe('PeopleTab', () => {
       { profile_space_id: mocks.personalSpaceId },
       { profile_space_id: PROFILE_SPACE_IDS['user-them'] },
     ]);
+  });
+
+  // Match counts only compare people with the viewer, so the tab reads others' positions on the
+  // viewer's claims alone rather than everything everyone listed has ever answered.
+  it('reads positions scoped to the claims the viewer has answered', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(mocks.positionOptions).toEqual({ onlyViewerClaims: true });
   });
 
   it('shows the number of distinct claims where the viewer and a person hold opposite positions', () => {
@@ -1654,17 +1670,64 @@ describe('Online only', () => {
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
   });
 
-  it('leaves out someone whose shared times have all passed', () => {
+  it('keeps someone with no upcoming shared times, schedulable but with no times drawn', () => {
     mocks.people = [];
     mocks.schedulable = {
       viewer_timezone: 'UTC',
       viewer_has_schedule: true,
       truncated: false,
-      people: [schedulable('user-away', 'Ona', [slotIn(-3), slotIn(-2)])],
+      people: [schedulable('user-past', 'Ona', [slotIn(-3), slotIn(-2)]), schedulable('user-none', 'Idris', [])],
     };
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.queryByText('Ona')).not.toBeInTheDocument();
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.getByText('Idris')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schedule a debate with Idris' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Schedule a debate with Ona / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More times for Idris' })).not.toBeInTheDocument();
+  });
+
+  it('ranks someone who shares no time by matches too, below a sharer only when matches tie', () => {
+    const viewer = mocks.personalSpaceId!;
+    const mei = '019fedae-72b6-7ab2-927a-df044d57c5aa';
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    const withProfile = (entry: ReturnType<typeof schedulable>, profileSpaceId: string) => ({
+      ...entry,
+      user: { ...entry.user, profile_space_id: profileSpaceId },
+    });
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      // The server's order: shared times first, soonest first.
+      people: [
+        withProfile(schedulable('user-other', 'Vytautas', [slotIn(26)]), PROFILE_SPACE_IDS['user-other']),
+        withProfile(schedulable('user-mei', 'Mei', [slotIn(30)]), mei),
+        withProfile(schedulable('user-them', 'Arturas', []), PROFILE_SPACE_IDS['user-them']),
+      ],
+    };
+    // Arturas and Mei each disagree with the viewer once; Vytautas never.
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-them'], claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: mei, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-other'], claimId: 'claim-1', position: true, ...context },
+        ],
+      ],
+    ]);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    // Matches come first (#2614), so sharing no time does not sink Arturas below Vytautas. Among
+    // equal matches the server's shared-times-first order decides, so Mei leads Arturas.
+    expect(screen.getAllByText(/^(Mei|Vytautas|Arturas)$/).map(name => name.textContent)).toEqual([
+      'Mei',
+      'Arturas',
+      'Vytautas',
+    ]);
   });
 
   it('keeps the online list up while offline people load', () => {
