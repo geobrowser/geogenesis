@@ -79,7 +79,8 @@ export function RematchRequestCard({
         {request.claim.claim}
       </Text>
 
-      <RequestParties viewer={viewer} opponent={opponent} />
+      {/* A new tab: this card sits in a live room, and following the name in place would leave it. */}
+      <RequestParties viewer={viewer} opponent={opponent} profileLinkTarget="_blank" />
 
       {/* The hub never draws an expired request — `useUnexpiredRequests` filters them out before its
           card sees one. Here the card is drawn from the session, which says `request_pending` until
