@@ -25,9 +25,10 @@ import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
 /**
@@ -162,10 +163,10 @@ export function ClaimExploreFeedCard({
     indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
   });
 
-  // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
-  // action at all. Checking only the server seed would keep the button hidden after this card's
-  // optional composer publishes the first comment; rendering a button that returns null would leave
-  // PositionRow in its three-column layout with an empty final column.
+  // Read the live comment cache before deciding whether the row has a third action at all. Checking
+  // only the server seed would keep the pill hidden after this card's optional composer publishes the
+  // first comment; rendering a pill that returns null would leave PositionRow in its three-column
+  // layout with an empty final column.
   // What the claim page's Activity heading says: its debates, the claims extracted from them, and
   // every comment in that tree — not only the comments filed directly on the claim. The two read
   // from one query so a reader who opens the card is not told a different number. Falls back to the
@@ -334,13 +335,11 @@ export function ClaimExploreFeedCard({
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (
-                <EntityCommentsButton
-                  commentsInCount={commentsInCount}
-                  entityId={item.entityId}
-                  spaceId={item.spaceId}
-                  targetEntityType="claim"
-                  count={activityCount}
-                  className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+                <ClaimActivityLink
+                  item={item}
+                  count={liveCommentCount}
+                  measuresActivity={commentsInCount != null}
+                  opensSidePanel={titleOpensSidePanel}
                 />
               ) : undefined
             }
@@ -372,6 +371,51 @@ export function ClaimExploreFeedCard({
     </article>
   );
 }
+
+/**
+ * The count beside the pills, and the way through to the claim's Activity section.
+ *
+ * Not the global comments panel. That lists only the comments filed directly on the claim, while the
+ * number here is the claim's whole activity — its debates, the claims extracted from them, and every
+ * comment under those — so it showed a shorter list than the count promised, without the debates it
+ * was counting. The claim's Activity section is the one place that draws all of it.
+ *
+ * Where it opens follows the title, through `opensSidePanel`: on Explore the side panel, scrolled to
+ * Activity (see `useScrollToCommentsOnOpen`); everywhere else the claim page at `#entity-comments`,
+ * which `CommentSection` scrolls to on arrival. It is the title's own link pointed at a position, so it
+ * inherits the title's rules rather than restating them: a real anchor, modified clicks left to the
+ * browser, and the side-panel opener mark only where it opens the panel.
+ */
+function ClaimActivityLink({
+  item,
+  count,
+  measuresActivity,
+  opensSidePanel,
+}: {
+  item: ExploreFeedItem;
+  count: number;
+  /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
+  measuresActivity: boolean;
+  opensSidePanel: boolean;
+}) {
+  return (
+    <ExploreCardEntityLink
+      item={item}
+      opensSidePanel={opensSidePanel}
+      section={ACTIVITY_SECTION}
+      aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
+      data-geo-analytics-label="Open claim activity"
+      data-geo-analytics-intent="open_claim_activity"
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+    >
+      <ExploreCommentsIcon />
+      <span className="text-[14px] font-normal tabular-nums">{count}</span>
+    </ExploreCardEntityLink>
+  );
+}
+
+/** Module-level so the link's click handler is not rebuilt on every render. */
+const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollToComments: true } };
 
 /**
  * The share, the split and who answered — or an invitation where nobody has.

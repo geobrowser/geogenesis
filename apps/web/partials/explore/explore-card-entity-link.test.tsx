@@ -159,4 +159,33 @@ describe('ExploreCardEntityLink', () => {
       expect(screen.getByTestId('panel')).toHaveTextContent('closed');
     });
   });
+
+  // A link to a position on the page — a claim's activity count — goes where the name goes, and
+  // carries the position both ways: as the href's fragment, and as the panel's instruction.
+  it('carries a section to the page as a fragment and to the panel as options', () => {
+    function TargetProbe() {
+      const target = useAtomValue(entitySidePanelAtom);
+      return <div data-testid="scroll">{String(target?.scrollToComments ?? 'none')}</div>;
+    }
+
+    render(
+      <Provider>
+        <ExploreCardEntityLink
+          item={item}
+          opensSidePanel
+          section={{ hash: 'entity-comments', sidePanel: { scrollToComments: true } }}
+          aria-label="Activity (3)"
+        >
+          3
+        </ExploreCardEntityLink>
+        <TargetProbe />
+      </Provider>
+    );
+
+    const anchor = screen.getByRole('link', { name: 'Activity (3)' });
+    expect(anchor).toHaveAttribute('href', `${NavUtils.toEntity('space-1', 'entity-1')}#entity-comments`);
+
+    clickName();
+    expect(screen.getByTestId('scroll')).toHaveTextContent('true');
+  });
 });

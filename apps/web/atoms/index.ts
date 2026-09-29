@@ -12,6 +12,11 @@ export type EntitySidePanelTarget = {
   openedFromReviewEdits?: boolean;
   /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
   forceRequestedSpace?: boolean;
+  /**
+   * Open scrolled to the entity's comments — a claim's Activity — rather than at the top. The panel's
+   * stand-in for the full page's `#entity-comments`; see `useScrollToCommentsOnOpen`.
+   */
+  scrollToComments?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
