@@ -2,10 +2,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import { SpaceDecoder } from '~/core/io/decoders/space';
 import type { RemoteEntity } from '~/core/io/schema';
-
-import { TOPIC_TYPE_ID } from '~/core/constants';
 
 import { hasExternalTopic, isPersonProfileSpace, isTopicHomeSpace } from './spaces';
 

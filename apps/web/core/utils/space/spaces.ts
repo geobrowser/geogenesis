@@ -54,7 +54,7 @@ export function isPersonProfileSpace(space: Pick<Space, 'type' | 'entity'> | nul
  * Asked of `space.entity`, like the profile check, and for the same reason — it is `topic ?? page`,
  * which is the entity the homepage actually renders.
  */
-export function isTopicHomeSpace(space: Pick<Space, 'type' | 'entity'> | null | undefined): boolean {
+export function isTopicHomeSpace<T extends Pick<Space, 'type' | 'entity'>>(space: T | null | undefined): space is T {
   if (!space || isPersonProfileSpace(space)) return false;
   return (space.entity?.types ?? []).some(type => normId(type.id) === normId(TOPIC_TYPE_ID));
 }

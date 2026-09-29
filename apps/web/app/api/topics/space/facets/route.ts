@@ -3,8 +3,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { NextResponse } from 'next/server';
 
 import { fetchSpaceTopicFeedFacets } from '~/core/topics/browse/topic-feed-facets';
-import { MAX_TOPIC_FEED_SELECTED_TOPICS, parseTopicFeedIds } from '~/core/topics/browse/topic-feed-params';
-import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
+import { parseTopicFeedSelectedIds } from '~/core/topics/browse/topic-feed-params';
+import { parseTopicFeedBodyTypeIds } from '~/core/topics/browse/topic-feed-types';
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -23,10 +23,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ topics: [] }, { status: 400 });
   }
 
-  const selectedTopicIds = parseTopicFeedIds(body?.selectedTopicIds).slice(0, MAX_TOPIC_FEED_SELECTED_TOPICS);
-  const typeIds = Array.isArray(body?.typeIds)
-    ? parseTopicFeedTypeIds(body.typeIds.filter((id): id is string => typeof id === 'string').join(','))
-    : parseTopicFeedTypeIds(null);
+  const selectedTopicIds = parseTopicFeedSelectedIds(body?.selectedTopicIds);
+  const typeIds = parseTopicFeedBodyTypeIds(body?.typeIds);
   if (typeIds.length === 0) {
     return NextResponse.json({ topics: [] });
   }

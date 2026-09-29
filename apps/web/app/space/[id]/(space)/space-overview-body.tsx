@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
-import { SpaceTopicExplore } from '~/core/topics/browse/space-topic-explore';
+import { SpaceTopicFeed } from '~/core/topics/browse/topic-feed';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
@@ -44,7 +44,9 @@ export async function SpaceOverviewBody({
 
   // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
   // (GEO-2875).
-  const sidebar = tabId ? null : <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} communityCalls={communityCalls} />;
+  const sidebar = tabId ? null : (
+    <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} communityCalls={communityCalls} />
+  );
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
@@ -87,7 +89,8 @@ export async function SpaceOverviewBody({
         </TrackedErrorBoundary>
       )}
     </EntityPageSidebarLayout>
-  );}
+  );
+}
 
 /**
  * The Explore landing of a space whose home entity is a Topic.
@@ -102,7 +105,7 @@ export async function SpaceTopicExploreBody({ spaceId, spaceTopicId }: { spaceId
     <EntityPageSidebarLayout
       sidebar={<SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} communityCalls={communityCalls} />}
     >
-      <SpaceTopicExplore spaceId={spaceId} spaceTopicId={spaceTopicId} />
+      <SpaceTopicFeed spaceId={spaceId} spaceTopicId={spaceTopicId} />
     </EntityPageSidebarLayout>
   );
 }

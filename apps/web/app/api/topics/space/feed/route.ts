@@ -7,7 +7,7 @@ import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { topicsRelationFilter } from '~/core/topics/browse/topic-feed-filter';
-import { MAX_TOPIC_FEED_SELECTED_TOPICS, parseTopicFeedIds } from '~/core/topics/browse/topic-feed-params';
+import { parseTopicFeedSelectedIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 
 /**
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
   if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
 
-  const selectedTopicIds = parseTopicFeedIds(searchParams.get('topicIds')).slice(0, MAX_TOPIC_FEED_SELECTED_TOPICS);
+  const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'));
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(spaceId);
 
   try {

@@ -3,14 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { claimsRequireDebateTagFilter } from '~/core/explore/explore-debate-tag-filter';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
 import {
   emptyTopicFeedCompositionCounts,
+  fetchSpaceTopicCompositionCounts,
+  fetchSpaceTopicFeedFacets,
   fetchTopicFeedCompositionCounts,
   fetchTopicFeedFacets,
 } from './topic-feed-facets';
-import { topicFeedFilter } from './topic-feed-filter';
+import { topicFeedFilter, topicsRelationFilter } from './topic-feed-filter';
+import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const PAGE_TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -65,6 +69,11 @@ vi.mock('~/core/io/graphql-client', async () => {
           decoder({
             relationsConnection: { nodes: nodes.map(fromEntity => ({ fromEntity })), pageInfo: { hasNextPage: false } },
           })
+        );
+      }
+      if (operation?.name?.value === 'SpaceTopicFeedTypeCounts') {
+        return Effect.succeed(
+          decoder({ t0: { totalCount: '888' }, t1: { totalCount: 35 }, t2: null, t3: { totalCount: 'nope' } })
         );
       }
       throw new Error(`Unexpected operation ${operation?.name?.value}`);
@@ -162,5 +171,64 @@ describe('fetchTopicFeedCompositionCounts', () => {
       typeIds: { overlaps: expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID]) },
     });
     expect(fromEntity.and[1]).toEqual(topicFeedFilter(PAGE_TOPIC));
+  });
+});
+
+describe('fetchSpaceTopicFeedFacets', () => {
+  const spaceId = spaceIds[0];
+
+  it("facets everything in the space, leaving out the space's own topic", async () => {
+    const topics = await fetchSpaceTopicFeedFacets({
+      spaceId,
+      spaceTopicId: PAGE_TOPIC,
+      selectedTopicIds: [],
+      typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
+    });
+
+    expect(topics).toEqual([
+      { id: TOPIC_A, name: 'Alignment', count: 5 },
+      { id: TOPIC_C, name: 'Governance', count: 1 },
+    ]);
+    // No Topics predicate: with nothing selected the population is the space alone. The claims in
+    // it are gated on the Debate tag, as the feed is.
+    const fromEntity = mocks.calls[0]?.variables.filter.fromEntity;
+    expect(fromEntity.and).toBeUndefined();
+    expect(fromEntity).toMatchObject({
+      spaceIds: { overlaps: [spaceId] },
+      ...claimsRequireDebateTagFilter([spaceId]),
+    });
+  });
+
+  it('narrows to the selected topics', async () => {
+    await fetchSpaceTopicFeedFacets({
+      spaceId,
+      spaceTopicId: PAGE_TOPIC,
+      selectedTopicIds: [TOPIC_A],
+      typeIds: [CLAIM_TYPE_ID],
+    });
+
+    expect(mocks.calls[0]?.variables.filter.fromEntity.and[1]).toEqual(topicsRelationFilter([TOPIC_A]));
+  });
+
+  it('skips an empty type selection', async () => {
+    await expect(
+      fetchSpaceTopicFeedFacets({ spaceId, spaceTopicId: PAGE_TOPIC, selectedTopicIds: [], typeIds: [] })
+    ).resolves.toEqual([]);
+    expect(mocks.calls).toHaveLength(0);
+  });
+});
+
+describe('fetchSpaceTopicCompositionCounts', () => {
+  it('maps each aliased count back to its type, reading a missing or unparseable count as zero', async () => {
+    const expected = emptyTopicFeedCompositionCounts();
+    expected.typeCounts[TOPIC_FEED_ENTITY_TYPE_IDS[0]] = 888;
+    expected.typeCounts[TOPIC_FEED_ENTITY_TYPE_IDS[1]] = 35;
+
+    await expect(fetchSpaceTopicCompositionCounts({ spaceId: spaceIds[0] })).resolves.toEqual(expected);
+    expect(mocks.calls).toHaveLength(1);
+    expect(mocks.calls[0]?.variables).toMatchObject({
+      spaceIds: { in: spaceIds },
+      filter: claimsRequireDebateTagFilter(spaceIds),
+    });
   });
 });

@@ -101,7 +101,7 @@ export default async function SpacePage(props0: Props) {
   // A Topic-typed home opens on the topic's Explore feed, as a topic page does; the authored page
   // it would otherwise open on moves to its own Overview route. An authored tab is still the tab.
   if (!tabId && Spaces.isTopicHomeSpace(space)) {
-    return <SpaceTopicExploreBody spaceId={spaceId} spaceTopicId={space!.entity.id} />;
+    return <SpaceTopicExploreBody spaceId={spaceId} spaceTopicId={space.entity.id} />;
   }
 
   return <SpaceOverviewBody space={space} spaceId={spaceId} tabId={tabId} />;
@@ -276,6 +276,5 @@ const SubtopicGallerySkeleton = () => {
     </>
   );
 };
-
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';
