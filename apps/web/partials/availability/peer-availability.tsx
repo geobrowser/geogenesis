@@ -30,6 +30,11 @@ const SLOTS_PER_DAY = 4;
  * stays read-only and no CTA renders.
  */
 export type PeerAvailabilityBooking = {
+  /**
+   * `reschedule` moves an existing request rather than proposing one (a scheduling email's "Choose
+   * different time"). Only the wording changes; the caller decides what `onRequest` does.
+   */
+  mode?: 'request' | 'reschedule';
   /** An instant, not a chip: a week with no slots is still requestable (GEO-2938). */
   onRequest: (startsAt: string) => void;
   pending: boolean;
@@ -202,13 +207,7 @@ function BookingFooter({
   peerName: string;
   peerTimezone?: string | null;
 }) {
-  if (booking.requestedStart) {
-    return (
-      <Hint>
-        Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
-      </Hint>
-    );
-  }
+  if (booking.requestedStart) return <BookedHint booking={booking} peerName={peerName} />;
 
   const theirTime = startsAt && peerTimezone ? formatIn(startsAt, peerTimezone) : null;
 
@@ -245,6 +244,24 @@ function BookingFooter({
   );
 }
 
+/** What the footer says once the server has accepted the time. */
+function BookedHint({ booking, peerName }: { booking: PeerAvailabilityBooking; peerName: string }) {
+  if (!booking.requestedStart) return null;
+  if (booking.mode === 'reschedule') {
+    return (
+      <Hint>
+        Proposed {formatIn(booking.requestedStart)} instead. {peerName} has to accept the new time before the room is
+        booked.
+      </Hint>
+    );
+  }
+  return (
+    <Hint>
+      Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
+    </Hint>
+  );
+}
+
 function SendRequest({
   booking,
   clock,
@@ -276,7 +293,7 @@ function SendRequest({
         }}
         className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
       >
-        {booking.pending ? 'Sending…' : 'Send request'}
+        {booking.pending ? 'Sending…' : booking.mode === 'reschedule' ? 'Propose new time' : 'Send request'}
       </button>
       {passed && (
         <Text as="p" variant="footnote" color="red-01">
@@ -309,13 +326,7 @@ function RequestAnyway({
   // geo-chat refuses a past start, so one never leaves here.
   const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
 
-  if (booking.requestedStart) {
-    return (
-      <Hint>
-        Requested {formatIn(booking.requestedStart)}. {peerName} has to accept before the room is booked.
-      </Hint>
-    );
-  }
+  if (booking.requestedStart) return <BookedHint booking={booking} peerName={peerName} />;
 
   return (
     <div className="mt-3 flex flex-col items-center gap-2">
