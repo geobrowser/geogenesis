@@ -4,14 +4,14 @@
   "hashAlgorithm": "sha256",
   "schemaVersion": "2026-05-09",
   "sourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
-  "eventRegistryHash": "a3c51521fb993d4d124cfcc79c3b42bbd2b49302dc3fb1dcbc3664ab2d8c9774",
-  "hash": "23fa0a025e64c8212f9256771d18f1d684fba65afb3a565619daf3e94b6fb506",
-  "shortHash": "23fa0a025e64",
-  "integrity": "sha256-I/oKAl5kyCEvklZ3HRjx1oT7plr7OlZWGdrz6UtvtQY=",
+  "eventRegistryHash": "46f159124e69f1bd7b530a3b2806b63c5bfcbed0c6b773a1f46389246174300a",
+  "hash": "7b3fb368509a8133d22ae66314e50c681b7625af1a053173fcdc361b02ce5879",
+  "shortHash": "7b3fb368509a",
+  "integrity": "sha256-ez+zaFCagTPSKuZjFOUMaBt2Ja8aBTFz/Nw2GwLOWHk=",
   "files": {
     "stable": "ga.js",
     "latest": "ga-latest.js",
-    "hashed": "ga-23fa0a025e64.js"
+    "hashed": "ga-7b3fb368509a.js"
   },
   "upstreamSourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
   "localPatch": "scripts/analytics/extend-action-registry.py"

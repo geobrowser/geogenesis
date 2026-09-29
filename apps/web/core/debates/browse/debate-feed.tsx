@@ -10,8 +10,10 @@ import { useSetAtom } from 'jotai';
 import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
+import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
@@ -62,6 +64,7 @@ export function DebatesBrowseFeed({
   fallback?: React.ReactNode;
 }) {
   const debatesQuery = useSpaceDebates(spaceId, true);
+  const pageOutcome = useDebatePageOutcome(initialDebateId);
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -163,6 +166,7 @@ export function DebatesBrowseFeed({
   const lastScrollIntent = React.useRef(-Infinity);
   const activateVisibleDebate = (debateId: string) => {
     setActiveId(debateId);
+    if (initialDebateId != null && !ID.equals(debateId, initialDebateId)) pageOutcome?.movedOn();
     if (lastObservedDebate.current === debateId) return;
     const previousDebateId = lastObservedDebate.current;
     lastObservedDebate.current = debateId;
@@ -286,6 +290,42 @@ export function DebatesBrowseFeed({
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
 
+  // Where the linked debate has got to, for the visit's outcome, in the same order the render
+  // below decides what to show.
+  const anchorSource =
+    listedDebates.find(debate => initialDebateId != null && ID.equals(debate.id, initialDebateId)) ?? anchorQuery.data;
+  const pageFeedState: DebatePageFeedState = anchorMissing
+    ? {
+        kind: 'unavailable',
+        detail:
+          anchorGone || !anchorSource
+            ? 'not_found'
+            : !isWatchableDebate(anchorSource)
+              ? 'not_watchable'
+              : 'not_processed',
+      }
+    : anchorErrored
+      ? { kind: 'lookup_error' }
+      : anchorUnresolved
+        ? {
+            kind: 'loading',
+            stage: debatesQuery.isLoading
+              ? 'debate_list'
+              : anchorQuery.isLoading
+                ? 'anchor_lookup'
+                : mediaLoading
+                  ? 'media_readiness'
+                  : 'ranking',
+          }
+        : { kind: 'shown' };
+  // Keyed on its content, so it reports a change of state rather than every render.
+  const pageFeedStateKey = JSON.stringify(pageFeedState);
+  const latestPageFeedState = React.useRef(pageFeedState);
+  latestPageFeedState.current = pageFeedState;
+  React.useEffect(() => {
+    pageOutcome?.feed(latestPageFeedState.current);
+  }, [pageOutcome, pageFeedStateKey]);
+
   // Runs after all hooks so the early return never skips one.
   if (anchorMissing && fallback != null) {
     return <>{fallback}</>;
@@ -318,6 +358,10 @@ export function DebatesBrowseFeed({
           active={activeId === debate.id}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
+          }
+          // Only the linked debate's card reports: the visit's outcome is about that debate.
+          onPlaybackState={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
           }
           // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
@@ -402,6 +446,7 @@ function DebateFeedItem({
   onOpenClaims,
   onOpenComments,
   onPlaybackRequest,
+  onPlaybackState,
 }: {
   debate: Debate;
   spaceId: string;
@@ -419,6 +464,7 @@ function DebateFeedItem({
   onOpenComments: () => void;
   /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
   onPlaybackRequest: () => void;
+  onPlaybackState?: DebatePageOutcome['player'];
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const share = useDebateShareAction();
@@ -495,6 +541,7 @@ function DebateFeedItem({
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}
+              onPlaybackState={onPlaybackState}
             />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
