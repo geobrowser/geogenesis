@@ -544,8 +544,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       if (!editor || editor.isDestroyed || !editable) return;
 
       // Only focus when clicking on the editor wrapper itself, not inner content.
+      // Same behavior as a plain focus(), but with scrollIntoView disabled
       if (e.target === e.currentTarget) {
-        editor.commands.focus();
+        editor.commands.focus(undefined, { scrollIntoView: false });
       }
     },
     [editor, editable]
