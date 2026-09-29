@@ -119,8 +119,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
-  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
-  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  // Held here rather than in the row. Rows follow live data: someone who goes offline with no shared
+  // time left, or whose last shared time passes, drops out of the list, and a dialog inside their
+  // row would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{
     userId: string;
     name: string;
