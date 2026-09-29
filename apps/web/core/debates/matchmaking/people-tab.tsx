@@ -14,7 +14,7 @@ import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { Time } from '~/design-system/icons/time';
+import { Calendar } from '~/design-system/icons/calendar';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -732,7 +732,7 @@ function PersonRow({
             // An icon rather than text: the stats beside it need the width in a narrow panel.
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
           >
-            <Time />
+            <Calendar />
           </button>
         )}
         {schedule && onSeeTimes ? (

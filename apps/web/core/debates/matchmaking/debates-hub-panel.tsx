@@ -27,6 +27,7 @@ import { hubClosesOnArrivalAt } from './hub-navigation';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
+import { ScheduleButton } from './schedule-button';
 import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
@@ -262,6 +263,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           Debates
         </Text>
         <div className="flex min-w-0 items-center gap-1">
+          <ScheduleButton />
           <AvailabilityToggle />
           {onClose ? (
             <button

@@ -14,16 +14,19 @@ import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { hubAnalyticsAttributes } from './hub-analytics';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`), like the explore
-// welcome banner. Dismissing it is permanent, which is only safe because the calendar has a
-// standing entry point of its own: "Set my schedule" in the profile menu
-// (`partials/navbar/navbar-actions`). The availability toggle beside this banner is not a second
-// one — that is "available to debate right now" on `PUT /me/debate-availability`, a different
-// setting on a different endpoint.
+// welcome banner. Dismissing it is permanent, which is safe because the calendar has a standing
+// entry point right above it: the calendar button in the hub header (`./schedule-button`), which
+// keeps a dot on it until a schedule is saved. The availability toggle beside that button is a
+// different setting — "available to debate right now" on `PUT /me/debate-availability`.
 const SET_SCHEDULE_BANNER_ID = 'debatesSetSchedule';
 
 /**
  * "Set your debate schedule" — the callout at the top of the debates panel, above the tabs, whose
  * button opens the availability calendar (GEO-2936).
+ *
+ * Onboarding only: once a schedule is saved it retires for good, because the header's calendar
+ * button is where the schedule lives from then on, and a full-width card restating it on every
+ * tab costs the lists below their room.
  *
  * Behind `ClientOnly` because the dismissed state only exists in the browser: server-rendering the
  * banner would flash it back up for everyone who has already closed it.
@@ -41,19 +44,22 @@ function Banner() {
   const { dismissed, remember: handleDismiss } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
   // Saved server-side now that the backend half of GEO-2936 exists (GEO-2932). Only whether one is
-  // set is read here, for the wording; the modal reads and saves the week itself.
-  const { isSet } = useDebateSchedule();
+  // set is read here; the modal reads and saves the week itself.
+  const { data, isSet } = useDebateSchedule();
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
 
   // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
   // modal it opens has nothing to resolve to.
   if (!authenticated || dismissed) return null;
+  // Waits for the read rather than defaulting to "unset": everyone who already has a schedule
+  // would otherwise watch the banner appear and vanish each time the panel opens.
+  if (data === undefined || isSet) return null;
 
   return (
     <div className="mx-4 mb-3 rounded-lg bg-[#EFE2FF] p-4">
       <div className="flex items-start justify-between gap-3">
         <Text as="h3" variant="smallTitle">
-          {isSet ? 'Your debate schedule' : 'Set your debate schedule'}
+          Set your debate schedule
         </Text>
         <button
           type="button"
@@ -67,9 +73,8 @@ function Banner() {
       </div>
 
       <Text as="p" variant="metadata" className="mt-2">
-        {isSet
-          ? 'These are the times you’re free for debates. Update them whenever your week changes, so others can keep requesting a time that works for both of you.'
-          : 'Set the times you’re free for debates. When you’re offline, others can check your availability and request a time that works for both of you.'}
+        Set the times you’re free for debates. When you’re offline, others can check your availability and request a
+        time that works for both of you. You can change it any time from the calendar above.
       </Text>
 
       <button
@@ -79,7 +84,7 @@ function Banner() {
         onClick={() => setModalOpen(true)}
         className="mt-4 rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90"
       >
-        {isSet ? 'Edit my schedule' : 'Set my schedule'}
+        Set my schedule
       </button>
 
       <OwnScheduleModal open={modalOpen} onOpenChange={setModalOpen} openerRef={openerRef} />

@@ -11,10 +11,16 @@ import { SetScheduleBanner } from './set-schedule-banner';
 // The banner now reads and writes the saved calendar (GEO-2932). These tests are about the
 // callout and the modal opening, not the round trip, so the hooks are stubbed -- the payload
 // conversion has its own tests in core/availability.
-const mocks = vi.hoisted(() => ({ isSet: false, authenticated: true }));
+const mocks = vi.hoisted(() => ({ isSet: false, loaded: true, authenticated: true }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateSchedule: () => ({ blocks: [], isSet: mocks.isSet, isError: false, refetch: vi.fn() }),
+  useDebateSchedule: () => ({
+    data: mocks.loaded ? { is_set: mocks.isSet } : undefined,
+    blocks: mocks.loaded ? [] : undefined,
+    isSet: mocks.isSet,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'did:privy:1' }),
 }));
@@ -22,6 +28,7 @@ vi.mock('~/core/debates/hooks', () => ({
 afterEach(() => {
   cleanup();
   mocks.isSet = false;
+  mocks.loaded = true;
   mocks.authenticated = true;
   // The dismissal is stored per notice id in localStorage, so a dismissal in one case would
   // otherwise hide the banner in every case after it.
@@ -62,27 +69,22 @@ describe('SetScheduleBanner', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('switches the callout to edit wording once a schedule is saved', async () => {
-    // The banner is the same control either way -- what changes is that it no longer asks for
-    // something the person has already done.
+  // Onboarding only: once a schedule exists, the header's calendar button is where it lives.
+  it('retires once a schedule is saved', () => {
     mocks.isSet = true;
     setup();
 
-    expect(await screen.findByRole('button', { name: 'Edit my schedule' })).toBeInTheDocument();
-    expect(screen.getByText('Your debate schedule')).toBeInTheDocument();
-    expect(screen.getByText(/These are the times you/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
     expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
-  it('opens the same calendar from the edit wording', async () => {
-    mocks.isSet = true;
-    const { user } = setup();
-    await user.click(await screen.findByRole('button', { name: 'Edit my schedule' }));
+  // Defaulting to "unset" before the read answers would flash the banner at everyone who already
+  // has a schedule, every time the panel opens.
+  it('waits for the schedule read before showing', () => {
+    mocks.loaded = false;
+    setup();
 
-    expect(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' })
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
   });
 
   // Signed out the read is disabled, so the modal it opens would sit on "Loading your schedule"
