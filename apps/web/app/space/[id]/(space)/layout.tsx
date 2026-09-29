@@ -107,6 +107,8 @@ export default async function Layout(props0: LayoutProps) {
    * not the other is worse than neither.
    */
   const isProfile = Spaces.isPersonProfileSpace(props.space);
+  // Asked of the same space as `isProfile`, which it defers to — see `isTopicHomeSpace`.
+  const isTopicSpace = Spaces.isTopicHomeSpace(props.space);
 
   /*
    * `props.space` is the same space the wave above asked about everywhere but
@@ -293,6 +295,7 @@ export default async function Layout(props0: LayoutProps) {
                       typeIds={typeIds}
                       isProfile={isProfile}
                       personRecordCounts={personRecordCounts}
+                      isTopicSpace={isTopicSpace}
                     />
                   </React.Suspense>
                 </div>
