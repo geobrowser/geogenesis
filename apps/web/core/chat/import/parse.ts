@@ -70,6 +70,20 @@ export function cellToString(value: unknown): string {
   return String(value).trim();
 }
 
+const TYPED_DIGITS = 15;
+
+export function parseSpreadsheetNumber(raw: string): string {
+  const text = raw.trim();
+  if (significantDigits(text) <= TYPED_DIGITS) return text;
+  const displayed = String(Number(text));
+  return significantDigits(displayed) <= TYPED_DIGITS && Number(displayed) === Number(text) ? displayed : text;
+}
+
+function significantDigits(text: string): number {
+  const mantissa = text.replace(/^[-+]/, '').split(/e/i)[0];
+  return mantissa.replace('.', '').replace(/^0+/, '').replace(/0+$/, '').length;
+}
+
 type SniffScore = {
   delimiter: string;
   columns: number;

@@ -15,6 +15,7 @@ import {
   isSpreadsheet,
   normalizeExtension,
   parseDelimitedText,
+  parseSpreadsheetNumber,
   parseWorkbook,
   unsupportedTypeError,
 } from './parse';
@@ -27,7 +28,7 @@ export type ParseRequest = {
 };
 
 async function readSpreadsheet(file: File): Promise<ParseResult> {
-  const workbook = await readXlsxFile(file);
+  const workbook = await readXlsxFile(file, { parseNumber: parseSpreadsheetNumber });
   return parseWorkbook(workbook.map(sheet => ({ name: sheet.sheet, data: sheet.data as unknown[][] })));
 }
 

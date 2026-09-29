@@ -11,6 +11,7 @@ import {
   normalizeExtension,
   parseDelimitedText,
   parseSheetRows,
+  parseSpreadsheetNumber,
   parseWorkbook,
   sniffDelimiter,
 } from './parse';
@@ -115,6 +116,39 @@ describe('cellToString', () => {
 
   it('trims strings', () => {
     expect(cellToString('  Ethereum  ')).toBe('Ethereum');
+  });
+});
+
+describe('parseSpreadsheetNumber', () => {
+  it('keeps an integer past 2^53 exactly, where Number() would round it', () => {
+    expect(parseSpreadsheetNumber('9007199254740993')).toBe('9007199254740993');
+    expect(String(Number('9007199254740993'))).toBe('9007199254740992');
+  });
+
+  it('keeps more decimal digits than a double holds', () => {
+    expect(parseSpreadsheetNumber('12345678901234567890.123456789')).toBe('12345678901234567890.123456789');
+    expect(parseSpreadsheetNumber('88259496234518.57')).toBe('88259496234518.57');
+  });
+
+  it('gives back the typed value behind the 17 digits Excel writes for it', () => {
+    expect(parseSpreadsheetNumber('1.1000000000000001')).toBe('1.1');
+    expect(parseSpreadsheetNumber('0.29999999999999999')).toBe('0.3');
+    expect(parseSpreadsheetNumber('-2.2000000000000002')).toBe('-2.2');
+  });
+
+  it('leaves values of fifteen digits or fewer untouched, trailing zeros and exponents included', () => {
+    expect(parseSpreadsheetNumber('42')).toBe('42');
+    expect(parseSpreadsheetNumber('1000000000000000000000')).toBe('1000000000000000000000');
+    expect(parseSpreadsheetNumber('1E+21')).toBe('1E+21');
+    expect(parseSpreadsheetNumber('0.000123')).toBe('0.000123');
+  });
+
+  it('keeps a computed value whose 17 digits are the double itself', () => {
+    expect(parseSpreadsheetNumber('0.30000000000000004')).toBe('0.30000000000000004');
+  });
+
+  it('passes through what it cannot read as a number', () => {
+    expect(parseSpreadsheetNumber('not a number')).toBe('not a number');
   });
 });
 

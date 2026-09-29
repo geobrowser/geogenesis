@@ -1,6 +1,42 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { coerce } from './coerce';
 import { decodeDelimitedFile, parseFile } from './parse.worker';
+
+function fixtureFile(name: string): File {
+  const bytes = readFileSync(path.join(__dirname, 'fixtures', name));
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  const file = new File([buffer], name);
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => buffer });
+  return file;
+}
+
+describe('xlsx numbers', () => {
+  it('keeps a large integer and a high-precision decimal exactly as the workbook holds them', async () => {
+    const result = await parseFile({ file: fixtureFile('precision.xlsx') });
+    expect(result).toMatchObject({
+      ok: true,
+      sheets: [
+        {
+          name: 'Readings',
+          table: {
+            headers: ['Name', 'Serial', 'Reading', 'Typed'],
+            rows: [
+              ['Alpha', '9007199254740993', '12345678901234567890.123456789', '1.1'],
+              ['Beta', '88259496234518.57', '0.3', '42'],
+            ],
+          },
+        },
+      ],
+    });
+    if (!result.ok) return;
+    const [alpha] = result.sheets[0].table.rows;
+    expect(coerce('decimal', alpha[1])).toEqual({ ok: true, value: '9007199254740993' });
+    expect(coerce('decimal', alpha[2])).toEqual({ ok: true, value: '12345678901234567890.123456789' });
+  });
+});
 
 describe('file encodings and format validation', () => {
   it('reads Excel UTF-16 tab-delimited exports without corrupting names', async () => {
