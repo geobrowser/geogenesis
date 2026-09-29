@@ -3,6 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  type ScheduledRequestAnalytics,
+  debateScheduledRequestAnswered,
+  debateScheduledRequestFailed,
+  debateScheduledRequestSent,
+} from '~/core/availability/schedule-analytics';
+
+import {
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   createScheduledDebate,
@@ -39,7 +46,11 @@ export function useCreateScheduledDebate() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<ScheduledDebateRequest, Error, { opponentUserId: string; startsAt: Date; minutes: number }>({
+  return useMutation<
+    ScheduledDebateRequest,
+    Error,
+    { opponentUserId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics }
+  >({
     mutationFn: ({ opponentUserId, startsAt, minutes }) =>
       createScheduledDebate(
         {
@@ -50,7 +61,13 @@ export function useCreateScheduledDebate() {
         getPrivyIdentityToken,
         accountKey
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) }),
+    // Analytics here rather than at the call site: a shared link's modal can be closed while the
+    // request is in flight, and a caller's own callbacks die with it.
+    onSuccess: (request, { startsAt, analytics }) => {
+      debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+    },
+    onError: (error, { analytics }) => debateScheduledRequestFailed({ mode: 'request', error, analytics }),
   });
 }
 
@@ -59,7 +76,11 @@ export function useRescheduleScheduledDebate() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<ScheduledDebateRequest, Error, { requestId: string; startsAt: Date; minutes: number }>({
+  return useMutation<
+    ScheduledDebateRequest,
+    Error,
+    { requestId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics }
+  >({
     mutationFn: ({ requestId, startsAt, minutes }) =>
       rescheduleScheduledDebate(
         requestId,
@@ -70,7 +91,11 @@ export function useRescheduleScheduledDebate() {
         getPrivyIdentityToken,
         accountKey
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) }),
+    onSuccess: (request, { startsAt, analytics }) => {
+      debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+    },
+    onError: (error, { analytics }) => debateScheduledRequestFailed({ mode: 'reschedule', error, analytics }),
   });
 }
 
@@ -81,7 +106,8 @@ export function useRespondToScheduledDebate() {
   return useMutation<ScheduledDebateResponseResult, Error, { requestId: string; accepted: boolean }>({
     mutationFn: ({ requestId, accepted }) =>
       respondToScheduledDebate(requestId, accepted, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
+    onSuccess: (result, { requestId, accepted }) => {
+      debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });

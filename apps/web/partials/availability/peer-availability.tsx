@@ -14,6 +14,11 @@ import {
   viewerInputInstant,
   viewerInputValue,
 } from '~/core/availability/peer-schedule';
+import {
+  type ScheduleEntry,
+  debateAvailabilityViewed,
+  scheduleAnalyticsAttributes,
+} from '~/core/availability/schedule-analytics';
 import { usePeerSchedule } from '~/core/debates/hooks';
 
 import { Text } from '~/design-system/text';
@@ -47,8 +52,11 @@ export type PeerAvailabilityBooking = {
    * different time"). Only the wording changes; the caller decides what `onRequest` does.
    */
   mode?: 'request' | 'reschedule';
-  /** An instant, not a chip: a week with no slots is still requestable (GEO-2938). */
-  onRequest: (startsAt: string) => void;
+  /**
+   * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
+   * the picked chip's, for analytics; `null` for a time typed in by hand.
+   */
+  onRequest: (startsAt: string, pick?: { viewerIsFree: boolean | null }) => void;
   pending: boolean;
   error: string | null;
   /** The instant the server accepted, which swaps the footer for a confirmation. */
@@ -72,8 +80,17 @@ export type PeerAvailabilityBooking = {
  * Takes a user id and nothing else, so the shareable link that will eventually open this can
  * mount it without this component knowing anything about routing.
  */
-export function PeerAvailability({ userId, peerName, className, booking, initialSelectedStart }: Props) {
+export function PeerAvailability({ userId, peerName, className, booking, initialSelectedStart, entry = null }: Props) {
   const { schedule, enabled, isPending, isError } = usePeerSchedule(userId);
+
+  // Once per opening: the modal mounts this only while open, and a refetch is not a second look.
+  const viewedRef = React.useRef(false);
+  const bookable = Boolean(booking);
+  React.useEffect(() => {
+    if (!schedule || viewedRef.current) return;
+    viewedRef.current = true;
+    debateAvailabilityViewed(schedule, { entry, bookable });
+  }, [schedule, entry, bookable]);
 
   // Signed out there is no viewer to compare against, so the question cannot be asked rather than
   // having failed — a distinction worth drawing, since one of these is fixable by signing in.
@@ -103,6 +120,8 @@ type Props = {
   className?: string;
   /** A slot picked before the week opened, e.g. a time chip on a People tab row. */
   initialSelectedStart?: string | null;
+  /** What opened this week, for analytics. */
+  entry?: ScheduleEntry | null;
 };
 
 /**
@@ -251,7 +270,7 @@ function BookingFooter({
         <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
           {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : 'Pick a time above.'}
         </Text>
-        <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
+        <SendRequest booking={booking} clock={clock} startsAt={startsAt} viewerIsFree={viewerIsFree} />
       </div>
 
       {/* A slot outside your own week is a one-off, and saying so is what keeps it from reading as
@@ -301,10 +320,12 @@ function SendRequest({
   booking,
   clock,
   startsAt,
+  viewerIsFree,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   startsAt: string | null;
+  viewerIsFree: boolean | null;
 }) {
   // Keyed by the start it was raised for, so picking another time clears it.
   const [passedFor, setPassedFor] = React.useState<string | null>(null);
@@ -315,6 +336,9 @@ function SendRequest({
       <button
         type="button"
         disabled={!startsAt || booking.pending}
+        {...(booking.mode === 'reschedule'
+          ? scheduleAnalyticsAttributes('Availability Propose new time', 'reschedule_scheduled_debate')
+          : scheduleAnalyticsAttributes('Availability Send request', 'request_scheduled_debate'))}
         onClick={() => {
           if (!startsAt) return;
           // Checked at the click rather than trusted from render: an open modal does not re-render
@@ -324,7 +348,7 @@ function SendRequest({
             return;
           }
           setPassedFor(null);
-          booking.onRequest(startsAt);
+          booking.onRequest(startsAt, { viewerIsFree });
         }}
         className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
       >
@@ -380,7 +404,7 @@ function RequestAnyway({
           onChange={event => setLocal(event.target.value)}
           className="rounded border border-grey-02 px-2 py-1 text-footnote"
         />
-        <SendRequest booking={booking} clock={clock} startsAt={startsAt} />
+        <SendRequest booking={booking} clock={clock} startsAt={startsAt} viewerIsFree={null} />
       </div>
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
@@ -497,6 +521,10 @@ function DayColumn({
               // day can be put back.
               aria-label={expanded ? `Show less on ${dayLabel}` : `+${hidden} more times on ${dayLabel}`}
               aria-expanded={expanded}
+              {...scheduleAnalyticsAttributes(
+                expanded ? 'Availability Show fewer times' : 'Availability Show more times',
+                'expand_peer_availability_day'
+              )}
               onClick={() => setExpanded(current => !current)}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"
             >
@@ -553,6 +581,10 @@ function SlotChip({
       disabled={past}
       data-viewer-free={slot.viewerIsFree === true || undefined}
       data-past={past || undefined}
+      {...scheduleAnalyticsAttributes(
+        slot.viewerIsFree === true ? 'Availability Mutual slot' : 'Availability Slot',
+        selected ? 'deselect_debate_slot' : 'select_debate_slot'
+      )}
       onClick={onSelect}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',

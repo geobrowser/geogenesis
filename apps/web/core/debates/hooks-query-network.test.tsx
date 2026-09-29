@@ -15,6 +15,7 @@ import {
   useDebateSharePrompts,
   useDebateTranscript,
   useRematchLiveKitJoin,
+  useSaveDebateSchedule,
   useSpaceDebates,
 } from './hooks';
 
@@ -31,7 +32,9 @@ const mocks = vi.hoisted(() => ({
     getQueryCache: vi.fn(() => mocks.queryCache),
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
+    getQueryData: vi.fn(),
   },
+  debateScheduleSaved: vi.fn(),
   queryRefetch: vi.fn(),
   useMutation: vi.fn((options: unknown) => options),
   useQuery: vi.fn((options: unknown) => ({ options, refetch: mocks.queryRefetch })),
@@ -48,6 +51,8 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
   useMutation: mocks.useMutation,
   useQueryClient: () => mocks.queryClient,
 }));
+
+vi.mock('~/core/availability/schedule-analytics', () => ({ debateScheduleSaved: mocks.debateScheduleSaved }));
 
 vi.mock('~/core/auth/identity-token', () => ({
   getCachedIdentityToken: vi.fn(),
@@ -297,5 +302,43 @@ describe('debate query network ownership', () => {
     mocks.useScope.mockClear();
     rerender();
     expect(mocks.useScope.mock.calls.every(([, enabled]) => enabled === false)).toBe(true);
+  });
+});
+
+describe('useSaveDebateSchedule analytics', () => {
+  const saved = {
+    is_set: true,
+    schedule: {
+      timezone: 'UTC',
+      slot_minutes: 30,
+      recurring: [{ weekday: 1, start: '09:00', end: '12:00' }],
+      dated: [],
+    },
+  };
+
+  // The editor closes on Save, so the event rides on the mutation rather than on a caller that may
+  // have unmounted by the time the server answers.
+  it('records the saved week, and whether it is the first one, from the cache before the write', () => {
+    mocks.queryClient.getQueryData.mockReturnValue({ is_set: false });
+    const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'hub_banner' }));
+    const options = result.current as unknown as { onSuccess: (response: typeof saved) => void };
+
+    options.onSuccess(saved);
+
+    expect(mocks.debateScheduleSaved).toHaveBeenCalledWith(
+      [expect.objectContaining({ kind: 'recurring', weekday: 0, start: 540, end: 720 })],
+      { surface: 'hub_banner', isFirstSchedule: true }
+    );
+  });
+
+  it('calls a save over an existing schedule an edit', () => {
+    mocks.queryClient.getQueryData.mockReturnValue({ is_set: true });
+    const { result } = renderHook(() => useSaveDebateSchedule({ surface: 'navbar' }));
+    (result.current as unknown as { onSuccess: (response: typeof saved) => void }).onSuccess(saved);
+
+    expect(mocks.debateScheduleSaved).toHaveBeenLastCalledWith(expect.any(Array), {
+      surface: 'navbar',
+      isFirstSchedule: false,
+    });
   });
 });

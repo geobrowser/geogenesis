@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { NOT_A_PERSON_MESSAGE, toAvailability } from '~/core/availability/availability-deep-link';
+import { debateAvailabilityLinkOpened, scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
 import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
 import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
@@ -27,12 +28,14 @@ import { PeerAvailabilityBookingModal } from './peer-availability-booking-modal'
 export function AvailabilityDeepLink() {
   const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
   const [rescheduleRequestId, setRescheduleRequestId] = React.useState<string | null>(null);
+  const [via, setVia] = React.useState<string | null>(null);
   const setToast = useSetToast();
   const notAPerson = React.useCallback(() => setToast(<span>{NOT_A_PERSON_MESSAGE}</span>), [setToast]);
-  useAvailabilityDeepLink((spaceId, requestId) => {
+  useAvailabilityDeepLink((spaceId, requestId, linkVia) => {
     if (!spaceId) return notAPerson();
     setProfileSpaceId(spaceId);
     setRescheduleRequestId(requestId);
+    setVia(linkVia);
   });
   // Stable, since the modal fires it from an effect.
   const dismissNotAPerson = React.useCallback(() => {
@@ -47,6 +50,7 @@ export function AvailabilityDeepLink() {
       open
       profileSpaceId={profileSpaceId}
       rescheduleRequestId={rescheduleRequestId}
+      via={via}
       onClose={() => setProfileSpaceId(null)}
       onNotAPerson={dismissNotAPerson}
     />
@@ -68,6 +72,7 @@ export function SharedAvailabilityModal({
   open,
   profileSpaceId,
   rescheduleRequestId = null,
+  via = null,
   onClose,
   onNotAPerson,
 }: {
@@ -75,6 +80,8 @@ export function SharedAvailabilityModal({
   profileSpaceId: string;
   /** Picking a slot moves this scheduled request rather than proposing a new one. */
   rescheduleRequestId?: string | null;
+  /** The link's `via` attribution, for analytics. */
+  via?: string | null;
   onClose: () => void;
   /** The space loaded and is not a person's. Only a hand-edited link gets here. */
   onNotAPerson: () => void;
@@ -116,7 +123,36 @@ export function SharedAvailabilityModal({
   // nothing shows until then. A failed space read settles it too: there is no one to be.
   const whoseKnown = ready && (spaceError || !authenticated || isSelf || !profile.isPending);
 
-  if (isSelf) return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} />;
+  // Whether the week can be shown, once that is settled. A space that is not a person is left out:
+  // only a hand-edited link lands there, and `onNotAPerson` takes it away.
+  const peerState = spaceError
+    ? 'error'
+    : !isPerson || profile.isPending
+      ? null
+      : isDebateProfileMissing(profile.error)
+        ? 'no_debate_profile'
+        : profile.isError || !person
+          ? 'error'
+          : 'bookable';
+  const viewer = isSelf ? 'self' : authenticated ? 'other' : 'signed_out';
+  const openedKnown = open && (isSelf || (whoseKnown && peerState !== null));
+  // Once per landing. Signing in from here keeps this mounted, so it is still the same arrival; a
+  // new account sent round onboarding comes back through the link, and that is a second one.
+  const openedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!openedKnown || openedRef.current) return;
+    openedRef.current = true;
+    debateAvailabilityLinkOpened({
+      viewer,
+      peer: isSelf ? null : peerState,
+      rescheduling: rescheduleRequestId !== null,
+      via,
+    });
+  }, [openedKnown, viewer, isSelf, peerState, rescheduleRequestId, via]);
+
+  if (isSelf) {
+    return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} surface="availability_link" />;
+  }
   if (!whoseKnown) return null;
 
   const notice = (() => {
@@ -135,6 +171,7 @@ export function SharedAvailabilityModal({
           action={
             <button
               type="button"
+              {...scheduleAnalyticsAttributes('Availability link Sign in', 'sign_in_for_availability')}
               onClick={() => {
                 setSigningIn(true);
                 signIn();
@@ -158,6 +195,7 @@ export function SharedAvailabilityModal({
       userId={person?.user_id ?? ''}
       peerName={name}
       rescheduleRequestId={rescheduleRequestId}
+      entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
       onClose={onClose}
     >
       {notice}

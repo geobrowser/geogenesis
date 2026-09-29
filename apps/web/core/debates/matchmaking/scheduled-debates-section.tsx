@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import { scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
@@ -218,7 +219,11 @@ function UpcomingRow({
       urgent={room.others_present}
       actions={
         room.joinable && (
-          <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
+          <Link
+            href={debateRoomPath(room.room_id)}
+            className={JOIN_PILL}
+            {...scheduleAnalyticsAttributes('Debate hub Join scheduled debate', 'join_scheduled_debate')}
+          >
             Join debate
           </Link>
         )
@@ -256,10 +261,23 @@ function ScheduledRow({
         request.viewer_must_answer && (
           // Decline first, Accept primary on the right: the order every other request card uses.
           <div className="grid grid-cols-2 gap-2">
-            <HubPillButton onClick={() => onAnswer(request.request_id, false)} disabled={busy}>
+            {/* Labelled apart from the instant request cards' Accept and Decline, which would
+                otherwise share their labels and could not be told from these in the data. */}
+            <HubPillButton
+              analyticsLabel="Debate hub Decline scheduled debate"
+              analyticsIntent="decline_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, false)}
+              disabled={busy}
+            >
               Decline
             </HubPillButton>
-            <HubPillButton variant="primary" onClick={() => onAnswer(request.request_id, true)} disabled={busy}>
+            <HubPillButton
+              variant="primary"
+              analyticsLabel="Debate hub Accept scheduled debate"
+              analyticsIntent="accept_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, true)}
+              disabled={busy}
+            >
               Accept
             </HubPillButton>
           </div>

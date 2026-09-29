@@ -6,6 +6,7 @@ import { useAtom } from 'jotai';
 
 import { personProfileOpened } from '~/core/analytics';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import { type ScheduleEntry, scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -126,6 +127,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     userId: string;
     name: string;
     initialStart?: string;
+    entry: ScheduleEntry;
   } | null>(null);
   // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
@@ -548,9 +550,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                     onRequireSignIn={onRequireSignIn}
                     onSeeTimes={
                       bookingEnabled
-                        ? (peer, opener, initialStart) => {
+                        ? (peer, opener, entry, initialStart) => {
                             seeTimesOpenerRef.current = opener;
-                            setViewingTimes({ ...peer, initialStart });
+                            setViewingTimes({ ...peer, initialStart, entry });
                           }
                         : undefined
                     }
@@ -571,6 +573,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           onClose={() => setViewingTimes(null)}
           openerRef={seeTimesOpenerRef}
           initialSelectedStart={viewingTimes?.initialStart}
+          entry={viewingTimes?.entry}
         />
       ) : (
         <PeerAvailabilityModal
@@ -627,7 +630,12 @@ function PersonRow({
    */
   onRequireSignIn?: () => void;
   /** Absent while the feature flag is off, which is what hides "See times". */
-  onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null, initialStart?: string) => void;
+  onSeeTimes?: (
+    peer: { userId: string; name: string },
+    opener: HTMLElement | null,
+    entry: ScheduleEntry,
+    initialStart?: string
+  ) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -710,7 +718,12 @@ function PersonRow({
             personName={speakerLabel(person)}
             schedule={schedule}
             onPick={(start, opener) =>
-              onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, start)
+              onSeeTimes(
+                { userId: person.user_id, name: speakerLabel(person) },
+                opener,
+                start ? 'people_time' : 'people_more_times',
+                start
+              )
             }
           />
         ) : null}
@@ -727,10 +740,15 @@ function PersonRow({
             // Every row carries this control, so the visible label alone leaves a screen reader or
             // voice control with a list of identical targets.
             aria-label={`See times for ${speakerLabel(person)}`}
+            {...scheduleAnalyticsAttributes('Debate hub See times', 'open_peer_availability')}
             onClick={event =>
               onRequireSignIn
                 ? onRequireSignIn()
-                : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)
+                : onSeeTimes(
+                    { userId: person.user_id, name: speakerLabel(person) },
+                    event.currentTarget,
+                    'people_see_times'
+                  )
             }
             title="See times"
             // An icon rather than text: the stats beside it need the width in a narrow panel.
@@ -744,8 +762,15 @@ function PersonRow({
           // the viewer's live request state, for the same reason "See times" is not.
           <HubPillButton
             aria-label={`Schedule a debate with ${speakerLabel(person)}`}
-            analyticsLabel="Schedule debate"
-            onClick={event => onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)}
+            analyticsLabel="Debate hub Schedule debate"
+            analyticsIntent="open_peer_availability"
+            onClick={event =>
+              onSeeTimes(
+                { userId: person.user_id, name: speakerLabel(person) },
+                event.currentTarget,
+                'people_schedule'
+              )
+            }
           >
             Schedule
           </HubPillButton>
@@ -795,6 +820,7 @@ function SharedTimes({
           key={slot.start}
           type="button"
           aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}`}
+          {...scheduleAnalyticsAttributes('Debate hub Shared time', 'open_peer_availability')}
           onClick={event => onPick(slot.start, event.currentTarget)}
           className="rounded-full border border-grey-02 px-2 py-0.5 text-footnote text-text transition-colors hover:border-text"
         >
@@ -805,6 +831,7 @@ function SharedTimes({
         <button
           type="button"
           aria-label={`More times for ${personName}`}
+          {...scheduleAnalyticsAttributes('Debate hub More times', 'open_peer_availability')}
           onClick={event => onPick(undefined, event.currentTarget)}
           className="px-1 text-footnote text-grey-04 transition-colors hover:text-text"
         >
@@ -836,7 +863,7 @@ function formatSlot(iso: string, now: Date = new Date()): string {
 function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
   const { blocks, isError, refetch } = useDebateSchedule();
-  const saveSchedule = useSaveDebateSchedule();
+  const saveSchedule = useSaveDebateSchedule({ surface: 'people_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   return (
@@ -845,7 +872,8 @@ function SetAvailabilityNotice() {
         Set your availability to see offline people you can schedule a debate with.
       </Text>
       <HubPillButton
-        analyticsLabel="Set availability"
+        analyticsLabel="Debate hub Set availability"
+        analyticsIntent="open_debate_schedule"
         onClick={event => {
           openerRef.current = event.currentTarget;
           setOpen(true);

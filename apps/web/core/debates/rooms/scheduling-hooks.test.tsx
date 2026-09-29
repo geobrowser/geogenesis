@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -8,7 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
 import { GeoChatRequestError, type ScheduledDebateRequest } from '../api';
 import { debateQueryKeys } from '../hooks';
-import { useScheduledDebates } from './scheduling-hooks';
+import {
+  useCreateScheduledDebate,
+  useRescheduleScheduledDebate,
+  useRespondToScheduledDebate,
+  useScheduledDebates,
+} from './scheduling-hooks';
+
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics', () => ({ capture }));
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
@@ -20,6 +28,7 @@ vi.mock('../debate-attention', () => ({ useDebateVisibility: () => true }));
 const listing = (requestId: string) => ({ requests: [{ request_id: requestId } as ScheduledDebateRequest] });
 
 afterEach(() => {
+  capture.mockClear();
   focusManager.setFocused(undefined);
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -60,5 +69,98 @@ describe('useScheduledDebates', () => {
     await vi.advanceTimersByTimeAsync(60_000);
 
     await vi.waitFor(() => expect(result.current.data?.requests[0]?.request_id).toBe('after'));
+  });
+});
+
+function mutationWrapper() {
+  const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+}
+
+// Analytics rides on the server's answer, in the hook rather than at the call site: a shared link's
+// modal can close while the request is in flight, and a caller's own callbacks die with it.
+describe('scheduling analytics', () => {
+  const startsAt = new Date(Date.now() + 3 * 3_600_000);
+  const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
+
+  it('records a sent request with where it came from, once the server accepts it', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() =>
+      result.current.mutateAsync({
+        opponentUserId: 'them',
+        startsAt,
+        minutes: 30,
+        analytics: { entry: 'people_time', viewerIsFree: true },
+      })
+    );
+
+    expect(capture).toHaveBeenCalledWith('debate_scheduled_request_sent', {
+      mode: 'request',
+      entry: 'people_time',
+      request_id: 'req-1',
+      viewer_is_free: true,
+      lead_time_minutes: 180,
+    });
+  });
+
+  it('records a moved request as a reschedule', async () => {
+    vi.spyOn(api, 'rescheduleScheduledDebate').mockResolvedValue(sent);
+    const { result } = renderHook(() => useRescheduleScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() =>
+      result.current.mutateAsync({
+        requestId: 'req-1',
+        startsAt,
+        minutes: 30,
+        analytics: { entry: 'reschedule_link', viewerIsFree: null },
+      })
+    );
+
+    expect(capture).toHaveBeenCalledWith(
+      'debate_scheduled_request_sent',
+      expect.objectContaining({ mode: 'reschedule', entry: 'reschedule_link', viewer_is_free: null })
+    );
+  });
+
+  it("records a refusal by status and code, never geo-chat's message", async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockRejectedValue(
+      new GeoChatRequestError('Ada is already booked then', 'slot_taken', 409)
+    );
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() =>
+      result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }).catch(() => undefined)
+    );
+
+    expect(capture).toHaveBeenCalledWith('debate_scheduled_request_failed', {
+      mode: 'request',
+      entry: 'unknown',
+      error_name: 'GeoChatRequestError',
+      error_status: 409,
+      error_code: 'slot_taken',
+    });
+    expect(JSON.stringify(capture.mock.calls)).not.toContain('Ada');
+  });
+
+  it('records an answer, telling a clash apart from a recorded one', async () => {
+    vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({
+      outcome: 'conflict',
+      conflicting_request_id: 'other',
+      conflicting_start_at: startsAt.toISOString(),
+      conflicting_end_at: startsAt.toISOString(),
+    });
+    const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted: true }));
+
+    expect(capture).toHaveBeenCalledWith('debate_scheduled_request_answered', {
+      request_id: 'req-1',
+      accepted: true,
+      outcome: 'conflict',
+    });
   });
 });

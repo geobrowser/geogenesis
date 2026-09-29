@@ -6,6 +6,8 @@ import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import { scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
+
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
@@ -85,6 +87,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
             <button
               type="button"
+              {...scheduleAnalyticsAttributes('Scheduled debate prompt Not now', 'dismiss_scheduled_debate_prompt')}
               onClick={onNotNow}
               className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
             >
@@ -93,6 +96,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
             <button
               type="button"
               disabled={joining}
+              {...scheduleAnalyticsAttributes('Scheduled debate prompt Join', 'join_scheduled_debate')}
               onClick={() => {
                 setJoining(true);
                 startJoining(() => router.push(debateRoomPath(room.room_id)));
