@@ -19,10 +19,8 @@ const mocks = vi.hoisted(() => ({
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   feed: null as Record<string, unknown> | null,
-  comments: null as Record<string, unknown> | null,
   composition: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
-  pathname: '/space/space-1/topic-1',
   /**
    * Deliberately not 3.
    *
@@ -60,13 +58,6 @@ vi.mock('~/partials/entity-page/editable-entity-page', () => ({
     mocks.typesEditor = props;
     return <div data-testid="types-editor" />;
   },
-}));
-vi.mock('next/navigation', () => ({
-  usePathname: () => mocks.pathname,
-  useSearchParams: () => new URLSearchParams(),
-}));
-vi.mock('~/core/hooks/use-entity-comment-count', () => ({
-  useEntityCommentCount: () => ({ count: 7, isLoading: false }),
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
@@ -144,10 +135,7 @@ vi.mock('./topic-composition', () => ({
   },
 }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: (props: Record<string, unknown>) => {
-    mocks.comments = props;
-    return <div data-testid="comments" />;
-  },
+  CommentSection: () => <div data-testid="comments" />,
 }));
 
 function topicEntity(description: string | null) {
@@ -174,10 +162,8 @@ beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.feed = null;
-  mocks.comments = null;
   mocks.composition = null;
   mocks.tabs = null;
-  mocks.pathname = '/space/space-1/topic-1';
   mocks.topicSpaceIds = ['11111111111111111111111111111111'];
   mocks.typesEditor = null;
   mocks.blocks = [];
@@ -266,33 +252,28 @@ describe('TopicPageView explore feed', () => {
     expect(mocks.composition?.spaceIds).toEqual(mocks.feed?.spaceIds);
   });
 
-  it('keeps Explore and counted Comments as built-in tabs so authored tabs can follow them', () => {
+  it('keeps Explore as the built-in tab so authored tabs can follow it', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(mocks.tabs?.systemTabsBefore).toEqual([
       { label: 'Explore', href: '/space/space-1/topic-1', sidePanelKey: 'overview' },
-      {
-        label: 'Comments',
-        href: '/space/space-1/topic-1/comments',
-        sidePanelKey: 'comments',
-        badge: '7',
-      },
     ]);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore']);
   });
 
-  it('keeps comments out of Explore and renders them only on the Comments tab', () => {
-    const { rerender } = render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+  it('renders Explore without comments by default', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
     expect(screen.queryByTestId('comments')).toBeNull();
+  });
 
-    mocks.pathname = '/space/space-1/topic-1/comments';
-    rerender(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+  it('renders Explore for a stale Comments selection in the side panel', () => {
+    mocks.panel = { activeTabId: null, activeSystemTab: 'comments' };
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('comments')).toBeInTheDocument();
-    expect(screen.queryByTestId('topic-feed')).toBeNull();
-    expect(mocks.comments).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1', variant: 'tab' });
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+    expect(screen.queryByTestId('comments')).toBeNull();
   });
 });
 
@@ -482,7 +463,7 @@ describe('TopicPageView Overview tab', () => {
     expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
     // The rule rides Overview instead. Two would claim the row splits in two places.
     expect(mocks.tabs?.divideBeforeAuthored).toBe(false);
-    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Comments', 'Overview']);
+    expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Overview']);
   });
 
   it('shows it to an editor with an empty body, since that is the only way to start one', () => {
@@ -526,10 +507,11 @@ describe('TopicPageView Overview tab', () => {
   });
 
   // The other half of that rule: being *somewhere else* must not conjure the tab back.
-  it('still hides it from a reader who is on any other tab', () => {
-    mocks.pathname = '/space/space-1/topic-1/comments';
+  it('hides an empty Overview while reading an authored tab', () => {
+    mocks.authoredTabId = 'tab-1';
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
+    expect(screen.getByTestId('editor')).toBeInTheDocument();
     expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
   });
 
@@ -572,19 +554,8 @@ describe('TopicPageView Overview tab', () => {
 describe('resolveTopicTab', () => {
   const topic = { entityId: 'topic-1' };
 
-  it('resolves the Comments route', () => {
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/comments', authoredTabId: null, panel: null })).toBe(
-      'comments'
-    );
-  });
-
-  it('resolves legacy system routes to the explore feed', () => {
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/coverage', authoredTabId: null, panel: null })).toBe(
-      'explore'
-    );
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/subtopics', authoredTabId: null, panel: null })).toBe(
-      'explore'
-    );
+  it('defaults to the explore feed without an authored tab', () => {
+    expect(resolveTopicTab({ ...topic, authoredTabId: null, panel: null })).toBe('explore');
   });
 
   /*
@@ -594,18 +565,17 @@ describe('resolveTopicTab', () => {
    * when the entity stops being a topic.
    */
   it("reads a tab id equal to the entity as the topic's own blocks", () => {
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b', authoredTabId: 'topic-1', panel: null })).toBe('blocks');
+    expect(resolveTopicTab({ ...topic, authoredTabId: 'topic-1', panel: null })).toBe('blocks');
   });
 
   it('still reads any other tab id as an authored tab', () => {
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b', authoredTabId: 'tab-1', panel: null })).toBe('custom');
+    expect(resolveTopicTab({ ...topic, authoredTabId: 'tab-1', panel: null })).toBe('custom');
   });
 
   it('resolves the side-panel blocks selection independently of the route behind it', () => {
     expect(
       resolveTopicTab({
         ...topic,
-        pathname: '/space/a/b/comments',
         authoredTabId: null,
         panel: { activeTabId: 'topic-1', activeSystemTab: null },
       })
@@ -616,39 +586,30 @@ describe('resolveTopicTab', () => {
     expect(
       resolveTopicTab({
         ...topic,
-        pathname: '/space/a/b',
         authoredTabId: null,
         panel: { activeTabId: 'tab-1', activeSystemTab: null },
       })
     ).toBe('custom');
   });
 
-  it('lets an authored tab take precedence over the route', () => {
-    expect(resolveTopicTab({ ...topic, pathname: '/space/a/b/claims', authoredTabId: 'tab-1', panel: null })).toBe(
-      'custom'
-    );
-  });
-
   it('uses the side panel selection instead of the page behind it', () => {
     expect(
       resolveTopicTab({
         ...topic,
-        pathname: '/space/a/b/coverage',
         authoredTabId: 'page-tab',
         panel: { activeTabId: null, activeSystemTab: 'debates' },
       })
     ).toBe('explore');
   });
 
-  it('resolves the side-panel Comments selection independently of the route behind it', () => {
+  it('falls back to Explore for a retired side-panel Comments selection', () => {
     expect(
       resolveTopicTab({
         ...topic,
-        pathname: '/space/a/b',
         authoredTabId: null,
         panel: { activeTabId: null, activeSystemTab: 'comments' },
       })
-    ).toBe('comments');
+    ).toBe('explore');
   });
 
   /*
