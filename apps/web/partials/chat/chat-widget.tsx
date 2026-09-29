@@ -215,7 +215,8 @@ export function ChatWidget() {
 
   const pathname = usePathname() ?? '';
   const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
-  const isMobile = useMediaQuery('(max-width: 639px)');
+  // Match the debate feed's `md:` fullscreen overlay breakpoint.
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const hideAssistant = isFullscreenChildRoute(pathname) || (isMobile && debateFullscreenActive);
   const params = useParams();
 
