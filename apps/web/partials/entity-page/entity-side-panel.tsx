@@ -8,6 +8,8 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { entityActionScope } from '~/core/action-entity-context';
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -309,39 +311,50 @@ export function EntitySidePanelSurface({
     forceRequestedSpace,
   });
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const entityContext = entityActionScope(entity);
 
   return (
-    <EntitySidePanelEditModeProvider
-      entitySpaceId={effectiveSpaceId}
-      openedWithMainViewEditing={openedWithMainViewEditing}
-      openedFromReviewEdits={openedFromReviewEdits}
+    <ActionContextProvider
+      value={{
+        ...entityContext,
+        component: undefined,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: entityId,
+        overlay_entity_type: entityContext.target_type ?? 'entity',
+      }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        {showHeader ? (
-          <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
-        ) : null}
-        <div
-          ref={setScrollElement}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-          data-entity-side-panel-scroll
-          data-mobile-sheet-scroll
-        >
-          <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
-            <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
-            <EntitySidePanelBody
-              key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
-              entityId={entityId}
-              entitySpaceId={effectiveSpaceId}
-              entity={entity}
-              isLoadingEntity={isLoading}
-              previewImageUrl={previewImageUrl}
-              previewName={previewName}
-              previewDescription={previewDescription}
-            />
-          </EntitySidePanelActiveTabProvider>
+      <EntitySidePanelEditModeProvider
+        entitySpaceId={effectiveSpaceId}
+        openedWithMainViewEditing={openedWithMainViewEditing}
+        openedFromReviewEdits={openedFromReviewEdits}
+      >
+        <div className="flex min-h-0 flex-1 flex-col">
+          {showHeader ? (
+            <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
+          ) : null}
+          <div
+            ref={setScrollElement}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+            data-entity-side-panel-scroll
+            data-mobile-sheet-scroll
+          >
+            <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
+              <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
+              <EntitySidePanelBody
+                key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
+                entityId={entityId}
+                entitySpaceId={effectiveSpaceId}
+                entity={entity}
+                isLoadingEntity={isLoading}
+                previewImageUrl={previewImageUrl}
+                previewName={previewName}
+                previewDescription={previewDescription}
+              />
+            </EntitySidePanelActiveTabProvider>
+          </div>
         </div>
-      </div>
-    </EntitySidePanelEditModeProvider>
+      </EntitySidePanelEditModeProvider>
+    </ActionContextProvider>
   );
 }
 
@@ -513,17 +526,19 @@ export function EntitySidePanel() {
   const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits, forceRequestedSpace } = sidePanelTarget;
 
   const panelBody = (
-    <EntitySidePanelPopoverPortalProvider>
-      <EntitySidePanelSurface
-        entityId={entityId}
-        requestedSpaceId={spaceId}
-        openedWithMainViewEditing={openedWithMainViewEditing}
-        openedFromReviewEdits={openedFromReviewEdits}
-        forceRequestedSpace={forceRequestedSpace}
-        scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
-        onClose={handleCloseSidePanel}
-      />
-    </EntitySidePanelPopoverPortalProvider>
+    <ActionContextProvider value={sidePanelTarget.analyticsContext ?? {}}>
+      <EntitySidePanelPopoverPortalProvider>
+        <EntitySidePanelSurface
+          entityId={entityId}
+          requestedSpaceId={spaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+          openedFromReviewEdits={openedFromReviewEdits}
+          forceRequestedSpace={forceRequestedSpace}
+          scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
+          onClose={handleCloseSidePanel}
+        />
+      </EntitySidePanelPopoverPortalProvider>
+    </ActionContextProvider>
   );
 
   if (isMobile) {

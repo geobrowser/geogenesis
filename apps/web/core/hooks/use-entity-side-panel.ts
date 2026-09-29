@@ -2,6 +2,8 @@
 
 import { useAtom } from 'jotai';
 
+import { useActionContext } from '~/core/action-context-provider';
+
 import { type EntitySidePanelTarget, entitySidePanelAtom } from '~/atoms';
 
 export type OpenSidePanelOptions = Pick<
@@ -10,6 +12,7 @@ export type OpenSidePanelOptions = Pick<
 >;
 
 export function useEntitySidePanel() {
+  const getContext = useActionContext('entity_vote_buttons', 'entity', '');
   const [target, setTarget] = useAtom(entitySidePanelAtom);
 
   const openSidePanel = (
@@ -20,6 +23,7 @@ export function useEntitySidePanel() {
   ) =>
     setTarget({
       entityId,
+      analyticsContext: getContext({ target_type: 'entity', target_id: entityId }),
       spaceId: entitySpaceId,
       openedWithMainViewEditing,
       ...options,

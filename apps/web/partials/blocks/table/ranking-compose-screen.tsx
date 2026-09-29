@@ -89,7 +89,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const enqueuePendingAction = useEnqueuePendingAction('ranking_composer');
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const handleBack = React.useCallback(() => {

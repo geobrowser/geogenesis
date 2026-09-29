@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
@@ -41,7 +42,26 @@ const COLLAPSED_CLAIM_COUNT = 3;
  * relation points at the speaker's personal space — the same `profile_space_id` these rows already
  * key on. See `core/debates/transcript-claims.ts`.
  */
-export function DebateClaimsPanel({
+export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody>[0]) {
+  return (
+    <ActionSurface
+      className="contents"
+      value={{
+        component: 'debate_claims_panel',
+        target_id: props.debate.id,
+        target_type: 'debate',
+        debate_id: props.debate.id,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: props.debate.id,
+        overlay_entity_type: 'debate',
+      }}
+    >
+      <DebateClaimsPanelBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimsPanelBody({
   debate,
   onClose,
   focusParticipantSpaceId = null,
@@ -305,14 +325,16 @@ function ClaimList({
   return (
     <>
       <ul className="mt-4 space-y-3">
-        {visible.map(claim => (
+        {visible.map((claim, index) => (
           <li key={claim.id}>
-            <ClaimRow
-              claim={claim}
-              row={rowsByClaimId.get(claim.id) ?? null}
-              entity={entitiesByClaimId.get(claim.id) ?? null}
-              timing={timings.get(claim.id) ?? null}
-            />
+            <ActionContextProvider value={{ list_id: 'debate_claims', item_position: index + 1 }}>
+              <ClaimRow
+                claim={claim}
+                row={rowsByClaimId.get(claim.id) ?? null}
+                entity={entitiesByClaimId.get(claim.id) ?? null}
+                timing={timings.get(claim.id) ?? null}
+              />
+            </ActionContextProvider>
           </li>
         ))}
       </ul>

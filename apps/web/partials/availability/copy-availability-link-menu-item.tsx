@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
@@ -15,6 +16,7 @@ import { MenuItem } from '~/design-system/menu';
 export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceId: string }) {
   const enabled = usePeerAvailabilityEnabled();
   const setToast = useSetToast();
+  const getContext = useActionContext('share_dialog', 'space', profileSpaceId);
 
   if (!enabled) return null;
 
@@ -25,7 +27,7 @@ export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceI
       data-geo-analytics-intent="copy_availability_link"
       onClick={async () => {
         try {
-          await copyAvailabilityLink(profileSpaceId);
+          await copyAvailabilityLink(profileSpaceId, getContext());
           setToast(<span>Availability link copied</span>);
         } catch {
           setToast(<span>Could not copy link.</span>);

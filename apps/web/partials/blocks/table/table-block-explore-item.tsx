@@ -13,6 +13,7 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { useBlockExploreFeedItem } from './use-block-explore-feed-item';
 
 type Props = {
+  itemPosition?: number;
   columns: Record<string, Cell>;
   currentSpaceId: string;
   blockSpaceId: string;
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export function TableBlockExploreItem({
+  itemPosition,
   columns,
   currentSpaceId,
   blockSpaceId,
@@ -74,5 +76,5 @@ export function TableBlockExploreItem({
     );
   }
 
-  return <ExploreFeedCard item={item} hideSpaceLink hideJoinButton />;
+  return <ExploreFeedCard itemPosition={itemPosition} listId="data_block" item={item} hideSpaceLink hideJoinButton />;
 }

@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
@@ -213,7 +214,7 @@ export function ClaimExploreFeedCard({
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
-    // The `<article>` is the root and stays the root. Two things depend on that and neither is
+    // The `<ActionSurfaceArticle>` is the root and stays the root. Two things depend on that and neither is
     // visible from here: `table-block-explore-items-dnd` sizes these through `[&>article]`, a
     // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
@@ -222,7 +223,7 @@ export function ClaimExploreFeedCard({
     // The mobile Explore shell is selected by a viewport query rather than this article's container
     // query. That lets the root itself take the debates panel's border, radius and padding while the
     // card's internal wide/narrow decision remains local to the space it actually has.
-    <article
+    <ActionSurfaceArticle
       ref={setContainer}
       className={cx(
         '@container flex flex-col gap-4',
@@ -368,7 +369,7 @@ export function ClaimExploreFeedCard({
           </div>
         ) : null}
       </div>
-    </article>
+    </ActionSurfaceArticle>
   );
 }
 
