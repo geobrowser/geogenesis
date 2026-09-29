@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -102,8 +103,8 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // rather than bouncing someone who is merely early.
   if (room.access.status === 'not_yet_open') {
     return (
-      <RoomNotice>
-        {ROOM_NOT_YET_OPEN.title} {ROOM_NOT_YET_OPEN.opensAt(formatTime(room.access.opens_at))}
+      <RoomNotice action={{ href: NavUtils.toExplore(), label: ROOM_NOT_YET_OPEN.explore }} stacked>
+        {ROOM_NOT_YET_OPEN.message(formatTime(room.access.opens_at), leadMinutes(room.starts_at, room.access.opens_at))}
       </RoomNotice>
     );
   }
@@ -143,18 +144,32 @@ function formatTime(iso: string) {
   return sameDay ? time : `${at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
 }
 
+/** How long before the start the door unlocks, or `null` when the room's times do not say. */
+function leadMinutes(startsAt: string, opensAt: string) {
+  const minutes = Math.round((new Date(startsAt).getTime() - new Date(opensAt).getTime()) / 60_000);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+}
+
 function RoomNotice({
   children,
   busy = false,
   action,
+  stacked = false,
 }: {
   children: React.ReactNode;
   busy?: boolean;
   action?: { href: string; label: string };
+  /** Puts the action under the message rather than beside it, for a message long enough to wrap. */
+  stacked?: boolean;
 }) {
   return (
     <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8" role="status">
-      <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
+      <div
+        className={cx(
+          'flex gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light',
+          stacked ? 'max-w-sm flex-col items-center text-center' : 'items-center'
+        )}
+      >
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
         {action && (
