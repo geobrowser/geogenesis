@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { AvailabilityBlock } from '~/core/availability/blocks';
-import { scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
@@ -96,7 +96,7 @@ export function AvailabilityModal({
                 <button
                   type="button"
                   aria-label="Close"
-                  {...scheduleAnalyticsAttributes('Schedule editor Close', 'close_debate_schedule')}
+                  {...debateActionAnalyticsAttributes('schedule-editor', 'Close', 'close_debate_schedule')}
                   onClick={() => onOpenChange(false)}
                   className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
                 >
@@ -143,7 +143,7 @@ export function AvailabilityModal({
                   <>
                     <button
                       type="button"
-                      {...scheduleAnalyticsAttributes('Schedule editor Cancel', 'close_debate_schedule')}
+                      {...debateActionAnalyticsAttributes('schedule-editor', 'Cancel', 'close_debate_schedule')}
                       onClick={() => onOpenChange(false)}
                       className="rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text"
                     >
@@ -151,7 +151,7 @@ export function AvailabilityModal({
                     </button>
                     <button
                       type="button"
-                      {...scheduleAnalyticsAttributes('Schedule editor Save', 'save_debate_schedule')}
+                      {...debateActionAnalyticsAttributes('schedule-editor', 'Save', 'save_debate_schedule')}
                       onClick={() => {
                         onSave(draft);
                         onOpenChange(false);

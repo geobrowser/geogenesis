@@ -3,10 +3,12 @@
 import * as React from 'react';
 
 import { NOT_A_PERSON_MESSAGE, toAvailability } from '~/core/availability/availability-deep-link';
-import { debateAvailabilityLinkOpened, scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
+import { debateAvailabilityLinkOpened } from '~/core/availability/schedule-analytics';
 import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
 import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
@@ -123,32 +125,30 @@ export function SharedAvailabilityModal({
   // nothing shows until then. A failed space read settles it too: there is no one to be.
   const whoseKnown = ready && (spaceError || !authenticated || isSelf || !profile.isPending);
 
-  // Whether the week can be shown, once that is settled. A space that is not a person is left out:
-  // only a hand-edited link lands there, and `onNotAPerson` takes it away.
-  const peerState = spaceError
+  // Whether the person behind the link can be booked. Read by the notice below and by analytics, so
+  // the two cannot disagree. Still `loading` for a space that is not a person: only a hand-edited
+  // link lands there, and `onNotAPerson` takes it away.
+  const peer = spaceError
     ? 'error'
     : !isPerson || profile.isPending
-      ? null
+      ? 'loading'
       : isDebateProfileMissing(profile.error)
         ? 'no_debate_profile'
         : profile.isError || !person
           ? 'error'
           : 'bookable';
-  const viewer = isSelf ? 'self' : authenticated ? 'other' : 'signed_out';
-  const openedKnown = open && (isSelf || (whoseKnown && peerState !== null));
+
   // Once per landing. Signing in from here keeps this mounted, so it is still the same arrival; a
   // new account sent round onboarding comes back through the link, and that is a second one.
-  const openedRef = React.useRef(false);
-  React.useEffect(() => {
-    if (!openedKnown || openedRef.current) return;
-    openedRef.current = true;
+  const settledPeer = peer === 'loading' ? null : peer;
+  useEffectOnceWhen(open && (isSelf || (whoseKnown && settledPeer !== null)), () =>
     debateAvailabilityLinkOpened({
-      viewer,
-      peer: isSelf ? null : peerState,
+      viewer: isSelf ? 'self' : authenticated ? 'other' : 'signed_out',
+      peer: isSelf ? null : settledPeer,
       rescheduling: rescheduleRequestId !== null,
       via,
-    });
-  }, [openedKnown, viewer, isSelf, peerState, rescheduleRequestId, via]);
+    })
+  );
 
   if (isSelf) {
     return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} surface="availability_link" />;
@@ -156,14 +156,13 @@ export function SharedAvailabilityModal({
   if (!whoseKnown) return null;
 
   const notice = (() => {
-    if (spaceError) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
+    if (peer === 'error') return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
     // Not a word about signing in until this is known to be a person who can be booked: signing in
     // to be told the link leads nowhere would be the worst way to find out.
-    if (!isPerson || profile.isPending) return <Notice className="flex-1">Loading availability…</Notice>;
-    if (isDebateProfileMissing(profile.error)) {
+    if (peer === 'loading') return <Notice className="flex-1">Loading availability…</Notice>;
+    if (peer === 'no_debate_profile') {
       return <Notice className="flex-1">{name ?? 'This person'} hasn&rsquo;t set up debates yet.</Notice>;
     }
-    if (profile.isError || !person) return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
     if (!authenticated) {
       return (
         <Notice
@@ -171,7 +170,7 @@ export function SharedAvailabilityModal({
           action={
             <button
               type="button"
-              {...scheduleAnalyticsAttributes('Availability link Sign in', 'sign_in_for_availability')}
+              {...debateActionAnalyticsAttributes('availability-link', 'Sign in', 'sign_in_for_availability')}
               onClick={() => {
                 setSigningIn(true);
                 signIn();

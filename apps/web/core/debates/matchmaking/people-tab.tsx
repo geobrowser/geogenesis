@@ -6,7 +6,7 @@ import { useAtom } from 'jotai';
 
 import { personProfileOpened } from '~/core/analytics';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
-import { type ScheduleEntry, scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -46,6 +46,7 @@ import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
@@ -582,6 +583,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           peerName={viewingTimes?.name}
           onClose={() => setViewingTimes(null)}
           openerRef={seeTimesOpenerRef}
+          entry={viewingTimes?.entry}
         />
       )}
     </div>
@@ -740,7 +742,7 @@ function PersonRow({
             // Every row carries this control, so the visible label alone leaves a screen reader or
             // voice control with a list of identical targets.
             aria-label={`See times for ${speakerLabel(person)}`}
-            {...scheduleAnalyticsAttributes('Debate hub See times', 'open_peer_availability')}
+            {...hubAnalyticsAttributes('See times', 'open_peer_availability')}
             onClick={event =>
               onRequireSignIn
                 ? onRequireSignIn()
@@ -765,11 +767,7 @@ function PersonRow({
             analyticsLabel="Debate hub Schedule debate"
             analyticsIntent="open_peer_availability"
             onClick={event =>
-              onSeeTimes(
-                { userId: person.user_id, name: speakerLabel(person) },
-                event.currentTarget,
-                'people_schedule'
-              )
+              onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget, 'people_schedule')
             }
           >
             Schedule
@@ -820,7 +818,7 @@ function SharedTimes({
           key={slot.start}
           type="button"
           aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}`}
-          {...scheduleAnalyticsAttributes('Debate hub Shared time', 'open_peer_availability')}
+          {...hubAnalyticsAttributes('Shared time', 'open_peer_availability')}
           onClick={event => onPick(slot.start, event.currentTarget)}
           className="rounded-full border border-grey-02 px-2 py-0.5 text-footnote text-text transition-colors hover:border-text"
         >
@@ -831,7 +829,7 @@ function SharedTimes({
         <button
           type="button"
           aria-label={`More times for ${personName}`}
-          {...scheduleAnalyticsAttributes('Debate hub More times', 'open_peer_availability')}
+          {...hubAnalyticsAttributes('More times', 'open_peer_availability')}
           onClick={event => onPick(undefined, event.currentTarget)}
           className="px-1 text-footnote text-grey-04 transition-colors hover:text-text"
         >

@@ -68,7 +68,7 @@ export const NOT_A_PERSON_MESSAGE = 'This link doesn’t point to a person’s a
  * (which geo-notifications builds) and from someone typing the URL. Read back as `link_source` on
  * `debate_availability_link_opened`.
  */
-export const AVAILABILITY_LINK_VIA = 'share';
+const AVAILABILITY_LINK_VIA = 'share';
 
 /** Absolute, for a clipboard. `origin` defaults to the page's own. */
 export function availabilityLinkUrl(profileSpaceId: string, origin = window.location.origin): string {

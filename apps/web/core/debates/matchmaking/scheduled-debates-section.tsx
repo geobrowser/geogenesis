@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
-import { scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
@@ -20,6 +19,7 @@ import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -222,7 +222,7 @@ function UpcomingRow({
           <Link
             href={debateRoomPath(room.room_id)}
             className={JOIN_PILL}
-            {...scheduleAnalyticsAttributes('Debate hub Join scheduled debate', 'join_scheduled_debate')}
+            {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
           >
             Join debate
           </Link>

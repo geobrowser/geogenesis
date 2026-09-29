@@ -16,7 +16,7 @@ import {
 } from './scheduling-hooks';
 
 const capture = vi.hoisted(() => vi.fn());
-vi.mock('~/core/analytics', () => ({ capture }));
+vi.mock('~/core/analytics', () => ({ capture, analyticsContextRevision: () => 0 }));
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
@@ -139,9 +139,9 @@ describe('scheduling analytics', () => {
     expect(capture).toHaveBeenCalledWith('debate_scheduled_request_failed', {
       mode: 'request',
       entry: 'unknown',
-      error_name: 'GeoChatRequestError',
-      error_status: 409,
       error_code: 'slot_taken',
+      http_status: 409,
+      error_name: 'GeoChatRequestError',
     });
     expect(JSON.stringify(capture.mock.calls)).not.toContain('Ada');
   });
@@ -162,5 +162,43 @@ describe('scheduling analytics', () => {
       accepted: true,
       outcome: 'conflict',
     });
+  });
+
+  // GEO-3073's canonical record, alongside the scheduling events: the same `start_debate` and
+  // `join_debate` the instant challenge and request cards report, told apart by target type.
+  it('reports a booking as a canonical start_debate against the other debater', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }));
+
+    expect(capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        action_kind: 'start_debate',
+        component: 'debate_matchmaking',
+        target_type: 'debate_user',
+        target_id: 'them',
+        outcome: 'succeeded',
+      })
+    );
+  });
+
+  it('reports an acceptance as join_debate, and a decline as no action at all', async () => {
+    vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ outcome: 'recorded', ...sent });
+    const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper: mutationWrapper() });
+
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted: false }));
+    expect(capture).not.toHaveBeenCalledWith('action_completed', expect.anything());
+
+    await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted: true }));
+    expect(capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        action_kind: 'join_debate',
+        target_type: 'scheduled_debate_request',
+        target_id: 'req-1',
+      })
+    );
   });
 });

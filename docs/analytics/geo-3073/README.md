@@ -25,7 +25,7 @@ The entity route layout supplies the page's actual entity and its claim/topic/pe
 | Share | Debate and ranking shares, availability links, and graph/block-link copies. Clipboard success is observable; an external social handoff is unknown. |
 | Join space | `useRequestToBeMember`; explicit membership request, including deferred joins. Automatic membership side effects are not separate user actions. |
 | Bounty interest | `useInterestedInBounty`; publish callback. |
-| Start/join debate | Claim requests, accepting requests, profile challenges, accepting challenges, and rematch requests. These describe request/challenge acceptance, not successful camera admission. |
+| Start/join debate | Claim requests, accepting requests, profile challenges, accepting challenges, and rematch requests. Scheduled debates too: booking a time is `start_debate` (target `debate_user`, the geo-chat user booked), and accepting one is `join_debate` (target `scheduled_debate_request`). Declines are not observed, instant or scheduled. These describe request/challenge acceptance, not successful camera admission. |
 | Search | `useSearch`; completion or failed result, once per user query. Cache refetches are excluded. |
 | Search result | Global search dialog and inline entity picker; mouse/keyboard selection, including choosing a result's space. |
 | Assistant message / option | Chat widget dispatch; distinguishes typed messages and option choices without copying their text into the description. |

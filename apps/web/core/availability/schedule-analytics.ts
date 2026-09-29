@@ -1,4 +1,5 @@
 import { capture } from '~/core/analytics';
+import { geoChatErrorProperties } from '~/core/debates/api';
 
 import type { AvailabilityBlock } from './blocks';
 import type { PeerSchedule } from './peer-schedule';
@@ -8,8 +9,9 @@ import type { PeerSchedule } from './peer-schedule';
  *
  * Two layers, because they reach the warehouse on different terms:
  *
- * - **Click attributes** ({@link scheduleAnalyticsAttributes}) ride the runtime's autocaptured
- *   `element_clicked`, which is registered already. They answer "who pressed what".
+ * - **Click attributes** (`debateActionAnalyticsAttributes` in `hub-analytics`, with the scheduling
+ *   surfaces added there) ride the runtime's autocaptured `element_clicked`, which is registered
+ *   already. They answer "who pressed what".
  * - **Outcome events** (everything else here) fire on the server's answer, not on the press, so a
  *   request that failed is never counted as one sent. Each name has to be registered in
  *   `geobrowser/analytics` (`semantic/events.yaml`): the runtime and the collector both drop a name
@@ -39,12 +41,9 @@ export type ScheduleEntry =
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface = 'navbar' | 'hub_banner' | 'people_tab' | 'availability_link';
 
-/** `data-geo-analytics-*` for a scheduling control. Intents are verbs, stable across copy changes. */
-export function scheduleAnalyticsAttributes(label: string, intent: string) {
-  return {
-    'data-geo-analytics-label': label,
-    'data-geo-analytics-intent': intent,
-  } as const;
+/** Every event that knows how the week was opened says so the same way, `unknown` included. */
+function entryProperty(entry: ScheduleEntry | null | undefined) {
+  return entry ?? 'unknown';
 }
 
 /**
@@ -85,7 +84,7 @@ export function debateAvailabilityViewed(
     slots.reduce((total, slot) => total + Math.max(0, (Date.parse(slot.end) - Date.parse(slot.start)) / 60_000), 0);
 
   capture('debate_availability_viewed', {
-    entry: entry ?? 'unknown',
+    entry: entryProperty(entry),
     bookable,
     peer_user_id: schedule.userId,
     peer_has_schedule: schedule.peerHasSchedule,
@@ -120,14 +119,14 @@ export function debateScheduledRequestSent({
 }) {
   capture('debate_scheduled_request_sent', {
     mode,
-    entry: analytics?.entry ?? 'unknown',
+    entry: entryProperty(analytics?.entry),
     request_id: requestId,
     viewer_is_free: analytics?.viewerIsFree ?? null,
     lead_time_minutes: Math.max(0, Math.round((startsAt.getTime() - now) / 60_000)),
   });
 }
 
-/** The server refused it. Status and code only: geo-chat's message is prose meant for a person. */
+/** The server refused it. */
 export function debateScheduledRequestFailed({
   mode,
   error,
@@ -137,14 +136,10 @@ export function debateScheduledRequestFailed({
   error: unknown;
   analytics?: ScheduledRequestAnalytics;
 }) {
-  const failure = error as { status?: unknown; code?: unknown; name?: unknown } | null;
-
   capture('debate_scheduled_request_failed', {
     mode,
-    entry: analytics?.entry ?? 'unknown',
-    error_name: typeof failure?.name === 'string' ? failure.name : 'unknown',
-    error_status: typeof failure?.status === 'number' ? failure.status : null,
-    error_code: typeof failure?.code === 'string' ? failure.code : null,
+    entry: entryProperty(analytics?.entry),
+    ...geoChatErrorProperties(error),
   });
 }
 

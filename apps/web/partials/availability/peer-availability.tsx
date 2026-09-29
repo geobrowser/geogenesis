@@ -14,12 +14,10 @@ import {
   viewerInputInstant,
   viewerInputValue,
 } from '~/core/availability/peer-schedule';
-import {
-  type ScheduleEntry,
-  debateAvailabilityViewed,
-  scheduleAnalyticsAttributes,
-} from '~/core/availability/schedule-analytics';
+import { type ScheduleEntry, debateAvailabilityViewed } from '~/core/availability/schedule-analytics';
 import { usePeerSchedule } from '~/core/debates/hooks';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 
 import { Text } from '~/design-system/text';
 
@@ -84,13 +82,9 @@ export function PeerAvailability({ userId, peerName, className, booking, initial
   const { schedule, enabled, isPending, isError } = usePeerSchedule(userId);
 
   // Once per opening: the modal mounts this only while open, and a refetch is not a second look.
-  const viewedRef = React.useRef(false);
-  const bookable = Boolean(booking);
-  React.useEffect(() => {
-    if (!schedule || viewedRef.current) return;
-    viewedRef.current = true;
-    debateAvailabilityViewed(schedule, { entry, bookable });
-  }, [schedule, entry, bookable]);
+  useEffectOnceWhen(schedule !== undefined, () => {
+    if (schedule) debateAvailabilityViewed(schedule, { entry, bookable: Boolean(booking) });
+  });
 
   // Signed out there is no viewer to compare against, so the question cannot be asked rather than
   // having failed — a distinction worth drawing, since one of these is fixable by signing in.
@@ -337,8 +331,8 @@ function SendRequest({
         type="button"
         disabled={!startsAt || booking.pending}
         {...(booking.mode === 'reschedule'
-          ? scheduleAnalyticsAttributes('Availability Propose new time', 'reschedule_scheduled_debate')
-          : scheduleAnalyticsAttributes('Availability Send request', 'request_scheduled_debate'))}
+          ? debateActionAnalyticsAttributes('peer-availability', 'Propose new time', 'reschedule_scheduled_debate')
+          : debateActionAnalyticsAttributes('peer-availability', 'Send request', 'request_scheduled_debate'))}
         onClick={() => {
           if (!startsAt) return;
           // Checked at the click rather than trusted from render: an open modal does not re-render
@@ -521,8 +515,9 @@ function DayColumn({
               // day can be put back.
               aria-label={expanded ? `Show less on ${dayLabel}` : `+${hidden} more times on ${dayLabel}`}
               aria-expanded={expanded}
-              {...scheduleAnalyticsAttributes(
-                expanded ? 'Availability Show fewer times' : 'Availability Show more times',
+              {...debateActionAnalyticsAttributes(
+                'peer-availability',
+                expanded ? 'Show fewer times' : 'Show more times',
                 'expand_peer_availability_day'
               )}
               onClick={() => setExpanded(current => !current)}
@@ -581,8 +576,9 @@ function SlotChip({
       disabled={past}
       data-viewer-free={slot.viewerIsFree === true || undefined}
       data-past={past || undefined}
-      {...scheduleAnalyticsAttributes(
-        slot.viewerIsFree === true ? 'Availability Mutual slot' : 'Availability Slot',
+      {...debateActionAnalyticsAttributes(
+        'peer-availability',
+        slot.viewerIsFree === true ? 'Mutual slot' : 'Slot',
         selected ? 'deselect_debate_slot' : 'select_debate_slot'
       )}
       onClick={onSelect}

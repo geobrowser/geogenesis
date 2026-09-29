@@ -6,7 +6,8 @@ import type * as React from 'react';
 
 import cx from 'classnames';
 
-import { type ScheduleEntry, scheduleAnalyticsAttributes } from '~/core/availability/schedule-analytics';
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
@@ -102,7 +103,7 @@ export function PeerAvailabilityModal({
               <button
                 type="button"
                 aria-label="Close"
-                {...scheduleAnalyticsAttributes('Availability Close', 'close_peer_availability')}
+                {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
                 onClick={onClose}
                 className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
               >

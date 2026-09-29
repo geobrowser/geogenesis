@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AvailabilityBlock } from './blocks';
 import type { PeerSchedule } from './peer-schedule';
-import { debateAvailabilityViewed, debateScheduleSaved, scheduleAnalyticsAttributes } from './schedule-analytics';
+import { debateAvailabilityViewed, debateScheduleSaved } from './schedule-analytics';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics', () => ({ capture }));
@@ -66,13 +66,6 @@ describe('schedule analytics', () => {
       viewer_has_schedule: true,
       free_minutes: 210,
       mutual_free_minutes: 180,
-    });
-  });
-
-  it('builds the attributes the runtime reads off a click', () => {
-    expect(scheduleAnalyticsAttributes('Availability Send request', 'request_scheduled_debate')).toEqual({
-      'data-geo-analytics-label': 'Availability Send request',
-      'data-geo-analytics-intent': 'request_scheduled_debate',
     });
   });
 });

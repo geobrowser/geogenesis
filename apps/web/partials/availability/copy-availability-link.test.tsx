@@ -55,7 +55,9 @@ describe('CopyOwnAvailabilityLinkButton', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/my-space?modal=availability&via=share`);
+    expect(await navigator.clipboard.readText()).toBe(
+      `${window.location.origin}/space/my-space?modal=availability&via=share`
+    );
     expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
   });
 
@@ -83,7 +85,9 @@ describe('CopyAvailabilityLinkMenuItem', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/their-space?modal=availability&via=share`);
+    expect(await navigator.clipboard.readText()).toBe(
+      `${window.location.origin}/space/their-space?modal=availability&via=share`
+    );
     expect(setToast).toHaveBeenCalledOnce();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -145,7 +149,9 @@ describe.each(['schedule', 'menu'] as const)('%s share attribution', surface => 
     );
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
     const spaceId = surface === 'schedule' ? 'my-space' : 'their-space';
-    expect(clipboard).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}/space/${spaceId}?modal=availability`);
+    expect(clipboard).toHaveBeenCalledExactlyOnceWith(
+      `${window.location.origin}/space/${spaceId}?modal=availability&via=share`
+    );
     expect(capture).not.toHaveBeenCalled();
 
     // Navigation and caller unmount may happen before the clipboard promise settles.
