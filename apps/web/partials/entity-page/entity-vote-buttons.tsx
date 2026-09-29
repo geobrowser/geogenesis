@@ -379,18 +379,30 @@ export function EntityVoteButtons({
 
   if (presentation !== 'inline') {
     return (
-      <DebateVotePill
-        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
-        score={scoreLabel}
-        positiveActive={positiveActive}
-        negativeActive={negativeActive}
-        disabled={responseDisabled}
-        pending={isProcessingResponse}
-        positiveTitle={positiveTitle}
-        negativeTitle={negativeTitle}
-        onPositive={handlePositiveResponse}
-        onNegative={handleNegativeResponse}
-      />
+      <>
+        {/* The overlay's announcement. It had none: the confirming copy reached `title` and
+            `aria-label`, both read on focus and never announced, so a vote cast from the video
+            overlay told a screen reader nothing had happened. Same node, same gate and same copy as
+            the inline thumbs, so the feedback does not depend on where the vote was cast. `sr-only`
+            is absolutely positioned and clipped, so it cannot disturb the overlay's layout. */}
+        {isResponseIndexingDelayed ? (
+          <span aria-live="polite" className="sr-only">
+            {RESPONSE_CONFIRMING_COPY}
+          </span>
+        ) : null}
+        <DebateVotePill
+          orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
+          score={scoreLabel}
+          positiveActive={positiveActive}
+          negativeActive={negativeActive}
+          disabled={responseDisabled}
+          pending={isProcessingResponse}
+          positiveTitle={positiveTitle}
+          negativeTitle={negativeTitle}
+          onPositive={handlePositiveResponse}
+          onNegative={handleNegativeResponse}
+        />
+      </>
     );
   }
 

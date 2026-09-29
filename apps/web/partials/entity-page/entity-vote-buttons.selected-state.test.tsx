@@ -28,6 +28,7 @@ const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const mocks = vi.hoisted(() => ({
   optimisticResponse: undefined as 'positive' | 'negative' | undefined,
   isProcessingResponse: false,
+  isResponseIndexingDelayed: false,
   submitResponse: vi.fn(),
 }));
 
@@ -50,7 +51,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimisticResponse,
     isProcessingResponse: mocks.isProcessingResponse,
-    isResponseIndexingDelayed: false,
+    isResponseIndexingDelayed: mocks.isResponseIndexingDelayed,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),
@@ -90,6 +91,7 @@ function inlineButtons() {
 beforeEach(() => {
   mocks.optimisticResponse = undefined;
   mocks.isProcessingResponse = false;
+  mocks.isResponseIndexingDelayed = false;
   mocks.submitResponse.mockClear();
 });
 
@@ -206,6 +208,25 @@ describe('the selected vote treatment', () => {
       const [up] = renderPill();
 
       expect(up).toHaveAttribute('title', 'Response submitted. Waiting for confirmation.');
+    });
+
+    /**
+     * The overlay announced nothing. `title` and `aria-label` are read on focus, never announced
+     */
+    it('announces the confirmation rather than only putting it on focus', () => {
+      mocks.isProcessingResponse = true;
+      mocks.isResponseIndexingDelayed = true;
+      renderPill();
+
+      const notice = screen.getByText('Response submitted. Waiting for confirmation.');
+      expect(notice).toHaveAttribute('aria-live', 'polite');
+      expect(notice).toHaveClass('sr-only');
+    });
+
+    it('announces nothing before the response is in that window', () => {
+      renderPill();
+
+      expect(screen.queryByText('Response submitted. Waiting for confirmation.')).not.toBeInTheDocument();
     });
   });
 

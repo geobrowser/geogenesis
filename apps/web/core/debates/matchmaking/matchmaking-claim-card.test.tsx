@@ -1300,6 +1300,28 @@ describe('MatchmakingClaimCard', () => {
       expect(mocks.submitResponse).not.toHaveBeenCalled();
     });
 
+    /**
+     * The pills announced nothing. `RESPONSE_CONFIRMING_COPY` reached `title` through `actionTitle`,
+     * which a screen reader reads on focus and never announces.
+     */
+    it('announces the confirmation rather than only putting it on focus', () => {
+      mocks.indexing = { status: 'delayed', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const notice = screen.getByText('Response submitted. Waiting for confirmation.');
+      expect(notice).toHaveAttribute('aria-live', 'polite');
+      expect(notice).toHaveClass('sr-only');
+    });
+
+    // The same gate `EntityVoteButtons` announces on, so the two cannot announce at different
+    // moments. `reconciling` is the earlier window the press guard and the wait cursor hang off.
+    it('does not announce while merely reconciling', () => {
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      expect(screen.queryByText('Response submitted. Waiting for confirmation.')).not.toBeInTheDocument();
+    });
+
     it('removes the position once the chain has confirmed it', () => {
       // `indexed` holds the snapshot until geo-chat agrees, but the side it draws is now a fact.
       mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'positive' }, runId: 'run-1' };

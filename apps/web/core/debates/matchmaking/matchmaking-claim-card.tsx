@@ -560,6 +560,7 @@ export function useClaimPositionControl({
     isConnected,
     /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
     isResponsePending,
+    isResponseIndexingDelayed: responseIndexing.status === 'delayed',
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -726,23 +727,31 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
-    useClaimPositionControl({
-      claim,
-      positions,
-      readiness: resolvedReadiness,
-      // The unmerged one, and only once geo-chat has actually answered for this claim — which is
-      // exactly what `answersReady` reports, before the index is allowed to stand in for it.
-      serverReadiness: answersReady ? readiness : null,
-      answersReady: sideKnown,
-      responseBlockedReason,
-      viewerIdentityPending,
-      viewerResponseUnknown,
-      onRequireSignIn,
-      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-      offersDebate: !hideEndSlot,
-    });
+  const {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    canRespond,
+    isResponsePending,
+    isResponseIndexingDelayed,
+  } = useClaimPositionControl({
+    claim,
+    positions,
+    readiness: resolvedReadiness,
+    // The unmerged one, and only once geo-chat has actually answered for this claim — which is
+    // exactly what `answersReady` reports, before the index is allowed to stand in for it.
+    serverReadiness: answersReady ? readiness : null,
+    answersReady: sideKnown,
+    responseBlockedReason,
+    viewerIdentityPending,
+    viewerResponseUnknown,
+    onRequireSignIn,
+    // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+    // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+    offersDebate: !hideEndSlot,
+  });
 
   return (
     <>
@@ -765,6 +774,11 @@ function RespondableControls({
           ))
         }
       />
+      {isResponseIndexingDelayed ? (
+        <span aria-live="polite" className="sr-only">
+          {RESPONSE_CONFIRMING_COPY}
+        </span>
+      ) : null}
       <PositionRow
         positions={optimisticPositions}
         responseKind={CLAIM_RESPONSE_KIND}
