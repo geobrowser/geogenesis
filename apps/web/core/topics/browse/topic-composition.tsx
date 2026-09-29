@@ -44,6 +44,36 @@ export function TopicComposition({
 }) {
   const { counts, isLoading } = useTopicComposition(topicId, spaceId, spaceIds);
 
+  return <TopicCompositionBar counts={counts} isLoading={isLoading} />;
+}
+
+/** The composition summary for a topic space: what the space's own feed holds, per type. */
+export function useSpaceTopicComposition(spaceId: string) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['topic', 'space-composition', ID.uuidToHex(spaceId)],
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({ spaceId });
+      const response = await fetch(`/api/topics/space/composition?${params}`, { credentials: 'include', signal });
+      if (!response.ok) throw new Error('Space topic composition failed');
+      return response.json() as Promise<TopicFeedCompositionCounts>;
+    },
+    staleTime: 60_000,
+  });
+
+  return { counts: data ?? null, isLoading };
+}
+
+/**
+ * The bar and legend alone, fed counts by whichever population it summarises — a topic's tagged
+ * entities or a topic space's contents.
+ */
+export function TopicCompositionBar({
+  counts,
+  isLoading,
+}: {
+  counts: TopicFeedCompositionCounts | null;
+  isLoading: boolean;
+}) {
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];
 

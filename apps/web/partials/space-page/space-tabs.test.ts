@@ -27,6 +27,27 @@ describe('buildSpaceTabs', () => {
     expect(tabs.find(tab => tab.label === 'Debates')).toBeUndefined();
   });
 
+  it('leads a topic space with Explore at the bare URL and moves Overview to its own route', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Explore', href: `${overviewHref}?tabId=explore` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
+      isDebugDebatesPageEnabled: false,
+      isTopicSpace: true,
+    });
+
+    expect(tabs.map(tab => [tab.label, tab.href])).toEqual([
+      ['Explore', overviewHref],
+      ['Overview', `${overviewHref}/overview`],
+      ['Facts', `${overviewHref}?tabId=facts`],
+      ['Sources', `${overviewHref}?tabId=sources`],
+      ['Governance', `${overviewHref}/governance`],
+      ['Activity', `${overviewHref}/activity`],
+    ]);
+  });
+
   it('keeps personal spaces from showing Governance', () => {
     const tabs = buildSpaceTabs({
       spaceId,

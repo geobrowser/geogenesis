@@ -24,17 +24,13 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
-import { SpaceDebateActivitySection } from '~/partials/space-page/space-debate-activity-section';
-import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { resolveSpaceSidebar } from './space-sidebar';
+import { SpaceOverviewBody, SpaceTopicExploreBody } from './space-overview-body';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -102,69 +98,13 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { isRootSpace, communityCalls }] = await Promise.all([
-    getSpaceFrontPage(space),
-    resolveSpaceSidebar(spaceId),
-  ]);
-
-  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
-  // (GEO-2875). Both branches are containers under Suspense so the rail's query never delays the
-  // page's own JSX; the gallery this replaces streamed the same way.
-  let sidebar: React.ReactNode = null;
-  if (!tabId) {
-    sidebar = (
-      <React.Suspense fallback={null}>
-        {isRootSpace ? (
-          <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
-        ) : (
-          <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
-        )}
-      </React.Suspense>
-    );
+  // A Topic-typed home opens on the topic's Explore feed, as a topic page does; the authored page
+  // it would otherwise open on moves to its own Overview route. An authored tab is still the tab.
+  if (!tabId && Spaces.isTopicHomeSpace(space)) {
+    return <SpaceTopicExploreBody spaceId={spaceId} spaceTopicId={space!.entity.id} />;
   }
 
-  return (
-    <EntityPageSidebarLayout sidebar={sidebar}>
-      {/*
-       * Debate activity first, on Overview only (GEO "space activity section").
-       *
-       * The same card a person's profile leads with, and it leads here for the same reason: the
-       * space's authored page is what the space is *for*, but it is also the part that changes
-       * least, while the debates argued here and the claims queued up for debating are what
-       * somebody arriving wants to know is happening. It renders nothing at all unless the space is
-       * set up for debates and actually holds some, so every other space is unchanged — including
-       * the vertical rhythm, since an absent section contributes no height.
-       *
-       * Not rendered on a tab: `tabId` means an authored page of the space's own, and an activity
-       * card above it would read as a section of that page rather than of the space.
-       */}
-      {!tabId && <SpaceDebateActivitySection spaceId={spaceId} />}
-      <React.Suspense fallback={null}>
-        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-      </React.Suspense>
-      <Spacer height={24} />
-      <ToggleEntityPage id={props.id} spaceId={spaceId} />
-      <Spacer height={40} />
-      {/*
-        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-        boundary. We don't want to show any referenced by loading states but do want to
-        stream it in
-      */}
-      {/*
-        Skipped entirely when the space has no home entity, where `props.id` is `''`.
-        `getEntityBacklinks` now answers an invalid id without a request, so this is not
-        what stops the 400 — it stops a boundary, a Suspense and a render existing to
-        produce nothing.
-      */}
-      {props.id !== '' && (
-        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={props.id} />
-          </React.Suspense>
-        </TrackedErrorBoundary>
-      )}
-    </EntityPageSidebarLayout>
-  );
+  return <SpaceOverviewBody space={space} spaceId={spaceId} tabId={tabId} />;
 }
 
 /**
@@ -337,48 +277,5 @@ const SubtopicGallerySkeleton = () => {
   );
 };
 
-const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
-  const entity = space?.entity;
-
-  if (!entity) {
-    // A space with no home entity. `id` stays `''` rather than a generated one because
-    // consumers here render it, and inventing an id makes them render a page for an
-    // entity that does not exist — the layout's variant generates one only because it
-    // needs a stable key. Anything that treats this as a real id is the caller's bug to
-    // avoid; see the `props.id` guard where backlinks are rendered.
-    return {
-      id: '',
-      name: null,
-      values: [],
-      relations: [],
-      spaceTypes: [],
-    };
-  }
-
-  // See layout.tsx getSpaceFrontPage for the rationale (incl. why this is gated
-  // to the test env). When the indexer's space record has no home entity id,
-  // treat spaceId as the synthetic home-entity id AND fetch the entity at that
-  // id so published values surface here (not just space.entity which is empty
-  // in that case).
-  if (!entity.id && space?.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
-    const synthetic = await cachedFetchEntityPage(space.id, space.id);
-    const syntheticEntity = synthetic?.entity ?? null;
-    return {
-      id: space.id,
-      name: syntheticEntity?.name ?? null,
-      values: syntheticEntity?.values ?? [],
-      spaceTypes: syntheticEntity?.types ?? [],
-      relationsOut: syntheticEntity?.relations ?? [],
-    };
-  }
-
-  return {
-    name: entity?.name ?? null,
-    values: entity?.values ?? [],
-    id: entity.id,
-    spaceTypes: space?.entity?.types ?? [],
-    relationsOut: entity?.relations ?? [],
-  };
-};
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';

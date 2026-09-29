@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SpaceDecoder } from '~/core/io/decoders/space';
 import type { RemoteEntity } from '~/core/io/schema';
 
-import { hasExternalTopic, isPersonProfileSpace } from './spaces';
+import { TOPIC_TYPE_ID } from '~/core/constants';
+
+import { hasExternalTopic, isPersonProfileSpace, isTopicHomeSpace } from './spaces';
 
 /**
  * The two topic predicates, exercised through the decoder rather than a
@@ -123,5 +125,55 @@ describe('isPersonProfileSpace', () => {
   it('is false for nothing at all', () => {
     expect(isPersonProfileSpace(null)).toBe(false);
     expect(isPersonProfileSpace(undefined)).toBe(false);
+  });
+});
+
+describe('isTopicHomeSpace', () => {
+  // Types are read off the TYPES relations, so the fixture carries them there as well.
+  function typed(name: string, types: { id: string; name: string }[]) {
+    return remoteEntity(TOPIC_ID, name, {
+      types,
+      relationsList: types.map((type, index) => ({
+        id: `0000000000000000000000000000001${index}`,
+        entityId: TOPIC_ID,
+        spaceId: SPACE_ID,
+        position: null,
+        verified: null,
+        fromEntity: { id: TOPIC_ID, name },
+        toEntity: { id: type.id, name: type.name, types: [], valuesList: [] },
+        toSpaceId: null,
+        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+      })),
+    });
+  }
+
+  const topic = typed('AI', [{ id: TOPIC_TYPE_ID, name: 'Topic' }]);
+
+  it('is true for a DAO space whose home entity is a Topic', () => {
+    expect(isTopicHomeSpace(decode({ type: 'DAO', topic }))).toBe(true);
+  });
+
+  it('reads the page when there is no topic, like the profile check', () => {
+    expect(isTopicHomeSpace(decode({ type: 'DAO', topicId: null, page: topic }))).toBe(true);
+  });
+
+  it('is false for a space whose home entity is not a Topic', () => {
+    expect(isTopicHomeSpace(decode({ type: 'DAO' }))).toBe(false);
+  });
+
+  it('never takes a profile away from its person', () => {
+    const personTopic = typed('Preston Mantel', [
+      { id: SystemIds.PERSON_TYPE, name: 'Person' },
+      { id: TOPIC_TYPE_ID, name: 'Topic' },
+    ]);
+    const space = decode({ topic: personTopic });
+
+    expect(isPersonProfileSpace(space)).toBe(true);
+    expect(isTopicHomeSpace(space)).toBe(false);
+  });
+
+  it('is false for nothing at all', () => {
+    expect(isTopicHomeSpace(null)).toBe(false);
+    expect(isTopicHomeSpace(undefined)).toBe(false);
   });
 });
