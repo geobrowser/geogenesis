@@ -423,65 +423,83 @@ describe('Properties', () => {
 describe('replacePropertyTypeRelation', () => {
   const TEXT = '9edb6fcce4544aa5861139d7f024c010';
   const RELATION = '4b6d9fc1fbfe474c861c83398e1b50d9';
+  const PROPERTY = { id: '0b9b1a35206844318f7d2350f958a728', name: 'Participants' };
+  const TYPE = { id: DATA_TYPE_PROPERTY, name: 'Data Type' };
 
-  const relation = (id: string, toId: string, flags: Partial<Relation> = {}): Relation => ({
+  const existingRelation = (id: string, flags: Partial<Relation>): Relation => ({
     id,
     entityId: `${id}-entity`,
     spaceId: 'space',
     position: 'a0',
     verified: false,
     renderableType: 'RELATION',
-    type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
-    fromEntity: { id: 'property', name: 'Participants' },
-    toEntity: { id: toId, name: toId === TEXT ? 'Text' : 'Relation', value: toId },
+    type: TYPE,
+    fromEntity: PROPERTY,
+    toEntity: { id: TEXT, name: 'Text', value: TEXT },
     ...flags,
   });
 
-  function run(existing: Relation | undefined) {
+  function changeToRelation(existing: Relation | undefined) {
     const set = vi.fn<(r: Relation) => void>();
     const del = vi.fn<(r: Relation) => void>();
-    replacePropertyTypeRelation(existing, relation('replacement', RELATION), { set, delete: del });
+    replacePropertyTypeRelation(
+      { existing, property: PROPERTY, spaceId: 'space', type: TYPE, target: { id: RELATION, name: 'Relation' } },
+      { set, delete: del }
+    );
     return { set, del };
   }
 
+  /** A complete new relation: fresh ids, pointing from the property at the new target. */
+  const expectFreshRelation = (relation: Relation, notId?: string) => {
+    expect(relation).toMatchObject({
+      fromEntity: PROPERTY,
+      type: TYPE,
+      toEntity: { id: RELATION, name: 'Relation', value: RELATION },
+      spaceId: 'space',
+      verified: false,
+      renderableType: 'RELATION',
+    });
+    expect(relation.id).toMatch(/^[0-9a-f]{32}$/);
+    expect(relation.entityId).toMatch(/^[0-9a-f]{32}$/);
+    if (notId) expect(relation.id).not.toBe(notId);
+  };
+
   // Changing the type twice before publishing should leave one relation, not a trail of dead ones.
   it('edits a relation that has never been published in place', () => {
-    const existing = relation('draft', TEXT, { isLocal: true, hasBeenPublished: false });
+    const existing = existingRelation('draft', { isLocal: true, hasBeenPublished: false });
 
-    const { set, del } = run(existing);
+    const { set, del } = changeToRelation(existing);
 
     expect(del).not.toHaveBeenCalled();
-    expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'draft', toEntity: expect.objectContaining({ id: RELATION }) })
-    );
+    expect(set).toHaveBeenCalledWith({ ...existing, toEntity: { id: RELATION, name: 'Relation', value: RELATION } });
   });
 
   // The Participants bug: created as Text and published, then changed to Relation in the same
   // session. The published relation is still `isLocal` in the store; reusing its id published a
   // `createRelation` the graph ignored, so the property stayed Text.
   it('replaces a relation published from this session under a new id', () => {
-    const existing = relation('published', TEXT, { isLocal: true, hasBeenPublished: true });
+    const existing = existingRelation('published', { isLocal: true, hasBeenPublished: true });
 
-    const { set, del } = run(existing);
+    const { set, del } = changeToRelation(existing);
 
     expect(del).toHaveBeenCalledWith(existing);
     expect(set).toHaveBeenCalledTimes(1);
-    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement', toEntity: { id: RELATION } });
+    expectFreshRelation(set.mock.calls[0][0], existing.id);
   });
 
   it('replaces a relation loaded from the graph under a new id', () => {
-    const existing = relation('remote', TEXT, { isLocal: false });
+    const existing = existingRelation('remote', { isLocal: false });
 
-    const { set, del } = run(existing);
+    const { set, del } = changeToRelation(existing);
 
     expect(del).toHaveBeenCalledWith(existing);
-    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement' });
+    expectFreshRelation(set.mock.calls[0][0], existing.id);
   });
 
   it('creates the relation when there is none yet', () => {
-    const { set, del } = run(undefined);
+    const { set, del } = changeToRelation(undefined);
 
     expect(del).not.toHaveBeenCalled();
-    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement' });
+    expectFreshRelation(set.mock.calls[0][0]);
   });
 });

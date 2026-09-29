@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 
@@ -14,6 +14,7 @@ import {
   UNIT_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
 } from '~/core/constants';
+import { ID } from '~/core/id';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { getEntity } from '~/core/io/queries';
 import type { GeoStore } from '~/core/sync/store';
@@ -395,14 +396,37 @@ export function getCurrentRenderableType(
  * update its `to` target, so reusing the id publishes a type change the graph silently ignores.
  */
 export function replacePropertyTypeRelation(
-  existing: Relation | undefined,
-  replacement: Relation,
+  {
+    existing,
+    property,
+    spaceId,
+    type,
+    target,
+  }: {
+    existing: Relation | undefined;
+    property: { id: string; name: string };
+    spaceId: string;
+    /** The relation type: `DATA_TYPE_PROPERTY` or `RENDERABLE_TYPE_PROPERTY`. */
+    type: { id: string; name: string };
+    target: { id: string; name: string };
+  },
   relations: { set: (relation: Relation) => void; delete: (relation: Relation) => void }
 ): void {
+  const toEntity = { ...target, value: target.id };
   if (existing?.isLocal && !existing.hasBeenPublished) {
-    relations.set({ ...existing, toEntity: replacement.toEntity });
+    relations.set({ ...existing, toEntity });
     return;
   }
   if (existing) relations.delete(existing);
-  relations.set(replacement);
+  relations.set({
+    id: ID.createEntityId(),
+    entityId: ID.createEntityId(),
+    fromEntity: property,
+    type,
+    toEntity,
+    spaceId,
+    position: Position.generate(),
+    verified: false,
+    renderableType: 'RELATION',
+  });
 }

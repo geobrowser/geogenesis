@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -18,7 +18,6 @@ import {
 } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -166,21 +165,15 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
         );
 
         Properties.replacePropertyTypeRelation(
-          existingDataTypeRelation,
           {
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: { id: entityId, name: name || '' },
+            existing: existingDataTypeRelation,
+            property: { id: entityId, name: name || '' },
+            spaceId,
             type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
-            toEntity: {
+            target: {
               id: dataTypeEntityId,
               name: (SWITCHABLE_RENDERABLE_TYPE_LABELS as Record<string, string>)[baseDataType] || baseDataType,
-              value: dataTypeEntityId,
             },
-            spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
           },
           storage.relations
         );
@@ -192,21 +185,12 @@ export function EntityPageMetadataHeader({ spaceId }: EntityPageMetadataHeaderPr
 
       if (renderableTypeId) {
         Properties.replacePropertyTypeRelation(
-          existingRelation,
           {
-            id: IdUtils.generate(),
-            entityId: ID.createEntityId(),
-            fromEntity: { id: entityId, name: propertyData?.name || '' },
-            type: { id: RENDERABLE_TYPE_PROPERTY, name: 'Renderable Type' },
-            toEntity: {
-              id: renderableTypeId,
-              name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType,
-              value: renderableTypeId,
-            },
+            existing: existingRelation,
+            property: { id: entityId, name: propertyData?.name || '' },
             spaceId,
-            position: Position.generate(),
-            verified: false,
-            renderableType: 'RELATION',
+            type: { id: RENDERABLE_TYPE_PROPERTY, name: 'Renderable Type' },
+            target: { id: renderableTypeId, name: SWITCHABLE_RENDERABLE_TYPE_LABELS[newType] || newType },
           },
           storage.relations
         );
