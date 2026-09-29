@@ -18,6 +18,7 @@ import { ID } from '~/core/id';
 import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { getEntity } from '~/core/io/queries';
 import type { GeoStore } from '~/core/sync/store';
+import type { Mutator } from '~/core/sync/use-mutate';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
 import { getSpaceRank, scopeBySpacePrecedence } from '~/core/utils/space/space-ranking';
 
@@ -389,11 +390,11 @@ export function getCurrentRenderableType(
 /**
  * Point a property's Data type or Renderable type relation at a new target.
  *
- * A relation that has never been published is edited in place, so changing the type several times
- * before publishing doesn't pile up dead relations. Anything already on the graph is deleted and
- * replaced under a new id instead — and that includes relations published from this browser, which
- * stay `isLocal` with `hasBeenPublished` set. GRC-20 `createRelation` with an existing id does not
- * update its `to` target, so reusing the id publishes a type change the graph silently ignores.
+ * An existing relation goes through `relations.update`, which already knows when an id can be kept:
+ * a relation from the current edit is changed in place, while one that exists on the graph —
+ * loaded, published from this session, or carrying a pending update (`isExistingRelation`) — is
+ * deleted and recreated under a new id. That matters because GRC-20 `createRelation` with an
+ * existing id doesn't move its `to` target, so reusing it publishes a type change the graph ignores.
  */
 export function replacePropertyTypeRelation(
   {
@@ -410,14 +411,15 @@ export function replacePropertyTypeRelation(
     type: { id: string; name: string };
     target: { id: string; name: string };
   },
-  relations: { set: (relation: Relation) => void; delete: (relation: Relation) => void }
+  relations: Pick<Mutator['relations'], 'set' | 'update'>
 ): void {
   const toEntity = { ...target, value: target.id };
-  if (existing?.isLocal && !existing.hasBeenPublished) {
-    relations.set({ ...existing, toEntity });
+  if (existing) {
+    relations.update(existing, draft => {
+      draft.toEntity = toEntity;
+    });
     return;
   }
-  if (existing) relations.delete(existing);
   relations.set({
     id: ID.createEntityId(),
     entityId: ID.createEntityId(),

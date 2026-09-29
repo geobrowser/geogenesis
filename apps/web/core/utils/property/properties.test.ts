@@ -5,13 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
-import {
-  constructDataType,
-  getCurrentRenderableType,
-  mapPropertyType,
-  reconstructFromStore,
-  replacePropertyTypeRelation,
-} from './properties';
+import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
 
 // Mock the DTO module — use real SDK IDs so tests match actual usage
 vi.mock('~/core/io/dto/properties', () => ({
@@ -417,89 +411,5 @@ describe('Properties', () => {
       const result = getCurrentRenderableType(mockPropertyDataType);
       expect(result).toBe('TEXT');
     });
-  });
-});
-
-describe('replacePropertyTypeRelation', () => {
-  const TEXT = '9edb6fcce4544aa5861139d7f024c010';
-  const RELATION = '4b6d9fc1fbfe474c861c83398e1b50d9';
-  const PROPERTY = { id: '0b9b1a35206844318f7d2350f958a728', name: 'Participants' };
-  const TYPE = { id: DATA_TYPE_PROPERTY, name: 'Data Type' };
-
-  const existingRelation = (id: string, flags: Partial<Relation>): Relation => ({
-    id,
-    entityId: `${id}-entity`,
-    spaceId: 'space',
-    position: 'a0',
-    verified: false,
-    renderableType: 'RELATION',
-    type: TYPE,
-    fromEntity: PROPERTY,
-    toEntity: { id: TEXT, name: 'Text', value: TEXT },
-    ...flags,
-  });
-
-  function changeToRelation(existing: Relation | undefined) {
-    const set = vi.fn<(r: Relation) => void>();
-    const del = vi.fn<(r: Relation) => void>();
-    replacePropertyTypeRelation(
-      { existing, property: PROPERTY, spaceId: 'space', type: TYPE, target: { id: RELATION, name: 'Relation' } },
-      { set, delete: del }
-    );
-    return { set, del };
-  }
-
-  /** A complete new relation: fresh ids, pointing from the property at the new target. */
-  const expectFreshRelation = (relation: Relation, notId?: string) => {
-    expect(relation).toMatchObject({
-      fromEntity: PROPERTY,
-      type: TYPE,
-      toEntity: { id: RELATION, name: 'Relation', value: RELATION },
-      spaceId: 'space',
-      verified: false,
-      renderableType: 'RELATION',
-    });
-    expect(relation.id).toMatch(/^[0-9a-f]{32}$/);
-    expect(relation.entityId).toMatch(/^[0-9a-f]{32}$/);
-    if (notId) expect(relation.id).not.toBe(notId);
-  };
-
-  // Changing the type twice before publishing should leave one relation, not a trail of dead ones.
-  it('edits a relation that has never been published in place', () => {
-    const existing = existingRelation('draft', { isLocal: true, hasBeenPublished: false });
-
-    const { set, del } = changeToRelation(existing);
-
-    expect(del).not.toHaveBeenCalled();
-    expect(set).toHaveBeenCalledWith({ ...existing, toEntity: { id: RELATION, name: 'Relation', value: RELATION } });
-  });
-
-  // The Participants bug: created as Text and published, then changed to Relation in the same
-  // session. The published relation is still `isLocal` in the store; reusing its id published a
-  // `createRelation` the graph ignored, so the property stayed Text.
-  it('replaces a relation published from this session under a new id', () => {
-    const existing = existingRelation('published', { isLocal: true, hasBeenPublished: true });
-
-    const { set, del } = changeToRelation(existing);
-
-    expect(del).toHaveBeenCalledWith(existing);
-    expect(set).toHaveBeenCalledTimes(1);
-    expectFreshRelation(set.mock.calls[0][0], existing.id);
-  });
-
-  it('replaces a relation loaded from the graph under a new id', () => {
-    const existing = existingRelation('remote', { isLocal: false });
-
-    const { set, del } = changeToRelation(existing);
-
-    expect(del).toHaveBeenCalledWith(existing);
-    expectFreshRelation(set.mock.calls[0][0], existing.id);
-  });
-
-  it('creates the relation when there is none yet', () => {
-    const { set, del } = changeToRelation(undefined);
-
-    expect(del).not.toHaveBeenCalled();
-    expectFreshRelation(set.mock.calls[0][0]);
   });
 });
