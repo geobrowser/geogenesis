@@ -1606,17 +1606,21 @@ describe('Online only', () => {
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
   });
 
-  it('leaves out someone whose shared times have all passed', () => {
+  it('keeps someone with no upcoming shared times, schedulable but with no times drawn', () => {
     mocks.people = [];
     mocks.schedulable = {
       viewer_timezone: 'UTC',
       viewer_has_schedule: true,
       truncated: false,
-      people: [schedulable('user-away', 'Ona', [slotIn(-3), slotIn(-2)])],
+      people: [schedulable('user-past', 'Ona', [slotIn(-3), slotIn(-2)]), schedulable('user-none', 'Idris', [])],
     };
     renderWithOfflineShown();
 
-    expect(screen.queryByText('Ona')).not.toBeInTheDocument();
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.getByText('Idris')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schedule a debate with Idris' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Schedule a debate with Ona / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More times for Idris' })).not.toBeInTheDocument();
   });
 
   it('keeps the online list up while offline people load', () => {

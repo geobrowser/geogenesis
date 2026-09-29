@@ -187,8 +187,8 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
- * The People tab's "Online only" switch (GEO-2937). Off adds offline people who share a free slot
- * with the viewer. Outside the tab for the same reason as the spaces filter above.
+ * The People tab's "Online only" switch (GEO-2937). Off adds offline people who have saved availability,
+ * shared times with the viewer first. Outside the tab for the same reason as the spaces filter above.
  */
 export const debatesHubPeopleOnlineOnlyAtom = atom(true);
 
