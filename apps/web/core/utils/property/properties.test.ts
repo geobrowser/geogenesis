@@ -5,7 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { Property, Relation, SwitchableRenderableType } from '~/core/types';
 
-import { constructDataType, getCurrentRenderableType, mapPropertyType, reconstructFromStore } from './properties';
+import {
+  constructDataType,
+  getCurrentRenderableType,
+  mapPropertyType,
+  reconstructFromStore,
+  replacePropertyTypeRelation,
+} from './properties';
 
 // Mock the DTO module — use real SDK IDs so tests match actual usage
 vi.mock('~/core/io/dto/properties', () => ({
@@ -411,5 +417,71 @@ describe('Properties', () => {
       const result = getCurrentRenderableType(mockPropertyDataType);
       expect(result).toBe('TEXT');
     });
+  });
+});
+
+describe('replacePropertyTypeRelation', () => {
+  const TEXT = '9edb6fcce4544aa5861139d7f024c010';
+  const RELATION = '4b6d9fc1fbfe474c861c83398e1b50d9';
+
+  const relation = (id: string, toId: string, flags: Partial<Relation> = {}): Relation => ({
+    id,
+    entityId: `${id}-entity`,
+    spaceId: 'space',
+    position: 'a0',
+    verified: false,
+    renderableType: 'RELATION',
+    type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+    fromEntity: { id: 'property', name: 'Participants' },
+    toEntity: { id: toId, name: toId === TEXT ? 'Text' : 'Relation', value: toId },
+    ...flags,
+  });
+
+  function run(existing: Relation | undefined) {
+    const set = vi.fn<(r: Relation) => void>();
+    const del = vi.fn<(r: Relation) => void>();
+    replacePropertyTypeRelation(existing, relation('replacement', RELATION), { set, delete: del });
+    return { set, del };
+  }
+
+  // Changing the type twice before publishing should leave one relation, not a trail of dead ones.
+  it('edits a relation that has never been published in place', () => {
+    const existing = relation('draft', TEXT, { isLocal: true, hasBeenPublished: false });
+
+    const { set, del } = run(existing);
+
+    expect(del).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'draft', toEntity: expect.objectContaining({ id: RELATION }) })
+    );
+  });
+
+  // The Participants bug: created as Text and published, then changed to Relation in the same
+  // session. The published relation is still `isLocal` in the store; reusing its id published a
+  // `createRelation` the graph ignored, so the property stayed Text.
+  it('replaces a relation published from this session under a new id', () => {
+    const existing = relation('published', TEXT, { isLocal: true, hasBeenPublished: true });
+
+    const { set, del } = run(existing);
+
+    expect(del).toHaveBeenCalledWith(existing);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement', toEntity: { id: RELATION } });
+  });
+
+  it('replaces a relation loaded from the graph under a new id', () => {
+    const existing = relation('remote', TEXT, { isLocal: false });
+
+    const { set, del } = run(existing);
+
+    expect(del).toHaveBeenCalledWith(existing);
+    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement' });
+  });
+
+  it('creates the relation when there is none yet', () => {
+    const { set, del } = run(undefined);
+
+    expect(del).not.toHaveBeenCalled();
+    expect(set.mock.calls[0][0]).toMatchObject({ id: 'replacement' });
   });
 });

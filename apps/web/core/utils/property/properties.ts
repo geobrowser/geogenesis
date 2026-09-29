@@ -384,3 +384,25 @@ export function getCurrentRenderableType(
   // Otherwise, default to the base dataType
   return propertyDataType.dataType as SwitchableRenderableType;
 }
+
+/**
+ * Point a property's Data type or Renderable type relation at a new target.
+ *
+ * A relation that has never been published is edited in place, so changing the type several times
+ * before publishing doesn't pile up dead relations. Anything already on the graph is deleted and
+ * replaced under a new id instead — and that includes relations published from this browser, which
+ * stay `isLocal` with `hasBeenPublished` set. GRC-20 `createRelation` with an existing id does not
+ * update its `to` target, so reusing the id publishes a type change the graph silently ignores.
+ */
+export function replacePropertyTypeRelation(
+  existing: Relation | undefined,
+  replacement: Relation,
+  relations: { set: (relation: Relation) => void; delete: (relation: Relation) => void }
+): void {
+  if (existing?.isLocal && !existing.hasBeenPublished) {
+    relations.set({ ...existing, toEntity: replacement.toEntity });
+    return;
+  }
+  if (existing) relations.delete(existing);
+  relations.set(replacement);
+}
