@@ -296,13 +296,14 @@ describe('compact, for the sticky header', () => {
     expect(notice).not.toHaveClass('ml-1');
   });
 
-  it('still shows the indexing notice everywhere else', async () => {
+  it('announces the indexing notice without drawing it, on every surface', async () => {
     mocks.indexingDelayed = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
     const notice = await screen.findByText(INDEXING);
-    expect(notice).toHaveClass('ml-1');
-    expect(notice).not.toHaveClass('sr-only');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    expect(notice).toHaveClass('sr-only');
+    expect(notice).not.toHaveClass('ml-1');
   });
 
   /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -27,6 +27,8 @@ const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 
 const mocks = vi.hoisted(() => ({
   optimisticResponse: undefined as 'positive' | 'negative' | undefined,
+  isProcessingResponse: false,
+  submitResponse: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -44,9 +46,10 @@ vi.mock('~/core/analytics', () => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
-    submitResponse: vi.fn(),
+    submitResponse: mocks.submitResponse,
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimisticResponse,
+    isProcessingResponse: mocks.isProcessingResponse,
     isResponseIndexingDelayed: false,
     isConnected: true,
     personalSpaceId: 'profile-1',
@@ -86,6 +89,8 @@ function inlineButtons() {
 
 beforeEach(() => {
   mocks.optimisticResponse = undefined;
+  mocks.isProcessingResponse = false;
+  mocks.submitResponse.mockClear();
 });
 
 afterEach(cleanup);
@@ -144,6 +149,63 @@ describe('the selected vote treatment', () => {
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
       expect(inlineButtons().up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
+    });
+  });
+
+  // The debate overlay draws the pills' control and shares their handlers, so pressing a held side means "remove".
+  describe('the debates pill while a response confirms', () => {
+    function renderPill() {
+      render(
+        <EntityVoteButtons
+          entityId="entity-1"
+          spaceId={SPACE}
+          responseKind="curation"
+          presentation="debate-horizontal"
+        />,
+        { wrapper }
+      );
+      return screen.getAllByRole('button');
+    }
+
+    it('ignores a press', () => {
+      mocks.isProcessingResponse = true;
+      const [up] = renderPill();
+
+      fireEvent.click(up);
+
+      expect(mocks.submitResponse).not.toHaveBeenCalled();
+    });
+
+    it('still takes a press when nothing is confirming', () => {
+      const [up] = renderPill();
+
+      fireEvent.click(up);
+
+      expect(mocks.submitResponse).toHaveBeenCalled();
+    });
+
+    // `aria-disabled`, not `disabled`: the side stays at full strength so it still reads as taken.
+    it('says so to assistive technology without disabling the control', () => {
+      mocks.isProcessingResponse = true;
+      const [up] = renderPill();
+
+      expect(up).toHaveAttribute('aria-disabled', 'true');
+      expect(up).not.toBeDisabled();
+    });
+
+    // The only sign the press was taken — there is no room for a sentence out here.
+    it('puts the wait on the pointer', () => {
+      mocks.isProcessingResponse = true;
+      const [up] = renderPill();
+
+      expect(up).toHaveClass('cursor-progress');
+    });
+
+    it('says what is happening in the tooltip', () => {
+      mocks.isProcessingResponse = true;
+      const [up] = renderPill();
+
+      expect(up).toHaveAttribute('title', 'Response submitted. Waiting for confirmation.');
     });
   });
 

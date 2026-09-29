@@ -69,23 +69,19 @@ type EntityVoteButtonsProps = {
    * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
    * and dropped rather than wrapped, because the bar is one fixed-height line by design.
    *
-   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
-   * blocking responses, or that there is no response kind — and the page explains that state too, so
-   * a reader who finds nothing in the bar has somewhere else to find it.
+   * Both are dropped outright. They describe *state* — that an unpublished type edit is blocking
+   * responses, or that there is no response kind — and the page explains that state too, so a reader
+   * who finds nothing in the bar has somewhere else to find it.
    *
-   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
-   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
-   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
-   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
-   * earlier version of this comment claimed the page's own copy announced instead, and that is false
-   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
-   * puts this same sentence in a `title`: read on focus, never announced.
+   * Two, not three: the indexing notice is no longer one of `compact`'s concerns. It is `sr-only` on
+   * every surface now, because #2595 established that a visible "waiting for confirmation" makes the
+   * side the viewer just took look unsettled — so it costs the bar no width wherever it renders, and
+   * the pointer's cue is `cursor-progress` instead.
    *
    * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
-   * profile — both live regions are inserted at once and the confirmation can be announced twice.
-   * Deduplicating needs the two surfaces to know about each other, and this component renders once
-   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
-   * announcement is the better failure than none.
+   * profile — two live regions are inserted at once and the confirmation can be announced twice.
+   * Deduplicating needs the two surfaces to know about each other; that is the structural fix
+   * tracked in GEO-3057, not something a `compact` flag can answer.
    */
   compact?: boolean;
 };
@@ -389,6 +385,7 @@ export function EntityVoteButtons({
         positiveActive={positiveActive}
         negativeActive={negativeActive}
         disabled={responseDisabled}
+        pending={isProcessingResponse}
         positiveTitle={positiveTitle}
         negativeTitle={negativeTitle}
         onPositive={handlePositiveResponse}
@@ -452,15 +449,12 @@ export function EntityVoteButtons({
       </button>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
       {isResponseIndexingDelayed ? (
-        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
-        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
-        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
-        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
-        //
-        // I had claimed the page's own copy still announced. It does not on the surface that matters
-        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
-        // same sentence in a `title` attribute — read on focus, never announced as a live update.
-        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
+        // `sr-only` rather than removed. It is the only `aria-live` a vote gets, and it announces an
+        // event the reader just caused. `ClaimPageView` puts this same sentence in a `title` —
+        // read on focus, never announced — so removing the node would leave nothing on the surface
+        // that matters most. It is absolutely positioned and clipped, so it also costs the sticky
+        // header no width, which is what `compact` originally needed from it.
+        <span aria-live="polite" className="sr-only">
           {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}
@@ -540,12 +534,16 @@ function RespondersPopover({
   );
 }
 
+/**
+ * The debate overlay's vote control.
+ */
 function DebateVotePill({
   orientation,
   score,
   positiveActive,
   negativeActive,
   disabled,
+  pending,
   positiveTitle,
   negativeTitle,
   onPositive,
@@ -556,11 +554,32 @@ function DebateVotePill({
   positiveActive: boolean;
   negativeActive: boolean;
   disabled: boolean;
+  pending: boolean;
   positiveTitle: string;
   negativeTitle: string;
   onPositive: () => void;
   onNegative: () => void;
 }) {
+  // Every difference the confirming window makes, in one place, so the two arrows cannot drift from
+  // each other the way this control drifted from the pills.
+  const arrowProps = (active: boolean, title: string, onPress: () => void) => ({
+    type: 'button' as const,
+    'aria-label': pending ? RESPONSE_CONFIRMING_COPY : title,
+    'aria-pressed': active,
+    'aria-disabled': pending || undefined,
+    disabled,
+    title: pending ? RESPONSE_CONFIRMING_COPY : title,
+    onClick: () => {
+      if (!pending) onPress();
+    },
+    className: cx(
+      'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+      pending ? VOTE_BUTTON_CONFIRMING_CLASS : VOTE_BUTTON_CLASS,
+      // The only sign the press was taken — there is no room for a sentence out here.
+      pending && 'cursor-progress'
+    ),
+  });
+
   return (
     <div
       data-entity-vote-presentation={`debate-${orientation}`}
@@ -569,33 +588,11 @@ function DebateVotePill({
         orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
       )}
     >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
-        disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
+      <button {...arrowProps(positiveActive, positiveTitle, onPositive)}>
         <VoteArrow direction="up" filled={positiveActive} />
       </button>
       <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
-        disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
+      <button {...arrowProps(negativeActive, negativeTitle, onNegative)}>
         <VoteArrow direction="down" filled={negativeActive} />
       </button>
     </div>
