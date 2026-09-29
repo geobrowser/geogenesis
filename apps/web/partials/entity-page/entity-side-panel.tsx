@@ -47,6 +47,7 @@ import { Text } from '~/design-system/text';
 import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
+import { useScrollToCommentsOnOpen } from '~/partials/entity-page/use-scroll-to-comments-on-open';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
 
 import {
@@ -274,6 +275,7 @@ export function EntitySidePanelSurface({
   previewImageUrl,
   previewName,
   previewDescription,
+  scrollToCommentsRequest = null,
   onClose,
 }: {
   entityId: string;
@@ -287,8 +289,15 @@ export function EntitySidePanelSurface({
   previewImageUrl?: string | null;
   previewName?: string | null;
   previewDescription?: string | null;
+  /**
+   * Set to scroll to the entity's comments once they render. Compared by identity, so each new object
+   * is a new request — the panel passes its target, which a second click on the same card replaces.
+   */
+  scrollToCommentsRequest?: object | null;
   onClose: () => void;
 }) {
+  const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
+  useScrollToCommentsOnOpen(scrollElement, scrollToCommentsRequest);
   const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
   const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId, {
     preferRequestedSpace,
@@ -307,6 +316,7 @@ export function EntitySidePanelSurface({
           <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         ) : null}
         <div
+          ref={setScrollElement}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
           data-entity-side-panel-scroll
           data-mobile-sheet-scroll
@@ -504,6 +514,7 @@ export function EntitySidePanel() {
         openedWithMainViewEditing={openedWithMainViewEditing}
         openedFromReviewEdits={openedFromReviewEdits}
         forceRequestedSpace={forceRequestedSpace}
+        scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
         onClose={handleCloseSidePanel}
       />
     </EntitySidePanelPopoverPortalProvider>

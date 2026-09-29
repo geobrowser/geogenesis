@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -22,6 +22,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  openSidePanel: vi.fn(),
   entity: null as Entity | null,
   /** Every `enabled` the entity hydration was called with, in render order. */
   entityEnabledCalls: [] as boolean[],
@@ -174,6 +175,10 @@ vi.mock('~/core/claims/browse/claim-side-responders', () => ({
   ClaimSideResponders: ({ label }: { label: string }) => <div data-testid={`responders-${label}`} />,
 }));
 
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel }),
+}));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -239,6 +244,7 @@ function factualClaim(): Entity {
 
 beforeEach(() => {
   observers = [];
+  mocks.openSidePanel.mockReset();
   mocks.entity = null;
   mocks.entityEnabledCalls = [];
   mocks.rowEnabledCalls = [];
@@ -322,15 +328,38 @@ describe('ClaimExploreFeedCard', () => {
     expect(comments).toHaveClass('h-7', 'shrink-0', 'gap-2', 'rounded-full', 'border', 'border-grey-02');
   });
 
-  it('opens the claim page at its Activity section rather than the comments panel', () => {
+  it('opens the side panel at Activity where the title opens the side panel', () => {
     mocks.commentCount = 2;
     render(<ClaimExploreFeedCard item={item} titleOpensSidePanel />);
 
-    // Navigates even on Explore, where the title opens the side panel: the panel's comment list is
-    // narrower than the activity this count measures.
     const activity = screen.getByRole('link', { name: 'Comments (2)' });
+    // Still a real link to the page, for cmd-click and "copy link".
     expect(activity.getAttribute('href')).toContain(CLAIM_ID);
     expect(activity.getAttribute('href')).toMatch(/#entity-comments$/);
+    expect(activity).toHaveAttribute('data-entity-side-panel-opener');
+
+    expect(fireEvent.click(activity)).toBe(false);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_ID, item.spaceId, false, { scrollToComments: true });
+  });
+
+  it('leaves a modified click to the browser', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} titleOpensSidePanel />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Comments (2)' }), { metaKey: true });
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the claim page at Activity where the title navigates', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} />);
+
+    const activity = screen.getByRole('link', { name: 'Comments (2)' });
+    expect(activity.getAttribute('href')).toMatch(/#entity-comments$/);
+    expect(activity).not.toHaveAttribute('data-entity-side-panel-opener');
+
+    fireEvent.click(activity);
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
   });
 
   it("names the count Activity when it measures the claim's whole activity", () => {

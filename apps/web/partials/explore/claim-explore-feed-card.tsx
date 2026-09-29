@@ -18,10 +18,12 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -339,6 +341,7 @@ export function ClaimExploreFeedCard({
                   spaceId={item.spaceId}
                   count={liveCommentCount}
                   measuresActivity={commentsInCount != null}
+                  opensSidePanel={titleOpensSidePanel}
                 />
               ) : undefined
             }
@@ -372,36 +375,55 @@ export function ClaimExploreFeedCard({
 }
 
 /**
- * The count beside the pills, and the way through to the claim page's Activity section.
+ * The count beside the pills, and the way through to the claim's Activity section.
  *
- * A link rather than the global comments panel. The panel lists only the comments filed directly on
- * the claim, while the number here is the claim's whole activity — its debates, the claims extracted
- * from them, and every comment under those — so opening the panel showed a shorter list than the
- * count promised, without the debates it was counting. The page's Activity section is the one place
- * that draws all of it, and `CommentSection` scrolls to `#entity-comments` on arrival.
+ * Not the global comments panel. That lists only the comments filed directly on the claim, while the
+ * number here is the claim's whole activity — its debates, the claims extracted from them, and every
+ * comment under those — so it showed a shorter list than the count promised, without the debates it
+ * was counting. The claim's Activity section is the one place that draws all of it.
  *
- * Navigates even where the title opens the side panel: this asks for the claim's activity, which the
- * page lays out in full. Being a real anchor also keeps cmd-click and "copy link" working.
+ * Where it opens follows the title, through `opensSidePanel`: on Explore the side panel, scrolled to
+ * Activity (see `useScrollToCommentsOnOpen`); everywhere else the claim page at `#entity-comments`,
+ * which `CommentSection` scrolls to on arrival. Either way it stays a real anchor to the page and only
+ * unmodified left clicks are intercepted, so cmd-click and "copy link" still reach the page — the same
+ * rule as `ExploreCardEntityLink`.
  */
 function ClaimActivityLink({
   entityId,
   spaceId,
   count,
   measuresActivity,
+  opensSidePanel,
 }: {
   entityId: string;
   spaceId: string;
   count: number;
   /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
   measuresActivity: boolean;
+  opensSidePanel: boolean;
 }) {
+  const { openSidePanel } = useEntitySidePanel();
+
+  const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!opensSidePanel || isModifiedClick(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // `openedWithMainViewEditing: false` — Explore has no editor behind it, as for the title.
+    openSidePanel(entityId, spaceId, false, { scrollToComments: true });
+  };
+
   return (
     <Link
       href={`${NavUtils.toEntity(spaceId, entityId)}#entity-comments`}
       entityId={entityId}
       spaceId={spaceId}
+      onClick={onClick}
       aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
       data-geo-analytics-label="Open claim activity"
+      // Exempts the pill from the open panel's outside-pointerdown close, so clicking it with a panel
+      // already open switches the panel rather than closing and rebuilding it — see
+      // `ExploreCardEntityLink`. Only where it is an opener.
+      {...(opensSidePanel ? { 'data-entity-side-panel-opener': '' } : {})}
       className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
     >
       <ExploreCommentsIcon />
