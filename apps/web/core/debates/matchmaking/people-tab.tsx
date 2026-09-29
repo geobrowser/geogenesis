@@ -312,8 +312,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       );
     }
 
-    // Online people first: they can be asked now. The server's order breaks ties (roster order
-    // online, soonest shared slot offline), so equal matches stay stable as live updates land.
+    // Online and offline people share one list ordered by matches. Among equal matches the online
+    // person goes first, since they can be asked now; the server's order breaks the remaining ties
+    // (roster order online, soonest shared slot offline), so rows stay stable as live updates land.
     return filtered
       .map((person, index) => ({
         person,
@@ -322,7 +323,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
       }))
       .sort(
-        (left, right) => right.online - left.online || right.matchCount - left.matchCount || left.index - right.index
+        (left, right) => right.matchCount - left.matchCount || right.online - left.online || left.index - right.index
       )
       .map(({ person }) => person);
   }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
