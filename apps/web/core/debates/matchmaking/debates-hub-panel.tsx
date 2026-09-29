@@ -8,6 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -160,7 +161,11 @@ export function DebatesHubPanel() {
   // deliberately not an announced control — leaving Escape, which a phone rarely has, as the only
   // way out. The desktop aside is non-modal, so its toggle stays reachable and the design's
   // header stands.
-  const body = <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />;
+  const body = (
+    <ActionContextProvider value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking' }}>
+      <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
+    </ActionContextProvider>
+  );
 
   if (isMobile) {
     return createPortal(

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-b916886eb8f2.js';
+const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-a3a214b8ae74.js';
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -16,6 +16,27 @@ describe('analytics', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('does not fill a deferred Explore action with the entity on the completion page', async () => {
+    const send = vi.fn();
+    window.lytics = { capture: send };
+    const { snapshotActionContext } = await import('./action-context');
+    const { capture } = await import('./analytics');
+    window.history.replaceState({}, '', '/explore');
+    const original = snapshotActionContext('entity_vote_buttons', 'claim', 'claim');
+    window.history.replaceState({}, '', '/space/11111111111111111111111111111111/22222222222222222222222222222222');
+    capture('action_completed', original);
+    expect(send).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        page_path: '/explore',
+        page_type: 'explore',
+        page_entity_id: null,
+        page_entity_type: null,
+      })
+    );
+    window.history.replaceState({}, '', '/');
   });
 
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
@@ -34,7 +55,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-uRaIbrjyGABCgpsoCj9CefxylFMK6p/6CN5nLSw8m8A=');
+    expect(script?.integrity).toBe('sha256-o6IUuK50bRAyZQc3/Nu/33kzRIcOeuGURyGDh+WI/lY=');
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
@@ -258,54 +279,75 @@ describe('analytics', () => {
       space_id: 'personal-space-1',
       entity_id: 'personal-space-1',
     });
-    expect(capture).toHaveBeenCalledWith('review_changes_opened', {
-      app: 'genesis',
-      source: 'review_changes',
-      space_id: 'space-1',
-    });
-    expect(capture).toHaveBeenCalledWith('published_edit', {
-      app: 'genesis',
-      source: 'publishing',
-      space_id: 'space-1',
-    });
-    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
-      app: 'genesis',
-      source: 'person_profile',
-      entity_id: 'person-1',
-      graph_entity_type: 'person',
-      profile_space_id: 'profile-space-1',
-      interaction_surface: 'claim_vote_list',
-    });
-    expect(capture).toHaveBeenCalledWith('published_edit', {
-      app: 'genesis',
-      source: 'profile_editor',
-      content_id: 'person-1',
-      content_type: 'profile',
-      space_id: 'profile-space-1',
-    });
-    expect(capture).toHaveBeenCalledWith('comment_created', {
-      app: 'genesis',
-      source: 'commenting',
-      comment_id: 'comment-1',
-      target_type: 'entity',
-      target_id: 'claim-1',
-      space_id: 'space-1',
-    });
-    expect(capture).toHaveBeenCalledWith('content_edited', {
-      app: 'genesis',
-      source: 'commenting',
-      content_id: 'comment-1',
-      content_type: 'comment',
-      target_type: 'entity',
-      target_id: 'claim-1',
-      space_id: 'space-1',
-    });
-    expect(capture).toHaveBeenCalledWith('signup_completed', {
-      app: 'genesis',
-      source: 'signup_form',
-      form_type: 'newsletter',
-      signup_surface: 'explore_email_capture',
-    });
+    expect(capture).toHaveBeenCalledWith(
+      'review_changes_opened',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'review_changes',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'published_edit',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'publishing',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: 'person-1',
+        graph_entity_type: 'person',
+        profile_space_id: 'profile-space-1',
+        interaction_surface: 'claim_vote_list',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'published_edit',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'profile_editor',
+        content_id: 'person-1',
+        content_type: 'profile',
+        space_id: 'profile-space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'comment_created',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'commenting',
+        comment_id: 'comment-1',
+        target_type: 'entity',
+        target_id: 'claim-1',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'content_edited',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'commenting',
+        content_id: 'comment-1',
+        content_type: 'comment',
+        target_type: 'entity',
+        target_id: 'claim-1',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'signup_completed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'signup_form',
+        form_type: 'newsletter',
+        signup_surface: 'explore_email_capture',
+      })
+    );
   });
 
   it('tracks completed searches with result, latency, and privacy-safe query fields', async () => {
@@ -321,16 +363,19 @@ describe('analytics', () => {
       surface: 'global',
     });
 
-    expect(capture).toHaveBeenCalledWith('search_submitted', {
-      app: 'genesis',
-      source: 'global_search',
-      query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
-      query_type: 'global_entities',
-      query_text: 'reach ***** using *****',
-      result_count: 12,
-      no_results: false,
-      latency_bucket: '250_500ms',
-    });
+    expect(capture).toHaveBeenCalledWith(
+      'search_submitted',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'global_search',
+        query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
+        query_type: 'global_entities',
+        query_text: 'reach ***** using *****',
+        result_count: 12,
+        no_results: false,
+        latency_bucket: '250_500ms',
+      })
+    );
   });
 
   it('uses stable search query ids without storing unmasked sensitive text', async () => {
@@ -391,14 +436,17 @@ describe('analytics', () => {
 
     personProfileOpened('profile-space-1', 'profile-space-1', { interaction_surface: 'claim_vote_list' });
 
-    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
-      app: 'genesis',
-      source: 'person_profile',
-      entity_id: 'profile-space-1',
-      graph_entity_type: 'personal_space',
-      profile_space_id: 'profile-space-1',
-      interaction_surface: 'claim_vote_list',
-    });
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: 'profile-space-1',
+        graph_entity_type: 'personal_space',
+        profile_space_id: 'profile-space-1',
+        interaction_surface: 'claim_vote_list',
+      })
+    );
   });
 
   it('recognizes dashed and differently cased forms of the same personal-space id', async () => {
@@ -409,13 +457,16 @@ describe('analytics', () => {
 
     personProfileOpened('4C81561D-1F95-4131-9CDD-DD20AB831BA2', '4c81561d1f9541319cdddd20ab831ba2');
 
-    expect(capture).toHaveBeenCalledWith('graph_relationship_followed', {
-      app: 'genesis',
-      source: 'person_profile',
-      entity_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
-      graph_entity_type: 'personal_space',
-      profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
-    });
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+        graph_entity_type: 'personal_space',
+        profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+      })
+    );
   });
 
   it('does not attribute a profile open to a pending personal-space sentinel', async () => {

@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { runObservedAction } from '~/core/analytics-operations';
 import { useEntity } from '~/core/database/entities';
 import { useToast } from '~/core/hooks/use-toast';
 import { NavUtils } from '~/core/utils/utils';
@@ -35,6 +37,7 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
   onRemoveLink,
   onClose,
 }) => {
+  const getShareContext = useActionContext('share_dialog', 'entity', entityId ?? '');
   const [, setToast] = useToast();
 
   // Fetch entity data if not provided via props (handles rerender case)
@@ -50,7 +53,7 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
 
     try {
       const fullUrl = new URL(NavUtils.toEntity(entitySpaceId, entityId), window.location.origin).toString();
-      await navigator.clipboard.writeText(fullUrl);
+      await runObservedAction('share', getShareContext(), () => navigator.clipboard.writeText(fullUrl));
       setToast(<div className="text-button">Link copied</div>);
       onClose?.();
     } catch (error) {

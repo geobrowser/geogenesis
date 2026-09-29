@@ -6,9 +6,11 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   type CreateDebateRequestBody,
@@ -369,13 +371,17 @@ export function useDebateBlocks(enabled: boolean) {
 }
 
 export function useCreateDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
     onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  );
 }
 
 export function useWithdrawDebateRequest() {
@@ -407,11 +413,12 @@ export function useDismissDebateRequest() {
  * `ready`. The other side is told by `DebateReadyPrompt` off its own activity.
  */
 export function useAcceptDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
     // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
@@ -433,6 +440,9 @@ export function useAcceptDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
+  return useObservedMutation(mutation, 'join_debate', request =>
+    getContext({ target_type: 'debate_request', target_id: request.requestId })
+  );
 }
 
 export function useBlockDebateUser() {

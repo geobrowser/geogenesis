@@ -1,14 +1,17 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ActionContextProvider, useActionContext } from '~/core/action-context-provider';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { ExploreFeedCard } from './explore-feed-card';
+
+const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 
 // The claim card's response controls reach this module, whose top-level `atomWithStorage` runs on
 // import — and under Node's own webstorage, which shadows jsdom's with an object that has no
@@ -48,11 +51,15 @@ vi.mock('~/design-system/prefetch-link', () => ({
 // EntityRowActions carries the vote buttons and the claim debate toggle, both of which reach into
 // the sync engine; the card only needs it to occupy the actions slot.
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <div data-testid="row-actions" className={className}>
-      {children}
-    </div>
-  ),
+  EntityRowActions: ({ children, className }: { children: React.ReactNode; className?: string }) => {
+    const getContext = useActionContext('entity_vote_buttons', 'entity', item.entityId);
+    return (
+      <div data-testid="row-actions" className={className}>
+        <button onClick={() => attribute(getContext())}>Record action</button>
+        {children}
+      </div>
+    );
+  },
 }));
 
 vi.mock('./explore-join-space-button', () => ({
@@ -279,4 +286,27 @@ describe('ExploreFeedCard', () => {
       expect(screen.getByTestId('card-title-link')).toHaveAttribute('data-opens-side-panel', 'false');
     });
   });
+});
+
+it.each(['profile_activity', 'other_gallery'])('inherits list and position from %s through the real card', listId => {
+  attribute.mockReset();
+  const debateItem = { ...item, types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }] };
+  render(
+    <ActionContextProvider value={{ list_id: listId, item_position: 7 }}>
+      <ExploreFeedCard item={debateItem} />
+    </ActionContextProvider>
+  );
+  fireEvent.click(screen.getByText('Record action'));
+  expect(attribute).toHaveBeenCalledWith(expect.objectContaining({ list_id: listId, item_position: 7 }));
+});
+
+it('lets explicit card list and position override the enclosing gallery', () => {
+  attribute.mockReset();
+  render(
+    <ActionContextProvider value={{ list_id: 'profile_activity', item_position: 7 }}>
+      <ExploreFeedCard item={item} listId="ranking_entries" itemPosition={2} />
+    </ActionContextProvider>
+  );
+  fireEvent.click(screen.getByText('Record action'));
+  expect(attribute).toHaveBeenCalledWith(expect.objectContaining({ list_id: 'ranking_entries', item_position: 2 }));
 });
