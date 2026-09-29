@@ -662,6 +662,14 @@ export async function fetchExploreFeed(args: {
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
+  /**
+   * Drop any entity carrying one of these types, in every sort, whatever else it carries.
+   *
+   * Applied to the rows rather than sent to the query: `typeIds` matches an entity with *any*
+   * selected type, so it cannot express "and none of these", and adding a negated type predicate to
+   * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
+   */
+  excludeTypeIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -820,8 +828,14 @@ export async function fetchExploreFeed(args: {
                 entityFilter: args.entityFilter,
               });
 
+  const excludeTypeIds = args.excludeTypeIds ?? [];
+
   const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
-    const allRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
+    const builtRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
+    const allRows =
+      excludeTypeIds.length > 0
+        ? builtRows.filter(row => !entityMatchesExploreTypeIds(row, excludeTypeIds))
+        : builtRows;
 
     // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
     // sorts already came back filtered, so re-checking them would be redundant — and worse than

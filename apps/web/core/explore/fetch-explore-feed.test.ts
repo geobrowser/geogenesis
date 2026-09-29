@@ -63,26 +63,24 @@ const browse = {
 } as never;
 
 /**
- * One card-shaped entity carrying a single type. Cast rather than fully built: `Entity` has a
+ * One card-shaped entity carrying the given types. Cast rather than fully built: `Entity` has a
  * dozen fields the feed never reads for this, and spelling them out would obscure the one thing
- * each fixture is about — which type the row lands on.
+ * each fixture is about — which types the row lands on.
  */
-function entity(id: string, typeId: string) {
+function entity(id: string, ...typeIds: string[]) {
   return {
     id,
     name: `entity-${id}`,
     description: null,
     spaces: [SPACE],
-    types: [{ id: typeId, name: null }],
+    types: typeIds.map(typeId => ({ id: typeId, name: null })),
     values: [],
-    relations: [
-      {
-        id: `rel-${id}`,
-        spaceId: SPACE,
-        type: { id: SystemIds.TYPES_PROPERTY },
-        toEntity: { id: typeId, name: null, types: [], values: [] },
-      },
-    ],
+    relations: typeIds.map(typeId => ({
+      id: `rel-${id}-${typeId}`,
+      spaceId: SPACE,
+      type: { id: SystemIds.TYPES_PROPERTY },
+      toEntity: { id: typeId, name: null, types: [], values: [] },
+    })),
     commentCount: 0,
     createdAt: '1780000000',
   } as never;
@@ -245,6 +243,38 @@ describe('a window that does have rows', () => {
  * gaia #933 the server can do it exactly, so a type selection now goes to the by-type
  * connection.
  */
+/**
+ * The type selection matches an entity carrying *any* selected type, so it cannot keep out a Claim
+ * that is also a News story. The exclusion drops those rows in every sort, after the query.
+ */
+describe('an excluded type', () => {
+  it.each(['best', 'new', 'top'] as const)('drops an entity carrying it on %s, whatever else it is', async sort => {
+    windows.queue = [
+      windowOf([entity('c1', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort, excludeTypeIds: [NEWS_STORY_TYPE_ID] });
+
+    expect(result.items.map(i => i.entityId)).toEqual(['c2']);
+  });
+
+  it('keeps every row when nothing is excluded', async () => {
+    windows.queue = [
+      windowOf([entity('c1', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new' });
+
+    expect(result.items.map(i => i.entityId).sort()).toEqual(['c1', 'c2']);
+  });
+});
+
 describe('a type selection filters server-side (GEO-2885)', () => {
   const sent = () => windows.variables[0] ?? {};
 

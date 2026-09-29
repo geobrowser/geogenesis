@@ -31,13 +31,19 @@ export const FEED_ENTITY_TYPES = [
 export const FEED_ENTITY_TYPE_IDS = FEED_ENTITY_TYPES.map(type => type.id);
 
 /**
- * Entity types the Explore feed will serve: every feed type except News story.
+ * Types Explore never shows. An entity carrying one is dropped from every sort even when it also
+ * carries a type Explore does serve — a Claim that is also a News story is still a news story.
+ */
+export const EXPLORE_EXCLUDED_TYPE_IDS: readonly string[] = [NEWS_STORY_TYPE_ID];
+
+/**
+ * Entity types the Explore feed will serve: every feed type except the excluded ones.
  *
  * `sanitizeExploreTypeIds` sorts every selection into this order, so it is the single source of
- * order. Leaving News story off means a `typeIds` parameter naming it (an old client, a kept link)
- * is sanitized away rather than served.
+ * order. Leaving the excluded types off means a `typeIds` parameter naming one (an old client, a
+ * kept link) is sanitized away rather than served.
  */
-export const EXPLORE_ENTITY_TYPES = FEED_ENTITY_TYPES.filter(type => type.id !== NEWS_STORY_TYPE_ID);
+export const EXPLORE_ENTITY_TYPES = FEED_ENTITY_TYPES.filter(type => !EXPLORE_EXCLUDED_TYPE_IDS.includes(type.id));
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
 
