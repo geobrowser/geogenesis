@@ -30,6 +30,7 @@ import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher'
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpace } from '~/core/hooks/use-space';
 import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
@@ -52,6 +53,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatPanel } from './chat-panel';
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
@@ -212,7 +214,9 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
+  const isMobile = useMediaQuery('(max-width: 639px)');
+  const hideAssistant = isFullscreenChildRoute(pathname) || (isMobile && debateFullscreenActive);
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -564,10 +568,10 @@ export function ChatWidget() {
   );
 
   React.useEffect(() => {
-    if (hideAssistantOnRoute && isOpen) {
+    if (hideAssistant && isOpen) {
       closeAssistant('fullscreen_route');
     }
-  }, [hideAssistantOnRoute, isOpen, closeAssistant]);
+  }, [hideAssistant, isOpen, closeAssistant]);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
@@ -1093,7 +1097,7 @@ export function ChatWidget() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         // Don't hijack the shortcut mid-IME composition.
-        if (event.isComposing || hideAssistantOnRoute) return;
+        if (event.isComposing || hideAssistant) return;
         event.preventDefault();
         if (isOpen) {
           closeAssistant('keyboard_shortcut');
@@ -1104,7 +1108,7 @@ export function ChatWidget() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
+  }, [closeAssistant, hideAssistant, isBusy, isOpen, openAssistant, stopAndScrub]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -1126,7 +1130,7 @@ export function ChatWidget() {
     return null;
   }
 
-  const ui = hideAssistantOnRoute ? null : (
+  const ui = hideAssistant ? null : (
     <AnimatePresence mode="wait">
       {isOpen ? (
         <ChatPanel
