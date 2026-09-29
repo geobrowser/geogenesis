@@ -60,8 +60,14 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
     <>
       {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
-          {upcoming.map(({ room, opponentUserId }) => (
-            <UpcomingRow key={room.room_id} room={room} opponent={lookUp(opponentUserId)} viewer={viewer} />
+          {upcoming.map(({ room, opponentUserId, scheduledEndAt }) => (
+            <UpcomingRow
+              key={room.room_id}
+              room={room}
+              scheduledEndAt={scheduledEndAt}
+              opponent={lookUp(opponentUserId)}
+              viewer={viewer}
+            />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </Section>
@@ -108,8 +114,12 @@ export type ScheduledContent = {
   roomsError: Error | null;
 };
 
-/** A room carries no participants, so its opponent comes from the request that booked it. */
-export type UpcomingRoomRow = { room: UpcomingDebateRoom; opponentUserId: string | null };
+/** A room's opponent and scheduled end come from the request that booked it. */
+export type UpcomingRoomRow = {
+  room: UpcomingDebateRoom;
+  opponentUserId: string | null;
+  scheduledEndAt: string | null;
+};
 
 export function useScheduledContent(enabled: boolean): ScheduledContent {
   const requests = useScheduledDebates(enabled);
@@ -127,10 +137,14 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     () =>
       roomList
         .filter(room => !finishedRoomIds.has(room.room_id))
-        .map(room => ({
-          room,
-          opponentUserId: opponentOf(requestForRoom(rows, room.room_id), viewerId),
-        })),
+        .map(room => {
+          const request = requestForRoom(rows, room.room_id);
+          return {
+            room,
+            opponentUserId: opponentOf(request, viewerId),
+            scheduledEndAt: request?.scheduled_end_at ?? null,
+          };
+        }),
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
@@ -174,10 +188,12 @@ function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipant
 /** An open room says so and offers the way in; one that is not yet open says when. */
 function UpcomingRow({
   room,
+  scheduledEndAt,
   opponent,
   viewer,
 }: {
   room: UpcomingDebateRoom;
+  scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
 }) {
@@ -185,7 +201,13 @@ function UpcomingRow({
     <ScheduleCard
       opponent={opponent}
       viewer={viewer}
-      when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
+      when={
+        room.due
+          ? `Starting now${scheduledEndAt ? ` · Ends at ${formatTime(scheduledEndAt)}` : ''}`
+          : scheduledEndAt
+            ? formatDebateSlot(room.starts_at, scheduledEndAt)
+            : formatDebateTime(room.starts_at)
+      }
       status={
         room.others_present
           ? `${opponentName(opponent)} is waiting for you now`
