@@ -12,8 +12,8 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 const WELCOME_BANNER_ID = 'exploreWelcomeCurator';
 
 /**
- * "Welcome to Geo" banner shown above the explore feed. Dismissible
- * via the close button in the top-right; the dismissed state persists in localStorage.
+ * "Welcome to Geo" banner shown above the explore feed. Dismissible via the close button in the
+ * top-right; the dismissed state persists in localStorage.
  *
  * Gated behind `ClientOnly` so we never SSR a banner the user has already dismissed
  * (the dismissed state only exists client-side), which would flash on load.

@@ -24,7 +24,7 @@ function renderBanner(store = createStore()) {
   return store;
 }
 
-const heading = () => screen.queryByRole('heading', { name: /Welcome to Geo/ });
+const heading = () => screen.queryByRole('heading', { name: 'Welcome to Geo' });
 
 // `dismissedNoticesAtom` is an `atomWithStorage`, so a fresh `createStore()` is not a fresh slate —
 // it rehydrates from localStorage, and a dismissal in one case would otherwise hide the banner in
@@ -34,7 +34,7 @@ beforeEach(() => localStorage.clear());
 afterEach(cleanup);
 
 describe('ExploreWelcomeBanner', () => {
-  it('renders the welcome copy', () => {
+  it('renders until dismissed', () => {
     renderBanner();
 
     expect(heading()).toBeInTheDocument();
