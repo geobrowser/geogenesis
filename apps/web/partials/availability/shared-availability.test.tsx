@@ -58,17 +58,24 @@ vi.mock('./peer-availability-booking-modal', () => ({
     open,
     userId,
     peerName,
+    rescheduleRequestId,
     onClose,
     children,
   }: {
     open: boolean;
     userId: string;
     peerName?: string | null;
+    rescheduleRequestId?: string | null;
     onClose: () => void;
     children?: React.ReactNode;
   }) =>
     open ? (
-      <div data-testid="booking-modal" data-user-id={userId} data-peer-name={peerName ?? ''}>
+      <div
+        data-testid="booking-modal"
+        data-user-id={userId}
+        data-peer-name={peerName ?? ''}
+        data-reschedule={rescheduleRequestId ?? ''}
+      >
         {children ?? <div data-testid="week" />}
         <button type="button" onClick={onClose}>
           Close
@@ -284,6 +291,24 @@ describe('AvailabilityDeepLink', () => {
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+  });
+
+  it('hands the request to move to the week when the link names one', () => {
+    search = 'modal=availability&modalTarget=6676b145-0970-4c1c-bfbc-7497d9721b39';
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute(
+      'data-reschedule',
+      '6676b145-0970-4c1c-bfbc-7497d9721b39'
+    );
+  });
+
+  it('opens an ordinary booking week when the link names no request', () => {
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', '');
   });
 
   it('only acts on a profile root, and says so anywhere else', () => {

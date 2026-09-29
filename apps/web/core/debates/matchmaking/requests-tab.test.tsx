@@ -292,6 +292,19 @@ describe('RequestsTab', () => {
     expect(screen.getAllByText(/^Expires in/)).toHaveLength(2);
   });
 
+  // Drawn from the same expiry filter as the received side, so a lapsed request does not sit on an
+  // "Expired" card until the server gets round to saying so.
+  it('drops a sent request once it expires', () => {
+    mocks.outbound = {
+      ...request('request-2', SPACE_A, 'Chips are better than fries'),
+      expires_at: '2020-01-01T00:00:00.000Z',
+    };
+    render(<RequestsTab />);
+
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+  });
+
   it('narrows to one side with the status filter', () => {
     mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
     render(<RequestsTab />);

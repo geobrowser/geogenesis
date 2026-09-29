@@ -12,14 +12,42 @@ import { runObservedAction } from '~/core/analytics-operations';
  * so the recipient can see who they are booking, and a second copy of the id could only disagree
  * with the first. So it acts on a profile's own root and nowhere else — see
  * {@link profileSpaceIdFromPath}.
+ *
+ *     /space/<profileSpaceId>?modal=availability&modalTarget=<requestId>
+ *
+ * With a `modalTarget`, the week *moves* that scheduled request instead of proposing a new one.
+ * It is what a scheduling email's "Choose different time" opens: the other person's week, where
+ * picking a slot reschedules the request the email is about. Declining and booking afresh would
+ * send the proposer the "declined, find someone else" email a minute before a new invite from the
+ * same person; a reschedule sends them "proposed a different time" and keeps one request.
  */
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 import { NavUtils } from '~/core/utils/utils';
 
 export const AVAILABILITY_MODAL = DEEP_LINK_MODALS.availability;
 
-export function toAvailability(profileSpaceId: string, via?: string): string {
-  return toModal({ modal: AVAILABILITY_MODAL, pathname: NavUtils.toSpace(profileSpaceId), via });
+export function toAvailability(
+  profileSpaceId: string,
+  options: { via?: string; rescheduleRequestId?: string | null } = {}
+): string {
+  return toModal({
+    modal: AVAILABILITY_MODAL,
+    pathname: NavUtils.toSpace(profileSpaceId),
+    target: options.rescheduleRequestId ?? undefined,
+    via: options.via,
+  });
+}
+
+// geo-chat request ids are UUIDs, written dashed.
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The request a link asks to reschedule, or null for an ordinary booking link. Anything that is
+ * not a request id is ignored rather than refused: the link still opens the week, and booking from
+ * it proposes a new request, which is the best that a garbled link can mean.
+ */
+export function rescheduleRequestIdFromTarget(target: string | null): string | null {
+  return target && REQUEST_ID.test(target) ? target : null;
 }
 
 /**

@@ -26,9 +26,14 @@ import { PeerAvailabilityBookingModal } from './peer-availability-booking-modal'
  */
 export function AvailabilityDeepLink() {
   const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
+  const [rescheduleRequestId, setRescheduleRequestId] = React.useState<string | null>(null);
   const setToast = useSetToast();
   const notAPerson = React.useCallback(() => setToast(<span>{NOT_A_PERSON_MESSAGE}</span>), [setToast]);
-  useAvailabilityDeepLink(spaceId => (spaceId ? setProfileSpaceId(spaceId) : notAPerson()));
+  useAvailabilityDeepLink((spaceId, requestId) => {
+    if (!spaceId) return notAPerson();
+    setProfileSpaceId(spaceId);
+    setRescheduleRequestId(requestId);
+  });
   // Stable, since the modal fires it from an effect.
   const dismissNotAPerson = React.useCallback(() => {
     setProfileSpaceId(null);
@@ -41,6 +46,7 @@ export function AvailabilityDeepLink() {
     <SharedAvailabilityModal
       open
       profileSpaceId={profileSpaceId}
+      rescheduleRequestId={rescheduleRequestId}
       onClose={() => setProfileSpaceId(null)}
       onNotAPerson={dismissNotAPerson}
     />
@@ -61,11 +67,14 @@ export function AvailabilityDeepLink() {
 export function SharedAvailabilityModal({
   open,
   profileSpaceId,
+  rescheduleRequestId = null,
   onClose,
   onNotAPerson,
 }: {
   open: boolean;
   profileSpaceId: string;
+  /** Picking a slot moves this scheduled request rather than proposing a new one. */
+  rescheduleRequestId?: string | null;
   onClose: () => void;
   /** The space loaded and is not a person's. Only a hand-edited link gets here. */
   onNotAPerson: () => void;
@@ -79,7 +88,7 @@ export function SharedAvailabilityModal({
     onError: () => setSigningIn(false),
     // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
     // goes through onboarding and is sent back here afterwards, and should land on the week again.
-    redirectTo: toAvailability(profileSpaceId),
+    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId }),
   });
   // Whether this is a person at all, and the only name there is for a signed-out recipient — who is
   // who this link is mostly for. `null` is a space that does not exist, which is not a person either.
@@ -148,6 +157,7 @@ export function SharedAvailabilityModal({
       open={open && !signingIn}
       userId={person?.user_id ?? ''}
       peerName={name}
+      rescheduleRequestId={rescheduleRequestId}
       onClose={onClose}
     >
       {notice}

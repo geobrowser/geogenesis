@@ -53,7 +53,10 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (_onComplete?: () => void, options?: { analytics?: Record<string, unknown>; onError?: () => void }) => {
+  usePrivySignIn: (
+    _onComplete?: () => void,
+    options?: { analytics?: Record<string, unknown>; onError?: () => void }
+  ) => {
     mocks.usePrivySignIn();
     mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
@@ -869,12 +872,10 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
     });
 
-    // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is
-    // replaced by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session
-    // on a tab refocus — so a completion landing in that window was recorded by nobody. The navbar
-    // arms its tracker now, so this one cannot double-count.
-    it('reports the sign-in it started, attributed to this flow', async () => {
-      await subscribeSuccessfully();
+    // The headless SDK calls the captured completion after its verification promise resolves,
+    // even when authentication has already unmounted this card.
+    it('reports completion after the card unmounts, attributed to this flow', async () => {
+      const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
@@ -882,7 +883,12 @@ describe('ExploreEmailCapturePopup', () => {
       const args = mocks.useLoginWithEmailArgs as { onComplete?: (a: unknown) => void } | undefined;
       expect(typeof args?.onComplete).toBe('function');
 
-      const completion = { user: { id: 'did:privy:new-user' }, isNewUser: true };
+      view.unmount();
+      const completion = {
+        user: { id: 'did:privy:new-user', email: { address: 'reader@example.com' } },
+        isNewUser: true,
+        wasAlreadyAuthenticated: false,
+      };
       args?.onComplete?.(completion);
 
       expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(completion, {

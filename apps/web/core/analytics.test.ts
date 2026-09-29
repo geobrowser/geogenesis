@@ -172,7 +172,7 @@ describe('analytics', () => {
     });
   });
 
-  it('tracks explicit login completions as logins even when Privy reports an existing session', async () => {
+  it('does not let manual-login attribution override a restored session', async () => {
     const loggedIn = vi.fn();
     const sessionRestored = vi.fn();
     window.lytics = {
@@ -196,10 +196,10 @@ describe('analytics', () => {
       { auth_flow: 'manual_login' }
     );
 
-    expect(loggedIn).toHaveBeenCalledTimes(1);
-    expect(sessionRestored).not.toHaveBeenCalled();
-    expect(loggedIn.mock.calls[0][1]).toMatchObject({
-      auth_flow: 'manual_login',
+    expect(loggedIn).not.toHaveBeenCalled();
+    expect(sessionRestored).toHaveBeenCalledTimes(1);
+    expect(sessionRestored.mock.calls[0][1]).toMatchObject({
+      auth_flow: 'session_restore',
       was_already_authenticated: true,
     });
   });
