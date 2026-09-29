@@ -1,6 +1,6 @@
 # Copilot review follow-up
 
-Reviewed all four inline threads, resolved/outdated-thread metadata, review bodies (including collapsed sections), and issue comments. There were no additional suppressed or previously missed findings in the available review.
+The first review examined all four inline threads, resolved/outdated-thread metadata, review bodies (including collapsed sections), and issue comments. That initial review contained no additional suppressed or previously missed findings.
 
 | Finding | Decision and scope audit | Regression proof |
 | --- | --- | --- |
@@ -11,8 +11,20 @@ Reviewed all four inline threads, resolved/outdated-thread metadata, review bodi
 
 Each regression failed on the original code, passed with the fix, and failed again when its fix was deliberately removed. All mutations were restored before final checks. No repo-wide test or lint policy was added. The changes affect attribution and reporting, not layout, playback, search results or product actions.
 
+## Second review: collapsed findings
+
+Reviewed the full body of review `5355827044`, all inline threads (including resolved/outdated ones), and PR conversation comments. The two new findings exist only in the collapsed **Previously missed** section; neither has an inline thread. The review also repeats the original gallery finding as open.
+
+| Finding | Decision and scope audit | Regression proof |
+| --- | --- | --- |
+| Measured root replaced after asynchronous loading | Valid. The shared surface now receives the actual article through a stable callback and reattaches when it changes. The same lifetime bug affects the first child of a `display: contents` wrapper, so that path watches direct child replacement too. Audited every measured surface: Explore's base/claim/debate articles and the debate player, end card, ticker and claims panel. Detached observers cannot record queued notifications; replacement retains the existing display ID and impression deduplication. | Both article and contents tests failed on the old code. Restoring the old observer, disabling contents-node observation, and removing the stale-observer guard each produced assertion failures. Restored code passes. Tests exercise child-only replacement, forwarded refs, action/display joins and replacement after a recorded impression. |
+| Ranking X shares missing canonical outcomes | Valid. Both personal-ranking and viewer-own-ranking callbacks now use one observed callback around the existing `shareRankingOnX` utility and shared operation/context helpers. The target is the actual shared ranking submission, including when viewing another person's ranking. Audited all calls to ranking share/copy helpers: the global clipboard path already records success/failure and remains separate because a clipboard result is observable. | Both real state-hook callbacks failed before the fix. Bypassing observation independently at each entry point fails its regression. Tests verify one unknown outcome, inherited overlay/list attribution, no title leakage, synchronous popup opening before image preparation, and preserved thrown popup errors with a failed outcome. |
+| Gallery attribution still marked open | Already fixed in `6acf0a6d2`. The profile provider supplies list/position and `ExploreFeedCard` inherits omitted values, while explicit card props override them. Rechecked both production paths and the existing real-card regression tests. | Profile and other-gallery inheritance plus explicit-override tests pass. No extra call-site props were added: they would duplicate the shared fallback and fail to protect other consumers. |
+
+Five new regression cases fail against the prior behavior. All five deliberate mutations above fail with assertions, and every mutation was restored. Changes affect telemetry only; card DOM structure, styling, sharing URLs/text, popup activation timing and image preparation behavior are preserved. No repo-wide rule or test was added. Final validation: **705 files / 8,467 tests pass**, along with TypeScript and changed-file ESLint checks.
+
 ## Separate follow-up
 
 Legacy comment (`commentCreated`/`commentEdited`), review-publish (`publishedEdit`) and copied-debate-link (`debate_share_action`) events still emit after asynchronous work without an identity-revision guard. This behavior is present in master before this PR; the new canonical `action_completed` events are already guarded. Fixing those older reporting paths should be a separate PR: capture the initiating revision, gate legacy completion, and add account-switch tests while preserving deferred sign-in replay. No changes to those legacy paths were made here.
 
-Another focused review is worthwhile for the new retained-view subscription and actor boundaries. Production collector acceptance and warehouse rollout checks remain separate from this code review.
+After the second review, another broad automated pass is lower priority than signed-in staging checks of dynamic card fallbacks and both ranking share entry points. The concrete findings have regression and mutation coverage; the repeated gallery finding is stale. Production collector acceptance and warehouse rollout checks remain separate from this code review.

@@ -1,8 +1,15 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, expect, it, vi } from 'vitest';
 
-import { ActionContextProvider, ActionSurface, useActionContext } from './action-context-provider';
+import {
+  ActionContextProvider,
+  ActionSurface,
+  ActionSurfaceArticle,
+  useActionContext,
+} from './action-context-provider';
 import { pageViewed } from './analytics';
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
@@ -147,3 +154,84 @@ it('measures a retained card again when the page tracker reports query-only navi
   show();
   expect(capture).toHaveBeenCalledTimes(2);
 });
+
+// The child swaps its own root after data resolves; the enclosing surface stays mounted.
+it.each(['asChild', 'contents'] as const)(
+  'follows a replaced %s measurement root without counting it twice',
+  async mode => {
+    window.history.replaceState({}, '', `/explore/replacement-${mode}`);
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    const observers: {
+      notify: IntersectionObserverCallback;
+      observe: ReturnType<typeof vi.fn>;
+      disconnect: ReturnType<typeof vi.fn>;
+    }[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(notify: IntersectionObserverCallback) {
+          observers.push({ notify, observe: this.observe, disconnect: this.disconnect });
+        }
+        observe = vi.fn();
+        disconnect = vi.fn();
+      }
+    );
+    const action = vi.fn();
+    const forwardedRef = React.createRef<HTMLElement>();
+    function ReplacingChild() {
+      const [revision, setRevision] = React.useState(0);
+      const Article = mode === 'asChild' ? ActionSurfaceArticle : 'article';
+      return (
+        <Article key={revision} ref={forwardedRef} data-testid="measured-root">
+          <button onClick={() => setRevision(value => value + 1)}>Replace root</button>
+          <Control action={action} />
+        </Article>
+      );
+    }
+    render(
+      <ActionSurface
+        asChild={mode === 'asChild'}
+        className={mode === 'contents' ? 'contents' : undefined}
+        value={{ component: 'explore_feed_card', target_id: 'claim', target_type: 'claim' }}
+      >
+        <ReplacingChild />
+      </ActionSurface>
+    );
+    const oldRoot = screen.getByTestId('measured-root');
+    const first = observers.at(-1)!;
+    expect(first.observe).toHaveBeenLastCalledWith(oldRoot);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Replace root'));
+    });
+    const newRoot = screen.getByTestId('measured-root');
+    expect(newRoot).not.toBe(oldRoot);
+    expect(forwardedRef.current).toBe(newRoot);
+    expect(first.disconnect).toHaveBeenCalled();
+    const replacement = observers.at(-1)!;
+    expect(replacement.observe).toHaveBeenLastCalledWith(newRoot);
+    const show = (observer: typeof first, target: Element) =>
+      act(() =>
+        observer.notify(
+          [{ target, isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry],
+          {} as IntersectionObserver
+        )
+      );
+    // A queued notification from the detached root must not manufacture an impression.
+    show(first, oldRoot);
+    expect(capture).not.toHaveBeenCalled();
+    show(replacement, newRoot);
+    expect(capture).toHaveBeenCalledTimes(1);
+    const impression = capture.mock.calls[0][1];
+    fireEvent.click(screen.getByText('Agree'));
+    expect(action).toHaveBeenCalledWith(
+      expect.objectContaining({
+        presentation_instance_id: impression.presentation_instance_id,
+      })
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Replace root'));
+    });
+    show(observers.at(-1)!, screen.getByTestId('measured-root'));
+    expect(capture).toHaveBeenCalledTimes(1);
+  }
+);

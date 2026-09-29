@@ -16,7 +16,7 @@ import { equals } from './id/normalize';
 
 const Context = React.createContext<ActionScope>({});
 const DepthContext = React.createContext(0);
-const MeasurementContext = React.createContext<React.RefObject<HTMLElement | null> | null>(null);
+const MeasurementContext = React.createContext<((node: HTMLElement | null) => void) | null>(null);
 const seen = new Set<string>();
 const instances = new Map<string, string>();
 let seenPage = '';
@@ -90,7 +90,20 @@ export function ActionSurface({
 }) {
   const parent = React.useContext(Context);
   const depth = React.useContext(DepthContext) + 1;
-  const ref = React.useRef<HTMLElement>(null);
+  const [root, setRoot] = React.useState<HTMLElement | null>(null);
+  const [contentsNode, setContentsNode] = React.useState<Element | null>(null);
+  const measureContents = !asChild && className === 'contents';
+  // A display:contents wrapper has no box. Its child can replace itself without
+  // rerendering this surface, just like an asChild article resolving its fallback.
+  React.useLayoutEffect(() => {
+    if (!measureContents || !root) return;
+    const update = () => setContentsNode(root.firstElementChild);
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(root, { childList: true });
+    return () => observer.disconnect();
+  }, [measureContents, root]);
+  const measurementNode = measureContents ? contentsNode : root;
   const pageId = React.useSyncExternalStore(subscribeToActionPageViews, getPageViewId, getServerPageViewId);
   const key = [
     pageId,
@@ -113,7 +126,7 @@ export function ActionSurface({
     if (
       !trackImpression ||
       !IMPRESSION_COMPONENTS.has(value.component) ||
-      !ref.current ||
+      !measurementNode ||
       typeof IntersectionObserver === 'undefined'
     )
       return;
@@ -122,8 +135,9 @@ export function ActionSurface({
       seenPage = pageId;
     }
     let visible = false;
+    let active = true;
     const record = () => {
-      if (!visible || document.visibilityState !== 'visible' || seen.has(key)) return;
+      if (!active || !visible || document.visibilityState !== 'visible' || seen.has(key)) return;
       seen.add(key);
       const current = latest.current;
       capture('component_impression', {
@@ -147,28 +161,22 @@ export function ActionSurface({
       },
       { threshold: [0, 0.5] }
     );
-    observer.observe(className === 'contents' ? (ref.current.firstElementChild ?? ref.current) : ref.current);
+    observer.observe(measurementNode);
     document.addEventListener('visibilitychange', record);
     return () => {
+      active = false;
       observer.disconnect();
       document.removeEventListener('visibilitychange', record);
     };
-  }, [className, key, pageId, value.component, trackImpression]);
+  }, [measurementNode, key, pageId, value.component, trackImpression]);
   const enter = () => enterActionContext({ ...pageContext(), ...context }, depth);
   return (
     <DepthContext.Provider value={depth}>
       <Context.Provider value={context}>
         {asChild ? (
-          <MeasurementContext.Provider value={ref}>{children}</MeasurementContext.Provider>
+          <MeasurementContext.Provider value={setRoot}>{children}</MeasurementContext.Provider>
         ) : (
-          <div
-            ref={node => {
-              ref.current = node;
-            }}
-            className={className}
-            onClickCapture={enter}
-            onSubmitCapture={enter}
-          >
+          <div ref={setRoot} className={className} onClickCapture={enter} onSubmitCapture={enter}>
             {children}
           </div>
         )}
@@ -184,7 +192,7 @@ export function ActionSurfaceArticle({ ref: forwardedRef, onClickCapture, ...pro
   const depth = React.useContext(DepthContext);
   const attach = React.useCallback(
     (node: HTMLElement | null) => {
-      if (measurement) measurement.current = node;
+      measurement?.(node);
       if (typeof forwardedRef === 'function') forwardedRef(node);
       else if (forwardedRef) forwardedRef.current = node;
     },
