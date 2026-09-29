@@ -933,7 +933,7 @@ export async function getScheduleOverlaps(
   });
 }
 
-/** One person the viewer shares availability with (geo-chat#137, GEO-2937). */
+/** One person the viewer could schedule with, whether or not they share a time (geo-chat#137, GEO-2937). */
 export type SchedulablePerson = {
   user: DebateParticipantSummary;
   online: boolean;

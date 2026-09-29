@@ -1623,6 +1623,56 @@ describe('Online only', () => {
     expect(screen.queryByRole('button', { name: 'More times for Idris' })).not.toBeInTheDocument();
   });
 
+  it('ranks offline people who share a time above those who share none, by matches within each', () => {
+    const viewer = mocks.personalSpaceId!;
+    const mei = '019fedae-72b6-7ab2-927a-df044d57c5aa';
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    const withProfile = (entry: ReturnType<typeof schedulable>, profileSpaceId: string) => ({
+      ...entry,
+      user: { ...entry.user, profile_space_id: profileSpaceId },
+    });
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      // The server's order: shared times first, soonest first.
+      people: [
+        withProfile(schedulable('user-other', 'Vytautas', [slotIn(26)]), PROFILE_SPACE_IDS['user-other']),
+        withProfile(schedulable('user-mei', 'Mei', [slotIn(30)]), mei),
+        withProfile(schedulable('user-them', 'Arturas', []), PROFILE_SPACE_IDS['user-them']),
+      ],
+    };
+    // Arturas disagrees with the viewer twice, Mei once, Vytautas never.
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-them'], claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: mei, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-other'], claimId: 'claim-1', position: true, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-them'], claimId: 'claim-2', position: true, ...context },
+        ],
+      ],
+    ]);
+    renderWithOfflineShown();
+
+    // More matches does not lift someone with no shared time above people who can be booked inside
+    // both people's hours, and matches still rank people within each group.
+    expect(screen.getAllByText(/^(Mei|Vytautas|Arturas)$/).map(name => name.textContent)).toEqual([
+      'Mei',
+      'Vytautas',
+      'Arturas',
+    ]);
+  });
+
   it('keeps the online list up while offline people load', () => {
     mocks.people = [person('user-them', 'Arturas')];
     mocks.useSchedulablePeople.mockImplementation(() => ({

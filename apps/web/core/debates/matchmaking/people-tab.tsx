@@ -73,6 +73,11 @@ const INLINE_SLOTS = 3;
 
 type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
 
+/** Whether an offline row offers any time the viewer is free too, drawn or behind "More times". */
+function hasSharedTimes(schedule: PersonSchedule): boolean {
+  return schedule.slots.length > 0 || schedule.truncated;
+}
+
 /**
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
  * them like anyone else. Not requestable: nobody here can take a request right now.
@@ -312,20 +317,30 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       );
     }
 
-    // Online people first: they can be asked now. The server's order breaks ties (roster order
-    // online, soonest shared slot offline), so equal matches stay stable as live updates land.
+    // Online people first: they can be asked now. Then offline people who share a time with the
+    // viewer, who can be booked inside both people's hours, ahead of those who share none. The
+    // server's order breaks ties (roster order online, soonest shared slot offline), so equal
+    // matches stay stable as live updates land.
     return filtered
-      .map((person, index) => ({
-        person,
-        index,
-        online: person.online ? 1 : 0,
-        matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
-      }))
+      .map((person, index) => {
+        const schedule = schedulesByUser.get(normId(person.user_id));
+        return {
+          person,
+          index,
+          online: person.online ? 1 : 0,
+          sharesTime: !schedule || hasSharedTimes(schedule) ? 1 : 0,
+          matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
+        };
+      })
       .sort(
-        (left, right) => right.online - left.online || right.matchCount - left.matchCount || left.index - right.index
+        (left, right) =>
+          right.online - left.online ||
+          right.sharesTime - left.sharesTime ||
+          right.matchCount - left.matchCount ||
+          left.index - right.index
       )
       .map(({ person }) => person);
-  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
+  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, schedulesByUser, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -780,7 +795,7 @@ function SharedTimes({
   schedule: PersonSchedule;
   onPick: (start: string | undefined, opener: HTMLElement) => void;
 }) {
-  if (schedule.slots.length === 0 && !schedule.truncated) return null;
+  if (!hasSharedTimes(schedule)) return null;
 
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1">
