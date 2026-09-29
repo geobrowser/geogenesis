@@ -4,6 +4,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import {
+  DEFAULT_EXPLORE_TYPE_IDS,
   EPISODE_TYPE_ID,
   EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
@@ -429,11 +430,16 @@ describe('applyTargetMix', () => {
   const fromSequence = (seq: string) =>
     [...seq].map((c, i) => ({ key: c === 'C' ? CLAIM : c === 'D' ? DEBATE : NEWS, id: `${c}-${i}` }));
 
-  it('hits 6:3:1 on a page when supply allows', () => {
+  it('hits 6:3 on a page when supply allows', () => {
     const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
-    expect(per10(out, CLAIM, 22)).toBeCloseTo(6, 0);
-    expect(per10(out, DEBATE, 22)).toBeCloseTo(3, 0);
-    expect(per10(out, NEWS, 22)).toBeCloseTo(1, 0);
+    expect(per10(out, CLAIM, 22)).toBeCloseTo(6.7, 0);
+    expect(per10(out, DEBATE, 22)).toBeCloseTo(3.3, 0);
+  });
+
+  it('gives News story no share now that Explore no longer serves it', () => {
+    // A News story reaching the mix at all is residual: it waits behind every claim and debate.
+    const out = applyTargetMix(fromSequence(PRODUCTION_WINDOW), keyOf);
+    expect(per10(out, NEWS, 22)).toBe(0);
   });
 
   it('beats the run cap on the metric that was reported', () => {
@@ -454,7 +460,7 @@ describe('applyTargetMix', () => {
   });
 
   it('renormalises when a type is unticked', () => {
-    // No News story selected: 6:3 over the two present, not 6:3 with a hole where News was.
+    // Shares renormalise over the types present rather than leaving a hole for a missing one.
     const out = applyTargetMix(build({ [CLAIM]: 30, [DEBATE]: 20 }), keyOf);
     expect(per10(out, CLAIM, 20)).toBeCloseTo(6.7, 0);
     expect(per10(out, DEBATE, 20)).toBeCloseTo(3.3, 0);
@@ -482,7 +488,10 @@ describe('applyTargetMix', () => {
 
 describe('targetMixAppliesTo', () => {
   it('applies to the default selection', () => {
-    expect(targetMixAppliesTo([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID])).toBe(true);
+    expect(targetMixAppliesTo(DEFAULT_EXPLORE_TYPE_IDS)).toBe(true);
+  });
+  it('does not apply once News story is in the selection', () => {
+    expect(targetMixAppliesTo([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID])).toBe(false);
   });
   it('does not apply to a single type — there is no ratio to hit', () => {
     expect(targetMixAppliesTo([CLAIM_TYPE_ID])).toBe(false);

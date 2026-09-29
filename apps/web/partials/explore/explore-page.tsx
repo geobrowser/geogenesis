@@ -6,16 +6,13 @@ import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
-import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
+import { EntityFeed } from '~/partials/feed/entity-feed';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
 type Props = {
-  initialSpaceOptions: SpaceOption[];
-  /** Joined or pending — what the space filter opens on. */
-  memberSpaceIds: string[];
   featuredSpaces: FeaturedSpace[];
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
@@ -24,8 +21,6 @@ type Props = {
 };
 
 export function ExplorePage({
-  initialSpaceOptions,
-  memberSpaceIds,
   featuredSpaces,
   featuredRankings,
   pendingMembershipSpaceIds,
@@ -67,12 +62,12 @@ export function ExplorePage({
         </div>
         <EntityFeed
           apiEndpoint="/api/explore/feed"
-          initialSpaceOptions={initialSpaceOptions}
-          memberSpaceIds={memberSpaceIds}
           initialTime="month"
           initialSort="best"
           showSortFilter
-          showTypeFilter
+          // No space or type menus: the feed spans every space the reader may see, and the server
+          // decides which types it holds (Debate and Claim — see `DEFAULT_EXPLORE_TYPE_IDS`).
+          showSpaceFilter={false}
           dividerBeforeFeed
           titleOpensSidePanel
           claimCardVariant="debate-panel-mobile"

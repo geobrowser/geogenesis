@@ -322,7 +322,7 @@ describe('EntityFeed Explore type filter', () => {
       expect.objectContaining({ credentials: 'include' })
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /News story/ }));
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(EXPLORE_ENTITY_TYPES[0].label) }));
     await screen.findByText('0 types');
     await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
   });

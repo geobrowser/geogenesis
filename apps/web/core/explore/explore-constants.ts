@@ -7,15 +7,14 @@ export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
 export const PAPER_TYPE_ID = '5e24fb52856c4189a9716af4387b1b89';
 
 /**
- * Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables).
+ * Entity types the Explore feed will serve (Geo ontology IDs, hyphenless for GraphQL variables).
  *
- * This array is the single source of order: the dropdown maps it directly, and
- * `sanitizeExploreTypeIds` sorts every selection into it. The three defaults lead the list so the
- * boxes a reader arrives with are the ones they see first, instead of being scattered down it —
- * Debate and Claim used to sit at the bottom. The rest keep the order they already had.
+ * `sanitizeExploreTypeIds` sorts every selection into this order, so it is the single source of
+ * order. News story is deliberately absent: Explore no longer shows news stories, and leaving it off
+ * this list means a `typeIds` parameter naming it (an old client, a kept link) is sanitized away
+ * rather than served.
  */
 export const EXPLORE_ENTITY_TYPES = [
-  { id: NEWS_STORY_TYPE_ID, label: 'News story' },
   { id: DEBATE_TYPE_ID, label: 'Debate' },
   { id: CLAIM_TYPE_ID, label: 'Claim' },
   { id: EPISODE_TYPE_ID, label: 'Episode' },
@@ -32,18 +31,14 @@ export const EXPLORE_ENTITY_TYPES = [
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
 
 /**
- * What the types filter arrives checked with (GEO-2790).
+ * What Explore serves. There is no types menu any more, so this is the whole feed rather than an
+ * opening selection: `/api/explore/feed` reads a missing `typeIds` parameter as these.
  *
- * A narrower opening view, not a narrower feed: every option above stays in the dropdown and a
- * reader can tick any of them. This is only what is selected before anyone touches it.
- *
- * Still derived from `EXPLORE_ENTITY_TYPES` by membership rather than sliced off the front, even
- * though these now lead the list. `sanitizeExploreTypeIds` sorts selections into that order and the
- * feed compares them as joined keys, so a default ordered differently would look like a different
- * selection from the same three ticked by hand — deriving it keeps the two in step through any
- * future reshuffle, where a `slice(0, 3)` would silently follow the list somewhere else.
+ * Derived from `EXPLORE_ENTITY_TYPES` by membership so it stays in that list's order — the feed
+ * compares selections as joined keys, and the same types in another order would look like a
+ * different selection.
  */
-const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
+const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
 
 export const DEFAULT_EXPLORE_TYPE_IDS = EXPLORE_ENTITY_TYPES.filter(type => DEFAULT_SELECTED_TYPE_IDS.has(type.id)).map(
   type => type.id

@@ -9,17 +9,6 @@ function normalizeId(id: string): string {
 }
 
 /**
- * Every type there is. Distinct from `DEFAULT_EXPLORE_TYPE_IDS`, and the distinction matters more
- * than it looks: these two were one function until GEO-2790, and collapsing them again would be a
- * quiet bug. The client omits the `typeIds` param *precisely when every type is selected*, so the
- * server reading a missing param as "the default three" would hand back three types to the reader
- * who had just ticked all twelve.
- */
-function allExploreTypeIds(): string[] {
-  return [...EXPLORE_ENTITY_TYPE_IDS];
-}
-
-/**
  * A selection, put back into the order the menu declares.
  *
  * Order is not cosmetic here. The feed keys its query on the joined ids and compares selections by
@@ -63,13 +52,14 @@ export function parseStoredExploreTypeIds(raw: string | null): string[] {
 }
 
 /**
- * Missing query params preserve the historical all-types API behavior; an empty value means none.
+ * A missing parameter means Explore's own types; an empty value means none.
  *
- * Deliberately *not* the new default. The client drops the param when every type is selected, so
- * this is the "all twelve" path, not the "hasn't chosen yet" one — see `allExploreTypeIds`.
+ * Explore has no types menu, so its client never sends this — the server decides what the feed
+ * holds. A parameter is still honoured, narrowed to `EXPLORE_ENTITY_TYPES`, so an older client or a
+ * kept link keeps working without being able to ask for a type Explore no longer serves.
  */
 export function parseExploreTypeIdsParam(raw: string | null): string[] {
-  if (raw === null) return allExploreTypeIds();
+  if (raw === null) return [...DEFAULT_EXPLORE_TYPE_IDS];
   if (raw === '') return [];
   return sanitizeExploreTypeIds(raw.split(','));
 }
