@@ -1,10 +1,9 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
-
 import * as React from 'react';
 
-import { type AnalyticsProperties, trackPrivyAuth } from '~/core/analytics';
+import { type AnalyticsProperties } from '~/core/analytics';
+import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
 
@@ -53,22 +52,12 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   // loading the feed in a new tab would open the hub with nobody having pressed anything.
   const requestedRef = React.useRef(false);
 
-  // The attribution belongs to the attempt, not to whatever the page looks like when Privy
-  // finishes. A deep link clears its own params the moment it opens the dialog, so by the time
-  // someone has typed an emailed code the current render no longer knows where they came from.
-  // Taken at the press, spent on completion.
-  const requestedAnalyticsRef = React.useRef<AnalyticsProperties | undefined>(undefined);
-
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      // Only a sign-in this hook started is a login. An unrequested completion is a session
-      // restore, which `AnalyticsUserIdentifier` already reports as one — tracking it here as
-      // `manual_login` made every page load carrying this hook look like somebody signing in.
+  const { login } = useTrackedLogin({
+    onComplete: () => {
+      // Keep UI actions scoped to the initiating control. Analytics completion is owned by
+      // PrivyAuthTracker, which stays mounted even if this control disappears during login.
       if (!requestedRef.current) return;
       requestedRef.current = false;
-
-      trackPrivyAuth(args, { auth_flow: 'manual_login', ...requestedAnalyticsRef.current });
-      requestedAnalyticsRef.current = undefined;
 
       onCompleteRef.current?.();
     },
@@ -79,7 +68,6 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     onError: () => {
       if (!requestedRef.current) return;
       requestedRef.current = false;
-      requestedAnalyticsRef.current = undefined;
       optionsRef.current?.onError?.();
     },
   });
@@ -87,9 +75,6 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback(() => {
     prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
     requestedRef.current = true;
-    // Copied rather than referenced, so a caller rebuilding the object cannot rewrite an
-    // attempt that is already in flight.
-    requestedAnalyticsRef.current = optionsRef.current?.analytics ? { ...optionsRef.current.analytics } : undefined;
-    login();
+    login(optionsRef.current?.analytics);
   }, [login, prepareOnboarding]);
 }

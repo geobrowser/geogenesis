@@ -6,8 +6,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { trackPrivyAuth } from '~/core/analytics';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { completePrivyAuth } from '~/core/privy-auth-events';
 
 import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
@@ -31,18 +31,16 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
   // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
   // the life of the app in `core/providers.tsx`, does it instead.
-  // Reports its own sign-in, which is safe now that the navbar arms its tracker rather than firing
-  // on every completion. Leaving it to the navbar looked tidy and was not: that button is replaced
-  // by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session on a tab
-  // refocus or a Privy re-init — so a completion landing in that window was recorded by nobody at
-  // all. Silent under-counting of exactly the signups this flow exists to produce.
+  // Headless email completion is a direct callback after the verification promise resolves,
+  // not the modal's shared event. Its closure survives this card unmounting on authentication.
+  // Route it through the same app-owned tracker as modal logins.
   const {
     sendCode,
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
     onComplete: args =>
-      trackPrivyAuth(args, {
+      completePrivyAuth(args, {
         auth_flow: 'manual_login',
         link_source: 'explore_email_capture',
         form_type: 'account',
