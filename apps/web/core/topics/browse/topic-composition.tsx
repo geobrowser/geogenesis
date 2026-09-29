@@ -15,19 +15,54 @@ import { TOPIC_FEED_ENTITY_TYPES } from './topic-feed-types';
 type Bucket = { key: string; label: string; count: number; color: string };
 
 export function useTopicComposition(topicId: string, spaceId: string, spaceIds: string[] | undefined) {
-  const { data, isLoading } = useQuery({
+  return useCompositionCounts({
     queryKey: ['topic', 'composition', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), spaceIds],
+    endpoint: '/api/topics/composition',
+    params: () => ({ topicId, spaceId, spaceIds: spaceIds!.join(',') }),
+    enabled: spaceIds !== undefined,
+  });
+}
+
+/**
+ * Per-type counts for a topic space's own feed. It has no summary bar; the counts only feed the
+ * type picker.
+ */
+export function useSpaceTopicComposition(spaceId: string) {
+  return useCompositionCounts({
+    queryKey: ['topic', 'space-composition', ID.uuidToHex(spaceId)],
+    endpoint: '/api/topics/space/composition',
+    params: () => ({ spaceId }),
+    enabled: true,
+  });
+}
+
+function useCompositionCounts({
+  queryKey,
+  endpoint,
+  params,
+  enabled,
+}: {
+  queryKey: readonly unknown[];
+  endpoint: string;
+  /** Read only once `enabled`, so it may assume what `enabled` checks. */
+  params: () => Record<string, string>;
+  enabled: boolean;
+}) {
+  const { data, isLoading } = useQuery({
+    queryKey,
     queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({ topicId, spaceId, spaceIds: spaceIds!.join(',') });
-      const response = await fetch(`/api/topics/composition?${params}`, { credentials: 'include', signal });
+      const response = await fetch(`${endpoint}?${new URLSearchParams(params())}`, {
+        credentials: 'include',
+        signal,
+      });
       if (!response.ok) throw new Error('Topic composition failed');
       return response.json() as Promise<TopicFeedCompositionCounts>;
     },
-    enabled: spaceIds !== undefined,
+    enabled,
     staleTime: 60_000,
   });
 
-  return { counts: data ?? null, isLoading: spaceIds === undefined || isLoading };
+  return { counts: data ?? null, isLoading: !enabled || isLoading };
 }
 
 /**

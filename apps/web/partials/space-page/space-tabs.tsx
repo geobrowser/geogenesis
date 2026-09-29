@@ -29,6 +29,8 @@ type SpaceTabsProps = {
   isProfile: boolean;
   /** How much this person's record holds, for hiding empty tabs — see `buildSpaceTabs`. */
   personRecordCounts?: PersonRecordCounts;
+  /** Whether the space's home entity is a Topic — see `buildSpaceTabs`. */
+  isTopicSpace?: boolean;
 };
 
 type BuiltSpaceTab = {
@@ -90,7 +92,34 @@ type BuildSpaceTabsParams = {
   personRecordCounts?: PersonRecordCounts;
   /** Whether the profile owner may need the route to manage hidden debates. */
   isOwner?: boolean;
+  /**
+   * Whether the space's home entity is a Topic, so it opens on the topic Explore feed.
+   *
+   * Explore takes the bare URL and leads the row, as it does on a topic page, and the space's
+   * authored page moves to Overview at `/overview` beside it.
+   */
+  isTopicSpace?: boolean;
 };
+
+/**
+ * The leading system tabs every space opens with: Overview, or Explore then Overview.
+ *
+ * On a topic space Explore stands alone before a rule, the way it does on a topic page: it is the
+ * topic's feed, and everything after the rule is the space's.
+ */
+function leadingSpaceTabs(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
+  return isTopicSpace
+    ? [
+        { label: 'Explore', href: overviewHref },
+        { label: 'Overview', href: spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace), dividerBefore: true },
+      ]
+    : [{ label: 'Overview', href: overviewHref }];
+}
+
+/** The space's authored page: the bare URL, except on a topic space, where Explore has it. */
+function spaceOverviewPageHref(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
+  return isTopicSpace ? `/space/${spaceId}/overview` : overviewHref;
+}
 
 export type PersonRecordCounts = {
   debates: number;
@@ -108,16 +137,14 @@ export function buildSpaceTabs({
   isProfile,
   personRecordCounts,
   isOwner = false,
+  isTopicSpace = false,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
-  const ALL_SPACES_TABS: BuiltSpaceTab[] = [
-    {
-      label: 'Overview',
-      href: overviewHref,
-      priority: 1,
-    },
-  ];
+  const ALL_SPACES_TABS: BuiltSpaceTab[] = leadingSpaceTabs(spaceId, overviewHref, isTopicSpace).map(tab => ({
+    ...tab,
+    priority: 1 as const,
+  }));
 
   const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
     label: 'Debug debates',
@@ -244,6 +271,7 @@ export function SpaceTabs({
   typeIds,
   isProfile,
   personRecordCounts,
+  isTopicSpace = false,
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
@@ -289,7 +317,8 @@ export function SpaceTabs({
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
-  const systemTabsBefore: SystemTab[] = [{ label: 'Overview', href: overviewHref }];
+  const leadingTabs = leadingSpaceTabs(spaceId, overviewHref, isTopicSpace);
+  const systemTabsBefore: SystemTab[] = [...leadingTabs];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
 
   const systemTabsAfter: SystemTab[] = [];
@@ -354,6 +383,7 @@ export function SpaceTabs({
         systemTabsBefore={systemTabsBefore}
         systemTabsAfter={systemTabsAfter}
         overviewHref={overviewHref}
+        closedTabHref={spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace)}
       />
     );
   }
@@ -373,14 +403,15 @@ export function SpaceTabs({
     isDebugDebatesPageEnabled,
     isProfile,
     isOwner,
+    isTopicSpace,
   });
 
-  // Overview, then our Community tab, then everything else.
+  // Overview (or Explore and Overview), then our Community tab, then everything else.
   const tabs = showCommunity
     ? [
-        baseTabs[0],
+        ...baseTabs.slice(0, leadingTabs.length),
         { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
-        ...baseTabs.slice(1),
+        ...baseTabs.slice(leadingTabs.length),
       ]
     : baseTabs;
 
