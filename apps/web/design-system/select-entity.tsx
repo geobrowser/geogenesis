@@ -11,6 +11,8 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { recordAction } from '~/core/analytics-operations';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
@@ -331,6 +333,13 @@ export const SelectEntity = ({
     const result = results[selectedIndex];
 
     if (result) {
+      recordAction(
+        'search_result',
+        snapshotActionContext('search', 'entity', result.id, {
+          list_id: 'entity_picker',
+          item_position: selectedIndex + 1,
+        })
+      );
       setResult(null);
       onDone?.({
         id: result.id,
@@ -690,6 +699,13 @@ export const SelectEntity = ({
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
+                                      recordAction(
+                                        'search_result',
+                                        snapshotActionContext('search', 'entity', result.id, {
+                                          list_id: 'entity_picker',
+                                          item_position: index + 1,
+                                        })
+                                      );
                                       setResult(null);
                                       onDone?.({
                                         id: result.id,
@@ -856,6 +872,13 @@ export const SelectEntity = ({
                           <button
                             key={index}
                             onClick={() => {
+                              recordAction(
+                                'search_result',
+                                snapshotActionContext('search', 'entity', result.id, {
+                                  list_id: 'entity_picker_spaces',
+                                  item_position: index + 1,
+                                })
+                              );
                               setResult(null);
                               onDone?.({
                                 id: result.id,

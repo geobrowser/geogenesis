@@ -1,11 +1,13 @@
 'use client';
-
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
+import { runObservedAction } from '~/core/analytics-operations';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
 
@@ -327,11 +329,17 @@ export function useDebateBlocks(enabled: boolean) {
 }
 
 export function useCreateDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
+    mutationFn: (request: CreateDebateRequestBody) =>
+      runObservedAction(
+        'start_debate',
+        snapshotActionContext('debate_matchmaking', 'claim', request.claim_entity_id, getContext()),
+        () => createDebateRequest(request, getPrivyIdentityToken, accountKey)
+      ),
     onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
@@ -365,13 +373,18 @@ export function useDismissDebateRequest() {
  * `ready`. The other side is told by `DebateReadyPrompt` off its own activity.
  */
 export function useAcceptDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
-      acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
+      runObservedAction(
+        'join_debate',
+        snapshotActionContext('debate_matchmaking', 'debate_request', requestId, getContext()),
+        () => acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId)
+      ),
     // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
     // be taken until the response names the debate, and the server emits `debate.state_changed` to
     // this very tab on the way — so without this the coordinator gets a `ready` debate off our own

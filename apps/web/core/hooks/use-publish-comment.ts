@@ -2,7 +2,9 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { commentCreated, commentEdited } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 
 import type { CreateCommentParams } from '~/partials/comments/types';
@@ -45,14 +47,17 @@ export function usePublishComment(
   targetSpaceId: string,
   { targetEntityType = 'entity', interactionSurface = 'comment_section' }: CommentAnalyticsContext = {}
 ) {
+  const getContext = useActionContext('comment_composer', targetEntityType, targetEntityId);
   const { createComment, editComment: updateComment, isCreating, error } = useCreateComment(targetEntityId);
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const enqueuePendingAction = useEnqueuePendingAction('comment_composer');
 
   const publishComment = React.useCallback(
     async ({ text, ancestorComments, onOptimistic, onFailed }: PublishCommentInput) => {
+      const operation = observeOperation('comment', targetEntityType, targetEntityId, undefined, getContext());
       const recordIfPublished = (result: Awaited<ReturnType<typeof createComment>>) => {
         if (!result?.published) return false;
 
+        operation.succeeded({ comment_id: result.id });
         try {
           commentCreated(result.id, targetEntityId, {
             space_id: targetSpaceId,
@@ -98,6 +103,7 @@ export function usePublishComment(
       });
 
       if (!result) {
+        operation.failed('unknown');
         uncountRow();
         return result;
       }
@@ -126,19 +132,33 @@ export function usePublishComment(
           // The row is gone — `useCreateComment` removes it on a failed publish — so anything the
           // caller counted for this comment comes back before the error is surfaced.
           uncountRow();
+          operation.failed('unknown');
           throw new Error('Comment could not be published');
         },
       });
 
       return result;
     },
-    [createComment, enqueuePendingAction, interactionSurface, targetEntityId, targetEntityType, targetSpaceId]
+    [
+      getContext,
+      createComment,
+      enqueuePendingAction,
+      interactionSurface,
+      targetEntityId,
+      targetEntityType,
+      targetSpaceId,
+    ]
   );
 
   const editComment = React.useCallback(
     async (input: Parameters<typeof updateComment>[0]) => {
+      const operation = observeOperation('edit_comment', targetEntityType, targetEntityId, undefined, getContext());
       const published = await updateComment(input);
-      if (!published) return false;
+      if (!published) {
+        operation.failed('unknown');
+        return false;
+      }
+      operation.succeeded({ comment_id: input.commentId });
 
       try {
         commentEdited(input.commentId, targetEntityId, {
@@ -152,7 +172,7 @@ export function usePublishComment(
 
       return true;
     },
-    [interactionSurface, targetEntityId, targetEntityType, targetSpaceId, updateComment]
+    [getContext, interactionSurface, targetEntityId, targetEntityType, targetSpaceId, updateComment]
   );
 
   return { publishComment, editComment, isCreating, error };

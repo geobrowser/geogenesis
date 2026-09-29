@@ -1,5 +1,4 @@
 'use client';
-
 import { getCreateDaoSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Effect, Either } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { geo } from '~/core/sdk/geo-client';
 import { DAO_SPACE_FACTORY_ADDRESS, SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
@@ -135,7 +136,25 @@ export function useDeploySpace() {
   });
 
   return {
-    deploy: mutateAsync,
+    deploy: async (args: DeployArgs) => {
+      const draftId = crypto.randomUUID();
+      const operation = observeOperation(
+        'create_space',
+        'space_draft',
+        draftId,
+        undefined,
+        snapshotActionContext('create_space', 'space_draft', draftId)
+      );
+      try {
+        const id = await mutateAsync(args);
+        if (id) operation.succeeded({ created_space_id: id });
+        else operation.failed('unavailable');
+        return id;
+      } catch (error) {
+        operation.failed(classifyOperationFailure(error));
+        throw error;
+      }
+    },
   };
 }
 

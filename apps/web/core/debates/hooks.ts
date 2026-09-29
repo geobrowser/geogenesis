@@ -1,5 +1,4 @@
 'use client';
-
 import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
@@ -13,6 +12,9 @@ import {
 
 import * as React from 'react';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
+import { runObservedAction } from '~/core/analytics-operations';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
@@ -1121,12 +1123,17 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = N
 }
 
 export function useCreateDebateRematchRequest(sessionId: string) {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: (request: { source_space_id: string; claim_id: string; format_id: string }) =>
-      createDebateRematchRequest(sessionId, request, getPrivyIdentityToken, accountKey),
+      runObservedAction(
+        'start_debate',
+        snapshotActionContext('debate_matchmaking', 'claim', request.claim_id, getContext()),
+        () => createDebateRematchRequest(sessionId, request, getPrivyIdentityToken, accountKey)
+      ),
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, sessionId), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, sessionId) });
@@ -1223,12 +1230,17 @@ export function useDebateProfile(
 }
 
 export function useCreateDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: (request: { recipient_profile_space_id: string }) =>
-      createDebateChallenge(request, getPrivyIdentityToken, accountKey),
+      runObservedAction(
+        'start_debate',
+        snapshotActionContext('debate_matchmaking', 'profile', request.recipient_profile_space_id, getContext()),
+        () => createDebateChallenge(request, getPrivyIdentityToken, accountKey)
+      ),
     onSuccess: challenge => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge } : current
@@ -1245,11 +1257,17 @@ export function useCreateDebateChallenge() {
 }
 
 export function useAcceptDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    mutationFn: (challengeId: string) =>
+      runObservedAction(
+        'join_debate',
+        snapshotActionContext('debate_matchmaking', 'debate_challenge', challengeId, getContext()),
+        () => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey)
+      ),
     onSuccess: result => {
       if (result.session) {
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);

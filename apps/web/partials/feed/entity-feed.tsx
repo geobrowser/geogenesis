@@ -672,8 +672,9 @@ export function EntityFeed({
         ) : items.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          items.map(item => (
+          items.map((item, index) => (
             <ExploreFeedCard
+              itemPosition={index + 1}
               key={`${item.entityId}-${item.spaceId}`}
               item={item}
               hideSpaceLink={lockedSpaceId != null}

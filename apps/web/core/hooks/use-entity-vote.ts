@@ -7,6 +7,9 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useSyncExternal
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
+import { type ActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
+import { entityActionScope } from '~/core/action-entity-context';
 import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -47,6 +50,7 @@ import {
   recordFailedResponse,
 } from '~/core/responses/failed-response-retries';
 import { geo } from '~/core/sdk/geo-client';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -201,6 +205,14 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
 }
 
 export function useEntityResponse({ entityId, entityName, spaceId, responseKind }: UseEntityResponseArgs) {
+  const { entity: analyticsEntity } = useQueryEntity({ id: entityId });
+  const entityScope = entityActionScope(analyticsEntity);
+  const getContext = useActionContext(
+    'entity_vote_buttons',
+    entityScope.target_type ?? (responseKind === 'curation' ? 'entity' : 'claim'),
+    entityId,
+    entityScope
+  );
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -477,8 +489,9 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   };
 
   const responseMutation = useMutation({
-    mutationFn: executeResponse,
-    onMutate: direction => {
+    mutationFn: ({ direction }: { direction: ResponseDirection; attribution: ActionContext }) =>
+      executeResponse(direction),
+    onMutate: ({ direction, attribution }) => {
       const previousState =
         queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
       const previousResponse = previousState.pending
@@ -492,7 +505,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
               responseKind ?? 'curation'
             )
           );
-      const operation = observeOperation('vote', 'entity', entityId);
+      const operation = observeOperation('vote', attribution.target_type, entityId, undefined, attribution);
       // Keyed by the space the vote is sent from, which can differ from the reactive one
       // (a vote replayed before personalSpaceId resolves).
       const votingPersonalSpaceId = readRegisteredSpace().personalSpaceId;
@@ -526,7 +539,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         retryKey,
       };
     },
-    onSuccess: (submission, direction, context) => {
+    onSuccess: (submission, { direction }, context) => {
       const previousDirection =
         context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
       const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
@@ -575,7 +588,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         void reconcileResponseIndexing(submission.pending, context.runId);
       }
     },
-    onError: (_error, direction, context) => {
+    onError: (_error, { direction, attribution }, context) => {
       const failure = classifyOperationFailure(_error);
       context?.operation.failed(failure, queueTimeoutMetrics(_error));
       // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
@@ -587,7 +600,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
           retry: async () => {
             // Account, entity, space or response kind changed since the failure.
             if (currentRetryKeyRef.current() !== retryKey) return;
-            await responseMutation.mutateAsync(direction);
+            await responseMutation.mutateAsync({ direction, attribution });
           },
         });
         setToast(createElement(FailedResponsesToast), { persistent: true });
@@ -673,8 +686,10 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       : indexingState.pending.expectedResponse;
 
   return {
-    submitResponse: responseMutation.mutate,
-    submitResponseAsync: responseMutation.mutateAsync,
+    submitResponse: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutate>[1]) =>
+      responseMutation.mutate({ direction, attribution: getContext() }, options),
+    submitResponseAsync: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutateAsync>[1]) =>
+      responseMutation.mutateAsync({ direction, attribution: getContext() }, options),
     optimisticResponse,
     isProcessingResponse:
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',

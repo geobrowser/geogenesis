@@ -989,3 +989,5 @@ describe('responseIndexingRetryDelayMs', () => {
     expect(responseIndexingRetryDelayMs(-1)).toBe(1_000);
   });
 });
+
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null }) }));

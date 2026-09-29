@@ -202,7 +202,7 @@ describe('DebateClaimTickerCard', () => {
   it('fades with its window rather than holding at full strength', () => {
     const { container } = renderCard({ opacity: 0.4 });
 
-    expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
+    expect(container.firstElementChild?.firstElementChild).toHaveStyle({ opacity: '0.4' });
   });
 
   // The card above the newest one dissolves into the video; the newest sits at full strength. In

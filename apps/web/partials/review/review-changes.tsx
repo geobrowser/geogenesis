@@ -1,5 +1,4 @@
 'use client';
-
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -10,7 +9,9 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom, useStore } from 'jotai';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
@@ -745,6 +746,10 @@ export const ReviewChanges = () => {
     }));
   };
 
+  const getPublishContext = useActionContext('review_changes', 'space', activeSpace ?? '', {
+    component: 'review_changes',
+    overlay: 'modal',
+  });
   const handleSubmit = React.useCallback(async () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
@@ -760,6 +765,7 @@ export const ReviewChanges = () => {
 
     setIsPublishing(true);
     const proposalEntityId = ID.createEntityId();
+    const operation = observeOperation('publish', 'space', activeSpace, undefined, getPublishContext());
 
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
@@ -797,6 +803,12 @@ export const ReviewChanges = () => {
     });
 
     if (publishSucceeded) {
+      operation.succeeded({
+        content_id: proposalEntityId,
+        target_entity_ids: [...selectedEntityIds],
+        value_count: publishSelection.values.length,
+        relation_count: publishSelection.relations.length,
+      });
       publishedEdit({
         operation_id: proposalEntityId,
         publication_status: 'confirmed',
@@ -809,6 +821,8 @@ export const ReviewChanges = () => {
         relation_count: publishSelection.relations.length,
       });
     }
+
+    if (!publishSucceeded) operation.failed('unknown');
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
       const bountyLinkValues: StoreValue[] = [
@@ -937,6 +951,7 @@ export const ReviewChanges = () => {
 
     setIsPublishing(false);
   }, [
+    getPublishContext,
     activeSpace,
     isReadyToPublish,
     makeProposal,

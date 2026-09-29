@@ -1,10 +1,11 @@
 'use client';
-
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { capture } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
@@ -44,6 +45,11 @@ const LINKEDIN_TEXT_MAX = 700;
  * and a download of the prepared debate video.
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
+  const getContext = useActionContext('share_dialog', 'debate', debate.id, {
+    overlay: 'modal',
+    overlay_entity_id: debate.id,
+    overlay_entity_type: 'debate',
+  });
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
 
@@ -67,6 +73,9 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
 
   // The sheet's own success metric.
   const captureShare = (method: ShareMethod) => {
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+    if (method === 'copy_link' || method === 'download') operation.succeeded({ method });
+    else operation.failed('unknown');
     try {
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
     } catch {}
@@ -96,11 +105,14 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   };
 
   const onCopy = async () => {
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
     try {
       await navigator.clipboard.writeText(shareUrl());
       setToast(<span>Link copied!</span>);
-      captureShare('copy_link');
+      operation.succeeded({ method: 'copy_link' });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'copy_link' });
     } catch {
+      operation.failed('unavailable');
       setToast(<span>Could not copy link.</span>);
     }
   };

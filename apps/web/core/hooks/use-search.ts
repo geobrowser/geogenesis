@@ -6,7 +6,9 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
-import { type SearchAnalyticsSurface, searchSubmitted } from '~/core/analytics';
+import { type ActionContext, snapshotActionContext } from '~/core/action-context';
+import { type SearchAnalyticsSurface, searchQueryId, searchSubmitted } from '~/core/analytics';
+import { observeOperation, recordAction } from '~/core/analytics-operations';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -288,7 +290,12 @@ export function useSearch({
   }, [resultPages]);
 
   const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
-  const analyticsAttemptRef = React.useRef({ key: '', startedAt: 0, emitted: false });
+  const analyticsAttemptRef = React.useRef<{
+    key: string;
+    startedAt: number;
+    emitted: boolean;
+    context?: ActionContext;
+  }>({ key: '', startedAt: 0, emitted: false });
 
   React.useEffect(() => {
     if (analyticsAttemptRef.current.key === analyticsSearchKey) return;
@@ -296,9 +303,10 @@ export function useSearch({
     analyticsAttemptRef.current = {
       key: analyticsSearchKey,
       startedAt: searchClock(),
+      context: snapshotActionContext('search', 'search_query', searchQueryId(cappedQuery)),
       emitted: false,
     };
-  }, [analyticsSearchKey]);
+  }, [analyticsSearchKey, cappedQuery]);
 
   React.useEffect(() => {
     const attempt = analyticsAttemptRef.current;
@@ -312,13 +320,20 @@ export function useSearch({
       !shouldSearch ||
       isFetching ||
       shouldPumpEmptyPage ||
-      !pages?.length ||
-      pages.some(page => !page.succeeded)
+      !pages?.length
     ) {
       return;
     }
 
     attempt.emitted = true;
+    if (pages.some(page => !page.succeeded)) {
+      if (attempt.context)
+        observeOperation('search', 'search_query', attempt.context.target_id, undefined, attempt.context).failed(
+          'unavailable'
+        );
+      return;
+    }
+    if (attempt.context) recordAction('search', attempt.context, { result_count: results.length });
     searchSubmitted({
       queryText: cappedQuery,
       resultCount: results.length,

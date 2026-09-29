@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/analytics', () => ({
+  analyticsContextRevision: () => 0,
+  capture: vi.fn(),
   commentCreated: mocks.commentCreated,
   commentEdited: mocks.commentEdited,
 }));

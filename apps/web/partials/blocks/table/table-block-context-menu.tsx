@@ -1,11 +1,12 @@
 'use client';
-
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { observeOperation } from '~/core/analytics-operations';
 import type { Source } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { buildAbsoluteRankingShareUrl, copyRankingShareLink } from '~/core/blocks/ranking/ranking-share';
@@ -72,10 +73,19 @@ export function TableBlockContextMenu({
     // OG image pre-warm here would burn the activation and the clipboard write would
     // be silently denied. The short link doesn't depend on the image existing, so the
     // pre-warm runs in the background (and is already kicked off on menu open).
+    const operation = observeOperation(
+      'share',
+      'ranking',
+      entityId,
+      undefined,
+      snapshotActionContext('share_dialog', 'ranking', entityId)
+    );
     const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
     void Promise.resolve(onPrepareGlobalShareLink?.()).catch(error => {
       console.error('Failed to prepare global ranking share image:', error);
     });
+    if (copied) operation.succeeded({ method: 'copy_link' });
+    else operation.failed('unavailable');
     if (copied) {
       setIsMenuOpen(false);
       setIsEditingProperties(false);

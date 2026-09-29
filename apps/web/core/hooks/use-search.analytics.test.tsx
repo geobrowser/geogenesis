@@ -12,7 +12,11 @@ const mocks = vi.hoisted(() => ({
   searchSubmitted: vi.fn(),
 }));
 
-vi.mock('~/core/analytics', () => ({ searchSubmitted: mocks.searchSubmitted }));
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  searchSubmitted: mocks.searchSubmitted,
+  capture: vi.fn(),
+}));
 vi.mock('../database/result', () => ({ mergeSearchResult: vi.fn() }));
 vi.mock('../sync/orm', () => ({ E: { findFuzzyPage: mocks.findFuzzyPage } }));
 vi.mock('../sync/use-sync-engine', () => ({ useSyncEngine: () => ({ store: {} }) }));

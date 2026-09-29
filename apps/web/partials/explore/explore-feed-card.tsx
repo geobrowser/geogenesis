@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionSurface, ActionSurfaceArticle } from '~/core/action-context-provider';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
@@ -21,6 +22,8 @@ import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
 
 type ExploreFeedCardProps = {
+  itemPosition?: number;
+  listId?: string;
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row. Useful when the card is rendered inside the space it references (e.g. the activity tab). */
   hideSpaceLink?: boolean;
@@ -92,6 +95,29 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  const targetType = isDebateEntity(props.item.types)
+    ? 'debate'
+    : props.item.types.some(type => normId(type.id) === CLAIM_TYPE)
+      ? 'claim'
+      : 'entity';
+  return (
+    <ActionSurface
+      asChild
+      value={{
+        component: 'explore_feed_card',
+        target_id: props.item.entityId,
+        target_type: targetType,
+        item_position: props.itemPosition,
+        list_id: props.listId ?? 'entity_feed',
+        variant: props.claimCardVariant ?? 'default',
+      }}
+    >
+      <ExploreFeedCardBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function ExploreFeedCardBody(props: ExploreFeedCardProps) {
   const isDebate = isDebateEntity(props.item.types);
   if (isDebate) {
     return (
@@ -143,7 +169,7 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <article className={EXPLORE_CARD_CLASS}>
+    <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}
@@ -173,6 +199,6 @@ function BaseExploreFeedCard({
           compactTitle={compactDebateChrome}
         />
       )}
-    </article>
+    </ActionSurfaceArticle>
   );
 }

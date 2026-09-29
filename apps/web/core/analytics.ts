@@ -3,6 +3,8 @@
 import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
+import { pageContext } from './action-context';
+
 export type AnalyticsProperties = Record<string, unknown>;
 
 export type SearchAnalyticsSurface = 'entity' | 'global' | 'space';
@@ -23,6 +25,7 @@ const SEARCH_ANALYTICS_PROPERTIES = {
 type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
+  getContext?: () => AnalyticsProperties;
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
@@ -125,9 +128,10 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-b916886eb8f2.js';
+const analyticsScriptSrc = '/geo-analytics-a3a214b8ae74.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
+let internalAccount = false;
 let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
@@ -178,7 +182,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-uRaIbrjyGABCgpsoCj9CefxylFMK6p/6CN5nLSw8m8A=';
+  script.integrity = 'sha256-o6IUuK50bRAyZQc3/Nu/33kzRIcOeuGURyGDh+WI/lY=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -193,6 +197,15 @@ export function capture(eventName: string, properties: AnalyticsProperties = {})
     eventName,
     properties: {
       app: appName,
+      ...pageContext(),
+      is_automated:
+        typeof navigator !== 'undefined' &&
+        (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
+      is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
+      is_internal:
+        internalAccount ||
+        process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
+        (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
       ...properties,
     },
   });
@@ -274,7 +287,7 @@ export function pageViewed(properties: AnalyticsProperties = {}) {
       app: appName,
       page_title: document.title,
       page_url: window.location.href,
-      page_path: window.location.pathname,
+      ...pageContext(),
       ...properties,
     },
   });
@@ -440,6 +453,7 @@ export function sessionRestored(user: AnalyticsIdentity, properties: AnalyticsPr
 }
 
 export function loggedOut(properties: AnalyticsProperties = {}) {
+  internalAccount = false;
   callOrQueue({
     method: 'loggedOut',
     properties: cleanProperties({
@@ -455,6 +469,7 @@ export function reconcileAnonymousAnalyticsIdentity() {
 }
 
 export function resetAnalyticsIdentity(properties: AnalyticsProperties = {}) {
+  internalAccount = false;
   callOrQueue({
     method: 'identityReset',
     properties: cleanProperties({
@@ -715,6 +730,8 @@ function analyticsRuntime() {
 }
 
 function privyIdentityProperties(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
+  const teamIds = (process.env.NEXT_PUBLIC_ANALYTICS_TEAM_ACCOUNT_IDS ?? '').split(',').map(id => id.trim());
+  internalAccount = !!user.id && teamIds.includes(user.id);
   const wallet = user.wallet ?? null;
 
   return cleanProperties({

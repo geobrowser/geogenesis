@@ -1,6 +1,7 @@
 'use client';
-
 import { useAtom } from 'jotai';
+
+import { snapshotActionContext } from '~/core/action-context';
 
 import { type EntitySidePanelTarget, entitySidePanelAtom } from '~/atoms';
 
@@ -17,6 +18,7 @@ export function useEntitySidePanel() {
   ) =>
     setTarget({
       entityId,
+      analyticsContext: snapshotActionContext('entity_vote_buttons', 'entity', entityId),
       spaceId: entitySpaceId,
       openedWithMainViewEditing,
       ...options,

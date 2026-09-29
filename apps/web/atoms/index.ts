@@ -1,11 +1,14 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { ActionContext } from '~/core/action-context';
+
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
 
 export type EntitySidePanelTarget = {
+  analyticsContext?: ActionContext;
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;

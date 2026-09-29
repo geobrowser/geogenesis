@@ -8,6 +8,8 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { recordAction } from '~/core/analytics-operations';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -267,6 +269,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                               hydrate([result.id]);
                             }}
                             onSelect={() => {
+                              recordAction(
+                                'search_result',
+                                snapshotActionContext('search', 'entity', result.id, {
+                                  overlay: 'modal',
+                                  item_position: i + 1,
+                                  list_id: 'search_results',
+                                })
+                              );
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);
@@ -327,6 +337,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         <div>
                           <Command.Item
                             onSelect={() => {
+                              recordAction(
+                                'search_result',
+                                snapshotActionContext('search', 'entity', selectedEntity.id, {
+                                  overlay: 'modal',
+                                  item_position: i + 1,
+                                  list_id: 'search_spaces',
+                                })
+                              );
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);

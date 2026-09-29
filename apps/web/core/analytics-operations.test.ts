@@ -96,3 +96,32 @@ describe('queue timeout metrics', () => {
     expect(queueTimeoutMetrics(null)).toBeUndefined();
   });
 });
+
+describe('canonical action outcomes', () => {
+  const context = {
+    component: 'entity_vote_buttons' as const,
+    target_id: 'claim',
+    target_type: 'claim',
+    page_path: '/explore',
+    page_type: 'explore',
+    page_view_id: 'view',
+  };
+  it('emits one successful action for submit, index, and repeated completion callbacks', () => {
+    const operation = observeOperation('vote', 'claim', 'claim', undefined, context);
+    operation.outcome('vote_cast', 'submitted', { response_action: 'agree' });
+    operation.outcome('vote_cast', 'indexed', {});
+    operation.succeeded();
+    operation.failed('unknown');
+    const actions = capture.mock.calls.filter(([event]) => event === 'action_completed');
+    expect(actions).toHaveLength(1);
+    expect(actions[0][1]).toMatchObject({ ...context, outcome: 'succeeded', response_action: 'agree' });
+  });
+  it('does not turn an uncertain receipt into a failed or successful action', () => {
+    const operation = observeOperation('vote', 'claim', 'claim', undefined, context);
+    operation.failed('unknown');
+    operation.failed('rejected');
+    expect(capture.mock.calls.filter(([event]) => event === 'action_completed')).toEqual([
+      ['action_completed', expect.objectContaining({ outcome: 'unknown', failure_code: 'unknown' })],
+    ]);
+  });
+});

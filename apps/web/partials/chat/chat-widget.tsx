@@ -1,5 +1,4 @@
 'use client';
-
 import { useChat } from '@ai-sdk/react';
 
 import * as React from 'react';
@@ -10,7 +9,9 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
+import { recordAction } from '~/core/analytics-operations';
 import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
@@ -571,6 +572,10 @@ export function ChatWidget() {
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
+      recordAction(
+        source === 'option_click' ? 'assistant_option' : 'assistant_message',
+        snapshotActionContext('ai_assistant', 'conversation', conversationIdRef.current)
+      );
       capture('ai_assistant_message_sent', {
         ...assistantContextProperties(),
         message_id: createTrackingId('message'),

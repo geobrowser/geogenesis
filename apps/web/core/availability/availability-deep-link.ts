@@ -1,3 +1,5 @@
+import { snapshotActionContext } from '~/core/action-context';
+import { runObservedAction } from '~/core/analytics-operations';
 /**
  * The link that opens a person's bookable week on arrival.
  *
@@ -40,5 +42,7 @@ export function availabilityLinkUrl(profileSpaceId: string, origin = window.loca
 
 /** What both copy controls do; each confirms in its own way. Rejects if the clipboard refuses. */
 export function copyAvailabilityLink(profileSpaceId: string): Promise<void> {
-  return navigator.clipboard.writeText(availabilityLinkUrl(profileSpaceId));
+  return runObservedAction('share', snapshotActionContext('share_dialog', 'space', profileSpaceId), () =>
+    navigator.clipboard.writeText(availabilityLinkUrl(profileSpaceId))
+  );
 }

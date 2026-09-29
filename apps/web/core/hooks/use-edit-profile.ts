@@ -1,5 +1,4 @@
 'use client';
-
 import { ContentIds, IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,7 +7,9 @@ import * as React from 'react';
 import equal from 'fast-deep-equal';
 import { useSetAtom } from 'jotai';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { profileUpdated } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { useEntity } from '~/core/database/entities';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -660,6 +661,11 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   const publish = React.useCallback(
     async (draft: ProfileDraft, extraRows?: { values: Value[]; relations: Relation[] }) => {
+      const attribution = snapshotActionContext('entity_editor', 'person', entityId ?? '', {
+        overlay: 'modal',
+        overlay_entity_id: entityId ?? undefined,
+        overlay_entity_type: 'person',
+      });
       if (!canEdit) return;
 
       // Retry re-sends the staged rows so the uploads inside only run once — but
@@ -797,6 +803,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // a different edit entirely — an account change clears it, the new account
       // stages its own, and this request then settles or fails *that* one. Identity,
       // not presence, is what says the result belongs to the edit that asked for it.
+      const operation = observeOperation('publish', 'person', staged.owner.entityId, undefined, attribution);
       const inFlight = staged;
       const isStillInFlight = () => stagedRef.current === inFlight;
 
@@ -806,10 +813,12 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         spaceId: staged.owner.spaceId,
         name: 'Edit profile',
         onSuccess: () => {
+          operation.succeeded();
           if (!isStillInFlight()) return;
           settleSuccess();
         },
         onError: () => {
+          operation.failed('unknown');
           if (!isStillInFlight()) return;
           ownsPendingError.current = true;
           setStatus('error');

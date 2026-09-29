@@ -145,10 +145,11 @@ export function PersonRecordFeed({
        * card never matched and the list ended on a rule under nothing.
        */}
       <div>
-        {items.map(item => (
+        {items.map((item, index) => (
           <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
             {renderCard?.(item) ?? (
               <ExploreFeedCard
+                itemPosition={index + 1}
                 item={item}
                 fullWidthDebate={fullWidthDebates}
                 // One wording for every claim, so the card has no kind to hand back — it passes

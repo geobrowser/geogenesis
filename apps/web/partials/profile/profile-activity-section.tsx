@@ -1,9 +1,9 @@
 'use client';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
@@ -613,8 +613,9 @@ function ActivityGallery({
           ref={scrollerRef}
           className="no-scrollbar flex snap-x snap-mandatory items-start gap-4 overflow-x-auto py-2"
         >
-          {shown.map(row => (
+          {shown.map((row, index) => (
             <GalleryCard
+              itemPosition={index + 1}
               key={`${row.entityId}-${row.spaceId}`}
               row={row}
               label={spaceLabel(labelsById, row.spaceId)}
@@ -817,6 +818,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
  * row scrolls without a control saying so.
  */
 function GalleryCard({
+  itemPosition,
   row,
   label,
   response,
@@ -825,6 +827,7 @@ function GalleryCard({
   onDebatePlaybackAvailabilityChange,
   debateEndSlot,
 }: {
+  itemPosition: number;
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
@@ -843,42 +846,44 @@ function GalleryCard({
   const isClaim = isClaimRow(row);
 
   return (
-    <div
-      data-activity-card
-      data-activity-debate-id={isClaim ? undefined : row.entityId}
-      className={cx(
-        // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
-        // panel: the panel is a column of its own width inside a window that may
-        // be three times wider, so `84vw` there is not 84% of anything the reader
-        // can see. The wrapper around the scroller establishes the container this
-        // measures — see `ActivityGallery`.
-        // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
-        // to preserve two response columns after the card's padding. `84cqw` remains the phone
-        // ceiling, where the response row may stack rather than overflow.
-        isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
-        'shrink-0 snap-start',
-        // The lobby card brings its own outline; the feed's card does not, and
-        // draws a rule underneath itself to separate it from the next card
-        // *down* — which in a row is a line under nothing.
-        !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
-      )}
-    >
-      {isClaim ? (
-        <GalleryClaimCard row={row} response={response} personName={personName} />
-      ) : (
-        // The Join button is hidden: this is a record being read, not a place to
-        // be recruited into.
-        <ExploreFeedCard
-          item={toExploreFeedItem(row, label)}
-          hideJoinButton
-          titleOpensSidePanel
-          compactDebateChrome
-          onDebatePlaybackRequest={onDebatePlaybackRequest}
-          onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
-          debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
-        />
-      )}
-    </div>
+    <ActionContextProvider value={{ list_id: 'profile_activity', item_position: itemPosition }}>
+      <div
+        data-activity-card
+        data-activity-debate-id={isClaim ? undefined : row.entityId}
+        className={cx(
+          // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
+          // panel: the panel is a column of its own width inside a window that may
+          // be three times wider, so `84vw` there is not 84% of anything the reader
+          // can see. The wrapper around the scroller establishes the container this
+          // measures — see `ActivityGallery`.
+          // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
+          // to preserve two response columns after the card's padding. `84cqw` remains the phone
+          // ceiling, where the response row may stack rather than overflow.
+          isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
+          'shrink-0 snap-start',
+          // The lobby card brings its own outline; the feed's card does not, and
+          // draws a rule underneath itself to separate it from the next card
+          // *down* — which in a row is a line under nothing.
+          !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
+        )}
+      >
+        {isClaim ? (
+          <GalleryClaimCard row={row} response={response} personName={personName} />
+        ) : (
+          // The Join button is hidden: this is a record being read, not a place to
+          // be recruited into.
+          <ExploreFeedCard
+            item={toExploreFeedItem(row, label)}
+            hideJoinButton
+            titleOpensSidePanel
+            compactDebateChrome
+            onDebatePlaybackRequest={onDebatePlaybackRequest}
+            onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+            debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
+          />
+        )}
+      </div>
+    </ActionContextProvider>
   );
 }
 

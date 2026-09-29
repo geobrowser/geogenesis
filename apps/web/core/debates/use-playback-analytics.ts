@@ -10,6 +10,7 @@ import { recordingWindowOffsetsSeconds } from './playback-utils';
 import type { DebatePlaybackController } from './use-debate-playback';
 
 export function usePlaybackAnalytics(debate: Debate, active: boolean, controller: DebatePlaybackController) {
+  const playbackInstance = React.useRef(crypto.randomUUID());
   const elementRef = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
@@ -33,7 +34,7 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
     const primary = controller.slot1VideoRef.current;
     const secondary = controller.slot2VideoRef.current;
     if (!element || !primary || !secondary || !controller.ready || typeof IntersectionObserver === 'undefined') return;
-    const instance = crypto.randomUUID();
+    const instance = playbackInstance.current;
     let visible = false;
     let exposed = false;
     let visibleSince: number | null = null;
@@ -142,5 +143,9 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
     };
   }, [debate.id, mediaVersion, offset, controller.ready, controller.slot1VideoRef, controller.slot2VideoRef]);
 
-  return { elementRef, control: (name: string) => controlRef.current(name) };
+  return {
+    elementRef,
+    playbackInstanceId: playbackInstance.current,
+    control: (name: string) => controlRef.current(name),
+  };
 }

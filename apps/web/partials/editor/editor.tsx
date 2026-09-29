@@ -1,5 +1,4 @@
 'use client';
-
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
@@ -9,7 +8,9 @@ import { LayoutGroup } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { capture } from '~/core/analytics';
+import { recordAction, runObservedAction } from '~/core/analytics-operations';
 import { useToast } from '~/core/hooks/use-toast';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
@@ -118,6 +119,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     }
   }, [activeEntityId, blockIds, editorContentVersion, editorJson]);
 
+  const getEditContext = useActionContext('entity_editor', 'entity', activeEntityId);
   const trackEditorDocument = React.useCallback(
     (json: JSONContent) => {
       const snapshot = JSON.stringify(normalizeEditorContent(json));
@@ -130,6 +132,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
       const editorContent = json.content ?? [];
 
+      recordAction('edit', getEditContext(), { edit_scope: 'local_draft' });
       capture('content_created', {
         content_id: activeEntityId,
         content_type: 'editor_content_edit',
@@ -145,6 +148,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
         if (!blockId || knownDataBlockIdsRef.current.has(blockId)) continue;
 
         knownDataBlockIdsRef.current.add(blockId);
+        recordAction(
+          'edit',
+          { ...getEditContext(), component: 'data_block', target_id: blockId, target_type: 'data_block' },
+          { edit_scope: 'local_draft', edit_action: 'block_created' }
+        );
         capture('content_created', {
           content_id: blockId,
           content_type: 'data_block',
@@ -156,7 +164,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
         });
       }
     },
-    [activeEntityId, spaceId]
+    [activeEntityId, spaceId, getEditContext]
   );
 
   const onBlur = (params: { editor: TiptapEditor }) => {
@@ -484,13 +492,17 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       upsertEditorStateRef.current(json);
 
       try {
-        await navigator.clipboard.writeText(buildBlockLink(window.location.href, blockId));
+        await runObservedAction(
+          'share',
+          { ...getEditContext(), target_type: 'data_block', target_id: blockId, component: 'share_dialog' },
+          () => navigator.clipboard.writeText(buildBlockLink(window.location.href, blockId))
+        );
         setToast(<div className="text-button">Link copied</div>);
       } catch {
         setToast(<div className="text-button">Unable to copy link</div>);
       }
     },
-    [setToast, trackEditorDocument]
+    [getEditContext, setToast, trackEditorDocument]
   );
 
   const copyBlock = React.useCallback(

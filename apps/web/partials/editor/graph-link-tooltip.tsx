@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { runObservedAction } from '~/core/analytics-operations';
 import { useEntity } from '~/core/database/entities';
 import { useToast } from '~/core/hooks/use-toast';
 import { NavUtils } from '~/core/utils/utils';
@@ -50,7 +52,9 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
 
     try {
       const fullUrl = new URL(NavUtils.toEntity(entitySpaceId, entityId), window.location.origin).toString();
-      await navigator.clipboard.writeText(fullUrl);
+      await runObservedAction('share', snapshotActionContext('share_dialog', 'entity', entityId), () =>
+        navigator.clipboard.writeText(fullUrl)
+      );
       setToast(<div className="text-button">Link copied</div>);
       onClose?.();
     } catch (error) {
