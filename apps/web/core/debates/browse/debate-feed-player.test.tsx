@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
   bylines: new Map<string, string>(),
+  identities: new Map<string, { name: string; avatarUrl: string }>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
   /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
@@ -54,7 +55,13 @@ vi.mock('./debate-end-card', () => ({
 }));
 
 vi.mock('~/core/debates/participant-bylines', () => ({
-  useParticipantBylines: () => mocks.bylines,
+  useParticipantProfiles: () =>
+    new Map(
+      [...mocks.bylines].map(([id, byline]) => [
+        id,
+        { name: null, avatarUrl: null, byline, ...mocks.identities.get(id) },
+      ])
+    ),
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -224,6 +231,7 @@ beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
+  mocks.identities = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -300,6 +308,16 @@ describe('player layout', () => {
     expect(getByText('Disagree')).not.toBeNull();
     expect(queryByText('Verify')).toBeNull();
     expect(queryByText('Dispute')).toBeNull();
+  });
+
+  it('uses the resolved name and avatar in the video identity', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.bylines = new Map([[SPACE_1, 'Public affiliation']]);
+    mocks.identities.set(SPACE_1, { name: 'Resolved participant', avatarUrl: 'ipfs://resolved-avatar' });
+    const { getByText, container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('img')?.getAttribute('src')).toContain('resolved-avatar');
+    expect(getByText('Resolved participant')).toBeTruthy();
+    expect(getByText('Public affiliation')).toBeTruthy();
   });
 
   it('shows each participant byline below their name, clamped with the full line on hover', () => {
