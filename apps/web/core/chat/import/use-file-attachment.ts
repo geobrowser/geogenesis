@@ -67,27 +67,33 @@ export function useFileAttachment(currentSpaceId: string | null) {
   // Bumped per attach so a slow parse can't overwrite a newer file's result.
   const generationRef = React.useRef(0);
   const parseController = React.useRef<AbortController | null>(null);
+  const heldImageIds = React.useRef(new Set<string>());
+
+  const releaseHeldImages = React.useCallback(() => {
+    for (const id of heldImageIds.current) ImageAttachments.clear(id);
+    heldImageIds.current.clear();
+  }, []);
+
   React.useEffect(
     () => () => {
       generationRef.current++;
       parseController.current?.abort();
+      releaseHeldImages();
     },
-    []
+    [releaseHeldImages]
   );
 
   /** The user removed the file. Drop the parsed rows too — nothing will read them. */
   const remove = React.useCallback(() => {
     parseController.current?.abort();
+    releaseHeldImages();
     setAttachment(current => {
       if (current?.status === 'ready') ImportSessions.clear(current.session.id);
-      if (current?.status === 'image') {
-        ImageAttachments.clear(current.image.id);
-        URL.revokeObjectURL(current.previewUrl);
-      }
+      if (current?.status === 'image') URL.revokeObjectURL(current.previewUrl);
       return null;
     });
     generationRef.current++;
-  }, []);
+  }, [releaseHeldImages]);
 
   /**
    * The file has been announced to the assistant. Take the chip away but keep
@@ -151,6 +157,7 @@ export function useFileAttachment(currentSpaceId: string | null) {
           sizeBytes: file.size,
         };
         ImageAttachments.set(image);
+        heldImageIds.current.add(image.id);
         setAttachment({ status: 'image', image, previewUrl: URL.createObjectURL(file) });
         return;
       }

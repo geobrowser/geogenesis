@@ -61,8 +61,4 @@ export const ImageAttachments = {
   clear(id: string): void {
     attachments.delete(id);
   },
-
-  clearAll(): void {
-    attachments.clear();
-  },
 };

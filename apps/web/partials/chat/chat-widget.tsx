@@ -964,6 +964,7 @@ export function ChatWidget() {
   // current one into that just-cleared list is incoherent.
   const handleClearHistory = React.useCallback(() => {
     if (isBusy) stop();
+    removeAttachment();
     setHistory([]);
     resetForChatSwap();
     setPersistedCurrent(null);
@@ -975,7 +976,17 @@ export function ChatWidget() {
     setInjectJob(null);
     setInjectInline(null);
     conversationIdRef.current = createTrackingId('conversation');
-  }, [isBusy, stop, setHistory, resetForChatSwap, setPersistedCurrent, setMessages, clearError, setInjectInline]);
+  }, [
+    isBusy,
+    stop,
+    removeAttachment,
+    setHistory,
+    resetForChatSwap,
+    setPersistedCurrent,
+    setMessages,
+    clearError,
+    setInjectInline,
+  ]);
 
   // Bails while busy so a stuck seed retries once the current turn settles.
   React.useEffect(() => {
