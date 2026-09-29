@@ -81,7 +81,8 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
   isPendingPersonalSpaceId: (spaceId: string | null | undefined) => spaceId?.startsWith('pending:') ?? false,
 }));
-vi.mock('~/core/state/feature-flags', () => ({}));
+// The copy-link control in the calendar header has its own tests; off here keeps it out of the way.
+vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => false }));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: mocks.canEdit, isLoading: false }),

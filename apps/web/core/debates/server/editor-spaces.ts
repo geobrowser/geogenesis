@@ -2,16 +2,35 @@ import { GraphQLClient } from 'graphql-request';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { getConfig } from '~/core/environment/environment';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 // `memberSpaceId` is a UUID column, so the variable must be typed `UUID!` or the request fails
 // schema validation before it executes. This query is hand-written, so codegen can't catch that.
+//
+// A cursor connection rather than `editors(first: …)`: the sweep finds its work here, so a capped
+// read would leave every space past the cap unswept, with nothing to say so.
 const EDITOR_SPACES_QUERY = `
-  query DebateAcceptorEditorSpaces($memberSpaceId: UUID!) {
-    editors(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 500) {
-      spaceId
+  query DebateAcceptorEditorSpaces($memberSpaceId: UUID!, $first: Int!, $after: Cursor) {
+    editorsConnection(filter: { memberSpaceId: { is: $memberSpaceId } }, first: $first, after: $after) {
+      nodes {
+        spaceId
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 `;
+
+const EDITOR_SPACES_PAGE_SIZE = 500;
+
+type EditorSpacesPage = {
+  editorsConnection: {
+    nodes: Array<{ spaceId: string }>;
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  };
+};
 
 /**
  * Retries for this query, and why it needs its own.
@@ -53,18 +72,35 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
  * how the publish sweep finds its work: the acceptor publishes only into spaces it can edit, so
  * enumerating its editor spaces is the whole candidate set — no manual allowlist to maintain.
  *
- * Throws once retries are exhausted. Callers decide what an unanswerable question means; see the
- * route for why it must not mean "nothing is publishable".
+ * Throws once retries are exhausted, or when the cursor chain breaks (see `collectCursorPages`): a
+ * partial list is never returned as though it were the whole set. Callers decide what an
+ * unanswerable question means; see the route for why it must not mean "nothing is publishable".
  */
 export async function listEditorSpaceIds(memberSpaceId: string): Promise<string[]> {
   const client = new GraphQLClient(getConfig().api);
-  const variables = { memberSpaceId: normalizeSpaceId(memberSpaceId) };
+  const member = normalizeSpaceId(memberSpaceId);
 
+  // Retried per page, so a blip on page three does not restart the walk.
+  const fetchPage = async (after: string | undefined): Promise<CursorPage<string>> => {
+    const variables = { memberSpaceId: member, first: EDITOR_SPACES_PAGE_SIZE, after: after ?? null };
+    const { editorsConnection } = await requestWithRetry(() =>
+      client.request<EditorSpacesPage>(EDITOR_SPACES_QUERY, variables)
+    );
+    return {
+      items: editorsConnection.nodes.map(editor => editor.spaceId),
+      endCursor: editorsConnection.pageInfo.endCursor,
+      hasNextPage: editorsConnection.pageInfo.hasNextPage,
+    };
+  };
+
+  return [...new Set(await collectCursorPages(fetchPage))];
+}
+
+async function requestWithRetry<T>(request: () => Promise<T>): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const data = await client.request<{ editors: Array<{ spaceId: string }> }>(EDITOR_SPACES_QUERY, variables);
-      return [...new Set(data.editors.map(editor => editor.spaceId))];
+      return await request();
     } catch (error) {
       lastError = error;
       if (!isTransientEditorSpacesError(error) || attempt === MAX_ATTEMPTS - 1) throw error;

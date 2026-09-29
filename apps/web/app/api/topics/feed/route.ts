@@ -10,7 +10,7 @@ import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse
 import { parseTopicFeedSelectedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 
-/** Mixed Topic rabbit-hole feed: direct topic entities plus Debates reached through their Claim. */
+/** Mixed Topic feed: every entity is matched by its own Topics relations. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const topicId = searchParams.get('topicId');

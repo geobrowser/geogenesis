@@ -25,6 +25,8 @@ type Props = {
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
   openerRef?: React.RefObject<HTMLElement | null>;
+  /** Beside the close button — the "copy my availability link" control, where the caller has one. */
+  headerAction?: React.ReactNode;
 };
 
 /**
@@ -37,7 +39,16 @@ type Props = {
  * Edits are held until Save. Closing by any other route (Cancel, ×, Escape, the overlay) discards
  * them, because a schedule half-dragged is not one a person meant to publish.
  */
-export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, onSave, openerRef }: Props) {
+export function AvailabilityModal({
+  open,
+  onOpenChange,
+  blocks,
+  error,
+  onRetry,
+  onSave,
+  openerRef,
+  headerAction,
+}: Props) {
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
 
   return (
@@ -79,14 +90,17 @@ export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, 
                   Set your debate schedule
                 </Text>
               </Title>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => onOpenChange(false)}
-                className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
+              <div className="flex shrink-0 items-center gap-4">
+                {headerAction}
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => onOpenChange(false)}
+                  className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
+                >
+                  <Close />
+                </button>
+              </div>
             </div>
 
             {/* Remounted per opening so a discarded draft cannot survive into the next one. The

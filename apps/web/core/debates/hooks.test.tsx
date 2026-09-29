@@ -28,6 +28,7 @@ import {
   useDebateActivity,
   useDebateClaims,
   useDebateClaimsBySpaces,
+  useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useEndDebateTurn,
@@ -48,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   endDebateTurn: vi.fn(),
   leaveDebateRematch: vi.fn(),
   listDebateClaims: vi.fn(),
+  getDebateProfile: vi.fn(),
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
@@ -105,6 +107,7 @@ vi.mock('./api', async importOriginal => {
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
     listDebateClaims: mocks.listDebateClaims,
+    getDebateProfile: mocks.getDebateProfile,
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
@@ -1489,5 +1492,39 @@ describe('debateQueryKeys.claims', () => {
       'space-1',
       'all',
     ]);
+  });
+});
+
+describe('useDebateProfile signed out', () => {
+  beforeEach(() => {
+    mocks.authenticated = false;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    mocks.getDebateProfile.mockReset();
+    mocks.getDebateProfile.mockResolvedValue({ user: { user_id: 'chat-user-1' }, is_self: false });
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {children}
+    </QueryClientProvider>
+  );
+
+  // The profile's Debate button has nothing to show a signed-out viewer, so it keeps not asking.
+  it('asks nothing by default', async () => {
+    const { result } = renderHook(() => useDebateProfile('space-1'), { wrapper });
+
+    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'));
+    expect(mocks.getDebateProfile).not.toHaveBeenCalled();
+  });
+
+  // An availability link has to learn whether the person can be booked before asking anyone to sign
+  // in, and geo-chat answers that anonymously.
+  it('asks anonymously when the caller opts in', async () => {
+    const { result } = renderHook(() => useDebateProfile('space-1', true, { signedOut: true }), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mocks.getDebateProfile).toHaveBeenCalledOnce();
+    expect(mocks.getDebateProfile.mock.calls[0][0]).toBe('space-1');
   });
 });

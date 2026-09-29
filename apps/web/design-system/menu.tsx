@@ -1,6 +1,6 @@
 'use client';
 
-import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
+import { Close, PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
@@ -164,9 +164,25 @@ type MenuItemProps = {
   onClick?: () => void;
   children: React.ReactNode;
   className?: string;
+  /**
+   * Close the menu once the item is pressed, through Radix's own `Close` — for an item that is
+   * handed to a menu it cannot reach the state of, such as one a server component passes in.
+   */
+  closeOnSelect?: boolean;
 };
 
-export function MenuItem({ className = '', active = false, children, href, ...rest }: MenuItemProps) {
+export function MenuItem({ closeOnSelect = false, ...props }: MenuItemProps) {
+  const item = <MenuItemBody {...props} />;
+  return closeOnSelect ? <Close asChild>{item}</Close> : item;
+}
+
+function MenuItemBody({
+  className = '',
+  active = false,
+  children,
+  href,
+  ...rest
+}: Omit<MenuItemProps, 'closeOnSelect'>) {
   if (href) {
     return (
       <Link
