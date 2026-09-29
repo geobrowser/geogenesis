@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import type { DebateActivity, ScheduledDebateRequest } from '../api';
+import type { ScheduledDebateRequest } from '../api';
 import { useUnexpiredRequests } from '../matchmaking/use-request-countdown';
 
 /**
@@ -30,9 +30,4 @@ export function useOpenScheduledRequests(requests: ScheduledDebateRequest[] | un
   );
   const live = useUnexpiredRequests(open);
   return React.useMemo(() => live.map(entry => entry.request), [live]);
-}
-
-/** Scheduled requests waiting on the viewer's answer, for the request badges. */
-export function useScheduledAwaitingBadgeCount(activity: DebateActivity | undefined) {
-  return activity?.scheduled_awaiting_answer_count ?? 0;
 }

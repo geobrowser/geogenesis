@@ -145,7 +145,7 @@ describe('answering in the tab', () => {
   it('accepts a request and keeps its time range in the upcoming card', async () => {
     const pending = request();
     mocks.requests = [pending];
-    const ScheduledTab = () => <ScheduledDebatesSection content={useScheduledContent(true)} />;
+    const ScheduledTab = () => <ScheduledDebatesSection content={useScheduledContent()} />;
     const user = userEvent.setup();
     const { rerender } = render(<ScheduledTab />);
     const slot = screen.getByText(/ – /).textContent!;
@@ -304,7 +304,7 @@ describe('pairing a room with the request that booked it', () => {
     mocks.requests = [request({ status: 'accepted', room_id: dashed, viewer_must_answer: false })];
     mocks.rooms = [room({ room_id: dashed.replace(/-/g, '') })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming).toHaveLength(1);
     expect(result.current.upcoming[0].opponentUserId).toBe('user-them');
@@ -315,7 +315,7 @@ describe('pairing a room with the request that booked it', () => {
     mocks.rooms = [room({ room_id: 'room-done' }), room({ room_id: 'room-open' })];
     mocks.finishedRoomIds = new Set(['room-done']);
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
@@ -324,7 +324,7 @@ describe('pairing a room with the request that booked it', () => {
     mocks.requests = [request(), request({ request_id: 'request-2' })];
     mocks.graphPeople = [ADA];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
     expect(result.current.people).toEqual([ADA]);
@@ -333,7 +333,7 @@ describe('pairing a room with the request that booked it', () => {
   it('leaves the opponent unknown when no request owns the room', () => {
     mocks.rooms = [room()];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming[0].opponentUserId).toBeNull();
     expect(result.current.upcoming[0].scheduledEndAt).toBeNull();
@@ -345,7 +345,7 @@ describe('pairing a room with the request that booked it', () => {
       request({ scheduled_start_at: '2020-01-01T13:00:00Z', scheduled_end_at: '2020-01-01T13:30:00Z' }),
     ];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.answerable).toHaveLength(0);
   });
@@ -353,7 +353,7 @@ describe('pairing a room with the request that booked it', () => {
   it('keeps an accepted request out of the answerable list', () => {
     mocks.requests = [request({ status: 'accepted', room_id: 'room-1' })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.answerable).toHaveLength(0);
   });
@@ -371,7 +371,7 @@ describe('a schedule that could not be read', () => {
   it('reports a failed room read too, not only a failed request read', () => {
     mocks.roomsError = new Error('Rooms are down.');
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.roomsError?.message).toBe('Rooms are down.');
     expect(result.current.requestsError).toBeNull();

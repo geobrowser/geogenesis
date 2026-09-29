@@ -37,7 +37,7 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
-  const scheduled = useScheduledContent(true);
+  const scheduled = useScheduledContent();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 

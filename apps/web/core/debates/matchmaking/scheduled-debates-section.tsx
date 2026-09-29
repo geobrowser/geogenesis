@@ -121,9 +121,9 @@ export type UpcomingRoomRow = {
   scheduledEndAt: string | null;
 };
 
-export function useScheduledContent(enabled: boolean): ScheduledContent {
-  const requests = useScheduledDebates(enabled);
-  const rooms = useUpcomingDebateRooms(enabled);
+export function useScheduledContent(): ScheduledContent {
+  const requests = useScheduledDebates();
+  const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
 
   const rows = requests.data?.requests;
@@ -131,7 +131,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
   const answerable = useOpenScheduledRequests(rows);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
-  const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
+  const finishedRoomIds = useFinishedRoomIds(roomList);
 
   const upcoming = React.useMemo(
     () =>
@@ -153,7 +153,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
     [rows]
   );
-  const people = useGeoChatUserSummaries(participantIds, enabled);
+  const people = useGeoChatUserSummaries(participantIds, true);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }

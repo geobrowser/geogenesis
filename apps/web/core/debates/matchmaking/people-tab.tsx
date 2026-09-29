@@ -126,8 +126,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const [onlineOnly, setOnlineOnly] = useAtom(debatesHubPeopleOnlineOnlyAtom);
   // Offline people can only be scheduled with, which needs an account to book from.
-  const offlineAvailable = authenticated;
-  const showOffline = offlineAvailable && !onlineOnly;
+  const showOffline = authenticated && !onlineOnly;
   const schedulableQuery = useSchedulablePeople(showOffline);
   const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
 
@@ -432,7 +431,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           facetSpaces={facetSpaces}
           countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
           trailing={
-            offlineAvailable ? (
+            authenticated ? (
               <FilterSwitch label="Online only" checked={onlineOnly} onChange={setOnlineOnly} analyticsSurface="hub" />
             ) : undefined
           }
