@@ -96,8 +96,9 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  *
- * With "Online only" off, offline people who share a free slot with the viewer follow, each with
- * those times and a Schedule button in place of the request (GEO-2937).
+ * With "Online only" off, the default, offline people who share a free slot with the viewer are
+ * listed too, ranked by matches alongside everyone online, each with those times and a Schedule
+ * button in place of the request (GEO-2937).
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
@@ -118,8 +119,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
   // The debug flag also opens "See times", because a room is booked from the week.
   const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
-  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
-  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  // Held here rather than in the row. Rows follow live data: someone who goes offline with no shared
+  // time left, or whose last shared time passes, drops out of the list, and a dialog inside their
+  // row would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{
     userId: string;
     name: string;
@@ -312,8 +314,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       );
     }
 
-    // Online people first: they can be asked now. The server's order breaks ties (roster order
-    // online, soonest shared slot offline), so equal matches stay stable as live updates land.
+    // Online and offline people share one list ordered by matches. Among equal matches the online
+    // person goes first, since they can be asked now; the server's order breaks the remaining ties
+    // (roster order online, soonest shared slot offline), so rows stay stable as live updates land.
     return filtered
       .map((person, index) => ({
         person,
@@ -322,7 +325,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
         matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
       }))
       .sort(
-        (left, right) => right.online - left.online || right.matchCount - left.matchCount || left.index - right.index
+        (left, right) => right.matchCount - left.matchCount || right.online - left.online || left.index - right.index
       )
       .map(({ person }) => person);
   }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
