@@ -17,6 +17,13 @@ function globalMediaRecorder(): MediaRecorderConstructor | undefined {
   return typeof MediaRecorder === 'undefined' ? undefined : MediaRecorder;
 }
 
+/**
+ * Pinned rather than left to the browser. Every testnet recording outside WebKit already came in
+ * at 2.5 Mbps, but WebKit defaults to 10 Mbps: ~345 MB per debater per debate, which WebKit
+ * viewers then cannot play back without dropping most frames.
+ */
+export const RECORDING_VIDEO_BITS_PER_SECOND = 2_500_000;
+
 export function preferredRecordingMimeType(Recorder: MediaRecorderConstructor | undefined = globalMediaRecorder()) {
   if (!Recorder) return '';
   for (const mimeType of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']) {
@@ -96,7 +103,10 @@ export function startDebateRecorder({
   const mimeType = preferredRecordingMimeType(Recorder);
   let recorder: MediaRecorder;
   try {
-    recorder = new Recorder(stream, mimeType ? { mimeType } : undefined);
+    recorder = new Recorder(stream, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND,
+    });
   } catch (error) {
     report({ debateId, stage: 'construct', mimeType, error });
     return null;
