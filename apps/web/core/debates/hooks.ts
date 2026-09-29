@@ -127,6 +127,11 @@ export const debateQueryKeys = {
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
+  /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
+  schedulablePeopleRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'schedulable-people'] as const,
+  schedulablePeople: (accountKey: string | null, days: number, limit: number) =>
+    ['debates', 'account', accountKey, 'schedulable-people', days, limit] as const,
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
@@ -627,7 +632,11 @@ export function useSaveDebateSchedule() {
       replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
     // The server answers with the stored form, so take it rather than re-deriving: anything it
     // normalised on the way in is then what the calendar draws.
-    onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
+    onSuccess: saved => {
+      queryClient.setQueryData(scheduleKey, saved);
+      // Who shares a slot with the viewer is computed from this schedule.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+    },
   });
 }
 

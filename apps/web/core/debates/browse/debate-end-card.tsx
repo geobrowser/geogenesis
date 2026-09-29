@@ -9,6 +9,8 @@ import { DebateTileChip } from '~/core/debates/debate-video-tile';
 import { type ClaimVsArguments, type ResponseSplit, claimVsArgumentsReading } from '~/core/debates/end-card';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
+import { normId } from '~/core/utils/norm-id';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
@@ -18,6 +20,7 @@ import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranki
 
 import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
+import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type EndCardData = ReturnType<typeof useDebateEndCard>;
 
@@ -218,6 +221,7 @@ function DebaterColumn({
 }) {
   const { participant, name, claimCount, split, responderSpaceIds } = debater;
   const side = responsePositionLabel(participant.position);
+  const openProfile = useOpenDebaterProfile(participant, { interactionSurface: 'debate_end_card' });
   // Nothing rather than "0 claims" while the transcript is still saying which claims are theirs.
   const countLabel = claimCount === null ? null : `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
 
@@ -272,10 +276,22 @@ function DebaterColumn({
   return (
     <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2 @max-md:gap-1.5">
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
+        {/* The same link to the person as their name on the tile and on each claim they made: their
+            profile, in the side panel. An anchor, as the thread's speaker names are, rather than the
+            tile's button. The tile's name sits on the video's play/pause surface, which has no
+            address to honour; the card is not on it, so Cmd-click, middle-click and "copy link"
+            reach the person's space — the hook lets those through. The side chip stays outside the
+            link, as it does on the tile. */}
+        <a
+          href={NavUtils.toSpace(normId(participant.profile_space_id))}
+          onClick={openProfile}
+          className="flex min-w-0 items-center gap-1.5 no-underline hover:underline"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
+          </span>
+          <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
+        </a>
         <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
       </div>
 

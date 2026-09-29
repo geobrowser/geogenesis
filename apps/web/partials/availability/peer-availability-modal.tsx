@@ -33,6 +33,8 @@ type Props = {
    * rather than swapping dialogs under them once it does.
    */
   children?: React.ReactNode;
+  /** Opens with this slot already picked. */
+  initialSelectedStart?: string | null;
 };
 
 /**
@@ -46,7 +48,16 @@ type Props = {
  * than seven day columns — the same reason `availability-modal` does, and it carries that modal's
  * mobile fixes with it.
  */
-export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerRef, booking, children }: Props) {
+export function PeerAvailabilityModal({
+  open,
+  userId,
+  peerName,
+  onClose,
+  openerRef,
+  booking,
+  children,
+  initialSelectedStart,
+}: Props) {
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
@@ -98,7 +109,13 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerR
                 an empty `userId` away from the hook while nobody is selected. */}
             {open &&
               (children ?? (
-                <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" booking={booking} />
+                <PeerAvailability
+                  userId={userId}
+                  peerName={peerName}
+                  className="min-h-0 flex-1"
+                  booking={booking}
+                  initialSelectedStart={initialSelectedStart}
+                />
               ))}
           </div>
         </Content>

@@ -1,9 +1,10 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { NEWS_STORY_TYPE_ID } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
@@ -63,26 +64,24 @@ const browse = {
 } as never;
 
 /**
- * One card-shaped entity carrying a single type. Cast rather than fully built: `Entity` has a
+ * One card-shaped entity carrying the given types. Cast rather than fully built: `Entity` has a
  * dozen fields the feed never reads for this, and spelling them out would obscure the one thing
- * each fixture is about — which type the row lands on.
+ * each fixture is about — which types the row lands on.
  */
-function entity(id: string, typeId: string) {
+function entity(id: string, ...typeIds: string[]) {
   return {
     id,
     name: `entity-${id}`,
     description: null,
     spaces: [SPACE],
-    types: [{ id: typeId, name: null }],
+    types: typeIds.map(typeId => ({ id: typeId, name: null })),
     values: [],
-    relations: [
-      {
-        id: `rel-${id}`,
-        spaceId: SPACE,
-        type: { id: SystemIds.TYPES_PROPERTY },
-        toEntity: { id: typeId, name: null, types: [], values: [] },
-      },
-    ],
+    relations: typeIds.map(typeId => ({
+      id: `rel-${id}-${typeId}`,
+      spaceId: SPACE,
+      type: { id: SystemIds.TYPES_PROPERTY },
+      toEntity: { id: typeId, name: null, types: [], values: [] },
+    })),
     commentCount: 0,
     createdAt: '1780000000',
   } as never;
@@ -245,6 +244,38 @@ describe('a window that does have rows', () => {
  * gaia #933 the server can do it exactly, so a type selection now goes to the by-type
  * connection.
  */
+/**
+ * The type selection matches an entity carrying *any* selected type, so it cannot keep out a Claim
+ * that is also a News story. The exclusion drops those rows in every sort, after the query.
+ */
+describe('an excluded type', () => {
+  it.each(['best', 'new', 'top'] as const)('drops an entity carrying it on %s, whatever else it is', async sort => {
+    windows.queue = [
+      windowOf([entity('c1', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort, excludeTypeIds: [NEWS_STORY_TYPE_ID] });
+
+    expect(result.items.map(i => i.entityId)).toEqual(['c2']);
+  });
+
+  it('keeps every row when nothing is excluded', async () => {
+    windows.queue = [
+      windowOf([entity('c1', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID), entity('c2', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new' });
+
+    expect(result.items.map(i => i.entityId).sort()).toEqual(['c1', 'c2']);
+  });
+});
+
 describe('a type selection filters server-side (GEO-2885)', () => {
   const sent = () => windows.variables[0] ?? {};
 
@@ -542,5 +573,85 @@ describe('a visible space scope with nothing in it', () => {
     });
 
     expect(result.items.map(item => item.entityId)).toEqual(['a']);
+  });
+});
+
+// GEO-3070. Explore's Best opens on the highest-ranked debate whose video plays.
+describe('leading Best with a playable debate', () => {
+  // Debate entity ids are geo-chat debate ids, so they are real 32-hex ids here.
+  const D1 = 'd1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1';
+  const D2 = 'd2d2d2d2d2d2d2d2d2d2d2d2d2d2d2d2';
+  const uuid = (hex: string) =>
+    `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  const mediaAsked: string[] = [];
+
+  const withMedia = (processed: Record<string, boolean>) =>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        mediaAsked.push(url);
+        const id = Object.keys(processed).find(hex => url.includes(`/debates/${uuid(hex)}/media`));
+        const artifacts = id && processed[id] ? [{ kind: 'final_video' }] : [];
+        return new Response(JSON.stringify({ artifacts }), { status: 200 });
+      })
+    );
+
+  const leadArgs = { ...feedArgs, typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID], leadWithPlayableDebate: true };
+  const rankedWindow = () =>
+    windowOf(
+      [
+        entity('c1', CLAIM_TYPE_ID),
+        entity('c2', CLAIM_TYPE_ID),
+        entity(D1, DEBATE_TYPE_ID),
+        entity(D2, DEBATE_TYPE_ID),
+      ],
+      { hasNextPage: true, endCursor: 'next' }
+    );
+
+  beforeEach(() => {
+    mediaAsked.length = 0;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('puts the highest-ranked playable debate first, once', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D1]: false, [D2]: true });
+
+    const result = await fetchExploreFeed(leadArgs);
+    const served = result.items.map(i => i.entityId);
+
+    expect(served[0]).toBe(D2);
+    expect(served.filter(id => id === D2)).toHaveLength(1);
+    expect(served).toContain(D1);
+  });
+
+  it('serves the ranked order when no debate plays', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D1]: false, [D2]: false });
+    const ranked = (await fetchExploreFeed({ ...leadArgs, leadWithPlayableDebate: false })).items.map(i => i.entityId);
+
+    windows.calls = 0;
+    const result = await fetchExploreFeed(leadArgs);
+
+    expect(result.items.map(i => i.entityId)).toEqual(ranked);
+  });
+
+  it('only reorders when asked: other feeds keep their ranked order and ask geo-chat nothing', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D2]: true });
+
+    await fetchExploreFeed({ ...leadArgs, leadWithPlayableDebate: false });
+    await fetchExploreFeed({ ...leadArgs, sort: 'new' });
+
+    expect(mediaAsked).toEqual([]);
+  });
+
+  it('leaves windows past the first alone', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D2]: true });
+
+    await fetchExploreFeed({ ...leadArgs, cursor: 'w1:0:next' });
+
+    expect(mediaAsked).toEqual([]);
   });
 });

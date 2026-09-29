@@ -933,6 +933,50 @@ export async function getScheduleOverlaps(
   });
 }
 
+/** One person the viewer could schedule with, whether or not they share a time (geo-chat#137, GEO-2937). */
+export type SchedulablePerson = {
+  user: DebateParticipantSummary;
+  online: boolean;
+  /**
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Only
+   * times still ahead when geo-chat answered (geo-chat#165), though they can pass before the next
+   * fetch.
+   */
+  slots: ScheduleOverlapSlot[];
+  /** More overlap exists than `limit` returned. */
+  truncated: boolean;
+};
+
+/** What `/matchmaking/schedulable-people` answers. */
+export type SchedulablePeopleResponse = {
+  viewer_timezone: string;
+  /** False means the viewer has no availability saved, and `people` is then always empty. */
+  viewer_has_schedule: boolean;
+  people: SchedulablePerson[];
+  /** The server's candidate scan was capped. */
+  truncated: boolean;
+};
+
+/**
+ * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
+ * first (GEO-2937).
+ */
+export async function listSchedulablePeople(
+  { days, limit }: { days: number; limit: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ days: String(days), limit: String(limit) });
+
+  return geoChatRequest<SchedulablePeopleResponse>(`/matchmaking/schedulable-people?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /**
  * Reports that a human did something. The strict half of presence.
  *

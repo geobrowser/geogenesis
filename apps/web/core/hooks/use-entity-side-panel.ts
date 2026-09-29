@@ -6,7 +6,10 @@ import { useActionContext } from '~/core/action-context-provider';
 
 import { type EntitySidePanelTarget, entitySidePanelAtom } from '~/atoms';
 
-export type OpenSidePanelOptions = Pick<EntitySidePanelTarget, 'openedFromReviewEdits' | 'forceRequestedSpace'>;
+export type OpenSidePanelOptions = Pick<
+  EntitySidePanelTarget,
+  'openedFromReviewEdits' | 'forceRequestedSpace' | 'scrollToComments'
+>;
 
 export function useEntitySidePanel() {
   const getContext = useActionContext('entity_vote_buttons', 'entity', '');

@@ -16,6 +16,8 @@ import { usePeerSchedule } from '~/core/debates/hooks';
 
 import { Text } from '~/design-system/text';
 
+import { firstName } from '~/partials/profile/claim-response-tag';
+
 /**
  * How many slots a day shows before the expander.
  *
@@ -24,6 +26,14 @@ import { Text } from '~/design-system/text';
  * reads wrong against real schedules.
  */
 const SLOTS_PER_DAY = 4;
+
+/**
+ * Chip looks, shared with the legend so the key can never drift from what it describes. Green for
+ * a time you both have free, since that is the one worth picking; dashed for theirs alone.
+ */
+export const MUTUAL_SLOT = 'border-solid border-green bg-successTertiary text-text';
+export const PEER_ONLY_SLOT = 'border-dashed border-grey-03 bg-white text-text';
+export const SELECTED_SLOT = 'border-solid border-text bg-text text-white';
 
 /**
  * Supplied by a caller that can act on a picked time, which turns the footer on. Absent, the week
@@ -48,7 +58,7 @@ export type PeerAvailabilityBooking = {
  *
  * ## It shows their week, not the overlap
  *
- * The grid is *their* availability; the viewer's own picks solid over dashed, never whether a
+ * The grid is *their* availability; the viewer's own picks green over dashed, never whether a
  * slot appears. Intersecting would leave a shared-link recipient with no schedule of their own
  * seeing nothing, which is the case this exists for.
  *
@@ -60,7 +70,7 @@ export type PeerAvailabilityBooking = {
  * Takes a user id and nothing else, so the shareable link that will eventually open this can
  * mount it without this component knowing anything about routing.
  */
-export function PeerAvailability({ userId, peerName, className, booking }: Props) {
+export function PeerAvailability({ userId, peerName, className, booking, initialSelectedStart }: Props) {
   const { schedule, enabled, isPending, isError } = usePeerSchedule(userId);
 
   // Signed out there is no viewer to compare against, so the question cannot be asked rather than
@@ -69,7 +79,15 @@ export function PeerAvailability({ userId, peerName, className, booking }: Props
   if (isPending) return <Notice className={className}>Loading availability…</Notice>;
   if (isError || !schedule) return <Notice className={className}>Couldn&rsquo;t load their availability.</Notice>;
 
-  return <PeerAvailabilityView schedule={schedule} peerName={peerName} className={className} booking={booking} />;
+  return (
+    <PeerAvailabilityView
+      schedule={schedule}
+      peerName={peerName}
+      className={className}
+      booking={booking}
+      initialSelectedStart={initialSelectedStart}
+    />
+  );
 }
 
 type Props = {
@@ -81,6 +99,8 @@ type Props = {
    */
   peerName?: string | null;
   className?: string;
+  /** A slot picked before the week opened, e.g. a time chip on a People tab row. */
+  initialSelectedStart?: string | null;
 };
 
 /**
@@ -93,6 +113,7 @@ export function PeerAvailabilityView({
   className,
   now,
   booking,
+  initialSelectedStart = null,
 }: {
   schedule: PeerSchedule;
   peerName?: string | null;
@@ -100,11 +121,20 @@ export function PeerAvailabilityView({
   /** Pins the week. Tests pass it; nothing in the app does. */
   now?: Date;
   booking?: PeerAvailabilityBooking;
+  initialSelectedStart?: string | null;
 }) {
   const days = React.useMemo(() => peerScheduleDays(schedule, now), [schedule, now]);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
   // can ask for, and the footer needs to name the one that is.
-  const [selectedStart, setSelectedStart] = React.useState<string | null>(null);
+  // Matched by instant, not spelling: the wire sends `…:00Z` and the grid's starts are `…:00.000Z`.
+  // A pick outside the drawn week seeds nothing rather than a selection nobody can see.
+  const [selectedStart, setSelectedStart] = React.useState<string | null>(() => {
+    if (!initialSelectedStart) return null;
+    const instant = Date.parse(initialSelectedStart);
+    // A chip can outlive its time; a past pick would only be refused at Send.
+    if (instant <= (now ?? new Date()).getTime()) return null;
+    return days.flatMap(day => day.slots).find(slot => Date.parse(slot.start) === instant)?.start ?? null;
+  });
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
   // The week starts at today's midnight, so its early columns are already gone. geo-chat refuses a
   // past start outright, so a booking caller must not be able to pick one.
@@ -168,6 +198,7 @@ export function PeerAvailabilityView({
               the times you both have free.
             </Hint>
           )}
+          <Legend peerName={name} showMutual={schedule.viewerHasSchedule} />
           <WeekGrid
             days={days}
             peerName={name}
@@ -422,7 +453,10 @@ function DayColumn({
   onSelect: (start: string | null) => void;
   notBefore: number | null;
 }) {
-  const [expanded, setExpanded] = React.useState(false);
+  // Opened on a preselected slot past the fold, the pick has to be visible.
+  const [expanded, setExpanded] = React.useState(
+    () => day.slots.findIndex(slot => slot.start === selectedStart) >= SLOTS_PER_DAY
+  );
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
   const hidden = day.slots.length - shown.length;
@@ -490,7 +524,8 @@ function DayColumn({
 /**
  * One 30-minute slot. Selection lives in the view, so picking one clears the last.
  *
- * Dashed and muted means only they are free; it stays a perfectly ordinary, pickable slot.
+ * Green means you are both free; dashed means only they are, and it stays a perfectly ordinary,
+ * pickable slot.
  */
 function SlotChip({
   slot,
@@ -513,7 +548,7 @@ function SlotChip({
 
   // The visible chip carries the day in its column and free-vs-not in its border, neither of which
   // survives into an accessible name: without this every chip is a bare time that recurs on all
-  // seven days, and the solid/dashed distinction the view exists to draw is invisible.
+  // seven days, and the green/dashed distinction the view exists to draw is invisible.
   const label = [
     `${dayLabel} at ${slot.label}`,
     showPeerTime ? `${slot.peerLabel} for ${peerName}` : null,
@@ -538,20 +573,41 @@ function SlotChip({
       onClick={onSelect}
       className={cx(
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
-        slot.viewerIsFree === true
-          ? 'border-solid border-grey-02 bg-[#F6F6F6] text-text hover:bg-grey-01'
-          : 'border-dashed border-grey-02 bg-transparent text-grey-04 hover:text-text',
-        selected && 'border-solid border-text bg-[#EFE2FF] text-text',
+        selected ? SELECTED_SLOT : slot.viewerIsFree === true ? MUTUAL_SLOT : PEER_ONLY_SLOT,
+        // Here rather than in the shared looks, which the legend's static swatches also wear.
+        !selected && 'hover:border-text',
         past && 'cursor-not-allowed opacity-40'
       )}
     >
       <span>{slot.label}</span>
       {showPeerTime && (
-        <span className="block text-grey-04">
+        <span className={cx('block', selected ? 'text-white/70' : 'text-grey-04')}>
           {slot.peerLabel} <span className="sr-only">their time</span>
         </span>
       )}
     </button>
+  );
+}
+
+/** What green and dashed mean, drawn with the chips' own classes. */
+function Legend({ peerName, showMutual }: { peerName: string; showMutual: boolean }) {
+  return (
+    <ul aria-label="Legend" className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1">
+      {/* With no week of your own nothing can be mutual, and the hint above already says so. */}
+      {showMutual && <LegendItem swatch={MUTUAL_SLOT}>You&rsquo;re both free</LegendItem>}
+      <LegendItem swatch={PEER_ONLY_SLOT}>{firstName(peerName) ?? peerName} is free</LegendItem>
+    </ul>
+  );
+}
+
+function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-center gap-1.5">
+      <span aria-hidden className={cx('h-3 w-5 shrink-0 rounded-sm border', swatch)} />
+      <Text as="span" variant="footnote" color="grey-04">
+        {children}
+      </Text>
+    </li>
   );
 }
 

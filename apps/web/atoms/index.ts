@@ -15,6 +15,11 @@ export type EntitySidePanelTarget = {
   openedFromReviewEdits?: boolean;
   /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
   forceRequestedSpace?: boolean;
+  /**
+   * Open scrolled to the entity's comments — a claim's Activity — rather than at the top. The panel's
+   * stand-in for the full page's `#entity-comments`; see `useScrollToCommentsOnOpen`.
+   */
+  scrollToComments?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
@@ -190,6 +195,13 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
+ * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
+ * time this week alongside online ones. Outside the tab for the same reason as the
+ * spaces filter above.
+ */
+export const debatesHubPeopleOnlineOnlyAtom = atom(false);
+
+/**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -252,6 +264,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

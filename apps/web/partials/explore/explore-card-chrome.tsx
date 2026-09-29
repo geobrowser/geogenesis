@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreCardTitle } from './explore-card-title';
@@ -67,7 +68,7 @@ export function ExploreCardActions({ item }: { item: ExploreFeedItem }) {
   return (
     <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
       <ExploreFeedCommentLink
-        href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`}
+        href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#${ENTITY_COMMENTS_ANCHOR_ID}`}
         count={item.commentCount}
       />
     </EntityRowActions>

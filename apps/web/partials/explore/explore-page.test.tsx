@@ -26,8 +26,6 @@ vi.mock('~/partials/feed/entity-feed', () => ({ EntityFeed: () => <div data-test
 function renderExplore() {
   return render(
     <ExplorePage
-      initialSpaceOptions={[]}
-      memberSpaceIds={[]}
       featuredSpaces={[]}
       featuredRankings={[]}
       pendingMembershipSpaceIds={[]}
