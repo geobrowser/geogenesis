@@ -277,11 +277,11 @@ function DebaterColumn({
     <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2 @max-md:gap-1.5">
       <div className="flex min-w-0 items-center gap-1.5">
         {/* The same link to the person as their name on the tile and on each claim they made: their
-            profile, in the side panel. A real link, as the thread's speaker names are, rather than
-            the tile's button: the tile's name sits on the video's play/pause surface, where there is
-            no address to honour, but nothing here does, so Cmd-click, middle-click and "copy link"
-            reach their space — the hook lets those through. The side chip stays outside it, as it
-            does on the tile. */}
+            profile, in the side panel. An anchor, as the thread's speaker names are, rather than the
+            tile's button. The tile's name sits on the video's play/pause surface, which has no
+            address to honour; the card is not on it, so Cmd-click, middle-click and "copy link"
+            reach the person's space — the hook lets those through. The side chip stays outside the
+            link, as it does on the tile. */}
         <a
           href={NavUtils.toSpace(normId(participant.profile_space_id))}
           onClick={openProfile}
