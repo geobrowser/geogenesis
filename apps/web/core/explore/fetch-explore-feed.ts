@@ -15,6 +15,7 @@ import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
+import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
@@ -377,16 +378,14 @@ type CompletePopulationIndexArgs = {
   scopes: readonly ExploreCompletePopulationScope[];
 };
 
-type CompletePopulationCacheEntry = {
-  expiresAtMs: number;
-  promise: Promise<ExploreCompleteIndexNode[]>;
-};
-
 /** Matches the Topic facet/composition query freshness while bounding stale feed membership. */
 const COMPLETE_POPULATION_CACHE_TTL_MS = 60_000;
 /** Each entry may hold a whole Topic population, so keep the per-instance cache deliberately small. */
 const COMPLETE_POPULATION_CACHE_MAX_ENTRIES = 24;
-const completePopulationCache = new Map<string, CompletePopulationCacheEntry>();
+const completePopulationCache = createPromiseTtlCache<ExploreCompleteIndexNode[]>({
+  ttlMs: COMPLETE_POPULATION_CACHE_TTL_MS,
+  maxEntries: COMPLETE_POPULATION_CACHE_MAX_ENTRIES,
+});
 
 function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
   return JSON.stringify({
@@ -453,36 +452,7 @@ async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): 
 export async function fetchCompleteExplorePopulationIndex(
   args: CompletePopulationIndexArgs
 ): Promise<ExploreCompleteIndexNode[]> {
-  const key = completePopulationCacheKey(args);
-  const now = Date.now();
-  const cached = completePopulationCache.get(key);
-  if (cached && cached.expiresAtMs > now) {
-    // Refresh insertion order so the size bound evicts the least recently used population.
-    completePopulationCache.delete(key);
-    completePopulationCache.set(key, cached);
-    return cached.promise;
-  }
-  if (cached) completePopulationCache.delete(key);
-
-  for (const [cachedKey, entry] of completePopulationCache) {
-    if (entry.expiresAtMs <= now) completePopulationCache.delete(cachedKey);
-  }
-
-  const promise = buildCompletePopulationIndex(args);
-  const entry = { expiresAtMs: now + COMPLETE_POPULATION_CACHE_TTL_MS, promise };
-  completePopulationCache.set(key, entry);
-  while (completePopulationCache.size > COMPLETE_POPULATION_CACHE_MAX_ENTRIES) {
-    const oldestKey = completePopulationCache.keys().next().value;
-    if (typeof oldestKey !== 'string') break;
-    completePopulationCache.delete(oldestKey);
-  }
-
-  try {
-    return await promise;
-  } catch (error) {
-    if (completePopulationCache.get(key)?.promise === promise) completePopulationCache.delete(key);
-    throw error;
-  }
+  return completePopulationCache.get(completePopulationCacheKey(args), () => buildCompletePopulationIndex(args));
 }
 
 /**
