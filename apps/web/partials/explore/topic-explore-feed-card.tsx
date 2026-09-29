@@ -4,10 +4,16 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import type { TopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
 
-import { EXPLORE_CARD_CLASS, ExploreCardActions, ExploreCardDefaultBody } from './explore-card-chrome';
+import {
+  EXPLORE_CARD_CLASS,
+  ExploreCardActions,
+  ExploreCardDefaultBody,
+  ExploreCardSurface,
+} from './explore-card-chrome';
 import { ExploreMetaRow, META_SEGMENT_CLASS } from './explore-meta-row';
 import { MetaDot } from './meta-dot';
 
@@ -46,15 +52,17 @@ export function TopicExploreFeedCard({
   titleOpensSidePanel?: boolean;
 }) {
   return (
-    <article className={EXPLORE_CARD_CLASS}>
-      <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
-      <ExploreCardDefaultBody
-        item={item}
-        titleOpensSidePanel={titleOpensSidePanel}
-        meta={<TopicConnectionMeta counts={counts} />}
-        actions={<ExploreCardActions item={item} />}
-      />
-    </article>
+    <ExploreCardSurface item={item}>
+      <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
+        <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
+        <ExploreCardDefaultBody
+          item={item}
+          titleOpensSidePanel={titleOpensSidePanel}
+          meta={<TopicConnectionMeta counts={counts} />}
+          actions={<ExploreCardActions item={item} />}
+        />
+      </ActionSurfaceArticle>
+    </ExploreCardSurface>
   );
 }
 
