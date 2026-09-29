@@ -836,11 +836,17 @@ function SetAvailabilityNotice() {
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
-      <Text as="p" variant="footnote">
-        Set your availability to see offline people you can schedule a debate with.
+    <div className="mb-4 flex flex-col items-start gap-3 rounded-lg border border-purple/15 bg-purple/5 p-4">
+      <Text as="h3" variant="smallTitle">
+        Plan a debate for later
+      </Text>
+      <Text as="p" variant="metadata" className="leading-6">
+        Add the times you&rsquo;re free to find people you can debate with, even when they&rsquo;re offline. Others can
+        also see your schedule and request a time with you.
       </Text>
       <HubPillButton
+        variant="primary"
+        className="h-10! px-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         analyticsLabel="Set availability"
         onClick={event => {
           openerRef.current = event.currentTarget;
