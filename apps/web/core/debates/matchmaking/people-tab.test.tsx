@@ -45,8 +45,6 @@ const mocks = vi.hoisted(() => ({
   records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
-  peerAvailability: true,
-  debugBooking: false,
   propose: {
     mutate: vi.fn(),
     reset: vi.fn(),
@@ -142,14 +140,6 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/hooks/use-space-labels')>();
   return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
 });
-
-// GEO-2938 is behind a flag that is off by default. These cases are about the row, so the flag is
-// on unless a case turns it off.
-vi.mock('~/core/state/feature-flags', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
-  useDebugDebatesPageEnabled: () => mocks.debugBooking,
-}));
 
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
 vi.mock('../rooms/scheduling-hooks', () => ({
@@ -269,8 +259,6 @@ const card = () => screen.queryByRole('article');
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
-  mocks.peerAvailability = true;
-  mocks.debugBooking = false;
   mocks.propose = { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null, data: undefined };
   mocks.usePeerSchedule.mockReset();
   // Enough of a schedule that the view renders its heading, so a case can see the peer's name.
@@ -963,28 +951,7 @@ describe('See times', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
-  it('is absent while the flag is off, which is the default', () => {
-    mocks.peerAvailability = false;
-    mocks.people = [person('user-them', 'Arturas')];
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
-
-    expect(screen.queryByRole('button', { name: /See times/ })).not.toBeInTheDocument();
-    // The row is otherwise untouched.
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
-  });
-
-  // Booking a room is reached through the week, so the debug flag has to open it on its own.
-  it('opens on the booking flag even with availability off', () => {
-    mocks.peerAvailability = false;
-    mocks.debugBooking = true;
-    mocks.people = [person('user-them', 'Arturas')];
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
-
-    expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeInTheDocument();
-  });
-
   it('proposes against the person whose week is open', async () => {
-    mocks.debugBooking = true;
     mocks.people = [person('user-them', 'Arturas')];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -996,7 +963,6 @@ describe('See times', () => {
   });
 
   it('clears a finished proposal so the next week does not open showing it', async () => {
-    mocks.debugBooking = true;
     mocks.people = [person('user-them', 'Arturas')];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -1535,13 +1501,6 @@ describe('Online only', () => {
     expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'true');
     expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(false);
     expect(screen.queryByText('Ona')).not.toBeInTheDocument();
-  });
-
-  it('is absent without scheduling, since offline people could only be scheduled', () => {
-    mocks.peerAvailability = false;
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
-
-    expect(screen.queryByRole('switch', { name: 'Online only' })).not.toBeInTheDocument();
   });
 
   it('puts offline people after online ones at equal matches, with a Schedule button instead of a request', () => {

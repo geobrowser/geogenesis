@@ -9,7 +9,6 @@ import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
@@ -23,7 +22,6 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
-import { PeerAvailabilityModal } from '~/partials/availability/peer-availability-modal';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson, SchedulablePerson, ScheduleOverlapSlot } from '../api';
@@ -117,9 +115,6 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // One elevated portal for every row's menu. A portal per person would append a matching number
   // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
   const popoverPortal = useElevatedPopoverPortal();
-  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  // The debug flag also opens "See times", because a room is booked from the week.
-  const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
   // Held here rather than in the row. Rows follow live data: someone whose free time runs out, or
   // who is blocked, drops out of the list, and a dialog inside their row would vanish mid-read.
   const [viewingTimes, setViewingTimes] = React.useState<{
@@ -130,8 +125,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
   const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
   const [onlineOnly, setOnlineOnly] = useAtom(debatesHubPeopleOnlineOnlyAtom);
-  // Offline people can only be scheduled with, so the switch exists only where booking does.
-  const offlineAvailable = bookingEnabled && authenticated;
+  // Offline people can only be scheduled with, which needs an account to book from.
+  const offlineAvailable = authenticated;
   const showOffline = offlineAvailable && !onlineOnly;
   const schedulableQuery = useSchedulablePeople(showOffline);
   const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
@@ -546,14 +541,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
                     disabled={buttonsDisabled}
                     disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                     onRequireSignIn={onRequireSignIn}
-                    onSeeTimes={
-                      bookingEnabled
-                        ? (peer, opener, initialStart) => {
-                            seeTimesOpenerRef.current = opener;
-                            setViewingTimes({ ...peer, initialStart });
-                          }
-                        : undefined
-                    }
+                    onSeeTimes={(peer, opener, initialStart) => {
+                      seeTimesOpenerRef.current = opener;
+                      setViewingTimes({ ...peer, initialStart });
+                    }}
                   />
                 );
               })}
@@ -563,24 +554,14 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
       </div>
 
       {/* Closing returns to the hub, which is where it was opened from. */}
-      {bookingEnabled ? (
-        <PeerAvailabilityBookingModal
-          open={viewingTimes !== null}
-          userId={viewingTimes?.userId ?? ''}
-          peerName={viewingTimes?.name}
-          onClose={() => setViewingTimes(null)}
-          openerRef={seeTimesOpenerRef}
-          initialSelectedStart={viewingTimes?.initialStart}
-        />
-      ) : (
-        <PeerAvailabilityModal
-          open={viewingTimes !== null}
-          userId={viewingTimes?.userId ?? ''}
-          peerName={viewingTimes?.name}
-          onClose={() => setViewingTimes(null)}
-          openerRef={seeTimesOpenerRef}
-        />
-      )}
+      <PeerAvailabilityBookingModal
+        open={viewingTimes !== null}
+        userId={viewingTimes?.userId ?? ''}
+        peerName={viewingTimes?.name}
+        onClose={() => setViewingTimes(null)}
+        openerRef={seeTimesOpenerRef}
+        initialSelectedStart={viewingTimes?.initialStart}
+      />
     </div>
   );
 }
@@ -626,8 +607,7 @@ function PersonRow({
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
   onRequireSignIn?: () => void;
-  /** Absent while the feature flag is off, which is what hides "See times". */
-  onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null, initialStart?: string) => void;
+  onSeeTimes: (peer: { userId: string; name: string }, opener: HTMLElement | null, initialStart?: string) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -705,7 +685,7 @@ function PersonRow({
             <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
           </div>
         ) : null}
-        {schedule && onSeeTimes ? (
+        {schedule ? (
           <SharedTimes
             personName={speakerLabel(person)}
             schedule={schedule}
@@ -721,7 +701,7 @@ function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        {onSeeTimes && !schedule && (
+        {!schedule && (
           <button
             type="button"
             // Every row carries this control, so the visible label alone leaves a screen reader or
@@ -739,7 +719,7 @@ function PersonRow({
             <Time />
           </button>
         )}
-        {schedule && onSeeTimes ? (
+        {schedule ? (
           // Offline people cannot take a request, so the pill books a time instead. Never disabled by
           // the viewer's live request state, for the same reason "See times" is not.
           <HubPillButton

@@ -34,12 +34,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'peerAvailability',
-    label: 'Availability and scheduling',
-    description: "Book a debate from another debater's week, and answer or join scheduled debates in the Requests tab.",
-    enabledByDefault: false,
-  },
-  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
@@ -59,9 +53,10 @@ export const featureFlagDefinitions = [
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
-// renamed from) are no longer flags. Both are still sitting in browsers' stored flag objects;
-// normalizing drops them on the next write rather than reading them back.
-type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab', boolean>>;
+// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too. All three
+// are still sitting in browsers' stored flag objects; normalizing drops them on the next write
+// rather than reading them back.
+type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability', boolean>>;
 
 /**
  * Both of these are derived from the definitions above rather than written out beside them.
@@ -152,10 +147,6 @@ export function useDebugDebatesPageEnabled() {
 
 export function usePlaybackDiagnosticsEnabled() {
   return useFeatureFlag('playbackDiagnostics');
-}
-
-export function usePeerAvailabilityEnabled() {
-  return useFeatureFlag('peerAvailability');
 }
 
 /**

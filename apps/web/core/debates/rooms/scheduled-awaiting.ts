@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
-
 import type { DebateActivity, ScheduledDebateRequest } from '../api';
 import { useUnexpiredRequests } from '../matchmaking/use-request-countdown';
 
@@ -34,11 +32,7 @@ export function useOpenScheduledRequests(requests: ScheduledDebateRequest[] | un
   return React.useMemo(() => live.map(entry => entry.request), [live]);
 }
 
-/**
- * Scheduled requests waiting on the viewer's answer, for the request badges. Gated on the flag
- * here, because activity carries the count for everyone.
- */
+/** Scheduled requests waiting on the viewer's answer, for the request badges. */
 export function useScheduledAwaitingBadgeCount(activity: DebateActivity | undefined) {
-  const enabled = usePeerAvailabilityEnabled();
-  return enabled ? (activity?.scheduled_awaiting_answer_count ?? 0) : 0;
+  return activity?.scheduled_awaiting_answer_count ?? 0;
 }
