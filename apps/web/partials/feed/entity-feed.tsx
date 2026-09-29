@@ -1,22 +1,20 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
 
-import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
+import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
-import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
-import {
-  EXPLORE_TYPE_FILTER_STORAGE_KEY,
-  parseStoredExploreTypeIds,
-  toggleExploreTypeId,
-} from '~/core/explore/explore-type-filter';
+import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
+import { EXPLORE_TYPE_FILTER_STORAGE_KEY, parseStoredExploreTypeIds } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -97,6 +95,30 @@ type EntityFeedProps = {
   showSortFilter?: boolean;
   /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
   showTypeFilter?: boolean;
+  /** Whether the space picker is shown and sent. Topic feeds use their own curated scope. */
+  showSpaceFilter?: boolean;
+  /** Initial type selection. Explore defaults to its three primary types; Topic feeds start broad. */
+  initialTypeIds?: readonly string[];
+  /** Type checklist options. Defaults to the standard Explore set. */
+  typeOptions?: readonly { id: string; label: string }[];
+  /** Counts for this contextual feed's unfiltered population, shown beside each type. */
+  typeCounts?: readonly { id: string; count: number }[];
+  /** Whether contextual type counts are still loading. */
+  typeCountsPending?: boolean;
+  /** Start contextual feeds on only the types whose population count is non-zero. */
+  selectTypesWithResultsByDefault?: boolean;
+  /** Restore and save the Explore route's type choice. Disable for contextual feeds. */
+  persistTypeSelection?: boolean;
+  /** Optional Topic facet shown beside the type picker. */
+  topicOptions?: HubFilterOption<string>[];
+  /** Optional endpoint that counts and prunes Topic options against this feed's current filters. */
+  topicFacetEndpoint?: string;
+  /** Keep the Topic picker visible while its options load or when the default list is empty. */
+  showTopicFilter?: boolean;
+  /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
+  fixedParams?: Record<string, string>;
+  /** Optional bound for contextual AND-composed Topic selections. */
+  maxTopicSelections?: number;
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
@@ -120,6 +142,8 @@ async function fetchFeedPage(
     /** Empty means no space narrowing at all. */
     spaceIds: readonly string[];
     typeIds: readonly string[] | undefined;
+    topicIds: readonly string[];
+    fixedParams: Record<string, string>;
     cursor: string | undefined;
   }
 ): Promise<ExploreFeedResult> {
@@ -132,12 +156,40 @@ async function fetchFeedPage(
   // as "no narrowing", which is the same answer with one fewer special string in it.
   if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
+  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
+  for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
   const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
+
+async function fetchTopicFacets(
+  endpoint: string,
+  params: {
+    selectedTopicIds: readonly string[];
+    typeIds: readonly string[] | undefined;
+    fixedParams: Record<string, string>;
+    signal?: AbortSignal;
+  }
+): Promise<TopicFacetResult> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      selectedTopicIds: params.selectedTopicIds,
+      typeIds: params.typeIds,
+      fixedParams: params.fixedParams,
+    }),
+    signal: params.signal,
+  });
+  if (!response.ok) throw new Error('Topic facets failed');
+  return response.json() as Promise<TopicFacetResult>;
 }
 
 /**
@@ -154,6 +206,18 @@ export function EntityFeed({
   showTimeFilter = true,
   showSortFilter = false,
   showTypeFilter = false,
+  showSpaceFilter = true,
+  initialTypeIds = DEFAULT_EXPLORE_TYPE_IDS,
+  typeOptions = EXPLORE_ENTITY_TYPES,
+  typeCounts,
+  typeCountsPending = false,
+  selectTypesWithResultsByDefault = false,
+  persistTypeSelection = true,
+  topicOptions = [],
+  topicFacetEndpoint,
+  showTopicFilter = false,
+  fixedParams = {},
+  maxTopicSelections,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
@@ -176,28 +240,99 @@ export function EntityFeed({
   // Seeded with the default rather than every type, so the first paint is what the effect below
   // will settle on for a reader with nothing stored — the common case. Starting from all twelve
   // showed a wider feed for a frame and then narrowed it.
-  const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...DEFAULT_EXPLORE_TYPE_IDS]);
-  const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
+  const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
+  const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
+  const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter || !persistTypeSelection);
   const shouldPersistTypeSelectionRef = React.useRef(false);
+  const typeSelectionTouchedRef = React.useRef(false);
+  const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter and there is no menu to reconcile it with; otherwise it is
   // whatever is ticked, and nothing ticked means every space the reader may see.
   const requestedSpaceIds = React.useMemo(
-    () => (lockedSpaceId ? [lockedSpaceId] : spaceIds),
-    [lockedSpaceId, spaceIds]
+    () => (showSpaceFilter ? (lockedSpaceId ? [lockedSpaceId] : spaceIds) : []),
+    [lockedSpaceId, showSpaceFilter, spaceIds]
   );
   const spaceIdsKey = requestedSpaceIds.join(',');
-  const typeIds =
-    showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
+  const nonEmptyTypeIds = React.useMemo(() => {
+    if (!typeCounts || typeCountsPending) return null;
+    const countById = new Map(typeCounts.map(type => [normId(type.id), type.count]));
+    return typeOptions.filter(type => (countById.get(normId(type.id)) ?? 0) > 0).map(type => type.id);
+  }, [typeCounts, typeCountsPending, typeOptions]);
+  const visibleTypeOptions = React.useMemo(() => {
+    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds) return typeOptions;
+    const nonEmptyTypeIdSet = new Set(nonEmptyTypeIds.map(normId));
+    return typeOptions.filter(type => nonEmptyTypeIdSet.has(normId(type.id)));
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, typeOptions]);
+  const selectedTypeIdSet = React.useMemo(() => new Set(selectedTypeIds.map(normId)), [selectedTypeIds]);
+  const visibleSelectedTypeIds = React.useMemo(
+    () => visibleTypeOptions.filter(type => selectedTypeIdSet.has(normId(type.id))).map(type => type.id),
+    [selectedTypeIdSet, visibleTypeOptions]
+  );
+  const selectsWholePopulation = React.useMemo(() => {
+    if (selectedTypeIds.length === typeOptions.length) return true;
+    if (!selectTypesWithResultsByDefault || !nonEmptyTypeIds || nonEmptyTypeIds.length === 0) return false;
+    return (
+      selectedTypeIds.length === nonEmptyTypeIds.length &&
+      nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
+    );
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
+  const typeIds = showTypeFilter && !selectsWholePopulation ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
+  const topicIdsKey = selectedTopicIds.join(',');
+  const fixedParamsKey = Object.entries(fixedParams)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}:${value}`)
+    .join('|');
+  const topicFacets = useQuery({
+    queryKey: [
+      'entity-feed-topic-facets',
+      topicFacetEndpoint ?? null,
+      topicIdsKey,
+      showTypeFilter ? typeIdsKey : null,
+      fixedParamsKey,
+    ],
+    enabled: Boolean(topicFacetEndpoint && typeSelectionLoaded),
+    placeholderData: keepPreviousData,
+    queryFn: ({ signal }) =>
+      fetchTopicFacets(topicFacetEndpoint!, {
+        selectedTopicIds,
+        typeIds: showTypeFilter ? typeIds : undefined,
+        fixedParams,
+        signal,
+      }),
+    staleTime: 60_000,
+  });
+  const topicCountsPending = Boolean(topicFacetEndpoint) && (topicFacets.isLoading || topicFacets.isPlaceholderData);
+  const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
+    const options = topicFacetEndpoint
+      ? orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
+          value: topic.id,
+          label: topic.name?.trim() || 'Topic',
+          count: topic.count,
+        }))
+      : topicOptions;
+    return options;
+  }, [selectedTopicIds, topicFacetEndpoint, topicFacets.data?.topics, topicOptions]);
+
+  React.useEffect(() => {
+    if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
+    setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
+  }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
   // One condition behind both the dropdown and the request, so what the viewer can see and what
   // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
   // returning to Top restores the range the viewer last picked rather than resetting it.
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
-  const showFilterRow = showSortFilter || timeRangeApplies || lockedSpaceId == null || showTypeFilter;
+  const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
+  const showFilterRow =
+    showSortFilter ||
+    timeRangeApplies ||
+    (showSpaceFilter && lockedSpaceId == null) ||
+    showTypeFilter ||
+    topicFilterVisible;
 
   React.useEffect(() => {
-    if (!showTypeFilter) return;
+    if (!showTypeFilter || !persistTypeSelection) return;
     let stored: string | null = null;
     try {
       stored = window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY);
@@ -206,29 +341,67 @@ export function EntityFeed({
     }
     setSelectedTypeIds(parseStoredExploreTypeIds(stored));
     setTypeSelectionLoaded(true);
-  }, [showTypeFilter]);
+  }, [persistTypeSelection, showTypeFilter]);
 
   React.useEffect(() => {
-    if (!showTypeFilter || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current) return;
+    if (
+      !showTypeFilter ||
+      !selectTypesWithResultsByDefault ||
+      !nonEmptyTypeIds ||
+      contextualTypeDefaultAppliedRef.current
+    ) {
+      return;
+    }
+    contextualTypeDefaultAppliedRef.current = true;
+    if (!typeSelectionTouchedRef.current) setSelectedTypeIds(nonEmptyTypeIds);
+  }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, showTypeFilter]);
+
+  React.useEffect(() => {
+    if (!showTypeFilter || !persistTypeSelection || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current)
+      return;
     shouldPersistTypeSelectionRef.current = false;
     try {
       window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
     } catch {
       // Quota or blocked site data — the choice holds for this session, it just won't be restored.
     }
-  }, [selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
+  }, [persistTypeSelection, selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
 
-  const toggleType = React.useCallback((typeId: string) => {
-    shouldPersistTypeSelectionRef.current = true;
-    setSelectedTypeIds(current => toggleExploreTypeId(current, typeId));
-  }, []);
+  const toggleType = React.useCallback(
+    (typeId: string) => {
+      typeSelectionTouchedRef.current = true;
+      shouldPersistTypeSelectionRef.current = true;
+      setSelectedTypeIds(current => {
+        const selected = new Set(current);
+        if (selected.has(typeId)) selected.delete(typeId);
+        else selected.add(typeId);
+        return typeOptions.map(type => type.id).filter(id => selected.has(id));
+      });
+    },
+    [typeOptions]
+  );
 
   const toggleAllTypes = React.useCallback(() => {
+    typeSelectionTouchedRef.current = true;
     shouldPersistTypeSelectionRef.current = true;
-    setSelectedTypeIds(current =>
-      current.length === EXPLORE_ENTITY_TYPE_IDS.length ? [] : [...EXPLORE_ENTITY_TYPE_IDS]
-    );
-  }, []);
+    setSelectedTypeIds(current => {
+      const currentSet = new Set(current.map(normId));
+      const allVisibleSelected =
+        visibleTypeOptions.length > 0 && visibleTypeOptions.every(type => currentSet.has(normId(type.id)));
+      return allVisibleSelected ? [] : visibleTypeOptions.map(type => type.id);
+    });
+  }, [visibleTypeOptions]);
+
+  const toggleTopic = React.useCallback(
+    (topicId: string) => {
+      setSelectedTopicIds(current => {
+        if (current.includes(topicId)) return current.filter(id => id !== topicId);
+        if (maxTopicSelections !== undefined && current.length >= maxTopicSelections) return current;
+        return [...current, topicId];
+      });
+    },
+    [maxTopicSelections]
+  );
 
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
@@ -238,9 +411,16 @@ export function EntityFeed({
   const smartAccountAddress = smartAccount?.account.address ?? null;
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const queryKey = showTypeFilter
-    ? [apiEndpoint, sort, requestedTime, spaceIdsKey, typeIdsKey, smartAccountAddress]
-    : [apiEndpoint, sort, requestedTime, spaceIdsKey, smartAccountAddress];
+  const queryKey = [
+    apiEndpoint,
+    sort,
+    requestedTime,
+    spaceIdsKey,
+    showTypeFilter ? typeIdsKey : null,
+    topicIdsKey,
+    fixedParamsKey,
+    smartAccountAddress,
+  ];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
@@ -250,6 +430,8 @@ export function EntityFeed({
         time: requestedTime,
         spaceIds: requestedSpaceIds,
         typeIds,
+        topicIds: selectedTopicIds,
+        fixedParams,
         cursor: pageParam as string | undefined,
       }),
     initialPageParam: undefined as string | undefined,
@@ -312,7 +494,7 @@ export function EntityFeed({
     memberSpaceIds: liveMemberSpaceIds,
     isSettlingMemberships,
     isLoading: memberSpacesLoading,
-  } = useClaimSpaceAllowlist(lockedSpaceId == null);
+  } = useClaimSpaceAllowlist(showSpaceFilter && lockedSpaceId == null);
 
   // The union of the two, not the live one in place of the prop. Neither is reliably the fresher:
   // the prop was computed during *this* render of the page, while the live value can be a cache
@@ -351,6 +533,16 @@ export function EntityFeed({
     'Any space',
     () => initialSpaceOptions.find(option => option.value === spaceIds[0])?.label ?? 'Any space',
     count => `${count} spaces`
+  );
+  const topicLabel = pickerLabel(
+    selectedTopicIds.length,
+    'Any topic',
+    () =>
+      topicFacets.data?.topics.find(topic => normId(topic.id) === normId(selectedTopicIds[0]))?.name ??
+      topicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
+      availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
+      '1 topic',
+    count => `${count} topics`
   );
 
   return (
@@ -425,9 +617,9 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {lockedSpaceId == null || showTypeFilter ? (
+          {(showSpaceFilter && lockedSpaceId == null) || showTypeFilter || topicFilterVisible ? (
             <div className="ml-auto flex items-center gap-3">
-              {lockedSpaceId == null ? (
+              {showSpaceFilter && lockedSpaceId == null ? (
                 <HubMultiFilterMenu
                   label={spaceLabel}
                   options={initialSpaceOptions}
@@ -440,9 +632,26 @@ export function EntityFeed({
               ) : null}
               {showTypeFilter ? (
                 <ExploreTypeFilterMenu
-                  selectedTypeIds={selectedTypeIds}
+                  selectedTypeIds={visibleSelectedTypeIds}
+                  typeOptions={visibleTypeOptions}
+                  typeCounts={typeCounts}
+                  countsPending={typeCountsPending}
                   onToggleType={toggleType}
                   onToggleAll={toggleAllTypes}
+                />
+              ) : null}
+              {topicFilterVisible ? (
+                <HubMultiFilterMenu
+                  label={topicLabel}
+                  options={availableTopicOptions}
+                  values={selectedTopicIds}
+                  onToggle={toggleTopic}
+                  onClear={() => setSelectedTopicIds([])}
+                  clearLabel="Any topic"
+                  showImages={false}
+                  searchPlaceholder="Search topics"
+                  searchEmptyLabel="No topics found"
+                  countsPending={topicCountsPending}
                 />
               ) : null}
             </div>

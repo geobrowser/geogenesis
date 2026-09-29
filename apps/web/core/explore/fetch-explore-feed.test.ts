@@ -23,10 +23,20 @@ const windows = vi.hoisted(() => ({
    * stopped being forwarded.
    */
   variables: [] as Record<string, unknown>[],
+  operations: [] as string[],
+  responder: null as null | ((operation: string, variables: Record<string, unknown>) => unknown),
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ variables }: { variables: Record<string, unknown> }) => {
+  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+    const operation =
+      query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
+    windows.operations.push(operation);
+    if (windows.responder) {
+      windows.calls += 1;
+      windows.variables.push(variables);
+      return Effect.succeed(windows.responder(operation, variables));
+    }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
@@ -39,7 +49,8 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { fetchExploreFeed } = await import('./fetch-explore-feed');
+const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
+  await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -96,6 +107,8 @@ beforeEach(() => {
   windows.queue = [];
   windows.calls = 0;
   windows.variables = [];
+  windows.operations = [];
+  windows.responder = null;
 });
 
 /**
@@ -132,6 +145,20 @@ describe('the debate-tag clause reaching the query', () => {
 
     // The activity feed shares this fetcher and must keep seeing untagged claims.
     expect(sentFilter()?.or).toBeUndefined();
+  });
+});
+
+describe('a contextual entity scope', () => {
+  const sorts = ['best', 'new', 'top'] as const;
+  const entityFilter = { id: { is: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } };
+
+  it.each(sorts)('is composed into the %s query', async sort => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    await fetchExploreFeed({ ...feedArgs, sort, entityFilter });
+
+    const filter = windows.variables[0]?.filter as { and?: unknown[] } | undefined;
+    expect(filter?.and).toContainEqual(entityFilter);
   });
 });
 
@@ -271,5 +298,249 @@ describe('a type selection filters server-side (GEO-2885)', () => {
     // Easy to lose when swapping the document: the gate is an argument, not part of the
     // connection, so nothing would fail loudly if it stopped being sent.
     expect((sent().filter as { or?: unknown } | undefined)?.or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+});
+
+describe('a complete contextual population', () => {
+  it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
+          { fromEntity: null },
+          null,
+        ],
+        pageInfo: { hasNextPage: true, endCursor: 'next-relation-page' },
+      },
+      {
+        nodes: [
+          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
+          { fromEntity: { id: 'relation-unscored', rankingScore: null, createdAt: '2' } },
+        ],
+        pageInfo: { hasNextPage: false },
+      },
+    ];
+    const relationFilter = { typeId: { is: 'topics-property' }, toEntityId: { is: 'page-topic' } };
+    const entityFilter = { relations: { some: { toEntityId: { is: 'selected-topic' } } } };
+    const args = {
+      spaceIds: [SPACE],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      requireName: true,
+      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter, relationFilter }],
+    };
+    const rows = await fetchCompleteExplorePopulationIndex(args);
+    expect(rows.map(row => row.id)).toEqual(['relation-ranked', 'relation-unscored']);
+    expect(windows.operations).toEqual(['ExploreRelationIndex', 'ExploreRelationIndex']);
+    expect(windows.variables[1]?.after).toBe('next-relation-page');
+    const filter = windows.variables[0]?.filter as any;
+    expect(filter.and[0]).toEqual(relationFilter);
+    expect(filter.and[1].fromEntity.and[1]).toEqual(entityFilter);
+    expect(filter.and[1].fromEntity.and[0]).toMatchObject({
+      typeIds: { overlaps: [CLAIM_TYPE_ID] },
+      spaceIds: { overlaps: [SPACE] },
+      values: { some: { spaceId: { in: [SPACE] }, text: { isNull: false, isNot: '' } } },
+      relations: { none: { or: expect.any(Array) } },
+    });
+    expect(await fetchCompleteExplorePopulationIndex(args)).toEqual(rows);
+    expect(windows.calls).toBe(2);
+
+    windows.calls = 0;
+    const newest = await fetchCompleteExplorePopulationIndex({ ...args, sort: 'new' });
+    expect(newest.map(row => row.id)).toEqual(['relation-unscored', 'relation-ranked']);
+  });
+
+  it.each([
+    { relation: true, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: true, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+    { relation: false, endCursor: null, message: 'no end cursor', failedCalls: 1 },
+    { relation: false, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
+  ])('rejects invalid cursor chains and evicts the failed population: %j', async scenario => {
+    const id = `cursor-contract-${scenario.relation}-${scenario.endCursor}`;
+    const node = { id, rankingScore: '1', createdAt: '1' };
+    const nodes = scenario.relation ? [{ fromEntity: node }] : [node];
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: true, endCursor: scenario.endCursor } });
+    const args = {
+      spaceIds: [SPACE],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      scopes: [
+        {
+          typeIds: [CLAIM_TYPE_ID],
+          entityFilter: { id: { is: id } },
+          ...(scenario.relation ? { relationFilter: { toEntityId: { is: id } } } : {}),
+        },
+      ],
+    };
+
+    await expect(fetchCompleteExplorePopulationIndex(args)).rejects.toThrow(scenario.message);
+    expect(windows.calls).toBe(scenario.failedCalls);
+    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
+    await expect(fetchCompleteExplorePopulationIndex(args)).resolves.toEqual([node]);
+    expect(windows.calls).toBe(scenario.failedCalls + 1);
+  });
+
+  it('shares one compact population when equivalent space filters arrive in a different order', async () => {
+    const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? {
+            nodes: [{ id: 'cache-order', typeIds: [CLAIM_TYPE_ID], rankingScore: '1', createdAt: '1' }],
+            pageInfo: { hasNextPage: false, endCursor: null },
+          }
+        : windowOf([], { hasNextPage: false, endCursor: null });
+    const args = {
+      spaceIds: [SPACE, secondSpace],
+      sort: 'best' as const,
+      time: 'all' as const,
+      typeIds: [CLAIM_TYPE_ID],
+      requireName: true,
+      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { is: 'cache-order' } } }],
+    };
+
+    await fetchCompleteExplorePopulationIndex(args);
+    await fetchCompleteExplorePopulationIndex({ ...args, spaceIds: [secondSpace, SPACE] });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+  });
+
+  it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'unscored', rankingScore: null },
+          { id: 'ranked', rankingScore: '42.5' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('unscored', CLAIM_TYPE_ID), entity('ranked', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const scopeFilter = { id: { in: ['ranked', 'unscored'] } };
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
+    expect(windows.calls).toBe(2);
+    expect((windows.variables[0]?.filter as { and?: unknown[] }).and).toContainEqual(scopeFilter);
+    expect(windows.variables[1]?.filter).toEqual(
+      expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
+    );
+  });
+
+  it('uses the same compact population for New and orders it by creation time', async () => {
+    windows.queue = [
+      {
+        nodes: [
+          { id: 'older-high-rank', rankingScore: '100', createdAt: '1700000000' },
+          { id: 'newer-low-rank', rankingScore: '1', createdAt: '1800000000' },
+        ],
+        pageInfo: { hasNextPage: false, endCursor: null },
+      },
+      windowOf([entity('older-high-rank', CLAIM_TYPE_ID), entity('newer-low-rank', CLAIM_TYPE_ID)], {
+        hasNextPage: false,
+        endCursor: null,
+      }),
+    ];
+
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      sort: 'new',
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [
+        { typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: ['older-high-rank', 'newer-low-rank'] } } },
+      ],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
+    expect(windows.calls).toBe(2);
+  });
+
+  it('reuses the ordered compact population when infinite scroll advances', async () => {
+    const rows = Array.from({ length: 31 }, (_, index) => ({
+      id: `entity-${index.toString().padStart(2, '0')}`,
+      rankingScore: String(31 - index),
+      createdAt: String(1_800_000_000 - index),
+    }));
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? { nodes: rows, pageInfo: { hasNextPage: false, endCursor: null } }
+        : windowOf(
+            rows.map(row => entity(row.id, CLAIM_TYPE_ID)),
+            { hasNextPage: false, endCursor: null }
+          );
+
+    const args = {
+      ...feedArgs,
+      requireDebateTagOnClaims: false,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: rows.map(row => row.id) } } }],
+    };
+    const first = await fetchExploreFeed(args);
+    expect(first.nextCursor).not.toBeNull();
+
+    await fetchExploreFeed({ ...args, cursor: first.nextCursor });
+
+    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
+    expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
+  });
+});
+
+/**
+ * The signed-out reader's whole visible scope is the Featured list, so these two cases — which
+ * produce byte-identical empty pages today — are the difference between "nothing matched" and
+ * "Explore is broken".
+ */
+describe('a visible space scope with nothing in it', () => {
+  it('serves an empty page when the scope resolved and simply holds no space', async () => {
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null } as never,
+    });
+
+    expect(result).toEqual({ items: [], nextCursor: null });
+  });
+
+  it('fails instead when the scope is empty because the Featured traversal failed', async () => {
+    await expect(
+      fetchExploreFeed({
+        ...feedArgs,
+        browse: {
+          featured: [],
+          editorOf: [],
+          memberOf: [],
+          documentationImage: null,
+          personalSpaceId: null,
+          featuredError: true,
+        } as never,
+      })
+    ).rejects.toThrow(ExploreSpaceScopeUnresolvedError);
+  });
+
+  // A reader who *is* signed in still has their own spaces, which is why this bug only ever showed
+  // itself logged out — and why a failed Featured list must not take their feed down with it.
+  it('still serves the feed when Featured failed but the reader has spaces of their own', async () => {
+    windows.queue = [windowOf([entity('a', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      browse: {
+        featured: [],
+        editorOf: [{ id: SPACE, name: 'Space', image: null }],
+        memberOf: [],
+        documentationImage: null,
+        personalSpaceId: null,
+        featuredError: true,
+      } as never,
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['a']);
   });
 });

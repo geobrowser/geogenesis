@@ -162,7 +162,23 @@ export function useCreateComment(targetEntityId: string) {
       const commentName = getCommentName(text);
       const walletAddr = account.account.address;
 
-      if (!existingCommentId) {
+      // Insert the optimistic row whenever it is not in the cache — not only on a first attempt.
+      //
+      // A retry passes the id it was given, and used to skip this entirely on the assumption that its row
+      // was still there. It is not when an earlier attempt failed: the failure path below filters that
+      // row out. So a retry that then succeeded published a comment the thread did not show until the
+      // indexer caught up — and `usePublishComment` counted it back into the Activity heading on that
+      // success, so the heading reported a comment the list below it was not drawing. Putting the row
+      // back here, and reporting it through `onOptimistic` exactly as a first attempt does, keeps the row
+      // and every count that follows it moving on the same event. A retry whose row survived finds it
+      // cached and inserts nothing, so it is not counted twice.
+      const rowIsCached =
+        existingCommentId != null &&
+        (queryClient.getQueryData<CommentEntity[]>(['comments', targetEntityId]) ?? []).some(
+          comment => comment.id === existingCommentId
+        );
+
+      if (!rowIsCached) {
         const profileSnapshot = cachedProfileRef.current;
         const profileAvatarUrl =
           profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE

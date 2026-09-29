@@ -34,6 +34,12 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'peerAvailability',
+    label: 'Availability and scheduling',
+    description: "Book a debate from another debater's week, and answer or join scheduled debates in the Requests tab.",
+    enabledByDefault: false,
+  },
+  {
     id: 'exploreSidePanel',
     label: 'Explore side panel',
     description:
@@ -146,6 +152,10 @@ export function useDebugDebatesPageEnabled() {
 
 export function usePlaybackDiagnosticsEnabled() {
   return useFeatureFlag('playbackDiagnostics');
+}
+
+export function usePeerAvailabilityEnabled() {
+  return useFeatureFlag('peerAvailability');
 }
 
 /**

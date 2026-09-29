@@ -142,9 +142,7 @@ export function sortClaimsByBest<T extends { id: string }>(claims: T[], rankByCl
  * turn shares that turn's moment, so they tie, and the ranking is a better answer to the tie than
  * the shuffle that relation `position` supplies. Unranked claims sort last among their peers.
  */
-export function compareByBest<T extends { id: string }>(
-  rankByClaimId: Map<string, number>
-): (a: T, b: T) => number {
+export function compareByBest<T extends { id: string }>(rankByClaimId: Map<string, number>): (a: T, b: T) => number {
   const rankOf = (claim: T) => rankByClaimId.get(ID.uuidToHex(claim.id)) ?? Number.MAX_SAFE_INTEGER;
   return (a, b) => rankOf(a) - rankOf(b);
 }

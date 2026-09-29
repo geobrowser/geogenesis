@@ -29,7 +29,7 @@ import { RequestsTab } from './requests-tab';
 import { SetScheduleBanner } from './set-schedule-banner';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useRequestsTabCount } from './use-requests-tab-count';
 import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
@@ -250,8 +250,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  const requestCount = useRequestsTabCount({ authenticated, activity, requests });
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
@@ -275,6 +274,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           {onClose ? (
             <button
               type="button"
+              data-geo-analytics-label="Close debate hub"
+              data-geo-analytics-intent="close_debates_hub"
               aria-label="Close debates"
               onClick={onClose}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
@@ -297,11 +298,16 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               with no way to reach it. Scrolling costs nothing at the widths where everything
               already fits, and Requests carries the badge, so it is the worst one to lose. */}
           <div className="no-scrollbar overflow-x-auto">
-            <div className="relative flex w-max items-center gap-6 pb-2">
+            {/* `gap-4` rather than `gap-6`: at the panel's 400px the five labels fill the row, so
+                Requests' badge sat past the right edge, in overflow a hidden scrollbar never
+                offers. */}
+            <div className="relative flex w-max items-center gap-4 pb-2">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
                   type="button"
+                  data-geo-analytics-label={`Debate hub ${tab.label} tab`}
+                  data-geo-analytics-intent="navigate_debates_hub"
                   aria-current={activeTab === tab.id ? 'true' : undefined}
                   onClick={() => changeTab(tab.id)}
                   className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
@@ -392,6 +398,8 @@ function AvailabilityToggle() {
   return (
     <button
       type="button"
+      data-geo-analytics-label="Debate availability"
+      data-geo-analytics-intent="update_debate_availability"
       role="switch"
       // Without this the switch announces "Unavailable, off", which is ambiguous about which way
       // pressing it goes.

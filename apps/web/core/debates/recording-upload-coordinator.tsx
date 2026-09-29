@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { capture } from '~/core/analytics';
 import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -82,6 +84,21 @@ export function isPermanentRecordingUploadError(error: unknown): boolean {
     error.code !== null &&
     permanentRecordingUploadErrorCodes.has(error.code)
   );
+}
+
+/** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
+type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
+
+/** An upload error in analytics terms: geo-chat's code and status where it has them. */
+function uploadErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
 }
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
@@ -221,6 +238,8 @@ export function DebateRecordingUploadCoordinator() {
   const [wakeAt, setWakeAt] = React.useState(() => Date.now());
   const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
   const [cancelTargetDebateId, setCancelTargetDebateId] = React.useState<string | null>(null);
+  // Which control opened the prompt, for analytics. A ref: it only rides along with the target.
+  const cancelSourceRef = React.useRef<RecordingCancelSource>('upload_banner');
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
@@ -447,6 +466,15 @@ export function DebateRecordingUploadCoordinator() {
         // Drop the local blob for failures no retry can fix (see the permanent codes above)
         // instead of leaving the banner up forever.
         if (isPermanentRecordingUploadError(error)) {
+          // The recording is dropped here and never retried, so this is the one place a lost upload
+          // can be counted. `recording_cancelled` is included: it is the opponent's cancellation
+          // reaching this device, which the canceller's own event does not see.
+          capture('debate_recording_upload_failed', {
+            debate_id: upload.debateId,
+            stage: attemptStage,
+            attempt_count: attemptCount + 1,
+            ...uploadErrorProperties(error),
+          });
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
@@ -455,6 +483,14 @@ export function DebateRecordingUploadCoordinator() {
           return;
         }
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
+        // Bounded by the backoff (5s doubling to 5 minutes), so one stuck upload cannot flood this.
+        capture('debate_recording_upload_retry_scheduled', {
+          debate_id: upload.debateId,
+          stage: attemptStage,
+          attempt_count: attemptCount + 1,
+          online: typeof navigator === 'undefined' || navigator.onLine,
+          ...uploadErrorProperties(error),
+        });
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,
           debateId: upload.debateId,
@@ -580,6 +616,7 @@ export function DebateRecordingUploadCoordinator() {
     // there would swallow the flick and leave the switch off over a recording still uploading.
     if (cancellableDebateId === null) return;
     setPublishOptOutRequest(null);
+    cancelSourceRef.current = 'thanking_toggle';
     setCancelTargetDebateId(cancellableDebateId);
   }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
 
@@ -616,9 +653,17 @@ export function DebateRecordingUploadCoordinator() {
 
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
+    // Backing out is worth counting beside the cancellations: it is how often the prompt talked
+    // someone out of it, or was opened by accident.
+    if (cancelTargetDebateId) {
+      capture('debate_recording_upload_cancel_dismissed', {
+        debate_id: cancelTargetDebateId,
+        cancel_source: cancelSourceRef.current,
+      });
+    }
     setCancelTargetDebateId(null);
     setCancelError(null);
-  }, [cancelBusy]);
+  }, [cancelBusy, cancelTargetDebateId]);
 
   const confirmCancel = React.useCallback(async () => {
     if (!cancelTargetDebateId) return;
@@ -626,6 +671,7 @@ export function DebateRecordingUploadCoordinator() {
     setCancelBusy(true);
     setCancelError(null);
     try {
+      let alreadyCancelled = false;
       try {
         await retryDebatePhaseBoundaryRequest(() =>
           cancelDebateRecording(cancelTargetDebateId, getPrivyIdentityToken, accountKey)
@@ -635,7 +681,17 @@ export function DebateRecordingUploadCoordinator() {
         const terminal =
           error instanceof GeoChatRequestError && (error.code === 'recording_cancelled' || error.status === 404);
         if (!terminal) throw error;
+        alreadyCancelled = true;
       }
+      // Sent once the server has accepted the cancellation, before the best-effort local cleanup,
+      // so a storage failure below cannot lose a cancellation that did happen.
+      capture('debate_recording_upload_cancelled', {
+        debate_id: cancelTargetDebateId,
+        cancel_source: cancelSourceRef.current,
+        // Whether every byte was already out: cancelling then withdraws a finished upload.
+        upload_finished: uploadedDebateIds.has(normalizedTargetDebateId),
+        already_cancelled: alreadyCancelled,
+      });
       if (mountedRef.current) {
         // The server opt-out is authoritative even if this device cannot clean IndexedDB. Mark it
         // before local cleanup so a storage failure can never make Cancel available again.
@@ -679,7 +735,7 @@ export function DebateRecordingUploadCoordinator() {
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploads]);
+  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploadedDebateIds, uploads]);
 
   // Close the prompt only when there is nothing left to cancel. The upload finishing mid-prompt
   // must not close it, since the backend still cancels an uploaded recording.
@@ -697,11 +753,11 @@ export function DebateRecordingUploadCoordinator() {
   const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
   // The banner sits on the bottom edge of the viewport across its full width, so anything else
   // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
-  // clear it. `h-7` is 28px; the two have to be changed together.
+  // clear it by exactly the banner's height, which both read from `DEBATE_UPLOAD_BANNER_HEIGHT_PX`.
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
-  useAppBottomInset('debate-upload-banner', 28, bannerVisible && !inLiveDebate);
+  useAppBottomInset('debate-upload-banner', DEBATE_UPLOAD_BANNER_HEIGHT_PX, bannerVisible && !inLiveDebate);
 
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
@@ -718,7 +774,10 @@ export function DebateRecordingUploadCoordinator() {
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
           canCancel={!cardOwnsPublishControl && cancellableDebateId !== null && !cancelPromptOpen}
-          onCancel={() => setCancelTargetDebateId(cancellableDebateId)}
+          onCancel={() => {
+            cancelSourceRef.current = 'upload_banner';
+            setCancelTargetDebateId(cancellableDebateId);
+          }}
         />
       )}
       {cancelPromptOpen && (
@@ -732,6 +791,9 @@ export function DebateRecordingUploadCoordinator() {
     </>
   );
 }
+
+/** The upload banner's height, and what it claims from the bottom of the viewport while it shows. */
+export const DEBATE_UPLOAD_BANNER_HEIGHT_PX = 40;
 
 export function DebateRecordingUploadBanner({
   count,
@@ -792,10 +854,25 @@ export function DebateRecordingUploadBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center justify-center bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center bg-[#151515] px-4 text-metadata text-white ${Z_LAYER_CLASS.toast}`}
+      style={{ height: DEBATE_UPLOAD_BANNER_HEIGHT_PX }}
     >
-      <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
-        <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
+      {/* Figma centers the progress bar on the viewport with the message and the warning 50px either
+          side of it. Equal `1fr` side columns keep the bar dead centre whatever the two labels
+          measure — "Uploading & publishing 1 debate" is far wider than "Keep browser open". A phone
+          can't afford that: at 320px each side column is 112px, narrower than either label, so at
+          `md` (this app's breakpoints are max-width: 767px and below) it drops to a plain row where
+          the message truncates and the warning and Cancel stay whole. With no bar there is nothing
+          to centre on, so the line and its actions just sit together. */}
+      <div
+        className={cx(
+          'max-w-full min-w-0 items-center justify-center gap-[50px] md:gap-2',
+          showProgress ? 'grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:flex md:w-auto' : 'flex'
+        )}
+      >
+        {/* A grid item sizes to its content and spills out of its track, so `max-w-full` holds each
+            side to its column for `truncate` to act on. */}
+        <span className={cx('max-w-full min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
         {showProgress && (
           <div
             role="progressbar"
@@ -803,24 +880,30 @@ export function DebateRecordingUploadBanner({
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={percent ?? undefined}
-            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
+            className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-04"
           >
             <div
-              className={`h-full rounded-full bg-text transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
               style={percent === null ? undefined : { width: `${percent}%` }}
             />
           </div>
         )}
-        {showKeepBrowserOpen && <span className="shrink-0 text-grey-04">Keep browser open</span>}
-        {canCancel && (
-          <SmallButton
-            type="button"
-            variant="ghost"
-            onClick={onCancel}
-            className="shrink-0 bg-transparent! hover:bg-bg!"
+        {(showKeepBrowserOpen || canCancel) && (
+          <div
+            className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}
           >
-            Cancel
-          </SmallButton>
+            {showKeepBrowserOpen && <span className="min-w-0 truncate">Keep browser open</span>}
+            {canCancel && (
+              <SmallButton
+                type="button"
+                variant="ghost"
+                onClick={onCancel}
+                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none focus-visible:border-white focus-visible:shadow-none"
+              >
+                Cancel
+              </SmallButton>
+            )}
+          </div>
         )}
       </div>
     </div>

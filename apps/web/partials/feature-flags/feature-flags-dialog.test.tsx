@@ -59,6 +59,7 @@ describe('FeatureFlagsDialog', () => {
       expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
         playbackDiagnostics: false,
         debugDebatesPage: true,
+        peerAvailability: false,
         debateDebugging: true,
         debateFormatSelector: true,
         exploreSidePanel: false,

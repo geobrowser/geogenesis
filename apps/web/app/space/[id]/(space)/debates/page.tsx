@@ -2,6 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 
 import { PersonDebatesTab } from '~/partials/profile/person-debates-tab';
@@ -11,10 +12,11 @@ import { DebatesPageClient } from './debates-page-client';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ hidden?: string | string[] }>;
 }
 
 export default async function DebatesPage(props: Props) {
-  const params = await props.params;
+  const [params, searchParams] = await Promise.all([props.params, props.searchParams]);
 
   if (!IdUtils.isValid(params.id)) {
     notFound();
@@ -36,7 +38,10 @@ export default async function DebatesPage(props: Props) {
     // half back above the header.
     return (
       <div className="pb-16">
-        <PersonDebatesTab spaceId={params.id} />
+        <PersonDebatesTab
+          spaceId={params.id}
+          showHiddenInitially={firstSearchParamValue(searchParams.hidden) === 'true'}
+        />
       </div>
     );
   }

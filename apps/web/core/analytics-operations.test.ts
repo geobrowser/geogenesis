@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { classifyOperationFailure, observeOperation } from './analytics-operations';
+import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from './analytics-operations';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
 const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: vi.fn(() => 0) }));
@@ -40,6 +40,13 @@ describe('operation evidence', () => {
     });
     expect(() => observeOperation('vote', 'debate', 'd').failed('unknown')).not.toThrow();
   });
+  it('passes numeric failure metrics through without letting them override the code', () => {
+    observeOperation('vote', 'entity', 'e').failed('unavailable', { queue_wait_ms: 121_000, queue_depth: 4 });
+    expect(capture).toHaveBeenCalledWith(
+      'action_failed',
+      expect.objectContaining({ failure_code: 'unavailable', queue_wait_ms: 121_000, queue_depth: 4 })
+    );
+  });
   it('does not reassign asynchronous results after identity changes', () => {
     const operation = observeOperation('vote', 'debate', 'd');
     revision.mockReturnValue(1);
@@ -72,5 +79,20 @@ describe('operation failure classification', () => {
     cycle.cause = cycle;
     expect(classifyOperationFailure(cycle)).toBe('unknown');
     expect(classifyOperationFailure(null)).toBe('unknown');
+  });
+});
+
+describe('queue timeout metrics', () => {
+  it('reads wait and depth from a wrapped QueuedSendTimeoutError', () => {
+    const queued = Object.assign(new Error('never submitted'), { waitedMs: 121_000, queueDepth: 3 });
+    queued.name = 'QueuedSendTimeoutError';
+    expect(queueTimeoutMetrics(new Error('Transaction failed', { cause: queued }))).toEqual({
+      queue_wait_ms: 121_000,
+      queue_depth: 3,
+    });
+  });
+  it('returns nothing for other failures', () => {
+    expect(queueTimeoutMetrics(new Error('receipt timeout'))).toBeUndefined();
+    expect(queueTimeoutMetrics(null)).toBeUndefined();
   });
 });

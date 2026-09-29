@@ -63,9 +63,19 @@ export type ActivityKind = {
   isError?: boolean;
   /** The tab holding the rest. */
   href: string;
+  /**
+   * Link to {@link href} as given, without the tab-bar fragment.
+   *
+   * For a destination that has no tab bar to land on — the debates index is full-bleed, and
+   * `SpaceChromeGate` strips the header and tabs from it — where the fragment is inert and only
+   * shows up in a URL someone copies.
+   */
+  skipTabsAnchor?: boolean;
   seeAllLabel: string;
   /** Selects an in-place tab when the record is rendered inside a side panel. */
   onSeeAll?: () => void;
+  /** Profile-owner action placed in debate cards only. */
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 };
 
 /**
@@ -84,107 +94,185 @@ export type ActivityKind = {
  * that would be a second, worse copy of all of it — the bespoke one drew a
  * video inside an `<img>` and showed a grey box.
  */
-export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
+export function ProfileActivitySection({
+  kinds,
+  className,
+}: {
+  kinds: ActivityKind[];
+  /**
+   * Spacing owned by the surface rather than by the card.
+   *
+   * A profile stacks this in a `gap-6` column and needs none; a space's Overview puts it above an
+   * authored page and needs a gap under it. Passed in rather than set here because the card decides
+   * whether it renders at all — it returns `null` once both kinds settle empty — and a margin
+   * applied by the caller would survive that disappearance as a band of blank space.
+   */
+  className?: string;
+}) {
   // A failed kind is available: it has something to say, even if the something
   // is that it could not be read.
   const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  const [selectedKey, setSelectedKey] = React.useState<string | null>(null);
+  // Whether the card is still assembling. Read twice: the skeleton below waits on
+  // it, and so does the default — see `defaultKey`.
+  const isLoading = kinds.some(kind => kind.isLoading);
+
+  /**
+   * The lead kind: the first that has a *settled* record to show.
+   *
+   * Settled, not merely non-empty, because the rows can arrive before their order
+   * does. `usePersonDebates` hands the profile its debates a round trip before
+   * `useEntityScores` says how to rank them, and the caller folds that second wait
+   * into `isLoading` precisely so a row about to reshuffle is not put up as though
+   * it were final. Preferring a settled kind here honours that.
+   *
+   * A preference, not a guarantee. Where nothing available has settled — one kind,
+   * rows in, ranks still out — the fallback puts it up unsettled, because the
+   * alternative is holding the card blank behind the slower request, which is the
+   * one thing the skeleton gate below is written not to do. That case paints once
+   * and reshuffles, exactly as it did before this change. Closing it means moving
+   * when the card first paints, which is the gate's decision to make and not this
+   * line's.
+   */
+  const lead = available.find(kind => !kind.isLoading) ?? available[0];
+
+  /** The reader's own pick, and only that. Null until they make one. */
+  const [pickedKey, setPickedKey] = React.useState<string | null>(null);
+  /**
+   * The default, fixed at the moment the card first settles (GEO-3021).
+   *
+   * Two failure modes bracket this. Storing the default the first time *either*
+   * kind had rows — what this used to do — let the network choose it: the kinds
+   * are separate requests, so a profile whose claims came back first committed to
+   * Claims and stayed there, because the debates landing did not invalidate a key
+   * that still named an available kind. Deriving it on every render instead fixes
+   * that end and breaks the other: a focus refetch turning up a first debate half
+   * an hour later would pull a reader off the Claims they were reading, remount
+   * the gallery under their cursor and start a video playing.
+   *
+   * So the default follows the record while the card is still assembling, and
+   * stops the moment it has finished. After that, only the reader moves it.
+   */
+  const [defaultKey, setDefaultKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (available[0] && !available.some(kind => kind.key === selectedKey)) setSelectedKey(available[0].key);
-  }, [available, selectedKey]);
+    if (isLoading || defaultKey !== null || !lead) return;
 
-  // Whichever the reader picked, or the first with anything in it. Held as a key
-  // rather than an index so a kind arriving late — the two load separately —
-  // cannot shift the selection out from under them.
-  const selected = available.find(kind => kind.key === selectedKey) ?? available[0];
+    setDefaultKey(lead.key);
+  }, [defaultKey, isLoading, lead]);
+
+  /*
+   * A pick whose kind has gone away is adopted onto what replaced it, rather than
+   * dropped. Dropping it would hand the reader back to the default, which would
+   * then pull them off this kind the moment their emptied one returned — a jump
+   * under somebody who has not touched the toggle since. Falling back is already
+   * a choice made on their behalf; this makes it the one that sticks.
+   *
+   * Not while there is nothing to adopt, though. Both kinds can blank at once —
+   * the space Overview withholds every row while its counts are in flight — and
+   * writing the fallback there would spend their pick on a gap in the data.
+   */
+  React.useEffect(() => {
+    if (pickedKey === null || !lead || available.some(kind => kind.key === pickedKey)) return;
+
+    setPickedKey(lead.key);
+  }, [available, lead, pickedKey]);
+
+  // Their pick, else the settled default, else the lead kind — Debates, on every
+  // surface that renders this. All three held as keys rather than indexes, so a
+  // kind arriving late cannot shift the selection out from under them.
+  const selected =
+    available.find(kind => kind.key === pickedKey) ?? available.find(kind => kind.key === defaultKey) ?? lead;
 
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
   const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
-  const isLoading = kinds.some(kind => kind.isLoading);
 
   // Reserve the section while its first usable record is on the way. Once either kind resolves,
   // draw it immediately rather than holding the whole card behind the slower request.
-  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton />;
+  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton className={className} />;
 
   // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
   // and a permanent heading over blank space would imply that content failed to render.
   if (available.length === 0 || !selected) return null;
 
   return (
-    <div>
+    <div className={className}>
       <section
         ref={sectionRef}
+        aria-label="Activity"
         data-activity-section
         className={cx(
           // Not a card. A bordered panel holding bordered cards spends two gutters and two rules on
-          // saying "these belong together", which the heading already says. No box and no rule: the
+          // saying "these belong together", which the pill row already says. No box and no rule: the
           // content sits flush with the column — on a phone the gallery can reach the screen edge.
           'flex flex-col'
         )}
       >
         {/*
-         * The title, then Debates and Claims as pills beneath it, with the row's
-         * own controls to their right. A kind with nothing in it is left out, so a
-         * person with only debates sees one pill.
+         * The title is `sr-only`. The pills under it already name the two kinds, so on screen the
+         * heading only repeated the row beneath it — but dropping it outright would take the
+         * section out of the heading tree, and a reader navigating this page by heading would skip
+         * straight past it to the comments.
          */}
-        <header className="flex flex-col gap-3 pb-3">
-          <h3 className="text-mediumTitle text-text">Activity</h3>
-          <div className="flex flex-wrap items-center gap-2">
-            {available.map(kind => {
-              const isSelected = kind.key === selected.key;
+        <h3 className="sr-only">Activity</h3>
 
-              return (
-                <button
-                  key={kind.key}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => {
-                    if (isSelected) return;
+        {/*
+         * Debates and Claims as pills, with the row's own controls to their right. A kind with
+         * nothing in it is left out, so a person with only debates sees one pill.
+         */}
+        <header className="flex flex-wrap items-center gap-2 pb-3">
+          {available.map(kind => {
+            const isSelected = kind.key === selected.key;
 
-                    // Put the reserve in the document before React replaces
-                    // the tall view. Waiting for the next layout effect would
-                    // let the shorter DOM clamp `scrollY` while it is being
-                    // measured, before the reserve could help.
-                    prepareSwitch();
-                    setSelectedKey(kind.key);
-                  }}
-                  // The same pill as View all beside it — 28px, 16px type, the same padding — black
-                  // when selected (the Log in pill) and the secondary outline otherwise.
-                  className={
-                    isSelected
-                      ? buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })
-                      : buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })
-                  }
-                >
-                  {/* Up 1px: at the pill's 13px leading, Calibre's glyphs sit a pixel low in the box. */}
-                  <span className="relative -top-px">
-                    {kind.label}
-                    <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                      {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
-                    </span>
+            return (
+              <button
+                key={kind.key}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => {
+                  if (isSelected) return;
+
+                  // Put the reserve in the document before React replaces
+                  // the tall view. Waiting for the next layout effect would
+                  // let the shorter DOM clamp `scrollY` while it is being
+                  // measured, before the reserve could help.
+                  prepareSwitch();
+                  setPickedKey(kind.key);
+                }}
+                // The same pill as View all beside it — 28px, 16px type, the same padding — black
+                // when selected (the Log in pill) and the secondary outline otherwise.
+                className={
+                  isSelected
+                    ? buttonClassNames(PILL_BUTTON_CLASS_NAME)({ variant: 'primary' })
+                    : buttonClassNames(PILL_BUTTON_SECONDARY_CLASS_NAME)({ variant: 'secondary' })
+                }
+              >
+                {/* Up 1px: at the pill's 13px leading, Calibre's glyphs sit a pixel low in the box. */}
+                <span className="relative -top-px">
+                  {kind.label}
+                  <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
+                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
                   </span>
-                </button>
-              );
-            })}
-
-            {/*
-             * The row's own controls, right of the tabs: step through the cards, then leave for the
-             * full tab. Both belong to the selected kind — see `navigation`.
-             */}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {selected.rows.length > 0 ? (
-                // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
-                // there: dark when there is somewhere to go, grey at the row's end.
-                <span className="mr-1 flex items-center gap-3">
-                  <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
-                  <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
                 </span>
-              ) : null}
-              <ActivitySeeAll kind={selected} />
-            </div>
+              </button>
+            );
+          })}
+
+          {/*
+           * The row's own controls, right of the tabs: step through the cards, then leave for the
+           * full tab. Both belong to the selected kind — see `navigation`.
+           */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {selected.rows.length > 0 ? (
+              // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
+              // there: dark when there is somewhere to go, grey at the row's end.
+              <span className="mr-1 flex items-center gap-3">
+                <PreviousButton isDisabled={!navigation?.left} onClick={() => navigation?.scrollByCard(-1)} />
+                <NextButton isDisabled={!navigation?.right} onClick={() => navigation?.scrollByCard(1)} />
+              </span>
+            ) : null}
+            <ActivitySeeAll kind={selected} />
           </div>
         </header>
 
@@ -204,6 +292,7 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
             responseByClaimId={selected.responseByClaimId}
             personName={selected.personName}
             onNavigationChange={setNavigation}
+            debateEndSlot={selected.debateEndSlot}
           />
         )}
       </section>
@@ -225,21 +314,23 @@ export function ProfileActivitySection({ kinds }: { kinds: ActivityKind[] }) {
   );
 }
 
-function ProfileActivitySkeleton() {
+function ProfileActivitySkeleton({ className }: { className?: string }) {
   return (
-    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col')}>
-      <header className="flex flex-col gap-3 pb-3">
-        <h3 className="text-mediumTitle text-text">Activity</h3>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-7 w-24 rounded-full" />
-          <Skeleton className="h-7 w-20 rounded-full" />
-        </div>
+    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
+      {/* Drawn here too, so the heading is in the tree before the rows are, not only after. */}
+      <h3 className="sr-only">Activity</h3>
+      <header className="flex items-center gap-2 pb-3">
+        <Skeleton className="h-7 w-24 rounded-full" />
+        <Skeleton className="h-7 w-20 rounded-full" />
       </header>
-      <div className="py-4">
+      {/*
+       * `py-2`, the gallery scroller's own padding — and no footer under it. The real section has
+       * had neither a bottom rule nor a centered "see all" since that control moved up into the
+       * header beside the arrows; the skeleton kept drawing both, so it stood ~85px taller than
+       * what replaced it and everything below Activity jumped up when the rows landed.
+       */}
+      <div className="py-2">
         <Skeleton className="h-44 w-full rounded-lg" />
-      </div>
-      <div className="flex justify-center border-t border-divider py-4">
-        <Skeleton className="h-4 w-28 rounded" />
       </div>
     </section>
   );
@@ -258,9 +349,10 @@ function ActivitySeeAll({ kind }: { kind: ActivityKind }) {
 
   // A route navigation lands at the top of the page, which on a phone is a screenful of profile
   // chrome. The fragment puts the tab row under the navbar instead. Side panels use `onSeeAll`
-  // above because their tabs are selected in place and have no route fragment to follow.
+  // above because their tabs are selected in place and have no route fragment to follow, and a
+  // destination with no tab bar opts out — see `skipTabsAnchor`.
   return (
-    <Link href={withSpaceTabsAnchor(kind.href)} className={className}>
+    <Link href={kind.skipTabsAnchor ? kind.href : withSpaceTabsAnchor(kind.href)} className={className}>
       {kind.seeAllLabel}
     </Link>
   );
@@ -455,12 +547,14 @@ function ActivityGallery({
   responseByClaimId,
   personName,
   onNavigationChange,
+  debateEndSlot,
 }: {
   rows: ExploreFeedRow[];
   responseByClaimId?: Record<string, ClaimResponse>;
   personName?: string | null;
   /** Where the header's arrows learn whether this row can move, and how to move it. */
   onNavigationChange?: (navigation: GalleryNavigation | null) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   const shown = React.useMemo(() => rows.slice(0, ACTIVITY_GALLERY_CARD_LIMIT), [rows]);
 
@@ -511,7 +605,7 @@ function ActivityGallery({
         {/*
          * `snap-x` so a flick lands on a card rather than between two.
          *
-         * No inset at the start: the first card sits flush with the column, under the heading. On a
+         * No inset at the start: the first card sits flush with the column, under the pills. On a
          * phone the row bleeds to the screen edge, so a trailing spacer — not padding, which a
          * scroll container drops at its far end — keeps the last card off it.
          */}
@@ -528,6 +622,7 @@ function ActivityGallery({
               personName={personName}
               onDebatePlaybackRequest={requestPlayback}
               onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
+              debateEndSlot={debateEndSlot}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
@@ -728,6 +823,7 @@ function GalleryCard({
   personName,
   onDebatePlaybackRequest,
   onDebatePlaybackAvailabilityChange,
+  debateEndSlot,
 }: {
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
@@ -735,6 +831,7 @@ function GalleryCard({
   personName?: string | null;
   onDebatePlaybackRequest: (debateId: string) => void;
   onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
+  debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
   //
@@ -778,6 +875,7 @@ function GalleryCard({
           compactDebateChrome
           onDebatePlaybackRequest={onDebatePlaybackRequest}
           onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
+          debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
         />
       )}
     </div>

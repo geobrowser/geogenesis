@@ -1,6 +1,7 @@
+import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { decodeVoteOrder } from './person-position-order';
+import { decodeVoteOrder, personVoteOrderDocument } from './person-position-order';
 import { applyFilter, heldPositionsCount } from './use-person-positions';
 
 /**
@@ -36,29 +37,46 @@ describe('how a claim was answered', () => {
     expect(decodeVoteOrder([vote({ voteType: 2 })]).responseByClaimId).toEqual({});
   });
 
-  it('records a veracity vote under its own question', () => {
-    // Not dropped: a factual claim asks Verify or Dispute, and throwing this
-    // away is what left those claims with nothing to show.
+  /**
+   * These three used to assert the other half of a two-question record: a veracity vote decoded
+   * under its own key, both answers kept side by side, and a claim listed on a veracity answer
+   * alone. Nothing renders that key now, so a kind-2 row is not an answer this list can show —
+   * and listing a claim on one would print a row with no verdict under either button, which is
+   * the one thing the record exists to avoid.
+   */
+  it('gives no side to a retired veracity vote', () => {
     // Keyed normalised, so the default `claim-1` fixture lands as `claim1`.
-    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({
-      claim1: { veracity: 'disagree' },
-    });
+    expect(decodeVoteOrder([vote({ voteKind: 2, voteType: 1 })]).responseByClaimId).toEqual({});
   });
 
-  it('keeps both answers when somebody gave both', () => {
+  /**
+   * Both kinds on one claim, disagreeing — and the veracity row is the newer one.
+   *
+   * Rows arrive newest-first and the decode takes the first it sees per field, so putting the
+   * retired row first is the ordering that would win if it were still read at all. The stance is
+   * the answer either way.
+   *
+   * Both directions, because "the stance wins" and "agree wins" only look the same in the first
+   * case: a Verify sitting beside a Disagree must read as Disagree, not as the agreement the
+   * verify row would otherwise imply.
+   */
+  it.each([
+    ['a stance of agree under a dispute', 0, 1, 'agree'],
+    ['a stance of disagree under a verify', 1, 0, 'disagree'],
+  ] as const)('keeps only %s', (_case, stanceVoteType, veracityVoteType, expected) => {
     const order = decodeVoteOrder([
-      vote({ objectId: 'a', voteKind: 1, voteType: 0 }),
-      vote({ objectId: 'a', voteKind: 2, voteType: 1 }),
+      vote({ objectId: 'a', voteKind: 2, voteType: veracityVoteType }),
+      vote({ objectId: 'a', voteKind: 1, voteType: stanceVoteType }),
     ]);
 
-    expect(order.responseByClaimId).toEqual({ a: { stance: 'agree', veracity: 'disagree' } });
+    expect(order.responseByClaimId).toEqual({ a: { stance: expected } });
   });
 
-  it('lists a claim answered only for veracity', () => {
+  it('does not list a claim answered only for veracity', () => {
     const order = decodeVoteOrder([vote({ objectId: 'a', voteKind: 2 })]);
 
-    expect(order.entityIds).toEqual(['a']);
-    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
+    expect(order.entityIds).toEqual([]);
+    expect(order.responseByClaimId).toEqual({});
   });
 
   it('keeps the newest answer when somebody voted twice', () => {
@@ -105,14 +123,15 @@ describe('how a claim was answered', () => {
     expect(order.entityIds).toEqual(['kept']);
   });
 
-  it('keeps a claim retracted for one question but answered for the other', () => {
+  // Retracting the stance retracts the record, even where a retired veracity answer sits beside it.
+  it('drops a claim whose stance was retracted, whatever the old veracity row says', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', voteKind: 1, voteType: 2 }),
       vote({ objectId: 'a', voteKind: 2, voteType: 0 }),
     ]);
 
-    expect(order.entityIds).toEqual(['a']);
-    expect(order.responseByClaimId).toEqual({ a: { veracity: 'agree' } });
+    expect(order.entityIds).toEqual([]);
+    expect(order.responseByClaimId).toEqual({});
   });
 
   it('does not let an older neutral vote clear the current side', () => {
@@ -156,8 +175,7 @@ describe('how a claim was answered', () => {
     expect(order.entityIds).toEqual([]);
   });
 
-  it('settles each question on its own newest vote', () => {
-    // A neutral veracity answer must not clear the stance, and vice versa.
+  it('settles the stance on its own newest vote, ignoring retired rows around it', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'claim1', voteKind: 2, voteType: 2 }),
       vote({ objectId: 'claim1', voteKind: 1, voteType: 0 }),
@@ -192,7 +210,7 @@ describe('the space a position was taken in', () => {
   it('takes the space of the answer that stands, not of a retraction beside it', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', voteKind: 1, voteType: 2, spaceId: 'withdrawn' }),
-      vote({ objectId: 'a', voteKind: 2, voteType: 0, spaceId: 'held' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 0, spaceId: 'held' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['held'] });
@@ -216,7 +234,7 @@ describe('the space a position was taken in', () => {
   it('keeps every space a claim was answered in, newest first', () => {
     const order = decodeVoteOrder([
       vote({ objectId: 'a', spaceId: 'personal' }),
-      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+      vote({ objectId: 'a', spaceId: 'relationships' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['personal', 'relationships'] });
@@ -224,8 +242,8 @@ describe('the space a position was taken in', () => {
 
   it('lists a space once however many answers were given in it', () => {
     const order = decodeVoteOrder([
-      vote({ objectId: 'a', voteKind: 1, spaceId: 'relationships' }),
-      vote({ objectId: 'a', voteKind: 2, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 0, spaceId: 'relationships' }),
+      vote({ objectId: 'a', voteKind: 1, voteType: 1, spaceId: 'relationships' }),
     ]);
 
     expect(order.spacesByClaimId).toEqual({ a: ['relationships'] });
@@ -343,5 +361,26 @@ describe('heldPositionsCount', () => {
   it('falls back to the server count when the vote read failed', () => {
     // Overstated, and better than a headline number that never arrives.
     expect(heldPositionsCount({ total: null, isError: true }, 211)).toBe(211);
+  });
+});
+
+/**
+ * GEO-2993. The decode ignores kind-2 rows, but ignoring them after they arrive is not enough.
+ *
+ * Every row that comes back takes a slot in the vote order and a slot in the page budget, whether
+ * or not it becomes an answer. A claim answered Agree last month and Verified yesterday would sort
+ * by yesterday's retired vote, and enough retired rows push real stance rows past `ORDER_MAX_PAGES`
+ * and out of the list entirely. Asked for correctly, neither can happen.
+ */
+describe('the positions query', () => {
+  const source = print(personVoteOrderDocument);
+
+  it('asks only for stance votes', () => {
+    // `print` normalises the document, so this is the filter as printed rather than as written.
+    expect(source).toContain('voteKind: {is: 1}');
+  });
+
+  it('does not ask for the retired veracity kind', () => {
+    expect(source).not.toContain('voteKind: {is: 2}');
   });
 });

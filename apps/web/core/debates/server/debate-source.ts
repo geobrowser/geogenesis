@@ -3,6 +3,7 @@ import {
   type DebateOgSpeaker,
   generateDebateOgImageResponse,
 } from '~/core/debates/debate-og-image';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -23,6 +24,7 @@ import {
 import { hasProcessedVideo } from '../playback-utils';
 import { applyClaimReusePolicy } from './claim-reuse';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
+import { loadMotionTopics } from './motion-topics';
 
 const debatePublishSettlementMs = 60_000;
 
@@ -257,6 +259,9 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     motionClaimEntityId: debate.claim.claim_entity_id,
   });
 
+  // Like the share card and claims, a failed read degrades to a debate published without topics.
+  const claimTopics = await loadMotionTopics(debate.claim.claim_entity_id, debate.claim.space_id);
+
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
     displayName: p.display_name,
@@ -269,6 +274,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     spaceId: debate.claim.space_id,
     claimEntityId: debate.claim.claim_entity_id,
     claimText: debate.claim.claim,
+    claimTopics,
     participants,
     videoUrl,
     keyframeUrl,
@@ -335,7 +341,11 @@ type DebateSpeakerLike = Debate['participants'][number];
 function cardSpeaker(participant: DebateSpeakerLike, stillSrc: string): DebateOgSpeaker {
   return {
     name: participant.display_name ?? 'Anonymous',
-    stance: participant.position_label,
+    // Named from the side, not from geo-chat's `position_label`. That field still reads "Verify" or
+    // "Dispute" on a claim geo-chat calls factual, and this card is the worst place for the retired
+    // word to land: it is generated once at publish time and never revisited, so a wrong label is
+    // baked into the share image permanently. See `positionSummariesFromCounts`.
+    stance: responsePositionLabel(participant.position),
     avatarSrc: participant.avatar_cid ? getImagePath(participant.avatar_cid) : null,
     stillSrc,
   };

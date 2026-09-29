@@ -6,28 +6,27 @@ import type {
   DebateClaim,
   DebateClaimPositionSummary,
   DebateClaimSummary,
+  DebateResponseKind,
   MatchmakingReadiness,
 } from '~/core/debates/api';
-import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_KIND, hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
-import { claimResponseKind } from '../response-kind';
 import { positionSummariesFromCounts, viewerResponseWithIndexedFallback } from './claim-position-summaries';
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 
 export type ClaimResponseState = {
-  /** Which vocabulary labels the sides: Agree/Disagree, or Verify/Dispute on a factual claim. */
-  responseKind: 'stance' | 'veracity';
+  /** How a claim's sides are labelled. One vocabulary: Agree/Disagree. */
+  responseKind: DebateResponseKind;
   /**
-   * Whether `responseKind` is an answer or still the fallback.
+   * Whether this claim's own data has arrived.
    *
-   * Callers gate their pills on this. `stance` is what we assume before either lookup answers, and
-   * a click made inside that window publishes a *stance* response against a claim that wants
-   * Verify/Dispute — the kind selects `voteKind` on the write, so it is the wrong vote rather than
-   * the wrong label.
-   *
-   * Answered, not merely settled: a failed graph read stops loading too, and reading that as "no
-   * factual flag" is the same bug with a longer fuse. Something has to have said so.
+   * Callers gate their pills on it. It used to mean "the vocabulary is an answer rather than the
+   * `stance` fallback", back when a factual claim wanted Verify/Dispute and a click made before
+   * the lookups answered published the wrong *vote kind* rather than merely the wrong label.
+   * There is one kind now, so nothing about the write depends on this — what still does is the
+   * viewer's own side, which a pill needs before a click can clear a position rather than
+   * republish it.
    */
   isResponseKindResolved: boolean;
   /**
@@ -74,22 +73,16 @@ export type ClaimResponseState = {
  * differ is what happens to them afterwards, which is all of this.
  */
 /**
- * Which vocabulary a claim uses, from the two sources that can answer.
+ * Which vocabulary a claim uses. There is only one: Agree/Disagree.
  *
- * geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index. The
- * order matters and has to be the same everywhere, because this kind selects `voteKind` on both the
- * count query and the write — a surface that resolved it differently would count one vote kind
- * while publishing another, which is a bug this codebase has already had.
- *
- * Exported for the space claims page, which needs every claim's kind before it renders any of them
- * in order to batch the response reads. Everything else gets it from {@link useClaimResponseState}.
+ * Kept as a function, and still called where a kind is needed, because the thing it guarantees is
+ * worth a name — every claim surface publishes and counts the *same* vote kind. This used to read
+ * geo-chat's row first and the graph's "Is factual" flag second, and the order mattered: resolving
+ * it differently on one surface meant counting one vote kind while publishing another, a bug this
+ * codebase has already had. A constant cannot have that bug.
  */
-export function resolveClaimResponseKind(
-  row: Pick<DebateClaim, 'response_kind'> | null,
-  entity: Entity | null,
-  spaceId: string
-): 'stance' | 'veracity' {
-  return row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
+export function resolveClaimResponseKind(): DebateResponseKind {
+  return CLAIM_RESPONSE_KIND;
 }
 
 export function useClaimResponseState({
@@ -113,19 +106,19 @@ export function useClaimResponseState({
   /** False to hold the response reads back — a feed card below the fold. */
   enabled?: boolean;
 }): ClaimResponseState {
-  const responseKind = resolveClaimResponseKind(row, entity, spaceId);
+  const responseKind = resolveClaimResponseKind();
   const isResponseKindResolved = row !== null || entity !== null;
 
   // An unpublished edit to the claim's own vocabulary blocks responding, as it did before.
   //
   // `EntityVoteButtons` — the control every one of these surfaces used to render — refused outright
-  // while the "Is factual" value or the Claim type had a local edit that had not been published,
-  // and said so. Replacing it with the shared card dropped that, and the failure it prevents is the
-  // one this file exists to stop: the kind selects `voteKind` on the write, so a draft flag would
-  // publish a veracity response against a claim the graph still calls a stance one, or the reverse.
+  // while the Claim type had a local edit that had not been published, and said so. Replacing it
+  // with the shared card dropped that, and the failure it prevents is real: the kind selects
+  // `voteKind` on the write, so a draft type edit would publish a claim's stance against an entity
+  // the graph still calls an ordinary one, or the reverse.
   //
-  // A row does not settle it either. geo-chat indexes the *published* graph, so its kind is the
-  // stale half of exactly the disagreement the edit creates.
+  // It used to watch the "Is factual" value for the same reason. That flag no longer chooses a
+  // kind, so a draft edit to it cannot change what gets published.
   //
   // Only ever true where the entity carries local edits at all: the surfaces that read it through a
   // narrow projection have no `isLocal` to find, and this is false for them.
@@ -133,12 +126,12 @@ export function useClaimResponseState({
     ? 'Publish the claim type change before responding.'
     : null;
 
-  // Withheld until the vocabulary is an answer rather than the `stance` fallback.
+  // Withheld until the claim's own data has arrived.
   //
-  // The kind is part of both query keys, so asking early does not just waste a pair of requests on
-  // a factual claim — it populates the summary from the *stance* counts, and a card can draw that
-  // split for as long as the entity takes to arrive, then swap it for the veracity one. The pills
-  // being disabled stops the wrong write; it does not stop the wrong number.
+  // This used to be about the vocabulary: the kind is part of both query keys, so asking before it
+  // was known populated the summary from the wrong counts and a card could draw that split until
+  // the entity landed. One kind now, so the keys are stable — what is still worth waiting for is
+  // the row, which carries the viewer's own side.
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled && isResponseKindResolved);
 
   const claim = React.useMemo(
@@ -153,8 +146,8 @@ export function useClaimResponseState({
   );
 
   const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
+    () => positionSummariesFromCounts(summary.positive, summary.negative, row),
+    [row, summary.negative, summary.positive]
   );
 
   const readiness = React.useMemo(
@@ -168,7 +161,6 @@ export function useClaimResponseState({
         viewerResponse: row?.viewer_response,
         indexedDirection: summary.indexedViewerDirection,
         isIndexedLoading: summary.isViewerResponseLoading,
-        responseKind,
       }),
       viewer_debate_ready: row?.viewer_debate_ready ?? false,
       readiness_disabled_reason: row?.readiness_disabled_reason ?? null,

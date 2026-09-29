@@ -8,7 +8,12 @@ describe('DEEP_LINK_MODALS', () => {
   // These appear in URLs written down outside this repo, so a rename is a breaking change and the
   // list is worth pinning rather than leaving to whoever edits the map next.
   it('pins the values that appear in shipped URLs', () => {
-    expect(DEEP_LINK_MODALS).toEqual({ signIn: 'signin', debates: 'debates' });
+    expect(DEEP_LINK_MODALS).toEqual({
+      signIn: 'signin',
+      debates: 'debates',
+      roomAccess: 'room-access',
+      availability: 'availability',
+    });
   });
 
   it('gives every link a distinct value', () => {

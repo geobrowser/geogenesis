@@ -1,7 +1,10 @@
 'use client';
 
 import { useSignInDeepLink } from '~/core/auth/use-sign-in-deep-link';
+import { useRoomAccessDeepLink } from '~/core/debates/rooms/use-room-access-deep-link';
 import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-link';
+
+import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
 
 /**
  * Every deep link, at one mount point. Adding a link is a hook and a value in `DEEP_LINK_MODALS`,
@@ -9,10 +12,14 @@ import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-l
  *
  * The hooks are called unconditionally and each no-ops unless the URL names its own `modal` value,
  * so nothing here dispatches and no link can clear another's trigger.
+ *
+ * The availability link is a component rather than a bare hook because it owns a dialog, and
+ * nothing app-wide holds one for it the way the debates hub or the toast does.
  */
 export function DeepLinkHandler() {
   useSignInDeepLink();
   useDebatesPanelDeepLink();
+  useRoomAccessDeepLink();
 
-  return null;
+  return <AvailabilityDeepLink />;
 }

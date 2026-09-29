@@ -245,16 +245,62 @@ describe('ProfileActivitySection', () => {
       />
     );
 
-    expect(screen.getByRole('region', { name: 'Loading activity' })).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    const loading = screen.getByRole('region', { name: 'Loading activity' });
+
+    expect(loading).toHaveAttribute('aria-busy', 'true');
     // No tabs to draw until a kind arrives.
     expect(screen.queryByRole('button', { name: /Debates|Claims/ })).not.toBeInTheDocument();
+    /*
+     * Only the chrome the loaded section actually has: two pills and the gallery. The skeleton used
+     * to add a ruled "see all" footer that moved into the header long ago, which made it ~85px
+     * taller than what replaced it — so everything below Activity jumped up once the rows landed.
+     */
+    expect(loading.querySelectorAll('.animate-pulse')).toHaveLength(3);
+    expect(loading.querySelector('.border-t')).toBeNull();
+    // The title is in the tree before the rows are, not only after them.
+    expect(screen.getByRole('heading', { name: 'Activity' })).toHaveClass('sr-only');
   });
 
-  it('titles the section Activity, with the kinds as pills beneath it', () => {
+  /*
+   * The other half of the same jump, and the reason this asserts a match rather than `py-2`: the
+   * skeleton's gallery block has to keep whatever padding the real scroller has. Pinning the
+   * literal would hold this one line still while the scroller moved out from under it, which is
+   * how the footer above came to be stale in the first place.
+   */
+  it('gives the skeleton gallery the padding the loaded gallery has', () => {
+    const verticalPadding = (element: Element | null | undefined) =>
+      element?.className.match(/(?:^|\s)(py-\d+)(?:\s|$)/)?.[1] ?? null;
+
+    render(
+      <ProfileActivitySection
+        kinds={[
+          kind({ rows: [], isLoading: true }),
+          kind({ key: 'claims', label: 'Claims', rows: [], isLoading: true }),
+        ]}
+      />
+    );
+
+    const loading = screen.getByRole('region', { name: 'Loading activity' });
+    const skeletonGallery = verticalPadding(loading.querySelector('.animate-pulse.h-44')?.parentElement);
+
+    cleanup();
+    const { container } = render(<ProfileActivitySection kinds={[kind()]} />);
+    const loadedGallery = verticalPadding(container.querySelector('.no-scrollbar'));
+
+    expect(loadedGallery).not.toBeNull();
+    expect(skeletonGallery).toBe(loadedGallery);
+  });
+
+  it('keeps the heading for screen readers while hiding it on screen', () => {
     render(<ProfileActivitySection kinds={[kind(), kind({ key: 'claims', label: 'Claims' })]} />);
 
-    expect(screen.getByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    /*
+     * The pills say "Debates" and "Claims" already, so the visible title was a third word for the
+     * same thing. It stays in the heading tree, though: without it a reader navigating by heading
+     * has nothing between the page title and the comments.
+     */
+    expect(screen.getByRole('heading', { name: 'Activity' })).toHaveClass('sr-only');
+    expect(screen.getByRole('region', { name: 'Activity' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
   });
@@ -268,13 +314,96 @@ describe('ProfileActivitySection', () => {
     expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
   });
 
-  it('keeps the first available kind selected when an earlier kind finishes later', () => {
+  /*
+   * GEO-3021. The two kinds are separate requests, so which one lands first is a
+   * race — and a default committed to the winner is a default decided by the
+   * network. Debates are the lead kind on every surface that renders this, so
+   * they win the default as soon as they have anything to show, however late.
+   */
+  it('moves to debates when they arrive after claims', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
     const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
 
+    // Claims alone until the debates land: better the record that has arrived
+    // than a skeleton over one that may turn out to be empty.
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
 
     rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves a reader who picked claims there while the debates keep loading in', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // The debates page settling — more rows, ranks landing — re-renders the card.
+    // The default must not run again over a pick that is still valid.
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /*
+   * The other end of GEO-3021. A default that re-reads the record on every render
+   * moves whenever the record moves — including long after the reader settled in,
+   * since the queries refetch on window focus. Once the card has finished
+   * assembling, the default is finished too.
+   */
+  it('stays put when a first debate turns up after the card has settled', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // A refetch, an hour in, turning up a debate this person is now part of.
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
+
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('waits for the debates to settle before handing them the default', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    // Rows in, order still out — `useEntityScores` answers a round trip behind the
+    // rows, and the caller reports that wait as `isLoading`.
+    const { rerender } = render(
+      <ProfileActivitySection kinds={[kind({ rows: [row('d2'), row('d1')], isLoading: true }), claims]} />
+    );
+
+    // Not yet: taking the default here would paint an unranked row and reshuffle it.
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
+
+    expect(screen.getAllByTestId('card')[0]).toHaveTextContent('d1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a pick through a render where both kinds blank together', () => {
+    const debates = kind({ rows: [row('d1')] });
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates, claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+
+    // The space Overview withholds every row while its counts are in flight, so
+    // both kinds can empty on the same render. Their pick is not spent on that.
+    rerender(
+      <ProfileActivitySection
+        kinds={[
+          { ...debates, rows: [] },
+          { ...claims, rows: [], isLoading: true },
+        ]}
+      />
+    );
+    rerender(<ProfileActivitySection kinds={[debates, claims]} />);
 
     expect(screen.getByTestId('card')).toHaveTextContent('c1');
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
@@ -597,6 +726,15 @@ describe('ProfileActivitySection', () => {
       'href',
       '/space/s/positions#space-tabs'
     );
+  });
+
+  // A destination with no tab bar to land on — the full-bleed debates index, where
+  // `SpaceChromeGate` strips the header and tabs — would carry an inert fragment into any URL
+  // someone copied out of the address bar.
+  it('leaves the fragment off a kind that opts out', () => {
+    render(<ProfileActivitySection kinds={[kind({ href: '/space/s/debates', skipTabsAnchor: true })]} />);
+
+    expect(screen.getByRole('link', { name: /View all debates/ })).toHaveAttribute('href', '/space/s/debates');
   });
 
   it('reserves the lost mobile document height while switching between kinds', () => {

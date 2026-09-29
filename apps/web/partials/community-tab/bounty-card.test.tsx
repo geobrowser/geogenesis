@@ -17,10 +17,6 @@ vi.mock('~/core/hooks/use-entity-side-panel', () => ({
 
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
 
-vi.mock('~/core/state/sign-in-prompt-store', () => ({
-  useSignInPrompt: () => ({ action: null, open: vi.fn(), close: vi.fn() }),
-}));
-
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avatar" /> }));
 
 function bounty(overrides: Partial<SpaceBounty> = {}): SpaceBounty {

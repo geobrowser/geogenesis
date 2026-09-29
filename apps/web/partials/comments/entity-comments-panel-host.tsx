@@ -68,6 +68,7 @@ export function EntityCommentsPanelHost() {
     <EntityCommentsPanel
       entityId={commentsTarget.entityId}
       spaceId={commentsTarget.spaceId}
+      targetEntityType={commentsTarget.targetEntityType}
       onClose={closeComments}
       presentation="overlay"
     />,

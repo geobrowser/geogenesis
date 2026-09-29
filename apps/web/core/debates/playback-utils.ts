@@ -454,3 +454,46 @@ export async function playBothWithMutedFallback(
 
   return 'blocked';
 }
+
+/**
+ * One turn's place on the rendered timeline.
+ *
+ * `turnStateForTime` and `turnStateFromSegments` answer "who is speaking now and how long have
+ * they got", which is what the audible panel and the ring need. Naming a turn needs a different
+ * question answered — *which* turn is this, out of how many — so it needs the list rather than
+ * the answer.
+ *
+ * `index` is the turn's identity, which is why it is the segment's own `turn_index` and not its
+ * place in this array. `sortTurnSegments` drops a zero-length segment — what an instant yield
+ * leaves behind — and a turn dropped from the middle would renumber every turn after it, so a
+ * rebuttal would be captioned as an opening and the round would change hands mid-debate. geo-chat
+ * is the authority on turn boundaries here, as it is in `debate-source.ts`.
+ */
+export type TurnSpan = {
+  index: number;
+  slot: ParticipantSlot;
+  startSeconds: number;
+  endSeconds: number;
+};
+
+/** The spans the render actually used. Preferred wherever `turn_segments` came back (GEO-2949). */
+export function turnSpansFromSegments(segments: DebateMediaTurnSegment[]): TurnSpan[] {
+  return sortTurnSegments(segments).map((segment, position) => ({
+    // The position is a last resort for a replica that omits the field, not the ordinary path.
+    index: Number.isFinite(segment.turn_index) ? segment.turn_index : position,
+    slot: segment.participant_slot,
+    startSeconds: segment.output_start_ms / 1_000,
+    endSeconds: segment.output_end_ms / 1_000,
+  }));
+}
+
+/** The same list off the format's allowance, for a debate whose segments never arrived. */
+export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: number[]): TurnSpan[] {
+  let startSeconds = 0;
+  return turnDurationsMs.map((durationMs, index) => {
+    const endSeconds = startSeconds + durationMs / 1_000;
+    const span: TurnSpan = { index, slot: turnSlot(firstSlot, index), startSeconds, endSeconds };
+    startSeconds = endSeconds;
+    return span;
+  });
+}

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { responsePositionLabel } from '~/core/responses/entity-response';
+
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
@@ -233,7 +235,7 @@ function ParticipantSummary({
         {label}
       </Text>
       <Text as="span" variant="smallButton" color="text" className="rounded-full bg-grey-02 px-2 py-0.5">
-        {participant.position_label}
+        {responsePositionLabel(participant.position)}
       </Text>
     </div>
   );

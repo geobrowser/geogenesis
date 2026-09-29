@@ -13,7 +13,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { entitySidePanelAtom } from '~/atoms';
+import { entityCommentsPanelAtom, entitySidePanelAtom } from '~/atoms';
 
 // Reached through the claims panel, which now carries the shared response controls. The module's
 // top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
@@ -29,6 +29,11 @@ const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
   playerToggle: vi.fn(),
+  /** Draw a stand-in end card inside the player: its controls, and a popover portalled out of it. */
+  withEndCard: false,
+  endCardVote: vi.fn(),
+  endCardReplay: vi.fn(),
+  portalledClick: vi.fn(),
 }));
 
 type ObserverRecord = {
@@ -68,26 +73,41 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   ),
 }));
 
-vi.mock('~/core/debates/browse/debate-feed-player', () => ({
-  DebateFeedPlayer: ({
-    debate,
-    active,
-    reducedOverlays,
-  }: {
-    debate: Debate;
-    active: boolean;
-    reducedOverlays?: boolean;
-  }) => (
-    <button
-      type="button"
-      data-testid="player"
-      data-debate={debate.id}
-      data-active={active}
-      data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
-      onClick={mocks.playerToggle}
-    />
-  ),
-}));
+vi.mock('~/core/debates/browse/debate-feed-player', async () => {
+  const { createPortal } = await import('react-dom');
+  return {
+    DebateFeedPlayer: ({
+      debate,
+      active,
+      reducedOverlays,
+    }: {
+      debate: Debate;
+      active: boolean;
+      reducedOverlays?: boolean;
+    }) => (
+      <>
+        <button
+          type="button"
+          data-testid="player"
+          data-debate={debate.id}
+          data-active={active}
+          data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
+          onClick={mocks.playerToggle}
+        />
+        {mocks.withEndCard ? (
+          <div data-debate-end-card>
+            <button type="button" data-testid="end-card-vote" onClick={mocks.endCardVote} />
+            <button type="button" data-testid="end-card-replay" data-end-card-replay onClick={mocks.endCardReplay} />
+            {createPortal(
+              <button type="button" data-testid="end-card-portalled" onClick={mocks.portalledClick} />,
+              document.body
+            )}
+          </div>
+        ) : null}
+      </>
+    ),
+  };
+});
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
   useDebateShareAction: () => ({ open: false, onOpen: vi.fn(), onOpenChange: vi.fn() }),
@@ -190,6 +210,7 @@ beforeEach(() => {
   observers = [];
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
+  mocks.withEndCard = false;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -247,6 +268,15 @@ function PanelProbe() {
   return <div data-testid="panel">{target ? `${target.entityId} in ${target.spaceId}` : 'closed'}</div>;
 }
 
+function CommentsPanelProbe() {
+  const target = useAtomValue(entityCommentsPanelAtom);
+  return (
+    <div data-testid="comments-panel-target">
+      {target ? `${target.entityId} in ${target.spaceId} (${target.targetEntityType})` : 'closed'}
+    </div>
+  );
+}
+
 // The card is rendered inside the app's query provider — its comment count reads the comments cache —
 // so the harness has to provide one too, or the double is laxer than the real tree.
 let client: QueryClient;
@@ -265,6 +295,7 @@ function CardHarness({
       <Provider>
         {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
         <PanelProbe />
+        <CommentsPanelProbe />
       </Provider>
     </QueryClientProvider>
   );
@@ -377,6 +408,47 @@ describe('DebateExploreFeedCard', () => {
 
     expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
     expect(mocks.playerToggle).not.toHaveBeenCalled();
+  });
+
+  describe('while another debate holds playback', () => {
+    // A finished debate's end card is drawn inside the capture wrapper, but only its replay is an ask
+    // to play. The rest used to be swallowed as a playback handoff, so a vote was never cast.
+    const nonOwner = () => {
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      mocks.withEndCard = true;
+      const onPlaybackRequest = vi.fn();
+      renderCard({ onPlaybackRequest }, 'another-debate');
+      intersectAll(0.7);
+      return onPlaybackRequest;
+    };
+
+    it("lets the end card's own controls through", () => {
+      const onPlaybackRequest = nonOwner();
+      fireEvent.click(screen.getByTestId('end-card-vote'));
+
+      expect(mocks.endCardVote).toHaveBeenCalledTimes(1);
+      expect(onPlaybackRequest).not.toHaveBeenCalled();
+    });
+
+    it('lets a popover portalled out of the card through, though React bubbles its clicks here', () => {
+      const onPlaybackRequest = nonOwner();
+      fireEvent.click(screen.getByTestId('end-card-portalled'));
+
+      expect(mocks.portalledClick).toHaveBeenCalledTimes(1);
+      expect(onPlaybackRequest).not.toHaveBeenCalled();
+    });
+
+    it('hands playback over on Replay and lets the press reach the player', () => {
+      // Replay is the one ask to play on the card, so it transfers ownership — and the press goes
+      // through, where the player holds it until playback arrives. Swallowing it here left an ended
+      // debate with nothing to resume it, so Replay took a second tap.
+      const onPlaybackRequest = nonOwner();
+      fireEvent.click(screen.getByTestId('end-card-replay'));
+
+      expect(onPlaybackRequest).toHaveBeenCalledWith('fd51f935-2063-4617-8039-7b672b23364c');
+      expect(mocks.endCardReplay).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('brings an inactive player into view before requesting playback', () => {
@@ -558,10 +630,20 @@ describe('DebateExploreFeedCard', () => {
     const comments = screen.getByRole('button', { name: /^Comments/ });
     expect(comments.textContent).toBe('3');
     expect(screen.getByRole('button', { name: /^Claims/ }).textContent).toBe('18');
+    expect(comments).toHaveAttribute('data-geo-analytics-label', 'Debate comments');
+    expect(screen.getByRole('button', { name: /^Claims/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate claims'
+    );
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.
     expect(comments.hasAttribute('data-entity-comments-opener')).toBe(true);
+
+    fireEvent.click(comments);
+    expect(screen.getByTestId('comments-panel-target')).toHaveTextContent(
+      `${item.entityId} in ${item.spaceId} (debate)`
+    );
   });
 
   it('keeps votes and comments while the debate is still loading', () => {

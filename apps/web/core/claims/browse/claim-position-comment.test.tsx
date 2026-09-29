@@ -40,12 +40,14 @@ describe('ClaimPositionCommentControl', () => {
     onRespond = vi.fn(),
     responseKind = 'stance',
     positionRowEndSlot,
+    onActivityPublish,
   }: {
     viewerPosition?: boolean | null;
     promptForComment?: boolean;
     onRespond?: (position: boolean) => void;
-    responseKind?: 'stance' | 'veracity';
+    responseKind?: 'stance';
     positionRowEndSlot?: ReactNode;
+    onActivityPublish?: (delta: number) => void;
   } = {}) {
     render(
       <ClaimPositionCommentControl
@@ -56,6 +58,7 @@ describe('ClaimPositionCommentControl', () => {
         viewerPosition={viewerPosition}
         onRespond={onRespond}
         promptForComment={promptForComment}
+        onActivityPublish={onActivityPublish}
         positionRowEndSlot={positionRowEndSlot}
       />
     );
@@ -238,11 +241,33 @@ describe('ClaimPositionCommentControl', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
 
     await waitFor(() => expect(mocks.createComment).toHaveBeenCalledTimes(1));
-    expect(mocks.createComment).toHaveBeenCalledWith({
-      text: 'Because the evidence supports it.',
-    });
+    expect(mocks.createComment).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Because the evidence supports it.' })
+    );
     expect(onRespond).toHaveBeenCalledTimes(1);
     expect(order).toEqual(['response', 'comment']);
+  });
+
+  /**
+   * On the claim page this comment lands inside the Activity heading's server aggregate, which the
+   * heading prefers over anything the comment caches can say — so a composer that does not report
+   * leaves the number one behind. Only the claim page passes a reporter; the Explore card's pill is
+   * derived from the comment list and corrects itself.
+   */
+  it('reports the explanation to a host that is counting, and takes it back if it fails', async () => {
+    const reported: number[] = [];
+    mocks.createComment.mockImplementation(async (input: { onOptimistic?: () => void; onFailed?: () => void }) => {
+      input.onOptimistic?.();
+      input.onFailed?.();
+      return { id: 'comment-1', published: true };
+    });
+    renderControl({ onActivityPublish: (delta: number) => void reported.push(delta) });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Because the evidence supports it.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+    await waitFor(() => expect(reported).toEqual([1, -1]));
   });
 
   it('keeps a failed comment draft open so it can be retried', async () => {
@@ -299,15 +324,9 @@ describe('ClaimPositionCommentControl', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('uses the factual-claim vocabulary in the prompt', () => {
-    renderControl({ responseKind: 'veracity' });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Dispute' }));
-
-    expect(screen.getByRole('textbox', { name: 'Why do you dispute?' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Dispute' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
-  });
+  // A case that used to sit here — "uses the factual-claim vocabulary in the prompt" — asserted the
+  // composer said "Why do you dispute?" on a factual claim. The prompt is built from the action
+  // label, and there is one label per side now, so it would be a copy of the disagree case above.
 
   it('preserves the sign-in flow instead of opening a composer while signed out', () => {
     const { onRespond } = renderControl({ promptForComment: false });

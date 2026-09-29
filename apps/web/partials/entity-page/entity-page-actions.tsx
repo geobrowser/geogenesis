@@ -26,16 +26,16 @@ interface EntityPageActionsProps {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
-  /** Put voting before history/menu, matching the personal-profile header. */
-  votesFirst?: boolean;
+  /** Tighten the action spacing when the row shares a compact header. */
+  compact?: boolean;
 }
 
-/** Menu, history, create, and votes — separate from type metadata */
+/** Votes, create, history, and menu — separate from type metadata */
 export function EntityPageActions({
   entityId,
   spaceId,
   isVoteable = false,
-  votesFirst = false,
+  compact = false,
 }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -52,13 +52,9 @@ export function EntityPageActions({
     clearDiffSelection,
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
-  const voteButtons = isVoteable ? <EntityVoteButtons entityId={entityId} spaceId={spaceId} /> : null;
-
   return (
-    <div className={cx('ml-auto flex shrink-0 items-center', votesFirst ? 'gap-4' : 'gap-5')}>
-      {/* Profiles put voting first, as their mobile header does. Every other
-          surface keeps master's create, history, menu, votes order. */}
-      {votesFirst && voteButtons}
+    <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
+      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
       {editable && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
@@ -103,7 +99,6 @@ export function EntityPageActions({
         )}
       </HistoryPanel>
       <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
-      {!votesFirst && voteButtons}
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </div>
   );

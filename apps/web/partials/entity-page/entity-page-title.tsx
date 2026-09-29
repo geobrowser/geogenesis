@@ -9,6 +9,8 @@ import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
+
 /** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
 const titleTypographyClassName = 'text-entityTitle';
 
@@ -20,6 +22,11 @@ type EntityPageTitleProps = {
   className?: string;
   /** Rendered inline directly after the title in browse mode, e.g. a verification badge. */
   accessory?: React.ReactNode;
+  /**
+   * The entity this title names, marked in the DOM for the sticky header — see
+   * `entity-page-anchors`, which says why it is an attribute rather than a ref.
+   */
+  entityId?: string;
 };
 
 /**
@@ -42,10 +49,11 @@ export function EntityPageTitle({
   placeholder = 'Entity name...',
   className,
   accessory,
+  entityId,
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
-      <div className={cx('text-text', className)}>
+      <div className={cx('text-text', className)} {...entityPageTitleAnchor(entityId)}>
         <Textarea
           value={value}
           onChange={event => onChange(event.currentTarget.value)}
@@ -61,7 +69,7 @@ export function EntityPageTitle({
   }
 
   return (
-    <div className={className}>
+    <div className={className} {...entityPageTitleAnchor(entityId)}>
       {accessory ? (
         <div className="flex min-w-0 items-center gap-2">
           <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>

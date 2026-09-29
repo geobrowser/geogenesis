@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   heading: null as Record<string, unknown> | null,
   storeProvider: null as Record<string, unknown> | null,
   metadataHeader: null as Record<string, unknown> | null,
+  stickyHeader: null as Record<string, unknown> | null,
   entityTypes: [] as { id: string }[],
 }));
 
@@ -83,6 +84,16 @@ vi.mock('~/partials/entity-page/entity-page-metadata-header', () => ({
   },
 }));
 
+// Stubbed like every other child here: the real one reads the sync engine, which this suite mounts
+// no provider for. Its props are captured because they are this file's subject — the header votes
+// on and names an entity, so it has to be handed the route's id like the actions and the title.
+vi.mock('~/partials/entity-page/entity-sticky-header', () => ({
+  EntityStickyHeader: (props: Record<string, unknown>) => {
+    mocks.stickyHeader = props;
+    return <div data-testid="sticky-header" />;
+  },
+}));
+
 vi.mock('~/partials/entity-page/entity-page-cover', () => ({ EntityPageCover: () => null }));
 vi.mock('~/partials/entity-page/entity-page-content-container', () => ({
   EntityPageContentContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -104,6 +115,7 @@ beforeEach(() => {
   mocks.heading = null;
   mocks.storeProvider = null;
   mocks.metadataHeader = null;
+  mocks.stickyHeader = null;
 });
 
 afterEach(cleanup);
@@ -145,6 +157,8 @@ describe('profile ProfileLayout', () => {
     // The metadata header takes its id from the store rather than a prop, so pinning the provider
     // above is what covers it — the space it scopes by is the one assertable here.
     expect(mocks.metadataHeader).toMatchObject({ spaceId: SPACE_ID });
+    expect(mocks.stickyHeader).toMatchObject({ entityId: ROUTE_ENTITY_ID, spaceId: SPACE_ID });
+    expect(mocks.stickyHeader?.entityId).not.toBe(FETCHED_PERSON_ID);
   });
 
   it('does not wrap a mixed Claim and Person entity in the profile shell', async () => {
@@ -155,5 +169,9 @@ describe('profile ProfileLayout', () => {
     expect(view.getByTestId('page')).toBeInTheDocument();
     expect(mocks.storeProvider).toBeNull();
     expect(mocks.actions).toBeNull();
+    // The bar is not part of the profile shell: it belongs to every entity route, so the branch that
+    // draws no shell still draws it.
+    expect(view.getByTestId('sticky-header')).toBeInTheDocument();
+    expect(mocks.stickyHeader).toMatchObject({ entityId: ROUTE_ENTITY_ID, spaceId: SPACE_ID });
   });
 });

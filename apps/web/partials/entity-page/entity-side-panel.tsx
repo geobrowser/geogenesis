@@ -269,6 +269,7 @@ export function EntitySidePanelSurface({
   requestedSpaceId,
   openedWithMainViewEditing,
   openedFromReviewEdits,
+  forceRequestedSpace = false,
   showHeader = true,
   previewImageUrl,
   previewName,
@@ -279,6 +280,8 @@ export function EntitySidePanelSurface({
   requestedSpaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** Keep the panel in `requestedSpaceId`, even when the entity also lives in a higher-ranked space. */
+  forceRequestedSpace?: boolean;
   /** When false, hides the default side-panel chrome (close, space link, edit toggle, open). */
   showHeader?: boolean;
   previewImageUrl?: string | null;
@@ -287,11 +290,10 @@ export function EntitySidePanelSurface({
   onClose: () => void;
 }) {
   const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
-  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(
-    entityId,
-    requestedSpaceId,
-    preferRequestedSpace
-  );
+  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId, {
+    preferRequestedSpace,
+    forceRequestedSpace,
+  });
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   return (
@@ -492,7 +494,7 @@ export function EntitySidePanel() {
     return null;
   }
 
-  const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits } = sidePanelTarget;
+  const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits, forceRequestedSpace } = sidePanelTarget;
 
   const panelBody = (
     <EntitySidePanelPopoverPortalProvider>
@@ -501,6 +503,7 @@ export function EntitySidePanel() {
         requestedSpaceId={spaceId}
         openedWithMainViewEditing={openedWithMainViewEditing}
         openedFromReviewEdits={openedFromReviewEdits}
+        forceRequestedSpace={forceRequestedSpace}
         onClose={handleCloseSidePanel}
       />
     </EntitySidePanelPopoverPortalProvider>

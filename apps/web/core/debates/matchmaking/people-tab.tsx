@@ -4,30 +4,50 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { personProfileOpened } from '~/core/analytics';
+import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { useDebugDebatesPageEnabled, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Time } from '~/design-system/icons/time';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
+import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
+import { PeerAvailabilityModal } from '~/partials/availability/peer-availability-modal';
+
 import { activeDebate } from '../activity-state';
-import type { DebatePerson } from '../api';
-import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
+import type { DebatePerson, SchedulablePerson, ScheduleOverlapSlot } from '../api';
+import { useClaimEntitiesByIds } from '../claim-picker-page';
+import {
+  useCreateDebateChallenge,
+  useDebateActivity,
+  useDebateSchedule,
+  useGeoChatAuth,
+  useSaveDebateSchedule,
+} from '../hooks';
+import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
-import { useDebatePeople, useDebateRequests } from './hooks';
+import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
+import { FilterSwitch } from './filter-switch';
+import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { isPersonId } from './person-records-document';
@@ -35,7 +55,7 @@ import { PersonSpaceIcons } from './person-space-icons';
 import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 /**
  * Whether the records batch has answered for everybody queryable on the current roster.
@@ -45,6 +65,28 @@ import { type DebatesHubTab, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
  * have already left, or clearing it before a newly arrived person's activity has loaded.
  */
 const EMPTY_SPACE_IDS: string[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
+const EMPTY_MATCH_COUNTS = new Map<string, number>();
+
+/** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
+const INLINE_SLOTS = 3;
+
+type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
+
+/**
+ * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
+ * them like anyone else. Not requestable: nobody here can take a request right now.
+ */
+function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
+  return {
+    ...user,
+    online: false,
+    available_to_debate: false,
+    in_debate: false,
+    online_since: null,
+    can_challenge: false,
+  };
+}
 
 function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
   return personIds.some(personId => isPersonId(personId) && !records.has(personId));
@@ -53,6 +95,9 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
+ *
+ * With "Online only" off, offline people who share a free slot with the viewer follow, each with
+ * those times and a Schedule button in place of the request (GEO-2937).
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
@@ -66,10 +111,115 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
-  // One elevated portal for every row's space list. A portal per person would append a matching
-  // number of containers to the body, while a plain Radix portal sits behind this z-200 panel.
-  const spacesPopoverPortal = useElevatedPopoverPortal();
-  const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  const { personalSpaceId } = usePersonalSpaceId();
+  // One elevated portal for every row's menu. A portal per person would append a matching number
+  // of containers to the body, while a plain Radix portal sits behind this z-200 panel.
+  const popoverPortal = useElevatedPopoverPortal();
+  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
+  // The debug flag also opens "See times", because a room is booked from the week.
+  const bookingEnabled = useDebugDebatesPageEnabled() || peerAvailabilityEnabled;
+  // Held here rather than in the row. This list is everyone online *now*, so a row unmounts the
+  // moment its person goes offline, and a dialog inside it would vanish mid-read.
+  const [viewingTimes, setViewingTimes] = React.useState<{
+    userId: string;
+    name: string;
+    initialStart?: string;
+  } | null>(null);
+  // The row that opened it, so focus can go back there. It may unmount first; the modal checks.
+  const seeTimesOpenerRef = React.useRef<HTMLElement | null>(null);
+  const [onlineOnly, setOnlineOnly] = useAtom(debatesHubPeopleOnlineOnlyAtom);
+  // Offline people can only be scheduled with, so the switch exists only where booking does.
+  const offlineAvailable = bookingEnabled && authenticated;
+  const showOffline = offlineAvailable && !onlineOnly;
+  const schedulableQuery = useSchedulablePeople(showOffline);
+  const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
+
+  const onlinePeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  // Held in state so the slot filters below re-run as time passes; React Compiler caches a
+  // `Date.now()` read in render once per mount.
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!showOffline) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, [showOffline]);
+
+  // Anyone already on the roster is requestable now, so they keep their online row. Someone who is
+  // online but off the roster (unavailable, tab hidden) still cannot take a request, so they stay here.
+  const { offlinePeople, schedulesByUser } = React.useMemo(() => {
+    const byUser = new Map<string, PersonSchedule>();
+    if (!showOffline || !schedulableQuery.data) return { offlinePeople: [], schedulesByUser: byUser };
+
+    const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
+    // geo-chat's window follows the UTC date, which west of UTC can run a day past the modal's week.
+    const today = new Date(now);
+    const weekEnds = new Date(today.getFullYear(), today.getMonth(), today.getDate() + PEER_SCHEDULE_DAYS).getTime();
+    const offline: DebatePerson[] = [];
+    for (const candidate of schedulableQuery.data.people) {
+      const key = normId(candidate.user.user_id);
+      if (onRoster.has(key)) continue;
+      const upcoming = candidate.slots.filter(slot => {
+        const start = Date.parse(slot.start);
+        return start > now && start < weekEnds;
+      });
+      // Every shared time already past: nothing left to schedule in this window.
+      if (upcoming.length === 0 && !candidate.truncated) continue;
+      byUser.set(key, {
+        slots: upcoming.slice(0, INLINE_SLOTS),
+        truncated: candidate.truncated || upcoming.length > INLINE_SLOTS,
+      });
+      offline.push(schedulableAsPerson(candidate));
+    }
+    return { offlinePeople: offline, schedulesByUser: byUser };
+  }, [now, onlinePeople, schedulableQuery.data, showOffline]);
+
+  const allPeople = React.useMemo(() => [...onlinePeople, ...offlinePeople], [onlinePeople, offlinePeople]);
+  const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
+  // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
+  // compare against, so they do not spend a public query fetching everybody else's positions.
+  // The presence service can hand us a malformed profile-space id; keep those out of the graph's
+  // UUID filter so one bad roster entry cannot discard every valid person's match data.
+  const positionParticipants = React.useMemo(
+    () =>
+      viewerProfileSpaceId
+        ? [
+            { profile_space_id: viewerProfileSpaceId },
+            ...allPeople.flatMap(person =>
+              isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
+            ),
+          ]
+        : [],
+    [allPeople, viewerProfileSpaceId]
+  );
+  const {
+    byClaim: positionsByClaim,
+    isLoading: positionsLoading,
+    isPlaceholderData: positionsArePlaceholderData,
+    error: positionsError,
+  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId);
+  const matchAnalysis = React.useMemo(
+    () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
+    [positionsByClaim, viewerProfileSpaceId]
+  );
+  // A key-changing roster update retains the previous batch. It is useful placeholder UI for
+  // people already present, but an absent entry for somebody new means "unknown", not zero. A
+  // same-key background poll is not placeholder data, so settled counts stay visible while polling.
+  const matchesKnown =
+    viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
+  const matchingClaimIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
+    [matchAnalysis]
+  );
+  const matchingSpaceIds = React.useMemo(
+    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.spaceId)))],
+    [matchAnalysis]
+  );
+  const { entities: matchingClaims, isLoading: matchingClaimsLoading } = useClaimEntitiesByIds(matchingClaimIds);
+  const matchingClaimNamesById = React.useMemo(
+    () => new Map(matchingClaims.map(claim => [normId(claim.id), claim.name])),
+    [matchingClaims]
+  );
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
@@ -89,6 +239,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // remembered selection against no people and erase it before there is evidence it became invalid.
   const rosterUnavailable = peopleQuery.data === undefined;
   const spaceActivityUnavailable = rosterUnavailable || publishableSpacesPending || personRecordsPending;
+  // Offline people carry spaces too. Until they land, the people in hand are a subset, and
+  // reconciling against them would erase a space only offline people are active in.
+  const offlinePeopleUnsettled = showOffline && schedulableQuery.data === undefined;
 
   // "Active in" means evidence of activity, not membership: at least one distinct claim answered
   // or one recorded debate in that space. The same map drives both the row and the filter so a
@@ -131,12 +284,12 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // Reconcile against the exact options this tab is allowed to offer so `keepSelectedVisible`
   // cannot put a disabled, membership-only, or zero-activity space back into the dropdown.
   React.useEffect(() => {
-    if (spaceActivityUnavailable) return;
+    if (spaceActivityUnavailable || offlinePeopleUnsettled) return;
     setSpaceIds(current => {
       const kept = current.filter(spaceId => activeSpaceIds.has(normId(spaceId)));
       return kept.length === current.length ? current : kept;
     });
-  }, [activeSpaceIds, setSpaceIds, spaceActivityUnavailable]);
+  }, [activeSpaceIds, offlinePeopleUnsettled, setSpaceIds, spaceActivityUnavailable]);
 
   // Filtered here rather than through the query: this endpoint takes no parameters at all and
   // returns whoever is available right now in one unpaginated list, so there is nothing to page
@@ -151,12 +304,28 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   }, [allPeople, search]);
 
   const people = React.useMemo(() => {
-    if (effectiveSpaceIds.length === 0) return searchedPeople;
-    const wanted = new Set(effectiveSpaceIds.map(normId));
-    return searchedPeople.filter(person =>
-      (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
-    );
-  }, [debateSpacesByPerson, effectiveSpaceIds, searchedPeople]);
+    let filtered = searchedPeople;
+    if (effectiveSpaceIds.length > 0) {
+      const wanted = new Set(effectiveSpaceIds.map(normId));
+      filtered = searchedPeople.filter(person =>
+        (debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
+      );
+    }
+
+    // Online people first: they can be asked now. The server's order breaks ties (roster order
+    // online, soonest shared slot offline), so equal matches stay stable as live updates land.
+    return filtered
+      .map((person, index) => ({
+        person,
+        index,
+        online: person.online ? 1 : 0,
+        matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
+      }))
+      .sort(
+        (left, right) => right.online - left.online || right.matchCount - left.matchCount || left.index - right.index
+      )
+      .map(({ person }) => person);
+  }, [debateSpacesByPerson, effectiveSpaceIds, matchAnalysis, searchedPeople]);
 
   // Counted over everything the *other* filters leave, which is what a facet count means here as it
   // does on the claim tabs: the number beside a space is what picking it would give you, so it
@@ -189,8 +358,8 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   // counted out of the facets, and it still has to be nameable in the trigger.
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds])],
-      [effectiveSpaceIds, facetSpaces]
+      () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...matchingSpaceIds])],
+      [effectiveSpaceIds, facetSpaces, matchingSpaceIds]
     )
   );
 
@@ -255,18 +424,36 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
             Topic props are omitted because people carry no topics to facet on, the same way the
             requests bar omits them. */}
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={effectiveSpaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
           facetSpaces={facetSpaces}
           countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
+          trailing={
+            offlineAvailable ? (
+              <FilterSwitch label="Online only" checked={onlineOnly} onChange={setOnlineOnly} analyticsSurface="hub" />
+            ) : undefined
+          }
         />
       </HubStickyControls>
 
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
+        {viewerHasNoSchedule ? <SetAvailabilityNotice /> : null}
+        {showOffline && schedulableQuery.error ? (
+          <Text as="p" variant="footnote" color="grey-04" className="pb-2">
+            Couldn&rsquo;t load who&rsquo;s free at your times.{' '}
+            <button type="button" className="underline" onClick={() => void schedulableQuery.refetch()}>
+              Retry
+            </button>
+          </Text>
+        ) : null}
         <HubQueryState
-          isLoading={peopleQuery.isLoading}
+          analyticsSurface="hub"
+          // Offline people land in the same list, so an empty roster is not "nobody" until they have.
+          // Online people already in hand are drawn meanwhile; offline rows join them when they land.
+          isLoading={peopleQuery.isLoading || (showOffline && schedulableQuery.isLoading && onlinePeople.length === 0)}
           error={peopleQuery.error}
           failureReason={peopleQuery.failureReason}
           // The other three lists have always had this, and the setup state needs it more than the
@@ -283,7 +470,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
               ? searchIsTheOnlyFilter
                 ? 'Nobody available matches that search.'
                 : 'Nobody available matches those filters.'
-              : 'Nobody is available to debate right now.'
+              : showOffline
+                ? 'Nobody is online or free at the same times as you.'
+                : 'Nobody is available to debate right now.'
           }
           // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
           // same question: a list the viewer emptied with their own search is a different problem,
@@ -322,29 +511,81 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
               </Text>
             ) : null}
             <ul className="flex flex-col">
-              {people.map(person => (
-                <PersonRow
-                  key={person.user_id}
-                  person={person}
-                  record={records.get(person.profile_space_id) ?? null}
-                  spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
-                  labelsById={labelsById}
-                  popoverPortal={spacesPopoverPortal}
-                  disabled={buttonsDisabled}
-                  disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
-                  onRequireSignIn={onRequireSignIn}
-                />
-              ))}
+              {people.map(person => {
+                const isViewer =
+                  (currentUserId !== null && person.user_id === currentUserId) ||
+                  (personalSpaceId !== null && normId(person.profile_space_id) === normId(personalSpaceId));
+                return (
+                  <PersonRow
+                    key={person.user_id}
+                    person={person}
+                    matches={
+                      isViewer
+                        ? EMPTY_MATCHES
+                        : (matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES)
+                    }
+                    matchesBySpace={
+                      matchesKnown && !isViewer
+                        ? (matchAnalysis.countsByProfileAndSpace.get(normId(person.profile_space_id)) ??
+                          EMPTY_MATCH_COUNTS)
+                        : undefined
+                    }
+                    claimNamesById={matchingClaimNamesById}
+                    claimNamesLoading={matchingClaimsLoading}
+                    schedule={schedulesByUser.get(normId(person.user_id))}
+                    record={records.get(person.profile_space_id) ?? null}
+                    spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
+                    labelsById={labelsById}
+                    popoverPortal={popoverPortal}
+                    disabled={buttonsDisabled}
+                    disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                    onRequireSignIn={onRequireSignIn}
+                    onSeeTimes={
+                      bookingEnabled
+                        ? (peer, opener, initialStart) => {
+                            seeTimesOpenerRef.current = opener;
+                            setViewingTimes({ ...peer, initialStart });
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
             </ul>
           </>
         </HubQueryState>
       </div>
+
+      {/* Closing returns to the hub, which is where it was opened from. */}
+      {bookingEnabled ? (
+        <PeerAvailabilityBookingModal
+          open={viewingTimes !== null}
+          userId={viewingTimes?.userId ?? ''}
+          peerName={viewingTimes?.name}
+          onClose={() => setViewingTimes(null)}
+          openerRef={seeTimesOpenerRef}
+          initialSelectedStart={viewingTimes?.initialStart}
+        />
+      ) : (
+        <PeerAvailabilityModal
+          open={viewingTimes !== null}
+          userId={viewingTimes?.userId ?? ''}
+          peerName={viewingTimes?.name}
+          onClose={() => setViewingTimes(null)}
+          openerRef={seeTimesOpenerRef}
+        />
+      )}
     </div>
   );
 }
 
 function PersonRow({
   person,
+  matches,
+  matchesBySpace,
+  claimNamesById,
+  claimNamesLoading,
+  schedule,
   record,
   spaceIds,
   labelsById,
@@ -352,8 +593,17 @@ function PersonRow({
   disabled,
   disabledReason,
   onRequireSignIn,
+  onSeeTimes,
 }: {
   person: DebatePerson;
+  /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
+  matches: ClaimMatch[];
+  /** Viewer-relative matching claims per space; absent until that comparison is known. */
+  matchesBySpace?: ReadonlyMap<string, number>;
+  claimNamesById: ReadonlyMap<string, string | null>;
+  claimNamesLoading: boolean;
+  /** Set only for an offline row: their upcoming times shared with the viewer. */
+  schedule?: PersonSchedule;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
   /** Debate-enabled spaces where this person has at least one claim position or recorded debate. */
@@ -370,6 +620,8 @@ function PersonRow({
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
   onRequireSignIn?: () => void;
+  /** Absent while the feature flag is off, which is what hides "See times". */
+  onSeeTimes?: (peer: { userId: string; name: string }, opener: HTMLElement | null, initialStart?: string) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -380,6 +632,18 @@ function PersonRow({
         labelsById={labelsById}
         claimsBySpace={record?.claimsBySpace}
         debatesBySpace={record?.debatesBySpace}
+        matchesBySpace={matchesBySpace}
+        popoverPortal={popoverPortal}
+      />
+    ) : null;
+  const match =
+    matches.length > 0 ? (
+      <PersonMatches
+        personName={speakerLabel(person)}
+        matches={matches}
+        claimNamesById={claimNamesById}
+        claimNamesLoading={claimNamesLoading}
+        labelsById={labelsById}
         popoverPortal={popoverPortal}
       />
     ) : null;
@@ -401,18 +665,24 @@ function PersonRow({
         {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green
             in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
             a speck rather than a badge. */}
-        <OnlineDot faceSize={32} />
+        {schedule ? null : <OnlineDot faceSize={32} />}
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
-            A plain anchor, with no click handler at all: the hub survives the navigation on its
-            own now (GEO-2788), so there is nothing to intercept — which is also what keeps
-            cmd-click, middle click and "copy link address" working here (GEO-2701).
+            A plain anchor whose click handler only observes analytics: the hub survives the
+            navigation on its own now (GEO-2788), so the handler does not intercept it — which is
+            also what keeps cmd-click, middle click and "copy link address" working here (GEO-2701).
 
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
         {profileHref ? (
-          <Link href={profileHref} className="min-w-0">
+          <Link
+            href={profileHref}
+            onClick={() =>
+              personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debates_hub_people' })
+            }
+            className="min-w-0"
+          >
             <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
               {speakerLabel(person)}
             </Text>
@@ -422,32 +692,170 @@ function PersonRow({
             {speakerLabel(person)}
           </Text>
         )}
-        {/* Deliberately three lines: stats, active spaces, then the join date. Keeping "Active in"
-            immediately above "On Geo since" makes both read as profile context, while the popup
-            gives the compact avatar stack somewhere to reveal its full answer. */}
-        {record || spaceIds.length > 0 ? (
+        {/* One compact row: debates, positions, then the viewer-relative match count. The
+            latter opens the exact claims without making every person row permanently taller. */}
+        {record || activeSpaces || match ? (
           <div className="flex min-w-0 flex-col gap-0.5">
-            {record ? <PersonRecordLine record={record} activeSpaces={activeSpaces} /> : activeSpaces}
+            <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
           </div>
         ) : null}
+        {schedule && onSeeTimes ? (
+          <SharedTimes
+            personName={speakerLabel(person)}
+            schedule={schedule}
+            onPick={(start, opener) =>
+              onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, start)
+            }
+          />
+        ) : null}
       </div>
-      <HubPillButton
-        onClick={() =>
-          onRequireSignIn
-            ? onRequireSignIn()
-            : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
-        }
-        // `in_debate` holds signed out too: it means this person is in an active debate right now,
-        // which is true of them rather than of any viewer, so signing in would not make them
-        // available. `can_challenge` and the viewer's own pending request are the viewer-relative
-        // ones, and those are what the press bypasses on its way to the sign-in.
-        disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
-        pending={createChallenge.isPending}
-        pendingLabel="Requesting…"
-        title={disabled ? disabledReason : undefined}
-      >
-        {person.in_debate ? 'In a debate' : 'Request debate'}
-      </HubPillButton>
+      <div className="flex shrink-0 items-center gap-2">
+        {/* Quiet, and deliberately never disabled alongside the pill: someone already in a debate,
+            or a viewer whose own request is pending, is exactly who wants to know when this person
+            is next free. Gating it on the same reasons would hide it at the moment it earns its
+            place. Signed out it opens Privy like the pill does, because the endpoint behind it is
+            viewer-scoped and would only 401. */}
+        {onSeeTimes && !schedule && (
+          <button
+            type="button"
+            // Every row carries this control, so the visible label alone leaves a screen reader or
+            // voice control with a list of identical targets.
+            aria-label={`See times for ${speakerLabel(person)}`}
+            onClick={event =>
+              onRequireSignIn
+                ? onRequireSignIn()
+                : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)
+            }
+            title="See times"
+            // An icon rather than text: the stats beside it need the width in a narrow panel.
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+          >
+            <Time />
+          </button>
+        )}
+        {schedule && onSeeTimes ? (
+          // Offline people cannot take a request, so the pill books a time instead. Never disabled by
+          // the viewer's live request state, for the same reason "See times" is not.
+          <HubPillButton
+            aria-label={`Schedule a debate with ${speakerLabel(person)}`}
+            analyticsLabel="Schedule debate"
+            onClick={event => onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget)}
+          >
+            Schedule
+          </HubPillButton>
+        ) : (
+          <HubPillButton
+            onClick={() =>
+              onRequireSignIn
+                ? onRequireSignIn()
+                : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+            }
+            // `in_debate` holds signed out too: it means this person is in an active debate right now,
+            // which is true of them rather than of any viewer, so signing in would not make them
+            // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+            // ones, and those are what the press bypasses on its way to the sign-in.
+            disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
+            pending={createChallenge.isPending}
+            pendingLabel="Requesting…"
+            title={disabled ? disabledReason : undefined}
+          >
+            {person.in_debate ? 'In a debate' : 'Request debate'}
+          </HubPillButton>
+        )}
+      </div>
     </li>
+  );
+}
+
+/**
+ * The first few times an offline person and the viewer are both free, in the viewer's zone. A pick
+ * opens their week with that slot selected, which is where the request is confirmed.
+ */
+function SharedTimes({
+  personName,
+  schedule,
+  onPick,
+}: {
+  personName: string;
+  schedule: PersonSchedule;
+  onPick: (start: string | undefined, opener: HTMLElement) => void;
+}) {
+  if (schedule.slots.length === 0 && !schedule.truncated) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      {schedule.slots.map(slot => (
+        <button
+          key={slot.start}
+          type="button"
+          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}`}
+          onClick={event => onPick(slot.start, event.currentTarget)}
+          className="rounded-full border border-grey-02 px-2 py-0.5 text-footnote text-text transition-colors hover:border-text"
+        >
+          {formatSlot(slot.start)}
+        </button>
+      ))}
+      {schedule.truncated ? (
+        <button
+          type="button"
+          aria-label={`More times for ${personName}`}
+          onClick={event => onPick(undefined, event.currentTarget)}
+          className="px-1 text-footnote text-grey-04 transition-colors hover:text-text"
+        >
+          More times
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM" — the range is one week, so a weekday is unambiguous. */
+function formatSlot(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const dayDiff = Math.round(
+    (new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime() -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /
+      86_400_000
+  );
+  if (dayDiff === 0) return `Today ${time}`;
+  if (dayDiff === 1) return `Tomorrow ${time}`;
+  return `${at.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
+}
+
+/**
+ * Shown with "Online only" off when the viewer has no availability saved: geo-chat then matches
+ * nobody, and the list would otherwise read as nobody being free (GEO-2937, GEO-2936).
+ */
+function SetAvailabilityNotice() {
+  const [open, setOpen] = React.useState(false);
+  const { blocks, isError, refetch } = useDebateSchedule();
+  const saveSchedule = useSaveDebateSchedule();
+  const openerRef = React.useRef<HTMLElement | null>(null);
+
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
+      <Text as="p" variant="footnote">
+        Set your availability to see offline people you can schedule a debate with.
+      </Text>
+      <HubPillButton
+        analyticsLabel="Set availability"
+        onClick={event => {
+          openerRef.current = event.currentTarget;
+          setOpen(true);
+        }}
+      >
+        Set availability
+      </HubPillButton>
+      <AvailabilityModal
+        open={open}
+        onOpenChange={setOpen}
+        blocks={blocks}
+        error={isError}
+        onRetry={() => refetch()}
+        onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
+        openerRef={openerRef}
+      />
+    </div>
   );
 }

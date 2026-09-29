@@ -6,9 +6,15 @@ import cx from 'classnames';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import type { RoundCue } from '~/core/debates/round-cues';
+import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
+import { validateSpaceId } from '~/core/io/rest/validation';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -16,7 +22,11 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateEndCard } from './debate-end-card';
+import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { CONTROL_CIRCLE_CLASS } from './player-controls';
+import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 /**
@@ -59,9 +69,38 @@ type DebateFeedPlayerProps = {
    * makes arriving at a card feel glitchy (GEO-2895).
    */
   preload?: boolean;
+  /**
+   * Opens the claims panel — the same panel the claims pill under the player opens. With a
+   * debater's space id, at that debater's claims. The end card offers it; without it the card's
+   * ways into the claims are simply not drawn.
+   */
+  onOpenClaims?: (participantSpaceId?: string) => void;
+  /**
+   * Asks for this debate to become the active one. Replay on the end card calls it when the debate
+   * is not the active one yet, and holds the replay until it is. A row whose own click capture
+   * already hands playback over (the explore row) can leave it out.
+   */
+  onPlaybackRequest?: () => void;
+  /**
+   * Start here, in seconds, the first time this debate becomes playable — from a link that named a
+   * moment, such as a claim row saying where it was said.
+   *
+   * Applied once and never again. Every seek on these recordings is a parse walk (they are
+   * MediaRecorder WebM with one cluster and no Cues), so re-applying it on a later render would
+   * fight the viewer's own scrubbing and re-open GEO-2828's seek storm.
+   */
+  initialSeekSeconds?: number | null;
 };
 
-export function DebateFeedPlayer({ debate, active, preload = false, reducedOverlays = false }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({
+  debate,
+  active,
+  preload = false,
+  reducedOverlays = false,
+  onOpenClaims,
+  onPlaybackRequest,
+  initialSeekSeconds = null,
+}: DebateFeedPlayerProps) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -86,6 +125,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     playheadSeconds,
     timelineSeconds,
     turnState,
+    turnSpans,
+    turnCount,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -98,6 +139,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     beginScrub,
     endScrub,
   } = controller;
+  const showBylines = !reducedOverlays;
+  const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
+  const bylineFor = (participant: DebateParticipant | null) => {
+    if (!showBylines) return null;
+    const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
+    return spaceId ? (bylines.get(spaceId) ?? null) : null;
+  };
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     togglePlaybackRaw();
@@ -110,6 +158,41 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     measurement.control('seek');
     seekBothRaw(seconds);
   };
+
+  /**
+   * Honour a link that named a moment, once per moment.
+   *
+   * Waits for `ready` rather than firing on mount: before the media is seekable the request would
+   * be dropped, and this is the arriving reader's one chance to land where they were sent. Latched so
+   * that re-renders, a re-activation, or the viewer scrolling back to this card cannot yank the
+   * playhead back to where the link pointed after they have moved it themselves.
+   *
+   * Latched on the debate *and* the moment, not the debate alone. Two claims extracted from the same
+   * debate carry two timecodes, and following one after the other is a client-side navigation that
+   * changes `initialSeekSeconds` without remounting this card — which the id-only latch swallowed, so
+   * the second timecode did nothing at all.
+   *
+   * Not routed through the measured `seekBoth` above: this is a seek the reader asked for on the
+   * previous page, not a scrub performed on this player, and counting it as one would report a
+   * control interaction nobody made here.
+   */
+  const appliedInitialSeekRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    // No moment asked for means the last one has been let go. Without this the latch outlived the
+    // request that set it: `?t=124`, then the parameter dropped, then `?t=124` again — browser Back
+    // does exactly that — matched the stale latch and never seeked, though it was a new navigation
+    // asking for that moment. Only a missing timecode clears it; a render that is merely not ready
+    // yet keeps it, so the same request still cannot fire twice.
+    if (initialSeekSeconds == null) {
+      appliedInitialSeekRef.current = null;
+      return;
+    }
+    if (!ready) return;
+    const request = `${debate.id}@${initialSeekSeconds}`;
+    if (appliedInitialSeekRef.current === request) return;
+    appliedInitialSeekRef.current = request;
+    seekBothRaw(initialSeekSeconds);
+  }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 
   /**
    * Stopped, and only a tap will start it.
@@ -142,7 +225,63 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
     enabled: (active || preload) && !reducedOverlays,
   });
 
+  /**
+   * Which round is playing, as a card at the top of the turn and a label beside the timer after.
+   *
+   * Gated on `playing` for the same reason the countdown badge is: a card frozen on a paused tile
+   * is an announcement with no turn behind it, and the viewer has stopped to look at something
+   * else. Gated on `reducedOverlays` with the claim layer, because a compact gallery tile is too
+   * small for a phrase across it.
+   */
+  const roundCard = React.useMemo(
+    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+  );
+  const roundBadge = React.useMemo(
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, turnCount, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+  );
+
   const showReplay = ready && playbackEnded;
+  // The end card is where an ended debate lands, except on a compact gallery tile — which has no
+  // room for it and keeps the plain centred replay.
+  const endCardShown = showReplay && !reducedOverlays;
+  // Loaded while the debate is the active one, so its numbers are there when the video ends rather
+  // than drawing empty bars and filling them in.
+  const endCard = useDebateEndCard(debate, active && ready && !reducedOverlays, endCardShown);
+
+  /*
+   * Replay from the end card, held until this player may play.
+   *
+   * In a row of cards only one holds playback, and pressing Replay on another first hands playback
+   * over — which `active` reports a render later. Playing at once would run this debate beside the
+   * one still holding playback; dropping the press made Replay take two taps, because an ended
+   * debate does not resume by itself once it is handed playback. So the press asks for playback,
+   * is kept, and is carried out the moment playback arrives. It lapses if the debate stops being
+   * ended in the meantime.
+   */
+  const [replayPending, setReplayPending] = React.useState(false);
+  const replayFromEndCard = () => {
+    if (active) {
+      playFromStart();
+      return;
+    }
+    setReplayPending(true);
+    onPlaybackRequest?.();
+  };
+  // An effect event, so the effect runs on the three facts that decide it rather than on every render
+  // for a `playFromStart` that is a fresh function each time.
+  const replayNow = React.useEffectEvent(() => playFromStart());
+  React.useEffect(() => {
+    if (!replayPending) return;
+    if (!playbackEnded) {
+      setReplayPending(false);
+      return;
+    }
+    if (!active) return;
+    setReplayPending(false);
+    replayNow();
+  }, [active, playbackEnded, replayPending]);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded;
@@ -345,16 +484,30 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
       data-debate-playing={playing ? 'true' : 'false'}
       data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
       // No gap and one radius on the outside: the two tiles are a single surface in the Figma
-      // frame, which is what lets the subtitle straddle the seam rather than sit inside one tile.
+      // frame, which is what lets the subtitle and the round card straddle the seam rather than
+      // sit inside one tile.
       // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
-      className={cx('group relative flex flex-col overflow-hidden', reducedOverlays ? 'rounded-lg' : 'rounded-xl')}
+      //
+      // `@container` so the round card sizes against the player rather than the viewport: this
+      // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
+      // would get two of the three wrong.
+      className={cx(
+        'group @container relative flex flex-col overflow-hidden',
+        reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+      )}
     >
       <DebaterVideo
+        inert={endCardShown}
         participant={slot1Participant}
+        byline={bylineFor(slot1Participant)}
         src={urls.slot1}
         videoRef={slot1VideoRef}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
+        roundBadge={turnState?.slot === 1 ? roundBadge : null}
+        // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
+        // band and comes nowhere near the bottom tile's, half a player away.
+        cardYield={roundCard?.opacity ?? 0}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -404,11 +557,14 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         }
       />
       <DebaterVideo
+        inert={endCardShown}
         participant={slot2Participant}
+        byline={bylineFor(slot2Participant)}
         src={urls.slot2}
         videoRef={slot2VideoRef}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
+        roundBadge={turnState?.slot === 2 ? roundBadge : null}
         mutedByUser={mutedByUser}
         isResuming={isResuming}
         onPlaybackTick={onPlaybackTick}
@@ -486,17 +642,25 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
           the longest segment measures 284, so on a desktop they already never wrap and widening
           would only loosen the pill around the same one line. A ~355px phone tile leaves 236px,
           which is where a segment starts folding onto a second line and taking the caption off the
-          seam. */}
-      {subtitle && (!reducedOverlays || (active && playing && mutedByUser)) && (
+          seam.
+
+          Stood down while the round card has the seam — the two are given the same 20 pixels and
+          would otherwise be printed over each other, and a card the size of this one wins that.
+          It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
+          real only where the render retained speech from before the incoming debater's clock
+          started (GEO-2754), which is the one case where they are already talking as it lands. */}
+      {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
         <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
           {subtitle}
         </span>
       )}
 
+      <DebateRoundCard cue={roundCard} />
+
       {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
           desktop retains its persistent corner play/pause control while playback is in progress. */}
-      {(showReplay || showPausedGlyph) && (
+      {((showReplay && !endCardShown) || showPausedGlyph) && (
         <button
           type="button"
           aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
@@ -523,6 +687,8 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
         {flash.icon === 'pause' ? <Pause /> : <Play />}
       </div>
 
+      {endCardShown && <DebateEndCard card={endCard} onOpenClaims={onOpenClaims} onReplay={replayFromEndCard} />}
+
       {error && (
         <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
           {error}
@@ -534,10 +700,13 @@ export function DebateFeedPlayer({ debate, active, preload = false, reducedOverl
 
 function DebaterVideo({
   participant,
+  byline,
   src,
   videoRef,
   audible,
   countdown,
+  roundBadge,
+  cardYield = 0,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -551,12 +720,28 @@ function DebaterVideo({
   topLeft,
   scrubber,
   scrimClassName = 'h-14',
+  inert = false,
 }: {
   participant: DebateParticipant | null;
+  byline: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   audible: boolean;
   countdown: TurnState;
+  /** The round, beside this tile's timer for as long as this tile's turn runs. */
+  roundBadge?: RoundCue | null;
+  /**
+   * Out of reach entirely: covered by the end card, so nothing on it — the play/pause surface, the
+   * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
+   */
+  inert?: boolean;
+  /**
+   * How much of this tile's bottom band the round card has taken, 0–1.
+   *
+   * The card's own opacity, handed straight back, so the name crossfades against it rather than
+   * running a timer of its own. See where it is applied below.
+   */
+  cardYield?: number;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -630,9 +815,11 @@ function DebaterVideo({
    * machinery cannot help — every correction in `useDebatePlayback` is about *where* the two
    * elements are, and this one is nowhere.
    *
-   * The repair is to detach and re-fetch the source, which is enough on its own: the recording is
-   * fine, and the same URL loads to `HAVE_ENOUGH_DATA` on the second attempt. `onRecovered` then
-   * brings it back to wherever its partner has got to.
+   * The repair is to detach and re-fetch the source with `preload` raised to `auto`. The recording
+   * is fine and the URL is fine; what was wrong was how the element was asking for it, and the
+   * same URL loads to `HAVE_ENOUGH_DATA` on the first rebuild once it asks differently — the
+   * measurement is on the raise itself, in `rebuild` below. `onRecovered` then brings the tile
+   * back to wherever its partner has got to.
    *
    * Bounded and spaced, because the one thing worse than a blank tile is a tile refetching a
    * multi-megabyte recording in a loop.
@@ -669,6 +856,16 @@ function DebaterVideo({
 
   // A new recording is a new budget — including the one `onExhausted` has just re-signed — and any
   // repair still pending belongs to the old one.
+  //
+  // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `rebuild` writes
+  // that DOM property directly, which React cannot see and never reconciles — but there is no
+  // case that needs one. A genuinely different recording never reaches a live element: the hook
+  // blanks both URLs before fetching the new pair (`setUrls({slot1: null, slot2: null})`), which
+  // unmounts the `<video>` and takes the raised `preload` with it, and the replacement is built from
+  // the JSX default. The only `src` change a live element sees is `onExhausted` re-signing *this*
+  // recording — the one that has just failed every rebuild it was allowed under `metadata` (see `rebuild`).
+  // Putting it back there would hand the fresh URL the same mode that killed the old one, and buy another
+  // wasted attempt and another blank half-second before the next rebuild raised it again.
   React.useEffect(() => {
     recoveryAttemptsRef.current = 0;
     escalatedRef.current = false;
@@ -683,6 +880,27 @@ function DebaterVideo({
         const current = videoRef.current;
         // The tile may have been handed a different recording, or unmounted, while we waited.
         if (!current || !src || current.getAttribute('src') !== src) return;
+        /*
+         * Raised before the re-attach, because this is what the rebuild is actually for.
+         *
+         * `preload="metadata"` is what kills these recordings: MediaRecorder WebM ships without a
+         * duration and without cues, so the demuxer has to seek to work out how long the file is,
+         * and in metadata mode the browser has already stopped fetching by the time it asks —
+         * `PIPELINE_ERROR_READ: FFmpegDemuxer: demuxer seek failed`, on a URL that is perfectly
+         * good. A rebuild that leaves it alone therefore reproduces the failure exactly, every
+         * time: measured against the 89MB slot-1 recording of debate `01a0ca25`, three rebuilds
+         * failed three times and the re-signed URL failed too, which is the tile that sat there
+         * saying so. At `auto` the same element loads to `HAVE_ENOUGH_DATA` on the first attempt.
+         *
+         * Here rather than inside `reattachVideoSource`, because this is a fact about these
+         * recordings, not about re-attaching a video source — and here rather than anywhere later,
+         * because the raise has to reach the element before the new fetch gets far. Chrome allows
+         * more room than that implies (raising it after both `load()` calls still recovers, and so
+         * does a task's delay), but only so much: at 500ms the same recording comes straight back
+         * with `error.code === 2`, exactly as if nothing had been raised. This is the position
+         * that does not depend on knowing where the edge is.
+         */
+        current.preload = 'auto';
         reattachVideoSource(current, src);
         onRecovered?.();
       }, MEDIA_RECOVERY_BACKOFF_MS * attempt);
@@ -720,12 +938,40 @@ function DebaterVideo({
   };
 
   const openProfile = useOpenDebaterProfile(participant);
+  const onIdentityClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    // The position sits inside the name row for layout, but it remains part of the video's
+    // play/pause surface rather than becoming a second link to the participant's profile.
+    if (event.target instanceof Element && event.target.closest('[data-debate-position-chip]')) {
+      event.stopPropagation();
+      onToggle();
+      return;
+    }
+    openProfile(event);
+  };
+
+  /**
+   * Whether the keyboard is on this tile's name, which overrides the round card's crossfade.
+   *
+   * The same answer the scrubber gives a few hundred lines up, and for the same reason: fading a
+   * control out does not take it out of the tab order, so a viewer tabbing during the card would
+   * otherwise land on an invisible button and open a profile they could not see themselves
+   * choosing. Making it `inert` or `disabled` for the card's 1.8s closes that, but at a worse
+   * price — it blurs anyone already standing there, dumping them on `document.body` and losing
+   * their place in the middle of a video. Bringing it back into view instead keeps the control
+   * visible exactly for the person who needs to see it.
+   */
+  const [nameFocused, setNameFocused] = React.useState(false);
 
   return (
     <div
       onPointerEnter={event => onClaimsHoverChange?.(event, true)}
       onPointerMove={event => onClaimsHoverChange?.(event, true)}
       onPointerLeave={event => onClaimsHoverChange?.(event, false)}
+      // Which half of the debate this is, readable from outside React like the player's own state
+      // above it. The turn overlays move between the tiles as the turn does, and "on the right
+      // tile" is otherwise only checkable by counting DOM order.
+      data-debate-slot={participant?.participant_slot}
+      inert={inert}
       className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
@@ -735,6 +981,10 @@ function DebaterVideo({
             ref={videoRef}
             className="h-full w-full object-cover"
             playsInline
+            // Enough to paint a frame and know the shape of the recording, without pulling a
+            // multi-megabyte file down for a card nobody has reached yet — the feed keeps several
+            // of these mounted at once. Some recordings cannot be read this way at all; those are
+            // the ones `rebuild` raises, for that element alone and only for as long as it lives.
             preload="metadata"
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
@@ -796,6 +1046,7 @@ function DebaterVideo({
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
       {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -882,24 +1133,57 @@ function DebaterVideo({
         </div>
       )}
 
-      {/* Debater identity, opens their personal space in the side panel. On the left, opposite the
-          claim corner.
+      {/* Debater identity — who is speaking and which side they are arguing — opening their
+          personal space in the side panel. On the left, opposite the claim corner.
+
+          The position chip shares the name's row, before the byline gets its own row. Keeping
+          those as separate flex rows means a long byline can use the available identity width
+          without pushing the chip away from the name. The chip cannot shrink, so at narrow widths
+          the name truncates first and the short stance remains readable.
+
+          The row is `pointer-events-none` with the button opting back in, because it now spans the
+          band rather than hugging the name: everything it covers and does not use belongs to the
+          pause/play surface underneath.
 
           A generous 55%, and it no longer rations the claim corner's width: the corner shares this
-          row and draws over it rather than sitting beside it. It also stays put — it used to fade
-          out under a card, which cost the viewer the link to the debater's profile exactly when
-          they were reading something that debater had said.
+          row and draws over it rather than sitting beside it. It also stays put under a claim
+          card — it used to fade out under those, which cost the viewer the link to the debater's
+          profile exactly when they were reading something that debater had said.
 
-          Absolute rather than the flex row #2466 put here. That row exists so the name cannot run
-          under the "Winner?" pill at a 312px gallery width; the pill and the position chip are off
-          the tile in this redesign — winner voting lives in the scorecard and the claims panel — so
-          the name has the band to itself and there is nothing left to overlap. The 55% is still
-          what keeps it clear of the claim card above. */}
-      <button
-        type="button"
-        onClick={openProfile}
+          The round card is the one thing it does yield to, and the difference is attribution. A
+          claim card is a quotation and the name under it is who said it, so the two belong on
+          screen together. A round card attributes nothing, sits across this exact band, and is
+          gone in under two seconds — and a lower third under a title card is something no
+          broadcast does, because neither gets read.
+
+          It crossfades against the card's own opacity rather than running a timer, so the name
+          leaves as the card arrives and is back as it goes: one movement, and nothing to fall out
+          of step with a scrub.
+
+          `opacity` is in the transition because the value it crossfades against arrives about four
+          times a second — `playheadSeconds` is maintained by `timeupdate`, which
+          `use-debate-playback.ts` documents at that rate — and the card's fades are 250ms and
+          300ms. Left to the playhead alone the name would step once and be gone rather than
+          leaving, and where it landed in that step would vary from round to round. Letting CSS
+          interpolate between the samples is the whole fix here, and it works *here* because this
+          row is always mounted and so always has a value to interpolate from; the card and the
+          badge are drawn only inside their windows, so they have no from-state on the way in and
+          nothing to animate into on the way out. Those two would need a clock, and do not have one.
+
+          Its link goes with it for the pointer — an invisible profile button in the middle of the
+          pause surface is a misclick waiting to happen — but not for the keyboard, which keeps the
+          row in the tab order and brings it back into view on focus. `pointer-events-none` does
+          not touch focusability, which is what makes those two separable. */}
+      <div
+        data-debater-row
+        onFocus={() => setNameFocused(true)}
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNameFocused(false);
+        }}
+        style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
-          'absolute bottom-3 left-4 z-10 flex max-w-[55%] items-center gap-2 text-left transition-[padding-bottom] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
+          cardYield > 0.5 && '[&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -908,11 +1192,34 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
-        <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-          <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-        </span>
-        <span className="truncate text-[1rem] tracking-[-0.35px] text-white">{name}</span>
-      </button>
+        <button
+          type="button"
+          onClick={onIdentityClick}
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
+        >
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
+          </span>
+          <span className="flex min-w-0 flex-col">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+              {/* Named from the side rather than read off `position_label`, for the same reason
+                  the room tile is: geo-chat still calls a factual claim's sides "Verify" and
+                  "Dispute", which is a word this app no longer has a way to publish. `position`
+                  is a non-null boolean, so the label is always a real one and the participant is
+                  the only thing left to guard. */}
+              {participant && (
+                <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
+              )}
+            </span>
+            {byline && (
+              <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
+                {byline}
+              </span>
+            )}
+          </span>
+        </button>
+      </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
@@ -962,10 +1269,7 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx(
-        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
-        className
-      )}
+      className={cx(CONTROL_CIRCLE_CLASS, className)}
     >
       {children}
     </button>

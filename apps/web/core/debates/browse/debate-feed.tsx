@@ -49,10 +49,19 @@ const DEBATE_COLUMN_STYLE = {
 export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
+  initialSeekSeconds = null,
   fallback,
 }: {
   spaceId: string;
   initialDebateId?: string;
+  /**
+   * Where to start the anchored debate, in seconds — from a link that named a moment.
+   *
+   * Only ever applied to {@link initialDebateId}: a position means nothing on the debates that
+   * happen to be scrolled to next, and carrying it down the feed would seek every card a reader
+   * passes. See `debate-timecode.ts` for the param this comes from.
+   */
+  initialSeekSeconds?: number | null;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
 }) {
@@ -178,6 +187,11 @@ export function DebatesBrowseFeed({
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
+  // other way in clears it. Held with the debate it was chosen on, because the open panel follows
+  // the active debate as the feed scrolls — and a debater who argues in the next one too would
+  // otherwise have the list jump to them unasked.
+  const [claimsFocus, setClaimsFocus] = React.useState<{ debateId: string; participantSpaceId: string } | null>(null);
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
@@ -319,6 +333,9 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          initialSeekSeconds={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
+          }
           // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
@@ -356,14 +373,16 @@ export function DebatesBrowseFeed({
             setOpenPanel(null);
             debatesHub.open('lobby');
           }}
-          onOpenClaims={() => {
+          onOpenClaims={(participantSpaceId?: string) => {
             setActiveId(debate.id);
+            setClaimsFocus(participantSpaceId ? { debateId: debate.id, participantSpaceId } : null);
             setOpenPanel('claims');
           }}
           onOpenComments={() => {
             setActiveId(debate.id);
             setOpenPanel('comments');
           }}
+          onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (
@@ -377,11 +396,25 @@ export function DebatesBrowseFeed({
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
+      <DebateClaimsPanel
+        // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
+        // its scroll position and the debater it was opened at belong to the debate they were set
+        // on, and a reused panel carried the old offset onto the next one.
+        key={activeDebate.id}
+        debate={activeDebate}
+        onClose={closePanel}
+        focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}
+      />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
-      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+      <EntityCommentsPanel
+        key={activeDebate.id}
+        entityId={activeDebate.id}
+        spaceId={spaceId}
+        targetEntityType="debate"
+        onClose={closePanel}
+      />
     ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
@@ -401,6 +434,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  initialSeekSeconds,
   preload,
   root,
   scrollHint,
@@ -408,6 +442,7 @@ function DebateFeedItem({
   onOpenJoin,
   onOpenClaims,
   onOpenComments,
+  onPlaybackRequest,
 }: {
   debate: Debate;
   spaceId: string;
@@ -415,13 +450,17 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  initialSeekSeconds: number | null;
   preload: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
-  onOpenClaims: () => void;
+  /** With a debater's space id, the panel opens at that debater's claims. */
+  onOpenClaims: (participantSpaceId?: string) => void;
   onOpenComments: () => void;
+  /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
+  onPlaybackRequest: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const share = useDebateShareAction();
@@ -455,7 +494,7 @@ function DebateFeedItem({
     commentCount,
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
-    onClaims: onOpenClaims,
+    onClaims: () => onOpenClaims(),
     onShare: share.onOpen,
     shareOpen: share.open,
   };
@@ -492,7 +531,14 @@ function DebateFeedItem({
             />
           </div>
           <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
+            <DebateFeedPlayer
+              debate={debate}
+              active={active}
+              preload={preload}
+              initialSeekSeconds={initialSeekSeconds}
+              onOpenClaims={onOpenClaims}
+              onPlaybackRequest={onPlaybackRequest}
+            />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
@@ -591,6 +637,8 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          data-geo-analytics-label="Debate feed join debate"
+          data-geo-analytics-intent="open_debates_hub"
           // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
           // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
           // that followed reopened it, which read as a flicker.

@@ -1,3 +1,4 @@
+import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
@@ -53,6 +54,21 @@ export type ExploreFeedItem = {
   /** The claim this Debate argued. `null` on every non-debate, and on a debate missing the relation. */
   debateClaim: ExploreDebateClaim | null;
   commentCount: number;
+  /**
+   * Debates, extracted claims and every comment under them — what the claim page's Activity heading
+   * counts. Optional because only a claim card reads it, and only the explore selections fetch it;
+   * a row built by hand or by another feed simply has none.
+   */
+  activityCount?: number;
+  /**
+   * How many of {@link activityCount} are this claim's own comments.
+   *
+   * The card's live count needs it to stay exact: the comment list it can watch measures precisely
+   * this part of the total, so swapping the fetched-at number for the live one keeps the rest of the
+   * aggregate intact. Without it the pill had to guess from pending rows and fell back to the stale
+   * total the moment a post was indexed.
+   */
+  activityCommentCount?: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
 };
@@ -87,8 +103,13 @@ export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; im
   } satisfies ExploreFeedItem;
 }
 
-/** A decoded entity plus the two fields the card needs that aren't part of `Entity`. */
-export type ExploreCardEntity = Entity & { commentCount: number; createdAt?: string };
+/** A decoded entity plus the fields the card needs that aren't part of `Entity`. */
+export type ExploreCardEntity = Entity & {
+  commentCount: number;
+  activityCount: number;
+  activityCommentCount: number;
+  createdAt?: string;
+};
 
 /** The comment relation type — `backlinks` through it is how a card gets its comment count. */
 export const COMMENT_RELATION_TYPE_ID = '310d4a240e5b451cb2151bfce40d0fe6';
@@ -105,7 +126,17 @@ export function decodeExploreCardEntity(node: unknown): ExploreCardEntity | null
   const raw = node as Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string };
   const decoded = EntityDecoder.decode(raw);
   if (!decoded) return null;
-  return { ...decoded, commentCount: raw.backlinks?.totalCount ?? 0, createdAt: raw.createdAt };
+  const activity = countActivityForNode(raw);
+
+  return {
+    ...decoded,
+    commentCount: raw.backlinks?.totalCount ?? 0,
+    // Everything in this claim's activity tree, counted the same way the claim page counts it.
+    // Zero for anything that is not a claim, which is what those aggregates come back as.
+    activityCount: activity.total,
+    activityCommentCount: activity.comments,
+    createdAt: raw.createdAt,
+  };
 }
 
 const DEBATE_CLAIMS_RELATION = normId(DEBATE_CLAIMS_PROPERTY_ID);
@@ -278,6 +309,8 @@ export function buildExploreFeedRows(
       debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
       debateClaim: debateClaimFromEntity(types, relationsInDisplaySpace),
       commentCount: e.commentCount,
+      activityCount: e.activityCount,
+      activityCommentCount: e.activityCommentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });
   }

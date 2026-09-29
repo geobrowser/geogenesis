@@ -54,6 +54,9 @@ export type DebatePublishTurn = {
   text: string;
 };
 
+/** A topic entity to relate to via Topics. The name is for display only; publishing writes the id. */
+export type DebatePublishTopic = { id: string; name: string | null };
+
 export type DebateClaimInput = {
   /** The claim text (becomes the Claim entity name). */
   text: string;
@@ -79,7 +82,7 @@ export type DebateClaimInput = {
    * the reuse policy has already subtracted the topics the entity carries on the graph, so the
    * draft never writes a duplicate Topics relation.
    */
-  topics?: { id: string; name: string | null }[];
+  topics?: DebatePublishTopic[];
   /**
    * True when the claim is broad enough to be argued for and against. Tagged `Debate`
    * so it joins the claim picker's candidate motions; a narrowly verifiable claim
@@ -97,6 +100,12 @@ export type DebatePublishInput = {
   /** The already-published Claim entity the debate argued. */
   claimEntityId: string;
   claimText: string;
+  /**
+   * The debated claim's Topics in this space, mirrored onto the Debate entity so the debate is
+   * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
+   * Debate with no Topics relations.
+   */
+  claimTopics?: DebatePublishTopic[];
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -153,7 +162,19 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const debateEntityId = ID.uuidToHex(input.debateId);
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
   const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
-  const debateName = `${bySlot.map(nameFor).join(' vs. ')} on ${claimText}`;
+  // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
+  // truncating surfaces — feed cards, side-panel headers, edit titles — where the first
+  // words are the ones that survive, and what a debate is about identifies it far better
+  // than who argued it. `join` rather than a two-name template: the shape is a pair today,
+  // but nothing in the publisher caps participants at two.
+  const debateName = `${claimText} | ${bySlot.map(nameFor).join(' vs. ')}`;
+  /**
+   * The Video, its keyframe, the share card and the Transcript are named after the debate they
+   * belong to, qualified by what they are. One closure so the separator is declared once: it is
+   * the same `|` the debate name is built from, and four inline templates would have to agree
+   * about that by hand.
+   */
+  const derivedName = (qualifier: string) => `${debateName} | ${qualifier}`;
 
   const values: Value[] = [];
   const relations: Relation[] = [];
@@ -202,6 +223,18 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     );
   };
 
+  // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
+  // behind several extracted claims carrying the same topic. Keyed on normalized ids so the dedupe
+  // agrees with the reuse policy, which compares topics as hex: the same entity written once dashed
+  // and once dashless is one edge.
+  const topicEdges = new Set<string>();
+  const relateTopic = (fromEntity: { id: string; name: string | null }, topic: DebatePublishTopic) => {
+    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(topic.id)}`;
+    if (topicEdges.has(edge)) return;
+    topicEdges.add(edge);
+    relate({ fromEntity, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
+  };
+
   // --- Debate entity ---
   setText(debateEntityId, debateName, NAME_PROPERTY_ID, debateName);
   const debateRef = { id: debateEntityId, name: debateName };
@@ -212,6 +245,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     toEntityId: input.claimEntityId,
     toEntityName: claimText,
   });
+  // The Debate is filed under the same topics as the claim it argued.
+  for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
 
   for (const p of bySlot) {
     relate({
@@ -238,7 +273,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
     const ogImageId = createEntityId();
-    const ogImageName = `${debateName} share card`;
+    const ogImageName = derivedName('share card');
     const ogImageRef = { id: ogImageId, name: ogImageName };
     setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
     setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
@@ -259,7 +294,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
     const videoId = createEntityId();
-    const videoName = `${debateName} video`;
+    const videoName = derivedName('video');
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
     // Both carry the same URL: `Video URL` is what the debates ontology spec names, `Web URL` is
@@ -281,7 +316,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
     if (input.keyframeUrl) {
       const keyframeId = createEntityId();
-      const keyframeName = `${debateName} keyframe`;
+      const keyframeName = derivedName('keyframe');
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
       setText(keyframeId, keyframeName, WEB_URL_PROPERTY_ID, input.keyframeUrl);
@@ -304,7 +339,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const turns = input.transcriptTurns.filter(turn => turn.text.trim().length > 0);
   if (turns.length > 0) {
     const transcriptId = createEntityId();
-    const transcriptName = `${debateName} transcript`;
+    const transcriptName = derivedName('transcript');
     const transcriptRef = { id: transcriptId, name: transcriptName };
     setText(transcriptId, transcriptName, NAME_PROPERTY_ID, transcriptName);
     relate({
@@ -333,7 +368,6 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const claimTopicEdges = new Set<string>();
     const debateTaggedClaims = new Set<string>();
 
     turns.forEach(turn => {
@@ -418,19 +452,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             toEntityName: 'Debate',
           });
         }
-        for (const topic of claim.topics ?? []) {
-          // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
-          // topics as hex: the same entity written once dashed and once dashless is one edge.
-          const edge = `${normalizeId(claimId)}:${normalizeId(topic.id)}`;
-          if (claimTopicEdges.has(edge)) continue;
-          claimTopicEdges.add(edge);
-          relate({
-            fromEntity: claimRef,
-            propertyId: TOPICS_PROPERTY_ID,
-            toEntityId: topic.id,
-            toEntityName: topic.name,
-          });
-        }
+        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic);
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);

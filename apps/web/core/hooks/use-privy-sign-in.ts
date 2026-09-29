@@ -1,10 +1,9 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
-
 import * as React from 'react';
 
-import { type AnalyticsProperties, trackPrivyAuth } from '~/core/analytics';
+import { type AnalyticsProperties } from '~/core/analytics';
+import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
 
@@ -21,13 +20,15 @@ type UsePrivySignInOptions = {
    * URL.
    */
   analytics?: AnalyticsProperties;
+  /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
+  onError?: () => void;
 };
 
 /**
  * Opens Privy's own "Log in or sign up" dialog straight away, the way the upvote control does.
  *
- * The alternative, `SignInPrompt`, shows a "create your personal space" card first — which costs
- * the viewer a second click and paints a tinted overlay over the page on the way. For a control
+ * Signed-out gates use this rather than an interstitial "create your personal space" card, which
+ * cost the viewer a second click and a tinted overlay on the way to this same dialog. For a control
  * whose only barrier is "you are signed out", going directly to the login is the shorter path.
  *
  * Clears any half-finished onboarding first, and records where to return to so the viewer lands
@@ -46,27 +47,17 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   optionsRef.current = options;
 
   // Privy fires `onComplete` on session restoration too, not just on a login someone asked for —
-  // opening a second tab is enough (see the note in `core/wallet/wallet.tsx`). So the consumer's
+  // opening a second tab is enough. So the consumer's
   // callback is armed here and only fires for a sign-in this hook actually started. Without it,
   // loading the feed in a new tab would open the hub with nobody having pressed anything.
   const requestedRef = React.useRef(false);
 
-  // The attribution belongs to the attempt, not to whatever the page looks like when Privy
-  // finishes. A deep link clears its own params the moment it opens the dialog, so by the time
-  // someone has typed an emailed code the current render no longer knows where they came from.
-  // Taken at the press, spent on completion.
-  const requestedAnalyticsRef = React.useRef<AnalyticsProperties | undefined>(undefined);
-
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      // Only a sign-in this hook started is a login. An unrequested completion is a session
-      // restore, which `AnalyticsUserIdentifier` already reports as one — tracking it here as
-      // `manual_login` made every page load carrying this hook look like somebody signing in.
+  const { login } = useTrackedLogin({
+    onComplete: () => {
+      // Keep UI actions scoped to the initiating control. Analytics completion is owned by
+      // PrivyAuthTracker, which stays mounted even if this control disappears during login.
       if (!requestedRef.current) return;
       requestedRef.current = false;
-
-      trackPrivyAuth(args, { auth_flow: 'manual_login', ...requestedAnalyticsRef.current });
-      requestedAnalyticsRef.current = undefined;
 
       onCompleteRef.current?.();
     },
@@ -75,17 +66,15 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     // or a login started somewhere else on the page — which is the same unbidden replay the
     // arming exists to prevent, just later.
     onError: () => {
+      if (!requestedRef.current) return;
       requestedRef.current = false;
-      requestedAnalyticsRef.current = undefined;
+      optionsRef.current?.onError?.();
     },
   });
 
   return React.useCallback(() => {
     prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
     requestedRef.current = true;
-    // Copied rather than referenced, so a caller rebuilding the object cannot rewrite an
-    // attempt that is already in flight.
-    requestedAnalyticsRef.current = optionsRef.current?.analytics ? { ...optionsRef.current.analytics } : undefined;
-    login();
+    login(optionsRef.current?.analytics);
   }, [login, prepareOnboarding]);
 }

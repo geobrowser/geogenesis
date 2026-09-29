@@ -10,14 +10,17 @@ import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-s
 import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import {
+  trustedIndexedPosition,
+  useBackfillReadinessForHeldPosition,
+} from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
@@ -91,7 +94,7 @@ export function ClaimExploreFeedCard({
    * only this card knows. Absent everywhere else, which is every surface where
    * the only answer worth reporting is the reader's own.
    */
-  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -152,13 +155,28 @@ export function ClaimExploreFeedCard({
   // The feed is where the gap showed itself: a viewer scrolling past claims they hold positions on
   // saw their own face on the repaired ones and not the rest (GEO-2821). The card cannot be the one
   // surface that draws a held position without standing the viewer up on it.
-  useBackfillReadinessForHeldPosition({ readiness: row, entityId: item.entityId, spaceId: item.spaceId });
+  useBackfillReadinessForHeldPosition({
+    readiness: row,
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
+  });
 
   // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
   // action at all. Checking only the server seed would keep the button hidden after this card's
   // optional composer publishes the first comment; rendering a button that returns null would leave
   // PositionRow in its three-column layout with an empty final column.
-  const liveCommentCount = useCommentCount(item.entityId, item.commentCount);
+  // What the claim page's Activity heading says: its debates, the claims extracted from them, and
+  // every comment in that tree — not only the comments filed directly on the claim. The two read
+  // from one query so a reader who opens the card is not told a different number. Falls back to the
+  // comment count for a row built somewhere that does not fetch it.
+  const activityCount = item.activityCount ?? item.commentCount;
+  // The activity total counts debates and extracted claims as well as comments, so the live comment
+  // list replaces only its own share of it — see `useCommentCount`. A card falling back to the plain
+  // comment count passes nothing and keeps the old behaviour, because there the list really is the
+  // same measurement.
+  const commentsInCount = item.activityCount != null ? item.activityCommentCount : undefined;
+  const liveCommentCount = useCommentCount(item.entityId, activityCount, { commentsInSeed: commentsInCount });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -183,13 +201,12 @@ export function ClaimExploreFeedCard({
    * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
    * nothing else moves.
    *
-   * Held back until the response kind is known, or a factual claim reads
-   * "agrees" for a beat and then corrects itself to "verifies".
+   * No longer held back on the claim's metadata. It was, because a factual claim would have read
+   * "agrees" for a beat and then corrected itself to "verifies" — and there is one wording now, so
+   * there is nothing to correct. Waiting only delayed an answer already in hand, and hid it for
+   * good on a card where both metadata reads fail.
    */
-  const noteFor = React.useCallback(
-    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
-    [isResponseKindResolved, responseKind, responseNote]
-  );
+  const noteFor = React.useCallback((position: boolean) => responseNote?.(position), [responseNote]);
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
@@ -311,15 +328,18 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
+            pending={control.isResponsePending}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (
                 <EntityCommentsButton
+                  commentsInCount={commentsInCount}
                   entityId={item.entityId}
                   spaceId={item.spaceId}
-                  count={item.commentCount}
+                  targetEntityType="claim"
+                  count={activityCount}
                   className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
                 />
               ) : undefined
@@ -386,11 +406,11 @@ export function ClaimVerdictColumn({
 }: {
   entityId: string;
   spaceId: string;
-  responseKind: 'stance' | 'veracity';
+  responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   matchDebatePanelOnMobile: boolean;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
 
   const percent = summary.percent ?? 0;
 
@@ -415,7 +435,7 @@ export function ClaimVerdictColumn({
             {copy.positiveAction.toLowerCase()}
           </Text>
         </div>
-        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+        <ClaimSplitBar percent={percent} className="mt-3 h-1.5" />
         {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
         {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's

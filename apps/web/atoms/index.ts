@@ -10,11 +10,24 @@ export type EntitySidePanelTarget = {
   spaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
+  forceRequestedSpace?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
+
+/**
+ * Where the sticky entity header draws itself: a zero-height element docked under the navbar by the
+ * app shell.
+ *
+ * The bar has to span the content column and sit under the navbar, and the entity route that knows
+ * *which* entity is on screen renders deep inside a width-capped, transform-animated `<main>` —
+ * neither a full-bleed `sticky` nor a `fixed` element behaves there. Registering a host once in the
+ * shell and portalling into it keeps the positioning in the one place that can express it.
+ */
+export const entityStickyHeaderHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
  * The comments panel's own element, for the same reason the side panel registers one: a slide-up
@@ -82,7 +95,12 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
+export const entityCommentsPanelAtom = atom<{
+  entityId: string;
+  spaceId: string;
+  /** Logical graph type retained so comments created from the global panel are attributed correctly. */
+  targetEntityType?: string;
+} | null>(null);
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
@@ -169,6 +187,12 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
+ * The People tab's "Online only" switch (GEO-2937). Off adds offline people who share a free slot
+ * with the viewer. Outside the tab for the same reason as the spaces filter above.
+ */
+export const debatesHubPeopleOnlineOnlyAtom = atom(true);
+
+/**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -231,6 +255,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPeopleOnlineOnlyAtom, true);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLeftLobbyForExploreAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

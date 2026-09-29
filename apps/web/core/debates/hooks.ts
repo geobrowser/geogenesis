@@ -16,6 +16,7 @@ import * as React from 'react';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 
 import {
   type Debate,
@@ -55,6 +56,7 @@ import {
   getLiveKitToken,
   getRecordingUrl,
   getRematchLiveKitToken,
+  getScheduleOverlaps,
   handleDebateSharePrompt,
   isAccountWarmingUp,
   leaveDebateRematch,
@@ -123,6 +125,18 @@ export const debateQueryKeys = {
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
+  /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
+  schedulablePeopleRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'schedulable-people'] as const,
+  schedulablePeople: (accountKey: string | null, days: number, limit: number) =>
+    ['debates', 'account', accountKey, 'schedulable-people', days, limit] as const,
+  /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
+  peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
+    ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
+  /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
+  room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
+  scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
@@ -616,8 +630,50 @@ export function useSaveDebateSchedule() {
       replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
     // The server answers with the stored form, so take it rather than re-deriving: anything it
     // normalised on the way in is then what the calendar draws.
-    onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
+    onSuccess: saved => {
+      queryClient.setQueryData(scheduleKey, saved);
+      // Who shares a slot with the viewer is computed from this schedule.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+    },
   });
+}
+
+/**
+ * Another person's availability, ready to draw (GEO-2938).
+ *
+ * The only data access behind that view. One request: the response carries their week, the
+ * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
+ */
+export function usePeerSchedule(peerUserId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
+  // dialog that stays mounted passes an empty id, not null.
+  const enabled = authenticated && Boolean(peerUserId);
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryFn: ({ signal }) =>
+      getScheduleOverlaps(
+        peerUserId as string,
+        { days: PEER_SCHEDULE_DAYS },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled,
+  });
+
+  return {
+    ...query,
+    schedule: query.data ? toPeerSchedule(query.data) : undefined,
+    /**
+     * Whether this is a question that can be asked at all. A disabled query sits at `pending`
+     * forever, which a caller would otherwise draw as a spinner that never resolves.
+     */
+    enabled,
+    isPending: enabled && query.isPending,
+  };
 }
 
 export function useUpdateDebateAvailability() {
@@ -1136,10 +1192,23 @@ export function useRejectDebateRematchRequest() {
   });
 }
 
-export function useDebateProfile(profileSpaceId: string, enabled = true) {
+export function useDebateProfile(
+  profileSpaceId: string,
+  enabled = true,
+  {
+    signedOut = false,
+  }: {
+    /**
+     * Ask signed out too. geo-chat answers anonymously (`auth: 'optional'`), with the viewer fields
+     * false, which is enough to learn whether this person can be booked at all. Off by default: the
+     * profile's Debate button has nothing to show a signed-out viewer.
+     */
+    signedOut?: boolean;
+  } = {}
+) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const foreground = useDebateAttention();
-  const queryEnabled = enabled && authenticated && Boolean(profileSpaceId);
+  const queryEnabled = enabled && (authenticated || signedOut) && Boolean(profileSpaceId);
   const wasForeground = React.useRef(foreground);
 
   const query = useQuery({

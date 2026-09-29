@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity } from '../hooks';
@@ -14,8 +16,9 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -36,6 +39,34 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
+  // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
+  // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
+  return usePeerAvailabilityEnabled() ? (
+    <ScheduledRequestsTab />
+  ) : (
+    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} />
+  );
+}
+
+const NO_SCHEDULED: ScheduledContent = {
+  answerable: [],
+  upcoming: [],
+  people: [],
+  requestsError: null,
+  roomsError: null,
+};
+
+function ScheduledRequestsTab() {
+  return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
+}
+
+function RequestsTabBody({
+  scheduled,
+  schedulingEnabled,
+}: {
+  scheduled: ScheduledContent;
+  schedulingEnabled: boolean;
+}) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -43,7 +74,9 @@ export function RequestsTab() {
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  // Through the same expiry filter as the received side, so a lapsed request leaves at its expiry
+  // rather than sitting on an "Expired" card until the server says so.
+  const outbound = useLiveRequest(requestsQuery.data?.outbound ?? activity?.outbound_request);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),
@@ -72,11 +105,7 @@ export function RequestsTab() {
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
   // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
+  const challenge = useLiveRequest(activity?.challenge);
   const currentUserId = useCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
@@ -91,12 +120,18 @@ export function RequestsTab() {
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge;
+  const hasScheduled =
+    scheduled.answerable.length > 0 ||
+    scheduled.upcoming.length > 0 ||
+    scheduled.requestsError !== null ||
+    scheduled.roomsError !== null;
+  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
 
   return (
     <div className="flex flex-col">
       <HubStickyControls>
         <SpaceTopicFilters
+          analyticsSurface="hub"
           spaceIds={spaceIds}
           onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
           onSpacesClear={() => setSpaceIds([])}
@@ -104,6 +139,7 @@ export function RequestsTab() {
           leading={
             <HubFilterMenu
               label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+              analytics={{ name: 'Status', surface: 'hub' }}
               options={STATUS_OPTIONS}
               value={status}
               onChange={setStatus}
@@ -113,7 +149,12 @@ export function RequestsTab() {
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
+            must not vanish because an unrelated read failed. */}
+        {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+
         <HubQueryState
+          analyticsSurface="hub"
           isLoading={requestsQuery.isLoading}
           error={requestsQuery.error}
           failureReason={requestsQuery.failureReason}

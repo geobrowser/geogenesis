@@ -455,3 +455,132 @@ describe('DebateClaimsPanel', () => {
     expect(screen.getAllByText('Could not load claims: network down').length).toBeGreaterThan(0);
   });
 });
+
+describe('opening at one debater', () => {
+  /*
+   * jsdom does no layout, so every `offsetTop` is 0. Each card reports the position a browser would
+   * give it — stacked 300px apart — which is what the panel measures to scroll.
+   */
+  const withLayout = (run: () => void) => {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.dataset.claimsParticipant === PRESTON_SPACE) return 100;
+        if (this.dataset.claimsParticipant === ARTURAS_SPACE) return 400;
+        // The scrolling list, which starts 60px down the panel under its header.
+        return 60;
+      },
+    });
+    try {
+      run();
+    } finally {
+      if (descriptor) Object.defineProperty(HTMLElement.prototype, 'offsetTop', descriptor);
+    }
+  };
+
+  const listOf = (container: HTMLElement) =>
+    container.querySelector('[data-claims-participant]')!.parentElement as HTMLElement;
+
+  it("scrolls the list to that debater's card", () => {
+    withLayout(() => {
+      const { container } = render(
+        <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+      );
+      expect(listOf(container).scrollTop).toBe(400 - 60);
+    });
+  });
+
+  it('waits for the claims to be in place, since the cards above grow when they land', () => {
+    withLayout(() => {
+      mocks.isLoading = true;
+      const { container, rerender } = render(
+        <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+      );
+      expect(listOf(container).scrollTop).toBe(0);
+
+      mocks.isLoading = false;
+      rerender(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />);
+      expect(listOf(container).scrollTop).toBe(400 - 60);
+    });
+  });
+
+  it('opens at the top when no debater is asked for, as the claims pill always has', () => {
+    withLayout(() => {
+      const { container } = render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+      expect(listOf(container).scrollTop).toBe(0);
+    });
+  });
+});
+
+describe('holding the focused debater while the rows fill in', () => {
+  // Where a browser would lay each card out; mutated to stand in for a card above growing.
+  const offsets = { preston: 100, arturas: 400, list: 60 };
+  let resize: (() => void) | null = null;
+  const realResizeObserver = globalThis.ResizeObserver;
+  const realOffsetTop = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetTop');
+
+  beforeEach(() => {
+    offsets.preston = 100;
+    offsets.arturas = 400;
+    resize = null;
+    // jsdom has neither layout nor ResizeObserver. This one fires when the test says so, and stops
+    // once disconnected — which is the whole of what the panel relies on.
+    globalThis.ResizeObserver = class {
+      private live = true;
+      constructor(callback: () => void) {
+        resize = () => {
+          if (this.live) callback();
+        };
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {
+        this.live = false;
+      }
+    } as unknown as typeof ResizeObserver;
+    Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
+      configurable: true,
+      get(this: HTMLElement) {
+        if (this.dataset.claimsParticipant === PRESTON_SPACE) return offsets.preston;
+        if (this.dataset.claimsParticipant === ARTURAS_SPACE) return offsets.arturas;
+        return offsets.list;
+      },
+    });
+  });
+
+  afterEach(() => {
+    globalThis.ResizeObserver = realResizeObserver;
+    if (realOffsetTop) Object.defineProperty(HTMLElement.prototype, 'offsetTop', realOffsetTop);
+  });
+
+  const listOf = (container: HTMLElement) =>
+    container.querySelector('[data-claims-participant]')!.parentElement as HTMLElement;
+
+  it('keeps the card on screen as the cards above it grow', () => {
+    // Each row's pills and summary land after the order settles, and every one grows its card; the
+    // focused card must not be pushed back off screen by them.
+    const { container } = render(
+      <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+    );
+    expect(listOf(container).scrollTop).toBe(400 - 60);
+
+    offsets.arturas = 520;
+    resize?.();
+    expect(listOf(container).scrollTop).toBe(520 - 60);
+  });
+
+  it('hands the list back once the reader scrolls it themselves', () => {
+    const { container } = render(
+      <DebateClaimsPanel debate={debate()} onClose={vi.fn()} focusParticipantSpaceId={ARTURAS_SPACE} />
+    );
+    const list = listOf(container);
+
+    fireEvent.wheel(list);
+    offsets.arturas = 520;
+    resize?.();
+
+    // Still where the reader left it, not yanked back to the card.
+    expect(list.scrollTop).toBe(400 - 60);
+  });
+});
