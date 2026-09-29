@@ -7,14 +7,14 @@ export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
 export const PAPER_TYPE_ID = '5e24fb52856c4189a9716af4387b1b89';
 
 /**
- * Entity types the Explore feed will serve (Geo ontology IDs, hyphenless for GraphQL variables).
- *
- * `sanitizeExploreTypeIds` sorts every selection into this order, so it is the single source of
- * order. News story is deliberately absent: Explore no longer shows news stories, and leaving it off
- * this list means a `typeIds` parameter naming it (an old client, a kept link) is sanitized away
- * rather than served.
+ * Every entity type the shared feed classifier knows (Geo ontology IDs, hyphenless for GraphQL
+ * variables). `explore-diversity` derives its classification priority from this list, and the Topic
+ * feed runs through that classifier too — so this list is not Explore's whitelist, and News story
+ * stays on it even though Explore no longer serves news stories. Removing it here would reclassify
+ * a Claim-and-News-story entity as a Claim in the Topic feed's mix.
  */
-export const EXPLORE_ENTITY_TYPES = [
+export const FEED_ENTITY_TYPES = [
+  { id: NEWS_STORY_TYPE_ID, label: 'News story' },
   { id: DEBATE_TYPE_ID, label: 'Debate' },
   { id: CLAIM_TYPE_ID, label: 'Claim' },
   { id: EPISODE_TYPE_ID, label: 'Episode' },
@@ -27,6 +27,17 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '150db6defe2344f0805afa57502e2c32', label: 'Ranking block' },
   { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
 ] as const;
+
+export const FEED_ENTITY_TYPE_IDS = FEED_ENTITY_TYPES.map(type => type.id);
+
+/**
+ * Entity types the Explore feed will serve: every feed type except News story.
+ *
+ * `sanitizeExploreTypeIds` sorts every selection into this order, so it is the single source of
+ * order. Leaving News story off means a `typeIds` parameter naming it (an old client, a kept link)
+ * is sanitized away rather than served.
+ */
+export const EXPLORE_ENTITY_TYPES = FEED_ENTITY_TYPES.filter(type => type.id !== NEWS_STORY_TYPE_ID);
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
 

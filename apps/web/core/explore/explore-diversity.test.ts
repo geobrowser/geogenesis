@@ -6,8 +6,8 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import {
   DEFAULT_EXPLORE_TYPE_IDS,
   EPISODE_TYPE_ID,
-  EXPLORE_ENTITY_TYPE_IDS,
   EXPLORE_PAGE_SIZE,
+  FEED_ENTITY_TYPE_IDS,
   NEWS_STORY_TYPE_ID,
   TWEET_TYPE_ID,
 } from './explore-constants';
@@ -66,14 +66,18 @@ describe('exploreItemTypeKey', () => {
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('c', EPISODE_TYPE_ID)));
   });
 
-  it('classifies independently of the order the menu lists types in', () => {
-    // The invariant that keeps the two apart. Claim leads the dropdown so the boxes a reader
-    // arrives with read first; it must still lose classification ties to a more specific type, or
-    // the diversity cap starts extending claim runs instead of breaking them — the exact failure
-    // this module exists to prevent.
-    expect(EXPLORE_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(
-      EXPLORE_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID)
-    );
+  // The Topic feed shares this classifier and still serves News stories, so dropping News from
+  // Explore's whitelist must not move a multi-typed News story into the Claim bucket.
+  it('keeps classifying a Claim that is also a News story as a News story', () => {
+    expect(key(item('a', CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID)));
+    expect(key(item('a', DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID))).toBe(key(item('b', NEWS_STORY_TYPE_ID)));
+  });
+
+  it('classifies independently of the order the type list declares', () => {
+    // The invariant that keeps the two apart. Claim sits ahead of Episode in the list; it must
+    // still lose classification ties to a more specific type, or the diversity cap starts extending
+    // claim runs instead of breaking them — the exact failure this module exists to prevent.
+    expect(FEED_ENTITY_TYPE_IDS.indexOf(CLAIM_TYPE_ID)).toBeLessThan(FEED_ENTITY_TYPE_IDS.indexOf(EPISODE_TYPE_ID));
     expect(key(item('a', CLAIM_TYPE_ID, EPISODE_TYPE_ID))).toBe(key(item('b', EPISODE_TYPE_ID)));
   });
 
