@@ -128,7 +128,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-c5e51629e24e.js';
+const analyticsScriptSrc = '/geo-analytics-523a7d1579de.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
@@ -182,7 +182,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-xeUWKeJOsTKKlLsxo/6RhJWf5Fl3+UqFswEYWa8BCqU=';
+  script.integrity = 'sha256-Ujp9FXneRF58yeRgw02FwgXZzoOB6JUsACoDVSjO+Vs=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
