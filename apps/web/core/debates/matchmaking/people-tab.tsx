@@ -96,8 +96,9 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  *
- * With "Online only" off, offline people who share a free slot with the viewer follow, each with
- * those times and a Schedule button in place of the request (GEO-2937).
+ * With "Online only" off, the default, offline people who share a free slot with the viewer are
+ * listed too, ranked by matches alongside everyone online, each with those times and a Schedule
+ * button in place of the request (GEO-2937).
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();

@@ -13,7 +13,7 @@ import type { DebateChallenge, DebatePerson, SchedulablePeopleResponse } from '.
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -1497,12 +1497,6 @@ describe('Online only', () => {
     };
   }
 
-  function renderWithOfflineShown() {
-    const store = createStore();
-    store.set(debatesHubPeopleOnlineOnlyAtom, false);
-    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
-  }
-
   it('is off by default, so offline people are listed alongside online ones', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -1598,7 +1592,7 @@ describe('Online only', () => {
       truncated: false,
       people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByText('Arturas')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
@@ -1614,7 +1608,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-away', 'Ona', [past, ...upcoming])],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(3);
     expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
@@ -1643,7 +1637,7 @@ describe('Online only', () => {
         slots: [{ ...picked, viewerIsFree: true }],
       },
     });
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0]);
 
@@ -1655,7 +1649,7 @@ describe('Online only', () => {
   it('asks the viewer to set availability rather than implying nobody matches', () => {
     mocks.people = [];
     mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
   });
@@ -1668,7 +1662,7 @@ describe('Online only', () => {
       truncated: false,
       people: [schedulable('user-away', 'Ona', [slotIn(-3), slotIn(-2)])],
     };
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.queryByText('Ona')).not.toBeInTheDocument();
   });
@@ -1681,7 +1675,7 @@ describe('Online only', () => {
       error: null,
       refetch: vi.fn(),
     }));
-    renderWithOfflineShown();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('Arturas')).toBeInTheDocument();
   });
@@ -1697,7 +1691,6 @@ describe('Online only', () => {
       refetch: vi.fn(),
     }));
     const store = createStore();
-    store.set(debatesHubPeopleOnlineOnlyAtom, false);
     store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 
