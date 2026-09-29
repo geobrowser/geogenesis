@@ -1,6 +1,5 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback, useRef } from 'react';
@@ -9,13 +8,13 @@ import { useRouter } from 'next/navigation';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
-import { trackPrivyAuth } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
@@ -30,10 +29,8 @@ export function useRankingComposeAccess(spaceId: string) {
   const tx = useSmartAccountTransaction();
   const postLoginRedirectRef = useRef<string | null>(null);
 
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      trackPrivyAuth(args, { auth_flow: 'manual_login' });
-
+  const { login } = useTrackedLogin({
+    onComplete: () => {
       const postLoginRedirect = postLoginRedirectRef.current;
       postLoginRedirectRef.current = null;
       if (postLoginRedirect) {
