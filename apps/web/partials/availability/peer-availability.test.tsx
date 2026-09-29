@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { PeerSchedule, PeerSlot } from '~/core/availability/peer-schedule';
 
-import { type PeerAvailabilityBooking, PeerAvailabilityView } from './peer-availability';
+import {
+  MUTUAL_SLOT,
+  PEER_ONLY_SLOT,
+  type PeerAvailabilityBooking,
+  PeerAvailabilityView,
+  SELECTED_SLOT,
+} from './peer-availability';
 
 // A fixed clock, so the seven columns and their labels are the same on every run. A Monday.
 const NOW = new Date('2026-09-21T15:00:00Z');
@@ -115,6 +121,66 @@ describe('PeerAvailabilityView', () => {
       const chips = within(day('2026-09-21')).getAllByRole('button');
       expect(chips).toHaveLength(2);
       expect(chips.every(chip => !chip.hasAttribute('data-viewer-free'))).toBe(true);
+    });
+  });
+
+  // Against the shared constants rather than literal colors, so a palette change keeps these green
+  // and a chip drifting from its legend swatch does not.
+  describe('slot looks', () => {
+    const wears = (element: Element, look: string) => look.split(' ').every(name => element.classList.contains(name));
+    const swatch = (label: string) =>
+      within(screen.getByRole('list', { name: 'Legend' }))
+        .getByText(label)
+        .closest('li')!
+        .querySelector('[aria-hidden]')!;
+
+    it('draws each chip in the look its legend swatch shows', () => {
+      setup({ slots: [slot(13, true), slot(14, false)] });
+      const monday = within(day('2026-09-21'));
+      const mutual = monday.getByRole('button', { name: /1pm/ });
+      const theirs = monday.getByRole('button', { name: /2pm/ });
+
+      expect(wears(mutual, MUTUAL_SLOT) && wears(swatch('You’re both free'), MUTUAL_SLOT)).toBe(true);
+      expect(wears(theirs, PEER_ONLY_SLOT) && wears(swatch('Ada is free'), PEER_ONLY_SLOT)).toBe(true);
+      expect(wears(mutual, PEER_ONLY_SLOT) || wears(theirs, MUTUAL_SLOT)).toBe(false);
+    });
+
+    // Stacked rather than swapped, the unselected fill and border would fight the selected ones.
+    it('replaces a picked chip’s look rather than layering over it', async () => {
+      const { user } = setup({ slots: [slot(13, true), slot(14, false)] });
+      const monday = within(day('2026-09-21'));
+
+      for (const [name, look] of [
+        [/1pm/, MUTUAL_SLOT],
+        [/2pm/, PEER_ONLY_SLOT],
+      ] as const) {
+        const chip = monday.getByRole('button', { name });
+        await user.click(chip);
+        expect(wears(chip, SELECTED_SLOT)).toBe(true);
+        expect(wears(chip, look)).toBe(false);
+      }
+    });
+
+    it('darkens only unpicked chips on hover, and never the static swatches', async () => {
+      const { user } = setup({ slots: [slot(13, true), slot(14, false)] });
+      const monday = within(day('2026-09-21'));
+      const picked = monday.getByRole('button', { name: /1pm/ });
+      await user.click(picked);
+
+      expect(picked.className).not.toMatch(/hover:/);
+      expect(monday.getByRole('button', { name: /2pm/ }).className).toContain('hover:border-text');
+      for (const label of ['You’re both free', 'Ada is free']) expect(swatch(label).className).not.toMatch(/hover:/);
+    });
+
+    // grey-04 on the black selected fill is unreadable, so their time lightens with the chip.
+    it('keeps their local time legible on a picked chip', async () => {
+      const { user } = setup({ viewerTimezone: 'America/New_York', peerTimezone: 'Asia/Tokyo', slots: [slot(13)] });
+      const chip = screen.getByRole('button', { name: /9am, 10pm for Ada/ });
+      const theirTime = within(chip).getByText('10pm', { exact: false });
+
+      expect(theirTime).toHaveClass('text-grey-04');
+      await user.click(chip);
+      expect(theirTime).not.toHaveClass('text-grey-04');
     });
   });
 

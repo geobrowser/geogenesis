@@ -31,9 +31,9 @@ const SLOTS_PER_DAY = 4;
  * Chip looks, shared with the legend so the key can never drift from what it describes. Green for
  * a time you both have free, since that is the one worth picking; dashed for theirs alone.
  */
-const MUTUAL_SLOT = 'border-solid border-green bg-successTertiary text-text';
-const PEER_ONLY_SLOT = 'border-dashed border-grey-03 bg-white text-text';
-const SELECTED_SLOT = 'border-solid border-text bg-text text-white';
+export const MUTUAL_SLOT = 'border-solid border-green bg-successTertiary text-text';
+export const PEER_ONLY_SLOT = 'border-dashed border-grey-03 bg-white text-text';
+export const SELECTED_SLOT = 'border-solid border-text bg-text text-white';
 
 /**
  * Supplied by a caller that can act on a picked time, which turns the footer on. Absent, the week
