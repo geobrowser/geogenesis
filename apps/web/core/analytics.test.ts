@@ -18,6 +18,27 @@ describe('analytics', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not fill a deferred Explore action with the entity on the completion page', async () => {
+    const send = vi.fn();
+    window.lytics = { capture: send };
+    const { snapshotActionContext } = await import('./action-context');
+    const { capture } = await import('./analytics');
+    window.history.replaceState({}, '', '/explore');
+    const original = snapshotActionContext('entity_vote_buttons', 'claim', 'claim');
+    window.history.replaceState({}, '', '/space/11111111111111111111111111111111/22222222222222222222222222222222');
+    capture('action_completed', original);
+    expect(send).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        page_path: '/explore',
+        page_type: 'explore',
+        page_entity_id: null,
+        page_entity_type: null,
+      })
+    );
+    window.history.replaceState({}, '', '/');
+  });
+
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
     const { initAnalytics } = await import('./analytics');
 

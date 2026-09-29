@@ -192,12 +192,15 @@ export function initAnalytics() {
 }
 
 export function capture(eventName: string, properties: AnalyticsProperties = {}) {
+  // An attributed action may complete on another route. Explicit nulls also
+  // prevent the runtime from filling absent page entities from that later route.
+  const route = properties.page_view_id ? { page_entity_id: null, page_entity_type: null } : pageContext();
   callOrQueue({
     method: 'capture',
     eventName,
     properties: {
       app: appName,
-      ...pageContext(),
+      ...route,
       is_automated:
         typeof navigator !== 'undefined' &&
         (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
