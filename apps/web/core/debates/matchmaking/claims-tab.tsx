@@ -139,6 +139,33 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
+/** Every value the `list` param may name, for validating one that arrived from outside. */
+export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
+
+export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'lobby';
+
+const appliedUrlSeeds = new Set<string>();
+
+/**
+ * The seed this variant should apply for this query, or null if there is nothing to do — because the
+ * link names a different list, or because this one has already been spent
+ */
+export function takeUrlSeed(variant: ClaimsTabVariant, query: string) {
+  const seed = fromClaimsFilterSearch(new URLSearchParams(query), CLAIMS_TAB_VARIANTS);
+
+  if ((seed.list ?? DEFAULT_WORKSPACE_LIST) !== variant) return null;
+
+  const marker = `${variant}|${query}`;
+  if (appliedUrlSeeds.has(marker)) return null;
+  appliedUrlSeeds.add(marker);
+
+  return seed;
+}
+
+export function resetUrlSeedsForTests() {
+  appliedUrlSeeds.clear();
+}
+
 /**
  * Which surface is drawing it, which is a different question from which list it draws (GEO-2726).
  *
@@ -258,12 +285,11 @@ export function ClaimsTab({
   const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(atoms.seedSpent);
 
   const searchParams = useSearchParams();
-  const urlSeedApplied = React.useRef(false);
   React.useEffect(() => {
-    if (!workspace || urlSeedApplied.current || !searchParams) return;
-    urlSeedApplied.current = true;
+    if (!workspace || !searchParams) return;
 
-    const seed = fromClaimsFilterSearch(new URLSearchParams(searchParams.toString()), []);
+    const seed = takeUrlSeed(variant, searchParams.toString());
+    if (!seed) return;
 
     if (seed.search) setSearch(seed.search);
     if (seed.topicIds.length > 0) setTopicIds([...seed.topicIds]);
@@ -271,7 +297,7 @@ export function ClaimsTab({
       setSpaceIds([...seed.spaceIds]);
       setSpaceSeedSpent(true);
     }
-  }, [workspace, searchParams, setSearch, setSpaceIds, setTopicIds, setSpaceSeedSpent]);
+  }, [workspace, variant, searchParams, setSearch, setSpaceIds, setTopicIds, setSpaceSeedSpent]);
 
   const {
     allowlist: spaceAllowlist,

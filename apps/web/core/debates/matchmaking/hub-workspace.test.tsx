@@ -13,10 +13,12 @@ import { DebatesHubWorkspace } from './hub-workspace';
  */
 vi.mock('./claims-tab', () => ({
   ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
-    // `ClaimsTab` seeds itself from the URL once, behind a ref that only a fresh instance resets.
+    const logged = React.useRef(false);
     React.useEffect(() => {
+      if (logged.current) return;
+      logged.current = true;
       mocks.mounts.push(variant ?? 'explore');
-    }, []);
+    }, [variant]);
     return <div data-testid={`claims-tab-${variant ?? 'explore'}`}>{scopePicker}</div>;
   },
 }));
