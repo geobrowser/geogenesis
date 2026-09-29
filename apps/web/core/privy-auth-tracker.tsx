@@ -4,7 +4,7 @@ import { useLogout, usePrivy, usePrivyLogin } from '@geogenesis/auth';
 
 import { useEffect, useRef } from 'react';
 
-import { beginAuthAttempt, currentAuthAttempt, openAuthAttempt } from './auth-attempt';
+import { openAuthAttempt } from './auth-attempt';
 import { cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 
 /** Owns login and restore events for the app lifetime, independent of login controls. */
@@ -21,8 +21,6 @@ export function PrivyAuthTracker() {
   const { ready, authenticated, isModalOpen } = usePrivy();
   useEffect(() => {
     if (!isModalOpen || authenticated) return;
-    const attempt = currentAuthAttempt();
-    if (!attempt || attempt.endedAt) beginAuthAttempt({ auth_trigger: 'redirect' });
     openAuthAttempt();
   }, [isModalOpen, authenticated]);
   const wasAuthenticated = useRef(false);

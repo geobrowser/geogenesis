@@ -17,6 +17,9 @@ export type AuthAttempt = {
   actionSucceeded?: boolean;
 };
 let memory: AuthAttempt | undefined;
+// sessionStorage can be copied into another tab. Only this document's own presses
+// can be closed/superseded here; persisted pointers are also used for OAuth recovery.
+let ownedAttemptId: string | undefined;
 const unpersisted = new Map<string, AuthAttempt>();
 const fields = new Set<string>([
   ...ACTION_CONTEXT_FIELDS,
@@ -109,8 +112,8 @@ function save(attempt: AuthAttempt, activate = true) {
 export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | undefined {
   if (memory && Date.now() - memory.startedAt < TTL) return read(memory.id);
   try {
-    const own = read(sessionStorage.getItem(POINTER));
-    if (own) return own;
+    const persisted = read(sessionStorage.getItem(POINTER));
+    if (persisted) return persisted;
     if (!recoverFromOtherTab) return;
     const active: AuthAttempt[] = [];
     for (const key of Object.keys(localStorage)) {
@@ -120,7 +123,8 @@ export function currentAuthAttempt(recoverFromOtherTab = false): AuthAttempt | u
       else if (!candidate.endedAt) active.push(candidate);
     }
     if (active.length === 1) {
-      save(active[0]);
+      // Reading a recovery candidate does not grant ownership or rewrite shared state.
+      memory = active[0];
       return active[0];
     }
   } catch {
@@ -148,19 +152,22 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
     startedAt: Date.now(),
     properties: authProperties(properties),
   };
+  ownedAttemptId = attempt.id;
   save(attempt);
   captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
   return attempt;
 }
-export function openAuthAttempt() {
-  const attempt = currentAuthAttempt();
-  if (!attempt || attempt.endedAt || attempt.openedAt !== undefined) return;
+export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger: 'redirect' }) {
+  let attempt = currentAuthAttempt();
+  if (!attempt || attempt.endedAt || attempt.id !== ownedAttemptId) attempt = beginAuthAttempt(properties);
+  if (attempt.openedAt !== undefined) return;
   attempt.openedAt = Date.now();
   save(attempt);
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
 export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
+  if ((outcome === 'closed' || outcome === 'superseded') && attempt.id !== ownedAttemptId) return;
   attempt.endedAt = Date.now();
   attempt.outcome = outcome;
   save(attempt);
@@ -191,6 +198,7 @@ export function recoverAuthAttempt(properties?: AnalyticsProperties) {
 
 export function resetAuthAttempt() {
   memory = undefined;
+  ownedAttemptId = undefined;
   unpersisted.clear();
   try {
     sessionStorage.removeItem(POINTER);
@@ -202,6 +210,7 @@ export function resetAuthAttempt() {
 /** Stable, non-PII marketing identifiers; never collect an arbitrary URL or CTA text. */
 export function marketingAuthProperties(search: string): AnalyticsProperties {
   const params = new URLSearchParams(search);
+  if (params.get('via') !== 'marketing') return {};
   return Object.fromEntries(
     ['marketing_page', 'marketing_cta', 'marketing_handoff_id'].flatMap(key => {
       const value = params.get(key);

@@ -89,12 +89,26 @@ describe('durable sign-in attempts', () => {
   });
   it('accepts marketing identifiers without importing URLs, tokens or CTA text', () => {
     expect(
-      marketingAuthProperties('?marketing_page=home&marketing_cta=hero_signup&marketing_handoff_id=abc-123')
+      marketingAuthProperties(
+        '?via=marketing&marketing_page=home&marketing_cta=hero_signup&marketing_handoff_id=abc-123'
+      )
     ).toEqual({ marketing_page: 'home', marketing_cta: 'hero_signup', marketing_handoff_id: 'abc-123' });
     expect(
-      marketingAuthProperties('?marketing_page=https://site.test?email=x&marketing_cta=person@example.com&token=secret')
+      marketingAuthProperties(
+        '?via=marketing&marketing_page=https://site.test?email=x&marketing_cta=person@example.com&token=secret'
+      )
     ).toEqual({});
   });
+  it.each([undefined, '', 'invite', 'email', 'Marketing'])(
+    'rejects marketing fields for a non-marketing source (%s)',
+    via => {
+      expect(
+        marketingAuthProperties(
+          `?${via === undefined ? '' : `via=${via}&`}marketing_page=home&marketing_cta=hero&marketing_handoff_id=abc`
+        )
+      ).toEqual({});
+    }
+  );
   it('keeps the latest attempt and terminal outcome when storage fills after a previous login', () => {
     const old = beginAuthAttempt(entry);
     const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

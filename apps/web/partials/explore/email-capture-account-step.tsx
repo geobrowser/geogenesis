@@ -113,7 +113,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     const attempt = currentAuthAttempt();
     if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
       beginAuthAttempt(ACCOUNT_ANALYTICS);
-    openAuthAttempt();
+    openAuthAttempt(ACCOUNT_ANALYTICS);
     void requestCode();
   }, [requestCode]);
 

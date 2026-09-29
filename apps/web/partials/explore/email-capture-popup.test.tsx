@@ -6,6 +6,7 @@ import * as React from 'react';
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
@@ -87,6 +88,7 @@ function scrollPastTrigger() {
 }
 
 beforeEach(() => {
+  resetAuthAttempt();
   window.localStorage.clear();
   // A pending account attempt is session-scoped; left behind it resumes into the next test.
   window.sessionStorage.clear();
@@ -871,6 +873,25 @@ describe('ExploreEmailCapturePopup', () => {
 
       expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('mobile:h-11');
       expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
+    });
+
+    it('starts its own attributed email attempt when the document inherited another attempt', async () => {
+      await subscribeSuccessfully();
+      const inherited = beginAuthAttempt({ component: 'explore_email_capture', auth_control: 'create_account' });
+      // A fresh document has copied storage but no ownership of the earlier attempt.
+      resetAuthAttempt();
+      sessionStorage.setItem('geo:auth-attempt:active', inherited.id);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(currentAuthAttempt()?.id).not.toBe(inherited.id);
+      expect(currentAuthAttempt()?.properties).toMatchObject({
+        component: 'explore_email_capture',
+        auth_control: 'create_account',
+        auth_trigger: 'control',
+      });
+      expect(readAuthAttempt(inherited.id)?.outcome).toBeUndefined();
+      expect(mocks.sendCode).toHaveBeenCalledOnce();
     });
 
     // The headless SDK calls the captured completion after its verification promise resolves,
