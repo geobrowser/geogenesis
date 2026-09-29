@@ -50,6 +50,8 @@ export async function GET(request: Request) {
       // GEO-2835. A restriction on the feed rather than on the selection, unlike the types filter:
       // ticking Claim asks for the claims Explore has, and an untagged one is not among them.
       requireDebateTagOnClaims: true,
+      // GEO-3070. Explore's Best opens on a playable debate.
+      leadWithPlayableDebate: true,
     });
     return NextResponse.json(result);
   } catch (e) {
