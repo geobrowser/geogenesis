@@ -156,3 +156,104 @@ it('links canonical ranking actions to the surface without changing legacy oppor
     expect.objectContaining({ presentation_instance_id: 'legacy-display' })
   );
 });
+
+describe('canonical outcome field boundary', () => {
+  const context = {
+    component: 'entity_vote_buttons' as const,
+    target_id: 'entity',
+    target_type: 'entity',
+    page_path: '/explore',
+    page_type: 'explore',
+    page_view_id: 'view',
+  };
+  const completed = () => capture.mock.calls.filter(([event]) => event === 'action_completed');
+  const privateFields = {
+    target_name: 'Private entity name',
+    comment_text: 'Private comment',
+    query: 'Private search',
+    debug_payload: { message: 'Private error' },
+  };
+
+  it.each(['vote_cast', 'ranking_submitted'] as const)(
+    'filters %s properties only for the canonical outcome',
+    event => {
+      const operation = observeOperation(
+        event === 'vote_cast' ? 'vote' : 'ranking',
+        'entity',
+        'entity',
+        undefined,
+        context
+      );
+      const fields = { ...privateFields, entity_id: 'entity', response_action: 'agree', item_count: 3 };
+      operation.outcome(event, 'submitted', fields);
+      operation.outcome(event, 'indexed', fields);
+      expect(completed()).toHaveLength(1);
+      expect(completed()[0][1]).toMatchObject({
+        ...context,
+        outcome: 'succeeded',
+        entity_id: 'entity',
+        response_action: 'agree',
+        item_count: 3,
+      });
+      for (const key of Object.keys(privateFields)) expect(completed()[0][1]).not.toHaveProperty(key);
+      for (const phase of ['submitted', 'indexed'])
+        expect(capture).toHaveBeenCalledWith(event, expect.objectContaining({ ...fields, outcome_phase: phase }));
+      expect(fields).toMatchObject(privateFields); // Filtering must not mutate the bag reused for indexing.
+    }
+  );
+
+  it('filters direct success properties as well as legacy outcome properties', () => {
+    observeOperation('publish', 'entity', 'entity', undefined, context).succeeded({ ...privateFields, value_count: 2 });
+    expect(completed()[0][1]).toMatchObject({ outcome: 'succeeded', value_count: 2 });
+    for (const key of Object.keys(privateFields)) expect(completed()[0][1]).not.toHaveProperty(key);
+  });
+
+  it('filters unexpected failure metrics without dropping the known counters', () => {
+    observeOperation('vote', 'entity', 'entity', undefined, context).failed('unavailable', {
+      ...privateFields,
+      queue_wait_ms: 500,
+      queue_depth: 2,
+    } as unknown as Record<string, number>);
+    expect(completed()[0][1]).toMatchObject({
+      outcome: 'failed',
+      failure_code: 'unavailable',
+      queue_wait_ms: 500,
+      queue_depth: 2,
+    });
+    for (const key of Object.keys(privateFields)) expect(completed()[0][1]).not.toHaveProperty(key);
+  });
+
+  it('retains the ID, category and measurement fields used by current action producers', () => {
+    const fields = {
+      vote_direction: 'up',
+      vote_kind: 'up',
+      mutation_kind: 'cast',
+      vote_action: 'cast',
+      previous_vote_direction: 'down',
+      response_kind: 'curation',
+      response_action: 'upvote',
+      entity_id: 'entity',
+      space_id: 'space',
+      object_type: 0,
+      user_operation_hash: '0xhash',
+      vote_id: 'vote',
+      winner_id: 'winner',
+      previous_winner_id: null,
+      ranking_id: 'ranking',
+      rank_id: 'rank',
+      item_count: 3,
+      content_id: 'content',
+      target_entity_ids: ['entity'],
+      value_count: 2,
+      relation_count: 1,
+      comment_id: 'comment',
+      created_space_id: 'created',
+      result_count: 4,
+      method: 'copy_link',
+      edit_scope: 'local_draft',
+      edit_action: 'block_created',
+    };
+    observeOperation('vote', 'entity', 'entity', undefined, context).succeeded(fields);
+    expect(completed()[0][1]).toMatchObject(fields);
+  });
+});

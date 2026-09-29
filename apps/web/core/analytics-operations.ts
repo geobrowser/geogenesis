@@ -41,6 +41,41 @@ export function queueTimeoutMetrics(error: unknown): { queue_wait_ms: number; qu
 
 export type OperationContext = { opportunity_id: string; presentation_instance_id: string };
 
+// Canonical outcomes accept only the IDs, fixed categories and measurements used
+// by our producers. Legacy outcome bags may also contain human-readable labels.
+const CANONICAL_OUTCOME_FIELDS = new Set([
+  'vote_direction',
+  'vote_kind',
+  'mutation_kind',
+  'vote_action',
+  'previous_vote_direction',
+  'response_kind',
+  'response_action',
+  'entity_id',
+  'space_id',
+  'object_type',
+  'user_operation_hash',
+  'vote_id',
+  'winner_id',
+  'previous_winner_id',
+  'ranking_id',
+  'rank_id',
+  'item_count',
+  'content_id',
+  'target_entity_ids',
+  'value_count',
+  'relation_count',
+  'comment_id',
+  'created_space_id',
+  'result_count',
+  'method',
+  'edit_scope',
+  'edit_action',
+  'queue_wait_ms',
+  'queue_depth',
+  'failure_code',
+]);
+
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */
 export function observeOperation(
   action: ActionKind,
@@ -94,7 +129,10 @@ export function observeOperation(
   const complete = (outcome: 'succeeded' | 'failed' | 'unknown', properties: Record<string, unknown> = {}) => {
     if (completed) return;
     completed = true;
-    if (attribution) emit('action_completed', 'complete', { ...properties, outcome });
+    const canonical = Object.fromEntries(
+      Object.entries(properties).filter(([key]) => CANONICAL_OUTCOME_FIELDS.has(key))
+    );
+    if (attribution) emit('action_completed', 'complete', { ...canonical, outcome });
   };
   if (opportunity) emit('action_attempted', 'attempt', {});
   return {

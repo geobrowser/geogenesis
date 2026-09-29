@@ -4,7 +4,7 @@ The browser emits one `action_completed` record for each observed operation. Cou
 
 ## Shared description
 
-`core/action-context.ts` defines the component vocabulary and a runtime field allowlist. The description contains the starting `page_path`, `page_type`, `page_view_id`, page entity, target entity/type (and graph type IDs when available), every known source entity ID, overlay entity, list and one-based position, presentation ID, playback ID/position, and rendered variant. It contains no labels, comment text, search text, email addresses or tokens. Existing search redaction is unchanged.
+`core/action-context.ts` defines the component vocabulary and a runtime field allowlist. The description contains the starting `page_path`, `page_type`, `page_view_id`, page entity, target entity/type (and graph type IDs when available), every known source entity ID, overlay entity, list and one-based position, presentation ID, playback ID/position, and rendered variant. It contains no labels, comment text, search text, email addresses or tokens. Existing search redaction is unchanged. Canonical outcome properties are separately allowlisted in `analytics-operations.ts` before `action_completed` is emitted. This boundary covers direct success, failure metrics and legacy submitted outcomes; `target_name` and other unlisted fields remain excluded from canonical events. Legacy event payloads are unchanged.
 
 A claim's `Sources` relations supply `origin_entity_ids`. A reused claim can have several sources; none is arbitrarily designated its only source. Sources are not necessarily debates. Filter or enrich by graph entity type before labelling the origin report “debates.” IDs retain their source representation; graph joins should normalize UUID punctuation and case.
 

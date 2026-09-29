@@ -158,6 +158,16 @@ describe('useEntityResponse indexing reconciliation', () => {
         ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'submitted'
       );
       expect(votes).toHaveLength(1);
+      const canonical = mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
+      expect(canonical).toHaveLength(1);
+      expect(canonical[0][1]).not.toHaveProperty('target_name');
+      expect(canonical[0][1]).toMatchObject({
+        target_id: 'story-1',
+        entity_id: 'story-1',
+        space_id: TARGET_SPACE_ID,
+        response_kind: 'curation',
+        outcome: 'succeeded',
+      });
       expect(
         mocks.capture.mock.calls.filter(
           ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'indexed'
