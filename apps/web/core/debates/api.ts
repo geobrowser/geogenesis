@@ -938,8 +938,9 @@ export type SchedulablePerson = {
   user: DebateParticipantSummary;
   online: boolean;
   /**
-   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Can
-   * include slots already past today.
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Only
+   * times still ahead when geo-chat answered (geo-chat#165), though they can pass before the next
+   * fetch.
    */
   slots: ScheduleOverlapSlot[];
   /** More overlap exists than `limit` returned. */

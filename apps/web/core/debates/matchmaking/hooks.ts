@@ -173,7 +173,8 @@ export function useDebatePeople(enabled: boolean) {
 
 /**
  * Fixed so every caller shares one cache entry. geo-chat's range is inclusive, so this is the modal's
- * seven days; the limit leaves room for a day of past slots, which geo-chat keeps.
+ * seven days. The limit leaves room for a day of past slots, which geo-chat returned before
+ * geo-chat#165 and no longer does; kept so this works against either build.
  */
 const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;

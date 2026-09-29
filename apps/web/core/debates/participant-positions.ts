@@ -10,6 +10,7 @@ import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
 import { decodeActiveResponseDirection, responseKindToVoteKind } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
 import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
@@ -62,13 +63,19 @@ const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([[respons
  * here: a response counts only in the space the claim lives in.
  */
 const PARTICIPANT_POSITIONS_SOURCE = /* GraphQL */ `
-  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
-    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
-      userId
-      objectId
-      spaceId
-      voteType
-      voteKind
+  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $after: Cursor) {
+    userVotesConnection(filter: $filter, first: $first, after: $after, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        userId
+        objectId
+        spaceId
+        voteType
+        voteKind
+      }
     }
   }
 `;
@@ -81,28 +88,41 @@ type ParticipantPositionsFilter = {
   voteKind: { in: number[] };
 };
 const participantPositionsDocument = parse(PARTICIPANT_POSITIONS_SOURCE) as TypedDocumentNode<
-  { userVotes: Array<ParticipantPositionRow | null> | null },
-  { filter: ParticipantPositionsFilter; first: number; offset: number }
+  {
+    userVotesConnection: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: Array<ParticipantPositionRow | null>;
+    } | null;
+  },
+  { filter: ParticipantPositionsFilter; first: number; after?: string }
 >;
 
 type FetchPage = (
   filter: ParticipantPositionsFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortSignal
-) => Promise<ParticipantPositionRow[]>;
+) => Promise<CursorPage<ParticipantPositionRow>>;
 
-function defaultFetchPage(filter: ParticipantPositionsFilter, first: number, offset: number, signal?: AbortSignal) {
+function defaultFetchPage(
+  filter: ParticipantPositionsFilter,
+  first: number,
+  after: string | undefined,
+  signal?: AbortSignal
+) {
   return Effect.runPromise(
     graphql({
       query: participantPositionsDocument,
-      decoder: data =>
-        (data.userVotes ?? []).flatMap(row =>
+      decoder: data => ({
+        items: (data.userVotesConnection?.nodes ?? []).flatMap(row =>
           row
             ? [{ ...row, userId: String(row.userId), objectId: String(row.objectId), spaceId: String(row.spaceId) }]
             : []
         ),
-      variables: { filter, first, offset },
+        endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+        hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+      }),
+      variables: { filter, first, after },
       signal,
     })
   );
@@ -129,14 +149,10 @@ export async function fetchParticipantPositions(
   if (profileSpaceIds.length === 0) return [];
   const filter = { userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER };
 
-  const rows: ParticipantPositionRow[] = [];
-  let offset = 0;
-  while (true) {
-    const page = await fetchPage(filter, PAGE_SIZE, offset, signal);
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
+  // Cursors, not offsets: the graph rejects an offset past 1000, so offset paging threw on the
+  // fourth page and every match count vanished once the People tab's participants held more than
+  // 1,500 positions between them.
+  const rows = await collectCursorPages(after => fetchPage(filter, PAGE_SIZE, after, signal));
 
   return rows.flatMap(row => {
     const direction = decodeActiveResponseDirection(row.voteType);
