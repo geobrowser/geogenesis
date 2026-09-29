@@ -24,6 +24,18 @@ vi.mock('~/partials/blocks/table/ranking-period-metadata', () => ({
     <span data-testid="debater-faces">{submitterSpaceIds.length}</span>
   ),
 }));
+// Resolving a person's profile reads the network and drives the side panel; what matters here is
+// which person the card asks it to open, and from where.
+const profileMocks = vi.hoisted(() => ({ opened: [] as { spaceId: string; surface?: string }[] }));
+vi.mock('./use-open-debater-profile', () => ({
+  useOpenDebaterProfile:
+    (participant: { profile_space_id: string }, options?: { interactionSurface?: string }) =>
+    (event: { preventDefault: () => void }) => {
+      // As the real hook does for a plain click on a link: open the panel instead of navigating.
+      event.preventDefault();
+      profileMocks.opened.push({ spaceId: participant.profile_space_id, surface: options?.interactionSurface });
+    },
+}));
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({ showParticipants }: { showParticipants?: boolean }) => (
     <div data-testid="position-row" data-show-participants={String(showParticipants)} />
@@ -222,6 +234,37 @@ describe('DebateEndCard', () => {
 
     fireEvent.click(within(open).getByText('9 claims'));
     expect(onOpenClaims).toHaveBeenCalledWith('jonathan-space');
+  });
+
+  it("opens a debater's profile in the side panel from their name, not their claims", () => {
+    profileMocks.opened = [];
+    const onOpenClaims = vi.fn();
+    renderCard(cardFixture(), onOpenClaims);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Jonathan Bostock' }));
+
+    expect(profileMocks.opened).toEqual([{ spaceId: 'jonathan-space', surface: 'debate_end_card' }]);
+    expect(onOpenClaims).not.toHaveBeenCalled();
+  });
+
+  it("links the name to the debater's space, so Cmd-click and copy link reach them", () => {
+    // A real address rather than a button: the hook lets modified clicks through to it. geo-chat
+    // spells space ids as dashed UUIDs and the space route takes the graph's hex.
+    const card = cardFixture();
+    (card.debaters[0].participant as { profile_space_id: string }).profile_space_id =
+      'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+    renderCard(card);
+
+    expect(screen.getByRole('link', { name: 'Steve Fuller' })).toHaveAttribute(
+      'href',
+      '/space/aaaaaaaabbbbccccddddeeeeeeeeeeee'
+    );
+  });
+
+  it("keeps the side chip out of the name's link", () => {
+    renderCard(cardFixture());
+    const name = screen.getByRole('link', { name: 'Steve Fuller' });
+    expect(within(name).queryByText('Agree')).toBeNull();
   });
 
   it('draws no way into the claims when there is nowhere to open them', () => {

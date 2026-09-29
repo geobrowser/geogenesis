@@ -111,12 +111,6 @@ vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
 }));
 
-// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
-// next-navigation and Privy context this suite does not stand up.
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => vi.fn(),
-}));
-
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
@@ -180,12 +174,12 @@ afterEach(() => {
 });
 
 describe('DebatesPageClient browse feed', () => {
-  it('renders the claim title, space, join button and both debater videos', async () => {
+  it('renders the claim title, space and both debater videos without a join button', async () => {
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Join a debate' })).not.toBeInTheDocument();
     // Both debaters name themselves on their own tile. The "Winner?" pill used to sit here too;
     // it moved off the tile entirely when the name row took the bottom-right corner, and winner
     // voting now happens on the end-of-debate scorecard and in the claims panel.
