@@ -92,7 +92,10 @@ vi.mock('./rooms/hooks', () => ({
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
-vi.mock('./rooms/room-opponent', () => ({ useUpcomingRoomOpponent: () => null }));
+vi.mock('./rooms/room-opponent', async importOriginal => ({
+  ...(await importOriginal<typeof import('./rooms/room-opponent')>()),
+  useUpcomingRoomOpponent: () => null,
+}));
 
 vi.mock('./debate-attention', () => ({
   useDebatePresence: () => true,

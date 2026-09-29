@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '../api';
 import { useGeoChatUserSummaries } from '../matchmaking/use-geo-chat-user-summaries';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { UNNAMED_OPPONENT } from './room-copy';
 import { sameId } from './room-presence';
 import { useScheduledDebates } from './scheduling-hooks';
 
@@ -13,6 +14,11 @@ export function opponentOf(request: ScheduledDebateRequest | undefined, viewerId
   if (!request || !viewerId) return null;
   if (!request.participants.some(participant => sameId(participant.user_id, viewerId))) return null;
   return request.participants.find(participant => !sameId(participant.user_id, viewerId))?.user_id ?? null;
+}
+
+/** What to call the opponent: their name, or a stand-in until the graph has one. */
+export function opponentName(opponent: Pick<DebateParticipantSummary, 'display_name'> | null) {
+  return opponent?.display_name || UNNAMED_OPPONENT;
 }
 
 /** The request that booked a room. The room's id is dashless here and dashed on the request. */

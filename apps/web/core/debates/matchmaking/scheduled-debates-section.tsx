@@ -7,7 +7,8 @@ import Link from 'next/link';
 
 import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
+import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
+import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
@@ -187,7 +188,7 @@ function UpcomingRow({
       when={room.due ? 'Starting now' : formatDebateTime(room.starts_at)}
       status={
         room.others_present
-          ? `${shortName(opponent)} is waiting for you now`
+          ? `${opponentName(opponent)} is waiting for you now`
           : room.joinable
             ? 'The room is open'
             : `Opens at ${formatTime(room.opens_at)}`
@@ -314,8 +315,6 @@ function ScheduleCard({
   );
 }
 
-const UNNAMED_OPPONENT = 'Your opponent';
-
 /** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
 const UNKNOWN_OPPONENT: DebateParticipantSummary = {
   user_id: '',
@@ -323,10 +322,6 @@ const UNKNOWN_OPPONENT: DebateParticipantSummary = {
   display_name: UNNAMED_OPPONENT,
   avatar_cid: null,
 };
-
-function shortName(opponent: DebateParticipantSummary | null) {
-  return opponent?.display_name || UNNAMED_OPPONENT;
-}
 
 function ReadFailed({ children }: { children: React.ReactNode }) {
   return (

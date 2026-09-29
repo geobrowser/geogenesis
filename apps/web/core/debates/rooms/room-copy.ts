@@ -5,6 +5,9 @@ import type { DebateRoomPresenceState } from './room-presence';
  * to make swapping them one file.
  */
 
+/** Stands in for the opponent's name until one is known, on every surface that names them. */
+export const UNNAMED_OPPONENT = 'Your opponent';
+
 /** The indicator's label. Present in every state, so the pill never renders empty. */
 export function roomPresenceLabel(state: DebateRoomPresenceState, opponentName: string): string {
   switch (state) {
@@ -52,14 +55,19 @@ export const ROOM_JOIN_PROMPT = {
   startingNow: 'Starting now',
   opponentJoined: (opponentName: string) => `${opponentName} is waiting`,
   opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
-  unnamedOpponent: 'Your opponent',
   join: 'Join debate',
   notNow: 'Not now',
 } as const;
 
-/** Shown to someone who arrived before the door unlocked. */
+/**
+ * Shown to someone who arrived before the door unlocked. The lead is read off the room rather than
+ * written here, since geo-chat stores it per room and may change it for new ones.
+ */
 export const ROOM_NOT_YET_OPEN = {
-  message: (opensAt: string) => `The debate room opens 10 minutes early at ${opensAt}. In the meantime explore Geo.`,
+  message: (opensAt: string, leadMinutes: number | null) =>
+    leadMinutes
+      ? `The debate room opens ${leadMinutes} ${leadMinutes === 1 ? 'minute' : 'minutes'} early at ${opensAt}. In the meantime explore Geo.`
+      : `The debate room opens at ${opensAt}. In the meantime explore Geo.`,
   explore: 'Explore',
 } as const;
 

@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
-vi.mock('./room-opponent', () => ({ useUpcomingRoomOpponent: () => mocks.opponent }));
+vi.mock('./room-opponent', async importOriginal => ({
+  ...(await importOriginal<typeof import('./room-opponent')>()),
+  useUpcomingRoomOpponent: () => mocks.opponent,
+}));
 vi.mock('../matchmaking/use-request-countdown', () => ({ useServerClock: () => ({ now: () => mocks.now }) }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avatar" /> }));
 

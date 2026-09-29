@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import type { UpcomingDebateRoom } from '../api';
 import { useServerClock } from '../matchmaking/use-request-countdown';
 import { ROOM_JOIN_PROMPT } from './room-copy';
-import { useUpcomingRoomOpponent } from './room-opponent';
+import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
 
 const MINUTE_MS = 60_000;
@@ -31,11 +31,11 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   const opponent = useUpcomingRoomOpponent(room);
   const now = useNow();
 
-  const opponentName = opponent?.display_name || ROOM_JOIN_PROMPT.unnamedOpponent;
+  const name = opponentName(opponent);
   const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
 
   return (
-    <div className="pointer-events-none fixed top-[calc(env(safe-area-inset-top,0px)+3.5rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
+    <div className="pointer-events-none fixed top-[calc(2.75rem+0.75rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
       <motion.div
         role="status"
         aria-live="polite"
@@ -49,7 +49,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
             avatarUrl={opponent?.avatar_cid}
             value={opponent?.profile_space_id || room.room_id}
             size={36}
-            alt={opponentName}
+            alt={name}
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -59,7 +59,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           <p className="mt-0.5 flex min-w-0 items-center gap-1.5">
             <span
               aria-hidden
-              className={cx('h-2 w-2 shrink-0 rounded-full', room.others_present ? 'bg-green' : 'bg-grey-03')}
+              className={cx('size-2 shrink-0 rounded-full', room.others_present ? 'bg-green' : 'bg-grey-03')}
             />
             <Text
               as="span"
@@ -67,9 +67,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
               color={room.others_present ? 'text' : 'grey-04'}
               className="truncate"
             >
-              {room.others_present
-                ? ROOM_JOIN_PROMPT.opponentJoined(opponentName)
-                : ROOM_JOIN_PROMPT.opponentNotJoined(opponentName)}
+              {room.others_present ? ROOM_JOIN_PROMPT.opponentJoined(name) : ROOM_JOIN_PROMPT.opponentNotJoined(name)}
             </Text>
           </p>
           {schedule && (

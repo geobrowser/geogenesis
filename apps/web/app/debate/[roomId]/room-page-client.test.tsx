@@ -76,6 +76,14 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText(/picker for/)).not.toBeInTheDocument();
   });
 
+  // geo-chat stores the lead per room, so the copy follows the room rather than a constant.
+  it('reads how early the room opens off the room itself', () => {
+    mocks.access = { status: 'not_yet_open', opens_at: '2026-09-24T12:45:00.000Z' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText(/^The debate room opens 15 minutes early at /)).toBeInTheDocument();
+  });
+
   // Mounting the picker on a used room flashed its claims, then bounced into the finished debate.
   it('says a room whose debate is over has already had it', () => {
     mocks.session = converted;
