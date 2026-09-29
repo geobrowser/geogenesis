@@ -239,6 +239,7 @@ const INTEREST_BUTTON_CLASS =
  * the viewer to this bounty:
  */
 function InterestButton({
+  bountyId,
   isInterested,
   isPending,
   isInterestLoading,
@@ -251,9 +252,19 @@ function InterestButton({
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onClick: () => void;
+  bountyId: string;
 }) {
   const { smartAccount } = useSmartAccount();
-  const openPrivySignIn = usePrivySignIn();
+  const openPrivySignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'bounty_interest',
+      target_id: bountyId,
+      target_type: 'bounty',
+      auth_control: 'express_interest',
+      auth_intent: 'bounty_interest',
+      auth_continuation: 'repeat',
+    },
+  });
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
 
@@ -310,6 +321,7 @@ export function AvailableBountyCard({
         <BudgetBadge budget={bounty.budget} />
         {availableBountyCta(bounty) === 'apply' || isInterested ? (
           <InterestButton
+            bountyId={bounty.id}
             isInterested={isInterested}
             isPending={isPending}
             isInterestLoading={isInterestLoading}

@@ -19,7 +19,7 @@ import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
-export function useRankingComposeAccess(spaceId: string) {
+export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -61,9 +61,16 @@ export function useRankingComposeAccess(spaceId: string) {
       // `keepReturnTo` because this hook tracks its own destination in the ref above; writing the
       // shared atom too would put two sources of truth in play.
       prepareOnboarding({ keepReturnTo: true });
-      login();
+      login({
+        component: 'ranking_composer',
+        target_type: rankingId ? 'ranking' : 'space',
+        target_id: rankingId ?? spaceId,
+        auth_control: 'add_ranking',
+        auth_intent: 'ranking',
+        auth_continuation: 'resume',
+      });
     },
-    [prepareOnboarding, login]
+    [prepareOnboarding, login, spaceId, rankingId]
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {

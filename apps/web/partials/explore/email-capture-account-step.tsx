@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { beginAuthAttempt, currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { completePrivyAuth } from '~/core/privy-auth-events';
 
@@ -16,6 +17,11 @@ const CODE_LENGTH = 6;
 
 // The headless attempt and its modal fallback belong to the same signup surface.
 const ACCOUNT_ANALYTICS = {
+  component: 'explore_email_capture',
+  auth_control: 'create_account',
+  auth_trigger: 'control',
+  target_type: 'application',
+  target_id: 'genesis',
   link_source: 'explore_email_capture',
   form_type: 'account',
   signup_surface: 'explore_email_capture',
@@ -104,6 +110,10 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   React.useEffect(() => {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
+    const attempt = currentAuthAttempt();
+    if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
+      beginAuthAttempt(ACCOUNT_ANALYTICS);
+    openAuthAttempt();
     void requestCode();
   }, [requestCode]);
 

@@ -35,6 +35,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
+vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefined }) }));
+
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
 vi.mock('~/partials/onboarding/dialog', async () => {
@@ -96,7 +98,9 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
     expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
-    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ component: 'sign_in_prompt', auth_trigger: 'control' })
+    );
   });
 
   // The deep link strips its own params as it opens the dialog, so the render that sees the
@@ -136,7 +140,7 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.not.objectContaining({ link_source: 'marketing' }));
   });
 
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion
@@ -171,5 +175,13 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnError?.('exited_auth_flow'));
 
     expect(onError).not.toHaveBeenCalled();
+  });
+  it('keeps the initiating callback armed after a rejected code', () => {
+    const onComplete = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn(onComplete));
+    act(() => result.current());
+    act(() => mocks.privyOnError?.('invalid_credentials'));
+    act(() => mocks.privyOnComplete?.({}));
+    expect(onComplete).toHaveBeenCalledOnce();
   });
 });

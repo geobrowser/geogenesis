@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
 import { signupCompleted } from '~/core/analytics';
+import { currentAuthAttempt, finishAuthAttempt } from '~/core/auth-attempt';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
@@ -164,6 +165,7 @@ function EmailCapturePopup() {
   }, [prepareOnboarding, subscribedEmail]);
 
   const close = React.useCallback(() => {
+    if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
     rememberDismissed();

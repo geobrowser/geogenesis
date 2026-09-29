@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/analytics', () => ({
   signupCompleted: mocks.signupCompleted,
   trackPrivyAuth: mocks.trackPrivyAuth,
+  capture: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -891,12 +892,15 @@ describe('ExploreEmailCapturePopup', () => {
       };
       args?.onComplete?.(completion);
 
-      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(completion, {
-        auth_flow: 'manual_login',
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        completion,
+        expect.objectContaining({
+          auth_flow: 'manual_login',
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one
@@ -960,11 +964,13 @@ describe('ExploreEmailCapturePopup', () => {
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
-      expect(mocks.usePrivySignInOptions?.analytics).toEqual({
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.usePrivySignInOptions?.analytics).toEqual(
+        expect.objectContaining({
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
       // The modal replaces the popup visually, but this hook must remain mounted until Privy
       // completes so its completion handler can attribute the signup to this surface.
       expect(popup()).toBeInTheDocument();

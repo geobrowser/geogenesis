@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { readAuthAttempt } from '~/core/auth-attempt';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
@@ -31,6 +32,11 @@ export function PendingActionsRunner() {
 
     for (const action of actions) {
       if (runningRef.current.has(action.id)) continue;
+      const attempt = action.authAttemptId ? readAuthAttempt(action.authAttemptId) : undefined;
+      if (attempt?.outcome === 'closed' || attempt?.outcome === 'superseded') {
+        setActions(prev => prev.filter(a => a.id !== action.id));
+        continue;
+      }
       const ready = action.requires === 'personalSpace' ? hasPersonalSpace : hasAuth;
       if (!ready) continue;
 

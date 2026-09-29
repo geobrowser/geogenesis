@@ -19,7 +19,7 @@ type UsePrivySignInOptions = {
    * when the viewer presses, not when Privy finishes, which can be minutes later on a different
    * URL.
    */
-  analytics?: AnalyticsProperties;
+  analytics?: AnalyticsProperties | (() => AnalyticsProperties);
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
 };
@@ -65,16 +65,24 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     // the flag set would hand an abandoned press to whatever completion arrived next — a restore,
     // or a login started somewhere else on the page — which is the same unbidden replay the
     // arming exists to prevent, just later.
-    onError: () => {
-      if (!requestedRef.current) return;
+    onError: error => {
+      // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
+      if (error !== 'exited_auth_flow' || !requestedRef.current) return;
       requestedRef.current = false;
       optionsRef.current?.onError?.();
     },
   });
 
-  return React.useCallback(() => {
-    prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
-    requestedRef.current = true;
-    login(optionsRef.current?.analytics);
-  }, [login, prepareOnboarding]);
+  return React.useCallback(
+    (properties?: AnalyticsProperties | React.SyntheticEvent) => {
+      prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
+      requestedRef.current = true;
+      const configured = optionsRef.current?.analytics;
+      return login({
+        ...(typeof configured === 'function' ? configured() : configured),
+        ...(properties && !('nativeEvent' in properties) ? properties : {}),
+      });
+    },
+    [login, prepareOnboarding]
+  );
 }

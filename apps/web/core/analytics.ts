@@ -128,7 +128,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-a3a214b8ae74.js';
+const analyticsScriptSrc = '/geo-analytics-c5e51629e24e.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
@@ -182,7 +182,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-o6IUuK50bRAyZQc3/Nu/33kzRIcOeuGURyGDh+WI/lY=';
+  script.integrity = 'sha256-xeUWKeJOsTKKlLsxo/6RhJWf5Fl3+UqFswEYWa8BCqU=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -740,6 +740,14 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     user_id: user.id,
     privy_user_id: user.id,
     auth_provider: 'privy',
+    is_internal:
+      internalAccount ||
+      process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
+      (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+    is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
+    is_automated:
+      typeof navigator !== 'undefined' &&
+      (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
     privy_user_created_at: formatDate(user.createdAt),
     has_privy_email: Boolean(user.email),
     has_privy_phone: Boolean(user.phone),

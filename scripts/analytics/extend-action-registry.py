@@ -20,11 +20,17 @@ if not match:
 registry = json.loads(match[1])
 shared = ['component', 'page_path', 'page_type', 'page_view_id', 'target_id', 'target_type', 'action_context_version']
 for name, extra in {'action_completed': ['operation_id', 'action_kind', 'outcome'],
-                    'component_impression': ['presentation_instance_id']}.items():
+                    'component_impression': ['presentation_instance_id'],
+                    'auth_attempt_started': ['auth_attempt_id', 'auth_control', 'auth_trigger'],
+                    'auth_prompt_viewed': ['auth_attempt_id', 'auth_control', 'auth_trigger'],
+                    'auth_attempt_completed': ['auth_attempt_id', 'outcome', 'auth_duration_ms'],
+                    'auth_action_completed': ['auth_attempt_id', 'operation_id', 'outcome'],
+                    'auth_identity_linked': ['auth_attempt_id', 'user_id'],
+                    'auth_onboarding_progress': ['auth_attempt_id', 'onboarding_step', 'outcome']}.items():
     required = shared + extra
     registry['events'][name] = dict(name=name, apps=['genesis'], family='engagement', origin='browser',
                                    owner='product', required=required, runtimeSupport='generic', signal='log', status='draft')
-    contract = dict(id=name, apps=['genesis'], source='browser', required_properties=required, integer_properties=[])
+    contract = dict(id=name, apps=['genesis'], source='browser', required_properties=required, integer_properties=[field for field in required if field == 'auth_duration_ms'])
     registry['measurement']['contracts'] = [c for c in registry['measurement']['contracts'] if c['id'] != name] + [contract]
 encoded = json.dumps(registry, separators=(',', ':'), sort_keys=True)
 bundle = bundle[:match.start(1)] + encoded + bundle[match.end(1):]

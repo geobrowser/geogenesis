@@ -81,7 +81,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isLoading: isLoadingCreateAccess,
     ensureAccess,
     recheckAccess,
-  } = useRankingComposeAccess(composeAccessSpaceId);
+  } = useRankingComposeAccess(composeAccessSpaceId, entityId);
 
   // Member of the target space
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);

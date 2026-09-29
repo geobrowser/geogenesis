@@ -42,6 +42,7 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 vi.mock('./analytics', () => ({
   trackPrivyAuth: mocks.trackPrivyAuth,
+  capture: vi.fn(),
   restorePrivySession: mocks.restorePrivySession,
   identifyPrivyUser: mocks.identifyPrivyUser,
   reconcileAnonymousAnalyticsIdentity: vi.fn(),
@@ -67,6 +68,8 @@ beforeEach(() => {
   mocks.authenticated = false;
   mocks.user = null;
   resetPrivyAuthSession();
+  localStorage.clear();
+  sessionStorage.clear();
 });
 afterEach(cleanup);
 
@@ -117,7 +120,10 @@ describe('PrivyAuthTracker', () => {
     act(() => mocks.logout?.());
     broadcast(args);
     expect(mocks.restorePrivySession).toHaveBeenCalledExactlyOnceWith(args.user);
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(args, { auth_flow: 'manual_login' });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      args,
+      expect.objectContaining({ auth_flow: 'manual_login', auth_control: 'unknown' })
+    );
   });
 
   it('records one signup with many mounted controls and duplicate completions', () => {
@@ -126,9 +132,12 @@ describe('PrivyAuthTracker', () => {
     for (let i = 0; i < 49; i++) renderHook(() => useTrackedLogin({}));
     broadcast(completion('many-rows'));
     broadcast(completion('many-rows'));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('many-rows'), {
-      auth_flow: 'manual_login',
-    });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      completion('many-rows'),
+      expect.objectContaining({
+        auth_flow: 'manual_login',
+      })
+    );
   });
 
   it.each(['navbar', 'explore-card', 'deep-link'])(
@@ -141,10 +150,13 @@ describe('PrivyAuthTracker', () => {
       properties.link_source = 'changed';
       button.unmount();
       broadcast(completion(surface));
-      expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion(surface), {
-        link_source: surface,
-        auth_flow: 'manual_login',
-      });
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+        completion(surface),
+        expect.objectContaining({
+          link_source: surface,
+          auth_flow: 'manual_login',
+        })
+      );
     }
   );
 
@@ -160,10 +172,13 @@ describe('PrivyAuthTracker', () => {
     broadcast({ ...completion('restored', false), wasAlreadyAuthenticated: true });
     expect(mocks.trackPrivyAuth).not.toHaveBeenCalled();
     broadcast(completion('actual-login', false));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('actual-login', false), {
-      link_source: 'deep-link',
-      auth_flow: 'manual_login',
-    });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      completion('actual-login', false),
+      expect.objectContaining({
+        link_source: 'deep-link',
+        auth_flow: 'manual_login',
+      })
+    );
   });
 
   it('records each deliberate login after logout, without duplicating callbacks in a session', () => {
@@ -192,10 +207,13 @@ describe('PrivyAuthTracker', () => {
       for (const listener of mocks.listeners) listener.onError?.('invalid_credentials');
     });
     broadcast(completion('retried-code'));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('retried-code'), {
-      link_source: 'explore_email_capture',
-      auth_flow: 'manual_login',
-    });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      completion('retried-code'),
+      expect.objectContaining({
+        link_source: 'explore_email_capture',
+        auth_flow: 'manual_login',
+      })
+    );
   });
 
   it('forgets attribution after dismissal', () => {
@@ -205,19 +223,25 @@ describe('PrivyAuthTracker', () => {
       for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
     });
     broadcast(completion('after-cancel'));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('after-cancel'), {
-      auth_flow: 'manual_login',
-    });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      completion('after-cancel'),
+      expect.objectContaining({
+        auth_flow: 'manual_login',
+      })
+    );
   });
 
   it('shares deduplication with headless email completion and retains the email', () => {
     render(<PrivyAuthTracker />);
     completePrivyAuth(completion('email-capture'), { signup_surface: 'explore_email_capture' });
     broadcast(completion('email-capture'));
-    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(completion('email-capture'), {
-      signup_surface: 'explore_email_capture',
-      auth_flow: 'manual_login',
-    });
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledExactlyOnceWith(
+      completion('email-capture'),
+      expect.objectContaining({
+        signup_surface: 'explore_email_capture',
+        auth_flow: 'manual_login',
+      })
+    );
   });
 
   it('does not send a second signup for the same account after logout or tracker remount', () => {
@@ -228,5 +252,23 @@ describe('PrivyAuthTracker', () => {
     render(<PrivyAuthTracker />);
     broadcast(completion('signup-once'));
     expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
+  });
+  it('runs only the control belonging to the completing attempt', () => {
+    render(<PrivyAuthTracker />);
+    const first = vi.fn();
+    const second = vi.fn();
+    const controls = renderHook(() => ({
+      first: useTrackedLogin({ onComplete: first }),
+      second: useTrackedLogin({ onComplete: second }),
+    }));
+    act(() => controls.result.current.first.login({ auth_control: 'agree' }));
+    act(() => controls.result.current.second.login({ auth_control: 'disagree' }));
+    broadcast(completion('superseded-controls'));
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ auth_control: 'disagree' })
+    );
   });
 });

@@ -6,6 +6,7 @@ import { atom, useSetAtom, useStore } from 'jotai';
 
 import { type ActionContext, withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
+import { currentAuthAttempt, readAuthAttempt } from '~/core/auth-attempt';
 
 /**
  * Space ids a signed-out user asked to join before authenticating.
@@ -22,7 +23,10 @@ export function useAddPendingJoinIntent() {
     (spaceId: string) => {
       store.set(pendingJoinContextsAtom, prev => ({
         ...prev,
-        [spaceId]: getContext({ target_type: 'space', target_id: spaceId }),
+        [spaceId]: {
+          ...getContext({ target_type: 'space', target_id: spaceId }),
+          auth_attempt_id: currentAuthAttempt()?.id,
+        },
       }));
       setIntents(prev => (prev.includes(spaceId) ? prev : [...prev, spaceId]));
     },
@@ -47,6 +51,8 @@ export function useDeferredJoin(spaceId: string, isAuthenticated: boolean, submi
       delete next[spaceId];
       return next;
     });
+    const attempt = context?.auth_attempt_id ? readAuthAttempt(context.auth_attempt_id) : undefined;
+    if (attempt?.outcome === 'closed' || attempt?.outcome === 'superseded') return;
     if (context) withActionContext(context, submit);
     else submit();
   }, [isAuthenticated, spaceId, store, submit]);

@@ -75,7 +75,33 @@ describe('shipped action contract', () => {
       }
       expect(browser.lytics.validate('component_impression', context)).toMatchObject({ valid: true, missing: [] });
       browser.lytics.capture('action_completed', context);
-      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+      const auth = {
+        ...context,
+        auth_attempt_id: 'attempt',
+        auth_control: 'disagree',
+        auth_trigger: 'control',
+        auth_attribution_version: 'v1',
+        action_anonymous_id: 'visitor-before-login',
+        action_session_id: 'session-before-login',
+        auth_duration_ms: 1234,
+        user_id: 'did:privy:test',
+        onboarding_step: 'start',
+      };
+      const authEvents = [
+        'auth_attempt_started',
+        'auth_prompt_viewed',
+        'auth_attempt_completed',
+        'auth_identity_linked',
+        'auth_onboarding_progress',
+        'auth_action_completed',
+      ];
+      for (const event of authEvents) {
+        expect(browser.lytics.validate(event, auth)).toMatchObject({ valid: true, missing: [] });
+        browser.lytics.capture(event, auth);
+      }
+      await vi.waitFor(() => {
+        for (const event of authEvents) expect(JSON.stringify(fetch.mock.calls)).toContain(event);
+      });
       const bodies = fetch.mock.calls.map(call => JSON.parse((call as unknown as [string, { body: string }])[1].body));
       const record = bodies
         .flatMap(
@@ -86,6 +112,23 @@ describe('shipped action contract', () => {
         )
         .find(record => record.body.stringValue === 'action_completed');
       expect(record).toBeDefined();
+      const records = bodies.flatMap(
+        body =>
+          body.resourceLogs?.flatMap((resource: any) => resource.scopeLogs.flatMap((scope: any) => scope.logRecords)) ??
+          []
+      );
+      for (const event of authEvents) {
+        const authRecord = records.find((row: any) => row.body.stringValue === event);
+        expect(authRecord, event).toBeDefined();
+        const attrs = Object.fromEntries(
+          authRecord.attributes.map((attribute: any) => [attribute.key, attribute.value])
+        );
+        expect(attrs.auth_attempt_id).toEqual({ stringValue: 'attempt' });
+        expect(attrs.action_anonymous_id).toEqual({ stringValue: 'visitor-before-login' });
+        expect(attrs.action_session_id).toEqual({ stringValue: 'session-before-login' });
+        expect(attrs.anonymous_id.stringValue).toBeTruthy();
+        expect(attrs.session_id.stringValue).toBeTruthy();
+      }
       const attributes = Object.fromEntries(
         record.attributes.map((attribute: any) => [attribute.key, attribute.value])
       );

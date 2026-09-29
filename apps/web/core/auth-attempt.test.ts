@@ -1,0 +1,106 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  authAttemptForAction,
+  beginAuthAttempt,
+  completeAuthAction,
+  currentAuthAttempt,
+  finishAuthAttempt,
+  marketingAuthProperties,
+  openAuthAttempt,
+  resetAuthAttempt,
+  trackAuthOnboarding,
+} from './auth-attempt';
+
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('./analytics', () => ({ capture }));
+beforeEach(() => {
+  localStorage.clear();
+  sessionStorage.clear();
+  resetAuthAttempt();
+  capture.mockClear();
+  window.history.replaceState(null, '', '/explore');
+});
+const entry = {
+  component: 'debate_claim_ticker',
+  auth_control: 'disagree',
+  auth_trigger: 'control',
+  auth_intent: 'vote',
+  auth_continuation: 'queued',
+  target_type: 'claim',
+  target_id: 'claim-1',
+  debate_id: 'debate-1',
+  origin_entity_ids: ['debate-1'],
+  playback_instance_id: 'playback-1',
+  playback_position_ms: 30000,
+  item_position: 4,
+};
+describe('durable sign-in attempts', () => {
+  it('retains an immutable entry through navigation and a new tab', () => {
+    const properties = { ...entry, origin_entity_ids: ['debate-1'], email: 'not-stored@example.com' };
+    const attempt = beginAuthAttempt(properties);
+    properties.origin_entity_ids.push('later');
+    resetAuthAttempt();
+    window.history.replaceState(null, '', '/other');
+    expect(currentAuthAttempt(true)).toMatchObject({ id: attempt.id, properties: { ...entry, page_path: '/explore' } });
+    expect(JSON.stringify(currentAuthAttempt())).not.toContain('not-stored');
+  });
+  it('keeps each abandoned attempt and records one prompt impression and terminal outcome', () => {
+    const first = beginAuthAttempt(entry);
+    openAuthAttempt();
+    openAuthAttempt();
+    finishAuthAttempt('closed');
+    finishAuthAttempt('closed');
+    const second = beginAuthAttempt({ ...entry, auth_control: 'agree' });
+    expect(second.id).not.toBe(first.id);
+    expect(capture.mock.calls.filter(([event]) => event === 'auth_prompt_viewed')).toHaveLength(1);
+    expect(capture).toHaveBeenCalledWith(
+      'auth_attempt_completed',
+      expect.objectContaining({ auth_attempt_id: first.id, outcome: 'closed', auth_duration_ms: expect.any(Number) })
+    );
+  });
+  it('does not guess between concurrent attempts when completing in a new tab', () => {
+    const first = beginAuthAttempt(entry);
+    localStorage.setItem('geo:auth-attempt:v1:other-tab', JSON.stringify({ ...first, id: 'other-tab' }));
+    resetAuthAttempt();
+    expect(currentAuthAttempt(true)).toBeUndefined();
+  });
+  it('expires stale attempts', () => {
+    const attempt = beginAuthAttempt(entry);
+    vi.spyOn(Date, 'now').mockReturnValue(attempt.startedAt + 25 * 60 * 60 * 1000);
+    resetAuthAttempt();
+    expect(currentAuthAttempt(true)).toBeUndefined();
+    vi.restoreAllMocks();
+  });
+  it('links only the intended target and stops attributing actions after success', () => {
+    const attempt = beginAuthAttempt(entry);
+    finishAuthAttempt('signed_up');
+    expect(authAttemptForAction('comment', 'claim-1')).toBeUndefined();
+    expect(authAttemptForAction('vote', 'claim-2')).toBeUndefined();
+    expect(authAttemptForAction('vote', 'claim-1', attempt.id)?.id).toBe(attempt.id);
+    trackAuthOnboarding('interested-in', 'dismissed');
+    expect(capture).toHaveBeenCalledWith(
+      'auth_onboarding_progress',
+      expect.objectContaining({ auth_attempt_id: attempt.id, outcome: 'dismissed' })
+    );
+    completeAuthAction(attempt, 'succeeded', 'operation');
+    expect(authAttemptForAction('vote', 'claim-1', attempt.id)).toBeUndefined();
+  });
+  it('accepts marketing identifiers without importing URLs, tokens or CTA text', () => {
+    expect(
+      marketingAuthProperties('?marketing_page=home&marketing_cta=hero_signup&marketing_handoff_id=abc-123')
+    ).toEqual({ marketing_page: 'home', marketing_cta: 'hero_signup', marketing_handoff_id: 'abc-123' });
+    expect(
+      marketingAuthProperties('?marketing_page=https://site.test?email=x&marketing_cta=person@example.com&token=secret')
+    ).toEqual({});
+  });
+  it('continues when storage is blocked', () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    const attempt = beginAuthAttempt(entry);
+    openAuthAttempt();
+    expect(currentAuthAttempt()?.id).toBe(attempt.id);
+    spy.mockRestore();
+  });
+});
