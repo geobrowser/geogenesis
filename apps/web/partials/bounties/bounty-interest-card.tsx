@@ -41,7 +41,16 @@ type Props = {
 export function BountyInterestCard({ detail, roles }: Props) {
   const state = resolveInterestCardState(detail, roles);
   const actions = useBountyInterestActions(detail, roles);
-  const openPrivySignIn = usePrivySignIn();
+  const openPrivySignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'bounty_interest',
+      target_id: detail.bounty.id,
+      target_type: 'bounty',
+      auth_control: 'express_interest',
+      auth_intent: 'bounty_interest',
+      auth_continuation: 'repeat',
+    },
+  });
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },

@@ -128,7 +128,9 @@ describe('DeepLinkHandler', () => {
       render(<DeepLinkHandler />);
 
       expect(mocks.signInOptions?.redirectTo).toBe('/explore');
-      expect(mocks.signInOptions?.analytics).toEqual({ link_source: 'marketing' });
+      expect(mocks.signInOptions?.analytics).toEqual(
+        expect.objectContaining({ link_source: 'marketing', auth_trigger: 'deep_link', auth_control: 'open_sign_in' })
+      );
     });
   });
 

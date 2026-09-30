@@ -2,6 +2,7 @@
 
 import { usePrivy } from '@geogenesis/auth';
 
+import { marketingAuthProperties } from '~/core/auth-attempt';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -16,13 +17,30 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 export function useSignInDeepLink() {
   const { ready, authenticated } = usePrivy();
   const link = useDeepLinkParams(SIGN_IN_MODAL);
+  const roomId = typeof window === 'undefined' ? undefined : /^\/debate\/([^/]+)$/.exec(window.location.pathname)?.[1];
 
   const openSignIn = usePrivySignIn(undefined, {
     // Not the current URL, which still holds the trigger: a viewer who signs up goes through
     // onboarding and gets pushed back here afterwards, and being handed the modal a second time
     // is exactly the confusion the modal was opened to resolve.
     redirectTo: link.cleanUrl,
-    analytics: { link_source: link.via ?? undefined },
+    analytics: {
+      link_source: link.via ?? undefined,
+      component: link.via === 'invite' ? 'invite_link' : 'sign_in_deep_link',
+      auth_control: roomId ? 'join_debate' : 'open_sign_in',
+      ...(roomId
+        ? {
+            target_type: 'debate_room',
+            target_id: roomId,
+            page_type: 'debate_room',
+            page_entity_id: roomId,
+            page_entity_type: 'debate_room',
+            auth_intent: 'join_debate',
+          }
+        : {}),
+      auth_trigger: link.via === 'invite' ? 'invite_link' : 'deep_link',
+      ...marketingAuthProperties(typeof window === 'undefined' ? '' : window.location.search),
+    },
   });
 
   useDeepLinkEffect({

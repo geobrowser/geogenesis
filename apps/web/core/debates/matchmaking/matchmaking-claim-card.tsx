@@ -6,6 +6,8 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { type AnalyticsProperties } from '~/core/analytics';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
@@ -146,7 +148,7 @@ type Props = {
    * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
    * possibility the host has to handle, which keeps the response path unchanged for everyone else.
    */
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -408,7 +410,7 @@ export function useClaimPositionControl({
    * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
    * one they stay disabled, which is what the hub's cards have always done.
    */
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   /**
    * Whether this host offers the account-level match at all.
    *
@@ -424,6 +426,7 @@ export function useClaimPositionControl({
    */
   offersDebate?: boolean;
 }) {
+  const getSignInContext = useActionContext('claim_position_control', 'claim', claim.claim_entity_id);
   const target = {
     entityId: claim.claim_entity_id,
     entityName: claim.claim,
@@ -519,7 +522,12 @@ export function useClaimPositionControl({
 
   const respond = (position: boolean) => {
     if (!isConnected) {
-      onRequireSignIn?.();
+      onRequireSignIn?.({
+        ...getSignInContext(),
+        auth_control: position ? 'agree' : 'disagree',
+        auth_intent: 'vote',
+        auth_continuation: 'repeat',
+      });
       return;
     }
     if (isAccountSetupPending) return;
@@ -620,7 +628,7 @@ function RespondableControls({
    * from a second source contradicts the pair it is comparing rather than completing it.
    */
   reconcileWithIndexedResponse?: boolean;
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
 }) {

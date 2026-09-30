@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { type AnalyticsProperties } from '~/core/analytics';
 import { personProfileOpened } from '~/core/analytics';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
@@ -103,7 +104,14 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  */
 export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const { authenticated } = useGeoChatAuth();
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'debate_matchmaking',
+      auth_control: 'browse_people',
+      auth_continuation: 'repeat',
+      auth_intent: 'start_debate',
+    },
+  });
   // Undefined when signed in, so every path below keeps behaving exactly as it did.
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
 
@@ -609,7 +617,7 @@ function PersonRow({
    * Set only when signed out. Pressing Debate then opens Privy instead of sending a request, which
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   onSeeTimes: (
     peer: { userId: string; name: string },
     opener: HTMLElement | null,
@@ -723,7 +731,11 @@ function PersonRow({
             {...hubAnalyticsAttributes('See times', 'open_peer_availability')}
             onClick={event =>
               onRequireSignIn
-                ? onRequireSignIn()
+                ? onRequireSignIn({
+                    target_id: person.profile_space_id,
+                    target_type: 'space',
+                    auth_control: 'see_times',
+                  })
                 : onSeeTimes(
                     { userId: person.user_id, name: speakerLabel(person) },
                     event.currentTarget,
@@ -754,7 +766,11 @@ function PersonRow({
           <HubPillButton
             onClick={() =>
               onRequireSignIn
-                ? onRequireSignIn()
+                ? onRequireSignIn({
+                    target_id: person.profile_space_id,
+                    target_type: 'space',
+                    auth_control: 'start_debate',
+                  })
                 : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
             }
             // `in_debate` holds signed out too: it means this person is in an active debate right now,

@@ -1,5 +1,6 @@
 import { type ActionContext, type ActionKind } from './action-context';
 import { type AnalyticsEventName, analyticsContextRevision, capture } from './analytics';
+import { authAttemptForAction, completeAuthAction } from './auth-attempt';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
 /** Only classify outcomes that prove the action did not execute. Network and
@@ -109,6 +110,7 @@ export function observeOperation(
   attribution?: ActionContext
 ) {
   const operationId = crypto.randomUUID();
+  const authAttempt = authAttemptForAction(action, targetId, attribution?.auth_attempt_id);
   const isCurrent = snapshotAnalyticsRevision();
   const context = {
     measurement_version: 'growth-v2',
@@ -132,7 +134,13 @@ export function observeOperation(
         ...context,
         // Only canonical completions carry page/surface attribution. Legacy events
         // keep their original target type and opportunity/display IDs for existing consumers.
-        ...(event === 'action_completed' ? { ...attribution, action_context_version: 'v1' } : {}),
+        ...(event === 'action_completed'
+          ? {
+              ...attribution,
+              auth_attempt_id: attribution?.auth_attempt_id ?? authAttempt?.id,
+              action_context_version: 'v1',
+            }
+          : {}),
       });
     } catch {
       /* Never fail a product action. */
@@ -145,6 +153,7 @@ export function observeOperation(
       Object.entries(properties).filter(([key]) => CANONICAL_OUTCOME_FIELDS.has(key))
     );
     if (attribution) emit('action_completed', 'complete', { ...canonical, outcome });
+    if (authAttempt && isCurrent()) completeAuthAction(authAttempt, outcome, operationId);
   };
   if (opportunity) emit('action_attempted', 'attempt', {});
   return {

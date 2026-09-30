@@ -221,6 +221,13 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           // the vote silently dropped is worse than the toast this replaced. The runner replays
           // it once there is a personal space to write from, which is what the vote needs and
           // what finishing onboarding produces.
+          const attempt = openPrivySignIn({
+            ...attribution,
+            auth_control: 'pick_winner',
+            auth_intent: 'vote',
+            auth_continuation: 'queued',
+          });
+          attribution.auth_attempt_id = attempt?.id;
           enqueuePendingAction({
             id: `debate-winner-vote:${debateEntityId}`,
             label: 'your winner vote',
@@ -229,7 +236,6 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           });
           // Signed out is a step, not an error: open the login the upvote control opens rather
           // than a toast that names the problem and leaves them to find the way in.
-          openPrivySignIn();
           return;
         }
         if (accountError) {
