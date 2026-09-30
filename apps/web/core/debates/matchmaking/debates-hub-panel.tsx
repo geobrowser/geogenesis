@@ -220,7 +220,7 @@ export function DebatesHubPanel() {
       <aside
         data-debates-hub
         aria-label="Debates"
-        className="shadow-2xl fixed top-11 right-0 bottom-0 z-[200] flex w-[min(400px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white"
+        className="shadow-2xl fixed top-11 right-0 bottom-0 z-[200] flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white"
       >
         {body}
       </aside>
