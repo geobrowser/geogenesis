@@ -6,32 +6,28 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
-import { DebateTileChip } from '~/core/debates/debate-video-tile';
-import type { ResponseSplit } from '~/core/debates/end-card';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { speakerLabel } from '~/core/debates/playback-utils';
-import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
-import { normId } from '~/core/utils/norm-id';
+import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { NativeGeoImage } from '~/design-system/geo-image';
+import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
-
+import { DebateClaimTickerCard } from './debate-claim-ticker';
 import { Play } from './icons';
 import { CONTROL_CIRCLE_CLASS } from './player-controls';
-import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
+import type { EndCardClaims, useDebateEndCard } from './use-debate-end-card';
 import type { NextDebate } from './use-next-debate';
-import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type EndCardData = ReturnType<typeof useDebateEndCard>;
 
 /**
- * What a finished debate ends on: where the viewer stands on the claim, how each debater's claims
- * landed, and another debate to watch next.
+ * What a finished debate ends on: where the viewer stands on the claim, the claims the debate
+ * extracted to vote on, and another debate to watch next.
  *
  * On the player's dark glass — the same frosted surface as the claims that pop up over the video —
  * so the card reads as part of the player rather than a page laid over it. The controls on it are
@@ -42,12 +38,13 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  * and a fullscreen view, and a phone layout keyed to the window would get the wide ones wrong. The
  * player carries `@container`, and below 448px the card tightens.
  *
- * No claims list. They popped up over the video as they were made; the faces beside each debater
- * open them in the claims panel, and the claims pill sits directly under the video as it always has.
+ * The claims run sideways, as a carousel of the same cards that rose over the video as each was
+ * said, so a viewer who let them go by can go back and vote. Sideways rather than a list because
+ * the card is sized to fit a feed card's player without scrolling: a list would be one more
+ * vertical thing to scroll inside a feed that already scrolls vertically.
  *
- * Sized to fit a feed card's player without scrolling, which is why the card carries no second
- * claims pill, and why a narrow player gets replay as a pill in the card's header rather than a
- * circle in a band above it. It still scrolls as a last resort on a player too short for it.
+ * A narrow player gets replay as a pill in the card's header rather than a circle in a band above
+ * it. The card still scrolls vertically as a last resort on a player too short for it.
  */
 export function DebateEndCard({
   card,
@@ -56,10 +53,10 @@ export function DebateEndCard({
 }: {
   card: EndCardData;
   onReplay: () => void;
-  /** Opens the claims panel; with a debater's space id, at that debater's claims. */
+  /** Opens the claims panel. */
   onOpenClaims?: (participantSpaceId?: string) => void;
 }) {
-  const { claimResponse, debaters, countsReady, nextDebate } = card;
+  const { claimResponse, carousel, nextDebate } = card;
 
   return (
     <div data-debate-end-card className="absolute inset-0 z-40">
@@ -153,21 +150,12 @@ export function DebateEndCard({
           </div>
         </div>
 
-        <div className="my-3.5 h-px shrink-0 bg-white/15 @max-md:my-2" />
-
-        {/* Side by side at every width. Two debaters is the one comparison this card exists to make,
-            and stacking them on a phone turns it into two readouts that happen to be near each other.
-            The Agree side on the left, under the Agree button — `useDebateEndCard` orders them. */}
-        <div className="grid grid-cols-2 gap-4 @max-md:gap-3">
-          {debaters.map(debater => (
-            <DebaterColumn
-              key={debater.participant.profile_space_id}
-              debater={debater}
-              countsReady={countsReady}
-              onOpenClaims={onOpenClaims}
-            />
-          ))}
-        </div>
+        {carousel.claims.length > 0 ? (
+          <>
+            <div className="my-3.5 h-px shrink-0 bg-white/15 @max-md:my-2" />
+            <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} />
+          </>
+        ) : null}
 
         {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
       </section>
@@ -188,7 +176,7 @@ function VoteRow({
   countsReady,
   faces,
 }: {
-  summary: Pick<ResponseSplit, 'percent' | 'total'>;
+  summary: { percent: number | null; total: number };
   countsReady: boolean;
   faces: React.ReactNode;
 }) {
@@ -214,104 +202,129 @@ function VoteRow({
   );
 }
 
-function DebaterColumn({
-  debater,
-  countsReady,
+/** The live cards report each answer to the ticker's tally; the end card keeps no tally of its own. */
+const IGNORE_ANSWER = () => {};
+
+/**
+ * Every claim the debate extracted, side by side, each one votable.
+ *
+ * The cards are the live ones — the same speaker, share and thumbs, publishing through the same
+ * path — so a claim looks and answers the same whether it is caught as it is said or here after.
+ * In spoken order, which is the order the viewer heard them in.
+ *
+ * Snaps a card at a time. Scrolls by trackpad, touch or the arrows; the arrows are there because a
+ * mouse wheel scrolls vertically, and without them a mouse user sees one or two cards and no way to
+ * the rest. They step a card at a time and hide on a narrow player, which is a touch screen more
+ * often than not and has no room to spare in the header.
+ *
+ * The strip bleeds to the card's edges, so a card scrolled half out of view reads as "there is more
+ * this way" rather than as clipped.
+ */
+function ClaimsCarousel({
+  carousel,
   onOpenClaims,
 }: {
-  debater: EndCardDebater;
-  countsReady: boolean;
+  carousel: EndCardClaims;
   onOpenClaims?: (participantSpaceId?: string) => void;
 }) {
-  const { participant, name, claimCount, split, responderSpaceIds } = debater;
-  const side = responsePositionLabel(participant.position);
-  const openProfile = useOpenDebaterProfile(participant, { interactionSurface: 'debate_end_card' });
-  // Nothing rather than "0 claims" while the transcript is still saying which claims are theirs.
-  const countLabel = claimCount === null ? null : `${claimCount} ${claimCount === 1 ? 'claim' : 'claims'}`;
+  const { claims, speakerByClaimId, entitiesByClaimId } = carousel;
+  const stripRef = React.useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = React.useState({ atStart: true, atEnd: false });
 
-  // Across one debater's claims the same person can agree with some and disagree with others, so a
-  // single list split by side would misfile them. The row — count, share and faces — opens the claims
-  // panel at this debater's card instead, where every claim carries its own split and its own voters.
-  const faces = (
-    <RankingAggregatedSubmitterAvatars
-      submitterSpaceIds={responderSpaceIds}
-      totalCount={responderSpaceIds.length}
-      size={12}
-    />
-  );
-  // Nothing until the counts are an answer, as on the claim's row: "No votes yet" off a query still
-  // in flight would be a fact about the network presented as one about the debate.
-  const hasVotes = countsReady && split.percent !== null;
-  const share = !countsReady ? null : hasVotes ? `${split.percent}% agree` : 'No votes yet';
+  const readEdges = React.useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    // A pixel of slack: fractional scroll positions on high-density screens never land exactly.
+    const atStart = strip.scrollLeft <= 1;
+    const atEnd = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+    setEdges(current => (current.atStart === atStart && current.atEnd === atEnd ? current : { atStart, atEnd }));
+  }, []);
 
-  // The count, the share and the voters, and nothing drawn between them: a bar per debater repeated
-  // the claim's own bar directly above at a size too small to read. Wraps rather than squeezes, so a
-  // narrow column puts the faces under the numbers instead of clipping them.
-  //
-  // A narrow player has no room for the side chip beside the name, so the side leads this block
-  // instead, sharing its first line with the count ("Agree · 9 claims"), and a break puts the share
-  // and faces on the next. One count, moved by the layout, rather than one per width.
-  //
-  // The break is a line of its own, so it is the break that spaces the two lines, not the row gap:
-  // with a gap as well, it took one above it and one below, and the share sat twice as far from the
-  // count as the count sat from the name. `h-1.5` is the column's own gap on a narrow player.
-  const stats = (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-white/60 tabular-nums @max-md:gap-y-0">
-      <span className="hidden @max-md:inline">{side}</span>
-      {countLabel ? (
-        <>
-          <span aria-hidden className="hidden @max-md:inline">
-            ·
-          </span>
-          <span>{countLabel}</span>
-        </>
-      ) : null}
-      <span aria-hidden className="hidden h-1.5 basis-full @max-md:block" />
-      {countLabel && share ? (
-        <span aria-hidden className="@max-md:hidden">
-          ·
-        </span>
-      ) : null}
-      {share ? <span className={hasVotes ? 'text-chatMedium text-white' : undefined}>{share}</span> : null}
-      {hasVotes ? <span className="flex items-center">{faces}</span> : null}
-    </span>
-  );
+  React.useLayoutEffect(() => {
+    readEdges();
+    const strip = stripRef.current;
+    if (!strip || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(readEdges);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [readEdges, claims.length]);
+
+  const step = (direction: 1 | -1) => {
+    const strip = stripRef.current;
+    const first = strip?.firstElementChild as HTMLElement | null;
+    if (!strip || !first) return;
+    // One card and the gap after it, so each press lands the next card on the snap point.
+    const gap = Number.parseFloat(getComputedStyle(strip).columnGap) || 0;
+    strip.scrollBy({ left: direction * (first.offsetWidth + gap), behavior: 'smooth' });
+  };
+
+  const arrow =
+    'grid size-6 place-items-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-30';
 
   return (
-    <div data-end-card-debater={participant.profile_space_id} className="flex min-w-0 flex-col gap-2 @max-md:gap-1.5">
-      <div className="flex min-w-0 items-center gap-1.5">
-        {/* The same link to the person as their name on the tile and on each claim they made: their
-            profile, in the side panel. An anchor, as the thread's speaker names are, rather than the
-            tile's button. The tile's name sits on the video's play/pause surface, which has no
-            address to honour; the card is not on it, so Cmd-click, middle-click and "copy link"
-            reach the person's space — the hook lets those through. The side chip stays outside the
-            link, as it does on the tile. */}
-        <a
-          href={NavUtils.toSpace(normId(participant.profile_space_id))}
-          onClick={openProfile}
-          className="flex min-w-0 items-center gap-1.5 no-underline hover:underline"
-        >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white/15 @max-md:size-[1.125rem]">
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
-          </span>
-          <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
-        </a>
-        <DebateTileChip className="shrink-0 bg-white/15 text-white @max-md:hidden">{side}</DebateTileChip>
+    <section aria-label="Claims from this debate" className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-chatMedium text-white/60">
+          Vote on the claims <span className="text-white/40 tabular-nums">· {claims.length}</span>
+        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {onOpenClaims ? (
+            <button
+              type="button"
+              onClick={() => onOpenClaims()}
+              className="mr-1 rounded px-1 text-smallButton text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              See all
+            </button>
+          ) : null}
+          <button
+            type="button"
+            aria-label="Previous claims"
+            onClick={() => step(-1)}
+            disabled={edges.atStart}
+            className={cx(arrow, '@max-md:hidden')}
+          >
+            <span className="rotate-180">
+              <ChevronRight />
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label="More claims"
+            onClick={() => step(1)}
+            disabled={edges.atEnd}
+            className={cx(arrow, '@max-md:hidden')}
+          >
+            <ChevronRight />
+          </button>
+        </div>
       </div>
 
-      {onOpenClaims ? (
-        <button
-          type="button"
-          aria-label={`${[countLabel, share].filter(Boolean).join(', ') || 'Claims'} — open ${name}'s claims`}
-          onClick={() => onOpenClaims(participant.profile_space_id)}
-          className="-mx-1 flex cursor-pointer self-start rounded px-1 text-left transition-colors hover:bg-white/10"
-        >
-          {stats}
-        </button>
-      ) : (
-        stats
-      )}
-    </div>
+      <div
+        ref={stripRef}
+        onScroll={readEdges}
+        data-end-card-claims
+        className="-mx-5 flex snap-x snap-mandatory scroll-px-5 [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain px-5 @max-md:-mx-3.5 @max-md:scroll-px-3.5 @max-md:px-3.5 [&::-webkit-scrollbar]:hidden"
+      >
+        {claims.map(claim => (
+          // The card is the full width of whatever holds it, so the width is set here. Short enough
+          // that the next card always shows its edge, which is the only sign the strip scrolls.
+          <div
+            key={claim.id}
+            data-end-card-claim={claim.id}
+            className="flex w-[16.5rem] shrink-0 snap-start @max-md:w-[14rem] [&>*]:h-full"
+          >
+            <DebateClaimTickerCard
+              window={{ claim, startMs: 0, endMs: 0 }}
+              speaker={speakerByClaimId.get(claim.id) ?? null}
+              row={null}
+              entity={entitiesByClaimId.get(claim.id) ?? null}
+              onAnswered={IGNORE_ANSWER}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
