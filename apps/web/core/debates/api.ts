@@ -1272,6 +1272,58 @@ export async function getDebate(
   });
 }
 
+/** What `POST /debates/{id}/hide` and `/unhide` answer with: the debate's visibility afterwards. */
+export type DebateVisibilityResponse = {
+  debate_id: string;
+  hidden: boolean;
+  hidden_at: string | null;
+  /** Who hid it. Null when visible, or when an operator script hid it. */
+  hidden_by_user_id: string | null;
+  hidden_reason: string | null;
+};
+
+/** geo-chat's limit on a hide reason, in characters (`MAX_HIDE_REASON_CHARS`). */
+export const DEBATE_HIDE_REASON_MAX_CHARS = 500;
+
+/**
+ * Removes a completed debate from the product (GEO-2785): it leaves every listing, and every by-id
+ * read answers `debate_not_found`. geo-chat allows a participant or an editor of the debate's space,
+ * and refuses anyone else with `debate_visibility_forbidden`. Idempotent. A blank reason is sent as
+ * none, which is how geo-chat would read it anyway.
+ */
+export async function hideDebate(
+  debateId: string,
+  reason: string | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const trimmed = reason?.trim();
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/hide`, {
+    method: 'POST',
+    body: trimmed ? { reason: trimmed } : {},
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Restores a hidden debate. Narrower than {@link hideDebate}: a space editor may restore any, a
+ * participant only one they hid themselves. Idempotent.
+ */
+export async function unhideDebate(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/unhide`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function getLiveKitToken(
   debateId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
