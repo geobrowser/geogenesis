@@ -20,6 +20,8 @@ type UsePrivySignInOptions = {
    * URL.
    */
   analytics?: AnalyticsProperties;
+  /** Continue an email verification attempt through the modal without replacing its visitor/session. */
+  resumeAuthAttempt?: boolean;
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
 };
@@ -75,6 +77,6 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback(() => {
     prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
     requestedRef.current = true;
-    login(optionsRef.current?.analytics);
+    login(optionsRef.current?.analytics, { resume: optionsRef.current?.resumeAuthAttempt });
   }, [login, prepareOnboarding]);
 }

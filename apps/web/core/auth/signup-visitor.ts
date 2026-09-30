@@ -1,6 +1,7 @@
 'use client';
 
 import type { AnalyticsProperties } from '../analytics';
+import { readAnalyticsContext } from '../analytics-context';
 
 const storageKey = 'geo:signup-visitor:v1';
 const maxAgeMs = 24 * 60 * 60 * 1000;
@@ -13,35 +14,29 @@ type SignupVisitor = {
 
 // Only used when browser storage is unavailable. Shared storage is authoritative across tabs.
 let memory: SignupVisitor | null = null;
-
-function context() {
-  try {
-    if (typeof window === 'undefined' || process.env.NEXT_PUBLIC_DISABLE_POSTHOG === '1') return {};
-    return (window.lytics ?? window.geoAnalytics)?.getContext?.() ?? {};
-  } catch {
-    return {};
-  }
-}
+let memoryOnly = false;
 
 function validId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 200;
 }
 
-export function beginSignupVisitor(resume = false) {
+export function beginSignupVisitor({ resume = false }: { resume?: boolean } = {}) {
   if (resume && pendingVisitor()) return;
   clearSignupVisitor();
-  const current = context();
+  const current = readAnalyticsContext();
   if (current.user_id || !validId(current.anonymous_id) || !validId(current.session_id)) return;
   memory = { startedAt: Date.now(), anonymousId: current.anonymous_id, sessionId: current.session_id };
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(memory));
   } catch {
-    // Storage restrictions must never prevent login.
+    // Quota failures can block writes while reads still succeed with no saved value.
+    memoryOnly = true;
   }
 }
 
 export function clearSignupVisitor() {
   memory = null;
+  memoryOnly = false;
   try {
     window.localStorage.removeItem(storageKey);
   } catch {
@@ -52,7 +47,7 @@ export function clearSignupVisitor() {
 function pendingVisitor(): SignupVisitor | null {
   let stored: string | null;
   try {
-    stored = window.localStorage.getItem(storageKey);
+    stored = memoryOnly ? JSON.stringify(memory) : window.localStorage.getItem(storageKey);
   } catch {
     stored = JSON.stringify(memory);
   }
@@ -98,7 +93,7 @@ export function signupVisitorProperties(createdAt?: Date | string | null): Analy
 /** Called immediately before the runtime identifies the new account, including queued calls. */
 export function withSignupVisitor(properties: AnalyticsProperties): AnalyticsProperties {
   if (properties.signup_context_source === 'auth_start') return properties;
-  const current = context();
+  const current = readAnalyticsContext();
   const available = validId(current.anonymous_id) && validId(current.session_id);
   return {
     ...properties,

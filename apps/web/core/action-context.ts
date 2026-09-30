@@ -1,3 +1,4 @@
+import { readAnalyticsContext } from './analytics-context';
 import { equals } from './id/normalize';
 
 /** Shared, text-free attribution contract. IDs refer to graph entities, never labels. */
@@ -167,13 +168,7 @@ export function snapshotActionContext(
   overrides: ActionScope = {},
   options: { scopeDepth?: number; ignoreEventContext?: boolean } = {}
 ): ActionContext {
-  const runtime = typeof window === 'undefined' ? undefined : (window.lytics ?? window.geoAnalytics);
-  let identity: Record<string, unknown> = {};
-  try {
-    identity = runtime?.getContext?.() ?? {};
-  } catch {
-    /* Telemetry cannot block an action. */
-  }
+  const identity = readAnalyticsContext();
   const event = options.ignoreEventContext ? undefined : eventContext;
   // A child scope (for example a claim row inside a panel) wins over its parent's
   // capture handler. A deeper clicked surface still reaches hooks built above it.

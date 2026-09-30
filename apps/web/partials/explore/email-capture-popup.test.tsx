@@ -6,6 +6,7 @@ import * as React from 'react';
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
@@ -26,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
-  usePrivySignInOptions: undefined as undefined | { analytics?: Record<string, unknown>; onError?: () => void },
+  usePrivySignInOptions: undefined as Parameters<typeof usePrivySignIn>[1],
   useLoginWithEmailArgs: undefined as unknown,
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
@@ -53,10 +54,7 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (
-    _onComplete?: () => void,
-    options?: { analytics?: Record<string, unknown>; onError?: () => void }
-  ) => {
+  usePrivySignIn: (_onComplete?: () => void, options?: Parameters<typeof usePrivySignIn>[1]) => {
     mocks.usePrivySignIn();
     mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
@@ -981,6 +979,7 @@ describe('ExploreEmailCapturePopup', () => {
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+      expect(mocks.usePrivySignInOptions?.resumeAuthAttempt).toBe(true);
       expect(mocks.usePrivySignInOptions?.analytics).toEqual({
         link_source: 'explore_email_capture',
         form_type: 'account',

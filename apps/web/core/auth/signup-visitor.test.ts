@@ -141,7 +141,7 @@ describe('signup visitor attribution', () => {
     vi.resetModules();
     window.lytics!.getContext = () => ({ anonymous_id: 'new', session_id: 'new' });
     const resumed = await import('../privy-auth-events');
-    resumed.beginPrivyAuth({}, true);
+    resumed.beginPrivyAuth({}, { resume: true });
     resumed.completePrivyAuth(completion());
     expect(window.lytics!.signedUp).toHaveBeenCalledWith(
       expect.anything(),
@@ -167,6 +167,24 @@ describe('signup visitor attribution', () => {
     expect(window.lytics!.signedUp).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        signup_context_source: 'auth_start',
+      })
+    );
+  });
+
+  it('keeps the initiating session when writes fail but reads still work', async () => {
+    const auth = await import('../privy-auth-events');
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
+    });
+    auth.beginPrivyAuth();
+    window.lytics!.getContext = () => ({ anonymous_id: 'later-visitor', session_id: 'later-session' });
+    auth.completePrivyAuth(completion());
+    expect(window.lytics!.signedUp).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        signup_anonymous_id: visitor.anonymous_id,
+        signup_session_id: visitor.session_id,
         signup_context_source: 'auth_start',
       })
     );

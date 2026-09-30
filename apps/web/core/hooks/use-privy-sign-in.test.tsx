@@ -96,7 +96,7 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
     expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
-    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined, { resume: undefined });
   });
 
   // The deep link strips its own params as it opens the dialog, so the render that sees the
@@ -136,7 +136,7 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(undefined, { resume: undefined });
   });
 
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion
@@ -171,5 +171,12 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnError?.('exited_auth_flow'));
 
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('passes the resume option when opening the modal for an email attempt', () => {
+    const { result } = renderHook(() => usePrivySignIn(undefined, { resumeAuthAttempt: true }));
+    act(() => result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined, { resume: true });
+    expect(mocks.login).toHaveBeenCalledOnce();
   });
 });

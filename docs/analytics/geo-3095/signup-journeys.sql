@@ -10,25 +10,25 @@ signups AS (
       AND privy_user_id != ''
     GROUP BY account_id
 ),
-links AS (
+auth_events AS (
     SELECT coalesce(nullIf(privy_user_id, ''), user_id, '') AS account_id,
-           count() AS app_completions,
-           countIf(JSONExtractString(properties_json, 'signup_anonymous_id') != ''
-               AND JSONExtractString(properties_json, 'signup_session_id') != '') AS linked_completions,
-           -- Keep a visitor/session pair from ONE event; prefer the initiating snapshot.
-           argMinIf(tuple(
-               JSONExtractString(properties_json, 'signup_anonymous_id'),
-               JSONExtractString(properties_json, 'signup_session_id'),
-               JSONExtractString(properties_json, 'signup_context_source')
-           ), tuple(JSONExtractString(properties_json, 'signup_context_source') != 'auth_start', event_time),
-               JSONExtractString(properties_json, 'signup_anonymous_id') != ''
-               AND JSONExtractString(properties_json, 'signup_session_id') != '') AS visitor
+           event_time, event_name,
+           JSONExtractString(properties_json, 'signup_anonymous_id') AS signup_anonymous_id,
+           JSONExtractString(properties_json, 'signup_session_id') AS signup_session_id,
+           JSONExtractString(properties_json, 'signup_context_source') AS context_source,
+           signup_anonymous_id != '' AND signup_session_id != '' AS has_visitor
     FROM analytics.events_canonical
     WHERE app = 'genesis' AND environment = 'production'
-      AND (event_name = 'signed_up' OR (event_name = 'session_restored'
-           AND JSONExtractString(properties_json, 'signup_context_source') = 'auth_start'))
+      AND (event_name = 'signed_up' OR (event_name = 'session_restored' AND context_source = 'auth_start'))
       AND event_time >= toDateTime({signup_day:Date}, 'UTC') - INTERVAL 5 MINUTE
       AND event_time < toDateTime({signup_day:Date}, 'UTC') + INTERVAL 2 DAY
+),
+links AS (
+    SELECT account_id, count() AS app_completions, countIf(has_visitor) AS linked_completions,
+           -- Keep a visitor/session pair from ONE event; prefer the initiating snapshot.
+           argMinIf(tuple(signup_anonymous_id, signup_session_id, context_source),
+               tuple(context_source != 'auth_start', event_time), has_visitor) AS visitor
+    FROM auth_events
     GROUP BY account_id
 ),
 accounts AS (

@@ -10,9 +10,12 @@ let attribution: AnalyticsProperties = {};
 let completedUserId: string | null = null;
 const signedUpUserIds = new Set<string>();
 
-export function beginPrivyAuth(properties: AnalyticsProperties = {}, resume = false) {
+export function beginPrivyAuth(
+  properties: AnalyticsProperties = {},
+  options: Parameters<typeof beginSignupVisitor>[0] = {}
+) {
   attribution = { ...properties };
-  beginSignupVisitor(resume);
+  beginSignupVisitor(options);
 }
 
 export function cancelPrivyAuth() {

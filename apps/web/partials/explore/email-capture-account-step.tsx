@@ -47,6 +47,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
     analytics: ACCOUNT_ANALYTICS,
+    resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');
@@ -104,7 +105,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   React.useEffect(() => {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
-    beginPrivyAuth(ACCOUNT_ANALYTICS, true);
+    beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
     void requestCode();
   }, [requestCode]);
 
