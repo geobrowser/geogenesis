@@ -5,9 +5,7 @@ import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
-import { useCookies } from 'react-cookie';
-
-import { Cookie, WALLET_ADDRESS } from '../cookie';
+import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -20,16 +18,14 @@ import {
 
 export function smartAccountQueryKey(
   walletAddress: string | null | undefined,
-  embeddedWalletAddress: string | null | undefined,
-  cookieWalletAddress: string | null | undefined
+  embeddedWalletAddress: string | null | undefined
 ) {
-  return ['smart-account', walletAddress, embeddedWalletAddress, cookieWalletAddress] as const;
+  return ['smart-account', walletAddress, embeddedWalletAddress] as const;
 }
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const { wallets } = useWallets();
-  const [cookies] = useCookies([WALLET_ADDRESS]);
 
   // Privy embedded wallet — the EIP-7702 authority for the configured Geo chain. We need this
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
@@ -42,7 +38,7 @@ export function useSmartAccount() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address, cookies.walletAddress),
+    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address),
     queryFn: async () => {
       // ZeroDev EIP-7702 on every Geo chain — the chain identity comes from the
       // env-driven GEO_NETWORK config, so a network flip changes nothing here.
@@ -54,6 +50,7 @@ export function useSmartAccount() {
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
       if (!embeddedWallet) {
+        forgetSyncedWalletCookie();
         return null;
       }
 
@@ -205,11 +202,10 @@ export function useSmartAccount() {
           ),
       };
 
-      if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {
-        // The EOA address — registry now keys permissions on this directly (no Safe
-        // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-        await Cookie.onConnectionChange({ type: 'connect', address: wrapped.account.address });
-      }
+      // The EOA address — registry now keys permissions on this directly (no Safe
+      // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
+      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
+      await syncWalletCookie(wrapped.account.address);
 
       return wrapped;
     },

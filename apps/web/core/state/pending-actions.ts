@@ -30,7 +30,10 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
       const context = getContext();
       setActions(prev => [
         ...prev.filter(a => a.id !== action.id),
-        { ...action, run: () => withActionContext(context, action.run) },
+        {
+          ...action,
+          run: () => withActionContext(context, action.run),
+        },
       ]);
     },
     [setActions, getContext]

@@ -54,6 +54,11 @@ type InteractionBarProps = {
    * control looks like.
    */
   responseKind?: ResponseKind | 'infer';
+  /**
+   * The debate's overflow menu, drawn last. Its host decides what is in it and whether it is drawn
+   * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
+   */
+  overflow?: React.ReactNode;
   className?: string;
 };
 
@@ -86,6 +91,7 @@ export function DebateInteractionBar({
   onShare,
   shareOpen,
   responseKind = 'curation',
+  overflow,
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -139,6 +145,7 @@ export function DebateInteractionBar({
             expanded={shareOpen}
           />
         )}
+        {overflow}
       </div>
     );
   }
@@ -183,6 +190,7 @@ export function DebateInteractionBar({
           hideLabel={compact}
         />
       )}
+      {overflow}
     </div>
   );
 }

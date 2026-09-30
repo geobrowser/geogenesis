@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
+import { trackAuthOnboarding } from '~/core/auth-attempt';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -106,6 +107,7 @@ export function PendingPersonalSpaceRunner() {
         personalSpaceId: spaceId,
         personalEntityId: topicId,
       });
+      trackAuthOnboarding('personal_space', 'completed');
       setResolvedSpaceId(spaceId);
       setPending(null);
 
@@ -269,6 +271,7 @@ export function PendingPersonalSpaceRunner() {
         // enrich is still in flight or rejected (seededIds, not enrich results).
         void targetsPromise.then(rollbackPending, rollbackPending);
         console.error('[PendingPersonalSpace] creation failed', error);
+        trackAuthOnboarding('personal_space', 'failed');
         setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
           setPending({ topicId, address, status: 'pending' });

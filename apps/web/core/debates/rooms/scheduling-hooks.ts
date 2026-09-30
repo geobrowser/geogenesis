@@ -115,10 +115,18 @@ export function useRescheduleScheduledDebate() {
       if (isCurrent()) {
         debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
       }
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
     onError: (error, { analytics }, isCurrent) => {
       if (isCurrent?.()) debateScheduledRequestFailed({ mode: 'reschedule', error, analytics });
+    },
+    onSettled: () => {
+      // Settled, as cancel is: a refusal means the list the viewer acted on is stale. Moving an
+      // accepted debate also closes its room and frees its slot for both people, so the upcoming
+      // rooms and the availability reads go too, not only the requests.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
     },
   });
 }

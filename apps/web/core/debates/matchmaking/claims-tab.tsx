@@ -208,7 +208,14 @@ export function ClaimsTab({
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
   // card keeps publishing directly.
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'debate_matchmaking',
+      auth_control: 'browse_claims',
+      auth_continuation: 'repeat',
+      auth_intent: 'start_debate',
+    },
+  });
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
 
   // The account's open request, from the same two sources the matches list reads it from — the

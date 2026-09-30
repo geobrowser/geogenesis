@@ -96,6 +96,15 @@ export function SharedAvailabilityModal({
   const [signingIn, setSigningIn] = React.useState(false);
   const signIn = usePrivySignIn(() => setSigningIn(false), {
     onError: () => setSigningIn(false),
+    analytics: {
+      component: 'invite_link',
+      target_id: profileSpaceId,
+      target_type: 'space',
+      auth_control: 'book_debate',
+      auth_trigger: 'invite_link',
+      auth_intent: 'join_debate',
+      overlay: 'modal',
+    },
     // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
     // goes through onboarding and is sent back here afterwards, and should land on the week again —
     // still carrying the `via` it came with, or that second arrival loses its attribution.
