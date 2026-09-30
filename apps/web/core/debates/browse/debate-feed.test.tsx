@@ -133,6 +133,13 @@ vi.mock('./debate-claims-panel', () => ({
 vi.mock('./share-dialog', () => ({
   DebateShareDialog: () => null,
 }));
+// Its eligibility rules and dialog are covered by debate-overflow-menu.test.tsx; here it only has to
+// land in both of the bar's orientations.
+vi.mock('./debate-overflow-menu', () => ({
+  DebateOverflowMenu: ({ debate, variant }: { debate: Debate; variant: string }) => (
+    <div data-testid={`overflow-${variant}-${debate.id}`} />
+  ),
+}));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
@@ -449,6 +456,57 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
 
     expect(screen.getByText('Entity page')).toBeInTheDocument();
+  });
+
+  // GEO-2785, after removal became a product action. geo-chat's own `debate_not_found` for an id it
+  // minted (UUIDv7) means removed, and a removed debate must not fall back to the raw entity page,
+  // which carries its video. The server usually catches this first; this is the path for a debate
+  // removed after the page rendered, or while the server's check failed open.
+  it('shows the removed view, not the entity page, for a removed geo-chat debate', () => {
+    const removedId = '01a0448a61d371018434a20fdadf6f97';
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorError = new GeoChatRequestError('debate was not found', 'debate_not_found', 404);
+
+    render(
+      <DebatesBrowseFeed
+        spaceId="space-1"
+        initialDebateId={removedId}
+        fallback={<div>Entity page</div>}
+        removedView={<div>Removed view</div>}
+      />
+    );
+
+    expect(screen.getByText('Removed view')).toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
+  });
+
+  // Not every 404 is a removal: an id geo-chat never minted, or a 404 with no geo-chat code, keeps
+  // the fallback it always had.
+  it.each([
+    ['an id geo-chat did not mint', 'debate-99', 'debate_not_found'],
+    ['a 404 without geo-chat’s code', '01a0448a61d371018434a20fdadf6f97', null],
+  ])('keeps the entity page fallback for %s', (_, anchorId, code) => {
+    mocks.anchorError = new GeoChatRequestError('404 Not Found', code, 404);
+
+    render(
+      <DebatesBrowseFeed
+        spaceId="space-1"
+        initialDebateId={anchorId}
+        fallback={<div>Entity page</div>}
+        removedView={<div>Removed view</div>}
+      />
+    );
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    expect(screen.queryByText('Removed view')).not.toBeInTheDocument();
+  });
+
+  it('puts the overflow menu in both orientations of the bar', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getByTestId('overflow-pill-debate-1')).toBeInTheDocument();
+    expect(screen.getByTestId('overflow-circle-debate-1')).toBeInTheDocument();
   });
 
   // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it
@@ -951,6 +1009,21 @@ describe('DebatesBrowseFeed visit outcome (GEO-3074)', () => {
     view.unmount();
 
     expect(outcomes()).toEqual([expect.objectContaining({ reason: 'unavailable', detail })]);
+  });
+
+  it('records a removed debate as unavailable with the removed detail', () => {
+    mocks.anchorError = new GeoChatRequestError('debate was not found', 'debate_not_found', 404);
+    const view = render(
+      <DebatesBrowseFeed
+        spaceId="space-1"
+        initialDebateId="01a0448a61d371018434a20fdadf6f97"
+        fallback={<div>Entity page</div>}
+        removedView={<div>Removed view</div>}
+      />
+    );
+    view.unmount();
+
+    expect(outcomes()).toEqual([expect.objectContaining({ reason: 'unavailable', detail: 'removed' })]);
   });
 
   it('records nothing on the Debates tab, which is not a visit to one debate', () => {

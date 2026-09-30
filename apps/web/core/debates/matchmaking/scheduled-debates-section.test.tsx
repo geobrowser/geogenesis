@@ -66,6 +66,29 @@ vi.mock('./use-geo-chat-user-summaries', () => ({
   },
 }));
 
+// The week itself is covered by its own suites; here it only matters what it is opened with.
+vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
+  PeerAvailabilityBookingModal: (props: {
+    open: boolean;
+    userId: string;
+    peerName?: string | null;
+    rescheduleRequestId?: string | null;
+    entry?: string | null;
+    onClose: () => void;
+  }) =>
+    props.open ? (
+      <div role="dialog" aria-label="week">
+        <output aria-label="week of">{props.userId}</output>
+        <output aria-label="week name">{props.peerName ?? ''}</output>
+        <output aria-label="moving">{props.rescheduleRequestId ?? ''}</output>
+        <output aria-label="entry">{props.entry ?? ''}</output>
+        <button type="button" onClick={props.onClose}>
+          close week
+        </button>
+      </div>
+    ) : null,
+}));
+
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
@@ -337,6 +360,52 @@ describe('calling a scheduled debate off', () => {
     setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-admin' })] });
 
     expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+  });
+});
+
+// Moving an agreed debate (geo-chat allows it until someone joins, like Cancel): the other debater's
+// week, in the same reschedule mode the scheduling emails' "Choose different time" opens.
+describe('moving a scheduled debate', () => {
+  it("opens the other debater's week to move this debate", async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: false })] });
+    expect(screen.queryByRole('dialog', { name: 'week' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('week name')).toHaveTextContent('Ada');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    expect(screen.getByLabelText('entry')).toHaveTextContent('requests_reschedule');
+    // Offered beside Cancel, not instead of it.
+    expect(screen.getByRole('button', { name: 'Cancel debate' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'close week' }));
+    expect(screen.queryByRole('dialog', { name: 'week' })).not.toBeInTheDocument();
+  });
+
+  it('sits beside Join while the room is open', () => {
+    setup({ upcoming: [upcomingRow({ joinable: true })] });
+
+    expect(screen.getByRole('link', { name: 'Join debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['the other debater is in the room', upcomingRow({ others_present: true })],
+    ['anyone has been in the room', upcomingRow({ rematch_session_id: 'session-1' })],
+    ['no request is known to own the room', upcomingRow({}, 'user-them', null)],
+    ['the other debater is not known', upcomingRow({}, null, 'request-1')],
+  ])('is not offered once %s', (_why, row) => {
+    setup({ upcoming: [row] });
+
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  it('is not offered on a pending request, which is answered or withdrawn instead', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
   });
 });
 

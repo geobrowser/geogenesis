@@ -10,7 +10,11 @@ import { PeerAvailabilityModal } from './peer-availability-modal';
 
 // The view has its own tests; these are about the shell.
 vi.mock('./peer-availability', () => ({
-  PeerAvailability: ({ userId }: { userId: string }) => <div data-testid="peer-availability">{userId}</div>,
+  PeerAvailability: ({ userId, disagreementCount }: { userId: string; disagreementCount?: number | null }) => (
+    <div data-testid="peer-availability" data-disagreements={disagreementCount ?? undefined}>
+      {userId}
+    </div>
+  ),
 }));
 
 const onClose = vi.fn();
@@ -45,6 +49,19 @@ describe('PeerAvailabilityModal', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // The view's own "When … is free" is the first line; a visible "Availability" above it said the
+  // same thing twice.
+  it('draws no title of its own, but still names the dialog', () => {
+    setup({ peerName: 'Ada' });
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'When Ada is free' })).toBeInTheDocument();
+  });
+
+  it('hands the disagreement count to the view', () => {
+    setup({ disagreementCount: 7 });
+    expect(screen.getByTestId('peer-availability')).toHaveAttribute('data-disagreements', '7');
   });
 
   it('opts the content out of the bottom-sheet drag it is portalled inside', () => {

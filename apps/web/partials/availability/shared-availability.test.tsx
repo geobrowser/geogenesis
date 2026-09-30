@@ -46,6 +46,14 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => spaceQuery }));
+const disagreementCalls: unknown[][] = [];
+let disagreementCount: number | null = null;
+vi.mock('~/core/debates/matchmaking/use-disagreement-count', () => ({
+  useDisagreementCount: (...args: unknown[]) => {
+    disagreementCalls.push(args);
+    return disagreementCount;
+  },
+}));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
 vi.mock('./own-schedule-modal', () => ({
   OwnScheduleModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
@@ -62,6 +70,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     peerName,
     rescheduleRequestId,
     entry,
+    disagreementCount,
     onClose,
     children,
   }: {
@@ -70,6 +79,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     peerName?: string | null;
     rescheduleRequestId?: string | null;
     entry?: string | null;
+    disagreementCount?: number | null;
     onClose: () => void;
     children?: React.ReactNode;
   }) =>
@@ -80,6 +90,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
         data-peer-name={peerName ?? ''}
         data-reschedule={rescheduleRequestId ?? ''}
         data-entry={entry ?? ''}
+        data-disagreements={disagreementCount ?? ''}
       >
         {children ?? <div data-testid="week" />}
         <button type="button" onClick={onClose}>
@@ -102,6 +113,8 @@ beforeEach(() => {
   personalSpaceId = null;
   signInOptions = undefined;
   profileCalls.length = 0;
+  disagreementCalls.length = 0;
+  disagreementCount = null;
   signInCallbacks = {};
   capture.mockClear();
 });
@@ -153,6 +166,26 @@ describe('SharedAvailabilityModal', () => {
     expect(modal).toHaveAttribute('data-user-id', 'chat-user-1');
     expect(modal).toHaveAttribute('data-peer-name', 'Ada');
     expect(screen.getByTestId('week')).toBeInTheDocument();
+  });
+
+  // A link has no People tab row to hand a count down, so it asks for the viewer and this person.
+  it('compares the viewer with the person behind the link and hands the count on', () => {
+    personalSpaceId = 'viewer-space';
+    disagreementCount = 4;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    renderModal();
+
+    expect(disagreementCalls.at(-1)).toEqual(['viewer-space', 'profile-space']);
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-disagreements', '4');
+  });
+
+  it('asks for no comparison signed out', () => {
+    auth.authenticated = false;
+    personalSpaceId = 'viewer-space';
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    renderModal();
+
+    expect(disagreementCalls.at(-1)?.[0]).toBeNull();
   });
 
   it("opens the owner's schedule editor on their own link, as soon as their space is known", () => {

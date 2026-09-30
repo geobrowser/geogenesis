@@ -48,7 +48,7 @@ function PrivyConnectButton() {
 
   const onLogin = () => {
     prepareOnboarding({ returnTo: null });
-    login();
+    login({ component: 'navbar', auth_control: 'sign_in', auth_intent: 'sign_in' });
   };
 
   return (

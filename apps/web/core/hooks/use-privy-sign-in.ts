@@ -19,8 +19,8 @@ type UsePrivySignInOptions = {
    * when the viewer presses, not when Privy finishes, which can be minutes later on a different
    * URL.
    */
-  analytics?: AnalyticsProperties;
-  /** Continue an email verification attempt through the modal without replacing its visitor/session. */
+  analytics?: AnalyticsProperties | (() => AnalyticsProperties);
+  /** Keep the initiating signup visitor/session when email verification falls back to the modal. */
   resumeAuthAttempt?: boolean;
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
@@ -48,35 +48,27 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
-  // Privy fires `onComplete` on session restoration too, not just on a login someone asked for —
-  // opening a second tab is enough. So the consumer's
-  // callback is armed here and only fires for a sign-in this hook actually started. Without it,
-  // loading the feed in a new tab would open the hub with nobody having pressed anything.
-  const requestedRef = React.useRef(false);
-
+  // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
-    onComplete: () => {
-      // Keep UI actions scoped to the initiating control. Analytics completion is owned by
-      // PrivyAuthTracker, which stays mounted even if this control disappears during login.
-      if (!requestedRef.current) return;
-      requestedRef.current = false;
-
-      onCompleteRef.current?.();
-    },
-    // Privy calls this when the attempt fails and when the viewer dismisses the modal. Leaving
-    // the flag set would hand an abandoned press to whatever completion arrived next — a restore,
-    // or a login started somewhere else on the page — which is the same unbidden replay the
-    // arming exists to prevent, just later.
-    onError: () => {
-      if (!requestedRef.current) return;
-      requestedRef.current = false;
-      optionsRef.current?.onError?.();
+    onComplete: () => onCompleteRef.current?.(),
+    onError: error => {
+      // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
+      if (error === 'exited_auth_flow') optionsRef.current?.onError?.();
     },
   });
 
-  return React.useCallback(() => {
-    prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
-    requestedRef.current = true;
-    login(optionsRef.current?.analytics, { resume: optionsRef.current?.resumeAuthAttempt });
-  }, [login, prepareOnboarding]);
+  return React.useCallback(
+    (properties?: AnalyticsProperties | React.SyntheticEvent) => {
+      prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
+      const configured = optionsRef.current?.analytics;
+      return login(
+        {
+          ...(typeof configured === 'function' ? configured() : configured),
+          ...(properties && !('nativeEvent' in properties) ? properties : {}),
+        },
+        { resume: optionsRef.current?.resumeAuthAttempt }
+      );
+    },
+    [login, prepareOnboarding]
+  );
 }

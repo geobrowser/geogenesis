@@ -6,6 +6,7 @@ import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/confi
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
+import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
@@ -15,7 +16,7 @@ import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
 import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
-import { cachedFetchEntityPage } from './cached-fetch-entity';
+import { cachedFetchDebateVisibility, cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -55,11 +56,21 @@ export default async function EntityTemplateStrategy(props: Props) {
   // A Debate is a live video, not a value sheet: browse mode drops you into the debates feed
   // anchored to this debate, and the raw entity page is reserved for edit mode.
   if (isDebateEntity(result?.entity?.types)) {
+    // Removal goes through geo-chat only (GEO-2785), so the graph cannot say a debate was removed;
+    // geo-chat is asked here, on the server, so a removed debate's video and value sheet never
+    // reach the browser — including in edit mode, whose raw entity page carries the video too. An
+    // unreachable or ambiguous geo-chat answers `unknown` and the debate renders as before: an
+    // outage must not blank every debate. See `fetchDebateVisibility`.
+    if ((await cachedFetchDebateVisibility(params.entityId)) === 'removed') {
+      return <DebateRemovedView spaceId={params.id} debateId={params.entityId} />;
+    }
+
     return (
       <DebateEntityView
         spaceId={params.id}
         debateId={params.entityId}
         editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
+        removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
       />
     );
   }

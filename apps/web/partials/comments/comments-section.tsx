@@ -279,7 +279,16 @@ export function CommentSection({
   });
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'comment_composer',
+      target_type: 'entity',
+      target_id: entityId,
+      auth_control: 'comment',
+      auth_intent: 'comment',
+      auth_continuation: 'resume',
+    },
+  });
   const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);

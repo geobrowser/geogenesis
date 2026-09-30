@@ -14,6 +14,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { trackAuthOnboarding } from '~/core/auth-attempt';
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { ROOT_SPACE } from '~/core/constants';
@@ -118,9 +119,10 @@ export const OnboardingDialog = () => {
   const destination = postOnboardingRedirect || ONBOARDING_DESTINATION;
 
   const dismissOnboarding = React.useCallback(() => {
+    if (step !== 'completed' && step !== 'done') trackAuthOnboarding(step, 'dismissed');
     hideOnboarding();
     setPostOnboardingRedirect(null);
-  }, [hideOnboarding, setPostOnboardingRedirect]);
+  }, [hideOnboarding, setPostOnboardingRedirect, step]);
 
   // Warm the router cache for the destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
@@ -177,6 +179,18 @@ export const OnboardingDialog = () => {
     if (step !== 'interested-in') return;
     loadFeaturedSpaces();
   }, [step, loadFeaturedSpaces]);
+
+  const lastTrackedStep = useRef<string | null>(null);
+  useEffect(() => {
+    const visible = isOnboardingVisible || step === 'completed';
+    if (!visible || step === 'done') {
+      lastTrackedStep.current = null;
+      return;
+    }
+    if (lastTrackedStep.current === step) return;
+    lastTrackedStep.current = step;
+    trackAuthOnboarding(step, step === 'completed' ? 'completed' : 'viewed');
+  }, [isOnboardingVisible, step]);
 
   const address = smartAccount?.account.address;
 
@@ -370,7 +384,10 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
       {/* Onboarding can't be dismissed, so logout is the only way out. */}
       <button
         type="button"
-        onClick={() => logout()}
+        onClick={() => {
+          trackAuthOnboarding(step, 'dismissed');
+          logout();
+        }}
         className="absolute right-0 text-smallButton text-grey-04 transition-colors hover:text-text"
       >
         Log out

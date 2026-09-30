@@ -6,10 +6,9 @@ import { reportError, reportEvent } from '~/core/telemetry/logger';
  * Per-EOA send serialization. The kernel client computes the nonce at submit time, so
  * two overlapping sends compute the same nonce and the bundler rejects the second
  * (AA25). The queue must live at module scope: react-query rebuilds the wrapped smart
- * account on any refetch (window focus, the walletAddress cookie useSmartAccount
- * itself writes), and a queue captured inside its queryFn resets to empty while
- * closures from earlier renders still hold the previous instance — two instances, two
- * queues, one nonce space.
+ * account on any refetch (window focus, a stale mount), and a queue captured inside
+ * its queryFn resets to empty while closures from earlier renders still hold the
+ * previous instance — two instances, two queues, one nonce space.
  */
 const sendChainByAddress = new Map<string, Promise<unknown>>();
 
