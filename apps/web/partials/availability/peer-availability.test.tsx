@@ -593,7 +593,7 @@ describe('disagreement line', () => {
     renderWith(12);
     expect(
       screen.getByText(
-        'You and Ada disagree on 12 claims. When you join the debate room you can discuss what claim to debate first.'
+        'You and Ada disagree on 12 claims. When you join the debate room, you can discuss what claim to debate first.'
       )
     ).toBeInTheDocument();
   });
@@ -606,7 +606,7 @@ describe('disagreement line', () => {
   it.each([null, 0])('keeps only the room sentence when the count is %s', count => {
     renderWith(count);
     expect(
-      screen.getByText('When you join the debate room you can discuss what claim to debate first.')
+      screen.getByText('When you join the debate room, you can discuss what claim to debate first.')
     ).toBeInTheDocument();
     expect(screen.queryByText(/disagree on/)).not.toBeInTheDocument();
   });

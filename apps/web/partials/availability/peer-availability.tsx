@@ -215,7 +215,7 @@ export function PeerAvailabilityView({
                 disagreementCount === 1 ? 'claim' : 'claims'
               }. `
             : null}
-          When you join the debate room you can discuss what claim to debate first.
+          When you join the debate room, you can discuss what claim to debate first.
         </Text>
       </header>
 
