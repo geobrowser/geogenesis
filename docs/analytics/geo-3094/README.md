@@ -59,8 +59,26 @@ output and the deployment time on GEO-3094. A change in traffic can change raw
 counts, so inspect any drop alongside page views rather than requiring equal
 counts.
 
+The comparison uses the same external, non-automated population as the GEO-3073
+reports: it excludes `is_internal`, `is_automated`, and active account labels with
+`exclude_from_metrics`. Anonymous users and inactive/non-excluding labels remain
+included. Missing, null and empty page-view IDs contribute to `events` and
+`missing_required`, but never to distinct `page_views`.
+
+Run the actual report against synthetic ClickHouse fixtures (no production data):
+
+```sh
+python3 scripts/analytics/test-compare-counts.py --url 'https://play.clickhouse.com/?user=play'
+```
+
+The fixtures cover both events and both windows, missing/empty/null/duplicate IDs,
+the cohort exclusions, anonymous and retained users, date boundaries, and empty
+windows. `--case page-views` and `--case traffic` isolate the regressions;
+`--report /path/to/report.sql` can verify a deliberately reverted fix.
+
 Also inspect collector rejection/dead-letter monitoring during those windows.
 The ticket's reported pre-change evidence is 188 accepted events on September
 29 with no missing attribution or dead letters; that is not a full-day baseline
-and does not complete this comparison. Local tests cannot prove production
-delivery. Keep this rollout verification pending until deployed evidence exists.
+for this filtered population and does not complete this comparison. Local tests
+cannot prove production delivery. Keep this rollout verification pending until
+deployed evidence exists.

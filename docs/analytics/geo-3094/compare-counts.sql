@@ -5,7 +5,7 @@ counts AS (
     SELECT if(event_time < deployed_at, 'before', 'after') AS window,
            event_name,
            count() AS events,
-           uniqExact(JSONExtractString(properties_json, 'page_view_id')) AS page_views,
+           uniqExact(nullIf(JSONExtractString(properties_json, 'page_view_id'), '')) AS page_views,
            countIf(arrayExists(field -> JSONExtractString(properties_json, field) = '',
                arrayConcat(
                    ['component', 'page_path', 'page_type', 'page_view_id', 'target_id', 'target_type', 'action_context_version'],
@@ -16,6 +16,12 @@ counts AS (
       AND event_name IN ('action_completed', 'component_impression')
       AND event_time >= deployed_at - INTERVAL 1 DAY
       AND event_time < deployed_at + INTERVAL 1 DAY
+      AND NOT JSONExtractBool(properties_json, 'is_internal')
+      AND NOT JSONExtractBool(properties_json, 'is_automated')
+      AND coalesce(privy_user_id, user_id, '') NOT IN (
+          SELECT coalesce(privy_user_id, user_id, '') FROM analytics.privy_account_labels
+          WHERE active AND exclude_from_metrics AND coalesce(privy_user_id, user_id, '') != ''
+      )
     GROUP BY window, event_name
 )
 SELECT windows.window, events.event_name,
