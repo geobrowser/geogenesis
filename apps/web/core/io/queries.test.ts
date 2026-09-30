@@ -127,13 +127,41 @@ describe('buildSearchPath', () => {
     expect(buildSearchPath({ query: 'q' })).toBe('/search?query=q&limit=10&offset=0');
   });
 
-  it('suppresses include_non_canonical when additional_space_ids is in play', () => {
-    // The endpoint ignores additional_space_ids when include_non_canonical=false, so
-    // sending both drops the scoped spaces entirely — the regression #1949 fixed.
+  it('lets additional_space_ids carry the canonical gate instead of include_non_canonical', () => {
+    // The endpoint reads additional_space_ids as "canonical graph OR these spaces", so it is
+    // already the canonical-only filter for a scoped request. Adding include_non_canonical=false
+    // would not tighten it: the endpoint then skips additional_space_ids entirely and the
+    // scoped spaces drop out, which is the regression #1949 fixed.
     const path = buildSearchPath({ query: 'q', includeNonCanonical: false, additionalSpaceIds: [ROOT] });
 
     expect(path).toContain('additional_space_ids=');
     expect(path).not.toContain('include_non_canonical');
+  });
+
+  it("sends the search dialog's canonical-only request as canonical-plus-my-spaces", () => {
+    // What the dialog sends with "canonical only" on: root plus the user's own spaces, and no
+    // include_non_canonical. That parameter set is what gets the endpoint to return canonical
+    // rows plus rows from those spaces, and nothing else.
+    const canonicalOnly = buildSearchPath({
+      query: 'OpenAI',
+      includeNonCanonical: false,
+      additionalSpaceIds: [ROOT, CURRENT, PERSONAL],
+    });
+
+    expect(canonicalOnly).toBe(
+      '/search?query=OpenAI&limit=10&offset=0&additional_space_ids=' +
+        'a19c345a-b986-6679-b001-d7d2138d88a1%2Cc9f267dc-b0d2-7071-8c2a-3c45a64afd32%2Cf3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
+    );
+
+    // A caller with no opinion (ranking compose, table filters, import auto-map) gets the same
+    // server-side gate, because the gate comes from the space list and not from the flag.
+    expect(buildSearchPath({ query: 'OpenAI', additionalSpaceIds: [ROOT, CURRENT, PERSONAL] })).toBe(canonicalOnly);
+
+    // With the toggle off, useSearch drops the spaces, so neither parameter goes out and the
+    // search is unrestricted.
+    expect(buildSearchPath({ query: 'OpenAI', includeNonCanonical: true, additionalSpaceIds: undefined })).toBe(
+      '/search?query=OpenAI&limit=10&offset=0'
+    );
   });
 
   it('still emits include_non_canonical when additional space ids are dropped for SPACE_SINGLE', () => {
