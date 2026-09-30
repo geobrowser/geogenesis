@@ -110,6 +110,7 @@ function Banner({ scheduleButtonRef }: Props) {
         open={modalOpen}
         onOpenChange={setModalOpen}
         openerRef={returnFocusRef}
+        surface="hub_banner"
         onSaved={() => {
           if (scheduleButtonRef?.current) returnFocusRef.current = scheduleButtonRef.current;
         }}

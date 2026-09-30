@@ -2184,6 +2184,21 @@ export class GeoChatRequestError extends Error {
 }
 
 /**
+ * A geo-chat failure in analytics terms: its code and status where it has them. Never the message,
+ * which is prose meant for a person and can name one.
+ */
+export function geoChatErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
+}
+
+/**
  * A refusal from the session exchange itself, rather than from a resource.
  *
  * The two are the same status and opposite problems, and the rest of this codebase already knows

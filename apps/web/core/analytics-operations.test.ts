@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from './analytics-operations';
+import {
+  classifyOperationFailure,
+  observeOperation,
+  queueTimeoutMetrics,
+  runObservedAction,
+} from './analytics-operations';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
 const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: vi.fn(() => 0) }));
@@ -122,6 +127,18 @@ describe('canonical action outcomes', () => {
     operation.failed('rejected');
     expect(capture.mock.calls.filter(([event]) => event === 'action_completed')).toEqual([
       ['action_completed', expect.objectContaining({ outcome: 'unknown', failure_code: 'unknown' })],
+    ]);
+  });
+  it('fails an action whose result carries the refusal, and still hands that result back', async () => {
+    const refused = { outcome: 'conflict' };
+    const failureOf = (result: typeof refused) => (result.outcome === 'conflict' ? ('conflict' as const) : null);
+
+    await expect(runObservedAction('join_debate', context, async () => refused, failureOf)).resolves.toBe(refused);
+    await runObservedAction('join_debate', context, async () => ({ outcome: 'recorded' }), failureOf);
+
+    expect(capture.mock.calls.filter(([event]) => event === 'action_completed').map(([, props]) => props)).toEqual([
+      expect.objectContaining({ outcome: 'failed', failure_code: 'conflict' }),
+      expect.objectContaining({ outcome: 'succeeded' }),
     ]);
   });
 });

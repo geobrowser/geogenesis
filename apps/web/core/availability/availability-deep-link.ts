@@ -63,9 +63,26 @@ export function profileSpaceIdFromPath(segments: string[]): string | null {
 /** Said when a link lands anywhere that is not a person's profile. Only a hand-edited link does. */
 export const NOT_A_PERSON_MESSAGE = 'This link doesn’t point to a person’s availability.';
 
+/**
+ * Attribution on every copied link, so an arrival from one can be told from a scheduling email's
+ * (which geo-notifications builds) and from someone typing the URL. Read back as `link_source` on
+ * `debate_availability_link_opened`.
+ */
+const AVAILABILITY_LINK_VIA = 'share';
+
+/**
+ * A link's `via` as analytics may record it. The URL is anyone's to edit, so only a value this app
+ * writes passes through; anything else is `other` rather than whatever text it carried. Scheduling
+ * emails (geo-chat's `debate_emails.rs`) send none, so they read as `none`.
+ */
+export function availabilityLinkSource(via: string | null): typeof AVAILABILITY_LINK_VIA | 'other' | 'none' {
+  if (!via) return 'none';
+  return via === AVAILABILITY_LINK_VIA ? AVAILABILITY_LINK_VIA : 'other';
+}
+
 /** Absolute, for a clipboard. `origin` defaults to the page's own. */
 export function availabilityLinkUrl(profileSpaceId: string, origin = window.location.origin): string {
-  return new URL(toAvailability(profileSpaceId), origin).toString();
+  return new URL(toAvailability(profileSpaceId, { via: AVAILABILITY_LINK_VIA }), origin).toString();
 }
 
 /** What both copy controls do; each confirms in its own way. Rejects if the clipboard refuses. */

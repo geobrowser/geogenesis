@@ -17,6 +17,7 @@ import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
+  capture: vi.fn(),
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
   people: [] as DebatePerson[],
@@ -63,7 +64,7 @@ const mocks = vi.hoisted(() => ({
   personProfileOpened: vi.fn(),
 }));
 
-vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened }));
+vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
@@ -1684,6 +1685,52 @@ describe('Online only', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
     expect(within(screen.getByRole('dialog')).getByRole('button', { pressed: true })).toBeInTheDocument();
+  });
+
+  // The week and the request it ends in both name the chip that started them, so a booking can be
+  // traced back to the People tab row.
+  it('tells analytics the week was opened from a time chip, through to the request', async () => {
+    const picked = slotIn(26);
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [picked])],
+    };
+    mocks.usePeerSchedule.mockReturnValue({
+      enabled: true,
+      isPending: false,
+      isError: false,
+      schedule: {
+        userId: 'user-away',
+        viewerTimezone: 'UTC',
+        peerTimezone: 'UTC',
+        viewerHasSchedule: true,
+        peerHasSchedule: true,
+        theirWeekKnown: true,
+        slots: [{ ...picked, viewerIsFree: true }],
+      },
+    });
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const chip = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0];
+    expect(chip).toHaveAttribute('data-geo-analytics-intent', 'open_peer_availability');
+    fireEvent.click(chip);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ entry: 'people_time', bookable: true, mutual_free_minutes: 30 })
+    );
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Send request' }));
+    expect(mocks.propose.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        opponentUserId: 'user-away',
+        analytics: { entry: 'people_time', viewerIsFree: true },
+      })
+    );
   });
 
   it('asks the viewer to set availability rather than implying nobody matches', () => {
