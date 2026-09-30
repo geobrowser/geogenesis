@@ -12,7 +12,7 @@ A sign-in attempt snapshots the shared GEO-3073 action description at the initia
 - `auth_onboarding_progress`: viewed step, explicit dismissal, optimistic form completion, and background personal-space success/failure. Form completion is not registration success.
 - `auth_action_completed`: outcome of a linked action, or cancellation of a queued action when sign-in is closed/superseded. The canonical `action_completed` also carries the attempt ID.
 
-Storage contains only the allowlisted attribution, IDs and timestamps, never email codes, credentials or user-entered text. An attempt lasts at most 24 hours. This tab's in-memory pointer wins, with its session-storage pointer used after reload; an OAuth completion in a new tab can recover a single active attempt from shared origin storage. Several active attempts are ambiguous and produce `unknown`. Tabs starting independent attempts do not overwrite each other. A copied session-storage pointer is a recovery hint, not ownership: only the current document's own attempts can be closed/superseded there. A newly opened modal or headless step in another document gets its own attempt. OAuth completion can still finish a stored attempt. After a reload, an earlier attempt stays unresolved unless it completes; a new press does not falsely cancel a possibly live attempt in another tab. Blocked storage falls back to memory. This supports the same browser/origin on mobile, not cross-device identity recovery.
+Storage contains only the allowlisted attribution, IDs and timestamps, never email codes, credentials or user-entered text. `link_source` and the three marketing fields must match `[a-zA-Z0-9_-]{1,80}` before persistence; recovered records are checked again before emission. This is identifier-format validation, not a general PII detector. An attempt lasts at most 24 hours. This tab's in-memory pointer wins, with its session-storage pointer used after reload; an OAuth completion in a new tab can recover a single active attempt from shared origin storage. Several active attempts are ambiguous and produce `unknown`. Tabs starting independent attempts do not overwrite each other. A copied session-storage pointer is a recovery hint, not ownership: only the current document's own attempts can be closed/superseded there. A newly opened modal or headless step in another document gets its own attempt. OAuth completion can still finish a stored attempt. After a reload, an earlier attempt stays unresolved unless it completes; a new press does not falsely cancel a possibly live attempt in another tab. Blocked storage falls back to memory. This supports the same browser/origin on mobile, not cross-device identity recovery.
 
 Explicit dismissal is observable. Closing a tab, killing a browser or leaving during OAuth is not an auth dismissal: an opening without a terminal event is **unresolved**, and reports may classify it as abandoned after 24 hours. It does not have an invented duration. Delivery cannot be guaranteed after a browser is killed, analytics is blocked, or consent is withheld.
 
@@ -53,6 +53,14 @@ These fields are imported only when `via=marketing`; the marker classifies the h
 ## Review and rollout
 
 The bundled registry, content hash, SRI and manifest include the six new events. Runtime tests execute that exact JS bundle and inspect serialized collector fields. Regression tests cover abandonment, immutable context, blocked storage, TTL, ambiguous tabs, duplicate completions and session restores. Existing signup email handling is unchanged. Auth lifecycle records now carry the same team/test/automation classification as actions; reports also exclude warehouse account labels.
+
+The funnel counts an attempt as unresolved only when neither a terminal attempt event nor a signup/login event proves its outcome. Missing duration remains missing; a signup is not proof that a deferred action succeeded.
+
+Run the actual funnel SQL against isolated synthetic ClickHouse tables (no server or production connection):
+
+```bash
+CLICKHOUSE_BINARY=/path/to/clickhouse bun run docs/analytics/geo-3071/funnel.test.ts
+```
 
 The SQL files provide production-schema reports. They are review artifacts, not evidence that the collector has received production rows. Before accepting the production criteria:
 

@@ -38,6 +38,6 @@ SELECT toDate(started) AS day, component, control,
   countIf(requested) AS attempts, countIf(viewed) AS prompts,
   countIf(signed_up) AS new_accounts, countIf(signed_in) AS logins,
   countIf(outcome IN ('closed', 'superseded')) AS closed,
-  countIf(outcome = '' AND started < now() - INTERVAL 24 HOUR) AS unresolved_after_24h,
+  countIf(outcome = '' AND NOT signed_up AND NOT signed_in AND started < now() - INTERVAL 24 HOUR) AS unresolved_after_24h,
   avgIf(auth_duration_ms, outcome != '') AS mean_observed_auth_duration_ms
 FROM attempts GROUP BY day, component, control ORDER BY day, component, control;

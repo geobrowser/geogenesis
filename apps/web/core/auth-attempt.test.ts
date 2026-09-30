@@ -9,6 +9,7 @@ import {
   marketingAuthProperties,
   openAuthAttempt,
   readAuthAttempt,
+  recoverAuthAttempt,
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
@@ -109,6 +110,63 @@ describe('durable sign-in attempts', () => {
       ).toEqual({});
     }
   );
+  it.each(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id'])(
+    'rejects arbitrary text in %s before storage and emission',
+    field => {
+      for (const invalid of [
+        'person@example.com',
+        'https://site.test/path',
+        'free form text',
+        'x'.repeat(81),
+        ['email'],
+        { email: 'person@example.com' },
+      ]) {
+        const attempt = beginAuthAttempt({ ...entry, [field]: invalid });
+        expect(attempt.properties).not.toHaveProperty(field);
+        expect(JSON.parse(localStorage.getItem(`geo:auth-attempt:v1:${attempt.id}`)!).properties).not.toHaveProperty(
+          field
+        );
+        expect(capture.mock.calls.at(-1)?.[1]).not.toHaveProperty(field);
+        const recovered = recoverAuthAttempt({ [field]: invalid });
+        expect(recovered.properties).not.toHaveProperty(field);
+      }
+    }
+  );
+  it('keeps valid stable source identifiers', () => {
+    for (const source of ['marketing', 'email', 'invite', 'explore_email_capture', 'campaign-2026']) {
+      expect(beginAuthAttempt({ link_source: source }).properties.link_source).toBe(source);
+    }
+  });
+  it('scrubs unsafe source identifiers from older stored attempts without rebasing their page', () => {
+    const attempt = beginAuthAttempt({ ...entry, link_source: 'email' });
+    const key = `geo:auth-attempt:v1:${attempt.id}`;
+    const record = JSON.parse(localStorage.getItem(key)!);
+    const invalid = 'person@example.com';
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        ...record,
+        properties: {
+          ...record.properties,
+          link_source: invalid,
+          marketing_page: invalid,
+          marketing_cta: invalid,
+          marketing_handoff_id: invalid,
+        },
+      })
+    );
+    resetAuthAttempt();
+    window.history.replaceState(null, '', '/other');
+    const recovered = currentAuthAttempt(true);
+    expect(recovered?.properties).toMatchObject({ page_path: '/explore', auth_attribution_version: 'v1' });
+    for (const field of ['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']) {
+      expect(recovered?.properties).not.toHaveProperty(field);
+    }
+    capture.mockClear();
+    finishAuthAttempt('signed_in', recovered);
+    expect(JSON.stringify(capture.mock.calls)).not.toContain(invalid);
+    expect(localStorage.getItem(key)).not.toContain(invalid);
+  });
   it('keeps the latest attempt and terminal outcome when storage fills after a previous login', () => {
     const old = beginAuthAttempt(entry);
     const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

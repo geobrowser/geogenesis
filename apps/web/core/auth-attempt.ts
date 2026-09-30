@@ -35,9 +35,23 @@ const fields = new Set<string>([
   'marketing_handoff_id',
 ]);
 
+const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);
+
+function isSourceIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+}
+
+function sanitizeSourceIdentifiers(properties: AnalyticsProperties): AnalyticsProperties {
+  return Object.fromEntries(
+    Object.entries(properties).filter(([key, value]) => !sourceIdentifierFields.has(key) || isSourceIdentifier(value))
+  );
+}
+
 export function authProperties(properties: AnalyticsProperties = {}): AnalyticsProperties {
   const clean = JSON.parse(
-    JSON.stringify(Object.fromEntries(Object.entries(properties).filter(([key]) => fields.has(key))))
+    JSON.stringify(
+      sanitizeSourceIdentifiers(Object.fromEntries(Object.entries(properties).filter(([key]) => fields.has(key))))
+    )
   );
   let identity: AnalyticsProperties = {};
   try {
@@ -74,7 +88,7 @@ function read(id: string | null): AuthAttempt | undefined {
       value.properties &&
       Date.now() - value.startedAt < TTL
     )
-      return value;
+      return { ...value, properties: sanitizeSourceIdentifiers(value.properties) };
   } catch {
     /* Storage can be unavailable. */
   }
@@ -214,7 +228,7 @@ export function marketingAuthProperties(search: string): AnalyticsProperties {
   return Object.fromEntries(
     ['marketing_page', 'marketing_cta', 'marketing_handoff_id'].flatMap(key => {
       const value = params.get(key);
-      return value && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? [[key, value]] : [];
+      return isSourceIdentifier(value) ? [[key, value]] : [];
     })
   );
 }
