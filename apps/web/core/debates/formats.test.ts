@@ -1,22 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
+import formatContract from './debate-formats.contract.json';
 import { debateFormatById, debateFormats, debateTimingSummary, debateTurnRole, defaultDebateFormatId } from './formats';
 
 describe('debate formats', () => {
-  it('matches the prototype format catalog', () => {
-    expect(debateFormats.map(format => [format.id, format.label, format.turnDurationsMs])).toEqual([
-      ['dev-short', '7/7 4/4 3/3', [7_000, 7_000, 4_000, 4_000, 3_000, 3_000]],
-      ['standard', '1/1 45/45 30/30', [60_000, 60_000, 45_000, 45_000, 30_000, 30_000]],
-      ['extended-standard', '45/45 30/30', [45_000, 45_000, 30_000, 30_000]],
-      ['triple-standard', '45/45 30/30 30/30', [45_000, 45_000, 30_000, 30_000, 30_000, 30_000]],
-    ]);
-  });
-
-  it('matches the geo-chat catalog for the live format', () => {
-    // geo-chat resolves the id independently in `DebateFormat::standard()` and writes the
-    // durations onto the debate row. If the two catalogs drift, the request dialog previews turns
-    // the debate will not actually run.
-    expect(debateFormatById('standard')?.turnDurationsMs).toEqual([60_000, 60_000, 45_000, 45_000, 30_000, 30_000]);
+  /**
+   * geo-chat keeps its own copy of this catalog (`DebateFormat` in `crates/debates`) and is the
+   * one that writes `turn_durations_ms` onto the debate row; this copy only previews turns in the
+   * request dialog. `debate-formats.contract.json` is the shape both sides agree on (GEO-2956):
+   * this test holds `formats.ts` to it, geo-chat's tests hold its constructors to its own copy,
+   * and geo-chat's CI diffs that copy against this file on `master`. A change here therefore
+   * fails geo-chat's CI until geo-chat ships the same change.
+   */
+  it('matches the catalog contract shared with geo-chat', () => {
+    expect(
+      debateFormats.map(format => ({ id: format.id, label: format.label, turn_durations_ms: format.turnDurationsMs }))
+    ).toEqual(formatContract);
   });
 
   it('formats round summaries', () => {

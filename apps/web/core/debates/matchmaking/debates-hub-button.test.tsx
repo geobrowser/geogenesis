@@ -11,13 +11,7 @@ const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: true,
   incomingRequestCount: 0,
-  peerAvailability: true,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
-}));
-
-vi.mock('~/core/state/feature-flags', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
 }));
 
 vi.mock('../hooks', () => ({
@@ -51,7 +45,6 @@ beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.incomingRequestCount = 0;
-  mocks.peerAvailability = true;
   mocks.scheduledAwaitingAnswerCount = undefined;
 });
 
@@ -104,16 +97,6 @@ describe('DebatesHubButton', () => {
 
   it('badges a scheduled request on its own', () => {
     mocks.scheduledAwaitingAnswerCount = 1;
-    renderButton();
-
-    expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();
-  });
-
-  // Activity carries the count for everyone, so the flag has to be checked here.
-  it('counts no scheduled requests with the flag off, even when activity has some', () => {
-    mocks.peerAvailability = false;
-    mocks.incomingRequestCount = 1;
-    mocks.scheduledAwaitingAnswerCount = 2;
     renderButton();
 
     expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();

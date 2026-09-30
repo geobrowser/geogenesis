@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ENTITY_ID_BATCH_SIZE,
   buildSearchPath,
+  flattenRestResults,
   getBatchEntities,
   getEntityBacklinks,
   groupRestResults,
@@ -126,13 +127,41 @@ describe('buildSearchPath', () => {
     expect(buildSearchPath({ query: 'q' })).toBe('/search?query=q&limit=10&offset=0');
   });
 
-  it('suppresses include_non_canonical when additional_space_ids is in play', () => {
-    // The endpoint ignores additional_space_ids when include_non_canonical=false, so
-    // sending both drops the scoped spaces entirely — the regression #1949 fixed.
+  it('lets additional_space_ids carry the canonical gate instead of include_non_canonical', () => {
+    // The endpoint reads additional_space_ids as "canonical graph OR these spaces", so it is
+    // already the canonical-only filter for a scoped request. Adding include_non_canonical=false
+    // would not tighten it: the endpoint then skips additional_space_ids entirely and the
+    // scoped spaces drop out, which is the regression #1949 fixed.
     const path = buildSearchPath({ query: 'q', includeNonCanonical: false, additionalSpaceIds: [ROOT] });
 
     expect(path).toContain('additional_space_ids=');
     expect(path).not.toContain('include_non_canonical');
+  });
+
+  it("sends the search dialog's canonical-only request as canonical-plus-my-spaces", () => {
+    // What the dialog sends with "canonical only" on: root plus the user's own spaces, and no
+    // include_non_canonical. That parameter set is what gets the endpoint to return canonical
+    // rows plus rows from those spaces, and nothing else.
+    const canonicalOnly = buildSearchPath({
+      query: 'OpenAI',
+      includeNonCanonical: false,
+      additionalSpaceIds: [ROOT, CURRENT, PERSONAL],
+    });
+
+    expect(canonicalOnly).toBe(
+      '/search?query=OpenAI&limit=10&offset=0&additional_space_ids=' +
+        'a19c345a-b986-6679-b001-d7d2138d88a1%2Cc9f267dc-b0d2-7071-8c2a-3c45a64afd32%2Cf3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
+    );
+
+    // A caller with no opinion (ranking compose, table filters, import auto-map) gets the same
+    // server-side gate, because the gate comes from the space list and not from the flag.
+    expect(buildSearchPath({ query: 'OpenAI', additionalSpaceIds: [ROOT, CURRENT, PERSONAL] })).toBe(canonicalOnly);
+
+    // With the toggle off, useSearch drops the spaces, so neither parameter goes out and the
+    // search is unrestricted.
+    expect(buildSearchPath({ query: 'OpenAI', includeNonCanonical: true, additionalSpaceIds: undefined })).toBe(
+      '/search?query=OpenAI&limit=10&offset=0'
+    );
   });
 
   it('still emits include_non_canonical when additional space ids are dropped for SPACE_SINGLE', () => {
@@ -232,6 +261,100 @@ describe('groupRestResults', () => {
         ],
       },
     ]);
+  });
+});
+
+describe('otherSpaces (gaia#989, GEO-2394)', () => {
+  const ENTITY = '1f5ae430-e399-4a52-92a6-64f41b708fd5';
+  const CANONICAL = 'b5a31f81-82b0-4243-7ede-0f84ee02f104';
+  const OTHER = 'a070b8c1-96f2-8118-3351-86ec4b4abce7';
+  const THIRD = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+  const SINGLE = '22222222-2222-2222-2222-222222222222';
+  const PERSON = { id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', name: 'Person' };
+
+  // Today's API: one row per (entity, space).
+  const perSpaceRows = [
+    {
+      entityId: ENTITY,
+      space: { id: CANONICAL, name: 'Podcasts', avatar: 'ipfs://podcasts' },
+      name: 'OpenAI',
+      relevanceScore: 529.5,
+      inCanonicalGraph: true,
+    },
+    {
+      entityId: ENTITY,
+      space: { id: OTHER },
+      name: 'OpenAI',
+      description: 'Research Lab, USA',
+      types: [PERSON],
+      inCanonicalGraph: false,
+    },
+    { entityId: SINGLE, space: { id: THIRD }, name: 'Single', inCanonicalGraph: true },
+  ];
+
+  // After gaia#989: one row per entity, the rest of its spaces under otherSpaces.
+  const collapsedRows = [
+    {
+      entityId: ENTITY,
+      space: { id: CANONICAL, name: 'Podcasts', avatar: 'ipfs://podcasts' },
+      name: 'OpenAI',
+      relevanceScore: 529.5,
+      inCanonicalGraph: true,
+      otherSpaces: [
+        {
+          space: { id: OTHER },
+          name: 'OpenAI',
+          description: 'Research Lab, USA',
+          types: [PERSON],
+          inCanonicalGraph: false,
+        },
+      ],
+    },
+    { entityId: SINGLE, space: { id: THIRD }, name: 'Single', inCanonicalGraph: true },
+  ];
+
+  it('leaves rows without otherSpaces unchanged', () => {
+    expect(flattenRestResults(perSpaceRows)).toEqual(perSpaceRows);
+  });
+
+  it('expands otherSpaces into per-space rows placed right after their entity', () => {
+    const flattened = flattenRestResults(collapsedRows);
+    expect(flattened.map(r => [r.entityId, r.space.id])).toEqual([
+      [ENTITY, CANONICAL],
+      [ENTITY, OTHER],
+      [SINGLE, THIRD],
+    ]);
+    expect(flattened.every(r => !('otherSpaces' in r))).toBe(true);
+    expect(flattened[1]).toEqual(perSpaceRows[1]);
+  });
+
+  it('groups both API shapes into the same search results', () => {
+    const fromPerSpace = groupRestResults(perSpaceRows);
+    const fromCollapsed = groupRestResults(collapsedRows);
+
+    expect(fromCollapsed).toEqual(fromPerSpace);
+    const [entity] = fromCollapsed;
+    expect(entity.spaces.map(s => s.spaceId)).toEqual([CANONICAL.replace(/-/g, ''), OTHER.replace(/-/g, '')]);
+    expect(entity.namesBySpace).toEqual({
+      [CANONICAL.replace(/-/g, '')]: 'OpenAI',
+      [OTHER.replace(/-/g, '')]: 'OpenAI',
+    });
+    expect(entity.typesBySpace?.[OTHER.replace(/-/g, '')]).toEqual([
+      { id: PERSON.id.replace(/-/g, ''), name: 'Person' },
+    ]);
+    expect(entity.types).toEqual([{ id: PERSON.id.replace(/-/g, ''), name: 'Person' }]);
+  });
+
+  it("gates each of an entity's spaces on its own, for both shapes", () => {
+    const gate = { canonicalOnly: true, scopedSpaceIds: new Set<string>() };
+    const keep = (rows: Parameters<typeof flattenRestResults>[0]) =>
+      flattenRestResults(rows)
+        .filter(r => shouldIncludeRestSearchResult(r, gate))
+        .map(r => r.space.id);
+
+    // The non-canonical sibling is dropped and its canonical space kept, whichever shape.
+    expect(keep(collapsedRows)).toEqual([CANONICAL, THIRD]);
+    expect(keep(collapsedRows)).toEqual(keep(perSpaceRows));
   });
 });
 
@@ -520,9 +643,7 @@ describe('indexVoteRowsByObject', () => {
    * begins the next, so the live page has to be the one that owns the id.
    */
   it('gives the id to the page holding the live stance, not the retired row', () => {
-    const retiredPage = indexVoteRowsByObject([
-      { objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' },
-    ]);
+    const retiredPage = indexVoteRowsByObject([{ objectId: CLAIM, voteKind: 2, votedAt: '2026-09-24T00:00:00.000Z' }]);
     const stancePage = indexVoteRowsByObject([{ objectId: CLAIM, voteKind: 1, votedAt: '2026-08-06T00:00:00.000Z' }]);
 
     expect(retiredPage.objectIds).toEqual([]);

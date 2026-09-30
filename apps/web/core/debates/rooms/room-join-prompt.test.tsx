@@ -97,6 +97,17 @@ describe('DebateRoomJoinPrompt', () => {
     expect(screen.getByText('Your opponent hasn’t joined yet')).toBeInTheDocument();
   });
 
+  // `Avatar` renders a real photo `h-full w-full`, so the frame around it is the only thing holding
+  // it to 36px. Unframed, an opponent's profile photo drew at full resolution across the page.
+  it('holds the opponent photo to a clipped 36px circle', () => {
+    mocks.opponent = { ...ALEX, avatar_cid: 'ipfs://photo' };
+    render(<DebateRoomJoinPrompt room={room()} onNotNow={vi.fn()} />);
+
+    const frame = screen.getByTestId('avatar').parentElement;
+    expect(frame).toHaveClass('overflow-hidden', 'rounded-full');
+    expect(frame).toHaveStyle({ width: '36px', height: '36px' });
+  });
+
   it('joins the room on Join and snoozes it on Not now', () => {
     const onNotNow = vi.fn();
     render(<DebateRoomJoinPrompt room={room()} onNotNow={onNotNow} />);

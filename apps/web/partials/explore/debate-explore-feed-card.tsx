@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -346,7 +347,10 @@ export function DebateExploreFeedCard({
   };
 
   return (
-    <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <ActionSurfaceArticle
+      ref={setContainer}
+      className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
+    >
       {/* Meta, title, media and the interaction bar share one column, capped so the whole card
           fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
           than the full column width because feed columns, especially data blocks, can be much
@@ -446,7 +450,7 @@ export function DebateExploreFeedCard({
           ) : null}
         </>
       ) : null}
-    </article>
+    </ActionSurfaceArticle>
   );
 }
 

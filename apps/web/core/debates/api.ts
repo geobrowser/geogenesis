@@ -994,6 +994,24 @@ export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIde
   });
 }
 
+/**
+ * Saves the zone this browser is in, so emails geo-chat sends while the person is away render in
+ * it. geo-chat prefers the zone on saved availability and falls back to this one, then to UTC.
+ */
+export async function reportBrowserTimezone(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  timezone: string
+) {
+  return geoChatRequest<void>('/me/timezone', {
+    method: 'PUT',
+    body: { timezone },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function updateDebateAvailability(
   availableToDebate: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -1251,6 +1269,58 @@ export async function getDebate(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `POST /debates/{id}/hide` and `/unhide` answer with: the debate's visibility afterwards. */
+export type DebateVisibilityResponse = {
+  debate_id: string;
+  hidden: boolean;
+  hidden_at: string | null;
+  /** Who hid it. Null when visible, or when an operator script hid it. */
+  hidden_by_user_id: string | null;
+  hidden_reason: string | null;
+};
+
+/** geo-chat's limit on a hide reason, in characters (`MAX_HIDE_REASON_CHARS`). */
+export const DEBATE_HIDE_REASON_MAX_CHARS = 500;
+
+/**
+ * Removes a completed debate from the product (GEO-2785): it leaves every listing, and every by-id
+ * read answers `debate_not_found`. geo-chat allows a participant or an editor of the debate's space,
+ * and refuses anyone else with `debate_visibility_forbidden`. Idempotent. A blank reason is sent as
+ * none, which is how geo-chat would read it anyway.
+ */
+export async function hideDebate(
+  debateId: string,
+  reason: string | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const trimmed = reason?.trim();
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/hide`, {
+    method: 'POST',
+    body: trimmed ? { reason: trimmed } : {},
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Restores a hidden debate. Narrower than {@link hideDebate}: a space editor may restore any, a
+ * participant only one they hid themselves. Idempotent.
+ */
+export async function unhideDebate(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/unhide`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1749,6 +1819,26 @@ export async function respondToScheduledDebate(
   });
 }
 
+/**
+ * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
+ * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
+ * slot for both people and withdraws the calendar invite. It refuses with `409
+ * debate_already_started` once anyone has joined the room, and `409 request_not_cancellable` once the
+ * request is already resolved.
+ */
+export async function cancelScheduledDebate(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
@@ -2163,6 +2253,21 @@ export class GeoChatRequestError extends Error {
     this.status = status;
     this.retryAfterMs = retryAfterMs;
   }
+}
+
+/**
+ * A geo-chat failure in analytics terms: its code and status where it has them. Never the message,
+ * which is prose meant for a person and can name one.
+ */
+export function geoChatErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
 }
 
 /**

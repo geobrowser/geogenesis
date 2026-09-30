@@ -28,8 +28,17 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const promptSignIn = usePrivySignIn();
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'join_space_button',
+      target_type: 'space',
+      target_id: spaceId,
+      auth_control: 'join_space',
+      auth_intent: 'join_space',
+      auth_continuation: 'queued',
+    },
+  });
+  const enqueuePendingAction = useEnqueuePendingAction('join_space_button');
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
   const queueJoinRequest = React.useCallback(() => {
@@ -52,8 +61,8 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       return;
     }
     if (!smartAccount) {
-      deferJoin();
       promptSignIn();
+      deferJoin();
       return;
     }
     queueJoinRequest();

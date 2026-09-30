@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
-
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity } from '../hooks';
@@ -16,7 +14,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
+import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -36,40 +34,7 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * has no room for full-tab chrome.
  */
 export function RequestsTab({ dense = false, denseLabel }: { dense?: boolean; denseLabel?: string } = {}) {
-  // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
-  // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
-  return usePeerAvailabilityEnabled() ? (
-    <ScheduledRequestsTab dense={dense} denseLabel={denseLabel} />
-  ) : (
-    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} dense={dense} denseLabel={denseLabel} />
-  );
-}
-
-const NO_SCHEDULED: ScheduledContent = {
-  answerable: [],
-  upcoming: [],
-  people: [],
-  requestsError: null,
-  roomsError: null,
-};
-
-function ScheduledRequestsTab({ dense, denseLabel }: { dense: boolean; denseLabel?: string }) {
-  return (
-    <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled dense={dense} denseLabel={denseLabel} />
-  );
-}
-
-function RequestsTabBody({
-  scheduled,
-  schedulingEnabled,
-  dense,
-  denseLabel,
-}: {
-  scheduled: ScheduledContent;
-  schedulingEnabled: boolean;
-  dense: boolean;
-  denseLabel?: string;
-}) {
+  const scheduled = useScheduledContent();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -163,7 +128,7 @@ function RequestsTabBody({
       <div className="flex flex-col gap-3 px-4 py-3">
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
-        {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+        <ScheduledDebatesSection content={scheduled} />
 
         <HubQueryState
           analyticsSurface="hub"

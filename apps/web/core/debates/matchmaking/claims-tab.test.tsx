@@ -9,13 +9,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { AUTO_PAGES_WITHOUT_ROWS } from './use-bounded-paging';
 import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
+  /** The viewer's personal space — what a vote's `userId` is, and what the exclusion asks by. */
+  personalSpaceId: 'viewer-space' as string | null,
+  personalSpaceLoading: false,
+  /**
+   * Claims the *graph* has recorded the viewer answering, which is what `excludeAnsweredBy` leaves
+   * out server-side. Separate from `debateClaimRows`, geo-chat's record, which leads it by the
+   * indexer lag — so a test can be about either half.
+   */
+  graphAnsweredIds: new Set<string>(),
   claims: [] as MatchmakingClaim[],
   /** Which tag each enabled render of the graph hook asked for, in order. */
   tagsAskedFor: [] as string[],
@@ -101,6 +109,10 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   isPendingPersonalSpaceId: (spaceId: string | null | undefined) =>
     typeof spaceId === 'string' && spaceId.startsWith('pending:'),
   usePendingPersonalSpace: () => ({ isPending: false }),
+}));
+
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isLoading: mocks.personalSpaceLoading }),
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
@@ -366,6 +378,7 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
       return false;
     }
     if (spaces && !row.tagSpaceIds.some(spaceId => spaces.some(picked => norm(picked) === norm(spaceId)))) return false;
+    if (filters.excludeAnsweredBy && mocks.graphAnsweredIds.has(row.entity.id)) return false;
     return true;
   });
   return kept;
@@ -380,7 +393,6 @@ vi.mock('../tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.taggedCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
-      fetched: claims.length,
       isLoading: enabled && mocks.featuredLoading,
       // Disabled means no answer, not the last one — the hook masks all of these, so the mock has
       // to as well or a test can exercise a state production cannot reach.
@@ -390,6 +402,13 @@ vi.mock('../tagged-claims', async importOriginal => ({
       isFetchingNextPage: false,
       refetch: vi.fn(),
     };
+  },
+  // The server's count of what the exclusion left out: the graph's record of the viewer's answers,
+  // over the rows these filters match.
+  useTaggedAnsweredCount: (tagId: string, filters: any, enabled: boolean) => {
+    if (!enabled || !filters.excludeAnsweredBy) return { answeredCount: null, isLoading: false };
+    const rows = applyServerFilters(taggedRowsFor(tagId), { ...filters, excludeAnsweredBy: null });
+    return { answeredCount: rows.filter(row => mocks.graphAnsweredIds.has(row.entity.id)).length, isLoading: false };
   },
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic, as the server
@@ -594,6 +613,15 @@ beforeEach(() => {
   mocks.taggedCatalogError = null;
   mocks.taggedFiltersAskedFor = [];
   mocks.spaceFacetFiltersAskedFor = [];
+  mocks.personalSpaceId = 'viewer-space';
+  mocks.personalSpaceLoading = false;
+  // The switch is stored, so a case that turns it off would hand the next case a tab with it off.
+  try {
+    window.localStorage.removeItem('debatesHubHideMyPositions');
+  } catch {
+    // Some jsdom storages have no methods at all; then nothing was stored either.
+  }
+  mocks.graphAnsweredIds = new Set();
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
   mocks.hasNextPage = false;
@@ -2352,10 +2380,9 @@ describe('claims the viewer has already answered', () => {
    * geo-chat refuses every viewer-relative read until it has registered the account, so the rows
    * lookup 401s — and then the next page puts a fresh batch in flight while the failed one is still
    * in the array. Both flags are true at once, which is the state this pins: the collapse is
-   * `classifying`, so it holds *everything*, the tab reads an empty list, bounded paging advances
+   * `classifying`, so it holds *everything*, the tab reads an empty list, the sentinel advances
    * looking for the rows the hold is what is keeping off screen, and that page starts the next
-   * lookup to be held on in turn. It is the barren-corpus loop reached by a different road, and the
-   * bound cannot help — the pages are not barren.
+   * lookup to be held on in turn.
    *
    * A viewer whose account does not exist yet holds no positions, so there is nothing to hide and a
    * failed lookup cannot be the reason a row disappears. The list draws.
@@ -2466,13 +2493,11 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
-   * And it waits for each page's answers, not only the first — which is what keeps it finite.
+   * And it waits for each page's answers, not only the first.
    *
    * A page arrives, its rows are held back while they are classified, the list stays short, and a
-   * sentinel a page ahead of the viewport fires again. `useBoundedPaging` skips its accounting for
-   * exactly that window, because a page mid-classification cannot yet be called barren — so the
-   * budget was never charged and nothing stopped the loop. It walked the corpus as fast as the
-   * network allowed: a thousand requests and twenty-five megabytes, on one tab.
+   * sentinel a page ahead of the viewport would fire again — putting the next lookup in flight
+   * before this one has let anything onto the screen.
    */
   it('does not start a page while the last one is still being classified', async () => {
     mocks.taggedHasNextPage = true;
@@ -2515,34 +2540,91 @@ describe('claims the viewer has already answered', () => {
   });
 
   /**
-   * When the list stops advancing, it has to say so and offer to go on.
+   * The backlog is left out by the server (GEO-2894), so a page arrives as rows that can be shown.
    *
-   * The empty state carries that offer when there is nothing on screen; with rows on screen
-   * `HubQueryState` draws the rows instead, so the control has to live under the list. That is the
-   * ordinary shape of hitting the cap — a few claims found, then a run of pages with none — and a
-   * list that simply stopped, silently, is the failure the bound is supposed to be better than.
+   * The client collapse used to do this over each page after it landed, which left a viewer deep in
+   * the corpus with pages that emptied as they arrived — the sentinel stayed in view and the list
+   * paged the whole tag looking for something to show. Asked of the server, the page is full and
+   * the facet counts describe the same set.
    */
-  it('offers a way to go on when it stops advancing under a list that has rows', async () => {
-    mocks.taggedHasNextPage = true;
-    mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_B, 'One you have not')];
-    mocks.debateClaimRows = [];
+  describe('asked of the server', () => {
+    const lastAsked = () => mocks.taggedFiltersAskedFor.at(-1);
 
-    const view = render(<ClaimsTab />);
-    await showAllClaims();
-    expect(await screen.findByText('One you have not')).toBeInTheDocument();
+    it('asks for the claims the viewer has not answered', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
 
-    // Page after page of claims the viewer has already answered, so the list never grows.
-    for (let page = 1; page <= AUTO_PAGES_WITHOUT_ROWS; page += 1) {
-      const answered = `${FEATURED_A.slice(0, -2)}${String(page).padStart(2, '0')}`;
-      mocks.taggedClaims[DEBATE] = [...mocks.taggedClaims[DEBATE]!, featuredClaim(answered, `Answered ${page}`)];
-      mocks.debateClaimRows = [...mocks.debateClaimRows, answeredRow(answered)];
-      view.rerender(<ClaimsTab />);
-    }
+      expect(lastAsked().excludeAnsweredBy).toBe('viewer-space');
+    });
 
-    expect(await screen.findByRole('button', { name: 'Keep looking' })).toBeInTheDocument();
-    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
-    // The rows it did find are still there — this is a list that paused, not one that emptied.
-    expect(screen.getByText('One you have not')).toBeInTheDocument();
+    it('counts both menus over the same set', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      expect(mocks.spaceFacetFiltersAskedFor.at(-1).excludeAnsweredBy).toBe('viewer-space');
+    });
+
+    it('never draws what the graph already knows is answered', async () => {
+      mocks.graphAnsweredIds = new Set([FEATURED_A]);
+      // geo-chat has not caught up with it here, so only the server can be what leaves it out.
+      mocks.debateClaimRows = [];
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      expect(await screen.findByText('One you have not')).toBeInTheDocument();
+      expect(screen.queryByText('One you have answered')).toBeNull();
+    });
+
+    it('asks for everything once the switch is off', async () => {
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      fireEvent.click(screen.getByRole('switch', { name: 'Hide my positions' }));
+
+      await waitFor(() => expect(lastAsked().excludeAnsweredBy).toBeNull());
+    });
+
+    it('asks nothing until it knows whose answers to leave out', async () => {
+      mocks.personalSpaceId = null;
+      mocks.personalSpaceLoading = true;
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      expect(mocks.taggedFiltersAskedFor).toEqual([]);
+    });
+
+    it('leaves nothing out for an account with no personal space', async () => {
+      mocks.personalSpaceId = null;
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      expect(lastAsked().excludeAnsweredBy).toBeNull();
+    });
+
+    it('leaves nothing out for a signed-out viewer', async () => {
+      mocks.authenticated = false;
+      render(<ClaimsTab />);
+      await showAllClaims();
+      await screen.findByText('One you have answered');
+
+      expect(lastAsked().excludeAnsweredBy).toBeNull();
+    });
+
+    // Every claim is answered, so the server has nothing to send — which is the same statement the
+    // collapse used to make about a list with rows in it, and gets the same way out.
+    it('says the viewer answered everything when the server leaves nothing', async () => {
+      mocks.taggedClaims[DEBATE] = [featuredClaim(FEATURED_A, 'One you have answered')];
+      mocks.graphAnsweredIds = new Set([FEATURED_A]);
+      render(<ClaimsTab />);
+      await showAllClaims();
+
+      expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+    });
   });
 
   /**

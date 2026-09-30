@@ -43,18 +43,21 @@ const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/claims',
   searchParams: new URLSearchParams(),
   isMobile: false,
-  peerAvailability: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
 }));
 
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
+  // The People tab's booking modal; booking has its own coverage.
+  useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
-vi.mock('~/core/state/feature-flags', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+// The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
+vi.mock('./scheduled-debates-section', () => ({
+  ScheduledDebatesSection: () => null,
+  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -211,7 +214,6 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/claims';
   mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
-  mocks.peerAvailability = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
   mocks.scheduledRequests = undefined;
 });
@@ -451,7 +453,8 @@ describe('DebatesHubPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    // Signed in, the list includes offline people free at shared times, so the empty copy says so.
+    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', () => {
@@ -896,7 +899,7 @@ describe('the filters the expand link carries', () => {
   });
 });
 
-// The Requests tab's badge counts scheduled requests from activity, behind the flag.
+// The Requests tab's badge counts scheduled requests from activity.
 describe('Requests badge', () => {
   function renderRequestsButton() {
     const store = createStore();
@@ -910,21 +913,17 @@ describe('Requests badge', () => {
   }
 
   it('counts scheduled requests waiting on an answer', () => {
-    mocks.peerAvailability = true;
     mocks.scheduledAwaitingAnswerCount = 2;
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
   });
 
   it('shows no badge when activity has no count', () => {
-    mocks.peerAvailability = true;
-
     expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 
   // Pending in either direction: a request you sent is still in the tab until they answer.
   it('counts every pending scheduled request once the list lands, sent or received', () => {
-    mocks.peerAvailability = true;
     mocks.scheduledAwaitingAnswerCount = 1;
     mocks.scheduledRequests = [
       { status: 'pending', room_id: null, viewer_must_answer: true },
@@ -933,11 +932,5 @@ describe('Requests badge', () => {
     ];
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
-  });
-
-  it('counts no scheduled requests with the flag off, even when activity has some', () => {
-    mocks.scheduledAwaitingAnswerCount = 2;
-
-    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 });

@@ -8,6 +8,8 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { withActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
@@ -149,10 +151,11 @@ export type DebateVotesResult = {
  * voter's space rather than from geo-chat.
  */
 export function useDebateVotes(debate: Debate): DebateVotesResult {
+  const getContext = useActionContext('winner_vote_button', 'debate', debate.id, { debate_id: debate.id });
   const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
   const { ready: authReady, authenticated } = useGeoChatAuth();
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const enqueuePendingAction = useEnqueuePendingAction('winner_vote_button');
   // Lets the queued replay reach the current `castVote` without making the callback depend on
   // itself. The runner only fires it once a personal space exists, so the replay lands past the
   // branch that queued it.
@@ -201,6 +204,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
   const castVote = React.useCallback(
     async (participant: DebateParticipant) => {
+      const attribution = getContext();
       if (debatesWithVoteInFlight.has(debateEntityId)) return;
 
       const previousVote = tally.myVote;
@@ -217,15 +221,21 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           // the vote silently dropped is worse than the toast this replaced. The runner replays
           // it once there is a personal space to write from, which is what the vote needs and
           // what finishing onboarding produces.
+          const attempt = openPrivySignIn({
+            ...attribution,
+            auth_control: 'pick_winner',
+            auth_intent: 'vote',
+            auth_continuation: 'queued',
+          });
+          attribution.auth_attempt_id = attempt?.id;
           enqueuePendingAction({
             id: `debate-winner-vote:${debateEntityId}`,
             label: 'your winner vote',
             requires: 'personalSpace',
-            run: () => castVoteRef.current(participant),
+            run: () => withActionContext(attribution, () => castVoteRef.current(participant)),
           });
           // Signed out is a step, not an error: open the login the upvote control opens rather
           // than a toast that names the problem and leaves them to find the way in.
-          openPrivySignIn();
           return;
         }
         if (accountError) {
@@ -310,7 +320,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       ]);
 
       setVoteInFlight(debateEntityId, true);
-      const operation = observeOperation('vote', 'debate', debateEntityId);
+      const operation = observeOperation('vote', 'debate', debateEntityId, undefined, attribution);
       const outcomeProperties: Record<string, unknown> = {
         vote_kind: 'winner',
         vote_direction: 'winner',
@@ -426,6 +436,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       })();
     },
     [
+      getContext,
       tally.myVote,
       smartAccount,
       personalSpaceId,

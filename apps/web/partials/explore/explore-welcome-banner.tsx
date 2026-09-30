@@ -47,13 +47,13 @@ function WelcomeBanner() {
           <span aria-hidden className="mr-1.5">
             👋
           </span>
-          Welcome to Geo
+          Welcome to Geo!
         </h2>
         {/* Written for readers, not debaters: both actions are on the feed right below, so there is
             nothing to link to. Recording and matchmaking live in the debates hub for people who go
             looking. */}
         <p className="mt-2 text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-          Watch a debate, then decide where you stand by agreeing or disagreeing with the claim.
+          Watch a debate. Agree or disagree? Cast your vote.
         </p>
       </div>
 

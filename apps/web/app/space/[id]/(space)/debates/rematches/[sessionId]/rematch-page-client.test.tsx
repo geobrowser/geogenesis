@@ -72,6 +72,18 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
+  /** Every participant whose claims were asked for by person (`votedBy`), in render order. */
+  votedByLookups: [] as Array<string | null>,
+  /** The `votedBy` read alone is still in flight; `entityHydrationLoading` holds it too. */
+  votedByLoading: false,
+  /** The `votedBy` read failed outright. */
+  votedByError: false,
+  /** Claims the `votedBy` answer does not have yet — a response newer than the answer. */
+  votedByMissing: [] as string[],
+  /** Claims the `votedBy` answer still names after positions stopped — a side since taken back. */
+  votedByExtra: [] as string[],
+  /** Holds the by-id lookup whose id list contains this claim in flight, leaving the others answering. */
+  entityHydrationLoadingFor: null as string | null,
   /** The Debate tag's catalog, which is the All tab's corpus. */
   debateTagClaims: [] as Array<{
     claimEntityId: string;
@@ -114,11 +126,8 @@ const mocks = vi.hoisted(() => ({
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
   fetchNextTaggedPage: vi.fn(),
-  boundedPagingOverride: null as {
-    autoPages: boolean;
-    stoppedShort: boolean;
-    keepLooking: () => void;
-  } | null,
+  /** How many claims under the current filters the graph records the viewer answering. */
+  graphAnsweredCount: 0,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -433,7 +442,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
-      fetched: claims.length,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -442,6 +450,12 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       refetch: vi.fn(),
     };
   },
+  // No answered claims in the graph's record here unless a case says so, so an empty excluded
+  // catalogue reads as an empty one.
+  useTaggedAnsweredCount: (_tagId: string, filters: any, enabled: boolean) => ({
+    answeredCount: enabled && filters.excludeAnsweredBy ? mocks.graphAnsweredCount : null,
+    isLoading: false,
+  }),
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic.
     const rows = enabled ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
@@ -490,16 +504,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     };
   },
 }));
-
-vi.mock('~/core/debates/matchmaking/use-bounded-paging', async importOriginal => {
-  const original = await importOriginal<typeof import('~/core/debates/matchmaking/use-bounded-paging')>();
-
-  return {
-    ...original,
-    useBoundedPaging: (options: Parameters<typeof original.useBoundedPaging>[0]) =>
-      mocks.boundedPagingOverride ?? original.useBoundedPaging(options),
-  };
-});
 
 const HYDRATION_ERROR = new Error('hydration exploded');
 
@@ -577,6 +581,33 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/core/debates/claim-picker-page', () => ({
+  /**
+   * The claims one person holds a side on, asked for by person (GEO-2656). The server's answer is
+   * the entities the positions fixture says that person answered — which is what `votedBy` reads —
+   * less any a test holds back to stand for a response newer than the answer.
+   */
+  useClaimEntitiesVotedBy: (profileSpaceId: string | null) => {
+    mocks.votedByLookups.push(profileSpaceId);
+    if (!profileSpaceId) return { entities: undefined, isLoading: false, error: null };
+    const loading = mocks.entityHydrationLoading || mocks.votedByLoading;
+    const held = new Set(
+      mocks.positions.filter(row => row.profileSpaceId === profileSpaceId).map(row => row.claimId as string)
+    );
+    const answer = mocks.entities.filter(
+      entity =>
+        (held.has(entity.id as string) || mocks.votedByExtra.includes(entity.id as string)) &&
+        !mocks.votedByMissing.includes(entity.id as string)
+    );
+    // Answerless on a failure, as react-query is on a cold key — same as the by-id lookup below.
+    const failed =
+      mocks.votedByError ||
+      Boolean(mocks.entityHydrationErrorFor && answer.some(entity => entity.id === mocks.entityHydrationErrorFor));
+    return {
+      entities: loading || failed ? undefined : answer,
+      isLoading: loading,
+      error: failed ? HYDRATION_ERROR : null,
+    };
+  },
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
     // Idle on an empty list, for the same reason as `rematchClaimsLookup` above: the real hook
@@ -590,12 +621,12 @@ vi.mock('~/core/debates/claim-picker-page', () => ({
     // ignored the failure still draw every row, so the states that exist to handle one could not
     // fail a test.
     const failed = Boolean(mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor));
+    const loading =
+      mocks.entityHydrationLoading ||
+      Boolean(mocks.entityHydrationLoadingFor && ids.includes(mocks.entityHydrationLoadingFor));
     return {
-      entities:
-        mocks.entityHydrationLoading || failed
-          ? []
-          : mocks.entities.filter(entity => ids.includes(entity.id as string)),
-      isLoading: mocks.entityHydrationLoading,
+      entities: loading || failed ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
+      isLoading: loading,
       // Stable identity: a fresh Error each render would be a new value for every memo below it.
       error: failed ? HYDRATION_ERROR : null,
     };
@@ -887,6 +918,12 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
+  mocks.votedByLookups.length = 0;
+  mocks.votedByLoading = false;
+  mocks.votedByError = false;
+  mocks.votedByMissing = [];
+  mocks.votedByExtra = [];
+  mocks.entityHydrationLoadingFor = null;
   mocks.featuredClaims = [];
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
@@ -895,8 +932,8 @@ beforeEach(() => {
   mocks.facetOnlySpaces = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
+  mocks.graphAnsweredCount = 0;
   mocks.fetchNextTaggedPage = vi.fn();
-  mocks.boundedPagingOverride = null;
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
   mocks.savedClaimsError = null;
@@ -1766,7 +1803,8 @@ describe('DebateRematchPageClient', () => {
       mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SOURCE, SPACE_1, true)];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      await waitFor(() => expect(mocks.entityIdLookups.flat()).toContain(VIEWER_ONLY));
+      // Asked for by person (GEO-2656), the same way as the opponent's, rather than by these ids.
+      await waitFor(() => expect(mocks.votedByLookups).toContain('profile-local'));
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
 
       // And the number is on the tab before it is opened, and is of the rows the tab then lists —
@@ -1953,10 +1991,10 @@ describe('DebateRematchPageClient', () => {
     // geo-chat's settled batch has no row for it, so it has no readiness row: not ready, drawn
     // without spending a per-space request to find that out.
     expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
-    // Hydrated by id — exactly the claims the graph named, nothing paged. Matched among the
-    // hydrations rather than as the last one: the All tab now hydrates its own rows too, for
-    // the topics geo-chat doesn't carry.
-    expect(mocks.entityIdLookups).toContainEqual([CLAIM_SHARED, FRESH]);
+    // Asked for by person rather than by the ids positions returned (GEO-2656), and nothing
+    // hydrated by id behind it: the answer already had both claims.
+    expect(mocks.votedByLookups).toContain('profile-remote');
+    expect(mocks.entityIdLookups.flat()).not.toContain(FRESH);
     // And the graph was asked about exactly these two people.
     expect(mocks.positionParticipants.at(-1)).toEqual(['profile-local', 'profile-remote']);
   });
@@ -2111,16 +2149,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
   });
 
-  it('keeps the same rematch attribution when Keep looking appears below existing rows', async () => {
-    mocks.boundedPagingOverride = { autoPages: false, stoppedShort: true, keepLooking: vi.fn() };
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    const keepLooking = screen.getByRole('button', { name: 'Keep looking' });
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Keep looking');
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
-  });
-
   it('leaves the sentinel out once there is no page left to fetch', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
@@ -2264,6 +2292,138 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveTextContent('1');
+  });
+
+  /**
+   * GEO-2656, the latency half. The claim entities are asked for by person (`votedBy`) now, so they
+   * start with positions instead of waiting for the ids positions returns.
+   */
+  it('asks for the opponent’s claims while positions are still in flight', async () => {
+    // As on a first load: nothing back yet, so there are no ids a by-id lookup could have used.
+    mocks.positions = [];
+    mocks.positionsLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.votedByLookups).toContain('profile-remote');
+    expect(mocks.entityIdLookups.flat()).toHaveLength(0);
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+  });
+
+  /**
+   * And the number is still the rows, not a count of its own.
+   *
+   * A server count cannot match what the tab lists: it leaves out claims the session excludes,
+   * claims in a space that cannot publish, and positions taken in a space the claim is not in, and
+   * no filter can say any of that. Every one of those is in this fixture, with a claim that is not
+   * a claim at all and one the `votedBy` answer is missing, so the badge has to be the list's length
+   * for each of them to come out right.
+   */
+  describe('the opponent’s badge is the rows it lists', () => {
+    const TOPPED_UP = '019fedb5-4a85-7d72-9e55-6ab19c2d8831';
+    const ELSEWHERE = '019fedb6-5b96-7e83-9f66-7bc2ad4f9942';
+    const PERSONAL_CLAIM = '019fedb8-6ca7-7f94-8a77-8cd3be5fa053';
+    const NOT_A_CLAIM = '019fedb9-7db8-7aa5-9b88-9de4cf60b164';
+    const RETRACTED = '019fedba-8ec9-7bb6-8c99-aef5d071c275';
+    const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5bb';
+
+    function claimIn(id: string, name: string, spaceId: string) {
+      return {
+        id,
+        name,
+        description: null,
+        spaces: [spaceId],
+        values: [{ property: { id: NAME_PROPERTY }, spaceId, value: name }],
+        relations: [],
+      };
+    }
+
+    function everyFilter() {
+      mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
+      mocks.entities = [
+        sharedEntity(),
+        claimIn(TOPPED_UP, 'A claim the votedBy answer is missing', SPACE_1),
+        // The session's own claim, which it excludes.
+        claimIn(CLAIM_SOURCE, 'The claim the pair just debated', SPACE_1),
+        // Lives in Governance; the side was taken in Crypto.
+        claimIn(ELSEWHERE, 'A claim answered in some other space', SPACE_2),
+        claimIn(PERSONAL_CLAIM, 'A claim in a personal space', PERSONAL_SPACE),
+        claimIn(RETRACTED, 'A claim they took their side back on', SPACE_1),
+      ];
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', TOPPED_UP, SPACE_1, true),
+        position('profile-remote', CLAIM_SOURCE, SPACE_1, true),
+        position('profile-remote', ELSEWHERE, SPACE_1, true),
+        position('profile-remote', PERSONAL_CLAIM, PERSONAL_SPACE, true),
+        position('profile-remote', NOT_A_CLAIM, SPACE_1, true),
+      ];
+      mocks.votedByMissing = [TOPPED_UP];
+      mocks.votedByExtra = [RETRACTED];
+    }
+
+    const badge = () => {
+      const text = screen.getByRole('button', { name: /^Lobby/ }).textContent ?? '';
+      const digits = text.match(/\d+/);
+      return digits ? Number(digits[0]) : null;
+    };
+    const rows = () => screen.queryAllByRole('article').length;
+
+    it('counts exactly the rows the tab draws', async () => {
+      everyFilter();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(screen.getByText('A claim the votedBy answer is missing')).toBeInTheDocument());
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+      expect(rows()).toBe(2);
+      expect(badge()).toBe(rows());
+      // The answer had every claim but one, so only that one went by id.
+      expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
+      expect(mocks.entityIdLookups).toContainEqual([TOPPED_UP, NOT_A_CLAIM]);
+    });
+
+    // The top-up is not waited for, so there is a moment with one row and not two — and the badge
+    // has to say one then, rather than two early or a skeleton over a row.
+    it('agrees with the rows while a top-up is still in flight, and after it lands', async () => {
+      everyFilter();
+      mocks.entityHydrationLoadingFor = TOPPED_UP;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(rows()).toBe(1);
+      expect(badge()).toBe(1);
+
+      mocks.entityHydrationLoadingFor = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(badge()).toBe(2);
+    });
+
+    // The `votedBy` read failing takes nothing with it: the by-id lookup it replaced answers the
+    // whole list, and the badge still follows it.
+    it('falls back to the by-id lookup when the votedBy read fails', async () => {
+      everyFilter();
+      mocks.votedByError = true;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(badge()).toBe(2);
+      expect(mocks.entityIdLookups.flat()).toEqual(expect.arrayContaining([CLAIM_SHARED, TOPPED_UP]));
+    });
+
+    // Positions decide which claims are rows; the `votedBy` answer only supplies the entities. A
+    // side the opponent has since taken back can still be in a cached answer, and must not list.
+    it('does not list a claim only the votedBy answer still names', async () => {
+      everyFilter();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(screen.queryByText('A claim they took their side back on')).toBeNull();
+      expect(badge()).toBe(2);
+    });
   });
 
   /**
@@ -4642,6 +4802,51 @@ describe('Hide my positions', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Show my positions' }));
 
     expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The backlog is left out by the server (GEO-2894), so a page of the tag is rows that can be shown.
+   *
+   * Asked by the viewer's own personal space, which is what a vote's `userId` is — the participant
+   * row's `profile_space_id`, not their geo-chat user id.
+   */
+  it('asks the server to leave out what the viewer has answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await screen.findByText('A newly published claim');
+
+    expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBe('profile-local');
+  });
+
+  it('asks for everything once it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull());
+  });
+
+  // The server left every claim out, so the catalogue arrives empty rather than collapsed — and it
+  // is the same statement, with the same way out.
+  it('says the viewer answered these when the server leaves nothing', async () => {
+    mocks.debateTagClaims = [];
+    mocks.graphAnsweredCount = 2;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+  });
+
+  // And an empty catalogue with nothing left out is just empty.
+  it('does not blame the switch for a catalogue that is simply empty', async () => {
+    mocks.debateTagClaims = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/No other eligible claims/)).toBeInTheDocument();
+    expect(screen.queryByText(/You’ve answered every claim here/)).toBeNull();
   });
 
   // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather

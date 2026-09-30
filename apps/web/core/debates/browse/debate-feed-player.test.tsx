@@ -3,6 +3,7 @@ import { act, fireEvent, render, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -612,14 +613,19 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  function renderPair() {
+  /**
+   * `active` defaults on. The tests about `preload` itself pass it off: an active card buffers its
+   * recordings anyway (GEO-2965), which would hide whether the rebuild raised anything — and the
+   * look-ahead card, which is not active, is where this failure was observed.
+   */
+  function renderPair({ active = true }: { active?: boolean } = {}) {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
-    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={active} />);
     const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
     /** Hand the pair different URLs — or none, which is how a new recording arrives. */
     const hand = (urls: { slot1: string | null; slot2: string | null }) => {
       mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2, urls });
-      rerender(<DebateFeedPlayer debate={debate} active />);
+      rerender(<DebateFeedPlayer debate={debate} active={active} />);
     };
     return {
       slot1,
@@ -661,7 +667,7 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
    * did not load while the same recording plays fine on a page that autoplays it.
    */
   it('raises preload past the mode that killed the pipeline', () => {
-    const { slot1, slot2 } = renderPair();
+    const { slot1, slot2 } = renderPair({ active: false });
     expect(slot1.preload).toBe('metadata');
 
     fireEvent.error(slot1);
@@ -732,7 +738,7 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
    * here and reads like a mere loading state from over there.
    */
   it('starts a different recording from a fresh element', () => {
-    const { slot1, hand, container } = renderPair();
+    const { slot1, hand, container } = renderPair({ active: false });
 
     fireEvent.error(slot1);
     act(() => vi.advanceTimersByTime(500));
@@ -1340,5 +1346,281 @@ describe('the end card', () => {
     mocks.endCardEnabled = [];
     render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(mocks.endCardEnabled.at(-1)).toBe(false);
+  });
+});
+
+/**
+ * GEO-2965. Both recordings are held until both can play, then started together — the report was
+ * one panel painting and running, subtitles and countdown already moving, beside a grey tile.
+ *
+ * jsdom's media elements never load, so each test sets `readyState` and `networkState` by hand and
+ * fires the event a browser would, which is all the hold listens to.
+ */
+describe('the pair becomes watchable together (GEO-2965)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function setMedia(video: HTMLVideoElement, state: { readyState: number; networkState?: number }, event?: string) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: state.readyState });
+    Object.defineProperty(video, 'networkState', { configurable: true, value: state.networkState ?? 2 });
+    if (event) fireEvent(video, new Event(event));
+  }
+
+  /** A stopped card whose URLs have landed, which is where autoplay decides whether to start it. */
+  function renderHeld({
+    active = true,
+    onPlaybackState,
+  }: {
+    active?: boolean;
+    onPlaybackState?: (state: unknown) => void;
+  } = {}) {
+    const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    mocks.controller = fixture;
+    const view = render(<DebateFeedPlayer debate={debate} active={active} onPlaybackState={onPlaybackState} />);
+    const [slot1, slot2] = Array.from(view.container.querySelectorAll('video'));
+    const root = view.container.querySelector('[data-debate-ready]') as HTMLElement;
+    const rerender = (next: { active?: boolean; debateId?: string } = {}) =>
+      view.rerender(
+        <DebateFeedPlayer
+          debate={next.debateId ? ({ ...debate, id: next.debateId } as Debate) : debate}
+          active={next.active ?? active}
+          onPlaybackState={onPlaybackState}
+        />
+      );
+    return { fixture, slot1, slot2, root, rerender };
+  }
+
+  const concealed = (video: HTMLVideoElement) => video.className.includes('opacity-0');
+
+  it('starts neither recording while only one of them can play', () => {
+    const { fixture, slot1, slot2, root } = renderHeld();
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    expect(root.getAttribute('data-debate-pair-held')).toBe('true');
+
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    // And neither is drawn: slot 1 alone has a frame, and drawing it is the asymmetry.
+    expect(concealed(slot1)).toBe(true);
+    expect(concealed(slot2)).toBe(true);
+  });
+
+  it('starts and reveals both the moment the second can play', () => {
+    const { fixture, slot1, slot2, root } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    act(() => setMedia(slot2, { readyState: 3 }, 'canplay'));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+    expect(root.getAttribute('data-debate-pair-held')).toBe('false');
+  });
+
+  it('does not wait at all for a pair the look-ahead already loaded', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplaythrough');
+      setMedia(slot2, { readyState: 4 }, 'canplaythrough');
+    });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    rerender({ active: true });
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('reveals a look-ahead pair together once both have a frame, without starting it', () => {
+    const { fixture, slot1, slot2 } = renderHeld({ active: false });
+    act(() => setMedia(slot1, { readyState: 2 }, 'loadeddata'));
+    expect(concealed(slot1)).toBe(true);
+
+    act(() => setMedia(slot2, { readyState: 2 }, 'loadeddata'));
+
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+  });
+
+  it('plays whatever is ready once the hold times out', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS - 1));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    // Revealed as it starts: holding slot 1 invisible while it plays would be the same asymmetry
+    // the other way round.
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+  });
+
+  it('runs the timeout only while the card is the one being watched', () => {
+    const { fixture, rerender } = renderHeld({ active: false });
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS * 2));
+    rerender({ active: true });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // iOS Safari ignores `preload`: the element opens its header, goes idle, and will not fetch more
+  // until it is played. Waiting for it would only run out the clock.
+  it('stops holding for an element the browser has stopped loading short of playable', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend'));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // The same browser, arriving at a look-ahead card: its `suspend` fired before the card was the
+  // active one, and no second one is coming.
+  it('stops holding for an element that was already idle when the card became active', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend');
+      setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend');
+    });
+
+    rerender({ active: true });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // Where the raise to `preload="auto"` is honoured, the idle element starts fetching again inside
+  // the grace, and the pair is held for it as it should be.
+  it('keeps holding an idle element that resumes fetching once the card is active', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 4, networkState: 1 }, 'canplay');
+      setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend');
+    });
+
+    rerender({ active: true });
+    act(() => setMedia(slot2, { readyState: 1, networkState: 2 }, 'loadstart'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    act(() => setMedia(slot2, { readyState: 4 }, 'canplay'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // Chrome fires `suspend` a millisecond before `canplay` on these files. Read as "stopped", that
+  // would release every pair on the first element's suspend and hold nothing at all.
+  it('keeps holding when a suspend is followed by the element becoming playable', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => setMedia(slot1, { readyState: 4, networkState: 1 }, 'canplay'));
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => setMedia(slot2, { readyState: 4 }, 'canplay'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // The playback hook moves a fresh pair to where the debate starts as soon as both know their
+  // shape. Data at the old position says nothing about data at the new one.
+  it('keeps holding while an element is seeking to where it will start', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: true });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeking'));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: false });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeked'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a failed recording through to the rebuild rather than holding its partner', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    Object.defineProperty(slot2, 'error', { configurable: true, value: { code: 2 } });
+    act(() => {
+      fireEvent.error(slot2);
+    });
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a tap start playback without waiting', () => {
+    const { fixture, slot1 } = renderHeld();
+    fireEvent.click(slot1.closest('button') as HTMLElement);
+
+    expect(fixture.togglePlayback).toHaveBeenCalledTimes(1);
+    expect(concealed(slot1)).toBe(false);
+  });
+
+  it('never holds a pair again once it has been let go, whatever its elements do later', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld();
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+
+    // A seek drops `readyState` while the element fetches the new position; scrolling away and
+    // back re-runs autoplay. Neither is a new pair.
+    act(() => setMedia(slot2, { readyState: 1 }, 'waiting'));
+    rerender({ active: false });
+    rerender({ active: true });
+
+    expect(concealed(slot2)).toBe(false);
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds a different debate handed to the same card on its own terms', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld();
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    act(() => {
+      setMedia(slot1, { readyState: 0 });
+      setMedia(slot2, { readyState: 0 });
+    });
+
+    rerender({ debateId: 'debate-2' });
+
+    expect(concealed(slot1)).toBe(true);
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // GEO-3074's outcome must read the same as before: `ready` still means "URLs in hand", and the
+  // hold is reported beside it.
+  it('reports the hold to the page outcome without changing what ready means', () => {
+    const states: unknown[] = [];
+    const { slot1, slot2 } = renderHeld({ onPlaybackState: state => states.push(state) });
+
+    expect(states.at(-1)).toEqual({
+      ready: true,
+      playing: false,
+      autoplayBlocked: false,
+      error: false,
+      pairHeld: true,
+    });
+
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+
+    expect(states.at(-1)).toMatchObject({ ready: true, pairHeld: false });
+  });
+
+  it('buffers the active card and keeps the look-ahead default for the others', () => {
+    const active = renderHeld();
+    expect(active.slot1.preload).toBe('auto');
+    expect(active.slot2.preload).toBe('auto');
   });
 });

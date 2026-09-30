@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { type UseQueryResult, useQueries } from '@tanstack/react-query';
+import { type UseQueryResult, useQueries, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -9,6 +9,9 @@ import { parse } from 'graphql';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { graphql } from '~/core/io/graphql-client';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
+import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { normId } from '~/core/utils/norm-id';
 
 /**
  * The rematch picker's projection of a claim, carrying only what the picker reads.
@@ -24,55 +27,59 @@ import { graphql } from '~/core/io/graphql-client';
  *
  * Hand-written rather than generated so it doesn't require regenerating `gql.ts`.
  */
+const CLAIM_PICKER_ENTITY_FIELDS = /* GraphQL */ `
+  id
+  name
+  description
+  spaceIds
+  valuesList(first: 100, filter: { propertyId: { in: $propertyIds } }) {
+    spaceId
+    propertyId
+    text
+    boolean
+  }
+  relationsList(first: 100, filter: { typeId: { is: $topicsPropertyId } }) {
+    # Topics are assigned per space, so which space the assignment was made in is part of the
+    # answer rather than metadata about it. Without it a caller scoped to one space cannot tell
+    # a topic assigned there from one assigned somewhere else entirely.
+    spaceId
+    toEntity {
+      id
+      name
+    }
+  }
+`;
+
 const CLAIM_PICKER_ENTITIES_SOURCE = /* GraphQL */ `
   query ClaimPickerEntities($claimTypeId: UUID!, $propertyIds: [UUID!]!, $topicsPropertyId: UUID!, $ids: [UUID!]!) {
     entitiesConnection(first: 100, typeId: $claimTypeId, filter: { id: { in: $ids } }) {
       nodes {
-        id
-        name
-        description
-        spaceIds
-        valuesList(first: 100, filter: { propertyId: { in: $propertyIds } }) {
-          spaceId
-          propertyId
-          text
-          boolean
-        }
-        relationsList(first: 100, filter: { typeId: { is: $topicsPropertyId } }) {
-          # Topics are assigned per space, so which space the assignment was made in is part of the
-          # answer rather than metadata about it. Without it a caller scoped to one space cannot tell
-          # a topic assigned there from one assigned somewhere else entirely.
-          spaceId
-          toEntity {
-            id
-            name
-          }
-        }
+        ${CLAIM_PICKER_ENTITY_FIELDS}
       }
     }
   }
 `;
 
+type ClaimPickerEntityNode = {
+  id: string;
+  name: string | null;
+  description: string | null;
+  spaceIds: string[] | null;
+  valuesList: Array<{
+    spaceId: string;
+    propertyId: string;
+    text: string | null;
+    boolean: boolean | null;
+  } | null> | null;
+  // Nullable, as `tagged-claims.ts` also models it: a relation can carry no space.
+  relationsList: Array<{
+    spaceId: string | null;
+    toEntity: { id: string; name: string | null } | null;
+  } | null> | null;
+};
+
 type ClaimPickerEntitiesQuery = {
-  entitiesConnection: {
-    nodes: Array<{
-      id: string;
-      name: string | null;
-      description: string | null;
-      spaceIds: string[] | null;
-      valuesList: Array<{
-        spaceId: string;
-        propertyId: string;
-        text: string | null;
-        boolean: boolean | null;
-      } | null> | null;
-      // Nullable, as `tagged-claims.ts` also models it: a relation can carry no space.
-      relationsList: Array<{
-        spaceId: string | null;
-        toEntity: { id: string; name: string | null } | null;
-      } | null> | null;
-    } | null> | null;
-  } | null;
+  entitiesConnection: { nodes: Array<ClaimPickerEntityNode | null> | null } | null;
 };
 
 type ClaimPickerEntitiesVariables = {
@@ -113,9 +120,12 @@ export type ClaimPickerEntity = {
 export const CLAIM_PICKER_IDS_BATCH_SIZE = 100;
 
 function decodeClaimPickerEntities(data: ClaimPickerEntitiesQuery): ClaimPickerEntity[] {
-  const connection = data.entitiesConnection;
+  return decodeClaimPickerNodes(data.entitiesConnection?.nodes);
+}
+
+function decodeClaimPickerNodes(nodes: Array<ClaimPickerEntityNode | null> | null | undefined): ClaimPickerEntity[] {
   const entities: ClaimPickerEntity[] = [];
-  for (const node of connection?.nodes ?? []) {
+  for (const node of nodes ?? []) {
     if (!node) continue;
     entities.push({
       id: node.id,
@@ -202,4 +212,129 @@ export function useClaimEntitiesByIds(ids: string[]) {
     })),
     combine,
   });
+}
+
+/**
+ * Every claim one person holds a position on, as the picker's projection, asked for by the person
+ * rather than by id (GEO-2656).
+ *
+ * `useClaimEntitiesByIds` needs the ids first, and the ids come from the positions query, so the
+ * claim entities could not be asked for until positions had landed. `votedBy` answers "the claims
+ * this person holds a side on" directly, so this starts with positions rather than after them —
+ * one dependent round trip less behind the opponent's tab and its badge.
+ *
+ * The same held-position filters as every other `votedBy` read (`POSITION_VOTE_KINDS`,
+ * `POSITION_VOTE_TYPES`), so it names the same claims the positions query does: measured on the
+ * five busiest testnet voters, the two sets were identical (218–302 claims each).
+ *
+ * It does not decide which of them the picker lists. That still takes the positions themselves —
+ * which space each side was taken in — and geo-chat's session rows, so the caller joins this to
+ * both exactly as it joined the by-id lookup.
+ */
+const CLAIM_PICKER_ENTITIES_VOTED_BY_SOURCE = /* GraphQL */ `
+  query ClaimPickerEntitiesVotedBy(
+    $userId: UUID!
+    $kinds: [Int!]
+    $types: [Int!]
+    $claimTypeId: UUID!
+    $propertyIds: [UUID!]!
+    $topicsPropertyId: UUID!
+    $first: Int!
+    $after: Cursor
+  ) {
+    entitiesConnection(
+      votedBy: $userId
+      votedByKinds: $kinds
+      votedByTypes: $types
+      typeId: $claimTypeId
+      first: $first
+      after: $after
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        ${CLAIM_PICKER_ENTITY_FIELDS}
+      }
+    }
+  }
+`;
+
+type ClaimPickerEntitiesVotedByQuery = {
+  entitiesConnection: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
+    nodes: Array<ClaimPickerEntityNode | null> | null;
+  } | null;
+};
+
+const claimPickerEntitiesVotedByDocument = parse(CLAIM_PICKER_ENTITIES_VOTED_BY_SOURCE) as TypedDocumentNode<
+  ClaimPickerEntitiesVotedByQuery,
+  Omit<ClaimPickerEntitiesVariables, 'ids'> & {
+    userId: string;
+    kinds: number[];
+    types: number[];
+    first: number;
+    after?: string;
+  }
+>;
+
+/**
+ * Rows per `votedBy` page. The busiest testnet voter holds ~300 positions, so this is one request in
+ * the ordinary case — the same size the profile's position index pages at.
+ */
+export const CLAIM_PICKER_VOTED_BY_PAGE_SIZE = 500;
+
+export function fetchClaimPickerEntitiesVotedBy(
+  profileSpaceId: string,
+  signal?: AbortSignal
+): Promise<ClaimPickerEntity[]> {
+  return collectCursorPages(after =>
+    Effect.runPromise(
+      graphql({
+        query: claimPickerEntitiesVotedByDocument,
+        decoder: data => ({
+          items: decodeClaimPickerNodes(data.entitiesConnection?.nodes),
+          endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
+          hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
+        }),
+        variables: {
+          userId: profileSpaceId,
+          kinds: [...POSITION_VOTE_KINDS],
+          types: [...POSITION_VOTE_TYPES],
+          claimTypeId: CLAIM_TYPE_ID,
+          propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
+          topicsPropertyId: TOPICS_PROPERTY_ID,
+          first: CLAIM_PICKER_VOTED_BY_PAGE_SIZE,
+          after,
+        },
+        signal,
+      })
+    )
+  );
+}
+
+/** Beside the by-id batches, and outside `'debates'` for the same reason they are. */
+export const claimPickerVotedByQueryKey = (profileSpaceId: string) =>
+  ['claim-picker', 'voted-by', normId(profileSpaceId)] as const;
+
+/**
+ * {@link fetchClaimPickerEntitiesVotedBy} as a query. `entities` is `undefined` until an answer has
+ * landed, which is how a caller tells "not asked yet" from "holds no positions".
+ */
+export function useClaimEntitiesVotedBy(profileSpaceId: string | null): {
+  entities: ClaimPickerEntity[] | undefined;
+  isLoading: boolean;
+  error: Error | null;
+} {
+  const query = useQuery({
+    queryKey: claimPickerVotedByQueryKey(profileSpaceId ?? ''),
+    queryFn: ({ signal }) => fetchClaimPickerEntitiesVotedBy(profileSpaceId as string, signal),
+    enabled: Boolean(profileSpaceId),
+    // The set grows as the person answers, but nothing reads it for *which* claims: the caller walks
+    // the positions query's ids and tops up any this answer is missing by id. So a stale answer
+    // costs a by-id batch, never a missing row.
+    staleTime: 5 * 60_000,
+  });
+  return { entities: query.data, isLoading: query.isLoading, error: query.error };
 }

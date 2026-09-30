@@ -8,7 +8,9 @@ import * as React from 'react';
 import equal from 'fast-deep-equal';
 import { useSetAtom } from 'jotai';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { profileUpdated } from '~/core/analytics';
+import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { useEntity } from '~/core/database/entities';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -660,7 +662,13 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
   const publish = React.useCallback(
     async (draft: ProfileDraft, extraRows?: { values: Value[]; relations: Relation[] }) => {
+      const attribution = snapshotActionContext('entity_editor', 'person', entityId ?? '', {
+        overlay: 'modal',
+        overlay_entity_id: entityId ?? undefined,
+        overlay_entity_type: 'person',
+      });
       if (!canEdit) return;
+      const operation = observeOperation('publish', 'person', entityId ?? '', undefined, attribution);
 
       // Retry re-sends the staged rows so the uploads inside only run once — but
       // only while it is still the same edit. The fields stay live in the error
@@ -751,6 +759,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
 
           stagedRef.current = stagedEdit;
         } catch (error) {
+          operation.failed('unavailable');
           console.error('[edit-profile] failed to stage profile edit', error);
           // `makeProposal` never ran, so nothing else will clear the pill — but only
           // clear it if it is still ours to clear.
@@ -767,6 +776,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // saved: the image is still there, and closing on "published" tells the user
       // it is gone. This one is a real failure even when other fields did stage.
       if (staged.unresolvedRemoval) {
+        operation.failed('invalid_input');
         console.error('[edit-profile] removal found no relation to delete', {
           kind: staged.unresolvedRemoval,
           entityId,
@@ -788,6 +798,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
       // value already there. Publishing them earns the SDK's generic "Nothing to
       // publish" error for what is really a no-op, so settle them as done instead.
       if (staged.values.length === 0 && staged.relations.length === 0) {
+        operation.succeeded();
         clearStagingStatus();
         settleSuccess(false);
         return;
@@ -806,15 +817,20 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
         spaceId: staged.owner.spaceId,
         name: 'Edit profile',
         onSuccess: () => {
+          operation.succeeded();
           if (!isStillInFlight()) return;
           settleSuccess();
         },
         onError: () => {
+          operation.failed('unknown');
           if (!isStillInFlight()) return;
           ownsPendingError.current = true;
           setStatus('error');
           setErrorMessage('Couldn’t publish your profile. Your changes are still here — try again.');
         },
+      }).catch(error => {
+        operation.failed(classifyOperationFailure(error));
+        throw error;
       });
     },
     [

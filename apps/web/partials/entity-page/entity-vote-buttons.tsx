@@ -9,6 +9,8 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useStore } from 'jotai';
 
+import { type ActionContext, withActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
@@ -98,6 +100,8 @@ export function EntityVoteButtons({
   presentation = 'inline',
   compact = false,
 }: EntityVoteButtonsProps) {
+  const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
+  const signInContext = React.useRef<ActionContext | undefined>(undefined);
   const prepareOnboarding = usePrepareOnboarding();
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
@@ -180,7 +184,8 @@ export function EntityVoteButtons({
       const direction = pendingSignInDirectionRef.current;
       if (direction !== undefined) {
         pendingSignInDirectionRef.current = undefined;
-        queueVoteWrite(direction);
+        if (signInContext.current) withActionContext(signInContext.current, () => queueVoteWrite(direction));
+        else queueVoteWrite(direction);
       }
     },
   });
@@ -226,11 +231,18 @@ export function EntityVoteButtons({
   function openPrivySignIn() {
     // Stay on this page after onboarding instead of bouncing to the explore page.
     prepareOnboarding();
-    login();
+    const attempt = login({
+      ...signInContext.current,
+      auth_control: `${responseKind}_${pendingSignInDirectionRef.current}`,
+      auth_intent: 'vote',
+      auth_continuation: 'queued',
+    });
+    if (signInContext.current) signInContext.current = { ...signInContext.current, auth_attempt_id: attempt?.id };
   }
 
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      signInContext.current = getContext();
       pendingSignInDirectionRef.current = direction;
       openPrivySignIn();
       return;

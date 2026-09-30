@@ -26,6 +26,7 @@ import {
   cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
+  geoChatErrorProperties,
   getDebate,
   getLocalRecordingPartUrls,
   resolveCurrentGeoChatUserId,
@@ -88,18 +89,6 @@ export function isPermanentRecordingUploadError(error: unknown): boolean {
 
 /** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
 type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
-
-/** An upload error in analytics terms: geo-chat's code and status where it has them. */
-function uploadErrorProperties(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
-  }
-  return {
-    error_code: null,
-    http_status: null,
-    error_name: error instanceof Error ? error.name : typeof error,
-  };
-}
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
@@ -228,6 +217,31 @@ export function recordingUploadRetryDelay(attemptCount: number) {
   return Math.min(maxRetryDelayMs, initialRetryDelayMs * 2 ** Math.max(0, attemptCount));
 }
 
+/** What this tab knows about an upload's backoff, whether or not IndexedDB took the write. */
+type RecordingUploadBackoff = { attemptCount: number; nextAttemptAt: number };
+
+/**
+ * When an upload may next be attempted: the later of what the queue row says and what this tab
+ * recorded itself (GEO-3105).
+ *
+ * The row alone is not enough. It is only pushed back by `scheduleDebateRecordingRetry`, and when
+ * that write fails — the same broken IndexedDB that failed the attempt, typically — the row goes on
+ * saying "due now". A Safari tab then retried 180 times in three seconds. And even when the write
+ * lands, the observer that feeds `uploads` reports it a moment later than the next render reads it.
+ */
+export function recordingUploadDueAt(
+  upload: Pick<DebateRecordingUpload, 'nextAttemptAt'>,
+  backoff: RecordingUploadBackoff | undefined
+): number {
+  return Math.max(upload.nextAttemptAt, backoff?.nextAttemptAt ?? 0);
+}
+
+/** An error's own words for analytics, capped: the name alone ("Error") has said nothing so far. */
+function recordingUploadErrorMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message.trim() : '';
+  return message ? message.slice(0, 200) : null;
+}
+
 export function DebateRecordingUploadCoordinator() {
   const queryClient = useQueryClient();
   const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -275,6 +289,9 @@ export function DebateRecordingUploadCoordinator() {
 
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
+  // Keyed by upload id. Read on every scheduling decision, so a failed write-back cannot turn the
+  // backoff into a hot loop. See `recordingUploadDueAt`.
+  const backoffRef = React.useRef(new Map<string, RecordingUploadBackoff>());
   const mountedRef = React.useRef(true);
   const identityAttemptsRef = React.useRef(0);
 
@@ -416,7 +433,9 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     if (activeUploadId || publishableUploads.length === 0) return;
-    const nextAttemptAt = Math.min(...publishableUploads.map(upload => upload.nextAttemptAt));
+    const nextAttemptAt = Math.min(
+      ...publishableUploads.map(upload => recordingUploadDueAt(upload, backoffRef.current.get(upload.id)))
+    );
     const delay = Math.max(0, nextAttemptAt - Date.now());
     if (delay === 0) return;
     const timer = window.setTimeout(() => setWakeAt(Date.now()), delay);
@@ -425,7 +444,9 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
-    const upload = publishableUploads.find(candidate => candidate.nextAttemptAt <= Date.now());
+    const upload = publishableUploads.find(
+      candidate => recordingUploadDueAt(candidate, backoffRef.current.get(candidate.id)) <= Date.now()
+    );
     if (!upload) return;
 
     activeUploadIdRef.current = upload.id;
@@ -433,21 +454,31 @@ export function DebateRecordingUploadCoordinator() {
     const dependencies = recordingUploadDependencies(getPrivyIdentityToken, accountKey, loaded => {
       if (mountedRef.current) setUploadProgress({ id: upload.id, loaded });
     });
+    const backoffs = backoffRef.current;
     let attemptStage = upload.stage;
-    let attemptCount = upload.attemptCount;
+    let attemptCount = Math.max(upload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
     void withRecordingUploadLock(async () => {
       const latestUpload = await getDebateRecordingUpload(upload.id);
       if (!latestUpload || latestUpload.userId !== userId) return;
       attemptStage = latestUpload.stage;
-      attemptCount = latestUpload.attemptCount;
+      attemptCount = Math.max(latestUpload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
+      // The row this was picked from can be a stale report of one already pushed back. Hold off
+      // until it is due, and remember that here, or the stale report picks it again at once.
+      if (latestUpload.nextAttemptAt > Date.now()) {
+        backoffs.set(upload.id, { attemptCount, nextAttemptAt: latestUpload.nextAttemptAt });
+        return;
+      }
       await processDebateRecordingUpload(latestUpload, {
         ...dependencies,
         markUploaded: async (id, filename) => {
           await dependencies.markUploaded(id, filename);
           attemptStage = 'uploaded';
           attemptCount = 0;
+          // A new stage starts its own backoff, as the row does in `markDebateRecordingUploaded`.
+          backoffs.delete(id);
         },
       });
+      backoffs.delete(upload.id);
       if (mountedRef.current) {
         setUploadedDebateIds(current => new Set(current).add(normalizeDebateId(latestUpload.debateId)));
       }
@@ -473,23 +504,29 @@ export function DebateRecordingUploadCoordinator() {
             debate_id: upload.debateId,
             stage: attemptStage,
             attempt_count: attemptCount + 1,
-            ...uploadErrorProperties(error),
+            ...geoChatErrorProperties(error),
           });
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
             console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
           }
+          // Kept even if the delete failed: this upload is never to be attempted again.
+          backoffs.set(upload.id, { attemptCount: attemptCount + 1, nextAttemptAt: Number.POSITIVE_INFINITY });
           return;
         }
-        const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
+        const nextAttemptAt = Date.now() + recordingUploadRetryDelay(attemptCount);
+        // Recorded here before the queue write, which can fail on its own (GEO-3105): the backoff
+        // must hold either way, since the next render decides from this and the row together.
+        backoffs.set(upload.id, { attemptCount: attemptCount + 1, nextAttemptAt });
         // Bounded by the backoff (5s doubling to 5 minutes), so one stuck upload cannot flood this.
         capture('debate_recording_upload_retry_scheduled', {
           debate_id: upload.debateId,
           stage: attemptStage,
           attempt_count: attemptCount + 1,
           online: typeof navigator === 'undefined' || navigator.onLine,
-          ...uploadErrorProperties(error),
+          ...geoChatErrorProperties(error),
+          error_message: recordingUploadErrorMessage(error),
         });
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,

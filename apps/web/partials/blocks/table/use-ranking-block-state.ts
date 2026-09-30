@@ -7,6 +7,8 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { observeOperation } from '~/core/analytics-operations';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
@@ -163,7 +165,6 @@ export function useRankingBlockState({
   const searchParams = useSearchParams();
   const preferMyTab = searchParams?.get('tab') === RANKING_COMPOSE_TAB_MY;
   const { showOnboarding } = useOnboarding();
-  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
@@ -177,6 +178,23 @@ export function useRankingBlockState({
     view: stateView,
     viewRelation: stateViewRelation,
   } = useDataBlock();
+  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId, entityId);
+  const getShareContext = useActionContext('share_dialog', 'ranking', entityId);
+  const shareOnX = React.useCallback(
+    (shareUrl: string, shareText: string, rankEntityId: string) => {
+      const context = getShareContext({ target_type: 'ranking', target_id: rankEntityId });
+      const operation = observeOperation('share', 'ranking', rankEntityId, undefined, context);
+      try {
+        shareRankingOnX(shareUrl, shareText);
+        // Opening an external composer cannot tell us whether the user posts.
+        operation.failed('unknown');
+      } catch (error) {
+        operation.failed('unavailable');
+        throw error;
+      }
+    },
+    [getShareContext]
+  );
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -608,8 +626,8 @@ export function useRankingBlockState({
     if (!viewerOwnSharePath) return;
     const shareUrl = buildAbsoluteRankingShareUrl(viewerOwnSharePath);
     const shareText = `Here's my ${name?.trim() || 'ranking'}. What's yours?`;
-    shareRankingOnX(shareUrl, shareText);
-  }, [name, viewerOwnSharePath]);
+    shareOnX(shareUrl, shareText, viewerOwnRankEntityId);
+  }, [name, viewerOwnSharePath, viewerOwnRankEntityId, shareOnX]);
 
   React.useEffect(() => {
     if (!showViewerOwnTab && activeTab === 'viewer') {
@@ -851,9 +869,9 @@ export function useRankingBlockState({
     // after an await. The OG image is pre-warmed in the background (and the share
     // route falls back to a live preview render if the R2 object isn't ready yet),
     // so the card still resolves even if the user posts immediately.
-    shareRankingOnX(shareUrl, shareText);
+    shareOnX(shareUrl, shareText, shareRankEntityId);
     void ensurePersonalRankingOg().catch(() => {});
-  }, [name, ensurePersonalRankingOg, personalSharePath]);
+  }, [name, ensurePersonalRankingOg, personalSharePath, shareRankEntityId, shareOnX]);
 
   // Generate the personal OG image
   React.useEffect(() => {

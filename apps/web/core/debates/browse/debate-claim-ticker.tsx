@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
@@ -302,7 +303,20 @@ const HISTORY_EDGE_CLEAR_PX = 4.65;
  * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
  * thumb while signed out.
  */
-export function DebateClaimTickerCard({
+export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTickerCardBody>[0]) {
+  if (!props.window.claim.spaceId) return null;
+  return (
+    <ActionSurface
+      asChild
+      trackImpression={props.opacity === undefined || props.opacity > 0}
+      value={{ component: 'debate_claim_ticker', target_id: props.window.claim.id, target_type: 'claim' }}
+    >
+      <DebateClaimTickerCardBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimTickerCardBody({
   window,
   opacity = 1,
   speaker = null,
@@ -324,7 +338,7 @@ export function DebateClaimTickerCard({
   if (!claim.spaceId) return null;
 
   return (
-    <div
+    <ActionSurfaceDiv
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
@@ -368,7 +382,7 @@ export function DebateClaimTickerCard({
         onAnswered={onAnswered}
       />
       <TickerClaimText text={claim.text} />
-    </div>
+    </ActionSurfaceDiv>
   );
 }
 

@@ -9,8 +9,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
+import type { UpcomingRoomRow } from './scheduled-debates-section';
+
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
+  cancel: vi.fn(),
+  cancelPending: false,
+  cancelSuccess: false,
   pending: false,
   viewerId: 'user-me' as string | null,
   people: [] as { user_id: string; profile_space_id: string; display_name: string | null; avatar_cid: string | null }[],
@@ -37,6 +42,11 @@ const ADA = {
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
   useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
+  useCancelScheduledDebate: () => ({
+    mutate: mocks.cancel,
+    isPending: mocks.cancelPending,
+    isSuccess: mocks.cancelSuccess,
+  }),
   useScheduledDebates: () => ({ data: { requests: mocks.requests }, error: mocks.requestsError }),
 }));
 
@@ -60,7 +70,8 @@ vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
 
-const { ScheduledDebatesSection, formatDebateSlot, useScheduledContent } = await import('./scheduled-debates-section');
+const { ScheduledDebatesSection, formatDebateSlot, formatDebateTime, useScheduledContent } =
+  await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
@@ -93,7 +104,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
-  upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+  upcoming?: UpcomingRoomRow[];
   people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
@@ -112,15 +123,24 @@ const setup = (content: {
   ),
 });
 
-const upcomingRow = (overrides: Partial<UpcomingDebateRoom> = {}, opponentUserId: string | null = 'user-them') => ({
+const upcomingRow = (
+  overrides: Partial<UpcomingDebateRoom> = {},
+  opponentUserId: string | null = 'user-them',
+  requestId: string | null = 'request-1'
+) => ({
   room: room(overrides),
   opponentUserId,
+  scheduledEndAt: null,
+  requestId,
 });
 
 afterEach(() => {
   cleanup();
   mocks.respond = vi.fn();
   mocks.pending = false;
+  mocks.cancel = vi.fn();
+  mocks.cancelPending = false;
+  mocks.cancelSuccess = false;
   mocks.viewerId = 'user-me';
   mocks.people = [];
   mocks.requests = [];
@@ -138,13 +158,26 @@ describe('answering in the tab', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('accepts a request pointed at the viewer', async () => {
-    const { user } = setup({ answerable: [request()] });
+  it('accepts a request and keeps its time range in the upcoming card', async () => {
+    const pending = request();
+    mocks.requests = [pending];
+    const ScheduledTab = () => <ScheduledDebatesSection content={useScheduledContent()} />;
+    const user = userEvent.setup();
+    const { rerender } = render(<ScheduledTab />);
+    const slot = screen.getByText(/ – /).textContent!;
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.respond).toHaveBeenCalledTimes(1);
     expect(mocks.respond.mock.calls[0][0]).toEqual({ requestId: 'request-1', accepted: true });
+
+    mocks.requests = [{ ...pending, status: 'accepted', room_id: 'room-1', viewer_must_answer: false }];
+    mocks.rooms = [room({ starts_at: pending.scheduled_start_at, joinable: false })];
+    rerender(<ScheduledTab />);
+
+    expect(screen.getByText('Upcoming debates')).toBeInTheDocument();
+    expect(screen.getByText(slot)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
   it('says it expires when it starts', () => {
@@ -196,8 +229,10 @@ describe('joining from the tab', () => {
   // The tab carries what the popup carries, since the popup can be dismissed.
   it('offers the way in, and says who is already there', () => {
     mocks.people = [ADA];
-    setup({ upcoming: [upcomingRow({ others_present: true, due: true })] });
+    const end = new Date(2026, 8, 24, 13, 30).toISOString();
+    setup({ upcoming: [{ ...upcomingRow({ others_present: true, due: true }), scheduledEndAt: end }] });
 
+    expect(screen.getByText(/Starting now · Ends at 1:30\s?PM/)).toBeInTheDocument();
     expect(screen.getByText('Ada is waiting for you now')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Join debate' })).toHaveAttribute('href', '/debate/room-1');
   });
@@ -206,7 +241,102 @@ describe('joining from the tab', () => {
     setup({ upcoming: [upcomingRow({ joinable: false })] });
 
     expect(screen.getByText(/^Opens at/)).toBeInTheDocument();
+    expect(screen.getByText(formatDebateTime(room().starts_at))).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Join debate' })).not.toBeInTheDocument();
+  });
+});
+
+describe('calling a scheduled debate off', () => {
+  it('asks before cancelling an accepted debate, and can be backed out of', async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: false })] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(screen.getByText('Cancel your debate with Ada? The time is freed up for both of you.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument();
+  });
+
+  it('cancels the request that booked the room once confirmed', async () => {
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: true })] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+
+    expect(mocks.cancel).toHaveBeenCalledTimes(1);
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
+    // Joining stays on offer beside it.
+    expect(screen.getByRole('link', { name: 'Join debate' })).toBeInTheDocument();
+  });
+
+  it('offers no cancel once the other debater is in the room', () => {
+    setup({ upcoming: [upcomingRow({ others_present: true })] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  // The session is created on first join, so it outlives an arrival who has since left.
+  it('offers no cancel once anyone has been in the room', () => {
+    setup({ upcoming: [upcomingRow({ rematch_session_id: 'session-1' })] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it('offers no cancel for a room no request is known to own', () => {
+    setup({ upcoming: [upcomingRow({}, 'user-them', null)] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it("explains geo-chat's refusal once someone has joined", async () => {
+    const { GeoChatRequestError } = await import('~/core/debates/api');
+    mocks.cancel = vi.fn((_vars, options) =>
+      options.onError(new GeoChatRequestError('someone has already joined', 'debate_already_started', 409))
+    );
+    const { user } = setup({ upcoming: [upcomingRow()] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+
+    expect(
+      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
+    ).toBeInTheDocument();
+  });
+
+  it('says it is cancelled rather than offering it again before the list refreshes', () => {
+    mocks.cancelSuccess = true;
+    setup({ upcoming: [upcomingRow()] });
+
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it('lets the proposer withdraw a pending request', async () => {
+    const { user } = setup({
+      answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel request' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel request' }));
+
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
+  });
+
+  // geo-chat refuses it: someone who was asked says no with Decline, which is a truer record.
+  it('offers the invitee Decline rather than Cancel', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+  });
+
+  it('offers no cancel on a pending request someone else proposed', () => {
+    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-admin' })] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
   });
 });
 
@@ -284,17 +414,19 @@ describe('pairing a room with the request that booked it', () => {
     mocks.requests = [request({ status: 'accepted', room_id: dashed, viewer_must_answer: false })];
     mocks.rooms = [room({ room_id: dashed.replace(/-/g, '') })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming).toHaveLength(1);
     expect(result.current.upcoming[0].opponentUserId).toBe('user-them');
+    expect(result.current.upcoming[0].scheduledEndAt).toBe(mocks.requests[0].scheduled_end_at);
+    expect(result.current.upcoming[0].requestId).toBe('request-1');
   });
 
   it('drops a room whose debate has already happened', () => {
     mocks.rooms = [room({ room_id: 'room-done' }), room({ room_id: 'room-open' })];
     mocks.finishedRoomIds = new Set(['room-done']);
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
   });
@@ -303,7 +435,7 @@ describe('pairing a room with the request that booked it', () => {
     mocks.requests = [request(), request({ request_id: 'request-2' })];
     mocks.graphPeople = [ADA];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
     expect(result.current.people).toEqual([ADA]);
@@ -312,9 +444,11 @@ describe('pairing a room with the request that booked it', () => {
   it('leaves the opponent unknown when no request owns the room', () => {
     mocks.rooms = [room()];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming[0].opponentUserId).toBeNull();
+    expect(result.current.upcoming[0].scheduledEndAt).toBeNull();
+    expect(result.current.upcoming[0].requestId).toBeNull();
   });
 
   // geo-chat's sweeper expires an unanswered request once its start arrives, but only every minute.
@@ -323,7 +457,7 @@ describe('pairing a room with the request that booked it', () => {
       request({ scheduled_start_at: '2020-01-01T13:00:00Z', scheduled_end_at: '2020-01-01T13:30:00Z' }),
     ];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.answerable).toHaveLength(0);
   });
@@ -331,7 +465,7 @@ describe('pairing a room with the request that booked it', () => {
   it('keeps an accepted request out of the answerable list', () => {
     mocks.requests = [request({ status: 'accepted', room_id: 'room-1' })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.answerable).toHaveLength(0);
   });
@@ -349,7 +483,7 @@ describe('a schedule that could not be read', () => {
   it('reports a failed room read too, not only a failed request read', () => {
     mocks.roomsError = new Error('Rooms are down.');
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.roomsError?.message).toBe('Rooms are down.');
     expect(result.current.requestsError).toBeNull();

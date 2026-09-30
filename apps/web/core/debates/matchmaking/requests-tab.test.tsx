@@ -505,15 +505,4 @@ describe('dense (workspace rail) visibility', () => {
 
     expect(screen.getByText('Requests')).toBeInTheDocument();
   });
-
-  // With the flag off those reads never run, so they cannot hold the section open.
-  it('stays hidden when scheduling is off, whatever the scheduled reads would have said', () => {
-    mocks.scheduled = {
-      ...EMPTY_SCHEDULED,
-      answerable: [{ id: 'scheduled-1' }] as unknown as ScheduledContent['answerable'],
-    };
-    const { container } = render(<RequestsTab dense denseLabel="Requests" />);
-
-    expect(container.innerHTML).toBe('');
-  });
 });

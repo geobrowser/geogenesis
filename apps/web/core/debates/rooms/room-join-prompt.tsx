@@ -6,10 +6,12 @@ import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
+import { ThreadAvatar } from '~/partials/comments/thread-avatar';
+
 import type { UpcomingDebateRoom } from '../api';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { useServerClock } from '../matchmaking/use-request-countdown';
 import { ROOM_JOIN_PROMPT } from './room-copy';
 import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
@@ -44,14 +46,13 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="pointer-events-auto flex w-full items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-card md:flex-wrap"
         >
-          <div className="shrink-0">
-            <Avatar
-              avatarUrl={opponent?.avatar_cid}
-              value={opponent?.profile_space_id || room.room_id}
-              size={36}
-              alt={name}
-            />
-          </div>
+          {/* Framed, not a bare `Avatar`: a real photo fills whatever box it is given, and an unsized
+              one drew the opponent's profile photo at full resolution across the page. */}
+          <ThreadAvatar
+            avatarUrl={opponent?.avatar_cid}
+            value={opponent?.profile_space_id || room.room_id}
+            sizePx={36}
+          />
           <div className="min-w-0 flex-1">
             {/* Only what changes on an event is announced. The time line below re-renders every
                 minute, and inside the live region it would be read out every minute. */}
@@ -85,6 +86,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
             <button
               type="button"
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Not now', 'dismiss_scheduled_debate_prompt')}
               onClick={onNotNow}
               className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
             >
@@ -93,6 +95,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
             <button
               type="button"
               disabled={joining}
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
               onClick={() => {
                 setJoining(true);
                 startJoining(() => router.push(debateRoomPath(room.room_id)));
