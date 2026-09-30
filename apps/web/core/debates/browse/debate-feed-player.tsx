@@ -72,6 +72,11 @@ type DebateFeedPlayerProps = {
    */
   preload?: boolean;
   /**
+   * Detach both recordings from their <video> elements while keeping the signed URLs, so a card
+   * away from the viewer holds no decoder or buffered media (GEO-3067).
+   */
+  releaseMedia?: boolean;
+  /**
    * Buffer this debate's recordings, not just open them — for the one card the viewer is most
    * likely to reach next (GEO-2965).
    *
@@ -112,6 +117,7 @@ export function DebateFeedPlayer({
   debate,
   active,
   preload = false,
+  releaseMedia = false,
   buffer = false,
   reducedOverlays = false,
   onOpenClaims,
@@ -122,14 +128,15 @@ export function DebateFeedPlayer({
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
-  const controller = useDebatePlayback(debate, active || preload);
-  const measurement = usePlaybackAnalytics(debate, active, controller);
+  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia });
+  const measurement = usePlaybackAnalytics(debate, active, controller, !releaseMedia);
   const {
     slot1VideoRef,
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
     urls,
+    resigningUrls,
     ready,
     error,
     playing,
@@ -170,12 +177,16 @@ export function DebateFeedPlayer({
    * Keyed on the debate, not the card: the feed keys its cards by claim, so a re-rank hands this
    * same player a different debate, and that debate's pair has to be held on its own terms.
    */
+  // What the <video> elements actually hold: a released or re-signing card holds nothing.
+  const detached = releaseMedia || resigningUrls;
+  const slot1Src = detached ? null : urls.slot1;
+  const slot2Src = detached ? null : urls.slot2;
   const pair = usePairReadiness({
     pairKey: debate.id,
     slot1Ref: slot1VideoRef,
     slot2Ref: slot2VideoRef,
-    slot1Src: urls.slot1,
-    slot2Src: urls.slot2,
+    slot1Src,
+    slot2Src,
     active,
   });
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
@@ -561,7 +572,7 @@ export function DebateFeedPlayer({
           inert={endCardShown}
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
-          src={urls.slot1}
+          src={slot1Src}
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
@@ -623,7 +634,7 @@ export function DebateFeedPlayer({
           inert={endCardShown}
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
-          src={urls.slot2}
+          src={slot2Src}
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}

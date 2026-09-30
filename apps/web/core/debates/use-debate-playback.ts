@@ -131,9 +131,22 @@ function moveTo(video: HTMLVideoElement, seconds: number) {
 // below recompute on each one.
 const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>['data']>['segments'] = [];
 
-export function useDebatePlayback(debate: Debate, enabled: boolean) {
+/**
+ * geo-chat presigns recording URLs for 15 minutes and `lookup` may hand back one cached for up to
+ * 5. A card re-attaching its media later than this re-signs first, so a <video> never gets a URL
+ * about to lapse (GEO-3067).
+ */
+const RECORDING_URL_REUSE_MS = 5 * 60_000;
+
+export function useDebatePlayback(
+  debate: Debate,
+  enabled: boolean,
+  { mediaAttached = true }: { mediaAttached?: boolean } = {}
+) {
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
+  const urlsCommittedAtRef = React.useRef<number | null>(null);
+  const [resigningUrls, setResigningUrls] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
@@ -510,6 +523,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
 
         fetchedForRef.current = recordingsKey;
         needsPrepositionRef.current = true;
+        urlsCommittedAtRef.current = Date.now();
         setUrls({ slot1, slot2 });
       })
       .catch(caught => {
@@ -576,6 +590,38 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     },
     [debate.id, slot1RecordingFilename, slot2RecordingFilename]
   );
+
+  // Layout effect so a lapsed URL is never painted into a <video> between re-attach and re-sign.
+  React.useLayoutEffect(() => {
+    const committedAt = urlsCommittedAtRef.current;
+    if (!mediaAttached || committedAt === null || Date.now() - committedAt < RECORDING_URL_REUSE_MS) return;
+    if (!slot1RecordingFilename || !slot2RecordingFilename) return;
+
+    let cancelled = false;
+    setResigningUrls(true);
+    Promise.all([
+      recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot1RecordingFilename }),
+      recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot2RecordingFilename }),
+    ])
+      .then(([slot1Result, slot2Result]) => {
+        if (cancelled) return;
+        urlsCommittedAtRef.current = Date.now();
+        // Fresh signatures earn a fresh re-sign budget for the tiles.
+        refreshedSlotsRef.current.clear();
+        setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
+      })
+      .catch(() => {
+        // Fall back to the held URLs; the tile's own recovery re-signs if they have lapsed.
+      })
+      .finally(() => {
+        if (!cancelled) setResigningUrls(false);
+      });
+
+    return () => {
+      cancelled = true;
+      setResigningUrls(false);
+    };
+  }, [mediaAttached, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
 
   const videos = React.useCallback(
     () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
@@ -1319,6 +1365,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [playbackEnded, resumeBoth]);
 
   return {
+    /** Held URLs are being re-signed after a long release; render the placeholder meanwhile. */
+    resigningUrls,
     slot1VideoRef,
     slot2VideoRef,
     slot1Participant,
