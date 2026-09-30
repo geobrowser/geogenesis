@@ -4,8 +4,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { Button } from '~/design-system/button';
-import { TextButton } from '~/design-system/text-button';
+import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 
 type Props = {
   open: boolean;
@@ -56,25 +55,32 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
           }}
           className="fixed inset-0 z-103 flex items-center justify-center px-4 focus:outline-hidden"
         >
-          <div className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-grey-02 bg-white p-5 shadow-dropdown">
+          {/* Laid out like the debate request prompt: centred, a pair of pills
+              splitting the width, and the quiet way out as text beneath them. */}
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-grey-02 bg-white p-5 text-center shadow-dropdown">
             <Title className="text-smallTitle text-text">Exiting without saving will discard edits</Title>
             {!canSave && saveBlockedReason && <p className="text-metadata text-grey-04">{saveBlockedReason}</p>}
-            {/* Keep editing sits centred under the pair it is the alternative to. */}
-            <div className="flex flex-col items-center gap-3 self-end">
-              {/* Wraps rather than overflowing: the pair needs about 236px, and a
-                  320px phone leaves the card 248px before any font scaling. */}
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                <Button type="button" variant="secondary" onClick={onDiscard}>
-                  Discard edits
-                </Button>
-                <Button type="button" onClick={onSave} disabled={!canSave}>
-                  Save changes
-                </Button>
-              </div>
-              <TextButton ref={keepEditingRef} onClick={() => onOpenChange(false)}>
-                Keep editing
-              </TextButton>
+            <div className="grid w-full grid-cols-2 gap-2">
+              <button type="button" onClick={onDiscard} className={hubPillClassName('secondary', 'w-full')}>
+                Discard edits
+              </button>
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={!canSave}
+                className={hubPillClassName('primary', 'w-full')}
+              >
+                Save changes
+              </button>
             </div>
+            <button
+              ref={keepEditingRef}
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="px-4 py-1 text-metadata text-grey-04 hover:text-text"
+            >
+              Keep editing
+            </button>
           </div>
         </Content>
       </Portal>
