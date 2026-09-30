@@ -9,6 +9,7 @@ import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
+import { useAnsweredClaimEntities } from '~/core/debates/answered-claim-entities';
 import {
   type DebateClaimPositionSummary,
   type DebateRematchClaim,
@@ -259,8 +260,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   // Those ids are all the graph hands back; the claim itself — name, description, home space,
-  // whether it is factual, topics — is a second, narrow lookup.
-  const opponentEntitiesQuery = useClaimEntitiesByIds(opponentClaimIds);
+  // whether it is factual, topics — is a second, narrow lookup. Asked for by *person* rather than by
+  // those ids (GEO-2656), so it runs alongside positions instead of waiting for them: the badge
+  // used to sit behind positions and then this, one after the other.
+  const opponentEntitiesQuery = useAnsweredClaimEntities(remoteParticipant?.profile_space_id ?? null, opponentClaimIds);
 
   // The opponent is whichever participant isn't the local user; both drive the curated lookup.
   const participantSpaceIds = React.useMemo(
@@ -433,7 +436,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => claimIdsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null),
     [localParticipant, positions.byClaim]
   );
-  const viewerEntitiesQuery = useClaimEntitiesByIds(viewerClaimIds);
+  // By person, alongside positions, for the same reason as the opponent's.
+  const viewerEntitiesQuery = useAnsweredClaimEntities(localParticipant?.profile_space_id ?? null, viewerClaimIds);
   // Both graph-sourced options, one pipeline (GEO-2771).
   //
   // Featured and All are the same question asked of two tags — which claims carry it — so All joins
@@ -1315,16 +1319,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   /**
    * GEO-2656. The badge drew `0` from the very first paint, because the count is derived from a
-   * list that is empty until three dependent round trips land — positions, then the claim
-   * entities, then the session's rematch rows.
+   * list that is empty until the lookups behind it land.
+   *
+   * It is not a separate, faster count, and cannot be one: the tab leaves out claims the session
+   * excludes, claims in spaces that cannot publish, and positions taken in a space other than the
+   * claim's own, and no server-side count can say any of that. A one-hop count differed from the
+   * list by up to 3 on testnet's busiest voters, which would show one number and then correct it.
+   * So the number is still the list's length, and what got faster is the list: the claim entities
+   * are asked for by person, alongside positions, rather than by the ids positions returns
+   * (`useAnsweredClaimEntities`). What is left is positions and then the session's rematch rows.
    *
    * Zero is not a neutral placeholder here. It is a specific, confident claim — "this person holds
    * no positions" — and it is usually wrong, on the one tab whose whole purpose is their
    * positions. A viewer who reads it and switches away has been told something false.
    *
-   * `positions.isLoading` has to be part of this. The two claim lookups are keyed on ids that come
-   * *from* positions, so while positions is still in flight the id list is empty, those queries
-   * are disabled rather than loading, and nothing downstream reports as pending.
+   * `positions.isLoading` has to be part of this. The rematch rows are keyed on ids that come
+   * *from* positions, so while positions is still in flight the id list is empty, that query is
+   * disabled rather than loading, and nothing downstream reports as pending.
    *
    * `sessionQuery.isLoading` for the same reason, one step further up. Participants come from the
    * session, positions are keyed on participants, and the claim lookups are keyed on positions — so
