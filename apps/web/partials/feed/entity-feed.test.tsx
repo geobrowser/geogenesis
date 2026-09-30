@@ -4,9 +4,14 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import {
+  DEFAULT_EXPLORE_TYPE_IDS,
+  EXPLORE_ENTITY_TYPES,
+  EXPLORE_ENTITY_TYPE_IDS,
+  PAPER_TYPE_ID,
+} from '~/core/explore/explore-constants';
 
-import { EntityFeed } from './entity-feed';
+import { EntityFeed, MORE_FILTERS_STORAGE_KEY } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
@@ -21,6 +26,16 @@ const mocks = vi.hoisted(() => ({
   cardProps: null as Record<string, unknown> | null,
   /** The error the infinite query reports, so the failed-feed message can be rendered. */
   error: null as Error | null,
+  /** What the browse sidebar's cache holds — the space menu's options. */
+  browseSidebar: null as {
+    featured: { id: string; name: string }[];
+    editorOf: { id: string; name: string }[];
+    memberOf: { id: string; name: string }[];
+  } | null,
+}));
+
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useCachedBrowseSidebarData: () => mocks.browseSidebar,
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -81,6 +96,7 @@ beforeEach(() => {
   mocks.cardProps = null;
   mocks.queryKeys = [];
   mocks.error = null;
+  mocks.browseSidebar = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -437,5 +453,133 @@ describe('a feed request that failed', () => {
 
     expect(screen.getByText('Could not load the feed.')).toBeTruthy();
     expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
+  });
+});
+
+// #2628 took the type and space menus off Explore to keep the header simple for new readers. Advanced
+// readers asked for them back, so they sit behind "More filters" at the foot of the sort menu.
+describe('EntityFeed more filters', () => {
+  const FEATURED = { id: 'space-featured', name: 'Featured space' };
+  const MINE = { id: 'space-mine', name: 'My space' };
+
+  function renderExploreFeed() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialTime="month"
+        initialSort="best"
+        showSortFilter
+        showMoreFilters
+        typeOptions={EXPLORE_ENTITY_TYPES}
+        initialTypeIds={DEFAULT_EXPLORE_TYPE_IDS}
+      />
+    );
+  }
+
+  const typeTrigger = () => screen.queryByRole('button', { name: /^\d+ types?$/ });
+  const spaceTrigger = () => screen.queryAllByText('Any space')[0] ?? null;
+  // Type rows announce their state after the label ("Paper Not selected"), so match the start.
+  const pickType = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${label}`) }));
+
+  beforeEach(() => {
+    mocks.browseSidebar = { featured: [FEATURED], editorOf: [MINE], memberOf: [MINE] };
+    localStorage.removeItem(MORE_FILTERS_STORAGE_KEY);
+  });
+
+  it('keeps the type and space menus out of the header until asked for', () => {
+    renderExploreFeed();
+
+    expect(screen.getByRole('button', { name: 'More filters' })).toBeTruthy();
+    expect(typeTrigger()).toBeNull();
+    expect(screen.queryByText('Any space')).toBeNull();
+  });
+
+  it('reveals both menus, opening on the defaults without changing the request', async () => {
+    renderExploreFeed();
+    const before = await requestedUrl();
+
+    pickOption('More filters');
+
+    expect(typeTrigger()?.textContent).toBe('2 types');
+    expect(spaceTrigger()).toBeTruthy();
+    expect(await requestedUrl()).toBe(before);
+    expect(before).not.toContain('typeIds');
+    expect(before).not.toContain('spaceIds');
+  });
+
+  it('offers each visible space once, featured first', () => {
+    renderExploreFeed();
+    pickOption('More filters');
+
+    expect(screen.getAllByText('Featured space')).toHaveLength(1);
+    expect(screen.getAllByText('My space')).toHaveLength(1);
+  });
+
+  it('sends a type the reader ticks', async () => {
+    renderExploreFeed();
+    pickOption('More filters');
+
+    pickType('Paper');
+
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('typeIds')?.split(',')).toEqual(
+      EXPLORE_ENTITY_TYPE_IDS.filter(id => [...DEFAULT_EXPLORE_TYPE_IDS, PAPER_TYPE_ID].includes(id))
+    );
+  });
+
+  // Explore's route reads a missing `typeIds` as its default two types, not as every type.
+  it('sends every type explicitly when the reader selects all of them', async () => {
+    renderExploreFeed();
+    pickOption('More filters');
+
+    pickOption('Select all');
+
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('typeIds')?.split(',')).toEqual(EXPLORE_ENTITY_TYPE_IDS);
+  });
+
+  it('narrows to a space the reader ticks', async () => {
+    renderExploreFeed();
+    pickOption('More filters');
+
+    fireEvent.click(screen.getByText('My space'));
+
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('spaceIds')).toBe(MINE.id);
+  });
+
+  it('drops every narrowing when the menus are put away', async () => {
+    renderExploreFeed();
+    pickOption('More filters');
+    pickType('Paper');
+    fireEvent.click(screen.getByText('My space'));
+
+    pickOption('Hide filters');
+
+    expect(typeTrigger()).toBeNull();
+    const url = await requestedUrl();
+    expect(url).not.toContain('typeIds');
+    expect(url).not.toContain('spaceIds');
+
+    pickOption('More filters');
+    expect(typeTrigger()?.textContent).toBe('2 types');
+  });
+
+  it('remembers the reveal, and only the reveal, for the next visit', async () => {
+    const first = renderExploreFeed();
+    pickOption('More filters');
+    pickType('Paper');
+    first.unmount();
+
+    renderExploreFeed();
+
+    await waitFor(() => expect(typeTrigger()?.textContent).toBe('2 types'));
+    expect(await requestedUrl()).not.toContain('typeIds');
+  });
+
+  it('offers nothing extra on a feed that does not opt in', () => {
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter />);
+
+    expect(screen.queryByRole('button', { name: 'More filters' })).toBeNull();
   });
 });

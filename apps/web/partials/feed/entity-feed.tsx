@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
@@ -54,6 +55,13 @@ const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
  */
 const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
 
+/**
+ * Remembers that this viewer opened "More filters", so an advanced reader isn't asked twice. Only
+ * the reveal is kept, never a selection: a filter the viewer cannot see narrowing their feed is the
+ * thing #2628 removed the menus to avoid, so the menus always open on Explore's defaults.
+ */
+export const MORE_FILTERS_STORAGE_KEY = 'exploreMoreFiltersOpen';
+
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
   { value: 'week', label: 'This week' },
@@ -79,6 +87,12 @@ type EntityFeedProps = {
   compactHeader?: boolean;
   /** Whether to render the type checklist. Defaults to false. */
   showTypeFilter?: boolean;
+  /**
+   * Offer a "More filters" entry at the foot of the sort menu that reveals the type and space
+   * menus. Explore keeps them out of the way of new readers this way (#2628) while advanced ones can
+   * still narrow the feed. `typeOptions` and `initialTypeIds` feed the revealed type menu.
+   */
+  showMoreFilters?: boolean;
   /** Initial type selection. */
   initialTypeIds?: readonly string[];
   /** Type checklist options. */
@@ -185,6 +199,7 @@ export function EntityFeed({
   showSortFilter = false,
   compactHeader = false,
   showTypeFilter = false,
+  showMoreFilters = false,
   initialTypeIds = [],
   typeOptions = [],
   typeCounts,
@@ -206,10 +221,19 @@ export function EntityFeed({
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
   const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
+  const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<string[]>([]);
+  const [moreFiltersOpen, setMoreFiltersOpen] = React.useState(false);
+  const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
+  const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
+  const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
-  // A locked space is the whole filter; otherwise every space the reader may see.
-  const requestedSpaceIds = React.useMemo(() => (lockedSpaceId ? [lockedSpaceId] : []), [lockedSpaceId]);
+  // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
+  // nothing ticked (or the menu put away) means every space the reader may see.
+  const requestedSpaceIds = React.useMemo(
+    () => (lockedSpaceId ? [lockedSpaceId] : spaceFilterVisible ? selectedSpaceIds : []),
+    [lockedSpaceId, selectedSpaceIds, spaceFilterVisible]
+  );
   const spaceIdsKey = requestedSpaceIds.join(',');
   const nonEmptyTypeIds = React.useMemo(() => {
     if (!typeCounts || typeCountsPending) return null;
@@ -234,7 +258,19 @@ export function EntityFeed({
       nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
     );
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
-  const typeIds = showTypeFilter && !selectsWholePopulation ? selectedTypeIds : undefined;
+  // Two different rules for when the selection goes on the wire, because the two kinds of caller
+  // read a missing parameter differently. A contextual feed's route reads it as "every type", so it
+  // is omitted when every type is ticked. Explore's route reads it as its *default* types (Debate +
+  // Claim), so omitting it for "every type" would hand the reader two types after they ticked all
+  // of them — there it is omitted only when the selection *is* the default, which keeps revealing
+  // the menus from refetching a feed that has not changed.
+  const typeIds = showTypeFilter
+    ? selectsWholePopulation
+      ? undefined
+      : selectedTypeIds
+    : moreFiltersRevealed && !sameIds(selectedTypeIds, initialTypeIds)
+      ? selectedTypeIds
+      : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
   const fixedParamsKey = Object.entries(fixedParams)
@@ -242,19 +278,13 @@ export function EntityFeed({
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
   const topicFacets = useQuery({
-    queryKey: [
-      'entity-feed-topic-facets',
-      topicFacetEndpoint ?? null,
-      topicIdsKey,
-      showTypeFilter ? typeIdsKey : null,
-      fixedParamsKey,
-    ],
+    queryKey: ['entity-feed-topic-facets', topicFacetEndpoint ?? null, topicIdsKey, typeIdsKey, fixedParamsKey],
     enabled: Boolean(topicFacetEndpoint),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
         selectedTopicIds,
-        typeIds: showTypeFilter ? typeIds : undefined,
+        typeIds,
         fixedParams,
         signal,
       }),
@@ -282,7 +312,56 @@ export function EntityFeed({
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
   const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
-  const showFilterRow = showSortFilter || timeRangeApplies || showTypeFilter || topicFilterVisible;
+  const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
+
+  React.useEffect(() => {
+    if (!showMoreFilters) return;
+    try {
+      if (window.localStorage.getItem(MORE_FILTERS_STORAGE_KEY) === 'true') setMoreFiltersOpen(true);
+    } catch {
+      // Site data blocked — the menus start put away, one click from open.
+    }
+  }, [showMoreFilters]);
+
+  const toggleMoreFilters = React.useCallback(() => {
+    const next = !moreFiltersOpen;
+    setMoreFiltersOpen(next);
+    // Putting the menus away puts their filters away too, so the feed never stays narrowed by a
+    // menu the viewer can no longer see.
+    if (!next) {
+      setSelectedTypeIds([...initialTypeIds]);
+      setSelectedSpaceIds([]);
+    }
+    try {
+      if (next) window.localStorage.setItem(MORE_FILTERS_STORAGE_KEY, 'true');
+      else window.localStorage.removeItem(MORE_FILTERS_STORAGE_KEY);
+    } catch {
+      // Quota or blocked site data — the choice holds for this visit, it just won't be restored.
+    }
+  }, [initialTypeIds, moreFiltersOpen]);
+
+  // The spaces the old server-rendered menu offered — featured first, then the viewer's editor and
+  // member spaces — read off the browse sidebar's cache, which `BrowseSidebar` fills on every page.
+  // The route narrows a request to these same rows, so the menu cannot offer a space it would drop.
+  const browseSidebar = useCachedBrowseSidebarData();
+  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(() => {
+    if (!browseSidebar) return [];
+    const seen = new Set<string>();
+    const options: HubFilterOption<string>[] = [];
+    for (const row of [...browseSidebar.featured, ...browseSidebar.editorOf, ...browseSidebar.memberOf]) {
+      const key = normId(row.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      options.push({ value: row.id, label: row.name });
+    }
+    return options;
+  }, [browseSidebar]);
+
+  const toggleSpace = React.useCallback((spaceId: string) => {
+    setSelectedSpaceIds(current =>
+      current.includes(spaceId) ? current.filter(id => id !== spaceId) : [...current, spaceId]
+    );
+  }, []);
 
   React.useEffect(() => {
     if (
@@ -344,7 +423,7 @@ export function EntityFeed({
     sort,
     requestedTime,
     spaceIdsKey,
-    showTypeFilter ? typeIdsKey : null,
+    typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
     smartAccountAddress,
@@ -400,6 +479,12 @@ export function EntityFeed({
       ? 'h-8 rounded-full px-2.5 hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text data-[state=open]:bg-grey-01'
       : 'h-6 rounded border border-grey-02 pr-2 pl-1.5 shadow-button focus-within:border-text'
   );
+  const spaceLabel = pickerLabel(
+    selectedSpaceIds.length,
+    'Any space',
+    () => spaceOptions.find(option => option.value === selectedSpaceIds[0])?.label ?? '1 space',
+    count => `${count} spaces`
+  );
   const topicLabel = pickerLabel(
     selectedTopicIds.length,
     'Any topic',
@@ -443,6 +528,17 @@ export function EntityFeed({
                   {o.label}
                 </MenuItem>
               ))}
+              {showMoreFilters ? (
+                <MenuItem
+                  className="border-t border-grey-02"
+                  onClick={() => {
+                    toggleMoreFilters();
+                    setSortMenuOpen(false);
+                  }}
+                >
+                  {moreFiltersOpen ? 'Hide filters' : 'More filters'}
+                </MenuItem>
+              ) : null}
             </Menu>
           ) : null}
           {timeRangeApplies ? (
@@ -475,9 +571,22 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {showTypeFilter || topicFilterVisible ? (
+          {typeFilterVisible || spaceFilterVisible || topicFilterVisible ? (
             <div className="ml-auto flex items-center gap-3">
-              {showTypeFilter ? (
+              {spaceFilterVisible ? (
+                <HubMultiFilterMenu
+                  label={spaceLabel}
+                  options={spaceOptions}
+                  values={selectedSpaceIds}
+                  onToggle={toggleSpace}
+                  onClear={() => setSelectedSpaceIds([])}
+                  clearLabel="Any space"
+                  showImages={false}
+                  searchPlaceholder="Search spaces"
+                  searchEmptyLabel="No spaces found"
+                />
+              ) : null}
+              {typeFilterVisible ? (
                 <ExploreTypeFilterMenu
                   selectedTypeIds={visibleSelectedTypeIds}
                   typeOptions={visibleTypeOptions}
@@ -542,4 +651,10 @@ export function EntityFeed({
       </div>
     </div>
   );
+}
+
+function sameIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightSet = new Set(right.map(normId));
+  return left.every(id => rightSet.has(normId(id)));
 }
