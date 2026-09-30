@@ -448,6 +448,22 @@ describe('EditProfileDialog', () => {
       expect(onOpenChange).not.toHaveBeenCalled();
     });
 
+    // Asking here would offer a Save that publishes without the sheet's draft.
+    it('steps back out of a sheet on a backdrop click too', async () => {
+      mocks.hasPendingHistory = true;
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: /Add experience/ }));
+      const backdrop = screen.getByRole('dialog');
+      fireEvent.pointerDown(backdrop);
+      fireEvent.click(backdrop);
+
+      expect(screen.queryByText('Position sheet')).not.toBeInTheDocument();
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
     it('closes without asking when nothing was changed', async () => {
       const { onOpenChange } = renderDialog();
 

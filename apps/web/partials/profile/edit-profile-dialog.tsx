@@ -24,7 +24,7 @@ import { Input, inputStyles } from '~/design-system/input';
 
 import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
-import { DiscardEditsDialog } from './discard-edits-dialog';
+import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
 
@@ -281,13 +281,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
    * closing is what abandons them.
    */
   const hasUnsavedEdits = !isPublishing && (hasChanges || hasFailed);
-  const [isConfirmingDiscard, setIsConfirmingDiscard] = React.useState(false);
-
-  /** Every way out of the modal comes through here, so none of them drops an edit unasked. */
-  const requestClose = () => {
-    if (hasUnsavedEdits) setIsConfirmingDiscard(true);
-    else close();
-  };
 
   const footerNote = isUnavailable
     ? 'We couldn’t find your profile to edit. Try reloading the page.'
@@ -330,21 +323,23 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
       },
       history.stagePending()
     );
-    setIsConfirmingDiscard(false);
     onOpenChange(false);
   };
 
+  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, discard: close, save });
+
+  /**
+   * Escape and the backdrop. On a sheet they step back to the modal, the same as
+   * its Back button, rather than taking the whole modal down from two levels in —
+   * and rather than offering a Save that would publish without the sheet's draft.
+   */
+  const dismiss = () => {
+    if (sheet) setSheet(null);
+    else discardGuard.requestClose();
+  };
+
   return (
-    <Root
-      open={open}
-      onOpenChange={next => {
-        if (next) onOpenChange(true);
-        // Escape on a sheet steps back to the modal, the same as its Back button,
-        // rather than taking the whole modal down from two levels in.
-        else if (sheet) setSheet(null);
-        else requestClose();
-      }}
-    >
+    <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
         {/* This container spans the viewport and sits above the overlay, so a click
@@ -362,7 +357,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             pressStartedOnBackdrop.current = event.target === event.currentTarget;
           }}
           onClick={event => {
-            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) requestClose();
+            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) dismiss();
           }}
           // `px-4` so the card clears the screen edges on a phone, where
           // `max-w-[560px]` is wider than the viewport and the dialog would
@@ -418,7 +413,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
               <>
                 <header className="flex items-center justify-between px-5 py-4">
                   <Title className="text-smallTitle text-text">Edit profile</Title>
-                  <SquareButton type="button" onClick={requestClose} icon={<Close />} aria-label="Close" />
+                  <SquareButton type="button" onClick={discardGuard.requestClose} icon={<Close />} aria-label="Close" />
                 </header>
 
                 <Description className="sr-only">
@@ -568,7 +563,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   why Save is dead, how long the wait is, or what a failure cost. */}
                   <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" onClick={requestClose}>
+                    <Button type="button" variant="secondary" onClick={discardGuard.requestClose}>
                       {isPublishing ? 'Close' : 'Cancel'}
                     </Button>
                     <Button type="submit" disabled={!canSave}>
@@ -580,16 +575,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             )}
           </form>
 
-          <DiscardEditsDialog
-            open={isConfirmingDiscard}
-            onOpenChange={setIsConfirmingDiscard}
-            canSave={canSave}
-            onSave={save}
-            onDiscard={() => {
-              setIsConfirmingDiscard(false);
-              close();
-            }}
-          />
+          <DiscardEditsDialog {...discardGuard.dialogProps} />
         </Content>
       </Portal>
     </Root>

@@ -19,7 +19,7 @@ import { Close } from '~/design-system/icons/close';
 
 import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
-import { DiscardEditsDialog } from './discard-edits-dialog';
+import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 
 type Kind = 'employment' | 'education';
@@ -118,13 +118,6 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
   };
 
   const canSave = !isSaving && canEdit && history.hasPendingChanges;
-  const [isConfirmingDiscard, setIsConfirmingDiscard] = React.useState(false);
-
-  /** Every way out of the dialog comes through here, so none of them drops a staged row unasked. */
-  const requestClose = () => {
-    if (!isSaving && history.hasPendingChanges) setIsConfirmingDiscard(true);
-    else close();
-  };
 
   const save = () => {
     if (!history.hasPendingChanges) {
@@ -151,8 +144,20 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
     );
 
     setSheet(null);
-    setIsConfirmingDiscard(false);
     onOpenChange(false);
+  };
+
+  const discardGuard = useDiscardEditsGuard({
+    hasUnsavedEdits: !isSaving && history.hasPendingChanges,
+    canSave,
+    discard: close,
+    save,
+  });
+
+  /** Escape. On a sheet it steps back to the list, the same as its Back button. */
+  const dismiss = () => {
+    if (sheet) setSheet(null);
+    else discardGuard.requestClose();
   };
 
   /**
@@ -176,16 +181,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
   const copy = kind ? COPY[kind] : COPY.employment;
 
   return (
-    <Root
-      open={kind !== null}
-      onOpenChange={next => {
-        if (next) onOpenChange(true);
-        // Escape on a sheet steps back to the list, the same as its Back button,
-        // rather than taking the whole dialog down from two levels in.
-        else if (sheet) setSheet(null);
-        else requestClose();
-      }}
-    >
+    <Root open={kind !== null} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
         <Content // `px-4` so the card clears the screen edges on a phone, where
@@ -237,7 +233,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
               <>
                 <header className="flex items-center justify-between px-5 py-4">
                   <Title className="text-smallTitle text-text">{copy.title}</Title>
-                  <SquareButton type="button" onClick={requestClose} icon={<Close />} aria-label="Close" />
+                  <SquareButton type="button" onClick={discardGuard.requestClose} icon={<Close />} aria-label="Close" />
                 </header>
 
                 <Description className="sr-only">{copy.description}</Description>
@@ -261,7 +257,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                     {status === 'error' && errorMessage ? errorMessage : 'Saving publishes to your space.'}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={requestClose} disabled={isSaving}>
+                    <Button variant="secondary" onClick={discardGuard.requestClose} disabled={isSaving}>
                       Cancel
                     </Button>
                     {/* `canEdit` is false while the viewer's own space is still
@@ -277,16 +273,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
             )}
           </div>
 
-          <DiscardEditsDialog
-            open={isConfirmingDiscard}
-            onOpenChange={setIsConfirmingDiscard}
-            canSave={canSave}
-            onSave={save}
-            onDiscard={() => {
-              setIsConfirmingDiscard(false);
-              close();
-            }}
-          />
+          <DiscardEditsDialog {...discardGuard.dialogProps} />
         </Content>
       </Portal>
     </Root>

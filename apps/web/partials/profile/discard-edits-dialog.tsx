@@ -2,6 +2,8 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
+import * as React from 'react';
+
 import { Button } from '~/design-system/button';
 
 type Props = {
@@ -15,12 +17,12 @@ type Props = {
 };
 
 /**
- * Asked before a profile modal closes on edits that were never saved.
+ * Asked before a profile modal closes on edits that were never saved. Wired up
+ * through `useDiscardEditsGuard` below rather than directly.
  *
  * Rendered inside the modal it guards, so Radix treats it as a nested layer:
- * Escape and outside clicks dismiss this one only, and the modal underneath
- * stays open with the draft intact. Stacked one step above the modal's own
- * `z-100`/`z-101`.
+ * Escape dismisses this one only, and the modal underneath stays open with the
+ * draft intact. Stacked one step above the modal's own `z-100`/`z-101`.
  */
 export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canSave }: Props) {
   return (
@@ -52,4 +54,49 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
       </Portal>
     </Root>
   );
+}
+
+/**
+ * The close guard both profile modals share.
+ *
+ * `requestClose` is what every way out of a modal should call — X, Cancel,
+ * Escape, the backdrop. With nothing to lose it discards and closes straight
+ * away; otherwise it asks first. Spread `dialogProps` onto a
+ * `DiscardEditsDialog` rendered inside the modal's `Content`.
+ */
+export function useDiscardEditsGuard({
+  hasUnsavedEdits,
+  canSave,
+  discard,
+  save,
+}: {
+  hasUnsavedEdits: boolean;
+  canSave: boolean;
+  /** Throws the draft away and closes the modal. */
+  discard: () => void;
+  /** Publishes the draft and closes the modal. */
+  save: () => void;
+}) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
+  const requestClose = () => {
+    if (hasUnsavedEdits) setIsOpen(true);
+    else discard();
+  };
+
+  const dialogProps: Props = {
+    open: isOpen,
+    onOpenChange: setIsOpen,
+    canSave,
+    onDiscard: () => {
+      setIsOpen(false);
+      discard();
+    },
+    onSave: () => {
+      setIsOpen(false);
+      save();
+    },
+  };
+
+  return { requestClose, dialogProps };
 }
