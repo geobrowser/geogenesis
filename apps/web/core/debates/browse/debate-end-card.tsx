@@ -29,10 +29,10 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  * What a finished debate ends on: where the viewer stands on the claim, the claims the debate
  * extracted to vote on, and another debate to watch next.
  *
- * On the player's dark glass — the same frosted surface as the claims that pop up over the video —
- * so the card reads as part of the player rather than a page laid over it. The controls on it are
- * still the real components: the Agree/Disagree pills take a `glass` tone, and the split bar and
- * voter faces read on dark as they are.
+ * Geo's own light card over the dimmed last frame rather than the player's dark glass. Every control
+ * on it — the Agree/Disagree pills, the split bar, the voter faces and their list — is the real
+ * component, and those are built for light surfaces. The claim cards in the carousel take their
+ * `light` tone for the same reason.
  *
  * Laid out for the player's width, not the viewport's: the player is a feed card, an explore card
  * and a fullscreen view, and a phone layout keyed to the window would get the wide ones wrong. The
@@ -79,12 +79,12 @@ export function DebateEndCard({
           player, and scrolls as a last resort on one too short for it. */}
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-[#151515]/30 p-5 text-white backdrop-blur-[44px] @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
       >
         <div className="flex flex-col gap-3 @max-md:gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-chatMedium text-white/60">Where do you stand?</span>
+              <span className="text-chatMedium text-grey-04">Where do you stand?</span>
               {/* Replay on a narrow player: a pill on the question's own line rather than a circle in a
                   band above the card, which cost the card about 50px it could not spare. The claims
                   pill's shape, so it reads as one of the card's actions. */}
@@ -93,7 +93,7 @@ export function DebateEndCard({
                 aria-label="Replay debate"
                 data-end-card-replay
                 onClick={onReplay}
-                className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 text-smallButton text-white/80 transition-colors hover:bg-white/20 hover:text-white @max-md:flex"
+                className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-grey-02 bg-white px-2.5 text-smallButton text-grey-04 shadow-light transition-colors hover:text-text @max-md:flex"
               >
                 <RetrySmall />
                 Replay
@@ -138,7 +138,6 @@ export function DebateEndCard({
               pending={claimResponse.control.isResponsePending}
               titleFor={claimResponse.control.actionTitle}
               showParticipants={false}
-              tone="glass"
             />
             {claimResponse.control.responseError ? (
               <div role="alert" className="mt-1.5">
@@ -150,14 +149,15 @@ export function DebateEndCard({
           </div>
         </div>
 
-        {carousel.claims.length > 0 ? (
-          <>
-            <div className="my-3.5 h-px shrink-0 bg-white/15 @max-md:my-2" />
-            <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} />
-          </>
-        ) : null}
-
         {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
+
+        {/* Below the next debate rather than above it: the suggestion is the card's one way onward,
+            and the carousel is the longer, optional thing to do before taking it. */}
+        {carousel.claims.length > 0 ? (
+          <div className="mt-3.5 @max-md:mt-2.5">
+            <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} />
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -190,12 +190,12 @@ function VoteRow({
           {summary.percent}% agree
         </span>
       ) : countsReady ? (
-        <span className="shrink-0 text-chat text-white/60">No votes yet</span>
+        <span className="shrink-0 text-chat text-grey-04">No votes yet</span>
       ) : null}
       {hasVotes ? (
         <ClaimSplitBar percent={summary.percent!} className={cx('min-w-8 flex-1', bar)} />
       ) : (
-        <div className={cx('min-w-8 flex-1 rounded-full bg-white/15', bar)} />
+        <div className={cx('min-w-8 flex-1 rounded-full bg-grey-01', bar)} />
       )}
       {hasVotes ? faces : null}
     </div>
@@ -259,20 +259,20 @@ function ClaimsCarousel({
   };
 
   const arrow =
-    'grid size-6 place-items-center rounded-full text-white/80 transition-colors hover:bg-white/15 hover:text-white disabled:pointer-events-none disabled:opacity-30';
+    'grid size-6 place-items-center rounded-full text-grey-04 transition-colors hover:bg-divider hover:text-text disabled:pointer-events-none disabled:opacity-30';
 
   return (
     <section aria-label="Claims from this debate" className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-chatMedium text-white/60">
-          Vote on the claims <span className="text-white/40 tabular-nums">· {claims.length}</span>
+        <span className="text-chatMedium text-grey-04">
+          Vote on the claims <span className="text-grey-03 tabular-nums">· {claims.length}</span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {onOpenClaims ? (
             <button
               type="button"
               onClick={() => onOpenClaims()}
-              className="mr-1 rounded px-1 text-smallButton text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              className="mr-1 rounded px-1 text-smallButton text-grey-04 transition-colors hover:bg-divider hover:text-text"
             >
               See all
             </button>
@@ -320,6 +320,7 @@ function ClaimsCarousel({
               row={null}
               entity={entitiesByClaimId.get(claim.id) ?? null}
               onAnswered={IGNORE_ANSWER}
+              tone="light"
             />
           </div>
         ))}
@@ -345,11 +346,11 @@ function NextDebateLink({ next }: { next: NextDebate }) {
     <Link
       href={NavUtils.toEntity(next.spaceId, next.debateId)}
       data-end-card-next-debate={next.related ? 'related' : 'space'}
-      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-white/10 p-2.5 text-white no-underline transition-colors hover:bg-white/15 @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
+      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
     >
       {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
           landscape box cropped it down to a strip across the middle of the two. */}
-      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-white/15 @max-md:w-10">
+      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
         {next.keyFrame ? (
           <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
         ) : null}
@@ -362,19 +363,19 @@ function NextDebateLink({ next }: { next: NextDebate }) {
       </span>
 
       <span className="flex min-w-0 flex-col gap-1 @max-md:gap-0.5">
-        <span className="text-[0.75rem] leading-[0.875rem] text-white/60">
+        <span className="text-[0.75rem] leading-[0.875rem] text-grey-04">
           {next.related ? 'Watch a related debate' : 'Watch another debate'}
         </span>
         <span className="line-clamp-2 text-chatMedium @max-md:text-[0.8125rem] @max-md:leading-[1.125rem]">
           {next.claimName}
         </span>
         {next.participants.length > 0 ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-white/60">
+          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
             <span className="flex shrink-0 -space-x-1">
               {next.participants.map(participant => (
                 <span
                   key={participant.profile_space_id}
-                  className="block size-4 overflow-hidden rounded-full bg-white/15 ring-1 ring-black/30"
+                  className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
                 >
                   <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
                 </span>
