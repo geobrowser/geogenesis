@@ -308,6 +308,14 @@ describe('EditRecordDialog', () => {
     );
   });
 
+  it('gives the footer pills a keyboard focus ring', () => {
+    renderDialog();
+
+    for (const name of ['Cancel', 'Save']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-text');
+    }
+  });
+
   it('closes without asking when nothing is staged', () => {
     mocks.hasPendingChanges = false;
     const onOpenChange = vi.fn();

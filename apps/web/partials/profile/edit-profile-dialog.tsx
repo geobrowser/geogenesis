@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
@@ -28,6 +27,7 @@ import { AddPositionSheet } from './add-position-sheet';
 import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
+import { profilePillClassName } from './profile-pill';
 import { useBackdropDismiss } from './use-backdrop-dismiss';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
@@ -562,10 +562,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   why Save is dead, how long the wait is, or what a failure cost. */}
                   <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={discardGuard.requestClose} className={hubPillClassName('secondary')}>
+                    <button
+                      type="button"
+                      onClick={discardGuard.requestClose}
+                      className={profilePillClassName('secondary')}
+                    >
                       {isPublishing ? 'Close' : 'Cancel'}
                     </button>
-                    <button type="submit" disabled={!canSave} className={hubPillClassName('primary')}>
+                    <button type="submit" disabled={!canSave} className={profilePillClassName('primary')}>
                       {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
                     </button>
                   </div>

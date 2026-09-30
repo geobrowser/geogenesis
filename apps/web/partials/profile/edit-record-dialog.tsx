@@ -4,7 +4,6 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
-import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
@@ -22,6 +21,7 @@ import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
 import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
+import { profilePillClassName } from './profile-pill';
 
 type Kind = 'employment' | 'education';
 
@@ -265,7 +265,7 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                       type="button"
                       onClick={discardGuard.requestClose}
                       disabled={isSaving}
-                      className={hubPillClassName('secondary')}
+                      className={profilePillClassName('secondary')}
                     >
                       Cancel
                     </button>
@@ -273,7 +273,12 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                         resolving, and publishing then returns without doing
                         anything at all — a Save that reports nothing and writes
                         nothing is the worst of both. */}
-                    <button type="button" onClick={save} disabled={!canSave} className={hubPillClassName('primary')}>
+                    <button
+                      type="button"
+                      onClick={save}
+                      disabled={!canSave}
+                      className={profilePillClassName('primary')}
+                    >
                       Save
                     </button>
                   </div>

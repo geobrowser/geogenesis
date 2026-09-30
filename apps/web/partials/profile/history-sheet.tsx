@@ -4,7 +4,6 @@ import { Description, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import type { EntityChoice } from '~/core/profile/stage-history';
 import type { SearchResult } from '~/core/types';
 
@@ -14,6 +13,8 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { inputStyles } from '~/design-system/input';
 import { SelectEntity } from '~/design-system/select-entity';
 import { TextButton } from '~/design-system/text-button';
+
+import { profilePillClassName } from './profile-pill';
 
 type Props = {
   title: string;
@@ -59,10 +60,10 @@ export function HistorySheet({ title, canSave, onCancel, onSave, children }: Pro
           <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
         </Description>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onCancel} className={hubPillClassName('secondary')}>
+          <button type="button" onClick={onCancel} className={profilePillClassName('secondary')}>
             Cancel
           </button>
-          <button type="button" onClick={onSave} disabled={!canSave} className={hubPillClassName('primary')}>
+          <button type="button" onClick={onSave} disabled={!canSave} className={profilePillClassName('primary')}>
             Done
           </button>
         </div>

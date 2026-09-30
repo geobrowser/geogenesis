@@ -68,6 +68,8 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
 vi.mock('./add-position-sheet', () => ({ AddPositionSheet: () => <p>Position sheet</p> }));
 vi.mock('./add-education-sheet', () => ({ AddEducationSheet: () => <p>Education sheet</p> }));
 
+const FOCUS_RING = ['focus-visible:outline-2', 'focus-visible:outline-text'];
+
 function renderDialog(onOpenChange = vi.fn()) {
   const { rerender } = render(<EditProfileDialog open onOpenChange={onOpenChange} />);
   return { onOpenChange, rerender };
@@ -545,6 +547,22 @@ describe('EditProfileDialog', () => {
         expect(prompt().queryByText(/Try again|Add a name|Try reloading/)).not.toBeInTheDocument();
         expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).not.toHaveAttribute('aria-describedby');
       });
+    });
+
+    // The pills have no focus style of their own and the base styles drop the
+    // browser outline, so these would otherwise show no keyboard focus at all.
+    it('gives every pill a keyboard focus ring', async () => {
+      renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      for (const name of ['Cancel', 'Save profile']) {
+        expect(screen.getByRole('button', { name })).toHaveClass(...FOCUS_RING);
+      }
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      for (const name of ['Discard edits', 'Save changes']) {
+        expect(screen.getByRole('button', { name })).toHaveClass(...FOCUS_RING);
+      }
     });
 
     it('closes without asking when nothing was changed', async () => {

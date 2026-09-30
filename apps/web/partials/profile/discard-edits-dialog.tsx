@@ -4,8 +4,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
-
+import { profilePillClassName } from './profile-pill';
 import { useBackdropDismiss } from './use-backdrop-dismiss';
 
 type Props = {
@@ -57,11 +56,17 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
           }}
           // A press on the backdrop means "keep editing".
           {...backdropDismiss}
-          className="fixed inset-0 z-103 flex items-center justify-center px-4 focus:outline-hidden"
+          className="fixed inset-0 z-103 flex overflow-y-auto p-4 focus:outline-hidden"
         >
           {/* Laid out like the debate request prompt: centred, a pair of pills
-              splitting the width, and the quiet way out as text beneath them. */}
-          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-grey-02 bg-white px-5 pt-5 pb-3 text-center shadow-dropdown">
+              splitting the width, and the quiet way out as text beneath them.
+
+              `m-auto` rather than centring from the container: it centres the
+              card while it fits and lets the container scroll once it does not.
+              Centring with `items-center` pushes an oversized card's top above
+              the viewport, where scrolling cannot reach it — with enlarged text
+              on a short screen that took the buttons out of reach. */}
+          <div className="m-auto flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-grey-02 bg-white px-5 pt-5 pb-3 text-center shadow-dropdown">
             <Title className="text-smallTitle text-text">Exiting without saving will discard edits</Title>
             {reason && (
               <p id={reasonId} className="text-metadata text-grey-04">
@@ -70,15 +75,22 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
             )}
             {/* Keep editing sits close under the pills it is the alternative to. */}
             <div className="flex w-full flex-col items-center gap-2">
-              <div className="grid w-full grid-cols-2 gap-2">
-                <button type="button" onClick={onDiscard} className={hubPillClassName('secondary', 'w-full')}>
+              {/* Equal halves while both labels fit, one pill per row once they do
+                  not: the pills never wrap their labels, so a fixed two-column
+                  grid overflowed the card with enlarged text on a phone. */}
+              <div className="flex w-full flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onDiscard}
+                  className={profilePillClassName('secondary', 'min-w-fit flex-1')}
+                >
                   Discard edits
                 </button>
                 <button
                   type="button"
                   onClick={onSave}
                   disabled={!canSave}
-                  className={hubPillClassName('primary', 'w-full')}
+                  className={profilePillClassName('primary', 'min-w-fit flex-1')}
                 >
                   Save changes
                 </button>
