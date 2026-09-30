@@ -25,6 +25,12 @@ export type DebatePagePlayerState = {
   playing: boolean;
   autoplayBlocked: boolean;
   error: boolean;
+  /**
+   * Both URLs are in hand and the card is waiting for both recordings to be able to play before it
+   * starts either (GEO-2965). Deliberately not folded into `ready`, which keeps meaning "URLs in
+   * hand" so `ready_ms` and `media_loading` read the same before and after the hold existed.
+   */
+  pairHeld?: boolean;
 };
 
 export type DebatePageNotPlayedReason =
@@ -78,6 +84,9 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
     if (player?.error) return { reason: 'playback_error', detail: null };
     if (!player?.ready) return { reason: 'media_loading', detail: null };
     if (player.autoplayBlocked) return { reason: 'autoplay_blocked', detail: null };
+    // Still `not_started`, which is what this state was before the hold existed: URLs in hand, no
+    // confirmed start. The detail only says which part of not-starting it was.
+    if (player.pairHeld) return { reason: 'not_started', detail: 'pair_hold' };
     return { reason: 'not_started', detail: null };
   };
 
