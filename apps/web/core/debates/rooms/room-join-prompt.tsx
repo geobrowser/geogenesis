@@ -45,7 +45,9 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="pointer-events-auto flex w-full items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-card md:flex-wrap"
         >
-          <div className="shrink-0">
+          {/* The size lives on the wrapper: `size` only reaches the generated fallback, and a real
+              photo renders `h-full w-full`, so an unsized box drew it at its natural resolution. */}
+          <div className="size-9 shrink-0 overflow-hidden rounded-full">
             <Avatar
               avatarUrl={opponent?.avatar_cid}
               value={opponent?.profile_space_id || room.room_id}
