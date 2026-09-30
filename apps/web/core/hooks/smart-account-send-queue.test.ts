@@ -1,9 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ReceiptConfirmationTimeoutError } from '~/core/errors';
+
 import {
   QueuedSendTimeoutError,
   enqueueFor,
+  isAlreadyKnownSubmissionError,
   queueDepthFor,
+  recoverAlreadyKnownSubmission,
+  submitOrResumeUserOperation,
   waitForQueuedSends,
   withSubmissionRetry,
 } from './smart-account-send-queue';
@@ -348,6 +353,219 @@ describe('smart-account send queue', () => {
 
       await expect(withSubmissionRetry(receiptTimeout)).rejects.toThrow('receipt did not arrive');
       expect(receiptTimeout).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('recoverAlreadyKnownSubmission', () => {
+    const HASH = `0x${'4d'.repeat(32)}` as const;
+
+    /**
+     * The real shape (2026-09-30): viem's UserOperationExecutionError, whose message and whose
+     * InvalidFieldsError cause read "Invalid fields set on User Operation", over an RPC error
+     * whose `details` is the bundler's "Already known". The sender attaches the op's hash.
+     */
+    const alreadyKnownError = ({ hash = HASH as string | null, withWalk = true } = {}) => {
+      const rpc = Object.assign(new Error('RPC Request failed.'), { details: 'Already known' });
+      const invalidFields = Object.assign(new Error('Invalid fields set on User Operation.'), {
+        name: 'InvalidFieldsError',
+        cause: rpc,
+      });
+      const outer = Object.assign(new Error('Invalid fields set on User Operation.'), {
+        name: 'UserOperationExecutionError',
+        cause: invalidFields,
+      });
+      if (withWalk) {
+        (outer as unknown as { walk: (fn: (e: unknown) => boolean) => unknown }).walk = fn => {
+          for (const e of [outer, invalidFields, rpc]) if (fn(e)) return e;
+          return null;
+        };
+      }
+      if (hash) Object.defineProperty(outer, 'userOperationHash', { value: hash, enumerable: false });
+      return outer;
+    };
+
+    it('treats "already known" as the accepted submission and returns the op hash', async () => {
+      const task = vi.fn(async (): Promise<`0x${string}`> => {
+        throw alreadyKnownError();
+      });
+
+      await expect(recoverAlreadyKnownSubmission(task)).resolves.toBe(HASH);
+      expect(task).toHaveBeenCalledTimes(1);
+      expect(reportEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'smart-account.submission-already-known',
+          extra: { userOpHash: HASH },
+        })
+      );
+      expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it('matches the bundler text wherever it sits in the chain, with or without viem walk()', async () => {
+      expect(isAlreadyKnownSubmissionError(alreadyKnownError())).toBe(true);
+      expect(isAlreadyKnownSubmissionError(alreadyKnownError({ withWalk: false }))).toBe(true);
+      // Wrapped once more, the way every call site wraps failures.
+      expect(
+        isAlreadyKnownSubmissionError(new Error('Publish failed', { cause: alreadyKnownError({ withWalk: false }) }))
+      ).toBe(true);
+      expect(isAlreadyKnownSubmissionError(new Error('AlReAdY KnOwN'))).toBe(true);
+    });
+
+    it('does not match other bundler rejections, including other -32602 invalid-fields errors', () => {
+      const invalidFields = Object.assign(new Error('Invalid fields set on User Operation.'), {
+        name: 'InvalidFieldsError',
+        cause: Object.assign(new Error('RPC Request failed.'), { details: 'maxFeePerGas must be at least 1000' }),
+      });
+      expect(isAlreadyKnownSubmissionError(invalidFields)).toBe(false);
+      expect(isAlreadyKnownSubmissionError(new Error('replacement underpriced'))).toBe(false);
+      expect(isAlreadyKnownSubmissionError(new Error('AA23 reverted'))).toBe(false);
+      expect(isAlreadyKnownSubmissionError(undefined)).toBe(false);
+      expect(isAlreadyKnownSubmissionError('Already known')).toBe(false);
+    });
+
+    it('still surfaces a real rejection unchanged, and reports nothing', async () => {
+      const rejection = Object.assign(new Error('Invalid fields set on User Operation.'), {
+        cause: Object.assign(new Error('RPC Request failed.'), { details: 'replacement underpriced' }),
+      });
+      Object.defineProperty(rejection, 'userOperationHash', { value: HASH });
+
+      await expect(
+        recoverAlreadyKnownSubmission(async () => {
+          throw rejection;
+        })
+      ).rejects.toBe(rejection);
+      expect(reportError).not.toHaveBeenCalled();
+      expect(reportEvent).not.toHaveBeenCalled();
+    });
+
+    it('rethrows "already known" when no hash came with it, and reports that', async () => {
+      const error = alreadyKnownError({ hash: null });
+
+      await expect(
+        recoverAlreadyKnownSubmission(async () => {
+          throw error;
+        })
+      ).rejects.toBe(error);
+      expect(reportError).toHaveBeenCalledWith(error, {
+        tags: { area: 'smart-account', phase: 'submission', outcome: 'already-known-without-hash' },
+      });
+    });
+
+    it('recovers inside withSubmissionRetry: an AA25 retry whose resend is already known', async () => {
+      const task = vi.fn(async (): Promise<`0x${string}`> => {
+        if (task.mock.calls.length === 1) {
+          const err = new Error('Invalid Smart Account nonce used for User Operation.');
+          err.name = 'InvalidAccountNonceError';
+          throw err;
+        }
+        throw alreadyKnownError();
+      });
+
+      const result = withSubmissionRetry(() => recoverAlreadyKnownSubmission(task));
+      await vi.advanceTimersByTimeAsync(500);
+      await expect(result).resolves.toBe(HASH);
+      expect(task).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('submitOrResumeUserOperation', () => {
+    const HASH_A = `0x${'aa'.repeat(32)}` as const;
+    const HASH_B = `0x${'bb'.repeat(32)}` as const;
+    const calls = [{ to: '0x00000000000000000000000000000000000000d1' as const, data: '0xfeed' as const, value: 0n }];
+    const receiptTimeout = (hash: string) =>
+      new ReceiptConfirmationTimeoutError(
+        `UserOperation ${hash} was submitted but its receipt did not arrive within 90s.`
+      );
+
+    it('confirms a fresh submission', async () => {
+      const address = nextAddress();
+      const submit = vi.fn(async () => HASH_A);
+      const confirm = vi.fn(async () => undefined);
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_A);
+      expect(confirm).toHaveBeenCalledWith(HASH_A);
+    });
+
+    // 2026-09-30: the receipt wait timed out at 90s, the caller retry re-ran the send, and the
+    // re-submission was rejected "already known" for an op that landed ~70s later.
+    it('resumes the receipt wait instead of re-submitting when a receipt timeout is retried', async () => {
+      const address = nextAddress();
+      const submit = vi.fn(async () => HASH_A);
+      const confirm = vi.fn(async (_hash: `0x${string}`) => undefined).mockRejectedValueOnce(receiptTimeout(HASH_A));
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toBeInstanceOf(
+        ReceiptConfirmationTimeoutError
+      );
+      // The caller's retry: same address, same calls.
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_A);
+
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(confirm.mock.calls).toEqual([[HASH_A], [HASH_A]]);
+      expect(reportEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'smart-account.receipt-wait-resumed', extra: { userOpHash: HASH_A } })
+      );
+    });
+
+    it('resumes only once, so an op the bundler dropped cannot wedge later sends', async () => {
+      const address = nextAddress();
+      const submit = vi
+        .fn(async () => HASH_A)
+        .mockResolvedValueOnce(HASH_A)
+        .mockResolvedValueOnce(HASH_B);
+      const confirm = vi
+        .fn(async (_hash: `0x${string}`) => undefined)
+        .mockRejectedValueOnce(receiptTimeout(HASH_A))
+        .mockRejectedValueOnce(receiptTimeout(HASH_A));
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toThrow();
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toThrow();
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_B);
+
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect(confirm.mock.calls).toEqual([[HASH_A], [HASH_A], [HASH_B]]);
+    });
+
+    it('submits afresh for different calls, another address, or a stale record', async () => {
+      const address = nextAddress();
+      const other = [{ ...calls[0], data: '0xbeef' as const }];
+      const submit = vi.fn(async () => HASH_B);
+      const timingOut = vi.fn(async (_hash: `0x${string}`) => {
+        throw receiptTimeout(HASH_A);
+      });
+      const confirm = vi.fn(async () => undefined);
+
+      await expect(submitOrResumeUserOperation(address, calls, async () => HASH_A, timingOut)).rejects.toThrow();
+      await expect(submitOrResumeUserOperation(nextAddress(), calls, submit, confirm)).resolves.toBe(HASH_B);
+      await expect(submitOrResumeUserOperation(address, other, submit, confirm)).resolves.toBe(HASH_B);
+      expect(submit).toHaveBeenCalledTimes(2);
+
+      await expect(submitOrResumeUserOperation(address, calls, async () => HASH_A, timingOut)).rejects.toThrow();
+      await vi.advanceTimersByTimeAsync(10 * 60_000 + 1);
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_B);
+      expect(submit).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not remember an op that failed for any reason other than a receipt timeout', async () => {
+      const address = nextAddress();
+      const reverted = Object.assign(new Error('UserOperation reverted'), { name: 'RevertedUserOperationError' });
+      const submit = vi.fn(async () => HASH_A);
+      const confirm = vi.fn(async (_hash: `0x${string}`) => undefined).mockRejectedValueOnce(reverted);
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toBe(reverted);
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_A);
+      expect(submit).toHaveBeenCalledTimes(2);
+    });
+
+    it('never remembers a submission that failed before a hash existed', async () => {
+      const address = nextAddress();
+      const submit = vi
+        .fn(async (): Promise<`0x${string}`> => HASH_B)
+        .mockRejectedValueOnce(new Error('sponsorship refused'));
+      const confirm = vi.fn(async () => undefined);
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toThrow('sponsorship refused');
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_B);
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect(confirm).toHaveBeenCalledTimes(1);
     });
   });
 });
