@@ -32,7 +32,9 @@ async function json<T>(config: WarehouseSources, url: string, init?: RequestInit
   const response = await (config.fetch ?? fetch)(url, { ...init, signal: AbortSignal.timeout(60_000) });
   if (response.status === 404 && !init) return null;
   if (!response.ok) throw new Error(`Source returned HTTP ${response.status}`);
-  return response.json() as Promise<T>;
+  const body: unknown = await response.json();
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid source response');
+  return body as T;
 }
 async function graph<T>(config: WarehouseSources, query: string, variables: Record<string, unknown>): Promise<T> {
   const body = await json<{ data?: T; errors?: unknown[] }>(config, config.graphUrl, {
@@ -101,7 +103,10 @@ export async function readDebate(config: WarehouseSources, published: PublishedD
   ) {
     throw new Error(`Invalid debate ${id}`);
   }
-  if (media && media.turn_segments !== undefined && !Array.isArray(media.turn_segments))
+  if (
+    media &&
+    (!Array.isArray(media.artifacts) || (media.turn_segments !== undefined && !Array.isArray(media.turn_segments)))
+  )
     throw new Error('Invalid media turns');
   if (transcript && !Array.isArray(transcript.segments)) throw new Error('Invalid transcript');
   const segments = transcript?.segments ?? [];

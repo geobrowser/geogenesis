@@ -1,9 +1,9 @@
 // @vitest-environment node
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 import { CLAIM_END_OFFSET_PROPERTY_ID, CLAIM_START_OFFSET_PROPERTY_ID } from '../../core/debates/ontology';
 import type { DebateTranscriptClaimsQuery } from '../../core/io/debate-transcript-claims-document';
-import { claimsFromGraph } from './debate-warehouse-source';
+import { claimsFromGraph, readDebate } from './debate-warehouse-source';
 
 it('retains both speakers of a reused claim and deduplicates repeated graph blocks', () => {
   const blocks = [0, 1].map(i => ({
@@ -41,4 +41,32 @@ it('retains both speakers of a reused claim and deduplicates repeated graph bloc
     ['sameclaim', 'speaker0', 0],
     ['sameclaim', 'speaker1', 1000],
   ]);
+});
+
+it('does not mistake a malformed successful service response or an outage for a genuine 404', async () => {
+  for (const response of [
+    new Response('null'),
+    new Response('[]'),
+    new Response('{}'),
+    new Response('', { status: 500 }),
+  ]) {
+    const fetcher = vi.fn().mockResolvedValue(response);
+    await expect(
+      readDebate(
+        { graphUrl: 'https://graph.test', chatUrl: 'https://chat.test', fetch: fetcher },
+        { id: 'debate', transcripts: [] }
+      )
+    ).rejects.toThrow();
+  }
+});
+
+it('records a genuine missing service debate without inventing a timeline', async () => {
+  const fetcher = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
+  const result = await readDebate(
+    { graphUrl: 'https://graph.test', chatUrl: 'https://chat.test', fetch: fetcher },
+    { id: 'debate', transcripts: [] }
+  );
+  expect(result.debate.status).toBe('missing_service');
+  expect(result.turns).toEqual([]);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
