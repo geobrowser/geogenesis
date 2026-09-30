@@ -262,6 +262,14 @@ describe('DebateEndCard', () => {
     expect(screen.queryByText(/Watch (a related|another) debate/)).toBeNull();
   });
 
+  it('puts the claims above the next debate, which closes the card', () => {
+    const { container } = renderCard(cardFixture({ nextDebate: nextDebate() }));
+    const strip = container.querySelector('[data-end-card-claims]') as HTMLElement;
+    const next = container.querySelector('[data-end-card-next-debate]') as HTMLElement;
+
+    expect(strip.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('offers replay once, as a pill in the card header at every width', () => {
     const onReplay = vi.fn();
     renderCard(cardFixture(), undefined, onReplay);

@@ -137,15 +137,14 @@ export function DebateEndCard({
           </div>
         </div>
 
-        {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
-
-        {/* Below the next debate rather than above it: the suggestion is the card's one way onward,
-            and the carousel is the longer, optional thing to do before taking it. */}
+        {/* The claims first, then the way onward: the next debate closes the card. */}
         {carousel.claims.length > 0 ? (
           <div className="mt-3.5 @max-md:mt-2.5">
             <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} />
           </div>
         ) : null}
+
+        {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
       </section>
     </div>
   );
