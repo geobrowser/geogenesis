@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { GeoChatRequestError } from '~/core/debates/api';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
 
 import { PeerAvailabilityModal } from './peer-availability-modal';
@@ -11,8 +12,9 @@ const SCHEDULED_DEBATE_MINUTES = 30;
 
 type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'> & {
   /**
-   * Picking a slot moves this pending request instead of proposing a new one. Set by a scheduling
-   * email's "Choose different time" (see `core/availability/availability-deep-link`).
+   * Picking a slot moves this request instead of proposing a new one. Set by a scheduling email's
+   * "Choose different time" (see `core/availability/availability-deep-link`), and by the Requests
+   * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time.
    */
   rescheduleRequestId?: string | null;
 };
@@ -54,9 +56,29 @@ export function PeerAvailabilityBookingModal({
           else propose.mutate({ opponentUserId: userId, ...slot });
         },
         pending: mutation.isPending,
-        error: mutation.error?.message ?? null,
+        error: mutation.error
+          ? rescheduleRequestId
+            ? rescheduleFailureMessage(mutation.error)
+            : mutation.error.message
+          : null,
         requestedStart: mutation.data?.scheduled_start_at ?? null,
       }}
     />
   );
+}
+
+/** geo-chat's refusals of a move, said plainly; anything else keeps its own message. */
+export function rescheduleFailureMessage(error: unknown): string {
+  if (error instanceof GeoChatRequestError) {
+    if (error.code === 'debate_already_started') {
+      return 'Someone has already joined this debate, so its time can no longer be changed.';
+    }
+    if (error.code === 'schedule_conflict') return 'You already have a debate at that time. Pick another.';
+    if (error.code === 'reschedule_refused') {
+      return /too_many_reschedules/.test(error.message)
+        ? 'This debate has been moved too many times. Cancel it and send a new request instead.'
+        : 'This debate has already been declined, cancelled or expired.';
+    }
+  }
+  return error instanceof Error ? error.message : 'Could not change the time. Try again.';
 }

@@ -28,6 +28,8 @@ import { normId } from '~/core/utils/norm-id';
 import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
+import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
+
 import { useDebatePeople } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
@@ -46,6 +48,10 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
+  // The debate whose time is being moved, on the other debater's week. One at a time, so the modal
+  // lives here rather than per row, and closing it hands focus back to the row's button.
+  const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
+  const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
 
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
@@ -79,6 +85,18 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
+              onReschedule={
+                requestId && opponentUserId
+                  ? opener => {
+                      rescheduleOpenerRef.current = opener;
+                      setRescheduling({
+                        requestId,
+                        opponentUserId,
+                        opponentName: lookUp(opponentUserId)?.display_name ?? null,
+                      });
+                    }
+                  : null
+              }
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
@@ -109,9 +127,24 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
           )}
         </Section>
       )}
+
+      {/* The week the scheduling emails' "Choose different time" opens, in the same reschedule
+          mode: picking a slot moves this request rather than proposing a new one. */}
+      <PeerAvailabilityBookingModal
+        open={rescheduling !== null}
+        userId={rescheduling?.opponentUserId ?? ''}
+        peerName={rescheduling?.opponentName}
+        rescheduleRequestId={rescheduling?.requestId ?? null}
+        entry="requests_reschedule"
+        openerRef={rescheduleOpenerRef}
+        onClose={() => setRescheduling(null)}
+      />
     </>
   );
 }
+
+/** An accepted debate being moved: whose week to open, and the request it moves. */
+type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null };
 
 /**
  * What this tab has to show. Shared with the tab itself, which needs it for its empty state; both
@@ -208,12 +241,15 @@ function UpcomingRow({
   scheduledEndAt,
   opponent,
   viewer,
+  onReschedule,
 }: {
   room: UpcomingDebateRoom;
   requestId: string | null;
   scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
+  /** Opens the other debater's week to move this debate. Null when it cannot be offered. */
+  onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   // geo-chat refuses once anyone has joined (`debate_already_started`), so the button goes first.
   // The room's session is created on first join, so a non-null one means someone has been in even
@@ -250,6 +286,17 @@ function UpcomingRow({
               >
                 Join debate
               </Link>
+            )}
+            {/* Moving it is refused on exactly the same rule, and needs the other debater's week. */}
+            {cancellable && onReschedule && (
+              <HubPillButton
+                className="w-full"
+                analyticsLabel="Debate hub Reschedule scheduled debate"
+                analyticsIntent="reschedule_scheduled_debate"
+                onClick={event => onReschedule(event.currentTarget)}
+              >
+                Reschedule
+              </HubPillButton>
             )}
             {cancellable && <CancelScheduled requestId={requestId} kind="debate" opponent={opponent} />}
           </div>
