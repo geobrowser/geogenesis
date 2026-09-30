@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
@@ -37,7 +38,11 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className={isFullWidth ? 'min-w-0 flex-1' : 'mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16'}
+      className={
+        isFullWidth
+          ? 'min-w-0 flex-1'
+          : cx('mx-auto max-w-[1200px] min-w-0 flex-1 pb-16', pathname === '/explore' ? 'pt-0' : 'pt-8')
+      }
     >
       {children}
     </motion.main>
