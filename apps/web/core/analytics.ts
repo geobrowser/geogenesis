@@ -4,7 +4,9 @@ import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 import { notifyActionPageView, pageContext } from './action-context';
+import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
+import { withSignupVisitor } from './auth/signup-visitor';
 
 export type { AnalyticsEventName } from './analytics-events';
 
@@ -142,7 +144,7 @@ const pendingCalls: PendingCall[] = [];
 // NEXT_PUBLIC_ prefix is required: this loader runs client-side, and Next only exposes
 // NEXT_PUBLIC_* env vars to the browser bundle. Set NEXT_PUBLIC_DISABLE_POSTHOG='1' to keep
 // analytics off (e.g. during local dev).
-export const isAnalyticsEnabled = process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== '1';
+export { isAnalyticsEnabled } from './analytics-context';
 
 export function initAnalytics() {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !isAnalyticsEnabled) {
@@ -686,7 +688,7 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   }
 
   if (call.method === 'signedUp' && analytics.signedUp) {
-    analytics.signedUp(call.user, call.properties);
+    analytics.signedUp(call.user, withSignupVisitor(call.properties));
     return true;
   }
 
@@ -728,10 +730,6 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   }
 
   return false;
-}
-
-function analyticsRuntime() {
-  return window.lytics || window.geoAnalytics;
 }
 
 function privyIdentityProperties(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {

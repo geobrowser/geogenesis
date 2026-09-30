@@ -11,8 +11,8 @@ import { beginPrivyAuth } from '~/core/privy-auth-events';
 export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
   const { login } = useGeoLogin(params);
   const trackedLogin = useCallback(
-    (properties?: AnalyticsProperties) => {
-      beginPrivyAuth(properties);
+    (properties?: AnalyticsProperties, options?: Parameters<typeof beginPrivyAuth>[1]) => {
+      beginPrivyAuth(properties, options);
       login();
     },
     [login]
