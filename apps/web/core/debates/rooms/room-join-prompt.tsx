@@ -6,8 +6,9 @@ import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
-import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
+
+import { ThreadAvatar } from '~/partials/comments/thread-avatar';
 
 import type { UpcomingDebateRoom } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
@@ -45,16 +46,13 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="pointer-events-auto flex w-full items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-card md:flex-wrap"
         >
-          {/* The size lives on the wrapper: `size` only reaches the generated fallback, and a real
-              photo renders `h-full w-full`, so an unsized box drew it at its natural resolution. */}
-          <div className="size-9 shrink-0 overflow-hidden rounded-full">
-            <Avatar
-              avatarUrl={opponent?.avatar_cid}
-              value={opponent?.profile_space_id || room.room_id}
-              size={36}
-              alt={name}
-            />
-          </div>
+          {/* Framed, not a bare `Avatar`: a real photo fills whatever box it is given, and an unsized
+              one drew the opponent's profile photo at full resolution across the page. */}
+          <ThreadAvatar
+            avatarUrl={opponent?.avatar_cid}
+            value={opponent?.profile_space_id || room.room_id}
+            sizePx={36}
+          />
           <div className="min-w-0 flex-1">
             {/* Only what changes on an event is announced. The time line below re-renders every
                 minute, and inside the live region it would be read out every minute. */}
