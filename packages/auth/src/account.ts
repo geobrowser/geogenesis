@@ -1,5 +1,11 @@
 import { createGeoWalletClient, defineGeoNetworkConfig, GeoTestnetConfig } from '@geoprotocol/geo-sdk';
 import { type Account, type Address, type Hex, createPublicClient, http } from 'viem';
+import {
+  type UserOperation,
+  formatUserOperationRequest,
+  getUserOperationError,
+  getUserOperationHash,
+} from 'viem/account-abstraction';
 
 // Narrow interface capturing the surface every consumer in apps/web actually touches:
 // `.account.address`, `.sendTransaction({to,data,value})`, `.sendUserOperation({calls})`.
@@ -143,6 +149,84 @@ function assertSponsorshipConfigured(network: GeoNetworkConfig): void {
   }
 }
 
+/**
+ * The property a failed `sendUserOperation` carries the ERC-4337 hash of the exact op it tried to
+ * submit under. Read with `submittedUserOperationHash`.
+ *
+ * The hash is computed locally before submission, so it exists even when `eth_sendUserOperation`
+ * never answered. That is the point: a bundler that says "already known" to a resubmission has
+ * the op, and this hash is how the caller goes on to wait for its receipt instead of reporting a
+ * publish that is about to land as failed.
+ */
+const SUBMITTED_HASH_KEY = 'userOperationHash';
+
+/** The hash a failed `sendUserOperation` attached to its error (or anything in its `cause` chain). */
+export function submittedUserOperationHash(error: unknown): Hex | undefined {
+  for (let current = error, depth = 0; current != null && depth < 10; depth++) {
+    const hash = (current as Record<string, unknown>)[SUBMITTED_HASH_KEY];
+    if (typeof hash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(hash)) return hash as Hex;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+export type KernelClient = Awaited<ReturnType<typeof createGeoWalletClient>>;
+
+/**
+ * viem's `sendUserOperation`, unrolled so the hash of the signed op is known before it is sent.
+ *
+ * Same steps in the same order — prepare (nonce, gas, sponsorship), sign, `eth_sendUserOperation`
+ * with no transport retry, and the same error mapping — so behaviour on success and on rejection is
+ * unchanged. The only addition is that a rejection carries the op's hash (see SUBMITTED_HASH_KEY).
+ */
+export async function sendUserOperationWithKnownHash(
+  kernelClient: KernelClient,
+  account: NonNullable<KernelClient['account']>,
+  chainId: number,
+  args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }
+): Promise<Hex> {
+  const calls = args.calls.map(call => ({ ...call }));
+
+  const request = await kernelClient.prepareUserOperation({ account, calls });
+  const signature = await account.signUserOperation(request as UserOperation<'0.7'>);
+  const userOperation = { ...request, signature } as UserOperation<'0.7'>;
+  const hash = getUserOperationHash({
+    chainId,
+    entryPointAddress: account.entryPoint.address,
+    entryPointVersion: '0.7',
+    userOperation,
+  });
+
+  let returned: Hex;
+  try {
+    returned = await kernelClient.request(
+      {
+        method: 'eth_sendUserOperation',
+        params: [formatUserOperationRequest(userOperation), account.entryPoint.address],
+      },
+      { retryCount: 0 }
+    );
+  } catch (error) {
+    const mapped = getUserOperationError(error as Parameters<typeof getUserOperationError>[0], {
+      ...userOperation,
+      calls,
+    });
+    Object.defineProperty(mapped, SUBMITTED_HASH_KEY, { value: hash, enumerable: false });
+    throw mapped;
+  }
+
+  if (returned.toLowerCase() !== hash.toLowerCase()) {
+    // Would mean the local hash is not the bundler's, and an "already known" recovery would wait
+    // on a receipt that never comes (it times out rather than reporting a false success). Loud,
+    // because nothing else would notice.
+    console.error('[SMART-ACCOUNT] bundler returned a different UserOperation hash than computed', {
+      computed: hash,
+      returned,
+    });
+  }
+  return returned;
+}
+
 export async function generateZeroDevAccount({
   signer,
   network,
@@ -160,5 +244,22 @@ export async function generateZeroDevAccount({
     network: resolvedNetwork,
   });
 
-  return kernelClient as unknown as GeoWalletClient;
+  const account = kernelClient.account;
+  const chainId = kernelClient.chain?.id;
+  if (!account || chainId === undefined) {
+    throw new Error('ZeroDev kernel client was created without an account or chain.');
+  }
+  if (account.entryPoint.version !== '0.7') {
+    // sendUserOperationWithKnownHash hashes for EntryPoint 0.7; any other version would hash
+    // wrongly and leave a caller waiting on a receipt that can never exist.
+    throw new Error(`Unsupported EntryPoint version ${account.entryPoint.version}; expected 0.7.`);
+  }
+
+  const client: GeoWalletClient = {
+    account,
+    sendTransaction: args => kernelClient.sendTransaction(args as Parameters<KernelClient['sendTransaction']>[0]),
+    sendUserOperation: args => sendUserOperationWithKnownHash(kernelClient, account, chainId, args),
+    waitForUserOperationReceipt: args => kernelClient.waitForUserOperationReceipt(args),
+  };
+  return client;
 }
