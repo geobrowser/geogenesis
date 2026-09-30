@@ -1053,11 +1053,12 @@ interface ResultsArgs {
    * Pass `false` to restrict results to the canonical graph plus the user's
    * scoped spaces (`additionalSpaceIds`).
    *
-   * Where that gate runs depends on whether the request scopes spaces — see
-   * `buildSearchPath`. Scoped requests gate client-side in `getResultsPage` via each
-   * result's `inCanonicalGraph` flag, so scoped-space results are never stripped
-   * before they reach us; unscoped requests gate server-side, so the canonical rows
-   * can't be pushed off the endpoint's 100-row page by non-canonical ones.
+   * Both kinds of request gate server-side — see `buildSearchPath`. A request that
+   * scopes spaces is gated by `additional_space_ids` itself, which the endpoint always
+   * reads as "canonical graph OR these spaces"; an unscoped one sends
+   * `include_non_canonical=false`. Either way the canonical rows can't be pushed off the
+   * endpoint's 100-row page by non-canonical ones. For `false`, `getResultsPage` also
+   * re-applies the gate per space as a safety net.
    */
   includeNonCanonical?: boolean;
 }
@@ -1280,23 +1281,31 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('additional_space_ids', args.additionalSpaceIds!.map(toUuid).join(','));
   }
 
-  // Canonical filtering runs server-side only when we aren't widening to scoped spaces.
-  // The endpoint documents `additional_space_ids` as "ignored when
-  // include_non_canonical=false" and means it literally — sending both silently drops
-  // the scoped spaces, which is why #1949 stopped emitting this param and moved the
-  // gate into `shouldIncludeRestSearchResult`.
+  // `additional_space_ids` is itself a canonical gate. The endpoint turns the list into
+  // one eligibility filter, "in the canonical graph OR in a listed space" (gaia's
+  // `buildAdditionalSpacesFilter`); the root space is implicit in it. So a scoped request
+  // already gets exactly "canonical plus my spaces" without `include_non_canonical`.
   //
-  // A client-side gate can only filter the page it was handed, though, and the endpoint
-  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for an
-  // unscoped caller listing a type dominated by non-canonical entities: the
-  // community-calls digest requested every Community Call, got 100 test-space rows of
-  // 382 with none canonical, and filtered down to nothing while all 8 curated calls sat
-  // past offset 100 — so the Explore panel vanished entirely (GEO-2480).
+  // Adding `include_non_canonical=false` to such a request is not a stronger version of
+  // that filter. It replaces it: the endpoint then applies the bare canonical term and
+  // skips `additional_space_ids` ("ignored when include_non_canonical=false"), so the
+  // member, editor, personal and current spaces drop out. That was the regression #1949
+  // fixed. Measured on api-testnet, 2026-09-30, "OpenAI" with root plus one non-canonical
+  // space: 17 canonical rows and 3 from the listed space without the flag; 20 canonical
+  // and 0 from the listed space with it.
   //
-  // Unscoped callers therefore filter at the source; the client-side gate stays as a
-  // no-op safety net. Search-dialog requests are unaffected — they always carry
-  // ROOT_SPACE in `additionalSpaceIds` (see buildGlobalSearchSpaceIds), so they take the
-  // branch above and emit a byte-identical URL.
+  // An unscoped request has no such gate, so it needs the flag, and it has to be sent to
+  // the server. A client-side gate can only filter the page it was handed, and the endpoint
+  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for a
+  // caller listing a type dominated by non-canonical entities: the community-calls digest
+  // requested every Community Call, got 100 test-space rows of 382 with none canonical, and
+  // filtered down to nothing while all 8 curated calls sat past offset 100, so the Explore
+  // panel vanished entirely (GEO-2480).
+  //
+  // The search dialog always carries ROOT_SPACE in `additionalSpaceIds` (see
+  // buildGlobalSearchSpaceIds), so with "canonical only" on it takes the scoped branch. With
+  // it off it passes `includeNonCanonical: true` and `selectSearchAdditionalSpaceIds` drops
+  // the spaces, so neither parameter is sent and the search is unrestricted.
   if (args.includeNonCanonical === false && !scopesAdditionalSpaces) {
     params.set('include_non_canonical', 'false');
   }
