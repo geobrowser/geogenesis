@@ -16,6 +16,8 @@ import {
 } from './debate-publish-draft';
 import {
   AUTHORS_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -28,7 +30,9 @@ import {
   KEY_FRAME_IMAGE_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
   SOURCES_PROPERTY_ID,
+  TARGET_PROPERTY_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
@@ -604,6 +608,124 @@ describe('buildDebatePublishDraft', () => {
       }
     );
     expect(draft.values.some(v => v.value === 'Ghost claim')).toBe(false);
+  });
+
+  describe('claim timecodes (GEO-2958)', () => {
+    const statementOf = (draft: ReturnType<typeof buildDebatePublishDraft>, claimText: string) => {
+      const claimId = claimIdByName(draft, claimText);
+      const statements = draft.relations.filter(
+        r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === claimId
+      );
+      expect(statements).toHaveLength(1);
+      return statements[0].entityId;
+    };
+    const offsetsOn = (draft: ReturnType<typeof buildDebatePublishDraft>, entityId: string) =>
+      draft.values
+        .filter(v => v.entity.id === entityId)
+        .map(v => ({ property: v.property.id, dataType: v.property.dataType, value: v.value }));
+    const relationsFrom = (draft: ReturnType<typeof buildDebatePublishDraft>, entityId: string) =>
+      draft.relations.filter(r => r.fromEntity.id === entityId).map(r => [r.type.id, r.toEntity.id]);
+
+    it('writes a measured span onto the block → claim relation entity, typed as a Selector on the video', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [{ text: 'Timed claim', isFactual: false, turnIndex: 0, timing: { startMs: 16_680, endMs: 21_900 } }],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Timed claim');
+
+      // The hand-published shape: two Integer values and two relations on the relation's entity —
+      // not on the claim, which can be said in two turns, and not on the block.
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_START_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '16680' },
+        { property: CLAIM_END_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '21900' },
+      ]);
+      expect(relationsFrom(draft, statement)).toEqual([
+        [TYPES_PROPERTY_ID, SELECTOR_TYPE_ID],
+        [TARGET_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID],
+      ]);
+      const claimId = claimIdByName(draft, 'Timed claim');
+      expect(
+        draft.values.some(
+          v =>
+            v.entity.id === claimId &&
+            (v.property.id === CLAIM_START_OFFSET_PROPERTY_ID || v.property.id === CLAIM_END_OFFSET_PROPERTY_ID)
+        )
+      ).toBe(false);
+    });
+
+    // Each of these would be published as a to-the-second certainty the app cannot demote.
+    it.each([
+      ['no timing', undefined],
+      ['a null timing', null],
+      ['an end at the start', { startMs: 5_000, endMs: 5_000 }],
+      ['an end before the start', { startMs: 5_000, endMs: 4_000 }],
+      ['a negative start', { startMs: -1, endMs: 4_000 }],
+      ['a fractional value', { startMs: 1_000.5, endMs: 4_000 }],
+      ['a non-finite value', { startMs: 1_000, endMs: Number.POSITIVE_INFINITY }],
+    ])('writes nothing on the relation entity for %s', (_label, timing) => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Untimed claim', isFactual: false, turnIndex: 0, timing }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Untimed claim');
+      expect(offsetsOn(draft, statement)).toEqual([]);
+      expect(relationsFrom(draft, statement)).toEqual([]);
+    });
+
+    it('times each statement of a reused claim on its own block', () => {
+      const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Said by both',
+              isFactual: false,
+              turnIndex: 0,
+              existingClaimEntityId: EXISTING,
+              timing: { startMs: 1_000, endMs: 9_000 },
+            },
+            {
+              text: 'Said by both',
+              isFactual: false,
+              turnIndex: 1,
+              existingClaimEntityId: EXISTING,
+              timing: { startMs: 61_000, endMs: 70_000 },
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statements = draft.relations.filter(
+        r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === EXISTING
+      );
+      expect(statements).toHaveLength(2);
+      expect(statements.map(r => offsetsOn(draft, r.entityId).map(v => v.value))).toEqual([
+        ['1000', '9000'],
+        ['61000', '70000'],
+      ]);
+      // Still nothing written onto the entity we did not create.
+      expect(draft.values.some(v => v.entity.id === EXISTING)).toBe(false);
+    });
+
+    it('survives the real publish pipeline as integer values on the relation entity', async () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Timed claim', isFactual: true, turnIndex: 0, timing: { startMs: 134_600, endMs: 143_140 } },
+          ],
+        }),
+        { createEntityId: ID.createEntityId }
+      );
+      const statement = statementOf(draft, 'Timed claim');
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      const serialized = JSON.stringify(ops, (_key, value) => (typeof value === 'bigint' ? value.toString() : value));
+      expect(serialized).toContain('134600');
+      expect(serialized).toContain('143140');
+      expect(ops.length).toBeGreaterThan(0);
+      expect(statement).toBeTruthy();
+    });
   });
 
   it('claim ops (incl. the boolean) survive the real publish pipeline', async () => {
