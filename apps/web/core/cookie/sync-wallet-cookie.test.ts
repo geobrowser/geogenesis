@@ -4,9 +4,13 @@ import { SYNC_RETRY_DELAYS_MS, forgetSyncedWalletCookie, syncWalletCookie } from
 
 const onConnectionChange = vi.hoisted(() => vi.fn<(args: unknown) => Promise<string | null>>());
 const getToken = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
+const setCachedToken = vi.hoisted(() => vi.fn<(token: string | null) => void>());
 
 vi.mock('./cookie', () => ({ onConnectionChange }));
-vi.mock('~/core/auth/identity-token', () => ({ getCachedIdentityToken: getToken }));
+vi.mock('~/core/auth/identity-token', () => ({
+  getCachedIdentityToken: getToken,
+  setCachedIdentityToken: setCachedToken,
+}));
 
 const ADDRESS = '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e';
 const OTHER = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4';
@@ -16,6 +20,7 @@ describe('syncWalletCookie', () => {
     forgetSyncedWalletCookie();
     onConnectionChange.mockReset();
     getToken.mockReset();
+    setCachedToken.mockReset();
     getToken.mockResolvedValue('identity-token');
     // The server answers with whatever wallet the token vouches for; here, the one asked about.
     onConnectionChange.mockImplementation(async () => ADDRESS);
@@ -128,13 +133,39 @@ describe('syncWalletCookie', () => {
       expect(getToken).toHaveBeenCalledTimes(1 + SYNC_RETRY_DELAYS_MS.length);
     });
 
-    it('does not retry when the server recognised a different wallet', async () => {
+    // After an account switch the shared token cache can still hold the previous account's token,
+    // which the server rightly verifies as that account. Retrying with the same token would repeat it.
+    it("drops a token that verified as another wallet, and retries with this account's", async () => {
+      getToken.mockResolvedValueOnce('previous-account-token').mockResolvedValue('this-account-token');
+      onConnectionChange.mockImplementationOnce(async () => OTHER);
+
+      await syncWalletCookie(ADDRESS);
+      expect(setCachedToken).toHaveBeenCalledWith(null);
+
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+      expect(onConnectionChange).toHaveBeenLastCalledWith({ type: 'connect', identityToken: 'this-account-token' });
+
+      // Recognised now, so settled.
+      await syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('still stops after the last delay when every answer names another wallet', async () => {
       onConnectionChange.mockImplementation(async () => OTHER);
 
       await syncWalletCookie(ADDRESS);
       await vi.advanceTimersByTimeAsync(10 * 60_000);
 
-      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+      expect(onConnectionChange).toHaveBeenCalledTimes(1 + SYNC_RETRY_DELAYS_MS.length);
+    });
+
+    it('keeps the shared token cache when the answer was just unverifiable', async () => {
+      onConnectionChange.mockImplementationOnce(async () => null);
+
+      await syncWalletCookie(ADDRESS);
+
+      expect(setCachedToken).not.toHaveBeenCalled();
     });
 
     it('keeps one retry pending however often it is asked, and retries the latest address', async () => {
@@ -174,6 +205,23 @@ describe('syncWalletCookie', () => {
       await vi.advanceTimersByTimeAsync(10 * 60_000);
 
       expect(onConnectionChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('when the wallet goes away', () => {
+    it('drops the cached identity token, which belonged to the account that left', async () => {
+      await syncWalletCookie(ADDRESS);
+      setCachedToken.mockClear();
+
+      forgetSyncedWalletCookie();
+
+      expect(setCachedToken).toHaveBeenCalledWith(null);
+    });
+
+    it('leaves the cache alone for a tab that never had a wallet', () => {
+      forgetSyncedWalletCookie();
+
+      expect(setCachedToken).not.toHaveBeenCalled();
     });
   });
 });

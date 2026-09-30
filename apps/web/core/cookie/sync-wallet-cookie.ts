@@ -1,4 +1,4 @@
-import { getCachedIdentityToken } from '~/core/auth/identity-token';
+import { getCachedIdentityToken, setCachedIdentityToken } from '~/core/auth/identity-token';
 
 import { onConnectionChange } from './cookie';
 
@@ -65,14 +65,22 @@ export async function syncWalletCookie(address: `0x${string}`) {
     clearRetry();
     return;
   }
-  // Null covers a token that could not be verified (Privy's keys unreachable), which can pass. A
-  // different wallet cannot: it is the one this same token verified as, so it would come back
-  // again, and it is left to the next smart-account run.
-  if (recognised === null) scheduleRetry(address);
+  // A different wallet means the token is not this tab's current account: the identity-token cache
+  // is only kept current while a debates or community-call hook is mounted, so after an account
+  // switch it can still hold the previous account's token. Drop it so the retry fetches this one.
+  // Null is a token that could not be verified (Privy's keys unreachable), which can pass.
+  if (recognised !== null) setCachedIdentityToken(null);
+  scheduleRetry(address);
 }
 
-/** Call when the wallet goes away, so signing back in with the same one writes the cookie again. */
+/**
+ * Call when the wallet goes away, so signing back in with the same one writes the cookie again. The
+ * cached identity token belonged to the account that left, so it goes too — otherwise the next
+ * sign-in could send it. Only when this tab had a wallet, so signed-out visitors do not keep
+ * resetting a cache the debates hooks share.
+ */
 export function forgetSyncedWalletCookie() {
+  if (syncedAddress !== null || retryAddress !== null) setCachedIdentityToken(null);
   syncedAddress = null;
   clearRetry();
 }
