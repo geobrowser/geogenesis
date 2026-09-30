@@ -3,30 +3,35 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import Link from 'next/link';
 
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { DebateTileChip } from '~/core/debates/debate-video-tile';
-import { type ClaimVsArguments, type ResponseSplit, claimVsArgumentsReading } from '~/core/debates/end-card';
+import type { ResponseSplit } from '~/core/debates/end-card';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { speakerLabel } from '~/core/debates/playback-utils';
 import { CLAIM_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { NativeGeoImage } from '~/design-system/geo-image';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 
+import { Play } from './icons';
 import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
+import type { NextDebate } from './use-next-debate';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type EndCardData = ReturnType<typeof useDebateEndCard>;
 
 /**
  * What a finished debate ends on: where the viewer stands on the claim, how each debater's claims
- * landed, and whether those two agree.
+ * landed, and another debate to watch next.
  *
  * Geo's own light card over the dimmed last frame rather than the player's dark glass. Every control
  * on it — the Agree/Disagree pills, the split bars, the voter faces and their list — is the real
@@ -54,7 +59,7 @@ export function DebateEndCard({
   /** Opens the claims panel; with a debater's space id, at that debater's claims. */
   onOpenClaims?: (participantSpaceId?: string) => void;
 }) {
-  const { claimResponse, debaters, agreeSide, disagreeSide, comparison, countsReady } = card;
+  const { claimResponse, debaters, countsReady, nextDebate } = card;
 
   return (
     <div data-debate-end-card className="absolute inset-0 z-40">
@@ -73,7 +78,7 @@ export function DebateEndCard({
       </button>
 
       {/* As tall as its content rather than the player: a card stretched to the bottom edge left a
-          band of blank white under the comparison that read as something missing. Capped at the
+          band of blank white under the last section that read as something missing. Capped at the
           player, and scrolls as a last resort on one too short for it. */}
       <section
         aria-label="Debate results"
@@ -163,9 +168,7 @@ export function DebateEndCard({
           ))}
         </div>
 
-        {comparison && agreeSide && disagreeSide && countsReady && claimResponse.summary.hasCounts ? (
-          <ComparisonBox comparison={comparison} agreeName={agreeSide.name} disagreeName={disagreeSide.name} />
-        ) : null}
+        {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
       </section>
     </div>
   );
@@ -312,101 +315,59 @@ function DebaterColumn({
 }
 
 /**
- * The vote on the claim against the claims people agreed with, on one line.
+ * Another debate to watch, as a link to its page: the key frame, the claim it argued and who argued
+ * it. Which one, and why, is `pickNextDebate`'s.
  *
- * The same at every width. A narrow player once got only the gap and the sentence, which kept the
- * finding but lost the picture of it — and the picture is what makes the gap mean something.
+ * A link rather than a button that swaps the player, so it has an address — Cmd-click opens it in a
+ * tab, and the feed card this sits on keeps showing the debate its title and header describe.
+ *
+ * The heading says which tier it came from: "related" only when it argues a related claim, so the
+ * card never calls an unrelated debate related.
  */
-function ComparisonBox({
-  comparison,
-  agreeName,
-  disagreeName,
-}: {
-  comparison: ClaimVsArguments;
-  agreeName: string;
-  disagreeName: string;
-}) {
-  // The line's two ends, named inline beside it rather than on a row of their own. Just the sides:
-  // which debater argued which is already on the card, directly above.
-  const endLabel = 'shrink-0 text-[0.75rem] leading-[0.875rem] text-grey-04';
-
-  if (comparison.status === 'waiting') {
-    return (
-      <div
-        data-end-card-comparison="waiting"
-        className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-2.5 @max-md:px-3 @max-md:py-2.5"
-      >
-        <span className="text-chatMedium">Claim vs. arguments</span>
-        <div className="flex items-center gap-2.5 py-1 @max-md:gap-2">
-          <span className={endLabel}>Agree</span>
-          <div className="h-1 flex-1 rounded-full bg-grey-02" />
-          <span className={endLabel}>Disagree</span>
-        </div>
-        <p className="text-metadata text-grey-04 @max-md:text-chat">
-          Shows once the claim and each debater&rsquo;s claims have a few votes.
-        </p>
-      </div>
-    );
-  }
-
-  const reading = claimVsArgumentsReading(comparison, { agreeName, disagreeName });
-  // Agree runs from the left, like the Agree button and the green end of every split bar on the card,
-  // so a share of agreement is measured in from the left edge: 62% agree sits 38% of the way along.
-  const along = (agreePercent: number) => 100 - agreePercent;
-  const claimAt = along(comparison.claimPercent);
-  const argumentsAt = along(comparison.argumentsPercent);
-  const low = Math.min(claimAt, argumentsAt);
-  const high = Math.max(claimAt, argumentsAt);
-  // Keep a marker's label on the line even where the marker sits at an end of it.
-  const labelAt = (position: number) => `${Math.min(90, Math.max(10, position))}%`;
+function NextDebateLink({ next }: { next: NextDebate }) {
+  const names = next.participants.map(speakerLabel).join(' vs. ');
 
   return (
-    <div
-      data-end-card-comparison="ready"
-      className="mt-3.5 flex flex-col gap-2 rounded-lg bg-grey-01 px-3.5 py-3 @max-md:mt-2.5 @max-md:px-3 @max-md:py-2.5"
+    <Link
+      href={NavUtils.toEntity(next.spaceId, next.debateId)}
+      data-end-card-next-debate={next.related ? 'related' : 'space'}
+      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-chatMedium">Claim vs. arguments</span>
-        <span className="shrink-0 text-chatMedium text-purple tabular-nums">{comparison.gap} pts apart</span>
-      </div>
+      <span className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-20">
+        {next.keyFrame ? (
+          <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
+        ) : null}
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-6"
+        >
+          <Play size={12} />
+        </span>
+      </span>
 
-      <div
-        role="img"
-        aria-label={`${comparison.claimPercent}% agree with the claim; agreement with the debaters' claims sits at ${comparison.argumentsPercent}% toward the Agree side.`}
-        className="flex items-center gap-2.5 @max-md:gap-2"
-      >
-        <span className={endLabel}>Agree</span>
-        <div className="relative h-11 flex-1">
-          <span
-            className="absolute top-0 -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
-            style={{ left: labelAt(claimAt) }}
-          >
-            Claim
+      <span className="flex min-w-0 flex-col gap-1 @max-md:gap-0.5">
+        <span className="text-[0.75rem] leading-[0.875rem] text-grey-04">
+          {next.related ? 'Watch a related debate' : 'Watch another debate'}
+        </span>
+        <span className="line-clamp-2 text-chatMedium @max-md:text-[0.8125rem] @max-md:leading-[1.125rem]">
+          {next.claimName}
+        </span>
+        {next.participants.length > 0 ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
+            <span className="flex shrink-0 -space-x-1">
+              {next.participants.map(participant => (
+                <span
+                  key={participant.profile_space_id}
+                  className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
+                >
+                  <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+                </span>
+              ))}
+            </span>
+            <span className="truncate">{names}</span>
           </span>
-          {/* Centred in the box, so the end labels beside it sit level with the line itself. */}
-          <div className="absolute inset-x-0 top-5 h-1 rounded-full bg-grey-02" />
-          <div className="absolute top-5 h-1 bg-purple" style={{ left: `${low}%`, width: `${high - low}%` }} />
-          <span
-            data-marker="claim"
-            className="absolute top-4 size-3 -translate-x-1/2 rounded-full bg-text ring-2 ring-grey-01"
-            style={{ left: `${claimAt}%` }}
-          />
-          <span
-            data-marker="arguments"
-            className="absolute top-4 size-3 -translate-x-1/2 rounded-full border-2 border-text bg-grey-01"
-            style={{ left: `${argumentsAt}%` }}
-          />
-          <span
-            className="absolute top-[1.875rem] -translate-x-1/2 text-[0.75rem] leading-[0.875rem] whitespace-nowrap text-grey-04"
-            style={{ left: labelAt(argumentsAt) }}
-          >
-            Arguments
-          </span>
-        </div>
-        <span className={endLabel}>Disagree</span>
-      </div>
-
-      <p className="text-metadata @max-md:text-chat">{reading}</p>
-    </div>
+        ) : null}
+      </span>
+    </Link>
   );
 }

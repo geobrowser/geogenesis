@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+
+import { normId } from '~/core/utils/norm-id';
+
+import { type NextDebateCandidate, pickNextDebate } from './next-debate';
+
+const CURRENT_DEBATE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const CURRENT_CLAIM = 'cccccccccccccccccccccccccccccccc';
+
+const candidate = (debateId: string, claimId: string, topicIds: string[] = []): NextDebateCandidate => ({
+  debateId,
+  claimId,
+  claimName: `Claim ${claimId}`,
+  topicIds,
+  keyFrame: null,
+});
+
+const current = candidate(CURRENT_DEBATE, CURRENT_CLAIM, ['ai-safety', 'ai-policy']);
+
+function pick({
+  candidates,
+  ranking = [],
+  watched = [],
+}: {
+  candidates: NextDebateCandidate[];
+  ranking?: string[];
+  watched?: string[];
+}) {
+  return pickNextDebate({
+    candidates,
+    // geo-chat spells the debate and claim ids as dashed uuids; the graph as bare hex.
+    currentDebateId: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA',
+    currentClaimId: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    // Normalized, as `useDebatesBestOrder` and `readWatchedDebateIds` both key them.
+    rankByDebateId: new Map(ranking.map((id, index) => [normId(id), index])),
+    watchedDebateIds: new Set(watched.map(normId)),
+  });
+}
+
+describe('pickNextDebate', () => {
+  it('prefers a debate on a related claim over a better-ranked unrelated one', () => {
+    const result = pick({
+      candidates: [
+        current,
+        candidate('unrelated', 'claim-u', ['sport']),
+        candidate('related', 'claim-r', ['ai-policy']),
+      ],
+      ranking: ['unrelated', 'related'],
+    });
+
+    expect(result).toEqual({ candidate: expect.objectContaining({ debateId: 'related' }), related: true });
+  });
+
+  it('takes the best-ranked of several related debates', () => {
+    const result = pick({
+      candidates: [
+        current,
+        candidate('related-low', 'claim-1', ['ai-safety']),
+        candidate('related-high', 'claim-2', ['ai-policy']),
+      ],
+      ranking: ['related-high', 'related-low'],
+    });
+
+    expect(result?.candidate.debateId).toBe('related-high');
+  });
+
+  it('falls back to the best-ranked debate in the space, and says it is not related', () => {
+    const result = pick({
+      candidates: [current, candidate('second', 'claim-2', ['sport']), candidate('first', 'claim-1', [])],
+      ranking: ['first', 'second'],
+    });
+
+    expect(result).toEqual({ candidate: expect.objectContaining({ debateId: 'first' }), related: false });
+  });
+
+  it('skips debates this browser has watched, falling through to the next one', () => {
+    const result = pick({
+      candidates: [current, candidate('seen', 'claim-1', ['ai-safety']), candidate('fresh', 'claim-2', ['ai-safety'])],
+      ranking: ['seen', 'fresh'],
+      watched: ['seen'],
+    });
+
+    expect(result?.candidate.debateId).toBe('fresh');
+  });
+
+  it('skips another debate on the claim that was just debated', () => {
+    const result = pick({
+      candidates: [current, candidate('rematch', CURRENT_CLAIM, ['ai-safety']), candidate('other', 'claim-2', [])],
+      ranking: ['rematch', 'other'],
+    });
+
+    expect(result).toEqual({ candidate: expect.objectContaining({ debateId: 'other' }), related: false });
+  });
+
+  it('never offers the debate that just ended, even when it ranks first', () => {
+    const result = pick({ candidates: [current, candidate('other', 'claim-2')], ranking: [CURRENT_DEBATE, 'other'] });
+
+    expect(result?.candidate.debateId).toBe('other');
+  });
+
+  it('puts debates the ranking has not covered after every ranked one, in the order they came', () => {
+    const result = pick({
+      candidates: [
+        current,
+        candidate('unranked-1', 'claim-1'),
+        candidate('unranked-2', 'claim-2'),
+        candidate('ranked', 'claim-3'),
+      ],
+      ranking: ['ranked'],
+    });
+    expect(result?.candidate.debateId).toBe('ranked');
+
+    const noRanking = pick({
+      candidates: [current, candidate('unranked-1', 'claim-1'), candidate('unranked-2', 'claim-2')],
+    });
+    expect(noRanking?.candidate.debateId).toBe('unranked-1');
+  });
+
+  it('treats nothing as related when the current debate is not among the candidates yet', () => {
+    const result = pick({ candidates: [candidate('other', 'claim-2', ['ai-safety'])] });
+
+    expect(result).toEqual({ candidate: expect.objectContaining({ debateId: 'other' }), related: false });
+  });
+
+  it('suggests nothing once every other debate in the space has been watched', () => {
+    expect(pick({ candidates: [current, candidate('seen', 'claim-1', ['ai-safety'])], watched: ['seen'] })).toBeNull();
+  });
+});

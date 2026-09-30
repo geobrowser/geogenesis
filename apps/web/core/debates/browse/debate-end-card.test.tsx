@@ -7,9 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { summarizeClaimResponses } from '~/core/claims/browse/claim-response-summary';
 import type { DebateParticipant } from '~/core/debates/api';
-import { claimVsArguments, poolResponses } from '~/core/debates/end-card';
+import { poolResponses } from '~/core/debates/end-card';
 
 import { DebateEndCard } from './debate-end-card';
+import type { NextDebate } from './use-next-debate';
 
 afterEach(cleanup);
 
@@ -79,11 +80,13 @@ function cardFixture({
   steve = [44, 56] as [number, number],
   jonathan = [71, 29] as [number, number],
   countsReady = true,
+  nextDebate = null,
 }: {
   claim?: ReturnType<typeof summary>;
   steve?: [number, number];
   jonathan?: [number, number];
   countsReady?: boolean;
+  nextDebate?: NextDebate | null;
 } = {}): CardData {
   const agreeSide = debater('steve-space', 'Steve Fuller', true, steve);
   const disagreeSide = debater('jonathan-space', 'Jonathan Bostock', false, jonathan, 9);
@@ -105,13 +108,21 @@ function cardFixture({
       },
     },
     debaters: [agreeSide, disagreeSide],
-    agreeSide,
-    disagreeSide,
-    comparison: claimVsArguments({ claim, agreeSide: agreeSide.split, disagreeSide: disagreeSide.split }),
     countsReady,
+    nextDebate,
     totalClaims: 17,
   } as unknown as CardData;
 }
+
+const nextDebate = (overrides: Partial<NextDebate> = {}): NextDebate => ({
+  debateId: 'next-debate',
+  spaceId: 'space-1',
+  claimName: 'We should slow down AI development',
+  keyFrame: 'ipfs://keyframe',
+  related: true,
+  participants: [participant('ada-space', 'Ada', true), participant('bo-space', 'Bo', false)],
+  ...overrides,
+});
 
 const renderCard = (card: CardData, onOpenClaims?: (id?: string) => void, onReplay = vi.fn()) =>
   render(<DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} />);
@@ -133,14 +144,6 @@ describe('DebateEndCard', () => {
     const voters = screen.getAllByTestId('claim-voters');
     expect(voters).toHaveLength(1);
     expect(voters[0]).toHaveAttribute('data-entity', 'claim-1');
-  });
-
-  it('draws the comparison in full at every width, not a narrow-player summary', () => {
-    const { container } = renderCard(cardFixture());
-    const box = container.querySelector('[data-end-card-comparison="ready"]') as HTMLElement;
-
-    expect(within(box).getByText('Claim vs. arguments')).toBeInTheDocument();
-    expect(box.querySelector('[role="img"]')?.className).not.toContain('@max-md:hidden');
   });
 
   it('keeps the ready-to-debate faces out of the pills, since the row above shows who voted', () => {
@@ -276,39 +279,39 @@ describe('DebateEndCard', () => {
     expect(screen.getByText('8 claims')).toBeInTheDocument();
   });
 
-  it('puts the claim and the arguments on one line, and reads the gap', () => {
-    const { container } = renderCard(cardFixture());
+  it('links a related debate to its page, with its claim and who argued it', () => {
+    const { container } = renderCard(cardFixture({ nextDebate: nextDebate() }));
+    const link = screen.getByRole('link', { name: /Watch a related debate/ });
 
-    expect(screen.getByText('24 pts apart')).toBeInTheDocument();
-    expect(
-      screen.getByText("Most agree with the claim, but found Jonathan Bostock's arguments against it more convincing.")
-    ).toBeInTheDocument();
-    // Agree runs from the left, under the Agree button: 62% agree sits 38% of the way along.
-    expect((container.querySelector('[data-marker="claim"]') as HTMLElement).style.left).toBe('38%');
-    expect((container.querySelector('[data-marker="arguments"]') as HTMLElement).style.left).toBe('62%');
+    expect(link).toHaveAttribute('href', expect.stringContaining('next-debate'));
+    expect(link).toHaveAttribute('data-end-card-next-debate', 'related');
+    expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
+    expect(within(link).getByText('Ada vs. Bo')).toBeInTheDocument();
+    expect(container.querySelector('[data-end-card-comparison]')).toBeNull();
   });
 
-  it('names the ends of the line Agree and Disagree, left to right, and leaves the names above', () => {
-    // Agree on the left, as the Agree button and the green end of every split bar are. Which debater
-    // argued which side is already on the card directly above, so the line does not repeat it.
-    const { container } = renderCard(cardFixture());
-    const line = container.querySelector('[data-end-card-comparison] [role="img"]') as HTMLElement;
-    const ends = [...line.children].filter(child => child.tagName === 'SPAN').map(child => child.textContent);
+  it('does not call a debate related when it is only the next one in the space', () => {
+    renderCard(cardFixture({ nextDebate: nextDebate({ related: false }) }));
 
-    expect(ends).toEqual(['Agree', 'Disagree']);
-    expect(line.textContent).not.toContain('Steve Fuller');
-    expect(line.textContent).not.toContain('Jonathan Bostock');
-  });
-
-  it('waits rather than characterising a split off a handful of votes', () => {
-    const { container } = renderCard(cardFixture({ steve: [1, 1] }));
-
-    expect(container.querySelector('[data-end-card-comparison]')).toHaveAttribute(
-      'data-end-card-comparison',
-      'waiting'
+    expect(screen.getByRole('link', { name: /Watch another debate/ })).toHaveAttribute(
+      'data-end-card-next-debate',
+      'space'
     );
-    expect(container.querySelector('[data-marker]')).toBeNull();
-    expect(screen.queryByText(/pts apart/)).toBeNull();
+    expect(screen.queryByText('Watch a related debate')).toBeNull();
+  });
+
+  it('still offers the debate when geo-chat could not say who argued it', () => {
+    renderCard(cardFixture({ nextDebate: nextDebate({ participants: [], keyFrame: null }) }));
+
+    const link = screen.getByRole('link', { name: /Watch a related debate/ });
+    expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
+    expect(within(link).queryByText(/ vs\. /)).toBeNull();
+  });
+
+  it('ends after the debaters when there is nothing left to suggest', () => {
+    renderCard(cardFixture({ nextDebate: null }));
+
+    expect(screen.queryByText(/Watch (a related|another) debate/)).toBeNull();
   });
 
   it('offers replay as the pause circle on a wide player and a header pill on a narrow one', () => {

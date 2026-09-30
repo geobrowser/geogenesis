@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   },
   /** The entity each render handed the claim's own response state. */
   claimEntity: [] as unknown[],
+  /** What each render asked the next-debate suggestion with. */
+  nextDebateCalls: [] as { live: boolean; shown: boolean }[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -58,6 +60,12 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ enabled }: { enabled: boolean }) => {
     mocks.entityEnabled.push(enabled);
     return { entities: enabled ? [{ id: 'claim-entity' }] : [] };
+  },
+}));
+vi.mock('./use-next-debate', () => ({
+  useNextDebate: (_debate: unknown, live: boolean, shown: boolean) => {
+    mocks.nextDebateCalls.push({ live, shown });
+    return null;
   },
 }));
 vi.mock('./use-debate-claim-response', () => ({
@@ -176,14 +184,26 @@ describe('useDebateEndCard', () => {
   it('finds each side by the position the debater argued, not by slot', () => {
     const { result } = render(() => useDebateEndCard(debate, true));
 
-    expect(result.current.agreeSide?.name).toBe('Steve');
-    expect(result.current.disagreeSide?.name).toBe('Jonathan');
-    expect(result.current.comparison).toMatchObject({ status: 'ready', claimPercent: 62, argumentsPercent: 38 });
+    expect(result.current.debaters.map(debater => [debater.name, debater.participant.position])).toEqual([
+      ['Steve', true],
+      ['Jonathan', false],
+    ]);
+  });
+
+  it('works out the next debate on the same latch as the numbers, and marks it shown with the card', () => {
+    const { rerender } = render(
+      ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(debate, enabled, shown),
+      { enabled: true, shown: false }
+    );
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true, shown: false });
+
+    // Scrolled away with the card on screen: still live, so the suggestion doesn't vanish either.
+    rerender({ enabled: false, shown: true });
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true, shown: true });
   });
 
   it('puts the Agree-side debater first whatever slot they recorded in', () => {
-    // The card's Agree button, the green end of every bar and the Agree end of the comparison are all
-    // on the left; the debater arguing for the claim has to be too.
+    // The card's Agree button and the green end of every bar are on the left; the debater arguing for the claim has to be too.
     const flipped = {
       ...debate,
       participants: [
@@ -242,7 +262,7 @@ describe('useDebateEndCard', () => {
   it('keeps asking once the debate has been active, so scrolling past it does not empty the card', () => {
     // Scrolling makes another debate the active one while this card is still on screen. Turning the
     // reads off then emptied the entity lookup — a disabled one answers with nothing — and the
-    // comparison box vanished and came back as the viewer scrolled.
+    // card's numbers vanished and came back as the viewer scrolled.
     const { rerender } = render(({ enabled }: { enabled: boolean }) => useDebateEndCard(debate, enabled), {
       enabled: true,
     });

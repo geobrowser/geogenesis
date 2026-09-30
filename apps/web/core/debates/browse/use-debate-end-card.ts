@@ -7,13 +7,7 @@ import * as React from 'react';
 import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import {
-  type ResponseSplit,
-  type ResponseTally,
-  claimVsArguments,
-  distinctResponders,
-  poolResponses,
-} from '~/core/debates/end-card';
+import { type ResponseSplit, type ResponseTally, distinctResponders, poolResponses } from '~/core/debates/end-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { claimsForParticipant } from '~/core/debates/transcript-claims';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -24,6 +18,7 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
 import { useDebateClaimResponse } from './use-debate-claim-response';
+import { useNextDebate } from './use-next-debate';
 
 export type EndCardDebater = {
   participant: DebateParticipant;
@@ -62,7 +57,7 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
    * `enabled` follows whether the debate is the active one, and scrolling makes another one active
    * while this card is still on screen. Turning the reads off then did more than stop fetching:
    * `useQueryEntities` answers a disabled query with no entities at all, cached or not, so the
-   * claim's response state lost its entity, reported no counts, and the comparison box vanished and
+   * claim's response state lost its entity, reported no counts, and the card's numbers vanished and
    * came back as the viewer scrolled. The flag is only there to keep debates nobody has reached from
    * fetching; one that has been reached has nothing left to save. Keyed on the debate, so a player
    * handed a different one starts held back again.
@@ -150,8 +145,8 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
 
   const debaters = React.useMemo<EndCardDebater[]>(
     () =>
-      // The Agree side first, whatever slot it recorded in: the card's Agree button, the green end
-      // of every split bar and the Agree end of the comparison line are all on the left, so the
+      // The Agree side first, whatever slot it recorded in: the card's Agree button and the green end
+      // of every split bar are both on the left, so the
       // debater arguing for the claim has to be too. Stable, so slot order holds within a side.
       [...claimsByParticipant]
         .sort((left, right) => Number(right.participant.position) - Number(left.participant.position))
@@ -171,12 +166,7 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     [claimsByParticipant, claimsReady, countsById, respondersById]
   );
 
-  const agreeSide = debaters.find(debater => debater.participant.position === true) ?? null;
-  const disagreeSide = debaters.find(debater => debater.participant.position === false) ?? null;
-  const comparison =
-    agreeSide && disagreeSide
-      ? claimVsArguments({ claim: claimResponse.summary, agreeSide: agreeSide.split, disagreeSide: disagreeSide.split })
-      : null;
+  const nextDebate = useNextDebate(debate, live, shown);
 
   return {
     claimId,
@@ -184,9 +174,8 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     claimText: debate.claim.claim,
     claimResponse,
     debaters,
-    agreeSide,
-    disagreeSide,
-    comparison,
+    /** Where the card points the viewer next: a debate they haven't watched. Null for none. */
+    nextDebate,
     /**
      * Whether the debaters' counts are an answer: the transcript has said which claims are theirs,
      * and every one of those has its counts. Until then their splits are zero because nothing has
