@@ -444,7 +444,11 @@ export function BlockReorder({
       {children}
 
       {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
-        <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
+        <BlockGutterHoverArea
+          blocks={blockLayout}
+          editorLeft={editorLeft}
+          onClick={() => editor.commands.focus(undefined, { scrollIntoView: false })}
+        />
       ) : null}
 
       {enabled
