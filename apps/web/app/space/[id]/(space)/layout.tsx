@@ -15,6 +15,7 @@ import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
+import { spacePageEntityId } from '~/core/utils/space/space-page';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -356,8 +357,9 @@ const getSpaceFrontPage = async (spaceId: string) => {
   // Gated to the e2e/test environment: on testnet/mainnet a fresh space can also
   // have an empty entity.id during the indexer-lag window, and handing out the
   // synthetic id there attaches edits to an entity that permanently diverges from
-  // the real home entity once it indexes. Outside test env we render the empty
-  // entity and let the next request pick up the indexed one.
+  // the real home entity once it indexes. Outside test env the editor gets
+  // `spacePageEntityId` below instead, which is derived rather than synthetic
+  // and is published with the `Types -> Space` relation that makes it the page.
   if (!entity.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
     const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
     const syntheticEntity = syntheticPage?.entity ?? null;
@@ -441,7 +443,10 @@ const getSpaceFrontPage = async (spaceId: string) => {
   ]);
 
   return {
-    id: entity.id,
+    // Never `''`. A space with no page entity used to hand `''` to the editor here, so every
+    // Name / Description / Types edit on it was stored against no entity and dropped at publish
+    // (GEO-2966). It now gets the id its page will be created at; see `spacePageEntityId`.
+    id: spacePageEntityId(space),
     tabEntities,
     tabRelations,
     tabs,
