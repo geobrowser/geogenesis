@@ -7,7 +7,7 @@ import { atom, useAtom } from 'jotai';
 import { reportEvent } from '~/core/telemetry/logger';
 
 import type { Debate } from './api';
-import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
+import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -116,7 +116,7 @@ const documentIsHidden = () => typeof document !== 'undefined' && document.visib
 const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>['data']>['segments'] = [];
 
 export function useDebatePlayback(debate: Debate, enabled: boolean) {
-  const recordingUrlMutation = useRecordingUrl();
+  const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
@@ -256,7 +256,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * that it must not write `muted` from underneath a retry that depends on it.
    */
   const [isResuming, setIsResuming] = React.useState(false);
-  const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
+  const recordingUrlsRef = React.useRef(recordingUrls);
 
   // `null` when the row's allowance is empty or malformed (GEO-2956). Nothing is invented in its
   // place: the rendered segments below stand in for it where they exist, and without them the
@@ -383,8 +383,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [activeSlot, playheadSeconds, transcriptSegments]);
 
   React.useEffect(() => {
-    getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
-  }, [recordingUrlMutation.mutateAsync]);
+    recordingUrlsRef.current = recordingUrls;
+  }, [recordingUrls]);
 
   // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
   // not re-request them (GEO-2895).
@@ -398,8 +398,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // placeholder, which is the flicker: a card the viewer had already watched blanking and
   // reloading as they scrolled past it.
   //
-  // `useRecordingUrl` is a mutation rather than a query, so nothing upstream caches this —
-  // every discarded URL is a real round trip.
+  // The lookup itself is cached now (GEO-2965, `useRecordingPlaybackUrl`), so a card the feed
+  // unmounts and remounts reads its URLs back without a round trip. This key still earns its
+  // place: it is what stops a re-activation blanking the URLs a mounted card is already playing.
   //
   // The key is claimed only once URLs are committed, never while a request is in flight. A
   // cleanup that lands mid-flight (StrictMode's dev double-run, or scrolling away and back
@@ -455,8 +456,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     refreshedSlotsRef.current.clear();
 
     Promise.all([
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
+      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot1RecordingFilename }),
+      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
       .then(([slot1Result, slot2Result]) => {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
@@ -529,7 +530,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       refreshedSlotsRef.current.add(slot);
 
       try {
-        const { url } = await getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename });
+        // `refresh`, never the cached `lookup`: the cached URL is the one suspected of being dead.
+        const { url } = await recordingUrlsRef.current.refresh({ debateId: debate.id, filename });
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
           current[slot === 1 ? 'slot1' : 'slot2'] === url
