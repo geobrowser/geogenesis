@@ -5,7 +5,14 @@ import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
-import { authAttemptForAction, currentAuthAttempt, readAuthAttempt, trackAuthOnboarding } from './auth-attempt';
+import {
+  authAttemptForAction,
+  currentAuthAttempt,
+  openAuthAttempt,
+  readAuthAttempt,
+  resetAuthAttempt,
+  trackAuthOnboarding,
+} from './auth-attempt';
 import { useTrackedLogin } from './hooks/use-tracked-login';
 import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 import { PrivyAuthTracker } from './privy-auth-tracker';
@@ -15,6 +22,7 @@ type Handlers = { onComplete?: (args: Completion) => void; onError?: (error: str
 const mocks = vi.hoisted(() => ({
   listeners: new Set<Handlers>(),
   authenticated: false,
+  isModalOpen: false,
   user: null as null | { id: string; email?: { address: string } },
   logout: undefined as undefined | (() => void),
   login: vi.fn(),
@@ -35,7 +43,12 @@ function useSubscription(handlers: Handlers) {
   return { login: mocks.login };
 }
 vi.mock('@geogenesis/auth', () => ({
-  usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.user }),
+  usePrivy: () => ({
+    ready: true,
+    authenticated: mocks.authenticated,
+    isModalOpen: mocks.isModalOpen,
+    user: mocks.user,
+  }),
   usePrivyLogin: (handlers: Handlers) => useSubscription(handlers),
   useGeoLogin: (handlers: Handlers) => useSubscription(handlers),
   useLogout: (handlers: { onSuccess: () => void }) => {
@@ -68,6 +81,8 @@ const broadcast = (args: Completion) =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authenticated = false;
+  mocks.isModalOpen = false;
+  window.history.replaceState(null, '', '/explore');
   mocks.user = null;
   resetPrivyAuthSession();
   localStorage.clear();
@@ -166,6 +181,70 @@ describe('PrivyAuthTracker', () => {
     render(<PrivyAuthTracker />);
     broadcast(completion('oauth-return'));
     expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
+  });
+
+  it.each(['copied pointer', 'unambiguous recovery'] as const)(
+    'preserves OAuth attribution through the callback modal with %s',
+    mode => {
+      const attempt = beginPrivyAuth({ component: 'navbar', auth_control: 'sign_in', link_source: 'oauth-origin' });
+      openAuthAttempt();
+      // Simulate the new document: retain shared storage, discard memory/ownership.
+      const pointer = sessionStorage.getItem('geo:auth-attempt:active')!;
+      resetAuthAttempt();
+      if (mode === 'copied pointer') sessionStorage.setItem('geo:auth-attempt:active', pointer);
+      window.history.replaceState(
+        null,
+        '',
+        '/explore?privy_oauth_code=code&privy_oauth_state=state&privy_oauth_provider=google'
+      );
+      const tracker = render(<PrivyAuthTracker />);
+      // Privy consumes the callback URL before the modal's state settles.
+      window.history.replaceState(null, '', '/explore');
+      mocks.isModalOpen = true;
+      tracker.rerender(<PrivyAuthTracker />);
+      expect(currentAuthAttempt(true)?.id).toBe(attempt.id);
+      broadcast({ ...completion(`oauth-${mode}`), loginMethod: 'google' });
+      expect(readAuthAttempt(attempt.id)?.outcome).toBe('signed_up');
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ auth_attempt_id: attempt.id, link_source: 'oauth-origin' })
+      );
+      expect(mocks.capture.mock.calls.filter(([name]) => name === 'auth_prompt_viewed')).toHaveLength(1);
+    }
+  );
+
+  it('still creates an independent modal attempt for an ordinary cloned document', () => {
+    const attempt = beginPrivyAuth({ component: 'navbar', auth_control: 'sign_in' });
+    const pointer = sessionStorage.getItem('geo:auth-attempt:active')!;
+    resetAuthAttempt();
+    sessionStorage.setItem('geo:auth-attempt:active', pointer);
+    mocks.isModalOpen = true;
+    render(<PrivyAuthTracker />);
+    expect(currentAuthAttempt()?.id).not.toBe(attempt.id);
+    expect(readAuthAttempt(attempt.id)?.outcome).toBeUndefined();
+    expect(mocks.capture).toHaveBeenCalledWith('auth_prompt_viewed', expect.objectContaining({ component: 'unknown' }));
+  });
+
+  it.each(['completed', 'dismissed'] as const)('tracks a new modal after an OAuth callback has %s', outcome => {
+    window.history.replaceState(
+      null,
+      '',
+      '/explore?privy_oauth_code=code&privy_oauth_state=state&privy_oauth_provider=google'
+    );
+    mocks.isModalOpen = true;
+    const tracker = render(<PrivyAuthTracker />);
+    if (outcome === 'completed') broadcast({ ...completion('oauth-then-modal'), loginMethod: 'google' });
+    else
+      act(() => {
+        for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
+      });
+    window.history.replaceState(null, '', '/explore');
+    mocks.isModalOpen = false;
+    tracker.rerender(<PrivyAuthTracker />);
+    mocks.capture.mockClear();
+    mocks.isModalOpen = true;
+    tracker.rerender(<PrivyAuthTracker />);
+    expect(mocks.capture).toHaveBeenCalledWith('auth_prompt_viewed', expect.objectContaining({ component: 'unknown' }));
   });
 
   it('does not classify a restore as manual or consume the pending attribution', () => {

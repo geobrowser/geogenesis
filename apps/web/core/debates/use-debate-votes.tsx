@@ -230,7 +230,6 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           attribution.auth_attempt_id = attempt?.id;
           enqueuePendingAction({
             id: `debate-winner-vote:${debateEntityId}`,
-            authAttemptId: attempt?.id,
             label: 'your winner vote',
             requires: 'personalSpace',
             run: () => withActionContext(attribution, () => castVoteRef.current(participant)),

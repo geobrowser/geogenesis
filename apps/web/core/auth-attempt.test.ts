@@ -61,6 +61,18 @@ describe('durable sign-in attempts', () => {
       expect.objectContaining({ auth_attempt_id: first.id, outcome: 'closed', auth_duration_ms: expect.any(Number) })
     );
   });
+  it.each(['closed', 'superseded'] as const)(
+    'records %s auth without inventing queued-action cancellation',
+    outcome => {
+      const attempt = beginAuthAttempt(entry);
+      finishAuthAttempt(outcome);
+      expect(capture).toHaveBeenCalledWith(
+        'auth_attempt_completed',
+        expect.objectContaining({ auth_attempt_id: attempt.id, outcome })
+      );
+      expect(capture.mock.calls.filter(([event]) => event === 'auth_action_completed')).toHaveLength(0);
+    }
+  );
   it('does not guess between concurrent attempts when completing in a new tab', () => {
     const first = beginAuthAttempt(entry);
     localStorage.setItem('geo:auth-attempt:v1:other-tab', JSON.stringify({ ...first, id: 'other-tab' }));

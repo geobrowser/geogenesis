@@ -15,7 +15,6 @@ export type PendingActionRequirement = 'auth' | 'personalSpace';
 export type PendingAction = {
   id: string;
   label: string;
-  authAttemptId?: string;
   requires: PendingActionRequirement;
   run: () => Promise<void> | void;
 };
@@ -33,7 +32,6 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
         ...prev.filter(a => a.id !== action.id),
         {
           ...action,
-          authAttemptId: action.authAttemptId ?? context.auth_attempt_id,
           run: () => withActionContext(context, action.run),
         },
       ]);

@@ -185,14 +185,6 @@ export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, 
   attempt.endedAt = Date.now();
   attempt.outcome = outcome;
   save(attempt);
-  if ((outcome === 'closed' || outcome === 'superseded') && attempt.properties.auth_continuation === 'queued') {
-    captureAuthEvent('auth_action_completed', {
-      ...attemptProperties(attempt),
-      outcome: 'cancelled',
-      failure_code: outcome,
-      operation_id: `cancel:${attempt.id}`,
-    });
-  }
   captureAuthEvent('auth_attempt_completed', {
     ...attemptProperties(attempt),
     outcome,
