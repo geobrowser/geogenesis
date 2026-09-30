@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
-import { type NextDebateCandidate, pickNextDebate } from './next-debate';
+import { type NextDebateCandidate, debateClaimIds, nextDebateCandidates, pickNextDebate } from './next-debate';
 
 const CURRENT_DEBATE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const CURRENT_CLAIM = 'cccccccccccccccccccccccccccccccc';
@@ -12,7 +13,6 @@ const candidate = (debateId: string, claimId: string, topicIds: string[] = []): 
   claimId,
   claimName: `Claim ${claimId}`,
   topicIds,
-  keyFrame: null,
 });
 
 const current = candidate(CURRENT_DEBATE, CURRENT_CLAIM, ['ai-safety', 'ai-policy']);
@@ -124,5 +124,51 @@ describe('pickNextDebate', () => {
 
   it('suggests nothing once every other debate in the space has been watched', () => {
     expect(pick({ candidates: [current, candidate('seen', 'claim-1', ['ai-safety'])], watched: ['seen'] })).toBeNull();
+  });
+});
+
+describe('nextDebateCandidates', () => {
+  const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const ELSEWHERE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+  const CLAIMS = 'e614cce1c4ce45868304fd1237119eb2';
+  const VIDEOS = 'c48dc314fa7148aeb967139160456f1d';
+  const TOPICS = '806d52bc27e94c9193c057978b093351';
+
+  const relation = (typeId: string, toId: string, spaceId = SPACE) => ({
+    type: { id: typeId },
+    toEntity: { id: toId },
+    spaceId,
+  });
+  const entity = (id: string, relations: ReturnType<typeof relation>[], name: string | null = null) =>
+    ({ id, name, relations }) as unknown as Entity;
+
+  const debate = (id: string, claimId: string, extra: ReturnType<typeof relation>[] = []) =>
+    entity(id, [relation(CLAIMS, claimId), relation(VIDEOS, `video-${id}`), ...extra]);
+
+  it("reads each debate's claim, and the claim's topics in this space only", () => {
+    const debates = [debate('d1', 'c1')];
+    const claims = [
+      entity('c1', [relation(TOPICS, 'topic-here'), relation(TOPICS, 'topic-elsewhere', ELSEWHERE)], 'A claim'),
+    ];
+
+    expect(debateClaimIds(debates, SPACE)).toEqual(['c1']);
+    expect(nextDebateCandidates(debates, claims, SPACE)).toEqual([
+      { debateId: 'd1', claimId: 'c1', claimName: 'A claim', topicIds: ['topichere'] },
+    ]);
+  });
+
+  it('drops a debate with no video, which there would be nothing to watch on', () => {
+    const noVideo = entity('d1', [relation(CLAIMS, 'c1')]);
+    expect(nextDebateCandidates([noVideo], [entity('c1', [], 'A claim')], SPACE)).toEqual([]);
+  });
+
+  it("ignores a debate's relations published in another space", () => {
+    const foreign = entity('d1', [relation(CLAIMS, 'c1', ELSEWHERE), relation(VIDEOS, 'v1', ELSEWHERE)]);
+    expect(debateClaimIds([foreign], SPACE)).toEqual([]);
+  });
+
+  it('drops a debate whose claim has no name yet, which the card could not title', () => {
+    expect(nextDebateCandidates([debate('d1', 'c1')], [entity('c1', [])], SPACE)).toEqual([]);
+    expect(nextDebateCandidates([debate('d1', 'c1')], [], SPACE)).toEqual([]);
   });
 });

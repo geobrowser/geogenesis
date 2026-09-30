@@ -84,11 +84,10 @@ type DebateFeedPlayerProps = {
    */
   buffer?: boolean;
   /**
-   * Opens the claims panel — the same panel the claims pill under the player opens. With a
-   * debater's space id, at that debater's claims. The end card offers it; without it the card's
-   * ways into the claims are simply not drawn.
+   * Opens the claims panel — the same panel the claims pill under the player opens. The end card
+   * offers it as See all; without it, See all is simply not drawn.
    */
-  onOpenClaims?: (participantSpaceId?: string) => void;
+  onOpenClaims?: () => void;
   /**
    * Asks for this debate to become the active one. Replay on the end card calls it when the debate
    * is not the active one yet, and holds the replay until it is. A row whose own click capture
@@ -786,7 +785,7 @@ function MeasuredEndCard({
   debate: Debate;
   enabled: boolean;
   shown: boolean;
-  onOpenClaims?: (participantSpaceId?: string) => void;
+  onOpenClaims?: () => void;
   onReplay: () => void;
 }) {
   const card = useDebateEndCard(debate, enabled, shown);

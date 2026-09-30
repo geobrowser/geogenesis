@@ -61,19 +61,7 @@ export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody
   );
 }
 
-function DebateClaimsPanelBody({
-  debate,
-  onClose,
-  focusParticipantSpaceId = null,
-}: {
-  debate: Debate;
-  onClose: () => void;
-  /**
-   * A debater to open at — the end card's faces beside a debater land here, on that debater's
-   * claims. Null opens at the top, as the claims pill always has.
-   */
-  focusParticipantSpaceId?: string | null;
-}) {
+function DebateClaimsPanelBody({ debate, onClose }: { debate: Debate; onClose: () => void }) {
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
@@ -168,43 +156,6 @@ function DebateClaimsPanelBody({
     [claims, participants, inSpokenOrder, isOrdering]
   );
 
-  /*
-   * Brought to the focused debater's card once the claims are in place, and held there while the
-   * rows above it finish filling in.
-   *
-   * The order settling is not the end of it: each row's pills and summary arrive after, from the
-   * row and entity lookups and the response counts, and every one of them grows a card. Scrolling
-   * once put the focused card on screen and then let the card above push it off again. So the list
-   * re-pins whenever a card changes size — until the reader scrolls, taps or keys in it themselves,
-   * after which it is theirs.
-   *
-   * The list's own `scrollTop`, not `scrollIntoView`, which scrolls every scrollable ancestor to
-   * reveal the target — including the feed behind the panel.
-   */
-  const listRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (!focusParticipantSpaceId || isOrdering) return;
-    const list = listRef.current;
-    const card = list?.querySelector<HTMLElement>(`[data-claims-participant="${focusParticipantSpaceId}"]`);
-    if (!list || !card) return;
-
-    const pin = () => {
-      list.scrollTop = card.offsetTop - list.offsetTop;
-    };
-    pin();
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(pin);
-    for (const child of list.children) observer.observe(child);
-    const handBack = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
-    const release = () => {
-      observer.disconnect();
-      for (const type of handBack) list.removeEventListener(type, release);
-    };
-    for (const type of handBack) list.addEventListener(type, release, { passive: true });
-    return release;
-  }, [focusParticipantSpaceId, isOrdering]);
-
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -230,13 +181,9 @@ function DebateClaimsPanelBody({
           <Close />
         </button>
       </header>
-      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
         {participants.map(participant => (
-          <article
-            key={participant.user_id}
-            data-claims-participant={participant.profile_space_id}
-            className="rounded-lg border border-grey-02 bg-white p-5"
-          >
+          <article key={participant.user_id} className="rounded-lg border border-grey-02 bg-white p-5">
             <div className="flex items-center gap-3">
               <span className="block size-10 shrink-0 overflow-hidden rounded-full bg-grey-02">
                 <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={40} />

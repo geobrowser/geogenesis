@@ -1,4 +1,9 @@
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import type { Entity, Relation } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
+
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from './ontology';
 
 /**
  * Which debate a finished one points the viewer to next. Pure, so every rule below is tested without
@@ -12,9 +17,57 @@ export type NextDebateCandidate = {
   claimName: string;
   /** The claim's topics *in this space* — topics are assigned per space. */
   topicIds: string[];
-  /** The still the app shows as the video's poster, when the debate has one. */
-  keyFrame: string | null;
 };
+
+/**
+ * A space's Debate entities as the picker's candidates, given their claims.
+ *
+ * Every relation is read in this space. Topics are assigned per space, and a topic this claim only
+ * carries elsewhere would make "related" mean something the claim page's gallery doesn't.
+ *
+ * Dropped:
+ * - a debate with no video, which there is nothing to watch on — the feeds keep the same rule
+ *   (`isWatchableDebate`), and a suggestion that opens onto a debate that can't play is worse than
+ *   none;
+ * - a debate whose claim hasn't resolved to a name, which the card would have nothing to title with.
+ *   Pass no claims to get none at all — {@link debateClaimIds} is what asks which claims to fetch.
+ */
+export function nextDebateCandidates(debates: Entity[], claims: Entity[], spaceId: string): NextDebateCandidate[] {
+  const claimsById = new Map(claims.map(claim => [normId(claim.id), claim]));
+
+  return debates.flatMap(debate => {
+    const relations = inSpace(debate.relations, spaceId);
+    if (Entities.relationTargets(relations, DEBATE_VIDEOS_PROPERTY_ID).length === 0) return [];
+
+    const claimId = debateClaimId(debate, spaceId);
+    const claim = claimId ? claimsById.get(claimId) : undefined;
+    if (!claimId || !claim?.name) return [];
+
+    return [
+      {
+        debateId: normId(debate.id),
+        claimId,
+        claimName: claim.name,
+        topicIds: Entities.relationTargets(inSpace(claim.relations, spaceId), TOPICS_PROPERTY_ID).map(normId),
+      },
+    ];
+  });
+}
+
+/** The claims a space's debates argued — what {@link nextDebateCandidates} needs fetched. */
+export function debateClaimIds(debates: Entity[], spaceId: string): string[] {
+  return [...new Set(debates.flatMap(debate => debateClaimId(debate, spaceId) ?? []))];
+}
+
+/** A Debate carries exactly one `Claims` relation — the motion it argued. */
+function debateClaimId(debate: Entity, spaceId: string): string | null {
+  const id = Entities.relationTargets(inSpace(debate.relations, spaceId), DEBATE_CLAIMS_PROPERTY_ID)[0];
+  return id ? normId(id) : null;
+}
+
+function inSpace(relations: Relation[], spaceId: string): Relation[] {
+  return relations.filter(relation => normId(relation.spaceId) === spaceId);
+}
 
 export type NextDebatePick = {
   candidate: NextDebateCandidate;

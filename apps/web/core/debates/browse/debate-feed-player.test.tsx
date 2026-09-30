@@ -36,19 +36,13 @@ vi.mock('./use-debate-end-card', () => ({
 // A stand-in for the card, so the player's half is what is under test: when the card is shown, what
 // it is handed for replay, and whether the claims opener reaches it.
 vi.mock('./debate-end-card', () => ({
-  DebateEndCard: ({
-    onReplay,
-    onOpenClaims,
-  }: {
-    onReplay: () => void;
-    onOpenClaims?: (participantSpaceId?: string) => void;
-  }) => (
+  DebateEndCard: ({ onReplay, onOpenClaims }: { onReplay: () => void; onOpenClaims?: () => void }) => (
     <div data-testid="end-card">
       <button type="button" onClick={onReplay}>
         Replay debate
       </button>
-      <button type="button" onClick={() => onOpenClaims?.('debater-space')}>
-        open debater claims
+      <button type="button" onClick={() => onOpenClaims?.()}>
+        open claims
       </button>
     </div>
   ),
@@ -1219,15 +1213,15 @@ describe('the end card', () => {
     expect(within(container).queryByTestId('end-card')).toBeNull();
   });
 
-  it('hands the claims opener through, with the debater the card asked for', () => {
+  it('hands the claims opener through to the card', () => {
     mocks.controller = ended();
     mocks.ticker = emptyTicker();
     const onOpenClaims = vi.fn();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active onOpenClaims={onOpenClaims} />);
-    fireEvent.click(within(container).getByRole('button', { name: 'open debater claims' }));
+    fireEvent.click(within(container).getByRole('button', { name: 'open claims' }));
 
-    expect(onOpenClaims).toHaveBeenCalledWith('debater-space');
+    expect(onOpenClaims).toHaveBeenCalledTimes(1);
   });
 
   it('stands the subtitle down under the card', () => {

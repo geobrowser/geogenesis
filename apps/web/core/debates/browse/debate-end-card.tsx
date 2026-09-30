@@ -3,18 +3,18 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import Link from 'next/link';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { speakerLabel } from '~/core/debates/playback-utils';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { NativeGeoImage } from '~/design-system/geo-image';
+import { GeoImage } from '~/design-system/geo-image';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RetrySmall } from '~/design-system/icons/retry-small';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { DebateClaimTickerCard } from './debate-claim-ticker';
@@ -54,7 +54,7 @@ export function DebateEndCard({
   card: EndCardData;
   onReplay: () => void;
   /** Opens the claims panel. */
-  onOpenClaims?: (participantSpaceId?: string) => void;
+  onOpenClaims?: () => void;
 }) {
   const { claimResponse, carousel, nextDebate } = card;
 
@@ -208,13 +208,7 @@ const IGNORE_ANSWER = () => {};
  * The strip bleeds to the card's edges, so a card scrolled half out of view reads as "there is more
  * this way" rather than as clipped.
  */
-function ClaimsCarousel({
-  carousel,
-  onOpenClaims,
-}: {
-  carousel: EndCardClaims;
-  onOpenClaims?: (participantSpaceId?: string) => void;
-}) {
+function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; onOpenClaims?: () => void }) {
   const { claims, speakerByClaimId, entitiesByClaimId } = carousel;
   const stripRef = React.useRef<HTMLDivElement>(null);
   const [edges, setEdges] = React.useState({ atStart: true, atEnd: false });
@@ -294,7 +288,7 @@ function ClaimsCarousel({
         data-end-card-claims
         className="-mx-5 flex snap-x snap-mandatory scroll-px-5 [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain px-5 @max-md:-mx-3.5 @max-md:scroll-px-3.5 @max-md:px-3.5 [&::-webkit-scrollbar]:hidden"
       >
-        {claims.map(claim => (
+        {claims.map((claim, index) => (
           // The card is the full width of whatever holds it, so the width is set here. Short enough
           // that the next card always shows its edge, which is the only sign the strip scrolls.
           <div
@@ -302,14 +296,18 @@ function ClaimsCarousel({
             data-end-card-claim={claim.id}
             className="flex w-[16.5rem] shrink-0 snap-start @max-md:w-[14rem] [&>*]:h-full"
           >
-            <DebateClaimTickerCard
-              window={{ claim, startMs: 0, endMs: 0 }}
-              speaker={speakerByClaimId.get(claim.id) ?? null}
-              row={null}
-              entity={entitiesByClaimId.get(claim.id) ?? null}
-              onAnswered={IGNORE_ANSWER}
-              tone="light"
-            />
+            {/* A list of its own, as the claims panel's rows are, so these impressions and votes are
+                told apart from the same claim rising over the video. */}
+            <ActionContextProvider value={{ list_id: 'debate_end_card_claims', item_position: index + 1 }}>
+              <DebateClaimTickerCard
+                window={{ claim, startMs: 0, endMs: 0 }}
+                speaker={speakerByClaimId.get(claim.id) ?? null}
+                row={null}
+                entity={entitiesByClaimId.get(claim.id) ?? null}
+                onAnswered={IGNORE_ANSWER}
+                tone="light"
+              />
+            </ActionContextProvider>
           </div>
         ))}
       </div>
@@ -328,7 +326,8 @@ function ClaimsCarousel({
  * card never calls an unrelated debate related.
  */
 function NextDebateLink({ next }: { next: NextDebate }) {
-  const names = next.participants.map(speakerLabel).join(' vs. ');
+  // The same fallback as `DebateRow`, for a side whose profile couldn't be resolved.
+  const names = next.participants.map(participant => participant.name ?? 'Unnamed debater').join(' vs. ');
 
   const heading = next.related ? 'Watch a related debate' : 'Watch another debate';
 
@@ -343,14 +342,14 @@ function NextDebateLink({ next }: { next: NextDebate }) {
       <span className="text-chatMedium text-grey-04">{heading}</span>
       <Link
         href={NavUtils.toEntity(next.spaceId, next.debateId)}
+        entityId={next.debateId}
+        spaceId={next.spaceId}
         className="flex items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:gap-2.5 @max-md:p-2"
       >
         {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
           landscape box cropped it down to a strip across the middle of the two. */}
         <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
-          {next.keyFrame ? (
-            <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
-          ) : null}
+          {next.keyFrame ? <GeoImage value={next.keyFrame} alt="" fill sizes="48px" className="object-cover" /> : null}
           <span
             aria-hidden
             className="absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-5"
@@ -368,10 +367,10 @@ function NextDebateLink({ next }: { next: NextDebate }) {
               <span className="flex shrink-0 -space-x-1">
                 {next.participants.map(participant => (
                   <span
-                    key={participant.profile_space_id}
+                    key={participant.spaceId}
                     className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
                   >
-                    <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+                    <Avatar avatarUrl={participant.avatarUrl} value={participant.spaceId} size={16} />
                   </span>
                 ))}
               </span>

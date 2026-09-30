@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
+import { equals as idEquals } from '~/core/id/normalize';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getTopRankedSpaceId, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -148,6 +149,16 @@ export function textInSpace(values: Value[], propertyId: string, spaceId?: strin
 /**
  * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
  */
+/**
+ * The entities a relation property points at, skipping deleted relations. Ids compared normalized,
+ * since relations reach the client in both spellings depending on the query that found them.
+ */
+export function relationTargets(relations: Relation[], propertyId: string): string[] {
+  return relations
+    .filter(relation => relation.isDeleted !== true && idEquals(relation.type.id, propertyId))
+    .map(relation => relation.toEntity.id);
+}
+
 export function avatar(relations?: Relation[]): string | null {
   if (!relations) return null;
   const avatarRelation = relations.find(r => r.type.id === EntityId(ContentIds.AVATAR_PROPERTY));

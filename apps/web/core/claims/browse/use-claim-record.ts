@@ -4,11 +4,13 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { buildExploreFeedRows, type ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { type ExploreFeedRow, buildExploreFeedRows } from '~/core/explore/explore-card-item';
 import { normId } from '~/core/utils/norm-id';
 
 import {
   CLAIM_RECORD_PAGE_SIZE,
+  type ClaimRecordSort,
+  type RankedClaimRecordEntity,
   claimRecordFilters,
   fetchClaimRecordClaimsPage,
   fetchClaimRecordCounts,
@@ -16,8 +18,6 @@ import {
   firstClaimRecordClaimsPageParam,
   mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
-  type ClaimRecordSort,
-  type RankedClaimRecordEntity,
 } from './claim-record-query';
 
 export { CLAIM_RECORD_PAGE_SIZE } from './claim-record-query';

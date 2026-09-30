@@ -10,7 +10,8 @@ import {
 } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 /**
@@ -27,7 +28,7 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
   const videoIdsByDebateId = React.useMemo(() => {
     const map = new Map<string, string[]>();
     for (const debate of debates) {
-      const videoIds = relationTargets(debate.relations, DEBATE_VIDEOS_PROPERTY_ID);
+      const videoIds = Entities.relationTargets(debate.relations, DEBATE_VIDEOS_PROPERTY_ID);
       if (videoIds.length > 0) map.set(debate.id, videoIds);
     }
     return map;
@@ -44,7 +45,7 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
   const keyframeIdByVideoId = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const video of videos) {
-      const keyframeId = relationTargets(video.relations, KEY_FRAME_IMAGE_PROPERTY_ID)[0];
+      const keyframeId = Entities.relationTargets(video.relations, KEY_FRAME_IMAGE_PROPERTY_ID)[0];
       if (keyframeId) map.set(video.id, keyframeId);
     }
     return map;
@@ -89,10 +90,4 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
 function valueForProperty(entity: Entity, propertyId: string): string | undefined {
   const value = entity.values?.find(v => v.isDeleted !== true && ID.equals(v.property.id, propertyId))?.value;
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function relationTargets(relations: Relation[], propertyId: string): string[] {
-  return relations
-    .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, propertyId))
-    .map(relation => relation.toEntity.id);
 }

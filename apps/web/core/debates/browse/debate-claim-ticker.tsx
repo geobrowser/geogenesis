@@ -13,18 +13,13 @@ import {
   backlogWindows,
   claimHistory,
   claimMarkers,
-  drawableClaims,
-  speakersByClaimId,
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
-import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { speakerLabel } from '~/core/debates/playback-utils';
-import { useClaimTimings } from '~/core/debates/use-claim-timings';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
-import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
@@ -80,8 +75,12 @@ export function useDebateClaimTicker(
     enabled,
   }: { playheadMs: number; timelineMs: number; enabled: boolean }
 ): DebateTicker {
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, enabled);
-  const { timings } = useClaimTimings(debate.id, claims, enabled);
+  const {
+    transcript: { claims },
+    claims: drawable,
+    speakerByClaimId: participantByClaimId,
+    entitiesByClaimId,
+  } = useDrawableDebateClaims(debate, enabled);
 
   const [answers, setAnswers] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
 
@@ -103,11 +102,6 @@ export function useDebateClaimTicker(
       return new Map(current).set(claimId, position);
     });
   }, []);
-
-  // Who said each claim — see `speakersByClaimId`.
-  const participantByClaimId = React.useMemo(() => speakersByClaimId(debate, claims), [claims, debate]);
-
-  const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
 
   /**
    * One gate for everything this surface offers, so the three ways it points at a claim agree.
@@ -140,30 +134,13 @@ export function useDebateClaimTicker(
    * an answer lands on whichever copy survived here. That is an argument for de-duplicating on
    * publish, not for showing the same sentence twice.
    */
-  const renderableClaims = React.useMemo(
-    () => (enabled ? drawableClaims(timedClaims, participantByClaimId) : []),
-    [enabled, participantByClaimId, timedClaims]
-  );
+  const renderableClaims = React.useMemo(() => (enabled ? drawable : []), [enabled, drawable]);
 
   // Two lists, because the live layer and the backlog answer different questions — see
   // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
   const windows = React.useMemo(() => tickerWindows(renderableClaims), [renderableClaims]);
   const backlog = React.useMemo(() => backlogWindows(renderableClaims), [renderableClaims]);
   const markers = React.useMemo(() => claimMarkers(renderableClaims, timelineMs), [renderableClaims, timelineMs]);
-
-  // One batch for every claim, the way the panel does it, so the live card and the end-of-debate
-  // stack never issue a lookup per claim as they mount.
-  const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  const { entities } = useQueryEntities({
-    where: { id: { in: claimIds } },
-    first: claimIds.length || 1,
-    enabled: enabled && claimIds.length > 0,
-  });
-  const entitiesByClaimId = React.useMemo(() => {
-    const map = new Map<string, Entity>();
-    for (const entity of entities) map.set(entity.id, entity);
-    return map;
-  }, [entities]);
 
   /**
    * Empty while this ticker is switched off, which is not the same as having no claims.
@@ -265,6 +242,9 @@ const HISTORY_EDGE_OPAQUE_PX = 71.5;
 /** The lead-in: the gradient's first stop sits 6.5% down its 71.5px, and nothing shows above it. */
 const HISTORY_EDGE_CLEAR_PX = 4.65;
 
+/** `glass` over the video; `light` on a white surface, as the end card's carousel is. */
+export type ClaimCardTone = 'glass' | 'light';
+
 /**
  * The claim card that rises over the video as it is said.
  *
@@ -274,8 +254,6 @@ const HISTORY_EDGE_CLEAR_PX = 4.65;
  * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
  * thumb while signed out.
  */
-export type ClaimCardTone = 'glass' | 'light';
-
 export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTickerCardBody>[0]) {
   if (!props.window.claim.spaceId) return null;
   return (

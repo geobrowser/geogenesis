@@ -10,10 +10,10 @@ import type { RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
 import {
-  decodeRelationFacet,
-  relationFacetByFilterDocument,
   type RelationFacetCount,
   type RelationFacetGroupBy,
+  decodeRelationFacet,
+  relationFacetByFilterDocument,
 } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
@@ -104,15 +104,7 @@ export function useClaimRecordFacets({
     staleTime: FACET_STALE_TIME,
   });
   const claimTopicsQuery = useQuery({
-    queryKey: [
-      'claim-record',
-      'facets',
-      'claim-topics',
-      claimId,
-      selectedSpaceKey,
-      sourceTopicKey,
-      selectedTopicKey,
-    ],
+    queryKey: ['claim-record', 'facets', 'claim-topics', claimId, selectedSpaceKey, sourceTopicKey, selectedTopicKey],
     enabled: kind === 'claims',
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
@@ -151,8 +143,7 @@ export function useClaimRecordFacets({
     }));
   }, [claimTopicsQuery.data, topicNamesQuery.data]);
 
-  const activeQueries =
-    kind === 'claims' ? [claimSpacesQuery, claimTopicsQuery] : [debateSpacesQuery];
+  const activeQueries = kind === 'claims' ? [claimSpacesQuery, claimTopicsQuery] : [debateSpacesQuery];
   const countsPending = activeQueries.some(query => query.isLoading || query.isPlaceholderData);
   const facetsSettled = activeQueries.every(query => !query.isLoading && !query.isPlaceholderData && !query.error);
 

@@ -1,123 +1,30 @@
 'use client';
 
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { Effect } from 'effect';
-import { parse } from 'graphql';
-
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { Debate, DebateParticipant } from '~/core/debates/api';
-import { useDebate } from '~/core/debates/hooks';
-import { type NextDebateCandidate, pickNextDebate } from '~/core/debates/next-debate';
+import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
+import type { Debate } from '~/core/debates/api';
+import { debateClaimIds, nextDebateCandidates, pickNextDebate } from '~/core/debates/next-debate';
 import {
-  DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_OPPOSED_BY_PROPERTY_ID,
+  DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
-  DEBATE_VIDEOS_PROPERTY_ID,
-  KEY_FRAME_IMAGE_PROPERTY_ID,
 } from '~/core/debates/ontology';
-import { orderedParticipants } from '~/core/debates/playback-utils';
 import { markDebateWatched, readWatchedDebateIds } from '~/core/debates/watched-debates';
-import { ID } from '~/core/id';
-import { graphql } from '~/core/io/graphql-client';
-import { isDirectMediaUrl } from '~/core/utils/media-url';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { useQueryEntities } from '~/core/sync/use-store';
+import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
 
 import { useDebatesBestOrder } from './use-debates-best-order';
 
 /**
- * Every published debate in a space, with what the picker and the card need: the claim it argued,
- * that claim's topics in this space, and its video's key frame.
+ * How many of a space's debates the picker considers.
  *
- * One request answers both of the picker's tiers — related debates and the rest of the space — and
- * the card's thumbnail. The busiest space on testnet holds a few dozen debates; `first` is set
- * explicitly because a list without it silently stops at a hundred.
- *
- * Every relation is read in this space. Topics are assigned per space, and a topic this claim only
- * carries elsewhere would make "related" mean something the claim page's gallery doesn't.
+ * The busiest space on testnet holds a few dozen. Set well above that, and explicitly, because a
+ * list query without `first` silently stops at a hundred.
  */
-const NEXT_DEBATE_CANDIDATES_SOURCE = /* GraphQL */ `
-  query NextDebateCandidates(
-    $spaceId: UUID!
-    $debateTypeId: UUID!
-    $claimsPropertyId: UUID!
-    $topicsPropertyId: UUID!
-    $videosPropertyId: UUID!
-    $keyFramePropertyId: UUID!
-  ) {
-    entitiesConnection(first: 200, typeId: $debateTypeId, spaceId: $spaceId) {
-      nodes {
-        id
-        claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
-          toEntity {
-            id
-            name
-            topics: relationsList(filter: { typeId: { is: $topicsPropertyId }, spaceId: { is: $spaceId } }) {
-              toEntityId
-            }
-          }
-        }
-        videos: relationsList(filter: { typeId: { is: $videosPropertyId }, spaceId: { is: $spaceId } }) {
-          toEntity {
-            keyFrames: relationsList(filter: { typeId: { is: $keyFramePropertyId } }) {
-              toEntity {
-                valuesList {
-                  text
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
-const nextDebateCandidatesDocument = parse(NEXT_DEBATE_CANDIDATES_SOURCE) as TypedDocumentNode<any, any>;
-
-type CandidatesResponse = {
-  entitiesConnection?: {
-    nodes?: Array<{
-      id?: string | null;
-      claims?: Array<{
-        toEntity?: { id?: string | null; name?: string | null; topics?: Array<{ toEntityId?: string | null }> } | null;
-      }> | null;
-      videos?: Array<{
-        toEntity?: { keyFrames?: Array<{ toEntity?: { valuesList?: Array<{ text?: string | null }> } | null }> } | null;
-      }> | null;
-    } | null> | null;
-  } | null;
-};
-
-export function decodeNextDebateCandidates(data: CandidatesResponse): NextDebateCandidate[] {
-  return (data.entitiesConnection?.nodes ?? []).flatMap(node => {
-    // A Debate carries exactly one `Claims` relation — the motion it argued. One without a named
-    // claim can't be titled, so it can't be offered.
-    const claim = node?.claims?.[0]?.toEntity;
-    if (!node?.id || !claim?.id || !claim.name) return [];
-
-    const keyFrame =
-      (node.videos ?? [])
-        .flatMap(video => video.toEntity?.keyFrames ?? [])
-        .flatMap(frame => frame.toEntity?.valuesList ?? [])
-        .map(value => value.text)
-        .find(isDirectMediaUrl) ?? null;
-
-    return [
-      {
-        debateId: normId(node.id),
-        claimId: normId(claim.id),
-        claimName: claim.name,
-        topicIds: (claim.topics ?? []).flatMap(topic => (topic.toEntityId ? [normId(topic.toEntityId)] : [])),
-        keyFrame,
-      },
-    ];
-  });
-}
-
-export const nextDebateCandidatesQueryKey = (spaceId: string) => ['debates', 'next-candidates', spaceId] as const;
+const CANDIDATE_LIMIT = 500;
 
 export type NextDebate = {
   debateId: string;
@@ -125,8 +32,8 @@ export type NextDebate = {
   claimName: string;
   keyFrame: string | null;
   related: boolean;
-  /** Agree side first, as on the card above. Empty if geo-chat couldn't say who argued it. */
-  participants: DebateParticipant[];
+  /** Supported by first, as the Agree side sits first everywhere on the card. */
+  participants: { spaceId: string; name: string | null; avatarUrl: string | null }[];
 };
 
 const NO_WATCHED: ReadonlySet<string> = new Set();
@@ -136,6 +43,11 @@ const NO_RANKING: ReadonlyMap<string, number> = new Map();
  * The debate the end card offers next, ready to draw — or null while it is being worked out, or when
  * there is nothing to offer.
  *
+ * Read from the graph the way the claim and topic pages list debates: the space's Debate entities,
+ * their claims for topics, the key frame through `useDebateKeyframes`, and the sides' names and
+ * faces through `useProfilesBySpaceIds`. The same queries on the same keys, so a viewer who has been
+ * on either page gets a cache read.
+ *
  * `live` is the end card's own latch: on once the debate has been active, so the suggestion is worked
  * out while the debate plays rather than after it ends. `shown` is whether the card is on screen,
  * which is when the debate counts as watched.
@@ -144,52 +56,44 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
   const spaceId = normId(debate.claim.space_id);
 
   const ranking = useDebatesBestOrder(spaceId, live);
-  const candidates = useQuery({
-    queryKey: nextDebateCandidatesQueryKey(spaceId),
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: nextDebateCandidatesDocument,
-          decoder: decodeNextDebateCandidates,
-          variables: {
-            spaceId,
-            debateTypeId: DEBATE_TYPE_ID,
-            claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-            topicsPropertyId: TOPICS_PROPERTY_ID,
-            videosPropertyId: DEBATE_VIDEOS_PROPERTY_ID,
-            keyFramePropertyId: KEY_FRAME_IMAGE_PROPERTY_ID,
-          },
-          signal,
-        })
-      ),
+  const { entities: debates, isLoading: debatesLoading } = useQueryEntities({
+    where: { types: [{ id: { equals: DEBATE_TYPE_ID } }], spaces: [{ equals: spaceId }] },
+    first: CANDIDATE_LIMIT,
     enabled: live && Boolean(spaceId),
-    // New debates are published minutes apart at most, and a suggestion a few minutes behind is
-    // still a good one.
-    staleTime: 5 * 60_000,
   });
 
-  // Read once per debate, when it becomes live: the suggestion is worked out while it plays, and
-  // re-reading after this debate is marked below would only ever add this debate, which the picker
-  // skips anyway.
+  // Each debate's claim, for its name and its topics in this space. Batched across the space.
+  const claimIds = React.useMemo(() => debateClaimIds(debates, spaceId), [debates, spaceId]);
+  const { entities: claims, isLoading: claimsLoading } = useQueryEntities({
+    where: { id: { in: claimIds } },
+    first: claimIds.length || 1,
+    enabled: live && claimIds.length > 0,
+  });
+  const candidates = React.useMemo(() => nextDebateCandidates(debates, claims, spaceId), [claims, debates, spaceId]);
+
+  // Re-read when the card comes on screen as well as when the debate goes live: a player stays
+  // mounted as the feed scrolls, and a debate finished elsewhere since this one went live must not
+  // be offered here.
   const watchedDebateIds = React.useMemo(
     () => (live ? readWatchedDebateIds() : NO_WATCHED),
-    // `debate.id` so a player handed a different debate reads again.
+    // `debate.id` so a player handed a different debate reads again; `shown` for the reason above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [live, debate.id]
+    [live, shown, debate.id]
   );
 
   React.useEffect(() => {
     if (shown) markDebateWatched(debate.id);
   }, [shown, debate.id]);
 
-  // Held until the ranking has answered, so the suggestion isn't drawn in query order and then
-  // swapped for the ranked one. A ranking that failed falls through to query order.
-  const settled = candidates.data !== undefined && !ranking.isLoading;
+  // Held until everything the choice rests on has answered, so the suggestion isn't drawn off a
+  // partial list and then swapped. A ranking that failed falls through to query order.
+  const settled =
+    live && !debatesLoading && !ranking.isLoading && !(claimIds.length > 0 && claimsLoading) && debates.length > 0;
   const pick = React.useMemo(
     () =>
       settled
         ? pickNextDebate({
-            candidates: candidates.data ?? [],
+            candidates,
             currentDebateId: debate.id,
             currentClaimId: debate.claim.claim_entity_id,
             rankByDebateId: ranking.isError ? NO_RANKING : ranking.rankByDebateId,
@@ -198,7 +102,7 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
         : null,
     [
       settled,
-      candidates.data,
+      candidates,
       debate.id,
       debate.claim.claim_entity_id,
       ranking.isError,
@@ -207,28 +111,37 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
     ]
   );
 
-  // The debaters' names and faces come from geo-chat: the graph knows them only as the spaces they
-  // argued from. The same single-debate read the Explore debate card makes for each card it shows.
-  const chosen = useDebate(pick ? ID.hexToUuid(pick.candidate.debateId) : '', live && pick !== null);
-  const participants = React.useMemo(
-    () =>
-      chosen.data
-        ? orderedParticipants(chosen.data).sort((left, right) => Number(right.position) - Number(left.position))
-        : [],
-    [chosen.data]
+  const chosen = React.useMemo(
+    () => (pick ? debates.filter(entity => normId(entity.id) === pick.candidate.debateId) : []),
+    [debates, pick]
   );
+  const keyframeByDebateId = useDebateKeyframes(chosen);
 
-  if (!pick) return null;
-  // Drawn once geo-chat has answered, either way — a row whose names arrive a beat later shifts
-  // everything under it. A failed read still offers the debate, just without the faces.
-  if (chosen.isLoading) return null;
+  // The sides as the graph publishes them, as `ClaimDebates` reads them.
+  const sides = React.useMemo(
+    () =>
+      chosen.flatMap(entity => [
+        ...Entities.relationTargets(entity.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID),
+        ...Entities.relationTargets(entity.relations, DEBATE_OPPOSED_BY_PROPERTY_ID),
+      ]),
+    [chosen]
+  );
+  const { profilesBySpaceId, isLoading: profilesLoading } = useProfilesBySpaceIds(sides, sides.length > 0);
+
+  if (!pick || chosen.length === 0) return null;
+  // Drawn once the names are in either way — a row whose names arrive a beat later shifts everything
+  // under it. Profiles that could not be resolved still leave the faces, keyed by space.
+  if (profilesLoading) return null;
 
   return {
     debateId: pick.candidate.debateId,
     spaceId,
     claimName: pick.candidate.claimName,
-    keyFrame: pick.candidate.keyFrame,
+    keyFrame: keyframeByDebateId.get(chosen[0].id) ?? null,
     related: pick.related,
-    participants,
+    participants: sides.map(sideSpaceId => {
+      const profile = profilesBySpaceId.get(sideSpaceId);
+      return { spaceId: sideSpaceId, name: profile?.name ?? null, avatarUrl: profile?.avatarUrl ?? null };
+    }),
   };
 }

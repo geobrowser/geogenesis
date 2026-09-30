@@ -6,10 +6,7 @@ import { parse } from 'graphql';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
-import {
-  type ExploreCardEntity,
-  decodeExploreCardEntity,
-} from '~/core/explore/explore-card-item';
+import { type ExploreCardEntity, decodeExploreCardEntity } from '~/core/explore/explore-card-item';
 import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
@@ -338,8 +335,7 @@ export function claimRecordFilters({
     debates: debateBranches.length === 1 ? debateBranches[0] : { or: debateBranches },
     claimRelations: { or: claimRelationBranches },
     claimTopicRelations: { or: claimTopicRelationBranches },
-    debateRelations:
-      debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
+    debateRelations: debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
   };
 }
 
@@ -437,10 +433,10 @@ function decodeCount(connection: CountConnection): number {
   return count;
 }
 
-export function decodeClaimRecordCounts(data: {
-  claims?: CountConnection;
-  debates?: CountConnection;
-}): { claims: number; debates: number } {
+export function decodeClaimRecordCounts(data: { claims?: CountConnection; debates?: CountConnection }): {
+  claims: number;
+  debates: number;
+} {
   return { claims: decodeCount(data.claims ?? null), debates: decodeCount(data.debates ?? null) };
 }
 
@@ -460,10 +456,7 @@ export function mergeSortedRecordEntities<
     createdAt?: string | null;
     updatedAt: string | null;
   },
->(
-  sort: ClaimRecordSort,
-  ...groups: readonly T[][]
-): T[] {
+>(sort: ClaimRecordSort, ...groups: readonly T[][]): T[] {
   const byId = new Map<string, T>();
   for (const entity of groups.flat()) {
     const key = normId(entity.id);
@@ -510,9 +503,7 @@ export function firstClaimRecordClaimsPageParam(hasTopics: boolean): ClaimRecord
   };
 }
 
-export function nextClaimRecordClaimsPageParam(
-  page: ClaimRecordClaimsPage
-): ClaimRecordClaimsPageParam | undefined {
+export function nextClaimRecordClaimsPageParam(page: ClaimRecordClaimsPage): ClaimRecordClaimsPageParam | undefined {
   const topicHasNext = page.topicClaims.hasNextPage && page.topicClaims.endCursor !== null;
   const extractedHasNext = page.extractedClaims.hasNextPage && page.extractedClaims.endCursor !== null;
   if (!topicHasNext && !extractedHasNext) return undefined;

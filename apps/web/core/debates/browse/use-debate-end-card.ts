@@ -4,10 +4,8 @@ import * as React from 'react';
 
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import { drawableClaims, speakersByClaimId } from '~/core/debates/claim-ticker';
-import { type TimedClaim, claimsInSpokenOrder } from '~/core/debates/claim-timing';
-import { useClaimTimings } from '~/core/debates/use-claim-timings';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import type { TimedClaim } from '~/core/debates/claim-timing';
+import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
@@ -17,6 +15,7 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
 import { useNextDebate } from './use-next-debate';
 
 const NO_ENTITIES: ReadonlyMap<string, Entity> = new Map();
+const NO_CLAIMS: TimedClaim[] = [];
 
 /** The claims the debate extracted, as the end card's carousel draws them. */
 export type EndCardClaims = {
@@ -63,38 +62,24 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
   const spaceId = normId(debate.claim.space_id);
   const claimId = normId(debate.claim.claim_entity_id);
 
-  // The same reads the live claim cards make, on the same keys, so a debate that played with its
-  // cards up hands the carousel a warm cache. Made here rather than borrowed from the player's
-  // ticker, which switches off when the viewer scrolls to another debate — while this card, and the
-  // carousel on it, can still be on screen.
-  const transcript = useDebateTranscriptClaims(debate.id, debate.claim.space_id, live);
+  // The same claims the live cards drew, on the same keys, so a debate that played with its cards up
+  // hands the carousel a warm cache. Asked for here rather than borrowed from the player's ticker,
+  // which switches off when the viewer scrolls to another debate — while this card, and the carousel
+  // on it, can still be on screen.
+  const {
+    transcript,
+    claims: drawable,
+    speakerByClaimId,
+    entitiesByClaimId,
+    timingsReady,
+  } = useDrawableDebateClaims(debate, live);
   const { claims } = transcript;
   // Whether `claims` is the debate's, rather than the empty set standing in while it loads or after
   // it failed.
   const claimsReady = live && !transcript.isLoading && transcript.error === null;
-  const { timings, isReady: timingsReady } = useClaimTimings(debate.id, claims, live);
-
-  const speakerByClaimId = React.useMemo(() => speakersByClaimId(debate, claims), [claims, debate]);
   // Held until the timings are in, so the carousel isn't drawn in graph order — which is random —
   // and then reshuffled under a viewer who has started scrolling it.
-  const carouselClaims = React.useMemo(
-    () =>
-      claimsReady && timingsReady ? drawableClaims(claimsInSpokenOrder(claims.all, timings), speakerByClaimId) : [],
-    [claims.all, claimsReady, speakerByClaimId, timings, timingsReady]
-  );
-
-  // Every claim's entity in one lookup — the same one the live cards make, so it is usually a cache
-  // read. Each card's vote control holds its reads back until it has its entity.
-  const allClaimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  const { entities: claimEntities } = useQueryEntities({
-    where: { id: { in: allClaimIds } },
-    first: allClaimIds.length || 1,
-    enabled: live && allClaimIds.length > 0,
-  });
-  const entitiesByClaimId = React.useMemo(
-    () => new Map(claimEntities.map(entity => [entity.id, entity])),
-    [claimEntities]
-  );
+  const carouselClaims = claimsReady && timingsReady ? drawable : NO_CLAIMS;
 
   // Responses are per space, so only the claims published in the debate's own space can be batched
   // against it. A claim quoted from elsewhere asks its own space for itself.

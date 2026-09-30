@@ -34,6 +34,14 @@ vi.mock('./debate-claim-ticker', () => ({
     </div>
   ),
 }));
+// Hydrates the entity on hover through the sync engine; here it only has to be the link it wraps.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...props
+  }: React.ComponentProps<'a'> & Record<string, unknown>) => <a {...props} />,
+}));
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({ showParticipants }: { showParticipants?: boolean }) => (
     <div data-testid="position-row" data-show-participants={String(showParticipants)} />
@@ -113,7 +121,10 @@ const nextDebate = (overrides: Partial<NextDebate> = {}): NextDebate => ({
   claimName: 'We should slow down AI development',
   keyFrame: 'ipfs://keyframe',
   related: true,
-  participants: [participant('ada-space', 'Ada', true), participant('bo-space', 'Bo', false)],
+  participants: [
+    { spaceId: 'ada-space', name: 'Ada', avatarUrl: null },
+    { spaceId: 'bo-space', name: 'Bo', avatarUrl: null },
+  ],
   ...overrides,
 });
 
