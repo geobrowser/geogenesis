@@ -169,6 +169,21 @@ describe('ExploreFeedCard', () => {
     expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
   });
 
+  it('draws no age in the meta row, on the generic card or the debate fallback', () => {
+    const fiveDaysAgo = Math.floor(Date.now() / 1000) - 5 * 86400;
+    render(<ExploreFeedCard item={{ ...item, createdAtSec: fiveDaysAgo }} />);
+    expect(screen.queryByText(/ ago$|just now/)).toBeNull();
+
+    cleanup();
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      createdAtSec: fiveDaysAgo,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+    };
+    render(<ExploreFeedCard item={debateItem} />);
+    expect(screen.queryByText(/ ago$|just now/)).toBeNull();
+  });
+
   it('does not route non-debate items to the debate card', () => {
     render(<ExploreFeedCard item={item} />);
     expect(screen.queryByTestId('debate-card')).toBeNull();
