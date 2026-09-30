@@ -14,6 +14,7 @@ import {
   type PeerAvailabilityBooking,
   PeerAvailabilityView,
   SELECTED_SLOT,
+  requestSentMessage,
 } from './peer-availability';
 
 // A fixed clock, so the seven columns and their labels are the same on every run. A Monday, early
@@ -47,7 +48,6 @@ const booking = (overrides: Partial<PeerAvailabilityBooking> = {}): PeerAvailabi
   onRequest: vi.fn(),
   pending: false,
   error: null,
-  requestedStart: null,
   ...overrides,
 });
 
@@ -426,6 +426,22 @@ describe('booking a slot', () => {
     expect(new Date(sent).getTime()).toBe(new Date('2026-09-21T17:00:00Z').getTime());
   });
 
+  // The caller confirms the request after this week has closed, so it has to be told the zone the
+  // chip was named in or its confirmation can name a different time.
+  it('sends the zone the week was drawn in with the pick', async () => {
+    const book = booking();
+    const { user } = setupBooking(book, { viewerTimezone: 'America/New_York', slots: [slot(16)] });
+
+    // 16:00Z is noon in New York.
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /12pm/ }));
+    await user.click(screen.getByRole('button', { name: 'Send request' }));
+
+    expect((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual({
+      viewerIsFree: true,
+      viewerTimezone: 'America/New_York',
+    });
+  });
+
   it('keeps one pick at a time, so the request cannot mean two times', async () => {
     const { user } = setupBooking(booking(), { slots: [slot(16), slot(17)] });
     const first = within(day('2026-09-21')).getByRole('button', { name: /4pm/ });
@@ -441,12 +457,6 @@ describe('booking a slot', () => {
   it('reports a refusal rather than looking like nothing happened', () => {
     setupBooking(booking({ error: 'Clashes with a debate at 2pm.' }));
     expect(screen.getByText('Clashes with a debate at 2pm.')).toBeInTheDocument();
-  });
-
-  it('says the other person still has to accept', () => {
-    setupBooking(booking({ requestedStart: '2026-09-21T14:00:00Z' }));
-    expect(screen.getByText(/Ada has to accept/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Send request' })).not.toBeInTheDocument();
   });
 });
 
@@ -492,7 +502,6 @@ describe('a refused invitation', () => {
 
     expect(screen.getByText(LIMIT)).toBeInTheDocument();
     expect(screen.getByText(/doesn.t change your availability/)).toBeInTheDocument();
-    expect(screen.queryByText(/has to accept/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send request' })).toBeEnabled();
   });
 
@@ -500,7 +509,6 @@ describe('a refused invitation', () => {
     setupBooking(booking({ error: LIMIT }), { peerHasSchedule: false, slots: [] });
 
     expect(screen.getByText(LIMIT)).toBeInTheDocument();
-    expect(screen.queryByText(/has to accept/)).not.toBeInTheDocument();
   });
 });
 
@@ -535,6 +543,10 @@ describe('a week with nothing in it', () => {
       expect(new Date((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][0]).toISOString()).toBe(
         '2026-09-22T03:15:00.000Z'
       );
+      expect((book.onRequest as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual({
+        viewerIsFree: null,
+        viewerTimezone,
+      });
     });
 
     it('bounds the input at now in that zone', () => {
@@ -544,12 +556,8 @@ describe('a week with nothing in it', () => {
     });
 
     it('confirms the time that was typed', () => {
-      setupBooking(booking({ requestedStart: '2026-09-22T03:15:00.000Z' }), {
-        viewerTimezone,
-        peerHasSchedule: false,
-        slots: [],
-      });
-      expect(screen.getByText(/^Requested /).textContent).toContain('9:00');
+      const message = requestSentMessage({ startsAt: '2026-09-22T03:15:00.000Z', peerName: 'Ada', viewerTimezone });
+      expect(message).toMatch(/^Requested .*9:00.*Ada has to accept before the room is booked\.$/);
     });
   });
 

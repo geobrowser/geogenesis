@@ -1718,7 +1718,8 @@ describe('Online only', () => {
       expect.objectContaining({
         opponentUserId: 'user-away',
         analytics: { entry: 'people_time', viewerIsFree: true },
-      })
+      }),
+      expect.anything()
     );
   });
 
