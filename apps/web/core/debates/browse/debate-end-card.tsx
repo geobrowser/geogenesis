@@ -201,8 +201,9 @@ const IGNORE_ANSWER = () => {};
  *
  * Snaps a card at a time. Scrolls by trackpad, touch or the arrows; the arrows are there because a
  * mouse wheel scrolls vertically, and without them a mouse user sees one or two cards and no way to
- * the rest. They step a card at a time and hide on a narrow player, which is a touch screen more
- * often than not and has no room to spare in the header.
+ * the rest. Kept on a narrow player too, where a swipe works but nothing else says the row moves.
+ * See all is the one that goes there instead: the header has room for the arrows or it, not both,
+ * and the arrows are the row's own controls.
  *
  * The strip bleeds to the card's edges, so a card scrolled half out of view reads as "there is more
  * this way" rather than as clipped.
@@ -259,7 +260,7 @@ function ClaimsCarousel({
             <button
               type="button"
               onClick={() => onOpenClaims()}
-              className="mr-1 rounded px-1 text-smallButton text-grey-04 transition-colors hover:bg-divider hover:text-text"
+              className="mr-1 rounded px-1 text-smallButton text-grey-04 transition-colors hover:bg-divider hover:text-text @max-md:hidden"
             >
               See all
             </button>
@@ -269,7 +270,7 @@ function ClaimsCarousel({
             aria-label="Previous claims"
             onClick={() => step(-1)}
             disabled={edges.atStart}
-            className={cx(arrow, '@max-md:hidden')}
+            className={arrow}
           >
             <span className="rotate-180">
               <ChevronRight />
@@ -280,7 +281,7 @@ function ClaimsCarousel({
             aria-label="More claims"
             onClick={() => step(1)}
             disabled={edges.atEnd}
-            className={cx(arrow, '@max-md:hidden')}
+            className={arrow}
           >
             <ChevronRight />
           </button>
@@ -323,55 +324,62 @@ function ClaimsCarousel({
  * A link rather than a button that swaps the player, so it has an address — Cmd-click opens it in a
  * tab, and the feed card this sits on keeps showing the debate its title and header describe.
  *
- * The heading says which tier it came from: "related" only when it argues a related claim, so the
+ * Headed like the claims section above it, and the heading says which tier it came from: "related" only when it argues a related claim, so the
  * card never calls an unrelated debate related.
  */
 function NextDebateLink({ next }: { next: NextDebate }) {
   const names = next.participants.map(speakerLabel).join(' vs. ');
 
-  return (
-    <Link
-      href={NavUtils.toEntity(next.spaceId, next.debateId)}
-      data-end-card-next-debate={next.related ? 'related' : 'space'}
-      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
-    >
-      {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
-          landscape box cropped it down to a strip across the middle of the two. */}
-      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
-        {next.keyFrame ? (
-          <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
-        ) : null}
-        <span
-          aria-hidden
-          className="absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-5"
-        >
-          <Play size={10} />
-        </span>
-      </span>
+  const heading = next.related ? 'Watch a related debate' : 'Watch another debate';
 
-      <span className="flex min-w-0 flex-col gap-1 @max-md:gap-0.5">
-        <span className="text-[0.75rem] leading-[0.875rem] text-grey-04">
-          {next.related ? 'Watch a related debate' : 'Watch another debate'}
-        </span>
-        <span className="line-clamp-2 text-chatMedium @max-md:text-[0.8125rem] @max-md:leading-[1.125rem]">
-          {next.claimName}
-        </span>
-        {next.participants.length > 0 ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
-            <span className="flex shrink-0 -space-x-1">
-              {next.participants.map(participant => (
-                <span
-                  key={participant.profile_space_id}
-                  className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
-                >
-                  <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
-                </span>
-              ))}
-            </span>
-            <span className="truncate">{names}</span>
+  return (
+    // A section with its own heading, as the claims above have — the two read as the card's two
+    // things to do next, headed the same way.
+    <section
+      aria-label={heading}
+      data-end-card-next-debate={next.related ? 'related' : 'space'}
+      className="mt-3.5 flex shrink-0 flex-col gap-2 @max-md:mt-2.5"
+    >
+      <span className="text-chatMedium text-grey-04">{heading}</span>
+      <Link
+        href={NavUtils.toEntity(next.spaceId, next.debateId)}
+        className="flex items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:gap-2.5 @max-md:p-2"
+      >
+        {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
+          landscape box cropped it down to a strip across the middle of the two. */}
+        <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
+          {next.keyFrame ? (
+            <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
+          ) : null}
+          <span
+            aria-hidden
+            className="absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-5"
+          >
+            <Play size={10} />
           </span>
-        ) : null}
-      </span>
-    </Link>
+        </span>
+
+        <span className="flex min-w-0 flex-col gap-1 @max-md:gap-0.5">
+          <span className="line-clamp-2 text-chatMedium @max-md:text-[0.8125rem] @max-md:leading-[1.125rem]">
+            {next.claimName}
+          </span>
+          {next.participants.length > 0 ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
+              <span className="flex shrink-0 -space-x-1">
+                {next.participants.map(participant => (
+                  <span
+                    key={participant.profile_space_id}
+                    className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
+                  >
+                    <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
+                  </span>
+                ))}
+              </span>
+              <span className="truncate">{names}</span>
+            </span>
+          ) : null}
+        </span>
+      </Link>
+    </section>
   );
 }

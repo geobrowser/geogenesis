@@ -190,7 +190,7 @@ describe('DebateEndCard', () => {
     expect([...(strip.firstElementChild as HTMLElement).classList]).toContain('snap-start');
   });
 
-  it('steps the strip a card at a time from the arrows, which a narrow player hides', () => {
+  it('steps the strip a card at a time from the arrows, at every width', () => {
     const { container } = renderCard(cardFixture());
     const strip = container.querySelector('[data-end-card-claims]') as HTMLElement;
     strip.scrollBy = vi.fn();
@@ -204,17 +204,20 @@ describe('DebateEndCard', () => {
     fireEvent.click(more);
 
     expect(strip.scrollBy).toHaveBeenCalledWith({ left: 264, behavior: 'smooth' });
-    expect([...more.classList]).toContain('@max-md:hidden');
+    expect([...more.classList]).not.toContain('@max-md:hidden');
     // At the start, there is nothing to go back to.
     expect(screen.getByRole('button', { name: 'Previous claims' })).toBeDisabled();
   });
 
-  it('opens the claims panel from See all', () => {
+  it('opens the claims panel from See all, which a narrow player hides', () => {
     const onOpenClaims = vi.fn();
     renderCard(cardFixture(), onOpenClaims);
 
-    fireEvent.click(screen.getByRole('button', { name: 'See all' }));
+    const seeAll = screen.getByRole('button', { name: 'See all' });
+    fireEvent.click(seeAll);
     expect(onOpenClaims).toHaveBeenCalledWith();
+    // A narrow player's header has room for the arrows or See all, and keeps the arrows.
+    expect([...seeAll.classList]).toContain('@max-md:hidden');
   });
 
   it('offers no See all when there is nowhere to open the claims', () => {
@@ -227,12 +230,16 @@ describe('DebateEndCard', () => {
     expect(screen.queryByRole('region', { name: 'Claims from this debate' })).toBeNull();
   });
 
-  it('links a related debate to its page, with its claim and who argued it', () => {
+  it('heads the next debate like the claims, and links it to its page with its claim and who argued it', () => {
     const { container } = renderCard(cardFixture({ nextDebate: nextDebate() }));
-    const link = screen.getByRole('link', { name: /Watch a related debate/ });
+    const section = screen.getByRole('region', { name: 'Watch a related debate' });
+    const link = within(section).getByRole('link');
 
+    expect(section).toHaveAttribute('data-end-card-next-debate', 'related');
+    // A heading beside the row, in the same style as "Vote on claims made", not a label inside it.
+    expect(within(section).getByText('Watch a related debate')).toHaveClass('text-chatMedium', 'text-grey-04');
+    expect(within(link).queryByText('Watch a related debate')).toBeNull();
     expect(link).toHaveAttribute('href', expect.stringContaining('next-debate'));
-    expect(link).toHaveAttribute('data-end-card-next-debate', 'related');
     expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
     expect(within(link).getByText('Ada vs. Bo')).toBeInTheDocument();
     expect(container.querySelector('[data-end-card-comparison]')).toBeNull();
@@ -241,7 +248,7 @@ describe('DebateEndCard', () => {
   it('does not call a debate related when it is only the next one in the space', () => {
     renderCard(cardFixture({ nextDebate: nextDebate({ related: false }) }));
 
-    expect(screen.getByRole('link', { name: /Watch another debate/ })).toHaveAttribute(
+    expect(screen.getByRole('region', { name: 'Watch another debate' })).toHaveAttribute(
       'data-end-card-next-debate',
       'space'
     );
@@ -251,7 +258,7 @@ describe('DebateEndCard', () => {
   it('still offers the debate when geo-chat could not say who argued it', () => {
     renderCard(cardFixture({ nextDebate: nextDebate({ participants: [], keyFrame: null }) }));
 
-    const link = screen.getByRole('link', { name: /Watch a related debate/ });
+    const link = within(screen.getByRole('region', { name: 'Watch a related debate' })).getByRole('link');
     expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
     expect(within(link).queryByText(/ vs\. /)).toBeNull();
   });
