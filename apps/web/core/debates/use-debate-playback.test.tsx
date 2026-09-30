@@ -1795,3 +1795,158 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     expect(result.current.turnState).not.toBeNull();
   });
 });
+
+/**
+ * GEO-2965. Every debate starts with a seek — the recordings begin a few seconds before the debate
+ * (GEO-2644) — and on the preview that seek, made by `resumeBoth` after the card had waited for
+ * both elements to be able to play, started the pair 15-420ms apart again. So a fresh pair is
+ * moved to its start as soon as both know their shape, and the resume finds nothing to move.
+ */
+describe('useDebatePlayback — a fresh pair is positioned before it is started (GEO-2965)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  /** Recordings that began 4.969s and 4.489s before the debate, as debate 01a0c99b's did. */
+  function preRolledDebate(): Debate {
+    const debate = debateFixture();
+    return {
+      ...debate,
+      recordings: [
+        { participant_slot: 1, filename: 'slot1.webm', started_at_ms: 1_700_000_000_000 - 4_969 },
+        { participant_slot: 2, filename: 'slot2.webm', started_at_ms: 1_700_000_000_000 - 4_489 },
+      ],
+    } as unknown as Debate;
+  }
+
+  /** A fake element that counts every `currentTime` write, since each one is a seek. */
+  function countingVideo(readyState: number) {
+    const video = fakeVideo();
+    let position = 0;
+    const seeks: number[] = [];
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => position,
+      set: (value: number) => {
+        seeks.push(value);
+        position = value;
+      },
+    });
+    video.readyState = readyState;
+    return { video, seeks };
+  }
+
+  async function mounted(readyState: number = HTMLMediaElement.HAVE_METADATA) {
+    const debate = preRolledDebate();
+    const { result } = renderHook(() => useDebatePlayback(debate, true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = countingVideo(readyState);
+    const slot2 = countingVideo(readyState);
+    result.current.slot1VideoRef.current = slot1.video;
+    result.current.slot2VideoRef.current = slot2.video;
+    return { result, slot1, slot2 };
+  }
+
+  it('moves both elements to the start of the debate once both know their shape', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toEqual([expect.closeTo(4.969, 6)]);
+    expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
+  });
+
+  it('waits for both to have metadata, since a seek before that has nothing to land on', async () => {
+    const { result, slot1, slot2 } = await mounted(HTMLMediaElement.HAVE_NOTHING);
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toEqual([]);
+
+    slot1.video.readyState = HTMLMediaElement.HAVE_METADATA;
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toEqual([]);
+
+    slot2.video.readyState = HTMLMediaElement.HAVE_METADATA;
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toHaveLength(1);
+    expect(slot2.seeks).toHaveLength(1);
+  });
+
+  it('positions a pair once, however many ticks follow', async () => {
+    const { result, slot1 } = await mounted();
+    act(() => {
+      result.current.onPlaybackTick();
+      result.current.onPlaybackTick();
+      result.current.onPlaybackTick();
+    });
+    expect(slot1.seeks).toHaveLength(1);
+  });
+
+  // The point of all of it: the resume finds both elements already where it would send them, so
+  // neither re-buffers and they start from data they both already hold.
+  it('lets the first resume start the pair without seeking either element again', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.video.settlePlay();
+      slot2.video.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
+    expect(slot1.seeks).toHaveLength(1);
+    expect(slot2.seeks).toHaveLength(1);
+  });
+
+  it('still seeks on a resume that has somewhere new to go', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+
+    act(() => result.current.seekBoth(30));
+
+    expect(slot1.seeks.at(-1)).toBeCloseTo(34.969, 6);
+    expect(slot2.seeks.at(-1)).toBeCloseTo(34.489, 6);
+  });
+
+  it('leaves a pair alone that a resume has already started', async () => {
+    const { result, slot1, slot2 } = await mounted(HTMLMediaElement.HAVE_NOTHING);
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.video.settlePlay();
+      slot2.video.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    const seeksAfterResume = slot1.seeks.length;
+
+    slot1.video.readyState = HTMLMediaElement.HAVE_ENOUGH_DATA;
+    slot2.video.readyState = HTMLMediaElement.HAVE_ENOUGH_DATA;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toHaveLength(seeksAfterResume);
+  });
+
+  // A link that named a moment is where playback starts, so it is the position and nothing may
+  // drag the pair back to the debate's opening afterwards.
+  it('defers to a seek asked for before the elements existed', async () => {
+    const debate = preRolledDebate();
+    const { result } = renderHook(() => useDebatePlayback(debate, true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    act(() => result.current.seekBoth(60));
+
+    const slot1 = countingVideo(HTMLMediaElement.HAVE_METADATA);
+    const slot2 = countingVideo(HTMLMediaElement.HAVE_METADATA);
+    result.current.slot1VideoRef.current = slot1.video;
+    result.current.slot2VideoRef.current = slot2.video;
+    act(() => result.current.onPlaybackTick());
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toEqual([expect.closeTo(64.969, 6)]);
+  });
+});

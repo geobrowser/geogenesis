@@ -1527,6 +1527,20 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
     expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
   });
 
+  // The playback hook moves a fresh pair to where the debate starts as soon as both know their
+  // shape. Data at the old position says nothing about data at the new one.
+  it('keeps holding while an element is seeking to where it will start', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: true });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeking'));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: false });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeked'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a failed recording through to the rebuild rather than holding its partner', () => {
     const { fixture, slot1, slot2 } = renderHeld();
     act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
