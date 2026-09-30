@@ -5,7 +5,10 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
+import type { AnalyticsEventName } from './analytics-events';
 import { withSignupVisitor } from './auth/signup-visitor';
+
+export type { AnalyticsEventName } from './analytics-events';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
@@ -31,7 +34,7 @@ type GeoAnalyticsRuntime = {
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
-  capture?: (eventName: string, properties?: AnalyticsProperties) => void;
+  capture?: (eventName: AnalyticsEventName, properties?: AnalyticsProperties) => void;
   identify?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   identifyUser?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   pageViewed?: (properties?: AnalyticsProperties) => void;
@@ -55,7 +58,7 @@ type GeoAnalyticsRuntime = {
 type PendingCall =
   | {
       method: 'capture';
-      eventName: string;
+      eventName: AnalyticsEventName;
       properties: AnalyticsProperties;
     }
   | {
@@ -130,7 +133,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-997e25cb095f.js';
+const analyticsScriptSrc = '/geo-analytics-38e6dc50cfe2.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
@@ -184,7 +187,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-mX4lywlfzaZvz3Ac+ipLjcKka/FvaWakf9c664A8uOQ=';
+  script.integrity = 'sha256-OObcUM/iOklWuNvA+bY3BaJok5pe/kCGexEyKpmrMfg=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -193,7 +196,7 @@ export function initAnalytics() {
   document.head.appendChild(script);
 }
 
-export function capture(eventName: string, properties: AnalyticsProperties = {}) {
+export function capture(eventName: AnalyticsEventName, properties: AnalyticsProperties = {}) {
   // An attributed action may complete on another route. Explicit nulls also
   // prevent the runtime from filling absent page entities from that later route.
   const route = properties.page_view_id ? { page_entity_id: null, page_entity_type: null } : pageContext();

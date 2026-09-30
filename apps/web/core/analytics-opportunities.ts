@@ -1,4 +1,4 @@
-import { capture } from './analytics';
+import { type AnalyticsEventName, capture } from './analytics';
 
 export type OpportunityEligibility = 'eligible' | 'authentication_required' | 'ineligible';
 export const rankingFeature = {
@@ -14,7 +14,7 @@ export function createRankingOpportunity(rankingId: string) {
   let state = '';
   let visibleSince: number | null = null;
   let exposed = false;
-  const emit = (name: string, properties: Record<string, unknown>) => {
+  const emit = (name: AnalyticsEventName, properties: Record<string, unknown>) => {
     try {
       capture(name, { ...properties, ...context, measurement_version: 'growth-v2' });
     } catch {

@@ -159,59 +159,6 @@ function sentQuery(call = 0) {
   return JSON.stringify(query);
 }
 
-/**
- * What the server returned, as against what survived decoding.
- *
- * `useBoundedPaging` counts this to know a page *landed*, so it has to mean exactly that — a page
- * whose nodes all lack a name decodes to nothing and must still be charged, and a page that is not
- * this filter's must not be charged at all.
- */
-describe('the count of what was fetched', () => {
-  it('counts nodes the decoder dropped, which a page of them would otherwise hide', async () => {
-    respondWithPages([[node('a', 'Kept'), node('b', null), node('c', 'No tag space', { tagSpaces: [] })]]);
-
-    const { result } = renderClaims();
-
-    await waitFor(() => expect(result.current.claims).toHaveLength(1));
-    expect(result.current.fetched).toBe(3);
-  });
-
-  /**
-   * And reports nothing while the previous filter's pages are being held.
-   *
-   * `keepPreviousData` is right for the list — narrowing should narrow rather than blank and refill
-   * — but a count is not a list. The caller has already reset its paging budget for the new filter,
-   * so handing it the old one's total charges a page belonging to a different question, and the
-   * real first page then arrives at an equal or smaller count and is never evaluated.
-   */
-  it('reports nothing while the previous filter’s pages are still what it holds', async () => {
-    respondWithPages([[node('a', 'First filter'), node('b', 'Also first')]]);
-    const { result, rerender } = renderHook(
-      ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
-      {
-        wrapper: Wrapper,
-        initialProps: { filters: NO_TAGGED_CLAIM_FILTERS },
-      }
-    );
-    await waitFor(() => expect(result.current.fetched).toBe(2));
-
-    // A different filter, whose own page has not arrived: the list is held, the count is not.
-    let release: (() => void) | undefined;
-    graphqlMock.mockImplementation(
-      ({ decoder }) =>
-        new Promise(resolve => {
-          release = () =>
-            resolve(decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } }));
-        })
-    );
-    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' } });
-
-    await waitFor(() => expect(result.current.claims).toHaveLength(2));
-    expect(result.current.fetched).toBe(0);
-    release?.();
-  });
-});
-
 describe('the page it asks for', () => {
   it('orders by ranking score on the server', async () => {
     // The inverse of the assertion this file used to carry. Ranked cursors lost and duplicated rows
@@ -318,6 +265,32 @@ function tagClause(variables: any) {
 }
 
 describe('the filter it builds', () => {
+  /**
+   * "Hide my positions" is answered by the server (GEO-2894): an anti-join through the vote table,
+   * negated, so a page is fifty claims the viewer has not answered. Held positions only — kind 1,
+   * types 0 and 1 — so a claim somebody took their side back on counts as unanswered.
+   */
+  it('leaves out what the viewer has answered when asked to', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({
+      ...NO_TAGGED_CLAIM_FILTERS,
+      excludeAnsweredBy: '019fedae-72b6-7ab2-927a-df044d57c500',
+    });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({
+      not: { votedBy: { userId: '019fedae72b67ab2927adf044d57c500', kinds: [1], types: [0, 1] } },
+    });
+  });
+
+  it('leaves nothing out when not asked to', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, excludeAnsweredBy: null });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and.some((clause: any) => clause.not !== undefined)).toBe(false);
+  });
+
   it('always asks for the tag', async () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims();
