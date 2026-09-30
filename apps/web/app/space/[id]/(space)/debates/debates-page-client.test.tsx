@@ -41,6 +41,12 @@ vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
 
 // Voting reaches the chain and the user's personal space, neither of which exists here. The
 // tally logic has its own unit tests; this suite only cares that the feed renders the pills.
+// Needs the wallet and editorship providers this harness does not mount; covered on its own in
+// debate-overflow-menu.test.tsx.
+vi.mock('~/core/debates/browse/debate-overflow-menu', () => ({
+  DebateOverflowMenu: () => null,
+}));
+
 vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotes: () => ({
     sharePercentFor: () => null,

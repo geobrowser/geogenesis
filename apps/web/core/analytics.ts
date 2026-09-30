@@ -133,7 +133,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-38e6dc50cfe2.js';
+const analyticsScriptSrc = '/geo-analytics-31a5b5b9901f.js';
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
@@ -187,7 +187,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-OObcUM/iOklWuNvA+bY3BaJok5pe/kCGexEyKpmrMfg=';
+  script.integrity = 'sha256-MaW1uZAf0w48xaESpow8z2xJUZSXo4LWF5+GIPRv9lE=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -206,14 +206,7 @@ export function capture(eventName: AnalyticsEventName, properties: AnalyticsProp
     properties: {
       app: appName,
       ...route,
-      is_automated:
-        typeof navigator !== 'undefined' &&
-        (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
-      is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
-      is_internal:
-        internalAccount ||
-        process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
-        (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+      ...trafficProperties(),
       ...properties,
     },
   });
@@ -732,6 +725,19 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   return false;
 }
 
+function trafficProperties() {
+  return {
+    is_automated:
+      typeof navigator !== 'undefined' &&
+      (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
+    is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
+    is_internal:
+      internalAccount ||
+      process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
+      (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+  };
+}
+
 function privyIdentityProperties(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
   const teamIds = (process.env.NEXT_PUBLIC_ANALYTICS_TEAM_ACCOUNT_IDS ?? '').split(',').map(id => id.trim());
   internalAccount = !!user.id && teamIds.includes(user.id);
@@ -741,6 +747,7 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     user_id: user.id,
     privy_user_id: user.id,
     auth_provider: 'privy',
+    ...trafficProperties(),
     privy_user_created_at: formatDate(user.createdAt),
     has_privy_email: Boolean(user.email),
     has_privy_phone: Boolean(user.phone),

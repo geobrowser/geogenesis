@@ -165,7 +165,6 @@ export function useRankingBlockState({
   const searchParams = useSearchParams();
   const preferMyTab = searchParams?.get('tab') === RANKING_COMPOSE_TAB_MY;
   const { showOnboarding } = useOnboarding();
-  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
@@ -179,6 +178,7 @@ export function useRankingBlockState({
     view: stateView,
     viewRelation: stateViewRelation,
   } = useDataBlock();
+  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId, entityId);
   const getShareContext = useActionContext('share_dialog', 'ranking', entityId);
   const shareOnX = React.useCallback(
     (shareUrl: string, shareText: string, rankEntityId: string) => {
