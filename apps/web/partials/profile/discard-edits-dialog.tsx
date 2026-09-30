@@ -38,7 +38,7 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
           className="fixed inset-0 z-103 flex items-center justify-center px-4 focus:outline-hidden"
         >
           <div className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-grey-02 bg-white p-5 shadow-dropdown">
-            <Title className="text-smallTitle text-text">Exiting without saving will discard edits permanently</Title>
+            <Title className="text-smallTitle text-text">Exiting without saving will discard edits</Title>
             <div className="flex items-center justify-end gap-2">
               <Button type="button" variant="secondary" onClick={onDiscard}>
                 Discard edits

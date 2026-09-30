@@ -180,7 +180,7 @@ describe('EditRecordDialog', () => {
   });
 
   describe('closing with rows staged', () => {
-    const confirmation = () => screen.queryByText('Exiting without saving will discard edits permanently');
+    const confirmation = () => screen.queryByText('Exiting without saving will discard edits');
 
     it.each(['Cancel', 'Close'])('asks before %s throws them away', name => {
       const onOpenChange = vi.fn();
@@ -248,7 +248,7 @@ describe('EditRecordDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getAllByRole('dialog').at(-1)!);
 
-    expect(screen.queryByText('Exiting without saving will discard edits permanently')).not.toBeInTheDocument();
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(mocks.discard).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalled();
   });
@@ -260,7 +260,7 @@ describe('EditRecordDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(screen.queryByText('Exiting without saving will discard edits permanently')).not.toBeInTheDocument();
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 

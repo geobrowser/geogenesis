@@ -338,7 +338,7 @@ describe('EditProfileDialog', () => {
   });
 
   describe('closing with unsaved edits', () => {
-    const confirmation = () => screen.queryByText('Exiting without saving will discard edits permanently');
+    const confirmation = () => screen.queryByText('Exiting without saving will discard edits');
 
     it.each(['Cancel', 'Close'])('asks before %s throws them away', async name => {
       const { onOpenChange } = renderDialog();
