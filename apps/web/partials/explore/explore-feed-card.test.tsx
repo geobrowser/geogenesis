@@ -169,19 +169,23 @@ describe('ExploreFeedCard', () => {
     expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
   });
 
-  it('draws no age in the meta row, on the generic card or the debate fallback', () => {
+  it('draws no age in either meta row', () => {
     const fiveDaysAgo = Math.floor(Date.now() / 1000) - 5 * 86400;
+    const age = / ago$|just now/;
     render(<ExploreFeedCard item={{ ...item, createdAtSec: fiveDaysAgo }} />);
-    expect(screen.queryByText(/ ago$|just now/)).toBeNull();
+    expect(screen.queryByText(age)).toBeNull();
 
     cleanup();
+    // Compact chrome is what routes the debate fallback through `DebateExploreMetaRow` rather than
+    // the generic row above; without it this half would check the same row twice.
     const debateItem: ExploreFeedItem = {
       ...item,
       createdAtSec: fiveDaysAgo,
       types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
     };
-    render(<ExploreFeedCard item={debateItem} />);
-    expect(screen.queryByText(/ ago$|just now/)).toBeNull();
+    render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
+    expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap');
+    expect(screen.queryByText(age)).toBeNull();
   });
 
   it('does not route non-debate items to the debate card', () => {
