@@ -108,6 +108,8 @@ export async function readDebate(config: WarehouseSources, published: PublishedD
   for (const segment of segments) {
     if (
       typeof segment.text !== 'string' ||
+      !Number.isSafeInteger(segment.sequence_index) ||
+      segment.sequence_index < 0 ||
       !Number.isSafeInteger(segment.start_ms) ||
       !Number.isSafeInteger(segment.end_ms) ||
       segment.start_ms < 0 ||
