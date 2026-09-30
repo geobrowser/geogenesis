@@ -27,7 +27,6 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import { CONTROL_CIRCLE_CLASS } from './player-controls';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -1320,7 +1319,10 @@ function ControlCircle({
         event.stopPropagation();
         onClick();
       }}
-      className={cx(CONTROL_CIRCLE_CLASS, className)}
+      className={cx(
+        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
+        className
+      )}
     >
       {children}
     </button>
