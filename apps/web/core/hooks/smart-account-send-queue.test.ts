@@ -544,6 +544,27 @@ describe('smart-account send queue', () => {
       expect(submit).toHaveBeenCalledTimes(3);
     });
 
+    // A vote or comment queued behind a timed-out publish runs before the publish's retry. It must
+    // not clear the record, or the retry re-submits instead of resuming.
+    it('keeps the record when a send of different calls runs in between', async () => {
+      const address = nextAddress();
+      const other = [{ ...calls[0], data: '0xbeef' as const }];
+      const submit = vi.fn(async () => HASH_A);
+      const confirm = vi.fn(async (_hash: `0x${string}`) => undefined).mockRejectedValueOnce(receiptTimeout(HASH_A));
+      const rejectedByNonce = vi.fn(async (): Promise<`0x${string}`> => {
+        throw new Error('AA25 invalid account nonce');
+      });
+
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).rejects.toBeInstanceOf(
+        ReceiptConfirmationTimeoutError
+      );
+      await expect(submitOrResumeUserOperation(address, other, rejectedByNonce, confirm)).rejects.toThrow('AA25');
+      await expect(submitOrResumeUserOperation(address, calls, submit, confirm)).resolves.toBe(HASH_A);
+
+      expect(submit).toHaveBeenCalledTimes(1);
+      expect(confirm.mock.calls).toEqual([[HASH_A], [HASH_A]]);
+    });
+
     it('does not remember an op that failed for any reason other than a receipt timeout', async () => {
       const address = nextAddress();
       const reverted = Object.assign(new Error('UserOperation reverted'), { name: 'RevertedUserOperationError' });
