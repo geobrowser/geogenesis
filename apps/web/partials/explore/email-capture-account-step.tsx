@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { completePrivyAuth } from '~/core/privy-auth-events';
+import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 
 import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
@@ -104,6 +104,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   React.useEffect(() => {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
+    beginPrivyAuth(ACCOUNT_ANALYTICS, true);
     void requestCode();
   }, [requestCode]);
 

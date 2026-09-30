@@ -530,6 +530,27 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   describe('creating an account from the confirmation', () => {
+    it('captures the visitor before sending the code and clears it on dismissal', async () => {
+      window.lytics = { getContext: () => ({ anonymous_id: 'email-visitor', session_id: 'email-session' }) };
+      try {
+        await subscribeSuccessfully();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+        });
+        expect(JSON.parse(window.localStorage.getItem('geo:signup-visitor:v1')!)).toMatchObject({
+          anonymousId: 'email-visitor',
+          sessionId: 'email-session',
+        });
+        expect(mocks.sendCode).toHaveBeenCalledOnce();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+        });
+        expect(window.localStorage.getItem('geo:signup-visitor:v1')).toBeNull();
+      } finally {
+        delete window.lytics;
+      }
+    });
+
     it('offers the account and a skip, rather than ending at the confirmation', async () => {
       await subscribeSuccessfully();
 

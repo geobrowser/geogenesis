@@ -4,6 +4,7 @@ import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 import { notifyActionPageView, pageContext } from './action-context';
+import { withSignupVisitor } from './auth/signup-visitor';
 
 export type AnalyticsProperties = Record<string, unknown>;
 
@@ -683,7 +684,7 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   }
 
   if (call.method === 'signedUp' && analytics.signedUp) {
-    analytics.signedUp(call.user, call.properties);
+    analytics.signedUp(call.user, withSignupVisitor(call.properties));
     return true;
   }
 

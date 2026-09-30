@@ -13,6 +13,7 @@ import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { timeoutSignal } from '~/core/timeout-signal';
 
@@ -158,6 +159,7 @@ function EmailCapturePopup() {
    * actually signing up.
    */
   const startAccount = React.useCallback(() => {
+    beginPrivyAuth();
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
@@ -166,9 +168,10 @@ function EmailCapturePopup() {
   const close = React.useCallback(() => {
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
+    if (wantsAccount) cancelPrivyAuth();
     rememberDismissed();
     setClosed(true);
-  }, [rememberDismissed]);
+  }, [rememberDismissed, wantsAccount]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {
