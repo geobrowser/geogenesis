@@ -366,6 +366,7 @@ describe('DebateRecordingUploadCoordinator', () => {
       error_code: null,
       http_status: null,
       error_name: 'Error',
+      error_message: 'Finalization unavailable',
     });
     expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_failed', expect.anything());
     expect(warning).toHaveBeenCalledWith(
@@ -433,6 +434,9 @@ describe('DebateRecordingUploadCoordinator', () => {
       await screen.findByText('Waiting to upload 1 debate — Temporary failure. Retrying automatically.')
     ).toBeInTheDocument();
 
+    // The backoff has run out: the tab's own record of it (GEO-3105) as well as the row's.
+    const later = Date.now() + 10 * 60_000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
     mocks.queue = mocks.queue.map(upload => ({ ...upload, nextAttemptAt: 0 }));
     mocks.observer?.(mocks.queue);
 
@@ -480,6 +484,63 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
     expect(mocks.queue[0]?.attemptCount).toBe(1_001);
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+  });
+
+  // GEO-3105. A Safari tab fired this event 180 times in three seconds, every one `attempt_count: 1`:
+  // the attempt failed, and so did writing the retry state back to IndexedDB, so the row still said
+  // "due now" and the coordinator started the next attempt as soon as the last one settled.
+  it('backs off even when the retry state cannot be written back to the queue', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.createUpload.mockRejectedValue(new Error('Recording part upload failed (403)'));
+    mocks.scheduleRetry.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    // Long enough for a hot loop to run hundreds of attempts; the backoff allows none.
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(mocks.createUpload).toHaveBeenCalledOnce();
+    const retries = mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_retry_scheduled');
+    expect(retries).toHaveLength(1);
+    expect(retries[0]?.[1]).toMatchObject({
+      attempt_count: 1,
+      error_name: 'Error',
+      error_message: 'Recording part upload failed (403)',
+    });
+  });
+
+  it('backs off even when the queue cannot be read at all', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.getUpload.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.scheduleRetry.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(mocks.getUpload).toHaveBeenCalledOnce();
+    expect(
+      mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_retry_scheduled')
+    ).toHaveLength(1);
+  });
+
+  it('does not start an attempt the queue has already pushed back', async () => {
+    // The observer can lag the queue: the row it last reported says "due", the row in IndexedDB
+    // says "not for another minute". The fresh read decides.
+    mocks.queue = [queuedRecording('debate-1')];
+    mocks.getUpload.mockImplementation(async (id: string) => {
+      const upload = mocks.queue.find(candidate => candidate.id === id);
+      return upload ? { ...upload, attemptCount: 3, nextAttemptAt: Date.now() + 60_000 } : undefined;
+    });
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.getUpload).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+    expect(mocks.getUpload).toHaveBeenCalledOnce();
   });
 
   it('cancels the upload and drops the local blob from the banner action', async () => {
