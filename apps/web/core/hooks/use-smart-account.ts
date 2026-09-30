@@ -5,7 +5,7 @@ import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
-import { Cookie } from '../cookie';
+import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import {
@@ -50,6 +50,7 @@ export function useSmartAccount() {
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
       if (!embeddedWallet) {
+        forgetSyncedWalletCookie();
         return null;
       }
 
@@ -203,9 +204,8 @@ export function useSmartAccount() {
 
       // The EOA address — registry now keys permissions on this directly (no Safe
       // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-      // Unconditional: the cookie is httpOnly, so only the action can tell whether it is
-      // already set (see `onConnectionChange`).
-      await Cookie.onConnectionChange({ type: 'connect', address: wrapped.account.address });
+      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
+      await syncWalletCookie(wrapped.account.address);
 
       return wrapped;
     },
