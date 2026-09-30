@@ -12,6 +12,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { ExploreTypeTag } from './explore-type-tag';
 import { MetaDot } from './meta-dot';
 import { SpaceThumb } from './space-thumb';
 
@@ -107,12 +108,11 @@ export function ExploreMetaRow({
       key: 'types',
       showOnCompactMobile: false,
       content: (
-        <span className={`inline-flex min-w-0 flex-wrap items-center ${META_SEGMENT_CLASS}`}>
-          {types.map((type, index) => (
-            <React.Fragment key={type.id}>
-              {index > 0 ? <MetaDot /> : null}
-              <span className="truncate">{type.name}</span>
-            </React.Fragment>
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+          {types.map(type => (
+            <ExploreTypeTag key={type.id} className="truncate">
+              {type.name}
+            </ExploreTypeTag>
           ))}
         </span>
       ),

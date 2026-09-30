@@ -10,6 +10,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { ExploreFeedCard } from './explore-feed-card';
+import { ExploreTypeTag } from './explore-type-tag';
 
 const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 
@@ -186,6 +187,15 @@ describe('ExploreFeedCard', () => {
     render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
     expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap');
     expect(screen.queryByText(age)).toBeNull();
+  });
+
+  it('draws every type as the same pill the debate card uses', () => {
+    render(<ExploreFeedCard item={{ ...item, types: [{ id: 'some-other-type', name: 'Person' }] }} />);
+    const tag = screen.getByText('Person');
+
+    cleanup();
+    render(<ExploreTypeTag>Debate</ExploreTypeTag>);
+    for (const className of screen.getByText('Debate').classList) expect(tag).toHaveClass(className);
   });
 
   it('does not route non-debate items to the debate card', () => {
