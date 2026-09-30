@@ -87,6 +87,7 @@ describe('useClaimRecord independent loading and cached data', () => {
       mocks.allowedSets.push(allowed);
       return entities.map(entity => ({ ...claimRow, entityId: entity.id }));
     });
+
   });
 
   it('publishes claim rows before the independent exact count and debate requests finish', () => {

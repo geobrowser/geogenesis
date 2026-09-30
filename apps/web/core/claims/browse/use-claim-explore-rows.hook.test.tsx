@@ -23,14 +23,16 @@ function wrapper({ children }: { children: ReactNode }) {
 describe('useClaimExploreRows result stability', () => {
   beforeEach(() => {
     mocks.fetchExploreRowsByIds.mockReset();
-    mocks.fetchExploreRowsByIds.mockResolvedValue([{ entityId: 'entity-1', spaceId: 'space-1' } as ExploreFeedRow]);
+    mocks.fetchExploreRowsByIds.mockResolvedValue([
+      { entityId: 'entity-1', spaceId: 'space-1' } as ExploreFeedRow,
+    ]);
   });
 
   it('keeps rows and retry callbacks stable across an unrelated rerender', async () => {
-    const { result, rerender } = renderHook(({ ids }: { ids: string[] }) => useClaimExploreRows(ids, 'space-1'), {
-      initialProps: { ids: ['entity-1'] },
-      wrapper,
-    });
+    const { result, rerender } = renderHook(
+      ({ ids }: { ids: string[] }) => useClaimExploreRows(ids, 'space-1'),
+      { initialProps: { ids: ['entity-1'] }, wrapper }
+    );
     await waitFor(() => expect(result.current.data).toHaveLength(1));
     const firstData = result.current.data;
     const firstRefetch = result.current.refetch;
