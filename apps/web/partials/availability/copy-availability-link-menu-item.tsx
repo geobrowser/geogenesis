@@ -5,7 +5,6 @@ import * as React from 'react';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
 import { useSetToast } from '~/core/hooks/use-toast';
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
 
 import { MenuItem } from '~/design-system/menu';
 
@@ -14,11 +13,8 @@ import { MenuItem } from '~/design-system/menu';
  * looking at someone may want to pass on a way to book them.
  */
 export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceId: string }) {
-  const enabled = usePeerAvailabilityEnabled();
   const setToast = useSetToast();
   const getContext = useActionContext('share_dialog', 'space', profileSpaceId);
-
-  if (!enabled) return null;
 
   return (
     <MenuItem

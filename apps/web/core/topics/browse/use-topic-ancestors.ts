@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 
-import { SUBTOPIC_RELATION_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
+import type { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -19,6 +20,30 @@ import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 const MAX_DEPTH = 5;
 
 /**
+ * Who names `childId` as a subtopic, read from the root space's Subtopics relations only.
+ *
+ * The hierarchy is the root space's to curate (GEO-2351). Read across every space, the walk found
+ * 31 parent relations for `AI agents` — `AI agents` itself among them, plus `Innovation strategy`
+ * and `Portfolio management & strategy` — against the one the root space holds (`AI`), and the crumb
+ * was whichever of those ranked best. Measured 2026-09-30.
+ *
+ * Both hierarchy properties, for the same reason the subtopic list reads both: which one a topic
+ * was written with varies, and reading only the named one loses the parent entirely on topics
+ * written with the other. Both branches carry the same space, so the OR still collapses into one
+ * `relations.some` with `typeId in [...]` (see `collapseOrFilter`).
+ */
+export function parentTopicWhere(childId: string): WhereCondition {
+  const toChild = { toEntity: { id: { equals: childId } }, space: { equals: ROOT_SPACE } };
+
+  return {
+    OR: [
+      { relations: [{ typeOf: { id: { equals: SUBTOPIC_RELATION_TYPE_ID } }, ...toChild }] },
+      { relations: [{ typeOf: { id: { equals: UNNAMED_SUBTOPIC_PROPERTY_ID } }, ...toChild }] },
+    ],
+  };
+}
+
+/**
  * One rung of the walk: whoever names `childId` as a subtopic.
  *
  * A topic can be a subtopic of several — the hierarchy is a graph, not a tree — so the candidates
@@ -27,23 +52,7 @@ const MAX_DEPTH = 5;
  */
 function useParentTopic(childId: string | null, spaceId: string | null): Entity | null {
   const { entities } = useQueryEntities({
-    where: {
-      // Both hierarchy properties, for the same reason the subtopic list reads both: which one a
-      // topic was written with varies, and reading only the named one loses the parent entirely on
-      // topics written with the other.
-      OR: [
-        {
-          relations: [
-            { typeOf: { id: { equals: SUBTOPIC_RELATION_TYPE_ID } }, toEntity: { id: { equals: childId ?? '' } } },
-          ],
-        },
-        {
-          relations: [
-            { typeOf: { id: { equals: UNNAMED_SUBTOPIC_PROPERTY_ID } }, toEntity: { id: { equals: childId ?? '' } } },
-          ],
-        },
-      ],
-    },
+    where: parentTopicWhere(childId ?? ''),
     // More than one, deliberately. A topic can be a subtopic of several — the hierarchy is a graph,
     // not a tree — and asking for one hands back whichever the query happened to order first, which
     // is what made the same topic show different paths on different loads.

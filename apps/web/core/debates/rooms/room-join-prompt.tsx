@@ -10,6 +10,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { UpcomingDebateRoom } from '../api';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { useServerClock } from '../matchmaking/use-request-countdown';
 import { ROOM_JOIN_PROMPT } from './room-copy';
 import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
@@ -85,6 +86,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
           <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
             <button
               type="button"
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Not now', 'dismiss_scheduled_debate_prompt')}
               onClick={onNotNow}
               className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
             >
@@ -93,6 +95,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
             <button
               type="button"
               disabled={joining}
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
               onClick={() => {
                 setJoining(true);
                 startJoining(() => router.push(debateRoomPath(room.room_id)));

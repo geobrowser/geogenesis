@@ -19,6 +19,7 @@ import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -121,9 +122,9 @@ export type UpcomingRoomRow = {
   scheduledEndAt: string | null;
 };
 
-export function useScheduledContent(enabled: boolean): ScheduledContent {
-  const requests = useScheduledDebates(enabled);
-  const rooms = useUpcomingDebateRooms(enabled);
+export function useScheduledContent(): ScheduledContent {
+  const requests = useScheduledDebates();
+  const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
 
   const rows = requests.data?.requests;
@@ -131,7 +132,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
   const answerable = useOpenScheduledRequests(rows);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
-  const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
+  const finishedRoomIds = useFinishedRoomIds(roomList);
 
   const upcoming = React.useMemo(
     () =>
@@ -153,7 +154,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
     [rows]
   );
-  const people = useGeoChatUserSummaries(participantIds, enabled);
+  const people = useGeoChatUserSummaries(participantIds, true);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
@@ -218,7 +219,11 @@ function UpcomingRow({
       urgent={room.others_present}
       actions={
         room.joinable && (
-          <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
+          <Link
+            href={debateRoomPath(room.room_id)}
+            className={JOIN_PILL}
+            {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
+          >
             Join debate
           </Link>
         )
@@ -256,10 +261,23 @@ function ScheduledRow({
         request.viewer_must_answer && (
           // Decline first, Accept primary on the right: the order every other request card uses.
           <div className="grid grid-cols-2 gap-2">
-            <HubPillButton onClick={() => onAnswer(request.request_id, false)} disabled={busy}>
+            {/* Labelled apart from the instant request cards' Accept and Decline, which would
+                otherwise share their labels and could not be told from these in the data. */}
+            <HubPillButton
+              analyticsLabel="Debate hub Decline scheduled debate"
+              analyticsIntent="decline_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, false)}
+              disabled={busy}
+            >
               Decline
             </HubPillButton>
-            <HubPillButton variant="primary" onClick={() => onAnswer(request.request_id, true)} disabled={busy}>
+            <HubPillButton
+              variant="primary"
+              analyticsLabel="Debate hub Accept scheduled debate"
+              analyticsIntent="accept_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, true)}
+              disabled={busy}
+            >
               Accept
             </HubPillButton>
           </div>

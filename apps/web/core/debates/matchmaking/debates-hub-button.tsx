@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { Megaphone } from '~/design-system/icons/megaphone';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -34,10 +33,10 @@ export function DebatesHubButton() {
 
   // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
   // since signed out would otherwise badge the button for nobody.
-  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
   const requestCount = !authenticated
     ? 0
-    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) + scheduledAwaiting;
+    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
+      (activity?.scheduled_awaiting_answer_count ?? 0);
 
   return (
     <button

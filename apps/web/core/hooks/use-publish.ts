@@ -21,6 +21,7 @@ import { describeGovernanceError } from '../utils/contracts/governance-errors';
 import { isProposalExecuted } from '../utils/contracts/proposal-execution';
 import { describeError, isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
+import { repairPagelessSpacePublish } from '../utils/space/space-page';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
@@ -103,7 +104,25 @@ export function usePublish() {
           );
         }
 
-        const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
+        // A space with no page entity gets one created as part of this publish, and any rows
+        // stored against its old `''` stand-in are moved onto it (GEO-2966).
+        const repaired = repairPagelessSpacePublish({ space, values: valuesToPublish, relations });
+
+        // Anything still not attached to an entity would be dropped by `prepareOps` without a
+        // word while the review screen keeps listing it. Say so rather than publish without it.
+        const unattached = Publish.findUnattachedChanges(repaired.values, repaired.relations, spaceId);
+        if (unattached.values.length > 0 || unattached.relations.length > 0) {
+          console.error('[PUBLISH] changes not attached to any entity, cancelling publish', {
+            ...unattached,
+            spaceId,
+          });
+          return yield* Effect.fail(new TransactionWriteFailedError(Publish.describeUnattachedChanges(unattached)));
+        }
+
+        const contentOps = yield* Publish.prepareLocalDataForPublishing(repaired.values, repaired.relations, spaceId);
+        // The page's `Types -> Space` rides along only with real content, so an edit that resolves
+        // to nothing is still reported as nothing rather than published as a bare type relation.
+        const ops = contentOps.length > 0 ? [...repaired.pageOps, ...contentOps] : contentOps;
 
         if (ops.length === 0) {
           console.error('resulting ops are empty, cancelling publish', {

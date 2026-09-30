@@ -6,6 +6,8 @@ import type * as React from 'react';
 
 import cx from 'classnames';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
@@ -15,7 +17,7 @@ import { PeerAvailability, type PeerAvailabilityBooking } from './peer-availabil
 
 type Props = {
   open: boolean;
-  /** Absent leaves the week read-only, which is what it is for everyone without the booking flag. */
+  /** Absent leaves the week read-only, as on the debug page. */
   booking?: PeerAvailabilityBooking;
   /** The person whose week is being looked at. Nothing else about them is needed. */
   userId: string;
@@ -35,6 +37,8 @@ type Props = {
   children?: React.ReactNode;
   /** Opens with this slot already picked. */
   initialSelectedStart?: string | null;
+  /** What opened it, for analytics. */
+  entry?: ScheduleEntry | null;
 };
 
 /**
@@ -57,6 +61,7 @@ export function PeerAvailabilityModal({
   booking,
   children,
   initialSelectedStart,
+  entry = null,
 }: Props) {
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
@@ -98,6 +103,7 @@ export function PeerAvailabilityModal({
               <button
                 type="button"
                 aria-label="Close"
+                {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
                 onClick={onClose}
                 className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
               >
@@ -115,6 +121,7 @@ export function PeerAvailabilityModal({
                   className="min-h-0 flex-1"
                   booking={booking}
                   initialSelectedStart={initialSelectedStart}
+                  entry={entry}
                 />
               ))}
           </div>

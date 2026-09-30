@@ -43,6 +43,13 @@ export function hubPillClassName(variant: 'primary' | 'secondary' = 'secondary',
   );
 }
 
+/**
+ * The hub's round icon control — Close, See times, the schedule calendar. Text-free, so it sits
+ * beside a pill without competing with it. One definition because the copies had started to spread.
+ */
+export const HUB_ICON_BUTTON_CLASS_NAME =
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
 export function HubPillButton({
   variant = 'secondary',
   pendingLabel,

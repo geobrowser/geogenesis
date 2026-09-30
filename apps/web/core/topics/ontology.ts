@@ -59,3 +59,10 @@ export const COVERAGE_TYPE_IDS = [
   ARTICLE_TYPE_ID,
   PAPER_TYPE_ID,
 ];
+
+/**
+ * `personal-space entity —Following→ topic`, written into the personal space. The source id is the
+ * space id, never `space.topicId`, which is often null.
+ */
+export const FOLLOWING_PROPERTY = 'f374b8f2d33148a3a220ba3648992e93';
+export const FOLLOWING_PROPERTY_NAME = 'Following';

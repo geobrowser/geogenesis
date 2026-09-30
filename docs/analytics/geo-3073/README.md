@@ -25,7 +25,7 @@ The entity route layout supplies the page's actual entity and its claim/topic/pe
 | Share | Debate and ranking shares, availability links, and graph/block-link copies. Clipboard success is observable; an external social handoff is unknown. |
 | Join space | `useRequestToBeMember`; explicit membership request, including deferred joins. Automatic membership side effects are not separate user actions. |
 | Bounty interest | `useInterestedInBounty`; publish callback. |
-| Start/join debate | Claim requests, accepting requests, profile challenges, accepting challenges, and rematch requests. These describe request/challenge acceptance, not successful camera admission. |
+| Start/join debate | Claim requests, accepting requests, profile challenges, accepting challenges, and rematch requests. Scheduled debates too: booking a time is `start_debate` (target `debate_user`, the geo-chat user booked), and accepting one is `join_debate` (target `scheduled_debate_request`). Declines are not observed, instant or scheduled. These describe request/challenge acceptance, not successful camera admission. |
 | Search | `useSearch`; completion or failed result, once per user query. Cache refetches are excluded. |
 | Search result | Global search dialog and inline entity picker; mouse/keyboard selection, including choosing a result's space. |
 | Assistant message / option | Chat widget dispatch; distinguishes typed messages and option choices without copying their text into the description. |
@@ -45,7 +45,7 @@ All captured events carry `is_automated` (WebDriver or a headless user agent), `
 
 ## Runtime and validation
 
-The content-hashed vendor bundle registers both new events and their `growth-v2` contracts. `action_context_version=v1` versions the description independently. `scripts/analytics/extend-action-registry.py` reapplies the reviewed registry extension to an upstream bundle and updates its filename, SRI and manifest. The manifest preserves upstream source provenance and explicitly identifies the local patch; it does not claim this is an upstream release.
+The content-hashed vendor bundle registers both new events and their `growth-v2` contracts. `action_context_version=v1` versions the description independently. Both events are registered upstream since geobrowser/analytics#90, so the bundle is vendored from the analytics repo's `dist/` unchanged. The local patch this paragraph used to describe (`scripts/analytics/extend-action-registry.py`) was removed in geogenesis#2634.
 
 React Query mutations use `useObservedMutation` to capture before asynchronous `onMutate`, preserve caller variables/callbacks, and count automatic transport retries once. Search result selection uses one hook for keyboard, mouse and per-space choices. Entity type and provenance resolution reuse the graph's existing type and Sources helpers. Nested scopes retain their own positions; metadata is never carried onto a different target. Canonical display joins use the surface ID without replacing legacy ranking opportunity IDs.
 

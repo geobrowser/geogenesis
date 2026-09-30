@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
-
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity } from '../hooks';
@@ -16,7 +14,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
+import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -39,34 +37,7 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
-  // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
-  // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
-  return usePeerAvailabilityEnabled() ? (
-    <ScheduledRequestsTab />
-  ) : (
-    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} />
-  );
-}
-
-const NO_SCHEDULED: ScheduledContent = {
-  answerable: [],
-  upcoming: [],
-  people: [],
-  requestsError: null,
-  roomsError: null,
-};
-
-function ScheduledRequestsTab() {
-  return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
-}
-
-function RequestsTabBody({
-  scheduled,
-  schedulingEnabled,
-}: {
-  scheduled: ScheduledContent;
-  schedulingEnabled: boolean;
-}) {
+  const scheduled = useScheduledContent();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -151,7 +122,7 @@ function RequestsTabBody({
       <div className="flex flex-col gap-3 px-4 py-3">
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
-        {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+        <ScheduledDebatesSection content={scheduled} />
 
         <HubQueryState
           analyticsSurface="hub"

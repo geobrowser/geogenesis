@@ -28,6 +28,8 @@ const setToast = vi.fn();
 let signInOptions: { redirectTo?: string } | undefined;
 
 const profileCalls: unknown[][] = [];
+const capture = vi.fn();
+vi.mock('~/core/analytics', () => ({ capture: (...args: unknown[]) => capture(...args) }));
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => auth,
   useDebateProfile: (...args: unknown[]) => {
@@ -59,6 +61,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     userId,
     peerName,
     rescheduleRequestId,
+    entry,
     onClose,
     children,
   }: {
@@ -66,6 +69,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     userId: string;
     peerName?: string | null;
     rescheduleRequestId?: string | null;
+    entry?: string | null;
     onClose: () => void;
     children?: React.ReactNode;
   }) =>
@@ -75,6 +79,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
         data-user-id={userId}
         data-peer-name={peerName ?? ''}
         data-reschedule={rescheduleRequestId ?? ''}
+        data-entry={entry ?? ''}
       >
         {children ?? <div data-testid="week" />}
         <button type="button" onClick={onClose}>
@@ -98,6 +103,7 @@ beforeEach(() => {
   signInOptions = undefined;
   profileCalls.length = 0;
   signInCallbacks = {};
+  capture.mockClear();
 });
 
 afterEach(() => {
@@ -309,6 +315,63 @@ describe('AvailabilityDeepLink', () => {
     render(<AvailabilityDeepLink />);
 
     expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', '');
+  });
+
+  // A new account is sent round onboarding and back through this URL; without `via` that second
+  // arrival would read as a link nobody shared.
+  it('keeps the link source through the sign-in redirect', () => {
+    search = 'modal=availability&via=share';
+    auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    expect(signInOptions?.redirectTo).toBe('/space/profile-space?modal=availability&via=share');
+  });
+
+  it('attributes a booking to the link, and a reschedule to the email that sent it', () => {
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    const { unmount } = render(<AvailabilityDeepLink />);
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-entry', 'availability_link');
+    unmount();
+
+    search = 'modal=availability&modalTarget=6676b145-0970-4c1c-bfbc-7497d9721b39';
+    render(<AvailabilityDeepLink />);
+    expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-entry', 'reschedule_link');
+  });
+
+  it('records the arrival once it knows who opened it, with where the link came from', async () => {
+    search = 'modal=availability&via=share';
+    auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    const { rerender } = render(<AvailabilityDeepLink />);
+
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith('debate_availability_link_opened', {
+      viewer: 'signed_out',
+      peer: 'bookable',
+      rescheduling: false,
+      link_source: 'share',
+    });
+
+    // Signing in from the prompt is the same arrival, not a second one.
+    auth.authenticated = true;
+    rerender(<AvailabilityDeepLink />);
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for the person to resolve before recording the arrival', () => {
+    render(<AvailabilityDeepLink />);
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("records the owner opening their own link as 'self'", () => {
+    personalSpaceId = 'profile-space';
+    render(<AvailabilityDeepLink />);
+
+    expect(capture).toHaveBeenCalledWith(
+      'debate_availability_link_opened',
+      expect.objectContaining({ viewer: 'self', link_source: 'none' })
+    );
   });
 
   it('only acts on a profile root, and says so anywhere else', () => {

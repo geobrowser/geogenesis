@@ -29,6 +29,9 @@ export const DAY_INITIAL_HOUR = 7;
  */
 export const SLOT_MINUTES = 30;
 
+/** Column headings, in `weekday` order. */
+export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 export type BlockKind = 'recurring' | 'dated' | 'exception';
 
 type BlockBase = {

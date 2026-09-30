@@ -11,17 +11,17 @@ import { AVAILABILITY_MODAL, profileSpaceIdFromPath, rescheduleRequestIdFromTarg
  * a bad link does not keep firing on refresh.
  *
  * The second argument is the scheduled request the link asks to move, when it names one (see
- * `rescheduleRequestIdFromTarget`).
+ * `rescheduleRequestIdFromTarget`). The third is the link's `via` attribution, if it carried any.
  *
  * No auth gate: the week itself asks a signed-out recipient to sign in, which keeps the link
  * working for exactly the people it is sent to.
  */
 export function useAvailabilityDeepLink(
-  onArrive: (profileSpaceId: string | null, rescheduleRequestId: string | null) => void
+  onArrive: (profileSpaceId: string | null, rescheduleRequestId: string | null, via: string | null) => void
 ) {
   const link = useDeepLinkParams(AVAILABILITY_MODAL);
   const profileSpaceId = profileSpaceIdFromPath(usePathSegments());
   const rescheduleRequestId = rescheduleRequestIdFromTarget(link.target);
 
-  useDeepLinkEffect({ ...link, run: () => onArrive(profileSpaceId, rescheduleRequestId) });
+  useDeepLinkEffect({ ...link, run: () => onArrive(profileSpaceId, rescheduleRequestId, link.via) });
 }
