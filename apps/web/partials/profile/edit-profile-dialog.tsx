@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
@@ -17,7 +18,7 @@ import {
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 import { Input, inputStyles } from '~/design-system/input';
@@ -27,6 +28,7 @@ import { AddPositionSheet } from './add-position-sheet';
 import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
+import { useBackdropDismiss } from './use-backdrop-dismiss';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
 
@@ -116,9 +118,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const pristineRef = React.useRef({ name: true, tagline: true, description: true });
 
   const isPublishing = status === 'publishing';
-
-  /** Where the current press began; see the backdrop handler below. */
-  const pressStartedOnBackdrop = React.useRef(false);
 
   const resetForm = React.useCallback(() => {
     pristineRef.current = { name: true, tagline: true, description: true };
@@ -349,27 +348,16 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     else discardGuard.requestClose();
   };
 
+  const backdropDismiss = useBackdropDismiss(dismiss);
+
   return (
     <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        {/* This container spans the viewport and sits above the overlay, so a click
-            on the backdrop lands here rather than "outside" the Radix content —
-            `onPointerDownOutside` never fires. Closing on a click that reached the
-            container itself restores the dismissal the design asks for.
-            
-            The press has to have *started* on the backdrop too. A click's target is
-            the common ancestor of its pointerdown and pointerup, so drag-selecting
-            text in a field and releasing past the card edge produces a click
-            targeting this container — which would have thrown away everything typed
-            with no confirmation. */}
+        {/* Spans the viewport above the overlay, so the backdrop is this container
+            itself — see `useBackdropDismiss`. */}
         <Content
-          onPointerDown={event => {
-            pressStartedOnBackdrop.current = event.target === event.currentTarget;
-          }}
-          onClick={event => {
-            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) dismiss();
-          }}
+          {...backdropDismiss}
           // `px-4` so the card clears the screen edges on a phone, where
           // `max-w-[560px]` is wider than the viewport and the dialog would
           // otherwise run edge to edge.
@@ -574,12 +562,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   why Save is dead, how long the wait is, or what a failure cost. */}
                   <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" onClick={discardGuard.requestClose}>
+                    <button type="button" onClick={discardGuard.requestClose} className={hubPillClassName('secondary')}>
                       {isPublishing ? 'Close' : 'Cancel'}
-                    </Button>
-                    <Button type="submit" disabled={!canSave}>
+                    </button>
+                    <button type="submit" disabled={!canSave} className={hubPillClassName('primary')}>
                       {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
-                    </Button>
+                    </button>
                   </div>
                 </footer>
               </>

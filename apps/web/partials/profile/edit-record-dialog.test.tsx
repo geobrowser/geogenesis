@@ -246,7 +246,9 @@ describe('EditRecordDialog', () => {
     renderDialog(onOpenChange);
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getAllByRole('dialog').at(-1)!);
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    fireEvent.pointerDown(backdrop);
+    fireEvent.click(backdrop);
 
     expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(mocks.discard).not.toHaveBeenCalled();
@@ -281,6 +283,29 @@ describe('EditRecordDialog', () => {
 
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
     expect(screen.getByText('Your space is still loading. Try again in a moment.')).toBeInTheDocument();
+  });
+
+  // A click's target is the common ancestor of press and release, so a drag from
+  // the card out onto the backdrop lands as a click on the backdrop.
+  it('stays up after a drag from the question out onto the backdrop', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.pointerDown(screen.getByText('Exiting without saving will discard edits'));
+    fireEvent.click(screen.getAllByRole('dialog').at(-1)!);
+
+    expect(screen.getByText('Exiting without saving will discard edits')).toBeInTheDocument();
+  });
+
+  it('reads out why Save changes is held as part of the question', () => {
+    mocks.canEdit = false;
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).toHaveAccessibleDescription(
+      'Your space is still loading. Try again in a moment.'
+    );
   });
 
   it('closes without asking when nothing is staged', () => {

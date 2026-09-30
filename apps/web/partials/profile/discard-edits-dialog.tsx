@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 
+import { useBackdropDismiss } from './use-backdrop-dismiss';
+
 type Props = {
   open: boolean;
   /** Closing without choosing — Escape or the backdrop — goes back to editing. */
@@ -33,14 +35,19 @@ type Props = {
  */
 export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canSave, saveBlockedReason }: Props) {
   const keepEditingRef = React.useRef<HTMLButtonElement>(null);
+  const reasonId = React.useId();
+  const backdropDismiss = useBackdropDismiss(() => onOpenChange(false));
+  const reason = canSave ? null : saveBlockedReason;
 
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
         <Overlay className="fixed inset-0 z-102 bg-text/20" />
         <Content
-          // The title is the whole message; there is nothing further to describe.
-          aria-describedby={undefined}
+          // Focus starts on Keep editing, so a reason that is not wired up here is
+          // never read out: the title is announced and the explanation skipped.
+          // With nothing to explain, the title is the whole message.
+          aria-describedby={reason ? reasonId : undefined}
           // Radix focuses the first button by default, which is Discard edits —
           // Enter straight after opening would throw the draft away. Start on the
           // one choice that loses nothing.
@@ -48,39 +55,43 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
             event.preventDefault();
             keepEditingRef.current?.focus();
           }}
-          // This container covers the overlay, so Radix never sees an outside
-          // click — a press on the backdrop lands here and means "keep editing".
-          onClick={event => {
-            if (event.target === event.currentTarget) onOpenChange(false);
-          }}
+          // A press on the backdrop means "keep editing".
+          {...backdropDismiss}
           className="fixed inset-0 z-103 flex items-center justify-center px-4 focus:outline-hidden"
         >
           {/* Laid out like the debate request prompt: centred, a pair of pills
               splitting the width, and the quiet way out as text beneath them. */}
-          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-grey-02 bg-white p-5 text-center shadow-dropdown">
+          <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-lg border border-grey-02 bg-white px-5 pt-5 pb-3 text-center shadow-dropdown">
             <Title className="text-smallTitle text-text">Exiting without saving will discard edits</Title>
-            {!canSave && saveBlockedReason && <p className="text-metadata text-grey-04">{saveBlockedReason}</p>}
-            <div className="grid w-full grid-cols-2 gap-2">
-              <button type="button" onClick={onDiscard} className={hubPillClassName('secondary', 'w-full')}>
-                Discard edits
-              </button>
+            {reason && (
+              <p id={reasonId} className="text-metadata text-grey-04">
+                {reason}
+              </p>
+            )}
+            {/* Keep editing sits close under the pills it is the alternative to. */}
+            <div className="flex w-full flex-col items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2">
+                <button type="button" onClick={onDiscard} className={hubPillClassName('secondary', 'w-full')}>
+                  Discard edits
+                </button>
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={!canSave}
+                  className={hubPillClassName('primary', 'w-full')}
+                >
+                  Save changes
+                </button>
+              </div>
               <button
+                ref={keepEditingRef}
                 type="button"
-                onClick={onSave}
-                disabled={!canSave}
-                className={hubPillClassName('primary', 'w-full')}
+                onClick={() => onOpenChange(false)}
+                className="px-4 py-0.5 text-metadata text-grey-04 hover:text-text"
               >
-                Save changes
+                Keep editing
               </button>
             </div>
-            <button
-              ref={keepEditingRef}
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="px-4 py-1 text-metadata text-grey-04 hover:text-text"
-            >
-              Keep editing
-            </button>
           </div>
         </Content>
       </Portal>

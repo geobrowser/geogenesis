@@ -522,6 +522,19 @@ describe('EditProfileDialog', () => {
         ).toBeInTheDocument();
       });
 
+      // Focus starts on Keep editing, so a reason left off the dialog's
+      // description is never announced.
+      it('as part of the question, for assistive technology', async () => {
+        renderDialog();
+
+        await userEvent.clear(nameField());
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).toHaveAccessibleDescription(
+          'Add a name to save your profile.'
+        );
+      });
+
       it('and says nothing when Save is available', async () => {
         renderDialog();
 
@@ -530,6 +543,7 @@ describe('EditProfileDialog', () => {
 
         expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
         expect(prompt().queryByText(/Try again|Add a name|Try reloading/)).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).not.toHaveAttribute('aria-describedby');
       });
     });
 

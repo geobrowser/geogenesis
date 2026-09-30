@@ -4,6 +4,7 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
+import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
@@ -14,7 +15,7 @@ import {
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 
 import { AddEducationSheet } from './add-education-sheet';
@@ -260,16 +261,21 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
                     {status === 'error' && errorMessage ? errorMessage : 'Saving publishes to your space.'}
                   </p>
                   <div className="flex items-center gap-2">
-                    <Button variant="secondary" onClick={discardGuard.requestClose} disabled={isSaving}>
+                    <button
+                      type="button"
+                      onClick={discardGuard.requestClose}
+                      disabled={isSaving}
+                      className={hubPillClassName('secondary')}
+                    >
                       Cancel
-                    </Button>
+                    </button>
                     {/* `canEdit` is false while the viewer's own space is still
                         resolving, and publishing then returns without doing
                         anything at all — a Save that reports nothing and writes
                         nothing is the worst of both. */}
-                    <Button onClick={save} disabled={!canSave}>
+                    <button type="button" onClick={save} disabled={!canSave} className={hubPillClassName('primary')}>
                       Save
-                    </Button>
+                    </button>
                   </div>
                 </footer>
               </>
