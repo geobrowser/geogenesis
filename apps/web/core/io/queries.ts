@@ -1085,7 +1085,18 @@ interface RestSearchResult {
   relevanceScore?: number;
   textMatchScore?: number;
   inCanonicalGraph?: boolean;
+  /**
+   * The entity's other matching spaces, best first. Sent once the endpoint returns one row per
+   * entity (gaia#989, GEO-2394); before that it is absent and each space arrives as its own row.
+   */
+  otherSpaces?: RestSearchResultInSpace[];
 }
+
+/** One of an entity's other spaces, as listed in `RestSearchResult.otherSpaces`. */
+type RestSearchResultInSpace = Pick<
+  RestSearchResult,
+  'space' | 'name' | 'description' | 'avatar' | 'cover' | 'types' | 'inCanonicalGraph'
+>;
 
 interface RestSearchResponse {
   results: RestSearchResult[];
@@ -1107,15 +1118,31 @@ function toUuid(hex: string): string {
 }
 
 /**
- * Groups flat per-space REST results into the SearchResult shape the app expects.
+ * Expands each row's `otherSpaces` back into per-space rows, placed directly after the row.
  *
- * The REST endpoint returns one result per (entity, space) pair. We group
- * by entityId and collect all spaceIds into a single SearchResult per entity.
+ * The endpoint used to return one row per (entity, space) pair; since gaia#989 it returns one row
+ * per entity, its best space, and lists the rest under `otherSpaces`. Expanding them restores the
+ * per-space shape, so the per-row canonical/type gate and the grouping below treat both API
+ * shapes identically. Rows without `otherSpaces` pass through unchanged.
+ */
+export function flattenRestResults(results: RestSearchResult[]): RestSearchResult[] {
+  return results.flatMap(({ otherSpaces, ...row }) => [
+    row,
+    ...(otherSpaces ?? []).map(other => ({ ...other, entityId: row.entityId })),
+  ]);
+}
+
+/**
+ * Groups per-space REST results into the SearchResult shape the app expects.
+ *
+ * Each entity may arrive as several rows, one per space, or as one row with `otherSpaces`
+ * (see `flattenRestResults`). We group by entityId and collect all spaceIds into a single
+ * SearchResult per entity.
  */
 export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
   const byEntity = new Map<string, SearchResult>();
 
-  for (const r of results) {
+  for (const r of flattenRestResults(results)) {
     const entityId = stripHyphens(r.entityId);
     const spaceId = stripHyphens(r.space.id);
 
@@ -1287,7 +1314,8 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
     (response): SearchResultsPage => {
       const scopedSpaceIds = new Set((args.additionalSpaceIds ?? []).map(stripHyphens));
       const canonicalOnly = args.includeNonCanonical === false;
-      const filtered = response.results.filter(result =>
+      // Gate per space, as before the endpoint collapsed spaces into `otherSpaces`.
+      const filtered = flattenRestResults(response.results).filter(result =>
         shouldIncludeRestSearchResult(result, { canonicalOnly, scopedSpaceIds })
       );
       return {
