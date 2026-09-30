@@ -204,14 +204,16 @@ export function PeerAvailabilityView({
             : 'Times shown in your local time.'}
         </Text>
         {/* Scheduling is with the person, not over one claim: the room is where they pick which to
-            debate first, so the viewer only has to find a time. */}
-        {disagreementCount !== null && disagreementCount > 0 && (
-          <Text as="p" variant="footnote" color="grey-04">
-            You and {firstName(name) ?? name} disagree on {disagreementCount}{' '}
-            {disagreementCount === 1 ? 'claim' : 'claims'}. When you join the debate room you can discuss what claim to
-            debate first.
-          </Text>
-        )}
+            debate first, so the viewer only has to find a time. The count leads only when there is
+            one to give; zero or still loading, the room half stands on its own. */}
+        <Text as="p" variant="footnote" color="grey-04">
+          {disagreementCount !== null && disagreementCount > 0
+            ? `You and ${firstName(name) ?? name} disagree on ${disagreementCount} ${
+                disagreementCount === 1 ? 'claim' : 'claims'
+              }. `
+            : null}
+          When you join the debate room you can discuss what claim to debate first.
+        </Text>
       </header>
 
       {!schedule.theirWeekKnown ? (

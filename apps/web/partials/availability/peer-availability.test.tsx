@@ -584,8 +584,11 @@ describe('disagreement line', () => {
     expect(screen.getByText(/disagree on 1 claim\./)).toBeInTheDocument();
   });
 
-  it.each([null, 0])('is left out when the count is %s', count => {
+  it.each([null, 0])('keeps only the room sentence when the count is %s', count => {
     renderWith(count);
+    expect(
+      screen.getByText('When you join the debate room you can discuss what claim to debate first.')
+    ).toBeInTheDocument();
     expect(screen.queryByText(/disagree on/)).not.toBeInTheDocument();
   });
 });
