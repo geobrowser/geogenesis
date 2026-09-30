@@ -148,6 +148,7 @@ export function usePublish() {
             dispatch({
               type: 'SET_REVIEW_STATE',
               payload: newState,
+              spaceGovernanceType: space.type,
             }),
           ops,
           smartAccount,
@@ -163,6 +164,8 @@ export function usePublish() {
           valuesToPublish.map(v => v.id),
           relations.map(r => r.id)
         );
+
+        return { spaceGovernanceType: space.type };
       });
 
       const result = await runEffectEither(publish);
@@ -180,7 +183,11 @@ export function usePublish() {
         return;
       }
 
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+      dispatch({
+        type: 'SET_REVIEW_STATE',
+        payload: 'publish-complete',
+        spaceGovernanceType: result.right.spaceGovernanceType,
+      });
 
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => {
@@ -255,6 +262,7 @@ export function useBulkPublish() {
             dispatch({
               type: 'SET_REVIEW_STATE',
               payload: newState,
+              spaceGovernanceType: space.type,
             }),
           ops,
           smartAccount,
@@ -265,6 +273,8 @@ export function useBulkPublish() {
             isEditor: spaceAccess.isEditor,
           },
         });
+
+        return { spaceGovernanceType: space.type };
       });
 
       const result = await runEffectEither(publish);
@@ -286,7 +296,11 @@ export function useBulkPublish() {
         triples.map(v => v.id),
         relations.map(r => r.id)
       );
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete' });
+      dispatch({
+        type: 'SET_REVIEW_STATE',
+        payload: 'publish-complete',
+        spaceGovernanceType: result.right.spaceGovernanceType,
+      });
       onSuccess?.();
 
       // want to show the "complete" state for 3s if it succeeds

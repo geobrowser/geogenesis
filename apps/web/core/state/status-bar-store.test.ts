@@ -60,3 +60,59 @@ describe('status bar retry handling', () => {
     expect(store.get(statusBarStateAtom).retry).toBeUndefined();
   });
 });
+
+/**
+ * The destination decides the wording of the completion toast, and only some of a publish's
+ * dispatches know it — so it has to survive the ones that don't, and not outlive the publish.
+ */
+describe('status bar publish destination', () => {
+  it('has no destination before a publish starts', () => {
+    const store = createStore();
+
+    expect(store.get(statusBarStateAtom).spaceGovernanceType).toBeNull();
+  });
+
+  it('holds the destination across dispatches that do not carry one', () => {
+    const store = createStore();
+
+    store.set(statusBarDispatchAtom, {
+      type: 'SET_REVIEW_STATE',
+      payload: 'publishing-ipfs',
+      spaceGovernanceType: 'DAO',
+    });
+    store.set(statusBarDispatchAtom, { type: 'SET_REVIEW_STATE', payload: 'signing-wallet' });
+
+    expect(store.get(statusBarStateAtom).spaceGovernanceType).toBe('DAO');
+  });
+
+  it('forgets the destination once the publish returns to idle', () => {
+    const store = createStore();
+
+    store.set(statusBarDispatchAtom, {
+      type: 'SET_REVIEW_STATE',
+      payload: 'publish-complete',
+      spaceGovernanceType: 'DAO',
+    });
+    store.set(statusBarDispatchAtom, { type: 'SET_REVIEW_STATE', payload: 'idle' });
+
+    expect(store.get(statusBarStateAtom).spaceGovernanceType).toBeNull();
+  });
+
+  // Otherwise a personal publish following a DAO one would report a proposal it never filed.
+  it('replaces the destination rather than keeping the previous one', () => {
+    const store = createStore();
+
+    store.set(statusBarDispatchAtom, {
+      type: 'SET_REVIEW_STATE',
+      payload: 'publish-complete',
+      spaceGovernanceType: 'DAO',
+    });
+    store.set(statusBarDispatchAtom, {
+      type: 'SET_REVIEW_STATE',
+      payload: 'publishing-ipfs',
+      spaceGovernanceType: 'PERSONAL',
+    });
+
+    expect(store.get(statusBarStateAtom).spaceGovernanceType).toBe('PERSONAL');
+  });
+});
