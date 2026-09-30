@@ -253,7 +253,7 @@ function ClaimsCarousel({
     <section aria-label="Claims from this debate" className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <span className="text-chatMedium text-grey-04">
-          Vote on the claims <span className="text-grey-03 tabular-nums">· {claims.length}</span>
+          Vote on claims made <span className="text-grey-03 tabular-nums">· {claims.length}</span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {onOpenClaims ? (

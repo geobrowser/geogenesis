@@ -170,7 +170,7 @@ describe('DebateEndCard', () => {
     ).toEqual(['c1', 'c2', 'c3']);
     expect(within(strip).getByText('Steve Fuller: Claim c1')).toBeInTheDocument();
     expect(within(strip).getByText('Jonathan Bostock: Claim c2')).toBeInTheDocument();
-    expect(within(strip).getByText(/Vote on the claims/)).toHaveTextContent('Vote on the claims · 3');
+    expect(within(strip).getByText(/Vote on claims made/)).toHaveTextContent('Vote on claims made · 3');
   });
 
   it('no longer draws a column per debater', () => {
