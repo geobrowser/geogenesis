@@ -446,6 +446,17 @@ describe('speakersByClaimId', () => {
     expect(speakers.get('c2')?.display_name).toBe('Bo');
     expect(speakers.has('c3')).toBe(false);
   });
+
+  it('credits nobody with a claim restated across turns, since its turn is only the first of them', () => {
+    // One entity linked from two turns — possibly by both debaters. The row keeps only the first
+    // turn's block, so crediting that turn's author would put the other statement in their mouth.
+    const speakers = speakersByClaimId(debate, {
+      all: [{ id: 'c1', blockId: 'turn-1', restated: true }] as never,
+      blocks: [{ id: 'turn-1', authorSpaceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', text: '' }],
+    });
+
+    expect(speakers.has('c1')).toBe(false);
+  });
 });
 
 describe('drawableClaims', () => {

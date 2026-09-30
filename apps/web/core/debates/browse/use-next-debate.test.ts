@@ -7,12 +7,17 @@ import type { Debate } from '~/core/debates/api';
 import { useNextDebate } from './use-next-debate';
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const ELSEWHERE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const CLAIMS = 'e614cce1c4ce45868304fd1237119eb2';
 const VIDEOS = 'c48dc314fa7148aeb967139160456f1d';
 const SUPPORTED_BY = 'd19fad5651364a7f8309daf5c7bf99dd';
 const OPPOSED_BY = 'c57de77c3eee4e7ba0d2258d18aab11c';
 
-const relation = (typeId: string, toId: string) => ({ type: { id: typeId }, toEntity: { id: toId }, spaceId: SPACE });
+const relation = (typeId: string, toId: string, spaceId = SPACE) => ({
+  type: { id: typeId },
+  toEntity: { id: toId },
+  spaceId,
+});
 const debateEntity = (id: string, claimId: string) => ({
   id,
   name: id,
@@ -21,10 +26,17 @@ const debateEntity = (id: string, claimId: string) => ({
     relation(VIDEOS, `video-${id}`),
     relation(SUPPORTED_BY, `ada-${id}`),
     relation(OPPOSED_BY, `bo-${id}`),
+    // Another space's edits to the same debate, which must not reach this space's card.
+    relation(SUPPORTED_BY, `intruder-${id}`, ELSEWHERE),
+    relation(VIDEOS, `foreign-video-${id}`, ELSEWHERE),
   ],
 });
 
-const mocks = vi.hoisted(() => ({ watched: new Set<string>(), reads: 0 }));
+const mocks = vi.hoisted(() => ({
+  watched: new Set<string>(),
+  reads: 0,
+  keyframeInputs: [] as { relations: { spaceId: string }[] }[][],
+}));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ where }: { where: { id?: { in: string[] } } }) =>
@@ -46,7 +58,10 @@ vi.mock('./use-debates-best-order', () => ({
   }),
 }));
 vi.mock('~/core/claims/browse/use-debate-keyframes', () => ({
-  useDebateKeyframes: () => new Map([['first', 'ipfs://first-frame']]),
+  useDebateKeyframes: (debates: { relations: { spaceId: string }[] }[]) => {
+    mocks.keyframeInputs.push(debates);
+    return new Map([['first', 'ipfs://first-frame']]);
+  },
 }));
 vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
   useProfilesBySpaceIds: (ids: string[]) => ({
@@ -98,6 +113,15 @@ describe('useNextDebate', () => {
     rerender({ shown: true });
 
     expect(result.current?.debateId).toBe('second');
+  });
+
+  it("reads the chosen debate's sides and video in this space only", () => {
+    const { result } = renderHook(() => useNextDebate(debate, true, false));
+
+    expect(result.current?.participants.map(participant => participant.spaceId)).toEqual(['ada-first', 'bo-first']);
+    const handedToKeyframes = mocks.keyframeInputs.at(-1)!.flatMap(entity => entity.relations);
+    expect(handedToKeyframes.length).toBeGreaterThan(0);
+    expect(handedToKeyframes.every(relation => relation.spaceId === SPACE)).toBe(true);
   });
 
   it('suggests nothing while the debate has not been live', () => {

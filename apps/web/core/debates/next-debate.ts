@@ -1,5 +1,5 @@
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
 
@@ -36,7 +36,7 @@ export function nextDebateCandidates(debates: Entity[], claims: Entity[], spaceI
   const claimsById = new Map(claims.map(claim => [normId(claim.id), claim]));
 
   return debates.flatMap(debate => {
-    const relations = inSpace(debate.relations, spaceId);
+    const relations = Entities.relationsInSpace(debate.relations, spaceId);
     if (Entities.relationTargets(relations, DEBATE_VIDEOS_PROPERTY_ID).length === 0) return [];
 
     const claimId = debateClaimId(debate, spaceId);
@@ -48,7 +48,9 @@ export function nextDebateCandidates(debates: Entity[], claims: Entity[], spaceI
         debateId: normId(debate.id),
         claimId,
         claimName: claim.name,
-        topicIds: Entities.relationTargets(inSpace(claim.relations, spaceId), TOPICS_PROPERTY_ID).map(normId),
+        topicIds: Entities.relationTargets(Entities.relationsInSpace(claim.relations, spaceId), TOPICS_PROPERTY_ID).map(
+          normId
+        ),
       },
     ];
   });
@@ -61,12 +63,11 @@ export function debateClaimIds(debates: Entity[], spaceId: string): string[] {
 
 /** A Debate carries exactly one `Claims` relation — the motion it argued. */
 function debateClaimId(debate: Entity, spaceId: string): string | null {
-  const id = Entities.relationTargets(inSpace(debate.relations, spaceId), DEBATE_CLAIMS_PROPERTY_ID)[0];
+  const id = Entities.relationTargets(
+    Entities.relationsInSpace(debate.relations, spaceId),
+    DEBATE_CLAIMS_PROPERTY_ID
+  )[0];
   return id ? normId(id) : null;
-}
-
-function inSpace(relations: Relation[], spaceId: string): Relation[] {
-  return relations.filter(relation => normId(relation.spaceId) === spaceId);
 }
 
 export type NextDebatePick = {

@@ -16,6 +16,7 @@ import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
+import { markDebateWatched } from '~/core/debates/watched-debates';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -294,6 +295,11 @@ export function DebateFeedPlayer({
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
   // room for it and keeps the plain centred replay.
   const endCardShown = showReplay && !reducedOverlays;
+  // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
+  // a debate finished there must not come back as a suggestion.
+  React.useEffect(() => {
+    if (showReplay) markDebateWatched(debate.id);
+  }, [showReplay, debate.id]);
   // Loaded while the debate is the active one, so its numbers are there when the video ends rather
   // than drawing empty bars and filling them in.
 

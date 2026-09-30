@@ -292,7 +292,7 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
  * space, which is the id the participant list keys on.
  *
  * Shared by the live claim cards and the end card's carousel, so a claim is credited to the same
- * person in both.
+ * person in both. A restated claim is credited to nobody.
  */
 export function speakersByClaimId(
   debate: Debate,
@@ -311,6 +311,9 @@ export function speakersByClaimId(
 
   const speakers = new Map<string, DebateParticipant>();
   for (const claim of claims.all) {
+    // Linked from more than one turn, so its block is only the first of them and cannot say who
+    // made it — see `restated`. Uncredited, it never reaches a card that names a speaker.
+    if (claim.restated) continue;
     const speaker = byBlock.get(claim.blockId);
     if (speaker) speakers.set(claim.id, speaker);
   }

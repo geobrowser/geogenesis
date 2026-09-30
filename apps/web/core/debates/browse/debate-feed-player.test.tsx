@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   endCardShown: [] as boolean[],
 }));
 
+const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
+vi.mock('~/core/debates/watched-debates', () => ({ markDebateWatched: watchedMocks.markDebateWatched }));
+
 // The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
 vi.mock('./use-debate-end-card', () => ({
   useDebateEndCard: (_debate: unknown, enabled: boolean, shown: boolean) => {
@@ -1211,6 +1214,24 @@ describe('the end card', () => {
 
     const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
     expect(within(container).queryByTestId('end-card')).toBeNull();
+  });
+
+  it('records a debate watched to the end even on a compact tile, which never shows the end card', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
+  });
+
+  it('does not record a debate that is still playing', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(watchedMocks.markDebateWatched).not.toHaveBeenCalled();
   });
 
   it('hands the claims opener through to the card', () => {

@@ -10,7 +10,7 @@ import {
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
 } from '~/core/debates/ontology';
-import { markDebateWatched, readWatchedDebateIds } from '~/core/debates/watched-debates';
+import { readWatchedDebateIds } from '~/core/debates/watched-debates';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
@@ -50,7 +50,8 @@ const NO_RANKING: ReadonlyMap<string, number> = new Map();
  *
  * `live` is the end card's own latch: on once the debate has been active, so the suggestion is worked
  * out while the debate plays rather than after it ends. `shown` is whether the card is on screen,
- * which is when the debate counts as watched.
+ * which is when the watched set is re-read. Recording a finished debate is the player's — see
+ * `DebateFeedPlayer` — because a compact tile finishes debates without ever showing this card.
  */
 export function useNextDebate(debate: Debate, live: boolean, shown: boolean): NextDebate | null {
   const spaceId = normId(debate.claim.space_id);
@@ -81,10 +82,6 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
     [live, shown, debate.id]
   );
 
-  React.useEffect(() => {
-    if (shown) markDebateWatched(debate.id);
-  }, [shown, debate.id]);
-
   // Held until everything the choice rests on has answered, so the suggestion isn't drawn off a
   // partial list and then swapped. A ranking that failed falls through to query order.
   const settled =
@@ -111,9 +108,16 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
     ]
   );
 
+  // Scoped to this space before anything reads it, as the candidates were: another space's Videos or
+  // Supported by on the same debate would otherwise pick the key frame or name a debater.
   const chosen = React.useMemo(
-    () => (pick ? debates.filter(entity => normId(entity.id) === pick.candidate.debateId) : []),
-    [debates, pick]
+    () =>
+      pick
+        ? debates
+            .filter(entity => normId(entity.id) === pick.candidate.debateId)
+            .map(entity => ({ ...entity, relations: Entities.relationsInSpace(entity.relations, spaceId) }))
+        : [],
+    [debates, pick, spaceId]
   );
   const keyframeByDebateId = useDebateKeyframes(chosen);
 

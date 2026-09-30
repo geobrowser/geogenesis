@@ -147,9 +147,6 @@ export function textInSpace(values: Value[], propertyId: string, spaceId?: strin
 }
 
 /**
- * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
- */
-/**
  * The entities a relation property points at, skipping deleted relations. Ids compared normalized,
  * since relations reach the client in both spellings depending on the query that found them.
  */
@@ -159,6 +156,17 @@ export function relationTargets(relations: Relation[], propertyId: string): stri
     .map(relation => relation.toEntity.id);
 }
 
+/**
+ * The relations published in one space. An entity's relations arrive from every space that has
+ * written to it, and a relation written elsewhere says nothing about this space's view of it.
+ */
+export function relationsInSpace(relations: Relation[], spaceId: string): Relation[] {
+  return relations.filter(relation => idEquals(relation.spaceId, spaceId));
+}
+
+/**
+ * This function traverses through all the relations associated with an entity and attempts to find the avatar URL of the entity.
+ */
 export function avatar(relations?: Relation[]): string | null {
   if (!relations) return null;
   const avatarRelation = relations.find(r => r.type.id === EntityId(ContentIds.AVATAR_PROPERTY));
