@@ -12,7 +12,13 @@ import { followedTopicsQueryKey } from '~/core/io/subgraph/fetch-followed-topics
 import type { Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
-import { type FollowedTopicRelation, type TopicRef, buildFollowRelations, buildUnfollowRelations } from './follow-ops';
+import {
+  type FollowedTopicRelation,
+  type TopicRef,
+  buildFollowRelations,
+  buildUnfollowRelations,
+  followEditName,
+} from './follow-ops';
 import { followedTopicsQueryOptions } from './use-followed-topics';
 
 const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
@@ -20,11 +26,6 @@ const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
 type FollowVariables =
   | { kind: 'follow'; spaceId: string; topicIds: string[]; topics: TopicRef[] }
   | { kind: 'unfollow'; spaceId: string; topicIds: string[] };
-
-function editName(verb: 'Follow' | 'Unfollow', topics: readonly { name?: string | null }[]): string {
-  if (topics.length === 1 && topics[0].name) return `${verb} topic: ${topics[0].name}`;
-  return `${verb} ${topics.length} topic${topics.length === 1 ? '' : 's'}`;
-}
 
 /**
  * One edit per call, published to the viewer's personal space. Topics already being written by any
@@ -68,16 +69,7 @@ export function useFollowTopics() {
         values: [],
         relations,
         spaceId,
-        name:
-          variables.kind === 'follow'
-            ? editName(
-                'Follow',
-                variables.topics.filter(t => added.some(a => a.toEntityId === t.id))
-              )
-            : editName(
-                'Unfollow',
-                variables.topicIds.map(() => ({}))
-              ),
+        name: followEditName(variables.kind === 'follow' ? 'Follow' : 'Unfollow', relations),
       });
       if (!ok) return false;
 

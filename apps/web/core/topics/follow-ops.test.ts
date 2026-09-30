@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFollowRelations, buildUnfollowRelations } from './follow-ops';
+import { buildFollowRelations, buildUnfollowRelations, followEditName } from './follow-ops';
 import { FOLLOWING_PROPERTY } from './ontology';
 
 const PERSONAL_SPACE = '11111111111111111111111111111111';
@@ -80,5 +80,29 @@ describe('follow ops', () => {
         isDeleted: true,
       });
     }
+  });
+});
+
+describe('follow edit name', () => {
+  const relation = (id: string, name: string | null) =>
+    buildFollowRelations({ personalSpaceId: PERSONAL_SPACE, topics: [{ id, name }], existingTopicIds: new Set() })
+      .relations[0];
+
+  it('names a single topic', () => {
+    expect(followEditName('Follow', [relation(TOPIC_A, 'Energy')])).toBe('Follow topic: Energy');
+  });
+
+  it('counts distinct topics in the relations, not requested ids', () => {
+    const tombstones = buildUnfollowRelations({
+      personalSpaceId: PERSONAL_SPACE,
+      rows: [
+        { id: 'row-1', spaceId: PERSONAL_SPACE, toEntityId: TOPIC_A },
+        { id: 'row-2', spaceId: PERSONAL_SPACE, toEntityId: TOPIC_A },
+      ],
+      topicIds: [TOPIC_A, TOPIC_B],
+    });
+
+    expect(followEditName('Unfollow', tombstones)).toBe('Unfollow 1 topic');
+    expect(followEditName('Follow', [relation(TOPIC_A, null), relation(TOPIC_B, null)])).toBe('Follow 2 topics');
   });
 });

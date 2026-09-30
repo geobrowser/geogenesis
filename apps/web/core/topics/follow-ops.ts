@@ -76,3 +76,11 @@ export function buildUnfollowRelations(args: {
       isDeleted: true,
     }));
 }
+
+/** Names the edit by the distinct topics its relations touch, not the ids requested. */
+export function followEditName(verb: 'Follow' | 'Unfollow', relations: readonly Relation[]): string {
+  const topics = new Map(relations.map(relation => [normId(relation.toEntity.id), relation.toEntity.name]));
+  const [onlyName] = topics.values();
+  if (topics.size === 1 && onlyName) return `${verb} topic: ${onlyName}`;
+  return `${verb} ${topics.size} topic${topics.size === 1 ? '' : 's'}`;
+}
