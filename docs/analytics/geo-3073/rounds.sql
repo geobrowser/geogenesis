@@ -1,3 +1,6 @@
+-- Superseded by ../geo-3097/rounds.sql, which uses the implemented snapshot tables,
+-- retains unknown attribution, and exposes timing source/confidence. This older
+-- integration example is retained for historical reference only.
 -- Warehouse integration query. Supply these two external/enrichment tables from
 -- published graph claim timing and the debate timeline (no browser-derived rounds):
 -- claim_moments(claim_id String, debate_id String, start_ms UInt64)
