@@ -10,7 +10,13 @@ import { useCookies } from 'react-cookie';
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
-import { MAX_QUEUE_WAIT_MS, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
+import {
+  MAX_QUEUE_WAIT_MS,
+  enqueueFor,
+  recoverAlreadyKnownSubmission,
+  submitOrResumeUserOperation,
+  withSubmissionRetry,
+} from './smart-account-send-queue';
 
 export function smartAccountQueryKey(
   walletAddress: string | null | undefined,
@@ -101,11 +107,25 @@ export function useSmartAccount() {
       //    included-but-REVERTED op is different: nothing landed on-chain, so
       //    surfacing it immediately is safe (a retry can't duplicate anything)
       //    and required (receipt.success=false must not read as success).
+      //
+      //    The "past every caller's retry window" half of that does NOT hold, and
+      //    never did: Effect's Schedule.elapsed starts at the first FAILURE, so a
+      //    receipt timeout at 90s opens a fresh 10s retry window and the caller
+      //    re-runs the send. On 2026-09-30 that re-run prepared the same op against
+      //    the still-pending nonce, the bundler answered "already known", and a
+      //    FAST publish that landed ~70s later was reported as failed with its vote
+      //    and execute never sent. Two guards now sit under every caller:
+      //    submitOrResumeUserOperation resumes the receipt wait for a re-run of the
+      //    same calls instead of submitting again, and recoverAlreadyKnownSubmission
+      //    treats "already known" as the accepted submission it is and waits on its
+      //    hash.
       const eoaAddress = zeroDevAccount.account.address;
 
-      // Longer than every caller retry window (max 10s today) plus slack, so a
-      // surfaced receipt failure can't trigger a re-submission. This is also the
-      // number MAX_QUEUE_WAIT_MS is sized against — a sendUserOperation holds its
+      // How long a submitted op's receipt is waited for before the failure is
+      // surfaced. Surfacing it does trigger a caller re-run (see the note on
+      // Schedule.elapsed above); submitOrResumeUserOperation turns that re-run into
+      // a second wait on the same hash. This is also the number MAX_QUEUE_WAIT_MS is
+      // sized against — a sendUserOperation holds its
       // queue slot for this long in the worst case.
       const RECEIPT_DEADLINE_MS = 90_000;
 
@@ -174,11 +194,15 @@ export function useSmartAccount() {
           // The retry wraps the SUBMISSION ONLY. confirmInclusion must stay outside it:
           // once a hash exists the op may be landing, and re-running the send from a
           // confirm-phase failure is the duplicate-publish hazard described in (2) above.
-          enqueueFor(eoaAddress, async () => {
-            const hash = await withSubmissionRetry(() => zeroDevAccount.sendUserOperation(args));
-            await confirmInclusion(hash);
-            return hash;
-          }),
+          enqueueFor(eoaAddress, () =>
+            submitOrResumeUserOperation(
+              eoaAddress,
+              args.calls,
+              () =>
+                withSubmissionRetry(() => recoverAlreadyKnownSubmission(() => zeroDevAccount.sendUserOperation(args))),
+              confirmInclusion
+            )
+          ),
       };
 
       if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {
