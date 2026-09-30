@@ -1,5 +1,5 @@
 import { type ActionContext, type ActionKind } from './action-context';
-import { analyticsContextRevision, capture } from './analytics';
+import { type AnalyticsEventName, analyticsContextRevision, capture } from './analytics';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
 /** Only classify outcomes that prove the action did not execute. Network and
@@ -120,7 +120,7 @@ export function observeOperation(
   };
   const emitted = new Set<string>();
   let completed = false;
-  const emit = (event: string, phase: string, properties: Record<string, unknown>) => {
+  const emit = (event: AnalyticsEventName, phase: string, properties: Record<string, unknown>) => {
     if (emitted.has(`${event}:${phase}`)) return;
     // Source reconciliation owns completion after logout/account switch. Never
     // assign an earlier actor's asynchronous result to the current account.
