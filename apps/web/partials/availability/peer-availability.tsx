@@ -52,14 +52,34 @@ export type PeerAvailabilityBooking = {
   mode?: 'request' | 'reschedule';
   /**
    * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
-   * the picked chip's, for analytics; `null` for a time typed in by hand.
+   * the picked chip's, for analytics; `null` for a time typed in by hand. `viewerTimezone` is the
+   * zone the week was drawn in, so whatever confirms the pick names it the way the chip did.
    */
-  onRequest: (startsAt: string, pick?: { viewerIsFree: boolean | null }) => void;
+  onRequest: (startsAt: string, pick: { viewerIsFree: boolean | null; viewerTimezone: string }) => void;
   pending: boolean;
   error: string | null;
-  /** The instant the server accepted, which swaps the footer for a confirmation. */
-  requestedStart: string | null;
 };
+
+/**
+ * What a sent request says. The caller closes the week on success, so this is shown by whoever
+ * confirms it — in the grid's zone, like every other time here, so it cannot contradict the chip.
+ */
+export function requestSentMessage({
+  mode = 'request',
+  startsAt,
+  peerName,
+  viewerTimezone,
+}: {
+  mode?: PeerAvailabilityBooking['mode'];
+  startsAt: string;
+  peerName: string;
+  viewerTimezone: string | undefined;
+}) {
+  const requested = formatViewerInstant(startsAt, viewerTimezone);
+  return mode === 'reschedule'
+    ? `Proposed ${requested} instead. ${peerName} has to accept the new time before the room is booked.`
+    : `Requested ${requested}. ${peerName} has to accept before the room is booked.`;
+}
 
 /**
  * Another person's availability (GEO-2938).
@@ -178,7 +198,7 @@ export function PeerAvailabilityView({
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
   // For the free-time field, whose `min` is the only thing keeping a past time out of it.
   const notBefore = clock();
-  const name = peerName || shortId(schedule.userId);
+  const name = peerDisplayName(peerName, schedule.userId);
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
   // A week crossing a DST boundary holds two genuinely different offsets, so the header names one
@@ -232,7 +252,6 @@ export function PeerAvailabilityView({
               <RequestAnyway
                 booking={booking}
                 clock={clock}
-                peerName={name}
                 viewerTimezone={schedule.viewerTimezone}
                 notBefore={notBefore}
               />
@@ -260,7 +279,6 @@ export function PeerAvailabilityView({
               clock={clock}
               startsAt={selectedStart}
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
-              peerName={name}
               viewerTimezone={schedule.viewerTimezone}
               zoneNote={zoneNote}
             />
@@ -282,7 +300,6 @@ function BookingFooter({
   clock,
   startsAt,
   viewerIsFree,
-  peerName,
   viewerTimezone,
   zoneNote,
 }: {
@@ -290,22 +307,23 @@ function BookingFooter({
   clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
-  peerName: string;
   viewerTimezone: string;
   /** Which zone the grid is in, shown until a pick replaces it with the picked time. */
   zoneNote: string;
 }) {
-  if (booking.requestedStart) {
-    return <BookedHint booking={booking} peerName={peerName} viewerTimezone={viewerTimezone} />;
-  }
-
   return (
     <div className="flex shrink-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
           {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : zoneNote}
         </Text>
-        <SendRequest booking={booking} clock={clock} startsAt={startsAt} viewerIsFree={viewerIsFree} />
+        <SendRequest
+          booking={booking}
+          clock={clock}
+          startsAt={startsAt}
+          viewerIsFree={viewerIsFree}
+          viewerTimezone={viewerTimezone}
+        />
       </div>
 
       {/* A slot outside your own week is a one-off, and saying so is what keeps it from reading as
@@ -325,42 +343,18 @@ function BookingFooter({
   );
 }
 
-/** What the footer says once the server has accepted the time. */
-function BookedHint({
-  booking,
-  peerName,
-  viewerTimezone,
-}: {
-  booking: PeerAvailabilityBooking;
-  peerName: string;
-  viewerTimezone: string;
-}) {
-  if (!booking.requestedStart) return null;
-  const requested = formatViewerInstant(booking.requestedStart, viewerTimezone);
-  if (booking.mode === 'reschedule') {
-    return (
-      <Hint>
-        Proposed {requested} instead. {peerName} has to accept the new time before the room is booked.
-      </Hint>
-    );
-  }
-  return (
-    <Hint>
-      Requested {requested}. {peerName} has to accept before the room is booked.
-    </Hint>
-  );
-}
-
 function SendRequest({
   booking,
   clock,
   startsAt,
   viewerIsFree,
+  viewerTimezone,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
+  viewerTimezone: string;
 }) {
   // Keyed by the start it was raised for, so picking another time clears it.
   const [passedFor, setPassedFor] = React.useState<string | null>(null);
@@ -383,7 +377,7 @@ function SendRequest({
             return;
           }
           setPassedFor(null);
-          booking.onRequest(startsAt, { viewerIsFree });
+          booking.onRequest(startsAt, { viewerIsFree, viewerTimezone });
         }}
         className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
       >
@@ -406,13 +400,11 @@ function SendRequest({
 function RequestAnyway({
   booking,
   clock,
-  peerName,
   viewerTimezone,
   notBefore,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
-  peerName: string;
   viewerTimezone: string;
   notBefore: number;
 }) {
@@ -420,10 +412,6 @@ function RequestAnyway({
   const picked = viewerInputInstant(local, viewerTimezone);
   // geo-chat refuses a past start, so one never leaves here.
   const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
-
-  if (booking.requestedStart) {
-    return <BookedHint booking={booking} peerName={peerName} viewerTimezone={viewerTimezone} />;
-  }
 
   return (
     <div className="mt-3 flex flex-col items-center gap-2">
@@ -439,7 +427,13 @@ function RequestAnyway({
           onChange={event => setLocal(event.target.value)}
           className="rounded border border-grey-02 px-2 py-1 text-footnote"
         />
-        <SendRequest booking={booking} clock={clock} startsAt={startsAt} viewerIsFree={null} />
+        <SendRequest
+          booking={booking}
+          clock={clock}
+          startsAt={startsAt}
+          viewerIsFree={null}
+          viewerTimezone={viewerTimezone}
+        />
       </div>
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
@@ -685,7 +679,8 @@ export function Notice({
   );
 }
 
-/** Last resort when nobody supplied a name: enough of the id to tell two people apart. */
-function shortId(userId: string) {
+/** The supplied name, or as a last resort enough of the id to tell two people apart. */
+export function peerDisplayName(peerName: string | null | undefined, userId: string) {
+  if (peerName) return peerName;
   return userId.length > 10 ? `${userId.slice(0, 8)}…` : userId;
 }
