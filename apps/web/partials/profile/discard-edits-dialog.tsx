@@ -5,6 +5,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 import { Button } from '~/design-system/button';
+import { TextButton } from '~/design-system/text-button';
 
 type Props = {
   open: boolean;
@@ -14,6 +15,12 @@ type Props = {
   onSave: () => void;
   /** False when the edit cannot be published as it stands, e.g. a blank name. */
   canSave: boolean;
+  /**
+   * Why Save is disabled, shown in the prompt. The modal's own explanation — a
+   * "Name is required" under the field — is behind this prompt's overlay, and
+   * hidden from assistive technology while it is up.
+   */
+  saveBlockedReason: string | null;
 };
 
 /**
@@ -22,9 +29,12 @@ type Props = {
  *
  * Rendered inside the modal it guards, so Radix treats it as a nested layer:
  * Escape dismisses this one only, and the modal underneath stays open with the
- * draft intact. Stacked one step above the modal's own `z-100`/`z-101`.
+ * draft intact — as do Keep editing and a backdrop click. Stacked one step
+ * above the modal's own `z-100`/`z-101`.
  */
-export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canSave }: Props) {
+export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canSave, saveBlockedReason }: Props) {
+  const keepEditingRef = React.useRef<HTMLButtonElement>(null);
+
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
@@ -32,6 +42,13 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
         <Content
           // The title is the whole message; there is nothing further to describe.
           aria-describedby={undefined}
+          // Radix focuses the first button by default, which is Discard edits —
+          // Enter straight after opening would throw the draft away. Start on the
+          // one choice that loses nothing.
+          onOpenAutoFocus={event => {
+            event.preventDefault();
+            keepEditingRef.current?.focus();
+          }}
           // This container covers the overlay, so Radix never sees an outside
           // click — a press on the backdrop lands here and means "keep editing".
           onClick={event => {
@@ -41,13 +58,22 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
         >
           <div className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-grey-02 bg-white p-5 shadow-dropdown">
             <Title className="text-smallTitle text-text">Exiting without saving will discard edits</Title>
-            <div className="flex items-center justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={onDiscard}>
-                Discard edits
-              </Button>
-              <Button type="button" onClick={onSave} disabled={!canSave}>
-                Save changes
-              </Button>
+            {!canSave && saveBlockedReason && <p className="text-metadata text-grey-04">{saveBlockedReason}</p>}
+            {/* Keep editing sits centred under the pair it is the alternative to. */}
+            <div className="flex flex-col items-center gap-3 self-end">
+              {/* Wraps rather than overflowing: the pair needs about 236px, and a
+                  320px phone leaves the card 248px before any font scaling. */}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" variant="secondary" onClick={onDiscard}>
+                  Discard edits
+                </Button>
+                <Button type="button" onClick={onSave} disabled={!canSave}>
+                  Save changes
+                </Button>
+              </div>
+              <TextButton ref={keepEditingRef} onClick={() => onOpenChange(false)}>
+                Keep editing
+              </TextButton>
             </div>
           </div>
         </Content>
@@ -67,11 +93,13 @@ export function DiscardEditsDialog({ open, onOpenChange, onDiscard, onSave, canS
 export function useDiscardEditsGuard({
   hasUnsavedEdits,
   canSave,
+  saveBlockedReason,
   discard,
   save,
 }: {
   hasUnsavedEdits: boolean;
   canSave: boolean;
+  saveBlockedReason: string | null;
   /** Throws the draft away and closes the modal. */
   discard: () => void;
   /** Publishes the draft and closes the modal. */
@@ -88,6 +116,7 @@ export function useDiscardEditsGuard({
     open: isOpen,
     onOpenChange: setIsOpen,
     canSave,
+    saveBlockedReason,
     onDiscard: () => {
       setIsOpen(false);
       discard();

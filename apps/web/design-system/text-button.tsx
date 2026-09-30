@@ -20,7 +20,7 @@ const buttonStyles = cva(
   }
 );
 
-interface Props extends React.ComponentPropsWithoutRef<'button'> {
+interface Props extends React.ComponentPropsWithRef<'button'> {
   color?: 'grey-04' | 'ctaPrimary';
 }
 

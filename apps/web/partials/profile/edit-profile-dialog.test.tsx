@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -462,6 +462,75 @@ describe('EditProfileDialog', () => {
       expect(confirmation()).not.toBeInTheDocument();
       expect(mocks.publish).not.toHaveBeenCalled();
       expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('goes back to editing on Keep editing', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(nameField()).toHaveValue('Preston Mantel!');
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    // Radix focuses the first button otherwise — Discard edits, one Enter from
+    // throwing the draft away.
+    it('starts focus on Keep editing, not on Discard', async () => {
+      renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+    });
+
+    describe('says why Save changes is held', () => {
+      const prompt = () => within(screen.getByRole('dialog', { name: /Exiting without saving/ }));
+
+      it('for a blank name', async () => {
+        renderDialog();
+
+        await userEvent.clear(nameField());
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(prompt().getByText('Add a name to save your profile.')).toBeInTheDocument();
+      });
+
+      it('while the profile is still loading', async () => {
+        mocks.isLoading = true;
+        mocks.hasPendingHistory = true;
+        renderDialog();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(prompt().getByText('Your profile is still loading. Try again in a moment.')).toBeInTheDocument();
+      });
+
+      it('when the profile cannot be edited', async () => {
+        mocks.canEdit = false;
+        mocks.hasPendingHistory = true;
+        renderDialog();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(
+          prompt().getByText('We couldn’t find your profile to edit. Try reloading the page.')
+        ).toBeInTheDocument();
+      });
+
+      it('and says nothing when Save is available', async () => {
+        renderDialog();
+
+        await userEvent.type(nameField(), '!');
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+        expect(prompt().queryByText(/Try again|Add a name|Try reloading/)).not.toBeInTheDocument();
+      });
     });
 
     it('closes without asking when nothing was changed', async () => {

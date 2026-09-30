@@ -282,8 +282,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
    */
   const hasUnsavedEdits = !isPublishing && (hasChanges || hasFailed);
 
+  const unavailableNote = 'We couldn’t find your profile to edit. Try reloading the page.';
+
   const footerNote = isUnavailable
-    ? 'We couldn’t find your profile to edit. Try reloading the page.'
+    ? unavailableNote
     : isPublishing
       ? 'Publishing to your space. This usually takes about 10 seconds.'
       : hasFailed
@@ -326,7 +328,16 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
-  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, discard: close, save });
+  // Every way `canSave` can be false while there is still something to lose.
+  const saveBlockedReason = isNameMissing
+    ? 'Add a name to save your profile.'
+    : isUnavailable
+      ? unavailableNote
+      : isLoading
+        ? 'Your profile is still loading. Try again in a moment.'
+        : null;
+
+  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, saveBlockedReason, discard: close, save });
 
   /**
    * Escape and the backdrop. On a sheet they step back to the modal, the same as

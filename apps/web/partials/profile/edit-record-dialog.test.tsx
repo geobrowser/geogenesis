@@ -253,6 +253,36 @@ describe('EditRecordDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it('goes back to editing on Keep editing', () => {
+    const onOpenChange = vi.fn();
+    renderDialog(onOpenChange);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
+    expect(mocks.discard).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('starts focus on Keep editing, not on Discard', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+  });
+
+  it('says why Save changes is held while the space is resolving', () => {
+    mocks.canEdit = false;
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByText('Your space is still loading. Try again in a moment.')).toBeInTheDocument();
+  });
+
   it('closes without asking when nothing is staged', () => {
     mocks.hasPendingChanges = false;
     const onOpenChange = vi.fn();

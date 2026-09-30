@@ -150,6 +150,9 @@ export function EditRecordDialog({ kind, onOpenChange, entityId, spaceId }: Prop
   const discardGuard = useDiscardEditsGuard({
     hasUnsavedEdits: !isSaving && history.hasPendingChanges,
     canSave,
+    // With rows staged and no publish running, `canEdit` is the only thing left
+    // that can hold Save — false while the viewer's own space is still resolving.
+    saveBlockedReason: canEdit ? null : 'Your space is still loading. Try again in a moment.',
     discard: close,
     save,
   });
