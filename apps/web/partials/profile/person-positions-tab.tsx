@@ -12,12 +12,7 @@ import {
   reachableTopicFacets,
   usePersonPositionIndex,
 } from '~/core/profile/use-person-position-index';
-import {
-  DEFAULT_POSITION_SORT,
-  type PositionSort,
-  usePersonPositions,
-  usePersonResponses,
-} from '~/core/profile/use-person-positions';
+import { DEFAULT_POSITION_SORT, type PositionSort, usePersonPositions } from '~/core/profile/use-person-positions';
 
 import { PersonRecordFeed } from './person-record-feed';
 import { RecordFilterRow } from './record-filter-row';
@@ -47,23 +42,9 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const spaces = useRecordSelection();
   const topics = useRecordSelection();
 
-  /*
-   * The vote table, read before either of the two things that narrow to it.
-   *
-   * A retraction is a row rewritten to "neither", not a row removed, so every
-   * `votedBy` read — the index behind these menus included — counts claims this
-   * person no longer holds a position on. The menus and the list have to narrow
-   * to the same set or a topic offers a count the list below it cannot fill.
-   *
-   * One request: `usePersonPositions` shares this query key.
-   */
-  const responses = usePersonResponses({ spaceId });
-
-  const {
-    index,
-    isLoading: isLoadingIndex,
-    isError: isIndexError,
-  } = usePersonPositionIndex({ spaceId, answeredIds: responses.answeredIds });
+  // Held positions only, like the list and the count — the server leaves a
+  // retracted one out of the index, so a topic it alone carried is not offered.
+  const { index, isLoading: isLoadingIndex, isError: isIndexError } = usePersonPositionIndex({ spaceId });
 
   const selection = React.useMemo(
     () => ({ spaceIds: spaces.values, topicIds: topics.values }),
@@ -80,11 +61,6 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
     if (!isFiltered || isLoadingIndex) return null;
     return matchingEntityIds(index, selection);
   }, [index, isFiltered, isLoadingIndex, selection]);
-
-  // The index is only as settled as the set it was narrowed by, so the menus
-  // wait for both. Without this a topic carried only by a retracted claim is
-  // offered for as long as the vote read takes, and then disappears.
-  const isLoadingFacets = isLoadingIndex || responses.answeredIds === undefined;
 
   // A claim in two spaces must render in the one that satisfied the filter —
   // not whichever the entity lists first, and not a picked space where the
@@ -162,13 +138,13 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const replaceTopics = topics.replace;
 
   React.useEffect(() => {
-    if (isLoadingFacets) return;
+    if (isLoadingIndex) return;
     // `replaceTopics` rather than `topics`: the selection object is rebuilt each
     // render, so depending on it would re-run this on every one. The callback is
     // stable, and `replace` keeps the previous array when nothing changed, so
     // this settles rather than chasing its own output.
     replaceTopics(current => keepSelectableTopics(current, reachableTopics, true));
-  }, [isLoadingFacets, reachableTopics, replaceTopics]);
+  }, [isLoadingIndex, reachableTopics, replaceTopics]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -197,7 +173,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
                   onClear: spaces.clear,
                   anyLabel: 'Any space',
                   noun: ['space', 'spaces'],
-                  isPending: isLoadingFacets,
+                  isPending: isLoadingIndex,
                 },
                 {
                   key: 'topics',
@@ -207,7 +183,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
                   onClear: topics.clear,
                   anyLabel: 'Any topic',
                   noun: ['topic', 'topics'],
-                  isPending: isLoadingFacets,
+                  isPending: isLoadingIndex,
                 },
               ]
         }
