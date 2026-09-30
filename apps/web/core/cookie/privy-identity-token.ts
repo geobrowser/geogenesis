@@ -1,6 +1,8 @@
 import { type JWTVerifyGetKey, createRemoteJWKSet, jwtVerify } from 'jose';
 import { getAddress, isAddress } from 'viem';
 
+import { Environment } from '~/core/environment';
+
 /**
  * Verifies a Privy identity token and returns the user's embedded Ethereum wallet.
  *
@@ -42,7 +44,7 @@ export async function verifyPrivyIdentityToken(
   token: string,
   options: { appId?: string; keys?: JWTVerifyGetKey } = {}
 ): Promise<`0x${string}` | null> {
-  const appId = options.appId ?? process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const appId = options.appId ?? Environment.variables.privyAppId;
   if (!appId || !token) return null;
 
   try {

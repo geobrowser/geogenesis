@@ -36,7 +36,11 @@ describe('onConnectionChange', () => {
   it('issues a signed session for the wallet in a verified token', async () => {
     await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBe(ADDRESS);
 
-    expect(store.set).toHaveBeenCalledWith(WALLET_SESSION, expect.any(String), expect.objectContaining({ httpOnly: true }));
+    expect(store.set).toHaveBeenCalledWith(
+      WALLET_SESSION,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
     expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(ADDRESS);
   });
 

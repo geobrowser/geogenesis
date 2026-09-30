@@ -154,7 +154,6 @@ function getClientIp(req: Request): string {
   return `noip:${crypto.randomUUID()}`;
 }
 
-
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
   const host = req.headers.get('host');

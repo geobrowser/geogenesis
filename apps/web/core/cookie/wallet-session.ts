@@ -54,7 +54,7 @@ export function verifyWalletSession(value: string | undefined, now = Date.now())
 
   const [address, issuedAt, signature, ...rest] = value.split('.');
   if (rest.length > 0 || !address || !issuedAt || !signature) return null;
-  if (!isAddress(address, { strict: true }) || address !== getAddress(address)) return null;
+  if (!isAddress(address) || address !== getAddress(address)) return null;
 
   const issuedAtSeconds = Number(issuedAt);
   if (!Number.isSafeInteger(issuedAtSeconds)) return null;

@@ -7,9 +7,9 @@ import { getSpaceByAddress } from '~/core/io/queries';
 
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 
-
-// The wallet cookie is httpOnly + sameSite=lax (set on connect), so its presence
-// is a trustworthy "logged-in" signal for the browser publish/share flow.
+// The wallet session is only issued after the server verified a Privy login for that wallet, and
+// its signature is checked on every read, so it is a trustworthy "logged-in" signal for the
+// browser publish/share flow.
 export async function getRequestWallet(): Promise<string | null> {
   const store = await cookies();
   return readWalletCookieLowercase(store);

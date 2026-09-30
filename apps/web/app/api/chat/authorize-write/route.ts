@@ -24,7 +24,6 @@ function isSameOrigin(req: Request): boolean {
   }
 }
 
-
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
     status,
