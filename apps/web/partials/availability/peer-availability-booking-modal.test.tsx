@@ -171,3 +171,50 @@ describe('choosing a different time for an existing request', () => {
     expect(screen.getByLabelText('mode')).toHaveTextContent('request');
   });
 });
+
+// geo-chat's refusals of a move (reschedule of an accepted debate), which otherwise arrive as a
+// code and a JSON detail nobody should have to read.
+describe('a refused move', () => {
+  const REQUEST_ID = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+  const renderMoving = () =>
+    render(
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={vi.fn()}
+      />
+    );
+
+  it.each([
+    [
+      'debate_already_started',
+      'someone has already joined this debate',
+      'Someone has already joined this debate, so its time can no longer be changed.',
+    ],
+    ['schedule_conflict', '{"conflicting_request_id":"x"}', 'You already have a debate at that time. Pick another.'],
+    [
+      'reschedule_refused',
+      '{"reason":"too_many_reschedules","limit":5}',
+      'This debate has been moved too many times. Cancel it and send a new request instead.',
+    ],
+    ['reschedule_refused', '{"reason":"not_open"}', 'This debate has already been declined, cancelled or expired.'],
+  ])('says %s plainly', (code, detail, said) => {
+    mocks.error = new GeoChatRequestError(detail, code, 409);
+    renderMoving();
+    expect(screen.getByLabelText('error')).toHaveTextContent(said);
+  });
+
+  it("keeps any other refusal's own message", () => {
+    mocks.error = new GeoChatRequestError('the debate must end after it starts', 'invalid_schedule_span', 400);
+    renderMoving();
+    expect(screen.getByLabelText('error')).toHaveTextContent('the debate must end after it starts');
+  });
+
+  it('leaves a new request refused with the same code on its own message', () => {
+    mocks.error = new GeoChatRequestError('that time is already committed', 'schedule_conflict', 409);
+    setup();
+    expect(screen.getByLabelText('error')).toHaveTextContent('that time is already committed');
+  });
+});
