@@ -26,6 +26,14 @@ jobs:
         with:
           bun-version: 1.3.6
 
+      # bun's global package cache, so each job links packages instead of downloading them.
+      - name: Cache bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install dependencies
         run: bun install
 
@@ -38,16 +46,17 @@ jobs:
           name: build-output
           path: .next/
 
-  # Split across four runners: one runner took ~12 minutes for the 731 test files, which made every
-  # rebase on this fast-moving master cost a quarter of an hour. `Test` below aggregates the shards so
-  # there is still a single check to wait on.
+  # Split across eight runners. One runner took ~12 minutes for the 731 test files, and every rebase
+  # on this fast-moving master paid it again; four shards still left the longest at ~4 minutes.
+  # Vitest shards by file count, not duration, so more shards also shrink the imbalance. `Test` below
+  # aggregates the shards so there is still a single check to wait on.
   test-shard:
-    name: 'Test (${{ matrix.shard }}/4)'
+    name: 'Test (${{ matrix.shard }}/8)'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       NEXT_PUBLIC_APP_ENV: production
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: '1234'
@@ -63,6 +72,14 @@ jobs:
         with:
           bun-version: 1.3.6
 
+      # bun's global package cache, so each job links packages instead of downloading them.
+      - name: Cache bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install dependencies
         run: bun install
 
@@ -72,7 +89,7 @@ jobs:
       # wrong five times before it was covered. `--passWithNoTests` because a small package can end
       # up with no files in some shard.
       - name: Run tests
-        run: bun turbo run --filter=web --filter=@geogenesis/auth test -- --shard=${{ matrix.shard }}/4 --passWithNoTests
+        run: bun turbo run --filter=web --filter=@geogenesis/auth test -- --shard=${{ matrix.shard }}/8 --passWithNoTests
 
   test:
     name: 'Test'
@@ -96,6 +113,14 @@ jobs:
         with:
           bun-version: 1.3.6
 
+      # bun's global package cache, so each job links packages instead of downloading them.
+      - name: Cache bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install dependencies
         run: bun install
 
@@ -112,6 +137,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.6
+
+      # bun's global package cache, so each job links packages instead of downloading them.
+      - name: Cache bun packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
         run: bun install
