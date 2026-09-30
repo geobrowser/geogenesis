@@ -88,6 +88,16 @@ const props = {
   spaceId: 'f3dab79cb5a3d9d1759656dd5361d1c6',
 };
 
+/**
+ * A press from `down` released on `up`. The click lands on their common ancestor,
+ * which for any press touching the backdrop is the backdrop itself.
+ */
+function press(down: Element, up: Element, backdrop: Element) {
+  fireEvent.pointerDown(down);
+  fireEvent.pointerUp(up);
+  fireEvent.click(backdrop);
+}
+
 function renderDialog(onOpenChange: (open: boolean) => void = () => {}) {
   return render(<EditRecordDialog kind="employment" onOpenChange={onOpenChange} {...props} />);
 }
@@ -247,8 +257,7 @@ describe('EditRecordDialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     const backdrop = screen.getAllByRole('dialog').at(-1)!;
-    fireEvent.pointerDown(backdrop);
-    fireEvent.click(backdrop);
+    press(backdrop, backdrop, backdrop);
 
     expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(mocks.discard).not.toHaveBeenCalled();
@@ -291,8 +300,18 @@ describe('EditRecordDialog', () => {
     renderDialog();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.pointerDown(screen.getByText('Exiting without saving will discard edits'));
-    fireEvent.click(screen.getAllByRole('dialog').at(-1)!);
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    press(screen.getByText('Exiting without saving will discard edits'), backdrop, backdrop);
+
+    expect(screen.getByText('Exiting without saving will discard edits')).toBeInTheDocument();
+  });
+
+  it('stays up after a drag from the backdrop in over the question', () => {
+    renderDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    const backdrop = screen.getAllByRole('dialog').at(-1)!;
+    press(backdrop, screen.getByText('Exiting without saving will discard edits'), backdrop);
 
     expect(screen.getByText('Exiting without saving will discard edits')).toBeInTheDocument();
   });

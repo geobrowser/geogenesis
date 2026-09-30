@@ -70,6 +70,16 @@ vi.mock('./add-education-sheet', () => ({ AddEducationSheet: () => <p>Education 
 
 const FOCUS_RING = ['focus-visible:outline-2', 'focus-visible:outline-text'];
 
+/**
+ * A press from `down` released on `up`. The click lands on their common ancestor,
+ * which for any press touching the backdrop is the backdrop itself.
+ */
+function press(down: Element, up: Element, backdrop: Element) {
+  fireEvent.pointerDown(down);
+  fireEvent.pointerUp(up);
+  fireEvent.click(backdrop);
+}
+
 function renderDialog(onOpenChange = vi.fn()) {
   const { rerender } = render(<EditProfileDialog open onOpenChange={onOpenChange} />);
   return { onOpenChange, rerender };
@@ -358,8 +368,7 @@ describe('EditProfileDialog', () => {
 
       await userEvent.type(nameField(), '!');
       const backdrop = screen.getByRole('dialog');
-      fireEvent.pointerDown(backdrop);
-      fireEvent.click(backdrop);
+      press(backdrop, backdrop, backdrop);
 
       expect(confirmation()).toBeInTheDocument();
       expect(onOpenChange).not.toHaveBeenCalled();
@@ -457,8 +466,7 @@ describe('EditProfileDialog', () => {
 
       await userEvent.click(screen.getByRole('button', { name: /Add experience/ }));
       const backdrop = screen.getByRole('dialog');
-      fireEvent.pointerDown(backdrop);
-      fireEvent.click(backdrop);
+      press(backdrop, backdrop, backdrop);
 
       expect(screen.queryByText('Position sheet')).not.toBeInTheDocument();
       expect(confirmation()).not.toBeInTheDocument();
@@ -654,8 +662,7 @@ describe('EditProfileDialog', () => {
     // The dialog content spans the viewport, so Radix's own outside-click never
     // fires and the backdrop is this container itself.
     const backdrop = screen.getByRole('dialog');
-    fireEvent.pointerDown(backdrop);
-    fireEvent.click(backdrop);
+    press(backdrop, backdrop, backdrop);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -695,13 +702,26 @@ describe('EditProfileDialog', () => {
     await userEvent.clear(nameField());
     await userEvent.paste('Half-typed name');
 
-    // The press begins in the field; only the click lands on the backdrop.
-    fireEvent.pointerDown(nameField());
-    fireEvent.click(backdrop);
+    // The press begins in the field; only the release lands on the backdrop.
+    press(nameField(), backdrop, backdrop);
 
+    // Not even the question: with the discard prompt in place a stray dismissal
+    // no longer loses the draft, but it is still not one anybody chose.
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.reset).not.toHaveBeenCalled();
     expect(nameField()).toHaveValue('Half-typed name');
+  });
+
+  // The same, the other way: pressing on the backdrop and releasing over the card.
+  it('does not dismiss when a drag started on the backdrop and ended inside the card', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.type(nameField(), '!');
+    press(screen.getByRole('dialog'), nameField(), screen.getByRole('dialog'));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
   });
 
   it('names which image each control acts on', () => {
