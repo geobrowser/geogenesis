@@ -1,16 +1,17 @@
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
   type ApiProposalListItem,
   convertVoteOption,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapActionTypeToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
@@ -131,12 +132,11 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
-
   const proposals = paginatedProposals.map(p => {
     const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
     const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
     const type = mapActionTypeToProposalType(actionType);
-    const status = mapProposalStatus(p.status);
+    const status = mapProposalStatus(getEffectiveApiProposalStatus(p));
 
     return {
       id: p.proposalId,
