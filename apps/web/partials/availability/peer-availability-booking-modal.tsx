@@ -21,7 +21,13 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
  * The bookable week. Separate from the modal so the mutation, and the query client it needs, only
  * enter the tree where booking is turned on.
  */
-export function PeerAvailabilityBookingModal({ userId, onClose, rescheduleRequestId = null, ...props }: Props) {
+export function PeerAvailabilityBookingModal({
+  userId,
+  onClose,
+  rescheduleRequestId = null,
+  entry = null,
+  ...props
+}: Props) {
   const propose = useCreateScheduledDebate();
   const reschedule = useRescheduleScheduledDebate();
   const mutation = rescheduleRequestId ? reschedule : propose;
@@ -30,6 +36,7 @@ export function PeerAvailabilityBookingModal({ userId, onClose, rescheduleReques
     <PeerAvailabilityModal
       {...props}
       userId={userId}
+      entry={entry}
       onClose={() => {
         onClose();
         // Otherwise the next person's week opens already showing the last one's outcome.
@@ -37,8 +44,12 @@ export function PeerAvailabilityBookingModal({ userId, onClose, rescheduleReques
       }}
       booking={{
         mode: rescheduleRequestId ? 'reschedule' : 'request',
-        onRequest: startsAt => {
-          const slot = { startsAt: new Date(startsAt), minutes: SCHEDULED_DEBATE_MINUTES };
+        onRequest: (startsAt, pick) => {
+          const slot = {
+            startsAt: new Date(startsAt),
+            minutes: SCHEDULED_DEBATE_MINUTES,
+            analytics: { entry, viewerIsFree: pick?.viewerIsFree ?? null },
+          };
           if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot });
           else propose.mutate({ opponentUserId: userId, ...slot });
         },

@@ -17,11 +17,9 @@ import { CopyAvailabilityLinkMenuItem } from './copy-availability-link-menu-item
 const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: { current: 0 } }));
 vi.mock('~/core/analytics', () => ({ capture, analyticsContextRevision: () => revision.current }));
 
-let flagOn = true;
 let personalSpaceId: string | null = 'my-space';
 const setToast = vi.fn();
 
-vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => flagOn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
 
@@ -38,7 +36,6 @@ beforeEach(() => {
   capture.mockReset();
   revision.current = 0;
   window.history.replaceState({}, '', '/explore');
-  flagOn = true;
   personalSpaceId = 'my-space';
 });
 
@@ -55,18 +52,15 @@ describe('CopyOwnAvailabilityLinkButton', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/my-space?modal=availability`);
+    expect(await navigator.clipboard.readText()).toBe(
+      `${window.location.origin}/space/my-space?modal=availability&via=share`
+    );
     expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
   });
 
-  it('draws nothing behind the flag or without a personal space', () => {
-    flagOn = false;
-    const { rerender } = render(<CopyOwnAvailabilityLinkButton />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-
-    flagOn = true;
+  it('draws nothing without a personal space', () => {
     personalSpaceId = null;
-    rerender(<CopyOwnAvailabilityLinkButton />);
+    render(<CopyOwnAvailabilityLinkButton />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
@@ -83,15 +77,11 @@ describe('CopyAvailabilityLinkMenuItem', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
 
-    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/space/their-space?modal=availability`);
+    expect(await navigator.clipboard.readText()).toBe(
+      `${window.location.origin}/space/their-space?modal=availability&via=share`
+    );
     expect(setToast).toHaveBeenCalledOnce();
     expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
-
-  it('draws nothing behind the flag', () => {
-    flagOn = false;
-    render(<CopyAvailabilityLinkMenuItem profileSpaceId="their-space" />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
@@ -145,7 +135,9 @@ describe.each(['schedule', 'menu'] as const)('%s share attribution', surface => 
     );
     await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
     const spaceId = surface === 'schedule' ? 'my-space' : 'their-space';
-    expect(clipboard).toHaveBeenCalledExactlyOnceWith(`${window.location.origin}/space/${spaceId}?modal=availability`);
+    expect(clipboard).toHaveBeenCalledExactlyOnceWith(
+      `${window.location.origin}/space/${spaceId}?modal=availability&via=share`
+    );
     expect(capture).not.toHaveBeenCalled();
 
     // Navigation and caller unmount may happen before the clipboard promise settles.

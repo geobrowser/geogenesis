@@ -13,8 +13,11 @@ import {
 describe('availability deep link', () => {
   it("lands on the person's profile, which is what names them", () => {
     expect(toAvailability('abc123')).toBe('/space/abc123?modal=availability');
+  });
+
+  it('marks a copied link as shared', () => {
     expect(availabilityLinkUrl('abc123', 'https://geo.example')).toBe(
-      'https://geo.example/space/abc123?modal=availability'
+      'https://geo.example/space/abc123?modal=availability&via=share'
     );
   });
 

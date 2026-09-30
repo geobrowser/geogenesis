@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { SpaceTopicFeed } from '~/core/topics/browse/topic-feed';
+import { spacePageEntityId } from '~/core/utils/space/space-page';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
@@ -76,12 +77,11 @@ export async function SpaceOverviewBody({
         stream it in
       */}
       {/*
-        Skipped entirely when the space has no home entity, where `props.id` is `''`.
-        `getEntityBacklinks` now answers an invalid id without a request, so this is not
-        what stops the 400 — it stops a boundary, a Suspense and a render existing to
-        produce nothing.
+        Skipped entirely when the space has no page entity yet — `props.id` is then `''` or the
+        id the page will be created at, and nothing can link to either. It stops a boundary, a
+        Suspense and a render existing to produce nothing.
       */}
-      {props.id !== '' && (
+      {props.hasPage && props.id !== '' && (
         <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
           <React.Suspense fallback={<div />}>
             <BacklinksServerContainer entityId={props.id} />
@@ -145,6 +145,7 @@ const getSpaceFrontPage = async (space: CachedSpace) => {
     // avoid; see the `props.id` guard where backlinks are rendered.
     return {
       id: '',
+      hasPage: false,
       name: null,
       values: [],
       relations: [],
@@ -162,6 +163,7 @@ const getSpaceFrontPage = async (space: CachedSpace) => {
     const syntheticEntity = synthetic?.entity ?? null;
     return {
       id: space.id,
+      hasPage: true,
       name: syntheticEntity?.name ?? null,
       values: syntheticEntity?.values ?? [],
       spaceTypes: syntheticEntity?.types ?? [],
@@ -172,7 +174,10 @@ const getSpaceFrontPage = async (space: CachedSpace) => {
   return {
     name: entity?.name ?? null,
     values: entity?.values ?? [],
-    id: entity.id,
+    // The id the page will be created at when the space has none, so the properties panel below
+    // does not write to `''` (GEO-2966). `hasPage` still says whether anything exists there yet.
+    id: space ? spacePageEntityId(space) : entity.id,
+    hasPage: entity.id !== '',
     spaceTypes: space?.entity?.types ?? [],
     relationsOut: entity?.relations ?? [],
   };

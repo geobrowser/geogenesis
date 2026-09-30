@@ -30,16 +30,29 @@ import type { AddSubtopicTarget } from '~/partials/space-page/add-subtopic-searc
 const PREFETCH_CHILDREN_LIMIT = 10;
 
 interface SubtopicsTreeViewProps {
+  /** Where the Subtopics relations are read from and where edits to them are proposed. */
   spaceId: string;
+  /** The space topic links open in. Defaults to `spaceId`. */
+  linkSpaceId?: string;
   rootEntityId: string;
+  /** Shown for the root node. Falls back to the root entity's name in `spaceId`. */
+  rootName?: string | null;
   onAddSubtopic: (target: AddSubtopicTarget) => void;
   onNavigate?: () => void;
 }
 
-export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavigate }: SubtopicsTreeViewProps) {
+export function SubtopicsTreeView({
+  spaceId,
+  linkSpaceId = spaceId,
+  rootEntityId,
+  rootName: rootNameOverride,
+  onAddSubtopic,
+  onNavigate,
+}: SubtopicsTreeViewProps) {
   const { isEditor, isMember } = useAccessControl(spaceId);
   const canEdit = isEditor || isMember;
-  const rootName = useName(rootEntityId, spaceId);
+  const treeSpaceName = useName(rootEntityId, spaceId);
+  const rootName = rootNameOverride ?? treeSpaceName;
   const prefetchDefaultSubtopics = usePrefetchDefaultSubtopics();
 
   // Warm the "add a subtopic" suggestions while the user browses the tree so the
@@ -91,6 +104,7 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavi
           entityId={rootEntityId}
           name={rootName ?? 'Untitled'}
           spaceId={spaceId}
+          linkSpaceId={linkSpaceId}
           rootEntityId={rootEntityId}
           depth={0}
           canEdit={canEdit}
@@ -164,6 +178,7 @@ function SubtopicTreeNode({
   entityId,
   name,
   spaceId,
+  linkSpaceId,
   rootEntityId,
   depth,
   canEdit,
@@ -178,6 +193,7 @@ function SubtopicTreeNode({
   entityId: string;
   name: string;
   spaceId: string;
+  linkSpaceId: string;
   rootEntityId: string;
   depth: number;
   canEdit: boolean;
@@ -248,7 +264,7 @@ function SubtopicTreeNode({
         </button>
 
         <Link
-          href={NavUtils.toEntity(spaceId, entityId)}
+          href={NavUtils.toEntity(linkSpaceId, entityId)}
           onClick={() => onNavigate?.()}
           className="min-w-0 flex-1 truncate text-button text-current hover:underline"
         >
@@ -305,6 +321,7 @@ function SubtopicTreeNode({
                 entityId={child.id}
                 name={child.name}
                 spaceId={spaceId}
+                linkSpaceId={linkSpaceId}
                 rootEntityId={rootEntityId}
                 depth={depth + 1}
                 canEdit={canEdit}

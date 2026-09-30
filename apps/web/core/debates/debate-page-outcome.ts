@@ -56,7 +56,9 @@ export function createDebatePageOutcome({ debateId, emit, now }: { debateId: str
     done = true;
     try {
       emit({
-        measurement_version: 'debate-page-v1',
+        // Not `measurement_version`: the collector rejects any event carrying that key unless it is
+        // `growth-v2` with a measurement contract, and this event has none, so every one was dropped.
+        outcome_version: 'debate-page-v1',
         debate_id: debateId,
         shown_ms: elapsed(shownAt),
         ready_ms: elapsed(readyAt),

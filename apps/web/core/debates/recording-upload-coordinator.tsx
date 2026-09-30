@@ -26,6 +26,7 @@ import {
   cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
+  geoChatErrorProperties,
   getDebate,
   getLocalRecordingPartUrls,
   resolveCurrentGeoChatUserId,
@@ -88,18 +89,6 @@ export function isPermanentRecordingUploadError(error: unknown): boolean {
 
 /** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
 type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
-
-/** An upload error in analytics terms: geo-chat's code and status where it has them. */
-function uploadErrorProperties(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
-  }
-  return {
-    error_code: null,
-    http_status: null,
-    error_name: error instanceof Error ? error.name : typeof error,
-  };
-}
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
@@ -473,7 +462,7 @@ export function DebateRecordingUploadCoordinator() {
             debate_id: upload.debateId,
             stage: attemptStage,
             attempt_count: attemptCount + 1,
-            ...uploadErrorProperties(error),
+            ...geoChatErrorProperties(error),
           });
           try {
             await deleteDebateRecordingUpload(upload.id);
@@ -489,7 +478,7 @@ export function DebateRecordingUploadCoordinator() {
           stage: attemptStage,
           attempt_count: attemptCount + 1,
           online: typeof navigator === 'undefined' || navigator.onLine,
-          ...uploadErrorProperties(error),
+          ...geoChatErrorProperties(error),
         });
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,

@@ -5,13 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse } from '../api';
 
 const mocks = vi.hoisted(() => ({
-  schedulingEnabled: true,
   scheduled: undefined as
     { requests: { status: string; room_id: string | null; scheduled_start_at?: string }[] } | undefined,
-}));
-
-vi.mock('~/core/state/feature-flags', () => ({
-  usePeerAvailabilityEnabled: () => mocks.schedulingEnabled,
 }));
 
 vi.mock('../rooms/scheduling-hooks', () => ({
@@ -47,7 +42,6 @@ function count(input: {
 }
 
 afterEach(() => {
-  mocks.schedulingEnabled = true;
   mocks.scheduled = undefined;
 });
 
@@ -102,13 +96,6 @@ describe('the Requests tab count', () => {
 
   it("falls back to activity's awaiting count until the scheduled list lands", () => {
     expect(count({ activity: { scheduled_awaiting_answer_count: 1 } })).toBe(1);
-  });
-
-  it('counts no scheduled requests with the flag off', () => {
-    mocks.schedulingEnabled = false;
-    mocks.scheduled = { requests: [{ status: 'pending', room_id: null }] };
-
-    expect(count({ activity: { scheduled_awaiting_answer_count: 1 } })).toBe(0);
   });
 
   it('counts nothing signed out, whatever a stale cache says', () => {
