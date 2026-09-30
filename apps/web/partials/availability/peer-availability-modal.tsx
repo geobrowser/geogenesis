@@ -11,7 +11,6 @@ import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
-import { Text } from '~/design-system/text';
 
 import { PeerAvailability, type PeerAvailabilityBooking } from './peer-availability';
 
@@ -39,6 +38,8 @@ type Props = {
   initialSelectedStart?: string | null;
   /** What opened it, for analytics. */
   entry?: ScheduleEntry | null;
+  /** Claims the viewer and this person disagree on, when the caller has compared them. */
+  disagreementCount?: number | null;
 };
 
 /**
@@ -62,6 +63,7 @@ export function PeerAvailabilityModal({
   children,
   initialSelectedStart,
   entry = null,
+  disagreementCount = null,
 }: Props) {
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
@@ -92,24 +94,25 @@ export function PeerAvailabilityModal({
               so nothing can push the close button off a short window. */}
           <div
             data-no-sheet-drag
-            className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden overscroll-none rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:rounded-none md:p-4"
+            className="relative flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden overscroll-none rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:rounded-none md:p-4"
           >
-            <div className="flex shrink-0 items-start justify-between gap-4">
-              <Title asChild>
-                <Text as="h2" variant="smallTitle">
-                  Availability
-                </Text>
-              </Title>
-              <button
-                type="button"
-                aria-label="Close"
-                {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
-                onClick={onClose}
-                className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
-            </div>
+            {/* The week's own "When … is free" is the visible heading, so the dialog's name is for
+                assistive tech only. It is here rather than on that heading because the view also
+                renders outside a dialog (the debug page), where a Radix `Title` would throw. */}
+            <Title asChild>
+              {/* A span, not Radix's default `h2`, so it doesn't sit beside the visible one as a
+                  second heading with the same name. */}
+              <span className="sr-only">{peerName ? `When ${peerName} is free` : 'Availability'}</span>
+            </Title>
+            <button
+              type="button"
+              aria-label="Close"
+              {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
+              onClick={onClose}
+              className="absolute top-6 right-5 z-10 grid size-4 place-items-center text-[#151515] transition-opacity hover:opacity-70 md:top-5 md:right-4"
+            >
+              <Close />
+            </button>
 
             {/* Mounted only while open, so a closed dialog issues no request. It is also what keeps
                 an empty `userId` away from the hook while nobody is selected. */}
@@ -122,6 +125,7 @@ export function PeerAvailabilityModal({
                   booking={booking}
                   initialSelectedStart={initialSelectedStart}
                   entry={entry}
+                  disagreementCount={disagreementCount}
                 />
               ))}
           </div>
