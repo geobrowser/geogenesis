@@ -65,8 +65,9 @@ export async function syncWalletCookie(address: `0x${string}`) {
     clearRetry();
     return;
   }
-  // No wallet recognised can be transient (Privy's keys unreachable). A different wallet cannot:
-  // the same token would name it again, so that is left to the next smart-account run.
+  // Null covers a token that could not be verified (Privy's keys unreachable), which can pass. A
+  // different wallet cannot: it is the one this same token verified as, so it would come back
+  // again, and it is left to the next smart-account run.
   if (recognised === null) scheduleRetry(address);
 }
 

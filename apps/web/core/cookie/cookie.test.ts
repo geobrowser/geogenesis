@@ -51,13 +51,16 @@ describe('onConnectionChange', () => {
     expect(store.set).not.toHaveBeenCalled();
   });
 
-  it('keeps an existing session when a forged token arrives', async () => {
+  // Echoing the existing session here would name the previous wallet after an account switch,
+  // which the client takes as settled and never retries — leaving the tab signed in as that wallet.
+  it('answers null for an unverifiable token, and leaves the existing session alone', async () => {
     store.values.set(WALLET_SESSION, signWalletSession(OTHER)!);
 
-    await expect(onConnectionChange({ type: 'connect', identityToken: 'forged' })).resolves.toBe(OTHER);
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'forged' })).resolves.toBeNull();
 
     expect(store.set).not.toHaveBeenCalled();
     expect(store.delete).not.toHaveBeenCalled();
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(OTHER);
   });
 
   // Any cookie write in a Server Action makes Next re-render the page, and after a deploy that is

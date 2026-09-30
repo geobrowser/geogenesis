@@ -27,7 +27,10 @@ type ConnectionChangeArgs =
  * from the server, and if a deploy has shipped since the tab loaded, that re-render becomes a full
  * browser reload. Reading the cookie does not count as a revalidation.
  *
- * Returns the wallet the server now recognises, or null when it recognises none.
+ * Returns the wallet the token verified as, once the session names it, or null when it does not —
+ * including when the token could not be verified. That case must not echo the existing session:
+ * after an account switch it would name the previous wallet, which the client reads as a settled
+ * answer and does not retry, leaving the tab signed in as that wallet.
  */
 export async function onConnectionChange(connectionChange: ConnectionChangeArgs): Promise<`0x${string}` | null> {
   const cookieStore = await cookies();
@@ -41,7 +44,7 @@ export async function onConnectionChange(connectionChange: ConnectionChangeArgs)
 
   const address = await verifyPrivyIdentityToken(connectionChange.identityToken);
   // An unverifiable token leaves the session as it was: it proves nothing about who is asking.
-  if (!address) return readWalletCookie(cookieStore) ?? null;
+  if (!address) return null;
 
   if (hasLegacyCookie) cookieStore.delete(LEGACY_WALLET_ADDRESS);
   if (readWalletCookie(cookieStore) === address) return address;
