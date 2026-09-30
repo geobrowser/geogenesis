@@ -728,9 +728,6 @@ describe('ClaimPageView description', () => {
 });
 
 describe('ClaimPageView position', () => {
-  // The claim page is where a confirming response was pressed again and published a retraction.
-  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
-  // cursor, and only the presses that would undo it are dropped until it lands.
   it('names the claim for the vote control, so a vote kept on the device has a save-sheet chip', () => {
     mocks.entity = claimEntity(null);
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
@@ -759,13 +756,18 @@ describe('ClaimPageView position', () => {
     expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction. It
+  // hands the pills two flags: `pending`, which drops the undo-ing press until the bundler has the
+  // write, and `announcing`, the single screen-reader confirmation, which runs for the whole
+  // confirming window so it is not dropped and re-fired on an indexing retry. There is no visible
+  // sentence; the announcement is `sr-only` inside the pills.
+  it('marks the pills pending and announcing until the response reaches the bundler', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
-    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+    expect(mocks.positionControl?.announcing).toBe(true);
   });
 
   // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
@@ -775,12 +777,14 @@ describe('ClaimPageView position', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(false);
+    expect(mocks.positionControl?.announcing).toBe(true);
   });
 
   it('releases the pills once it has landed', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(false);
+    expect(mocks.positionControl?.announcing).toBe(false);
   });
 });
 

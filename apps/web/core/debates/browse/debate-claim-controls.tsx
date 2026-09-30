@@ -57,6 +57,7 @@ export function DebateClaimControls({
           onRespond={control.respond}
           disabled={!control.canRespond}
           pending={control.isResponseSubmitting}
+          announcing={control.isResponsePending}
           titleFor={control.actionTitle}
           localSide={control.localVoteSide}
           showParticipants={showParticipants}

@@ -42,6 +42,7 @@ export function ClaimPositionCommentControl({
   promptForComment,
   disabled,
   pending,
+  announcing,
   titleFor,
   noteFor,
   localSide,
@@ -71,6 +72,8 @@ export function ClaimPositionCommentControl({
   disabled?: boolean;
   /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
   pending?: boolean;
+  /** Speak the confirming sentence once, hidden. See `PositionRow`. */
+  announcing?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
   /** The side held only on this device; see `PositionRow`. */
@@ -181,6 +184,7 @@ export function ClaimPositionCommentControl({
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
           pending={pending}
+          announcing={announcing}
           titleFor={titleFor}
           noteFor={noteFor}
           localSide={localSide}

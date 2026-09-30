@@ -49,7 +49,7 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { ResponseButton } from '~/partials/entity-page/response-button';
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
 
 import type {
   Debate,
@@ -761,7 +761,8 @@ export function useClaimPositionControl({
     isConnected,
     /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
-     * whether to trust the index — not for the pills, which use `isResponseSubmitting`.
+     * whether to trust the index, and for the one screen-reader confirmation, spoken for the length
+     * of it — not for the pills' presses, which use `isResponseSubmitting`.
      */
     isResponsePending,
     /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
@@ -954,6 +955,7 @@ function RespondableControls({
     actionTitle,
     responseError,
     canRespond,
+    isResponsePending,
     isResponseSubmitting,
     localVoteSide,
   } = useClaimPositionControl({
@@ -1009,6 +1011,7 @@ function RespondableControls({
         // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
         pending={isResponseSubmitting}
+        announcing={isResponsePending}
         titleFor={actionTitle}
         noteFor={noteFor}
         showParticipants={showParticipants}
@@ -1261,6 +1264,7 @@ export function PositionRow({
   onRespond,
   disabled,
   pending,
+  announcing = false,
   titleFor,
   noteFor,
   localSide = null,
@@ -1286,6 +1290,11 @@ export function PositionRow({
    * pointer, with a wait cursor.
    */
   pending?: boolean;
+  /**
+   * Speak the confirming sentence once, hidden. Separate from `pending`, which ends once the bundler
+   * has the write; this runs until the response is indexed.
+   */
+  announcing?: boolean;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1339,6 +1348,7 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
+      <ResponseConfirmingAnnouncement active={announcing} />
       <div
         className={cx(
           'grid gap-2',

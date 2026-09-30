@@ -28,7 +28,6 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
-  RESPONSE_CONFIRMING_COPY,
   RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
@@ -58,7 +57,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { ResponseButton } from '~/partials/entity-page/response-button';
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
 import { VOTE_BUTTON_HOVER_CLASS, VOTE_BUTTON_RESTING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
@@ -85,19 +84,9 @@ type EntityVoteButtonsProps = {
    * blocking responses, or that there is no response kind — and the page explains that state too, so
    * a reader who finds nothing in the bar has somewhere else to find it.
    *
-   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
-   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
-   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
-   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
-   * earlier version of this comment claimed the page's own copy announced instead, and that is false
-   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
-   * puts this same sentence in a `title`: read on focus, never announced.
-   *
-   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
-   * profile — both live regions are inserted at once and the confirmation can be announced twice.
-   * Deduplicating needs the two surfaces to know about each other, and this component renders once
-   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
-   * announcement is the better failure than none.
+   * **The indexing notice stays off this copy.** The page header mounts another `EntityVoteButtons`
+   * for the same entity, and that one announces. Speaking here too would say the sentence twice.
+   * The bar takes no width either way.
    */
   compact?: boolean;
   /** Draw a failed vote's message beside the arrows. */
@@ -183,7 +172,7 @@ function EntityResponseButtons({
     submitResponseAsync,
     optimisticResponse,
     isSubmittingResponse,
-    isResponseIndexingDelayed,
+    isProcessingResponse,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
@@ -515,6 +504,12 @@ function EntityResponseButtons({
     );
   }
 
+  // Active for the whole confirming window, until the vote is indexed, so the sentence is spoken once
+  // when the vote enters it, not again on each indexing retry. Left off the compact sticky bar so the
+  // full-size page control is the one that speaks, and a vote is not announced twice; see the
+  // `compact` prop's note.
+  const confirmingAnnouncement = <ResponseConfirmingAnnouncement active={!compact && isProcessingResponse} />;
+
   // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
   // `isSubmittingResponse` clears once the bundler has the write.
   const thumbClassName = cx(
@@ -561,19 +556,7 @@ function EntityResponseButtons({
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </ResponseButton>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {isResponseIndexingDelayed ? (
-        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
-        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
-        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
-        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
-        //
-        // I had claimed the page's own copy still announced. It does not on the surface that matters
-        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
-        // same sentence in a `title` attribute — read on focus, never announced as a live update.
-        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
-          {RESPONSE_CONFIRMING_COPY}
-        </span>
-      ) : null}
+      {confirmingAnnouncement}
       {responseError ? (
         <span role="alert" className={cx(showInlineError && !compact ? 'ml-1 text-metadata text-red-01' : 'sr-only')}>
           {responseError}

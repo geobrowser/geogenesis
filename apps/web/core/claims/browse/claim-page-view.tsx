@@ -738,6 +738,7 @@ function ClaimPositionSection({
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
         pending={control.isResponseSubmitting}
+        announcing={control.isResponsePending}
         titleFor={control.actionTitle}
         noteFor={position => (
           <EmailVoteNote
