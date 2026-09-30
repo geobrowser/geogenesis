@@ -80,7 +80,7 @@ export function ScheduleButton({ ref }: { ref?: React.RefObject<HTMLButtonElemen
           </button>
         }
       />
-      <OwnScheduleModal open={modalOpen} onOpenChange={setModalOpen} openerRef={openerRef} />
+      <OwnScheduleModal open={modalOpen} onOpenChange={setModalOpen} openerRef={openerRef} surface="hub_header" />
     </>
   );
 }

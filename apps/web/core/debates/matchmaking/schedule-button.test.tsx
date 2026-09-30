@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   loaded: true,
   authenticated: true,
   blocks: [] as AvailabilityBlock[],
+  saveSurfaces: [] as string[],
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -25,7 +26,10 @@ vi.mock('~/core/debates/hooks', () => ({
     isError: false,
     refetch: vi.fn(),
   }),
-  useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  useSaveDebateSchedule: ({ surface }: { surface: string }) => {
+    mocks.saveSurfaces.push(surface);
+    return { mutate: vi.fn(), isPending: false };
+  },
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'did:privy:1' }),
 }));
 
@@ -38,6 +42,7 @@ afterEach(() => {
   mocks.loaded = true;
   mocks.authenticated = true;
   mocks.blocks = [];
+  mocks.saveSurfaces = [];
 });
 
 describe('ScheduleButton', () => {
@@ -97,6 +102,17 @@ describe('ScheduleButton', () => {
     expect(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' })
     ).toBeInTheDocument();
+  });
+
+  // Saves from here are told apart from the banner's, which is only onboarding and retires.
+  it('attributes the schedule it saves to the hub header', async () => {
+    const user = userEvent.setup();
+    render(<ScheduleButton />);
+
+    await user.click(screen.getByRole('button', { name: 'Set your debate schedule' }));
+    await screen.findByRole('dialog');
+
+    expect(new Set(mocks.saveSurfaces)).toEqual(new Set(['hub_header']));
   });
 
   // The hub hands this ref to the banner, which sends focus here when it leaves.
