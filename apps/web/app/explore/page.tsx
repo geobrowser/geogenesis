@@ -1,14 +1,14 @@
 import { cookies } from 'next/headers';
 
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 
 import { ExplorePage } from '~/partials/explore/explore-page';
 
 export default async function ExploreRoutePage() {
-  const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const wallet = readWalletCookie(await cookies());
 
   let memberSpaceId: string | null = null;
   try {

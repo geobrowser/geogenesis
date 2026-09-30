@@ -10,7 +10,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { generateText, jsonSchema, stepCountIs, tool } from 'ai';
 import { cookies } from 'next/headers';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 
 import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
@@ -137,11 +137,6 @@ function isSameOrigin(req: Request): boolean {
   }
 }
 
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
-}
 
 function getClientIp(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');
@@ -399,7 +394,7 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = readWalletCookieLowercase(cookieStore);
   if (!wallet) {
     return jsonError(401, 'Sign in to search images.');
   }

@@ -1,7 +1,9 @@
+import { getCachedIdentityToken } from '~/core/auth/identity-token';
+
 import { onConnectionChange } from './cookie';
 
 /**
- * The address this tab last wrote to the wallet cookie. Module scope, so it outlives the
+ * The address this tab last had the server recognise. Module scope, so it outlives the
  * smart-account query's refetches and resets with the page.
  *
  * `onConnectionChange` already skips the cookie write when nothing changed, but the call itself is
@@ -11,11 +13,22 @@ import { onConnectionChange } from './cookie';
  */
 let syncedAddress: string | null = null;
 
+/**
+ * Has the server recognise `address` as this tab's wallet. The server takes the wallet from the
+ * Privy identity token, not from `address` (GEO-3107), so `address` only decides whether a call
+ * is needed and whether the answer matches.
+ */
 export async function syncWalletCookie(address: `0x${string}`) {
-  if (syncedAddress === address) return;
-  await onConnectionChange({ type: 'connect', address });
-  // Set only after the write lands, so a failed call is retried on the next run.
-  syncedAddress = address;
+  if (syncedAddress === address.toLowerCase()) return;
+
+  // No token yet means Privy has not finished signing in. Leave it for the next run rather than
+  // failing the smart-account query over it.
+  const identityToken = await getCachedIdentityToken();
+  if (!identityToken) return;
+
+  const recognised = await onConnectionChange({ type: 'connect', identityToken });
+  // Remembered only once the server vouches for this same wallet, so anything else is retried.
+  if (recognised?.toLowerCase() === address.toLowerCase()) syncedAddress = recognised.toLowerCase();
 }
 
 /** Call when the wallet goes away, so signing back in with the same one writes the cookie again. */

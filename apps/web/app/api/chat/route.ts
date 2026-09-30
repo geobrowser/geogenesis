@@ -18,7 +18,7 @@ import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
 import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 
 import {
   CLOSER_SYSTEM_PROMPT,
@@ -154,11 +154,6 @@ function getClientIp(req: Request): string {
   return `noip:${crypto.randomUUID()}`;
 }
 
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
-}
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
@@ -385,7 +380,7 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = readWalletCookieLowercase(cookieStore);
 
   const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
