@@ -1,55 +1,51 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { VARIANT_ATOMS, resetUrlSeedsForTests, takeUrlSeed } from './claims-tab';
-
-beforeEach(resetUrlSeedsForTests);
+import { VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 
 /**
  * The URL seed used to be guarded by a `React.useRef`, which is reset by any remount while the query
  * it reads never changes.
  */
-describe('takeUrlSeed', () => {
+describe('readUrlSeed', () => {
   const EXPLORE_LINK = 'list=explore&spaces=space-a';
 
   it('gives the named list its seed', () => {
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
+    expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
   });
 
-  // The whole point: a remount asks again, and must be told no.
-  it('gives it once, however many times it is asked', () => {
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).not.toBeNull();
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).toBeNull();
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).toBeNull();
+  it('answers the same way however many times it is asked', () => {
+    expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
+    expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
   });
 
   /**
    * `LobbyTab` renders a `ClaimsTab` of its own with `variant="lobby"`
    */
   it('refuses a list the link did not name', () => {
-    expect(takeUrlSeed('lobby', EXPLORE_LINK)).toBeNull();
-    expect(takeUrlSeed('positions', EXPLORE_LINK)).toBeNull();
+    expect(readUrlSeed('lobby', EXPLORE_LINK)).toBeNull();
+    expect(readUrlSeed('positions', EXPLORE_LINK)).toBeNull();
   });
 
-  // Still available to the list it was meant for, after another variant has asked and been refused.
-  it('keeps the seed for its own list when another asks first', () => {
-    expect(takeUrlSeed('lobby', EXPLORE_LINK)).toBeNull();
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
+  // A refusal for one list says nothing about another: the check is the link's own list, not a
+  // first-come claim on it.
+  it('answers each list on its own terms', () => {
+    expect(readUrlSeed('lobby', EXPLORE_LINK)).toBeNull();
+    expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
   });
 
   // A link naming no list is about Lobby: the workspace opens there and omits it as the default.
   it('treats a link with no list as naming Lobby', () => {
-    expect(takeUrlSeed('explore', 'spaces=space-a')).toBeNull();
-    expect(takeUrlSeed('lobby', 'spaces=space-a')).toMatchObject({ spaceIds: ['space-a'] });
+    expect(readUrlSeed('explore', 'spaces=space-a')).toBeNull();
+    expect(readUrlSeed('lobby', 'spaces=space-a')).toMatchObject({ spaceIds: ['space-a'] });
   });
 
-  // A different link is a different intent, so it gets its own turn.
-  it('seeds again for a different query', () => {
-    expect(takeUrlSeed('explore', EXPLORE_LINK)).not.toBeNull();
-    expect(takeUrlSeed('explore', 'list=explore&spaces=space-b')).toMatchObject({ spaceIds: ['space-b'] });
+  it('reads each query on its own', () => {
+    expect(readUrlSeed('explore', EXPLORE_LINK)).toMatchObject({ spaceIds: ['space-a'] });
+    expect(readUrlSeed('explore', 'list=explore&spaces=space-b')).toMatchObject({ spaceIds: ['space-b'] });
   });
 
   it('carries search and topics too', () => {
-    expect(takeUrlSeed('positions', 'list=positions&q=nuclear&topics=t1,t2')).toMatchObject({
+    expect(readUrlSeed('positions', 'list=positions&q=nuclear&topics=t1,t2')).toMatchObject({
       search: 'nuclear',
       topicIds: ['t1', 't2'],
     });
@@ -62,7 +58,7 @@ describe('takeUrlSeed', () => {
  */
 describe('the atoms a seed is written into', () => {
   it('sends a list-less link to Lobby, which both of its branches read', () => {
-    const seed = takeUrlSeed('lobby', 'spaces=space-a&q=climate');
+    const seed = readUrlSeed('lobby', 'spaces=space-a&q=climate');
 
     expect(seed).toMatchObject({ spaceIds: ['space-a'], search: 'climate' });
     // The same atoms `MatchesList` reads, so the filters are on screen whichever branch draws.

@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, takeUrlSeed } from './claims-tab';
+import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
@@ -41,30 +41,34 @@ export function DebatesHubWorkspace() {
   const searchParams = useSearchParams();
   const store = useStore();
 
-  const appliedList = React.useRef<ClaimsTabVariant | null | undefined>(undefined);
+  const appliedQuery = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
     if (!searchParams) return;
 
+    const query = searchParams.toString();
+    if (appliedQuery.current === query) return;
+    const isFirstPass = appliedQuery.current === undefined;
+    appliedQuery.current = query;
+
     const asked = fromClaimsFilterSearch(
-      new URLSearchParams(searchParams.toString()),
+      new URLSearchParams(query),
       LIST_OPTIONS.map(option => option.value)
     ).list;
-    if (appliedList.current === asked) return;
-    appliedList.current = asked;
 
     const opened = asked ?? DEFAULT_WORKSPACE_LIST;
     setList(opened);
 
-    const seed = takeUrlSeed(opened, searchParams.toString());
+    const seed = readUrlSeed(opened, query);
     if (!seed) return;
 
+    const narrows = Boolean(seed.search) || seed.spaceIds.length > 0 || seed.topicIds.length > 0;
+    if (isFirstPass && !narrows) return;
+
     const atoms = VARIANT_ATOMS[opened];
-    if (seed.search) store.set(atoms.search, seed.search);
-    if (seed.topicIds.length > 0) store.set(atoms.topicIds, [...seed.topicIds]);
-    if (seed.spaceIds.length > 0) {
-      store.set(atoms.spaceIds, [...seed.spaceIds]);
-      store.set(atoms.seedSpent, true);
-    }
+    store.set(atoms.search, seed.search);
+    store.set(atoms.topicIds, [...seed.topicIds]);
+    store.set(atoms.spaceIds, [...seed.spaceIds]);
+    store.set(atoms.seedSpent, narrows);
   }, [searchParams, store]);
   const options = React.useMemo(
     () => (authenticated ? LIST_OPTIONS : LIST_OPTIONS.filter(option => SIGNED_OUT_LISTS.includes(option.value))),

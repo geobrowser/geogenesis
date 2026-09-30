@@ -3,34 +3,69 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebatesHubWorkspace } from './hub-workspace';
+import {
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreSpaceSeedSpentAtom,
+  debatesHubExploreTopicIdsAtom,
+} from '~/atoms';
 
 /**
  * The three claim lists are the panel's tabs and have their own suites; this one is about how the
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
-vi.mock('./claims-tab', () => ({
-  // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
-  // back to Lobby. Mirrored because this file mocks the module wholesale.
-  DEFAULT_WORKSPACE_LIST: 'lobby',
-  VARIANT_ATOMS: {
-    explore: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
-    positions: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
-    lobby: { spaceIds: null, topicIds: null, search: null, seedSpent: null },
-  },
-  takeUrlSeed: () => null,
-  ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
-    const logged = React.useRef(false);
-    React.useEffect(() => {
-      if (logged.current) return;
-      logged.current = true;
-      mocks.mounts.push(variant ?? 'explore');
-    }, [variant]);
-    return <div data-testid={`claims-tab-${variant ?? 'explore'}`}>{scopePicker}</div>;
-  },
-}));
+vi.mock('./claims-tab', async () => {
+  const atoms = await import('~/atoms');
+  return {
+    // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
+    // back to Lobby. Mirrored because this file mocks the module wholesale.
+    DEFAULT_WORKSPACE_LIST: 'lobby',
+    VARIANT_ATOMS: {
+      explore: {
+        spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
+        topicIds: atoms.debatesHubExploreTopicIdsAtom,
+        search: atoms.debatesHubExploreSearchAtom,
+        seedSpent: atoms.debatesHubExploreSpaceSeedSpentAtom,
+      },
+      positions: {
+        spaceIds: atoms.debatesHubPositionsSpaceIdsAtom,
+        topicIds: atoms.debatesHubPositionsTopicIdsAtom,
+        search: atoms.debatesHubPositionsSearchAtom,
+        seedSpent: atoms.debatesHubPositionsSpaceSeedSpentAtom,
+      },
+      lobby: {
+        spaceIds: atoms.debatesHubLobbySpaceIdsAtom,
+        topicIds: atoms.debatesHubLobbyTopicIdsAtom,
+        search: atoms.debatesHubLobbySearchAtom,
+        seedSpent: atoms.debatesHubLobbySpaceSeedSpentAtom,
+      },
+    },
+    readUrlSeed: (variant: string, query: string) => {
+      const params = new URLSearchParams(query);
+      const list = params.get('list') ?? 'lobby';
+      if (list !== variant) return null;
+      return {
+        list: params.get('list'),
+        search: params.get('q') ?? '',
+        spaceIds: (params.get('spaces') ?? '').split(',').filter(Boolean),
+        topicIds: (params.get('topics') ?? '').split(',').filter(Boolean),
+      };
+    },
+    ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
+      const logged = React.useRef(false);
+      React.useEffect(() => {
+        if (logged.current) return;
+        logged.current = true;
+        mocks.mounts.push(variant ?? 'explore');
+      }, [variant]);
+      return <div data-testid={`claims-tab-${variant ?? 'explore'}`}>{scopePicker}</div>;
+    },
+  };
+});
 
 vi.mock('./lobby-tab', () => ({
   LobbyTab: ({ scopePicker }: { scopePicker?: React.ReactNode }) => <div data-testid="lobby-tab">{scopePicker}</div>,
@@ -65,6 +100,82 @@ afterEach(cleanup);
 /**
  * Privy reports `ready: false, authenticated: false` until it restores the session.
  */
+/**
+ * A URL is a complete statement about what is narrowed, so navigating between two URLs for the same
+ * list has to apply the difference.
+ */
+describe('when only the filters change, not the list', () => {
+  let store: ReturnType<typeof createStore>;
+
+  /** Its own store, so what the workspace writes is readable and does not leak between cases. */
+  function renderWithSearch(initial: string) {
+    store = createStore();
+    mocks.search = initial;
+    const view = render(
+      <Provider store={store}>
+        <DebatesHubWorkspace />
+      </Provider>
+    );
+    return (next: string) => {
+      mocks.search = next;
+      view.rerender(
+        <Provider store={store}>
+          <DebatesHubWorkspace />
+        </Provider>
+      );
+    };
+  }
+
+  const exploreSearch = () => store.get(debatesHubExploreSearchAtom);
+
+  it('applies a filter the new URL adds', () => {
+    const navigate = renderWithSearch('list=explore');
+
+    navigate('list=explore&q=climate');
+
+    expect(exploreSearch()).toBe('climate');
+  });
+
+  // The failing half of the repro: Forward returns to a URL already visited, and its filters have to
+  // come back. A spent marker used to refuse exactly this.
+  it('re-applies a filter on the way Forward to a URL already seen', () => {
+    const navigate = renderWithSearch('list=explore&q=climate');
+    expect(exploreSearch()).toBe('climate');
+
+    navigate('list=explore');
+    navigate('list=explore&q=climate');
+
+    expect(exploreSearch()).toBe('climate');
+  });
+
+  // Clearing, not just adding: an absent `q` means "no search", not "leave the search alone".
+  it('clears a filter the new URL leaves out', () => {
+    const navigate = renderWithSearch('list=explore&q=climate');
+
+    navigate('list=explore');
+
+    expect(exploreSearch()).toBe('');
+  });
+
+  it('applies spaces and topics the same way', () => {
+    const navigate = renderWithSearch('list=explore');
+
+    navigate('list=explore&spaces=space-a&topics=t1,t2');
+
+    expect(store.get(debatesHubExploreSpaceIdsAtom)).toEqual(['space-a']);
+    expect(store.get(debatesHubExploreTopicIdsAtom)).toEqual(['t1', 't2']);
+  });
+
+  // An ordinary arrival at /matchmaking must not read as "the corpus has been chosen", or the
+  // membership default a fresh viewer should get is suppressed.
+  it('leaves an unfiltered first arrival alone', () => {
+    renderWithSearch('');
+
+    expect(store.get(debatesHubExploreSpaceSeedSpentAtom)).toBe(false);
+    expect(exploreSearch()).toBe('');
+  });
+});
+
 describe('when the URL changes without a remount', () => {
   function renderWithSearch(initial: string) {
     mocks.search = initial;

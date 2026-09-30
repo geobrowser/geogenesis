@@ -143,26 +143,23 @@ export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lob
 
 export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'lobby';
 
-const appliedUrlSeeds = new Set<string>();
-
 /**
- * The seed this variant should apply for this query, or null if there is nothing to do — because the
- * link names a different list, or because this one has already been spent
+ * The seed a variant should apply for a query, or null when the link names a different list.
+ *
+ * No spent marker any more. It used to hold a module-level set of `(list, query)` pairs so a second
+ * mount could not re-apply a link — but the workspace is the only caller now, and it does not
+ * remount on a query change, so that guard belongs there instead. Worse, the marker refused a
+ * genuine re-navigation: Back and then Forward to a URL already visited read as spent, and the
+ * filters it named never came back.
+ *
+ * Pure, so the caller decides when to ask and what "already applied" means.
  */
-export function takeUrlSeed(variant: ClaimsTabVariant, query: string) {
+export function readUrlSeed(variant: ClaimsTabVariant, query: string) {
   const seed = fromClaimsFilterSearch(new URLSearchParams(query), CLAIMS_TAB_VARIANTS);
 
   if ((seed.list ?? DEFAULT_WORKSPACE_LIST) !== variant) return null;
 
-  const marker = `${variant}|${query}`;
-  if (appliedUrlSeeds.has(marker)) return null;
-  appliedUrlSeeds.add(marker);
-
   return seed;
-}
-
-export function resetUrlSeedsForTests() {
-  appliedUrlSeeds.clear();
 }
 
 /**
