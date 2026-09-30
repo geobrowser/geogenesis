@@ -38,10 +38,16 @@ export const PAIR_HOLD_TIMEOUT_MS = 3_000;
 export const SUSPEND_GRACE_MS = 250;
 
 /** What the hold reads off one element. Deliberately a subset, so tests can pass plain objects. */
-export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 'error'>;
+export type PairMember = Pick<HTMLMediaElement, 'readyState' | 'networkState' | 'error'> &
+  Partial<Pick<HTMLMediaElement, 'seeking'>>;
 
-/** Enough data to play. `canplay`'s own threshold. */
-const canPlay = (video: PairMember) => video.readyState >= 3; /* HAVE_FUTURE_DATA */
+/**
+ * Enough data to play, *where it is going to play from*. `canplay`'s own threshold, and not while a
+ * seek is in flight: `useDebatePlayback` moves a fresh pair to its starting position the moment
+ * both know their shape, and `readyState` can still report the data at the old position until the
+ * seek has begun.
+ */
+const canPlay = (video: PairMember) => video.readyState >= 3 /* HAVE_FUTURE_DATA */ && !video.seeking;
 /** A frame to paint. What revealing the pair needs, which is less than what starting it needs. */
 const hasFrame = (video: PairMember) => video.readyState >= 2; /* HAVE_CURRENT_DATA */
 /** Has stopped fetching without being able to play. See `SUSPEND_GRACE_MS`. */
@@ -74,7 +80,17 @@ export function pairMayShow(slot1: PairMember, slot2: PairMember): boolean {
 }
 
 /** Everything that can move an element's `readyState` or `networkState`, or report it failed. */
-const MEDIA_EVENTS = ['loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'suspend', 'error', 'emptied'];
+const MEDIA_EVENTS = [
+  'loadedmetadata',
+  'loadeddata',
+  'canplay',
+  'canplaythrough',
+  'seeking',
+  'seeked',
+  'suspend',
+  'error',
+  'emptied',
+];
 
 type Latch = { key: string; started: boolean; shown: boolean };
 
