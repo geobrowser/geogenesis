@@ -1005,6 +1005,8 @@ function UnresolvableControls({
   );
 }
 
+type PositionTone = 'light' | 'glass';
+
 export function PositionRow({
   positions,
   responseKind,
@@ -1016,6 +1018,7 @@ export function PositionRow({
   noteFor,
   endSlot,
   showParticipants = true,
+  tone = 'light',
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1049,6 +1052,11 @@ export function PositionRow({
    * apart, and the nearer one reads as the voters.
    */
   showParticipants?: boolean;
+  /**
+   * `glass` for pills drawn over video on the player's dark glass — the debate end card. White
+   * text and outlines rather than the light card's grey on white, which vanish against it.
+   */
+  tone?: PositionTone;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1100,6 +1108,7 @@ export function PositionRow({
             disabled={disabled}
             pending={pending}
             title={titleFor?.(true)}
+            tone={tone}
           />
           {noteFor?.(true)}
         </div>
@@ -1114,6 +1123,7 @@ export function PositionRow({
             disabled={disabled}
             pending={pending}
             title={titleFor?.(false)}
+            tone={tone}
           />
           {noteFor?.(false)}
         </div>
@@ -1165,6 +1175,7 @@ function PositionButton({
   disabled,
   pending,
   title,
+  tone = 'light',
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1175,6 +1186,7 @@ function PositionButton({
   disabled?: boolean;
   pending?: boolean;
   title?: string;
+  tone?: PositionTone;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1191,9 +1203,13 @@ function PositionButton({
   // two and these sit directly above it, so using one grey for both flattens the pill into the
   // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
+  const glass = tone === 'glass';
   const className = cx(
-    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
-    selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
+    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button',
+    glass ? 'text-white' : 'text-text',
+    selected
+      ? cx('border-transparent', glass ? 'bg-white/20' : 'bg-divider')
+      : cx('border-dashed', glass ? 'border-white/40 bg-transparent' : 'border-grey-03 bg-white')
   );
   // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
   // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
@@ -1211,7 +1227,10 @@ function PositionButton({
         {selected ? <span className="sr-only"> — your response</span> : null}
       </span>
       {summary && presentCount(summary) > 0 ? (
-        <PositionAvatars summary={summary} ringClassName={selected ? 'border-divider' : 'border-white'} />
+        <PositionAvatars
+          summary={summary}
+          ringClassName={glass ? 'border-transparent' : selected ? 'border-divider' : 'border-white'}
+        />
       ) : null}
     </span>
   );
@@ -1235,7 +1254,7 @@ function PositionButton({
         // spends confirming, and nothing else on the page says so. The copy that used to sit
         // under the pills read as an unsettled side, so the cue stays on the pointer.
         pending && 'cursor-progress',
-        !selected && !disabled && !pending && 'hover:border-text'
+        !selected && !disabled && !pending && (glass ? 'hover:border-white' : 'hover:border-text')
       )}
     >
       {content}

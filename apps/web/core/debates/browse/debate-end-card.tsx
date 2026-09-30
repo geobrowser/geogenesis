@@ -33,10 +33,10 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  * What a finished debate ends on: where the viewer stands on the claim, how each debater's claims
  * landed, and another debate to watch next.
  *
- * Geo's own light card over the dimmed last frame rather than the player's dark glass. Every control
- * on it — the Agree/Disagree pills, the split bars, the voter faces and their list — is the real
- * component, and those are built for light surfaces; on the glass each one would have to be a
- * re-tinted copy of itself.
+ * On the player's dark glass — the same frosted surface as the claims that pop up over the video —
+ * so the card reads as part of the player rather than a page laid over it. The controls on it are
+ * still the real components: the Agree/Disagree pills take a `glass` tone, and the split bar and
+ * voter faces read on dark as they are.
  *
  * Laid out for the player's width, not the viewport's: the player is a feed card, an explore card
  * and a fullscreen view, and a phone layout keyed to the window would get the wide ones wrong. The
@@ -82,12 +82,12 @@ export function DebateEndCard({
           player, and scrolls as a last resort on one too short for it. */}
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-[#151515]/30 p-5 text-white backdrop-blur-[44px] @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
       >
         <div className="flex flex-col gap-3 @max-md:gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-chatMedium text-grey-04">Where do you stand?</span>
+              <span className="text-chatMedium text-white/60">Where do you stand?</span>
               {/* Replay on a narrow player: a pill on the question's own line rather than a circle in a
                   band above the card, which cost the card about 50px it could not spare. The claims
                   pill's shape, so it reads as one of the card's actions. */}
@@ -96,7 +96,7 @@ export function DebateEndCard({
                 aria-label="Replay debate"
                 data-end-card-replay
                 onClick={onReplay}
-                className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-grey-02 bg-white px-2.5 text-smallButton text-grey-04 shadow-light transition-colors hover:text-text @max-md:flex"
+                className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-white/20 bg-white/10 px-2.5 text-smallButton text-white/80 transition-colors hover:bg-white/20 hover:text-white @max-md:flex"
               >
                 <RetrySmall />
                 Replay
@@ -141,6 +141,7 @@ export function DebateEndCard({
               pending={claimResponse.control.isResponsePending}
               titleFor={claimResponse.control.actionTitle}
               showParticipants={false}
+              tone="glass"
             />
             {claimResponse.control.responseError ? (
               <div role="alert" className="mt-1.5">
@@ -152,7 +153,7 @@ export function DebateEndCard({
           </div>
         </div>
 
-        <div className="my-3.5 h-px shrink-0 bg-divider @max-md:my-2" />
+        <div className="my-3.5 h-px shrink-0 bg-white/15 @max-md:my-2" />
 
         {/* Side by side at every width. Two debaters is the one comparison this card exists to make,
             and stacking them on a phone turns it into two readouts that happen to be near each other.
@@ -201,12 +202,12 @@ function VoteRow({
           {summary.percent}% agree
         </span>
       ) : countsReady ? (
-        <span className="shrink-0 text-chat text-grey-04">No votes yet</span>
+        <span className="shrink-0 text-chat text-white/60">No votes yet</span>
       ) : null}
       {hasVotes ? (
         <ClaimSplitBar percent={summary.percent!} className={cx('min-w-8 flex-1', bar)} />
       ) : (
-        <div className={cx('min-w-8 flex-1 rounded-full bg-grey-01', bar)} />
+        <div className={cx('min-w-8 flex-1 rounded-full bg-white/15', bar)} />
       )}
       {hasVotes ? faces : null}
     </div>
@@ -255,7 +256,7 @@ function DebaterColumn({
   // with a gap as well, it took one above it and one below, and the share sat twice as far from the
   // count as the count sat from the name. `h-1.5` is the column's own gap on a narrow player.
   const stats = (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-grey-04 tabular-nums @max-md:gap-y-0">
+    <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-chat text-white/60 tabular-nums @max-md:gap-y-0">
       <span className="hidden @max-md:inline">{side}</span>
       {countLabel ? (
         <>
@@ -271,7 +272,7 @@ function DebaterColumn({
           ·
         </span>
       ) : null}
-      {share ? <span className={hasVotes ? 'text-chatMedium text-text' : undefined}>{share}</span> : null}
+      {share ? <span className={hasVotes ? 'text-chatMedium text-white' : undefined}>{share}</span> : null}
       {hasVotes ? <span className="flex items-center">{faces}</span> : null}
     </span>
   );
@@ -290,12 +291,12 @@ function DebaterColumn({
           onClick={openProfile}
           className="flex min-w-0 items-center gap-1.5 no-underline hover:underline"
         >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-grey-02 @max-md:size-[1.125rem]">
+          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white/15 @max-md:size-[1.125rem]">
             <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
           </span>
           <span className="truncate text-metadataMedium @max-md:text-chatMedium">{name}</span>
         </a>
-        <DebateTileChip className="shrink-0 bg-divider text-text @max-md:hidden">{side}</DebateTileChip>
+        <DebateTileChip className="shrink-0 bg-white/15 text-white @max-md:hidden">{side}</DebateTileChip>
       </div>
 
       {onOpenClaims ? (
@@ -303,7 +304,7 @@ function DebaterColumn({
           type="button"
           aria-label={`${[countLabel, share].filter(Boolean).join(', ') || 'Claims'} — open ${name}'s claims`}
           onClick={() => onOpenClaims(participant.profile_space_id)}
-          className="-mx-1 flex cursor-pointer self-start rounded px-1 text-left transition-colors hover:bg-divider"
+          className="-mx-1 flex cursor-pointer self-start rounded px-1 text-left transition-colors hover:bg-white/10"
         >
           {stats}
         </button>
@@ -331,11 +332,11 @@ function NextDebateLink({ next }: { next: NextDebate }) {
     <Link
       href={NavUtils.toEntity(next.spaceId, next.debateId)}
       data-end-card-next-debate={next.related ? 'related' : 'space'}
-      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
+      className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-white/10 p-2.5 text-white no-underline transition-colors hover:bg-white/15 @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
     >
       {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
           landscape box cropped it down to a strip across the middle of the two. */}
-      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
+      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-white/15 @max-md:w-10">
         {next.keyFrame ? (
           <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
         ) : null}
@@ -348,19 +349,19 @@ function NextDebateLink({ next }: { next: NextDebate }) {
       </span>
 
       <span className="flex min-w-0 flex-col gap-1 @max-md:gap-0.5">
-        <span className="text-[0.75rem] leading-[0.875rem] text-grey-04">
+        <span className="text-[0.75rem] leading-[0.875rem] text-white/60">
           {next.related ? 'Watch a related debate' : 'Watch another debate'}
         </span>
         <span className="line-clamp-2 text-chatMedium @max-md:text-[0.8125rem] @max-md:leading-[1.125rem]">
           {next.claimName}
         </span>
         {next.participants.length > 0 ? (
-          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
+          <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-white/60">
             <span className="flex shrink-0 -space-x-1">
               {next.participants.map(participant => (
                 <span
                   key={participant.profile_space_id}
-                  className="block size-4 overflow-hidden rounded-full bg-grey-02 ring-1 ring-grey-01"
+                  className="block size-4 overflow-hidden rounded-full bg-white/15 ring-1 ring-black/30"
                 >
                   <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={16} />
                 </span>
