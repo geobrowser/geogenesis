@@ -10,6 +10,7 @@ import {
   recoverAuthAttempt,
   resetAuthAttempt,
 } from './auth-attempt';
+import { beginSignupVisitor, clearSignupVisitor, signupVisitorProperties } from './auth/signup-visitor';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
 
@@ -17,12 +18,17 @@ type Completion = Parameters<typeof trackPrivyAuth>[0];
 let completedUserId: string | null = null;
 const signedUpUserIds = new Set<string>();
 
-export function beginPrivyAuth(properties: AnalyticsProperties = {}) {
+export function beginPrivyAuth(
+  properties: AnalyticsProperties = {},
+  options: Parameters<typeof beginSignupVisitor>[0] = {}
+) {
+  beginSignupVisitor(options);
   return beginAuthAttempt(properties);
 }
 
 export function cancelPrivyAuth() {
   finishAuthAttempt('closed');
+  clearSignupVisitor();
 }
 
 export function resetPrivyAuthSession() {
@@ -37,7 +43,13 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
   completedUserId = params.user.id;
   // Restores are not successful control-initiated attempts, even with a pending press.
   if (params.wasAlreadyAuthenticated) {
-    if (!completedThisSession) restorePrivySession(params.user);
+    if (!completedThisSession) {
+      const visitor = signupVisitorProperties(params.user.createdAt ?? null);
+      if (visitor.signup_context_source) {
+        restorePrivySession(params.user, visitor);
+        clearSignupVisitor();
+      } else restorePrivySession(params.user);
+    }
     return;
   }
 
@@ -45,14 +57,20 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
   const attempt = currentAuthAttempt(true);
   // Suppress repeated account events without leaving a newly initiated attempt pending.
   // A duplicate callback with no active attempt must not invent another attempt either.
-  if (duplicateLifecycle && (!attempt || attempt.endedAt)) return;
+  if (duplicateLifecycle && (!attempt || attempt.endedAt)) {
+    clearSignupVisitor();
+    return;
+  }
   if (params.isNewUser) signedUpUserIds.add(params.user.id);
   const active = attempt && !attempt.endedAt ? attempt : recoverAuthAttempt(properties);
   const attribution = attemptProperties(active);
+  const visitor = params.isNewUser ? signupVisitorProperties() : {};
+  clearSignupVisitor();
 
   if (!duplicateLifecycle) {
     trackPrivyAuth(params, {
       ...attribution,
+      ...visitor,
       operation_id: params.isNewUser ? `signup:${params.user.id}` : active.id,
       auth_flow: 'manual_login',
     });

@@ -1,7 +1,8 @@
 'use client';
 
 import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
-import { type AnalyticsProperties, capture } from './analytics';
+import { type AnalyticsEventName, type AnalyticsProperties, capture } from './analytics';
+import { isAnalyticsEnabled, readAnalyticsContext } from './analytics-context';
 import { equals } from './id/normalize';
 
 const PREFIX = 'geo:auth-attempt:v1:';
@@ -53,12 +54,7 @@ export function authProperties(properties: AnalyticsProperties = {}): AnalyticsP
       sanitizeSourceIdentifiers(Object.fromEntries(Object.entries(properties).filter(([key]) => fields.has(key))))
     )
   );
-  let identity: AnalyticsProperties = {};
-  try {
-    identity = (window.lytics ?? window.geoAnalytics)?.getContext?.() ?? {};
-  } catch {
-    /* Optional runtime. */
-  }
+  const identity = readAnalyticsContext();
   const page = pageContext();
   return {
     ...page,
@@ -80,6 +76,7 @@ function read(id: string | null): AuthAttempt | undefined {
   if (!id) return;
   const pending = unpersisted.get(id);
   if (pending && Date.now() - pending.startedAt < TTL) return pending;
+  if (!isAnalyticsEnabled) return;
   try {
     const value = JSON.parse(localStorage.getItem(PREFIX + id) ?? 'null');
     if (
@@ -98,7 +95,7 @@ export function readAuthAttempt(id: string) {
   return read(id);
 }
 
-export function captureAuthEvent(event: string, properties: AnalyticsProperties) {
+export function captureAuthEvent(event: AnalyticsEventName, properties: AnalyticsProperties) {
   try {
     capture(event, { ...properties, measurement_version: 'growth-v2' });
   } catch {
@@ -108,6 +105,10 @@ export function captureAuthEvent(event: string, properties: AnalyticsProperties)
 
 function save(attempt: AuthAttempt, activate = true) {
   if (activate || memory?.id === attempt.id) memory = attempt;
+  if (!isAnalyticsEnabled) {
+    unpersisted.set(attempt.id, attempt);
+    return;
+  }
   try {
     localStorage.setItem(PREFIX + attempt.id, JSON.stringify(attempt));
     unpersisted.delete(attempt.id);

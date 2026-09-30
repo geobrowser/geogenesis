@@ -84,6 +84,46 @@ export function prepareLocalDataForPublishing(
   );
 }
 
+/**
+ * Local changes in `spaceId` that `prepareOps` would silently discard because they are not attached
+ * to any entity (GEO-2966).
+ *
+ * `prepareOps` skips a value whose `entity.id` is `''`, and `Graph.createRelation` throws on a
+ * relation whose `fromEntity.id` is `''`. Either way the user's change never reaches the edit, while
+ * the review screen, which does not check ids, keeps showing it. Callers use this to say so instead
+ * of reporting "an empty edit" or a generic failure.
+ */
+export function findUnattachedChanges(
+  values: Value[],
+  relations: Relation[],
+  spaceId: string
+): { values: Value[]; relations: Relation[] } {
+  return {
+    values: values.filter(
+      v =>
+        v.spaceId === spaceId && !v.hasBeenPublished && v.isLocal === true && v.property.id !== '' && v.entity.id === ''
+    ),
+    relations: relations.filter(r => r.spaceId === spaceId && !r.isDeleted && r.fromEntity.id === ''),
+  };
+}
+
+/** The user-facing error for changes `findUnattachedChanges` found, naming what would be lost. */
+export function describeUnattachedChanges(unattached: { values: Value[]; relations: Relation[] }): string {
+  const count = unattached.values.length + unattached.relations.length;
+  const names = [
+    ...new Set([
+      ...unattached.values.map(v => v.property.name || v.property.id),
+      ...unattached.relations.map(r => r.type.name || r.type.id),
+    ]),
+  ];
+  const noun = count === 1 ? 'change is' : 'changes are';
+
+  return (
+    `Unable to publish: ${count} ${noun} not attached to any entity (${names.join(', ')}), ` +
+    'so publishing would drop them. Deselect or discard them in review, then make them again.'
+  );
+}
+
 function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op[] {
   const validValues = values.filter(
     v =>
@@ -329,6 +369,8 @@ function toRfc3339Datetime(val: string): string {
 
 export const Publish = {
   prepareLocalDataForPublishing,
+  findUnattachedChanges,
+  describeUnattachedChanges,
   /** @internal Exported for testing only */
   parseDecimalString,
   toRfc3339Date,

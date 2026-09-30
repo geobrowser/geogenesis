@@ -6,9 +6,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { beginAuthAttempt, currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
+import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { completePrivyAuth } from '~/core/privy-auth-events';
+import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 
 import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
@@ -16,7 +16,7 @@ import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './emai
 const CODE_LENGTH = 6;
 
 // The headless attempt and its modal fallback belong to the same signup surface.
-const ACCOUNT_ANALYTICS = {
+export const ACCOUNT_ANALYTICS = {
   component: 'explore_email_capture',
   auth_control: 'create_account',
   auth_trigger: 'control',
@@ -53,6 +53,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
     analytics: ACCOUNT_ANALYTICS,
+    resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');
@@ -112,7 +113,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     hasRequestedRef.current = true;
     const attempt = currentAuthAttempt();
     if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
-      beginAuthAttempt(ACCOUNT_ANALYTICS);
+      beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
     openAuthAttempt(ACCOUNT_ANALYTICS);
     void requestCode();
   }, [requestCode]);

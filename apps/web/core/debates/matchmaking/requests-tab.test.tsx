@@ -33,6 +33,12 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
+// The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
+vi.mock('./scheduled-debates-section', () => ({
+  ScheduledDebatesSection: () => null,
+  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+}));
+
 vi.mock('./hooks', () => ({
   useDebateRequests: () => ({
     data: { incoming: mocks.incoming, outbound: mocks.outbound },

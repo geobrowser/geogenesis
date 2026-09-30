@@ -14,10 +14,12 @@ import {
 import * as React from 'react';
 
 import { useActionContext } from '~/core/action-context-provider';
+import { snapshotAnalyticsRevision } from '~/core/analytics-operations';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
+import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
@@ -31,6 +33,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  type DebateScheduleResponse,
   GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
@@ -124,6 +127,9 @@ export const debateQueryKeys = {
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** Viewer-specific: whether a recording can be read at all is decided per identity. */
+  recordingUrl: (debateId: string, filename: string, accountKey: string | null) =>
+    ['debates', 'recording-url', debateId, filename, accountKey] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
@@ -622,7 +628,7 @@ export function useDebateSchedule() {
  * The timezone is read at save time rather than stored with the editor's state: a schedule means
  * "18:00 where I am", and the zone that matters is the one they were in when they said so.
  */
-export function useSaveDebateSchedule() {
+export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurface }) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const scheduleKey = debateQueryKeys.schedule(accountKey);
@@ -630,9 +636,18 @@ export function useSaveDebateSchedule() {
   return useMutation({
     mutationFn: (blocks: AvailabilityBlock[]) =>
       replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
+    // next account's schedule.
+    onMutate: snapshotAnalyticsRevision,
     // The server answers with the stored form, so take it rather than re-deriving: anything it
     // normalised on the way in is then what the calendar draws.
-    onSuccess: saved => {
+    onSuccess: (saved, _blocks, isCurrent) => {
+      // Read before the write below replaces it. Here rather than at the call site: the editor
+      // closes on Save, and a caller that unmounts with it would never hear the answer.
+      const before = queryClient.getQueryData<DebateScheduleResponse>(scheduleKey);
+      if (isCurrent()) {
+        debateScheduleSaved(fromPayload(saved.schedule), { surface, isFirstSchedule: before?.is_set !== true });
+      }
       queryClient.setQueryData(scheduleKey, saved);
       // Who shares a slot with the viewer is computed from this schedule.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
@@ -1347,13 +1362,50 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
   });
 }
 
-export function useRecordingUrl() {
+/**
+ * How long a signed recording URL is handed out again from cache (GEO-2965).
+ *
+ * geo-chat signs these with its default presign lifetime, `PRESIGN_EXPIRES_DEFAULT` = 15 minutes
+ * (`crates/attachments/src/storage.rs`). A cached URL must outlive the playback that starts from
+ * it — the element keeps making range requests with it for the whole debate — so it is reused
+ * only for the first third of that, which leaves every URL served at least ten minutes of life.
+ * A playback that still outlasts it is what `refreshSlotUrl` is for.
+ */
+export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
+
+type RecordingUrlRequest = { debateId: string; filename: string };
+
+/**
+ * The signed playback URL for one debate recording, cached.
+ *
+ * This used to be a mutation, so nothing de-duplicated it: every card that mounted, and every
+ * return to one the feed had unmounted, was two real round trips before either video could even
+ * start opening. As a query it is fetched once per recording per five minutes, and the feed's
+ * look-ahead fills the same cache the active card reads.
+ *
+ * `lookup` reads through the cache. `refresh` always signs anew, for the one caller that has
+ * evidence the URL it holds has stopped working, and replaces the cached one so no other card is
+ * handed the dead URL afterwards.
+ */
+export function useRecordingPlaybackUrl() {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
-    mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
-      getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey),
-  });
+  return React.useMemo(() => {
+    const options = ({ debateId, filename }: RecordingUrlRequest, staleTime: number) => ({
+      queryKey: debateQueryKeys.recordingUrl(debateId, filename, accountKey),
+      queryFn: () => getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey),
+      staleTime,
+      // Dropped once it could no longer be served anyway.
+      gcTime: RECORDING_URL_STALE_MS,
+      // A failed signature is the caller's to report; a silent retry only delays the error.
+      retry: false,
+    });
+    return {
+      lookup: (request: RecordingUrlRequest) => queryClient.fetchQuery(options(request, RECORDING_URL_STALE_MS)),
+      refresh: (request: RecordingUrlRequest) => queryClient.fetchQuery(options(request, 0)),
+    };
+  }, [accountKey, getPrivyIdentityToken, queryClient]);
 }
 
 export function useDebateMedia(debateId: string, enabled: boolean) {

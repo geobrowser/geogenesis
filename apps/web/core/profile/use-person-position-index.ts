@@ -12,6 +12,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -32,11 +33,21 @@ import { normId } from '~/core/utils/norm-id';
  *
  * `votedBy` does the work, from GEO-2913. Without it this would be the vote ids
  * first and then an `id: { in: … }` lookup, which is the two-step the count used
- * to do.
+ * to do. `votedByTypes` (GEO-2962) keeps a retracted position out, so a topic
+ * carried only by a claim somebody took their side back on is not offered with
+ * a count the list cannot fill — and the menus no longer wait on the vote table
+ * to say so.
  */
 const POSITION_INDEX_SOURCE = /* GraphQL */ `
-  query PersonPositionIndex($userId: UUID!, $topicsPropertyId: UUID!, $first: Int, $after: Cursor) {
-    entitiesConnection(votedBy: $userId, votedByKinds: [1, 2], first: $first, after: $after) {
+  query PersonPositionIndex(
+    $userId: UUID!
+    $kinds: [Int!]
+    $types: [Int!]
+    $topicsPropertyId: UUID!
+    $first: Int
+    $after: Cursor
+  ) {
+    entitiesConnection(votedBy: $userId, votedByKinds: $kinds, votedByTypes: $types, first: $first, after: $after) {
       pageInfo {
         hasNextPage
         endCursor
@@ -447,27 +458,7 @@ export function personPositionIndexQueryKey(spaceId: string) {
   return ['person-position-index', ID.uuidToHex(spaceId)] as const;
 }
 
-export function usePersonPositionIndex({
-  spaceId,
-  enabled = true,
-  answeredIds,
-}: {
-  spaceId: string;
-  enabled?: boolean;
-  /**
-   * The claims this person still answers, from the vote table.
-   *
-   * `votedBy` counts a retraction as a vote — it is a row rewritten to
-   * "neither", not a row removed — so without this the menus offer topics and
-   * spaces whose counts include claims the list below them does not show. On one
-   * account that is 17 of 211, and a topic carried only by a retracted claim
-   * offered a count of 1 over an empty list.
-   *
-   * Undefined means "not known yet", which narrows nothing — the alternative
-   * empties the menus while the vote read is out.
-   */
-  answeredIds?: ReadonlySet<string>;
-}) {
+export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: string; enabled?: boolean }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: personPositionIndexQueryKey(spaceId),
     enabled: enabled && spaceId !== '',
@@ -487,6 +478,8 @@ export function usePersonPositionIndex({
             decoder: decodePage,
             variables: {
               userId: ID.uuidToHex(spaceId),
+              kinds: [...POSITION_VOTE_KINDS],
+              types: [...POSITION_VOTE_TYPES],
               topicsPropertyId: TOPICS_PROPERTY_ID,
               first: INDEX_PAGE_SIZE,
               after,
@@ -512,19 +505,10 @@ export function usePersonPositionIndex({
     },
   });
 
-  /*
-   * Counted here rather than in the fetch, because what is counted depends on
-   * something the fetch cannot see.
-   *
-   * `answeredIds` arrives from a different request and changes without the index
-   * changing, so folding it into the query key would refetch the whole record
-   * every time the vote read settled. The entries are a few hundred at most and
-   * the facet pass is linear over them.
-   */
   const index = React.useMemo((): PersonPositionIndex => {
     if (!data) return EMPTY_POSITION_INDEX;
 
-    const entries = answeredIds ? data.entries.filter(entry => answeredIds.has(entry.entityId)) : data.entries;
+    const { entries } = data;
 
     return {
       entries,
@@ -533,7 +517,7 @@ export function usePersonPositionIndex({
       // space names up for the rows and would otherwise ask twice.
       spaces: facetsFrom(entries, entry => entry.spaceIds, new Map()),
     };
-  }, [answeredIds, data]);
+  }, [data]);
 
   return { index, isLoading, isError };
 }

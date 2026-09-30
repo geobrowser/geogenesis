@@ -14,13 +14,14 @@ import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
+import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { timeoutSignal } from '~/core/timeout-signal';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { AccountStep } from './email-capture-account-step';
+import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
 import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS } from './email-capture-styles';
 import { clearPendingSignup, readPendingSignup, writePendingSignup } from './pending-signup';
@@ -159,6 +160,7 @@ function EmailCapturePopup() {
    * actually signing up.
    */
   const startAccount = React.useCallback(() => {
+    beginPrivyAuth(ACCOUNT_ANALYTICS);
     prepareOnboarding();
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
@@ -168,9 +170,10 @@ function EmailCapturePopup() {
     if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
     // Closing is a decision, so the attempt should not follow them to the next page.
     clearPendingSignup();
+    if (wantsAccount) cancelPrivyAuth();
     rememberDismissed();
     setClosed(true);
-  }, [rememberDismissed]);
+  }, [rememberDismissed, wantsAccount]);
 
   const submit = React.useCallback(
     async (event: React.FormEvent) => {

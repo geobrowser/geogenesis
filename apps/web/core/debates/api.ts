@@ -1767,6 +1767,26 @@ export async function respondToScheduledDebate(
   });
 }
 
+/**
+ * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
+ * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
+ * slot for both people and withdraws the calendar invite. It refuses with `409
+ * debate_already_started` once anyone has joined the room, and `409 request_not_cancellable` once the
+ * request is already resolved.
+ */
+export async function cancelScheduledDebate(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
@@ -2181,6 +2201,21 @@ export class GeoChatRequestError extends Error {
     this.status = status;
     this.retryAfterMs = retryAfterMs;
   }
+}
+
+/**
+ * A geo-chat failure in analytics terms: its code and status where it has them. Never the message,
+ * which is prose meant for a person and can name one.
+ */
+export function geoChatErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
 }
 
 /**

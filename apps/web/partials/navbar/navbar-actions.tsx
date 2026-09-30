@@ -260,6 +260,8 @@ export function NavbarActions() {
                     (`debateQueryKeys.schedule`), which everyone signed in has. */}
                 <button
                   type="button"
+                  data-geo-analytics-label="Profile menu set my schedule"
+                  data-geo-analytics-intent="open_debate_schedule"
                   onClick={() => {
                     onOpenChange(false);
                     setHasOpenedSchedule(true);
@@ -302,6 +304,7 @@ export function NavbarActions() {
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
           openerRef={avatarTriggerRef}
+          surface="navbar"
         />
       ) : null}
     </>

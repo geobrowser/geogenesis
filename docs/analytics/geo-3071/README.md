@@ -52,7 +52,7 @@ These fields are imported only when `via=marketing`; the marker classifies the h
 
 ## Review and rollout
 
-The bundled registry, content hash, SRI and manifest include the six new events. Runtime tests execute that exact JS bundle and inspect serialized collector fields. Regression tests cover abandonment, immutable context, blocked storage, TTL, ambiguous tabs, duplicate completions, session restores, queued votes/joins after another sign-in, and the OAuth callback modal lifecycle. OAuth is currently disabled (`loginMethods: ['email']`); its coverage is a simulated tracker regression, not a live provider validation. Existing signup email handling is unchanged. Auth lifecycle records now carry the same team/test/automation classification as actions; reports also exclude warehouse account labels.
+The six new events are registered upstream in [analytics #94](https://github.com/geobrowser/analytics/pull/94) (source commit `55c5066`). The browser bundle, manifest, and typed event names are vendored unchanged with `bun run scripts/analytics/vendor.mjs /path/to/analytics`; the removed local registry patch stays removed. Merge the upstream PR and deploy its collector before deploying this producer. Runtime tests execute that exact JS bundle and inspect serialized collector fields. Regression tests cover abandonment, immutable context, blocked storage, TTL, ambiguous tabs, duplicate completions, session restores, queued votes/joins after another sign-in, and the OAuth callback modal lifecycle. OAuth is currently disabled (`loginMethods: ['email']`); its coverage is a simulated tracker regression, not a live provider validation. Existing signup email handling is unchanged. Auth lifecycle records now carry the same team/test/automation classification as actions; reports also exclude warehouse account labels.
 
 The funnel counts an attempt as unresolved only when neither a terminal attempt event nor a signup/login event proves its outcome. Missing duration remains missing; a signup is not proof that a deferred action succeeded.
 
@@ -64,7 +64,7 @@ CLICKHOUSE_BINARY=/path/to/clickhouse bun run docs/analytics/geo-3071/funnel.tes
 
 The SQL files provide production-schema reports. They are review artifacts, not evidence that the collector has received production rows. Before accepting the production criteria:
 
-1. Update the external collector registry to match these contracts and verify all fields arrive.
+1. Merge analytics #94, deploy its collector registry, and verify all fields arrive.
 2. Implement the marketing CTA producer above in its separate project.
 3. Run email-code, new-tab and mobile signups/logins from each entry above. Validate OAuth against the live provider before enabling that login method. Inspect page, target, sources, overlay, position, playback, control and outcome. Verify signup once, no login on reload, and anonymous history joins. Label test account IDs for exclusion.
 4. Schedule reconciliation against the authoritative Privy account export. Browser-only delivery/deduplication cannot guarantee every Privy account has exactly one warehouse row. Compare daily distinct accounts, raw duplicates and attribution coverage, and require >=98% known after rollout. Backfill/server reconciliation is a collector/warehouse concern.

@@ -262,6 +262,20 @@ describe('PeerAvailabilityView', () => {
       expect(monday.getByRole('button', { name: /Show less on/ })).toHaveAttribute('aria-expanded', 'true');
     });
 
+    // Collapsing is not expanding, so the two directions must not share an intent in the data.
+    it('names the expander by what a click does in each state', async () => {
+      const { user } = setup({ slots: many });
+      const monday = within(day('2026-09-21'));
+
+      const expand = monday.getByRole('button', { name: /\+2 more times on/ });
+      expect(expand).toHaveAttribute('data-geo-analytics-intent', 'expand_peer_availability_day');
+      await user.click(expand);
+      expect(monday.getByRole('button', { name: /Show less on/ })).toHaveAttribute(
+        'data-geo-analytics-intent',
+        'collapse_peer_availability_day'
+      );
+    });
+
     it('does not offer an expander for exactly four', () => {
       setup({ slots: many.slice(0, 4) });
       expect(within(day('2026-09-21')).queryByRole('button', { name: /more times on/ })).not.toBeInTheDocument();

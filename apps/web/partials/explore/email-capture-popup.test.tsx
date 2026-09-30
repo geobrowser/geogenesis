@@ -7,6 +7,7 @@ import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
@@ -27,16 +28,17 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
-  usePrivySignInOptions: undefined as undefined | { analytics?: Record<string, unknown>; onError?: () => void },
+  usePrivySignInOptions: undefined as Parameters<typeof usePrivySignIn>[1],
   useLoginWithEmailArgs: undefined as unknown,
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
+  capture: vi.fn(),
 }));
 
 vi.mock('~/core/analytics', () => ({
   signupCompleted: mocks.signupCompleted,
   trackPrivyAuth: mocks.trackPrivyAuth,
-  capture: vi.fn(),
+  capture: mocks.capture,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -55,10 +57,7 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (
-    _onComplete?: () => void,
-    options?: { analytics?: Record<string, unknown>; onError?: () => void }
-  ) => {
+  usePrivySignIn: (_onComplete?: () => void, options?: Parameters<typeof usePrivySignIn>[1]) => {
     mocks.usePrivySignIn();
     mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
@@ -533,6 +532,27 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   describe('creating an account from the confirmation', () => {
+    it('captures the visitor before sending the code and clears it on dismissal', async () => {
+      window.lytics = { getContext: () => ({ anonymous_id: 'email-visitor', session_id: 'email-session' }) };
+      try {
+        await subscribeSuccessfully();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+        });
+        expect(JSON.parse(window.localStorage.getItem('geo:signup-visitor:v1')!)).toMatchObject({
+          anonymousId: 'email-visitor',
+          sessionId: 'email-session',
+        });
+        expect(mocks.sendCode).toHaveBeenCalledOnce();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+        });
+        expect(window.localStorage.getItem('geo:signup-visitor:v1')).toBeNull();
+      } finally {
+        delete window.lytics;
+      }
+    });
+
     it('offers the account and a skip, rather than ending at the confirmation', async () => {
       await subscribeSuccessfully();
 
@@ -875,6 +895,17 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
     });
 
+    it('starts exactly one attributed attempt for the create-account press', async () => {
+      await subscribeSuccessfully();
+      mocks.capture.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      const starts = mocks.capture.mock.calls.filter(([event]) => event === 'auth_attempt_started');
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.[1]).toMatchObject({ component: 'explore_email_capture', auth_control: 'create_account' });
+    });
+
     it('starts its own attributed email attempt when the document inherited another attempt', async () => {
       await subscribeSuccessfully();
       const inherited = beginAuthAttempt({ component: 'explore_email_capture', auth_control: 'create_account' });
@@ -985,6 +1016,7 @@ describe('ExploreEmailCapturePopup', () => {
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+      expect(mocks.usePrivySignInOptions?.resumeAuthAttempt).toBe(true);
       expect(mocks.usePrivySignInOptions?.analytics).toEqual(
         expect.objectContaining({
           link_source: 'explore_email_capture',

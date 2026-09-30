@@ -20,6 +20,8 @@ type UsePrivySignInOptions = {
    * URL.
    */
   analytics?: AnalyticsProperties | (() => AnalyticsProperties);
+  /** Keep the initiating signup visitor/session when email verification falls back to the modal. */
+  resumeAuthAttempt?: boolean;
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
 };
@@ -59,10 +61,13 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     (properties?: AnalyticsProperties | React.SyntheticEvent) => {
       prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
-      return login({
-        ...(typeof configured === 'function' ? configured() : configured),
-        ...(properties && !('nativeEvent' in properties) ? properties : {}),
-      });
+      return login(
+        {
+          ...(typeof configured === 'function' ? configured() : configured),
+          ...(properties && !('nativeEvent' in properties) ? properties : {}),
+        },
+        { resume: optionsRef.current?.resumeAuthAttempt }
+      );
     },
     [login, prepareOnboarding]
   );

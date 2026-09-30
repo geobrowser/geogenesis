@@ -5,13 +5,23 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
-import type { DebateParticipantSummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import {
+  type DebateParticipantSummary,
+  GeoChatRequestError,
+  type ScheduledDebateRequest,
+  type UpcomingDebateRoom,
+} from '~/core/debates/api';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
+import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
-import { useRespondToScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import {
+  useCancelScheduledDebate,
+  useRespondToScheduledDebate,
+  useScheduledDebates,
+} from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
 
@@ -19,6 +29,7 @@ import { Date as DateIcon } from '~/design-system/icons/date';
 import { Text } from '~/design-system/text';
 
 import { useDebatePeople } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -60,10 +71,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
     <>
       {(upcoming.length > 0 || roomsError) && (
         <Section label="Upcoming debates">
-          {upcoming.map(({ room, opponentUserId, scheduledEndAt }) => (
+          {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
             <UpcomingRow
               key={room.room_id}
               room={room}
+              requestId={requestId}
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
@@ -84,6 +96,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                 request={request}
                 opponent={lookUp(opponentOf(request, viewerId))}
                 viewer={viewer}
+                viewerId={viewerId}
                 busy={respond.isPending}
                 onAnswer={answer}
               />
@@ -119,11 +132,13 @@ export type UpcomingRoomRow = {
   room: UpcomingDebateRoom;
   opponentUserId: string | null;
   scheduledEndAt: string | null;
+  /** The accepted request that booked the room, which is what Cancel calls off. */
+  requestId: string | null;
 };
 
-export function useScheduledContent(enabled: boolean): ScheduledContent {
-  const requests = useScheduledDebates(enabled);
-  const rooms = useUpcomingDebateRooms(enabled);
+export function useScheduledContent(): ScheduledContent {
+  const requests = useScheduledDebates();
+  const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
 
   const rows = requests.data?.requests;
@@ -131,7 +146,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
   const answerable = useOpenScheduledRequests(rows);
 
   const roomList = React.useMemo(() => rooms.data?.rooms ?? [], [rooms.data]);
-  const finishedRoomIds = useFinishedRoomIds(roomList, enabled);
+  const finishedRoomIds = useFinishedRoomIds(roomList);
 
   const upcoming = React.useMemo(
     () =>
@@ -143,6 +158,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
             room,
             opponentUserId: opponentOf(request, viewerId),
             scheduledEndAt: request?.scheduled_end_at ?? null,
+            requestId: request?.status === 'accepted' ? request.request_id : null,
           };
         }),
     [finishedRoomIds, roomList, rows, viewerId]
@@ -153,7 +169,7 @@ export function useScheduledContent(enabled: boolean): ScheduledContent {
     () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
     [rows]
   );
-  const people = useGeoChatUserSummaries(participantIds, enabled);
+  const people = useGeoChatUserSummaries(participantIds, true);
 
   return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
 }
@@ -188,15 +204,22 @@ function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipant
 /** An open room says so and offers the way in; one that is not yet open says when. */
 function UpcomingRow({
   room,
+  requestId,
   scheduledEndAt,
   opponent,
   viewer,
 }: {
   room: UpcomingDebateRoom;
+  requestId: string | null;
   scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
 }) {
+  // geo-chat refuses once anyone has joined (`debate_already_started`), so the button goes first.
+  // The room's session is created on first join, so a non-null one means someone has been in even
+  // if they have since left and `others_present` no longer says so.
+  const cancellable = requestId !== null && !room.others_present && !room.rematch_session_id;
+
   return (
     <ScheduleCard
       opponent={opponent}
@@ -217,10 +240,19 @@ function UpcomingRow({
       }
       urgent={room.others_present}
       actions={
-        room.joinable && (
-          <Link href={debateRoomPath(room.room_id)} className={JOIN_PILL}>
-            Join debate
-          </Link>
+        (room.joinable || cancellable) && (
+          <div className="flex flex-col gap-2">
+            {room.joinable && (
+              <Link
+                href={debateRoomPath(room.room_id)}
+                className={JOIN_PILL}
+                {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
+              >
+                Join debate
+              </Link>
+            )}
+            {cancellable && <CancelScheduled requestId={requestId} kind="debate" opponent={opponent} />}
+          </div>
         )
       }
     />
@@ -231,6 +263,7 @@ function ScheduledRow({
   request,
   opponent,
   viewer,
+  viewerId,
   busy,
   onAnswer,
   ref,
@@ -240,10 +273,17 @@ function ScheduledRow({
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
+  viewerId: string | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
+  // While pending, only whoever proposed the current time may withdraw it; the other side declines.
+  const withdrawable =
+    !request.viewer_must_answer &&
+    viewerId !== null &&
+    request.proposed_by_user_id !== null &&
+    sameId(request.proposed_by_user_id, viewerId);
 
   return (
     <ScheduleCard
@@ -253,20 +293,149 @@ function ScheduledRow({
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
       actions={
-        request.viewer_must_answer && (
+        request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
           <div className="grid grid-cols-2 gap-2">
-            <HubPillButton onClick={() => onAnswer(request.request_id, false)} disabled={busy}>
+            {/* Labelled apart from the instant request cards' Accept and Decline, which would
+                otherwise share their labels and could not be told from these in the data. */}
+            <HubPillButton
+              analyticsLabel="Debate hub Decline scheduled debate"
+              analyticsIntent="decline_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, false)}
+              disabled={busy}
+            >
               Decline
             </HubPillButton>
-            <HubPillButton variant="primary" onClick={() => onAnswer(request.request_id, true)} disabled={busy}>
+            <HubPillButton
+              variant="primary"
+              analyticsLabel="Debate hub Accept scheduled debate"
+              analyticsIntent="accept_scheduled_debate"
+              onClick={() => onAnswer(request.request_id, true)}
+              disabled={busy}
+            >
               Accept
             </HubPillButton>
           </div>
+        ) : (
+          withdrawable && <CancelScheduled requestId={request.request_id} kind="request" opponent={opponent} />
         )
       }
     />
   );
+}
+
+const CANCEL_COPY = {
+  debate: {
+    action: 'Cancel debate',
+    question: (name: string) => `Cancel your debate with ${name}? The time is freed up for both of you.`,
+    analytics: ['Cancel scheduled debate', 'cancel_scheduled_debate'],
+  },
+  request: {
+    action: 'Cancel request',
+    question: (name: string) => `Cancel your request to ${name}?`,
+    analytics: ['Cancel scheduled request', 'cancel_scheduled_request'],
+  },
+} as const;
+
+/**
+ * Calling a scheduled debate off (GEO-3093), behind a confirm step: an accepted debate is an
+ * agreement with someone else, and one press should not be able to undo it.
+ */
+function CancelScheduled({
+  requestId,
+  kind,
+  opponent,
+}: {
+  requestId: string;
+  kind: keyof typeof CANCEL_COPY;
+  opponent: DebateParticipantSummary | null;
+}) {
+  const cancel = useCancelScheduledDebate();
+  const [confirming, setConfirming] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const copy = CANCEL_COPY[kind];
+  const [label, intent] = copy.analytics;
+
+  // Gone from the list once the refetch lands; until then the card must not offer it again.
+  if (cancel.isSuccess) {
+    return (
+      <Text as="p" variant="footnote" color="grey-04">
+        Cancelled
+      </Text>
+    );
+  }
+
+  if (!confirming) {
+    return (
+      <div className="flex flex-col gap-2">
+        <HubPillButton
+          className="w-full"
+          analyticsLabel={`Debate hub ${label}`}
+          analyticsIntent={intent}
+          onClick={() => {
+            setError(null);
+            setConfirming(true);
+          }}
+        >
+          {copy.action}
+        </HubPillButton>
+        {error && (
+          <Text as="p" variant="footnote" color="red-01">
+            {error}
+          </Text>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Text as="p" variant="footnote">
+        {copy.question(opponentName(opponent))}
+      </Text>
+      <div className="grid grid-cols-2 gap-2">
+        <HubPillButton
+          analyticsLabel={`Debate hub Keep ${kind}`}
+          analyticsIntent={`keep_scheduled_${kind}`}
+          onClick={() => setConfirming(false)}
+          disabled={cancel.isPending}
+        >
+          Keep it
+        </HubPillButton>
+        <HubPillButton
+          variant="primary"
+          analyticsLabel={`Debate hub Confirm ${label}`}
+          analyticsIntent={`confirm_${intent}`}
+          pending={cancel.isPending}
+          pendingLabel="Cancelling…"
+          onClick={() =>
+            cancel.mutate(
+              { requestId },
+              {
+                onError: failure => {
+                  setConfirming(false);
+                  setError(cancelFailureMessage(failure));
+                },
+              }
+            )
+          }
+        >
+          {copy.action}
+        </HubPillButton>
+      </div>
+    </div>
+  );
+}
+
+/** geo-chat's two refusals, said plainly; anything else keeps its own message. */
+export function cancelFailureMessage(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    if (error.code === 'debate_already_started') {
+      return 'Someone has already joined this debate, so it can no longer be cancelled.';
+    }
+    if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
+  }
+  return error instanceof Error ? error.message : 'Could not cancel. Try again.';
 }
 
 /**

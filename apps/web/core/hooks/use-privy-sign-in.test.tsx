@@ -101,7 +101,8 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnComplete?.({}));
     expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
     expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
-      expect.objectContaining({ component: 'sign_in_prompt', auth_trigger: 'control' })
+      expect.objectContaining({ component: 'sign_in_prompt', auth_trigger: 'control' }),
+      { resume: undefined }
     );
   });
 
@@ -142,7 +143,9 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.not.objectContaining({ link_source: 'marketing' }));
+    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.not.objectContaining({ link_source: 'marketing' }), {
+      resume: undefined,
+    });
   });
 
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion
@@ -221,7 +224,14 @@ describe('usePrivySignIn', () => {
         target_id: 'claim',
         origin_entity_ids: ['debate'],
         item_position: 4,
-      })
+      }),
+      { resume: undefined }
     );
+  });
+  it('passes the resume option when opening the modal for an email attempt', () => {
+    const { result } = renderHook(() => usePrivySignIn(undefined, { resumeAuthAttempt: true }));
+    act(() => result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(expect.any(Object), { resume: true });
+    expect(mocks.login).toHaveBeenCalledOnce();
   });
 });

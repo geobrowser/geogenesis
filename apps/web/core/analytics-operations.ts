@@ -1,5 +1,5 @@
 import { type ActionContext, type ActionKind } from './action-context';
-import { analyticsContextRevision, capture } from './analytics';
+import { type AnalyticsEventName, analyticsContextRevision, capture } from './analytics';
 import { authAttemptForAction, completeAuthAction } from './auth-attempt';
 import { ReceiptConfirmationTimeoutError } from './errors';
 
@@ -42,6 +42,13 @@ export function queueTimeoutMetrics(error: unknown): { queue_wait_ms: number; qu
 
 export type OperationContext = { opportunity_id: string; presentation_instance_id: string };
 
+/**
+ * Why an operation did not do what it was asked. `conflict` is a refusal that arrives as an ordinary
+ * answer rather than an error: geo-chat declining to book a debate that clashes with another.
+ */
+export type OperationFailureCode =
+  'rejected' | 'unavailable' | 'invalid_input' | 'publish_failed' | 'conflict' | 'unknown';
+
 // Canonical outcomes accept only the IDs, fixed categories and measurements used
 // by our producers. Legacy outcome bags may also contain human-readable labels.
 const CANONICAL_OUTCOME_FIELDS = new Set([
@@ -77,6 +84,23 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   'failure_code',
 ]);
 
+/**
+ * Taken when an asynchronous action starts. The returned check is false once the analytics identity
+ * has changed (logout, account switch), after which that action's result belongs to nobody present:
+ * source reconciliation owns it, and it must not be captured under the current account.
+ */
+export function snapshotAnalyticsRevision(): () => boolean {
+  const readRevision = () => {
+    try {
+      return analyticsContextRevision();
+    } catch {
+      return null;
+    }
+  };
+  const contextRevision = readRevision();
+  return () => readRevision() === contextRevision;
+}
+
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */
 export function observeOperation(
   action: ActionKind,
@@ -87,15 +111,7 @@ export function observeOperation(
 ) {
   const operationId = crypto.randomUUID();
   const authAttempt = authAttemptForAction(action, targetId, attribution?.auth_attempt_id);
-  const readRevision = () => {
-    try {
-      return analyticsContextRevision();
-    } catch {
-      return null;
-    }
-  };
-  const contextRevision = readRevision();
-  const isCurrent = () => readRevision() === contextRevision;
+  const isCurrent = snapshotAnalyticsRevision();
   const context = {
     measurement_version: 'growth-v2',
     operation_id: operationId,
@@ -106,7 +122,7 @@ export function observeOperation(
   };
   const emitted = new Set<string>();
   let completed = false;
-  const emit = (event: string, phase: string, properties: Record<string, unknown>) => {
+  const emit = (event: AnalyticsEventName, phase: string, properties: Record<string, unknown>) => {
     if (emitted.has(`${event}:${phase}`)) return;
     // Source reconciliation owns completion after logout/account switch. Never
     // assign an earlier actor's asynchronous result to the current account.
@@ -147,10 +163,7 @@ export function observeOperation(
       complete('succeeded', properties);
     },
     /** `metrics` is numbers only, so no provider text or payload can reach analytics. */
-    failed(
-      code: 'rejected' | 'unavailable' | 'invalid_input' | 'publish_failed' | 'unknown',
-      metrics?: Record<string, number>
-    ) {
+    failed(code: OperationFailureCode, metrics?: Record<string, number>) {
       if (completed) return;
       complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: code });
       if (['vote', 'ranking', 'publish'].includes(action))
@@ -170,16 +183,22 @@ export function observeOperation(
   };
 }
 
-/** Observe an async application operation without changing its result or errors. */
+/**
+ * Observe an async application operation without changing its result or errors. `failureOf` names a
+ * failure the result carries without throwing; the caller still receives that result.
+ */
 export async function runObservedAction<T>(
   action: ActionKind,
   context: ActionContext,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  failureOf?: (result: T) => OperationFailureCode | null
 ): Promise<T> {
   const operation = observeOperation(action, context.target_type, context.target_id, undefined, context);
   try {
     const result = await run();
-    operation.succeeded();
+    const failure = failureOf?.(result) ?? null;
+    if (failure) operation.failed(failure);
+    else operation.succeeded();
     return result;
   } catch (error) {
     operation.failed(classifyOperationFailure(error));

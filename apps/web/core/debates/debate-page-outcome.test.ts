@@ -43,6 +43,16 @@ describe('createDebatePageOutcome', () => {
     ]);
   });
 
+  it('never sends measurement_version, which makes the collector reject an event with no measurement contract', () => {
+    const { outcome, events } = setup();
+    outcome.leave('pagehide');
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).not.toHaveProperty('measurement_version');
+    expect(events[0]).toMatchObject({ outcome_version: 'debate-page-v1' });
+  });
+
   it('records once: leaving after a play, or a second play, sends nothing more', () => {
     const { outcome, events } = setup();
     outcome.feed({ kind: 'shown' });
@@ -119,6 +129,42 @@ describe('createDebatePageOutcome', () => {
     outcome.leave('hidden');
 
     expect(events).toEqual([expect.objectContaining({ shown_ms: 500, ready_ms: 500 })]);
+  });
+
+  // GEO-2965. The pair hold sits between "URLs in hand" and "playing". It must not move a visit into
+  // a different reason, or `ready_ms`, or the split GEO-3074 is waiting on stops being comparable
+  // across the change. It only names which part of `not_started` a visitor left in.
+  it('reports a visitor who left during the pair hold as not_started, with the hold as the detail', () => {
+    const { outcome, events, advance } = setup();
+    outcome.feed({ kind: 'shown' });
+    advance(400);
+    outcome.player({ ...idle, ready: true, pairHeld: true });
+    advance(900);
+    outcome.leave('pagehide');
+
+    expect(events).toEqual([
+      expect.objectContaining({ outcome: 'not_played', reason: 'not_started', detail: 'pair_hold', ready_ms: 400 }),
+    ]);
+  });
+
+  it('keeps media_loading for a visit that had no URLs yet, whatever the hold says', () => {
+    const { outcome, events } = setup();
+    outcome.feed({ kind: 'shown' });
+    outcome.player({ ...idle, pairHeld: true });
+    outcome.leave('hidden');
+
+    expect(events).toEqual([expect.objectContaining({ reason: 'media_loading', ready_ms: null })]);
+  });
+
+  it('records the play when the hold lets go, with ready_ms still the moment the URLs landed', () => {
+    const { outcome, events, advance } = setup();
+    outcome.feed({ kind: 'shown' });
+    advance(300);
+    outcome.player({ ...idle, ready: true, pairHeld: true });
+    advance(600);
+    outcome.player({ ...idle, ready: true, playing: true, pairHeld: false });
+
+    expect(events).toEqual([expect.objectContaining({ outcome: 'played', ready_ms: 300, played_ms: 900 })]);
   });
 
   it('never lets a failing emitter reach playback', () => {

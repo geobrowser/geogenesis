@@ -41,8 +41,6 @@ vi.mock('~/core/hooks/use-profile-facts', () => ({
 
 vi.mock('~/core/profile/use-person-positions', () => ({
   usePersonPositions: () => ({ rows: [], responseByClaimId: new Map(), isLoading: false, isError: false }),
-  usePersonResponses: () => ({ isError: false, total: 0 }),
-  heldPositionsCount: () => 0,
 }));
 
 vi.mock('~/core/hooks/use-space-labels', () => ({
