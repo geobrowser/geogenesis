@@ -32,6 +32,13 @@ const debateEntity = (id: string, claimId: string) => ({
   ],
 });
 
+// Claims are named in this space, which is where the card reads the name from.
+const claimName = (id: string) => ({
+  property: { id: 'a126ca530c8e48d5b88882c734c38935' },
+  spaceId: SPACE,
+  value: `Claim ${id}`,
+});
+
 const mocks = vi.hoisted(() => ({
   watched: new Set<string>(),
   reads: 0,
@@ -41,7 +48,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ where }: { where: { id?: { in: string[] } } }) =>
     where.id
-      ? { entities: where.id.in.map(id => ({ id, name: `Claim ${id}`, relations: [] })), isLoading: false }
+      ? {
+          entities: where.id.in.map(id => ({ id, name: `Claim ${id}`, relations: [], values: [claimName(id)] })),
+          isLoading: false,
+        }
       : {
           entities: [debateEntity('current', 'c0'), debateEntity('first', 'c1'), debateEntity('second', 'c2')],
           isLoading: false,

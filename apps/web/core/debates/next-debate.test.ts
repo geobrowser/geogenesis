@@ -139,8 +139,14 @@ describe('nextDebateCandidates', () => {
     toEntity: { id: toId },
     spaceId,
   });
+  // `name` mirrored into a value in this space, which is where the space-aware name is read from.
   const entity = (id: string, relations: ReturnType<typeof relation>[], name: string | null = null) =>
-    ({ id, name, relations }) as unknown as Entity;
+    ({
+      id,
+      name,
+      relations,
+      values: name ? [{ property: { id: 'a126ca530c8e48d5b88882c734c38935' }, spaceId: SPACE, value: name }] : [],
+    }) as unknown as Entity;
 
   const debate = (id: string, claimId: string, extra: ReturnType<typeof relation>[] = []) =>
     entity(id, [relation(CLAIMS, claimId), relation(VIDEOS, `video-${id}`), ...extra]);
@@ -155,6 +161,17 @@ describe('nextDebateCandidates', () => {
     expect(nextDebateCandidates(debates, claims, SPACE)).toEqual([
       { debateId: 'd1', claimId: 'c1', claimName: 'A claim', topicIds: ['topichere'] },
     ]);
+  });
+
+  it("names the claim in this space's wording, not the graph's merged name", () => {
+    const NAME = 'a126ca530c8e48d5b88882c734c38935';
+    const nameIn = (spaceId: string, value: string) => ({ property: { id: NAME }, spaceId, value });
+    const claim = {
+      ...entity('c1', [], 'Wording from elsewhere'),
+      values: [nameIn(ELSEWHERE, 'Wording from elsewhere'), nameIn(SPACE, 'Wording in this space')],
+    } as unknown as Entity;
+
+    expect(nextDebateCandidates([debate('d1', 'c1')], [claim], SPACE)[0]?.claimName).toBe('Wording in this space');
   });
 
   it('drops a debate with no video, which there would be nothing to watch on', () => {

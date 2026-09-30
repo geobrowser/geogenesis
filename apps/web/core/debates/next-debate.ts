@@ -29,7 +29,7 @@ export type NextDebateCandidate = {
  * - a debate with no video, which there is nothing to watch on — the feeds keep the same rule
  *   (`isWatchableDebate`), and a suggestion that opens onto a debate that can't play is worse than
  *   none;
- * - a debate whose claim hasn't resolved to a name, which the card would have nothing to title with.
+ * - a debate whose claim has no name in any space, which the card would have nothing to title with.
  *   Pass no claims to get none at all — {@link debateClaimIds} is what asks which claims to fetch.
  */
 export function nextDebateCandidates(debates: Entity[], claims: Entity[], spaceId: string): NextDebateCandidate[] {
@@ -41,13 +41,17 @@ export function nextDebateCandidates(debates: Entity[], claims: Entity[], spaceI
 
     const claimId = debateClaimId(debate, spaceId);
     const claim = claimId ? claimsById.get(claimId) : undefined;
-    if (!claimId || !claim?.name) return [];
+    // This space's wording, falling back to the graph's only where the space has none — the rule
+    // every surface that names an entity for a space follows (`nameInSpace`, GEO-2778). The merged
+    // `name` could be another space's wording under a link into this one.
+    const claimName = claim ? Entities.nameInSpace(claim.values, spaceId) : null;
+    if (!claimId || !claim || !claimName) return [];
 
     return [
       {
         debateId: normId(debate.id),
         claimId,
-        claimName: claim.name,
+        claimName,
         topicIds: Entities.relationTargets(Entities.relationsInSpace(claim.relations, spaceId), TOPICS_PROPERTY_ID).map(
           normId
         ),
