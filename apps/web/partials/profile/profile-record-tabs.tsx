@@ -5,15 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 
-import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { fallbackProposer, hasRecordToShow } from '~/core/profile/profile-proposer';
 import { profileRailFacts } from '~/core/profile/profile-rail-facts';
-import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import type { Profile } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
@@ -73,25 +72,15 @@ export function ProfileRecordTabs({
     personEntityId: entityId,
   });
 
-  // The rail's own source, so the count that decides whether Positions is
-  // offered is the count that tab would show — a retracted vote is not a
-  // position, and `entitiesConnection(votedBy:)` counts it as one.
-  const responses = usePersonResponses({ spaceId });
-  const positions = heldPositionsCount(responses, facts.positions);
-
   /*
    * Unknown counts offer every tab, which `hasRecordToShow` is the statement of
    * — so a read that is still out or has failed is passed through as unknown
    * rather than folded into a second rule here.
    *
-   * **Positions knows on its own.** It comes from the vote table, which is a
-   * different request from the facts, so a facts failure says nothing about it:
-   * where `usePersonResponses` has answered, a zero there is a definite zero and
-   * hiding the tab is right. Reading both through one `isCountKnown` left an
-   * empty Positions tab standing whenever the facts request happened to fail.
+   * Positions is one of the facts again: the server leaves a retracted position
+   * out of its count (`votedByTypes`), so this is the number the tab would show.
    */
   const areFactsKnown = !isLoadingFacts && !isFactsError;
-  const arePositionsKnown = responses.total !== null || areFactsKnown;
 
   const fromFacts = React.useCallback(
     (count: number | null) => hasRecordToShow(areFactsKnown ? count : undefined),
@@ -106,14 +95,14 @@ export function ProfileRecordTabs({
         label: 'Debates',
         shown: fromFacts(profileDebateNavigationCount(facts.debates, facts.totalDebates, isOwner) ?? 0),
       },
-      { id: 'positions', label: 'Positions', shown: hasRecordToShow(arePositionsKnown ? positions : undefined) },
+      { id: 'positions', label: 'Positions', shown: fromFacts(facts.positions) },
       { id: 'proposals', label: 'Proposals', shown: fromFacts(facts.proposals) },
       // Always: it is the rail, and neither surface has one.
       { id: 'about', label: 'About', shown: true },
     ];
 
     return all.filter(entry => entry.shown);
-  }, [arePositionsKnown, facts.debates, facts.proposals, facts.totalDebates, fromFacts, isOwner, positions]);
+  }, [facts.debates, facts.positions, facts.proposals, facts.totalDebates, fromFacts, isOwner]);
 
   // A tab that stops being offered while it is open — its count arrived as zero
   // — would leave the reader on a list nothing points at.

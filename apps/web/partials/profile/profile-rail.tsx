@@ -22,7 +22,6 @@ import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-f
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
-import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
 import { NavUtils } from '~/core/utils/utils';
@@ -85,11 +84,6 @@ export function ProfileRailSections({
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
-  // Shares its query key with the Positions tab and the Activity gallery, so
-  // this is the same request they make rather than a third one.
-  const responses = usePersonResponses({ spaceId });
-  const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
-
   return (
     // A rule between sections, 24px either side — the same divider the Explore
     // and space rails draw (`SideRailSections`). Spacing lives on the sections
@@ -99,7 +93,6 @@ export function ProfileRailSections({
         facts={facts}
         isLoading={isLoading}
         isError={isError}
-        positionsCount={positionsCount}
         spaceId={spaceId}
         personEntityId={personEntityId}
         systemEntityId={systemEntityId}
@@ -401,7 +394,6 @@ export function AboutSection({
   facts,
   isLoading,
   isError,
-  positionsCount,
   spaceId,
   personEntityId,
   systemEntityId,
@@ -413,8 +405,6 @@ export function AboutSection({
   isLoading: boolean;
   /** The counts could not be read. Distinct from all three being zero. */
   isError: boolean;
-  /** Positions actually held, or null while the vote table is still out. */
-  positionsCount: number | null;
   spaceId: string;
   personEntityId: string | null;
   systemEntityId: string;
@@ -507,13 +497,12 @@ export function AboutSection({
           value={isLoading ? null : facts.debates.toLocaleString()}
           href={`/space/${spaceId}/debates`}
         />
-        {/* Not `facts.positions`: the server counts a retracted vote as a
-            position, and this number sits above the list that does not show
-            them. See `heldPositionsCount`. */}
+        {/* Held positions only — the server leaves a retracted one out
+            (`votedByTypes`), so this is the number the list below it shows. */}
         <Fact
           label="Positions"
-          isUnavailable={isError && positionsCount === null}
-          value={positionsCount === null ? null : positionsCount.toLocaleString()}
+          isUnavailable={isError}
+          value={isLoading ? null : facts.positions.toLocaleString()}
           href={`/space/${spaceId}/positions`}
         />
         <Fact
