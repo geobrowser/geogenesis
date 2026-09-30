@@ -75,6 +75,8 @@ type EntityFeedProps = {
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
   showSortFilter?: boolean;
+  /** Use quiet pill controls and a tighter divider gap for the Explore header. */
+  compactHeader?: boolean;
   /** Whether to render the type checklist. Defaults to false. */
   showTypeFilter?: boolean;
   /** Initial type selection. */
@@ -181,6 +183,7 @@ export function EntityFeed({
   initialSort = 'new',
   showTimeFilter = true,
   showSortFilter = false,
+  compactHeader = false,
   showTypeFilter = false,
   initialTypeIds = [],
   typeOptions = [],
@@ -391,6 +394,12 @@ export function EntityFeed({
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
+  const filterTriggerClassName = cx(
+    'flex items-center gap-1.5 text-metadata text-grey-04 transition-colors duration-150',
+    compactHeader
+      ? 'h-8 rounded-full px-2.5 hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text data-[state=open]:bg-grey-01'
+      : 'h-6 rounded border border-grey-02 pr-2 pl-1.5 shadow-button focus-within:border-text'
+  );
   const topicLabel = pickerLabel(
     selectedTopicIds.length,
     'Any topic',
@@ -414,11 +423,7 @@ export function EntityFeed({
               sideOffset={8}
               className="max-w-60 bg-white"
               trigger={
-                <button
-                  type="button"
-                  aria-label={`Sort: ${sortLabel}`}
-                  className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
-                >
+                <button type="button" aria-label={`Sort: ${sortLabel}`} className={filterTriggerClassName}>
                   <span>{sortLabel}</span>
                   <span className={cx('inline-flex transition-transform duration-200', sortMenuOpen && 'rotate-180')}>
                     <ChevronDownSmall color="grey-04" />
@@ -448,11 +453,7 @@ export function EntityFeed({
               sideOffset={8}
               className="max-w-60 bg-white"
               trigger={
-                <button
-                  type="button"
-                  aria-label={`Time range: ${timeLabel}`}
-                  className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
-                >
+                <button type="button" aria-label={`Time range: ${timeLabel}`} className={filterTriggerClassName}>
                   <span>{timeLabel}</span>
                   <span className={cx('inline-flex transition-transform duration-200', timeMenuOpen && 'rotate-180')}>
                     <ChevronDownSmall color="grey-04" />
@@ -505,7 +506,7 @@ export function EntityFeed({
         </div>
       ) : null}
 
-      {dividerBeforeFeed ? <hr className="mt-5 border-t border-divider" /> : null}
+      {dividerBeforeFeed ? <hr className={cx('border-t border-divider', compactHeader ? 'mt-2' : 'mt-5')} /> : null}
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
