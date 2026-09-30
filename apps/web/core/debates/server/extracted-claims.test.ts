@@ -80,3 +80,29 @@ describe('decodeExtractedClaims topics', () => {
     expect(decodeExtractedClaims({ turns: [turn], claims: 'nope' as never }).claims).toEqual([]);
   });
 });
+
+describe('decodeExtractedClaims timing (GEO-2958)', () => {
+  const claim = (extra: Record<string, unknown>) => ({ text: 'A claim', is_factual: false, turn_index: 0, ...extra });
+
+  it('carries geo-chat start_ms/end_ms onto the claim', () => {
+    const { claims } = decodeExtractedClaims({ turns: [turn], claims: [claim({ start_ms: 16_680, end_ms: 21_900 })] });
+    expect(claims[0].timing).toEqual({ startMs: 16_680, endMs: 21_900 });
+  });
+
+  it.each([
+    ['absent (a payload from before timing)', {}],
+    ['null (geo-chat could not measure it)', { start_ms: null, end_ms: null }],
+    ['only a start', { start_ms: 1_000, end_ms: null }],
+    ['strings', { start_ms: '1000', end_ms: '2000' }],
+    ['an end at the start', { start_ms: 2_000, end_ms: 2_000 }],
+    ['an end before the start', { start_ms: 4_000, end_ms: 2_000 }],
+    ['a negative start', { start_ms: -500, end_ms: 2_000 }],
+    ['a fractional value', { start_ms: 1_000.5, end_ms: 2_000 }],
+  ])('decodes no timing when it is %s', (_label, extra) => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim(extra) as Parameters<typeof decodeExtractedClaims>[0]['claims'][number]],
+    });
+    expect(claims[0].timing).toBeNull();
+  });
+});
