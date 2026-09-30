@@ -1,9 +1,8 @@
+import { uuidToHex } from '../id/normalize';
 import type { Debate, DebateMediaTurnSegment, DebateTranscriptSegment } from './api';
 import { resolveClaimTimings } from './claim-timing';
 import { debateTurnRole } from './formats';
 import type { DebateTranscriptClaims } from './transcript-claims';
-
-export const warehouseId = (id: string) => id.replaceAll('-', '').toLowerCase();
 
 export type WarehouseTurn = {
   debate_id: string;
@@ -54,12 +53,12 @@ export function warehouseTurns(
     const speakers = debate.participants.filter(p => p.participant_slot === segment.participant_slot);
     if (speakers.length !== 1) throw new Error(`Ambiguous speaker for ${debate.id} turn ${turn}`);
     return {
-      debate_id: warehouseId(debate.id),
+      debate_id: uuidToHex(debate.id),
       turn_index: turn,
       start_ms: start,
       end_ms: end,
       round: debateTurnRole(turn, debate.turn_durations_ms.length),
-      speaker_space_id: warehouseId(speakers[0].profile_space_id),
+      speaker_space_id: uuidToHex(speakers[0].profile_space_id),
     };
   });
 }
@@ -72,7 +71,27 @@ export function warehouseClaims(
   segments: DebateTranscriptSegment[],
   turns: WarehouseTurn[]
 ): WarehouseClaim[] {
-  const timings = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
+  const timings = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments: [] });
+  // A repeated transcript passage can occur in another speaker's turn, or in several
+  // turns by the same speaker. Reuse the resolver within each eligible rendered turn:
+  // only one possible turn can support an inferred timestamp. Published offsets win.
+  for (const block of claims.blocks) {
+    const untimed = claims.all.filter(claim => claim.blockId === block.id && !claim.publishedTiming);
+    if (untimed.length === 0) continue;
+    const candidates = turns
+      .filter(turn => !block.authorSpaceId || uuidToHex(block.authorSpaceId) === turn.speaker_space_id)
+      .map(turn =>
+        resolveClaimTimings({
+          claims: untimed,
+          blocks: [block],
+          segments: segments.filter(segment => segment.start_ms >= turn.start_ms && segment.start_ms < turn.end_ms),
+        })
+      );
+    for (const claim of untimed) {
+      const matches = candidates.flatMap(candidate => (candidate.has(claim.id) ? [candidate.get(claim.id)!] : []));
+      if (matches.length === 1) timings.set(claim.id, matches[0]);
+    }
+  }
   return claims.all.map(claim => {
     const timing = timings.get(claim.id);
     const valid =
@@ -86,13 +105,13 @@ export function warehouseClaims(
     const turn = valid ? turns.find(t => valid.startMs >= t.start_ms && valid.startMs < t.end_ms) : undefined;
     const author = claims.blocks.find(b => b.id === claim.blockId)?.authorSpaceId;
     // Contradictory provenance must not silently attribute a statement to the other speaker.
-    const attributed = turn && (!author || warehouseId(author) === turn.speaker_space_id) ? turn : undefined;
+    const attributed = turn && (!author || uuidToHex(author) === turn.speaker_space_id) ? turn : undefined;
     return {
-      debate_id: warehouseId(debateId),
-      publication_space_id: warehouseId(spaceId),
-      claim_id: warehouseId(claim.id),
-      block_id: warehouseId(claim.blockId),
-      relation_entity_id: warehouseId(claim.relationEntityId ?? ''),
+      debate_id: uuidToHex(debateId),
+      publication_space_id: uuidToHex(spaceId),
+      claim_id: uuidToHex(claim.id),
+      block_id: uuidToHex(claim.blockId),
+      relation_entity_id: uuidToHex(claim.relationEntityId ?? ''),
       start_ms: valid?.startMs ?? null,
       end_ms: valid?.endMs ?? null,
       timing_source: valid

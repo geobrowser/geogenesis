@@ -5,10 +5,10 @@ The sync copies debate turns and claim occurrences into ClickHouse. [rounds.sql]
 ## Timing and attribution
 
 - Turns use the service's rendered `output_start_ms` / `output_end_ms`, including yields and handoff grace. They never use planned durations or countdown starts. Round names come from the app's `debateTurnRole`; older four-turn formats still map correctly. Speakers come from the service's participant slot → personal space mapping.
-- Claims use the app's resolver: published relation offsets (`exact`, confidence 1), a transcript match (`matched`, the resolver's score), then the source transcript block (`turn_only`, confidence 0). Missing timing remains `unknown` with null offsets. A block can only be located if its published text can be recovered in the transcript; relation position is not chronological and is never used to invent a turn.
+- Claims use the app's resolver: published relation offsets (`exact`, confidence 1), a transcript match (`matched`, the resolver's score), then the source transcript block (`turn_only`, confidence 0). Missing timing remains `unknown` with null offsets. For inferred timing, the resolver searches within rendered turns belonging to the block’s author. Exactly one turn must match; repeated passages that still match multiple turns remain unknown. A block can only be located if its published text can be recovered in the transcript; relation position is not chronological and is never used to invent a turn.
 - Each row represents a `(debate, publication space, block, claim)` occurrence. The sync groups each block separately, preserving statements made by multiple speakers or in multiple debates. Relation entity IDs are retained for auditing. Text is read for matching but not stored in the warehouse or logs.
 - A claim action uses its claim's timing even if its playback position differs. An explicit action debate ID narrows the join; without one, every source debate is credited. Repeated claims can contribute to multiple round/speaker buckets. Do not sum those buckets to obtain a global unique-action count.
-- Other video actions use their captured playback position and half-open turn intervals `[start, end)`. Missing positions, timeline gaps and positions beyond the recording are `unknown`, not opening. The query does not reconstruct a missing position from a later playback heartbeat.
+- Other video actions use their captured playback position and half-open turn intervals `[start, end)`. Missing, null, negative or nonnumeric positions, timeline gaps and positions beyond the recording are `unknown`, not opening. The query does not reconstruct a missing position from a later playback heartbeat.
 - End-card actions are their own stage and have no speaker, including actions on a claim. They work even when no turn timeline is available. Claims that cannot be joined remain visible as `unknown`; their debate ID is empty if the action and graph supply none.
 - Published offsets are recorded as exact provenance, not a guarantee that the publisher was correct. A block author that conflicts with the speaker at that offset produces an unknown round/speaker. Filter `timing_source` and `confidence` before aggregation as shown in the report. The match score measures lexical fit, not a calibrated probability.
 
@@ -41,7 +41,7 @@ Do not mark the production freshness criterion verified until secrets/schema set
 From `apps/web`:
 
 ```sh
-bun run test core/debates/warehouse.test.ts scripts/lib/debate-warehouse-source.test.ts scripts/lib/debate-warehouse-sync.test.ts core/debates/claim-timing.test.ts core/debates/formats.test.ts
+bun run test core/debates/warehouse.test.ts scripts/lib/debate-warehouse-source.test.ts scripts/lib/debate-warehouse-sync.test.ts core/debates/claim-timing.test.ts core/debates/transcript-claims.test.ts core/debates/formats.test.ts core/sync/collect-cursor-pages.test.ts scripts/lib/debate-claims.test.ts
 bun run typecheck
 bun scripts/sync-debate-warehouse.ts --dry-run
 ```
@@ -54,4 +54,6 @@ From the repository root, execute the real reporting SQL using only synthetic fi
 python3 scripts/analytics/test-rounds.py --url https://play.clickhouse.com/
 ```
 
-The optional SQL test covers duplicate operation delivery, interval boundaries, missing/out-of-range playback positions, claim timing taking precedence over playback, reused claims, explicit unmatched debate IDs, end cards without timelines, traffic exclusion and an uncommitted snapshot. It can use a local ClickHouse HTTP endpoint instead.
+The optional SQL test covers UTC parameter binding, empty snapshots, duplicate operation delivery, interval boundaries, missing/invalid/out-of-range playback positions, claim timing taking precedence over playback, reused claims, explicit unmatched debate IDs, end cards without timelines, traffic exclusion and an uncommitted snapshot. For a local ClickHouse HTTP endpoint, also pass `--user default` (or its configured test user).
+
+The [review follow-up](review.md) records the corrected attribution cases and shared-code decisions.

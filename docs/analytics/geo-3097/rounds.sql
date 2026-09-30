@@ -9,19 +9,20 @@ WITH current_generation AS (
 ), turns AS (
   SELECT * FROM analytics.debate_timing_turns WHERE generation IN current_generation
 ), actions AS (
-  SELECT toDate(event_time) AS day,
+  SELECT toDate(event_time, 'UTC') AS day,
          JSONExtractString(properties_json, 'operation_id') AS operation_id,
          JSONExtractString(properties_json, 'outcome') AS outcome,
          JSONExtractString(properties_json, 'component') AS component,
          JSONExtractString(properties_json, 'target_type') AS target_type,
          lower(replaceAll(JSONExtractString(properties_json, 'target_id'), '-', '')) AS target_id,
          lower(replaceAll(JSONExtractString(properties_json, 'debate_id'), '-', '')) AS debate_id,
-         JSONExtractUInt(properties_json, 'playback_position_ms') AS position_ms,
-         JSONHas(properties_json, 'playback_position_ms') AS has_position
+         JSONExtractFloat(properties_json, 'playback_position_ms') AS position_ms,
+         (JSONType(properties_json, 'playback_position_ms') IN ('Int64', 'UInt64', 'Float64')
+          AND isFinite(position_ms) AND position_ms >= 0) AS has_position
   FROM analytics.events_canonical
   WHERE app = 'genesis' AND environment = 'production'
     AND event_name = 'action_completed'
-    AND event_time >= {from:DateTime} AND event_time < {to:DateTime}
+    AND event_time >= {from:DateTime('UTC')} AND event_time < {to:DateTime('UTC')}
     AND JSONExtractString(properties_json, 'operation_id') != ''
     AND NOT JSONExtractBool(properties_json, 'is_internal')
     AND NOT JSONExtractBool(properties_json, 'is_automated')
@@ -53,12 +54,12 @@ WITH current_generation AS (
   WHERE target_type != 'claim' AND component != 'debate_end_card'
 ), playback_actions AS (
   SELECT a.day, a.operation_id, a.outcome, a.source_debate_id AS debate_id,
-         if(t.round != '' AND a.has_position AND a.position_ms < t.end_ms, t.round, 'unknown') AS round,
-         if(t.round != '' AND a.has_position AND a.position_ms < t.end_ms, t.speaker_space_id, '') AS speaker_space_id,
-         if(t.round != '' AND a.has_position AND a.position_ms < t.end_ms, 'playback', 'unknown') AS timing_source,
+         if(t.round != '' AND a.has_position AND a.position_ms < t.end_ms, t.round, 'unknown') AS located_round,
+         if(located_round != 'unknown', t.speaker_space_id, '') AS speaker_space_id,
+         if(located_round != 'unknown', 'playback', 'unknown') AS timing_source,
          toFloat64(0) AS confidence
   FROM playback_locations a ASOF LEFT JOIN turns t
-    ON a.source_debate_id = t.debate_id AND a.position_ms >= t.start_ms
+    ON a.source_debate_id = t.debate_id AND a.position_ms >= toFloat64(t.start_ms)
   WHERE a.source_debate_id != ''
 ), end_cards AS (
   SELECT day, operation_id, outcome,

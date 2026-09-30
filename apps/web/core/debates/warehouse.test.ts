@@ -102,3 +102,36 @@ describe('warehouse debate timing', () => {
     }
   });
 });
+
+it('matches repeated text within the source speaker’s rendered turns', () => {
+  const repeated = [
+    { ...segments[0], start_ms: 1_000, end_ms: 5_000 },
+    { ...segments[0], start_ms: 11_000, end_ms: 15_000 },
+  ];
+  const data = claims();
+  data.blocks[0].authorSpaceId = 'speaker-b';
+  expect(warehouseClaims('debate', 'space', data, repeated, turns)[0]).toMatchObject({
+    timing_source: 'matched',
+    start_ms: 11_000,
+    speaker_space_id: 'speakerb',
+    turn_index: 1,
+  });
+});
+
+it('does not invent a round when one speaker repeats the same transcript passage', () => {
+  const repeated = [{ ...segments[0], start_ms: 1_000, end_ms: 5_000 }, segments[0]];
+  expect(warehouseClaims('debate', 'space', claims(), repeated, turns)[0]).toMatchObject({
+    timing_source: 'unknown',
+    start_ms: null,
+    round: 'unknown',
+  });
+  expect(
+    warehouseClaims(
+      'debate',
+      'space',
+      claims({ publishedTiming: { startMs: 21_000, endMs: 25_000 } }),
+      repeated,
+      turns
+    )[0]
+  ).toMatchObject({ timing_source: 'exact', start_ms: 21_000, round: 'rebuttal' });
+});

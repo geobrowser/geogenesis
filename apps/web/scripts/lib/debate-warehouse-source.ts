@@ -6,23 +6,17 @@ import type {
   DebateTranscriptResponse,
   DebateTranscriptSegment,
 } from '../../core/debates/api';
-import {
-  AUTHORS_PROPERTY_ID,
-  BLOCKS_PROPERTY_ID,
-  CLAIM_END_OFFSET_PROPERTY_ID,
-  CLAIM_START_OFFSET_PROPERTY_ID,
-  DEBATE_CLAIMS_PROPERTY_ID,
-  DEBATE_TRANSCRIPTS_PROPERTY_ID,
-  DEBATE_TYPE_ID,
-  MARKDOWN_CONTENT_PROPERTY_ID,
-  NAME_PROPERTY_ID,
-} from '../../core/debates/ontology';
+import { DEBATE_TRANSCRIPTS_PROPERTY_ID, DEBATE_TYPE_ID } from '../../core/debates/ontology';
 import { groupTranscriptClaims } from '../../core/debates/transcript-claims';
-import { type WarehouseTurn, warehouseClaims, warehouseId, warehouseTurns } from '../../core/debates/warehouse';
+import { type WarehouseTurn, warehouseClaims, warehouseTurns } from '../../core/debates/warehouse';
+import { hexToUuid } from '../../core/id/create-id';
+import { uuidToHex } from '../../core/id/normalize';
 import {
   type DebateTranscriptClaimsQuery,
   debateTranscriptClaimsDocument,
+  debateTranscriptClaimsVariables,
 } from '../../core/io/debate-transcript-claims-document';
+import { collectCursorPages } from '../../core/sync/collect-cursor-pages';
 
 export type WarehouseSources = { graphUrl: string; chatUrl: string; fetch?: typeof fetch };
 export type PublishedDebate = { id: string; transcripts: { spaceId: string }[] };
@@ -48,58 +42,59 @@ async function graph<T>(config: WarehouseSources, query: string, variables: Reco
 
 export async function discoverDebates(config: WarehouseSources): Promise<PublishedDebate[]> {
   const debates = new Map<string, PublishedDebate>();
-  const cursors = new Set<string>();
-  let after: string | null = null;
-  do {
+  const nodes = await collectCursorPages<PublishedDebate>(async after => {
     const data: {
       entitiesConnection: { nodes: PublishedDebate[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
     } = await graph(
       config,
       `
-      query WarehouseDebates($type: UUID!, $transcripts: UUID!, $after: Cursor) {
+      query WarehouseDebates($type: UUID!, $transcripts: UUID!, $after: Cursor, $relationsFirst: Int!) {
         entitiesConnection(first: 100, after: $after, typeId: $type, orderBy: [ID_ASC]) {
-          nodes { id transcripts: relationsList(first: 1000, filter: { typeId: { is: $transcripts } }) { spaceId } }
+          nodes { id transcripts: relationsList(first: $relationsFirst, filter: { typeId: { is: $transcripts } }) { spaceId } }
           pageInfo { hasNextPage endCursor }
         }
       }`,
-      { type: DEBATE_TYPE_ID, transcripts: DEBATE_TRANSCRIPTS_PROPERTY_ID, after }
+      {
+        type: DEBATE_TYPE_ID,
+        transcripts: DEBATE_TRANSCRIPTS_PROPERTY_ID,
+        after,
+        relationsFirst: TRANSCRIPT_PAGE_LIMIT,
+      }
     );
     const page = data.entitiesConnection;
     if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== 'boolean')
       throw new Error('Invalid debate page');
-    for (const debate of page.nodes) {
-      if (!Array.isArray(debate.transcripts) || debate.transcripts.length >= 1000)
-        throw new Error('Incomplete publication spaces');
-      debates.set(warehouseId(debate.id), debate);
-    }
-    if (!page.pageInfo.hasNextPage) break;
-    after = page.pageInfo.endCursor;
-    if (!after || cursors.has(after)) throw new Error('Debate pagination did not advance');
-    cursors.add(after);
-  } while (true);
+    return { items: page.nodes, ...page.pageInfo };
+  });
+  for (const debate of nodes) {
+    if (!Array.isArray(debate.transcripts) || debate.transcripts.length >= TRANSCRIPT_PAGE_LIMIT)
+      throw new Error('Incomplete publication spaces');
+    debates.set(uuidToHex(debate.id), debate);
+  }
   if (debates.size === 0) throw new Error('Refusing to replace the warehouse with an empty debate catalog');
   return [...debates.values()];
 }
 
 // Bound every nested traversal explicitly; fail at the cap instead of publishing a truncated snapshot.
-const claimsQuery = print(debateTranscriptClaimsDocument).replaceAll('relationsList(', 'relationsList(first: 1000, ');
+const TRANSCRIPT_PAGE_LIMIT = 1000;
+const claimsQuery = print(debateTranscriptClaimsDocument);
 function assertComplete(value: unknown): void {
   if (Array.isArray(value)) {
-    if (value.length >= 1000) throw new Error('Transcript traversal reached its page limit');
+    if (value.length >= TRANSCRIPT_PAGE_LIMIT) throw new Error('Transcript traversal reached its page limit');
     value.forEach(assertComplete);
   } else if (value && typeof value === 'object') Object.values(value).forEach(assertComplete);
 }
 
 export async function readDebate(config: WarehouseSources, published: PublishedDebate) {
-  const id = warehouseId(published.id);
-  const dashed = id.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+  const id = uuidToHex(published.id);
+  const dashed = hexToUuid(id);
   const base = `${config.chatUrl.replace(/\/$/, '')}/debates/${dashed}`;
   const debate = await json<Debate>(config, base);
   const media = debate ? await json<DebateMediaResponse>(config, `${base}/media`) : null;
   const transcript = debate ? await json<DebateTranscriptResponse>(config, `${base}/transcript?format=json`) : null;
   if (
     debate &&
-    (!Array.isArray(debate.participants) || !Array.isArray(debate.turn_durations_ms) || warehouseId(debate.id) !== id)
+    (!Array.isArray(debate.participants) || !Array.isArray(debate.turn_durations_ms) || uuidToHex(debate.id) !== id)
   ) {
     throw new Error(`Invalid debate ${id}`);
   }
@@ -122,18 +117,12 @@ export async function readDebate(config: WarehouseSources, published: PublishedD
   }
   const turns = debate ? warehouseTurns(debate, media?.turn_segments ?? []) : [];
   const claims = [];
-  for (const space of new Set(published.transcripts.map(t => warehouseId(t.spaceId)))) {
-    const data = await graph<DebateTranscriptClaimsQuery>(config, claimsQuery, {
-      id,
-      spaceId: space,
-      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
-      blocksPropertyId: BLOCKS_PROPERTY_ID,
-      authorsPropertyId: AUTHORS_PROPERTY_ID,
-      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-      namePropertyId: NAME_PROPERTY_ID,
-      markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-      offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
-    });
+  for (const space of new Set(published.transcripts.map(t => uuidToHex(t.spaceId)))) {
+    const data = await graph<DebateTranscriptClaimsQuery>(
+      config,
+      claimsQuery,
+      debateTranscriptClaimsVariables(id, space, TRANSCRIPT_PAGE_LIMIT)
+    );
     if (!data.entity || !Array.isArray(data.entity.transcripts)) throw new Error(`Missing graph debate ${id}`);
     assertComplete(data);
     claims.push(...claimsFromGraph(data, id, space, segments, turns));
@@ -162,11 +151,12 @@ export function claimsFromGraph(
   const claims = [];
   const seenBlocks = new Set<string>();
   for (const transcript of data.entity?.transcripts ?? []) {
-    for (const block of transcript?.toEntity?.blocks ?? []) {
-      if (!block?.toEntity || seenBlocks.has(warehouseId(block.toEntity.id))) continue;
-      seenBlocks.add(warehouseId(block.toEntity.id));
+    if (!transcript?.toEntity) continue;
+    for (const block of transcript.toEntity.blocks ?? []) {
+      if (!block?.toEntity || seenBlocks.has(uuidToHex(block.toEntity.id))) continue;
+      seenBlocks.add(uuidToHex(block.toEntity.id));
       const grouped = groupTranscriptClaims(
-        { entity: { transcripts: [{ toEntity: { id: transcript!.toEntity!.id, blocks: [block] } }] } },
+        { entity: { transcripts: [{ toEntity: { id: transcript.toEntity.id, blocks: [block] } }] } },
         space
       );
       claims.push(...warehouseClaims(id, space, grouped, segments, turns));
