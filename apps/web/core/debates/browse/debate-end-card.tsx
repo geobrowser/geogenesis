@@ -333,15 +333,17 @@ function NextDebateLink({ next }: { next: NextDebate }) {
       data-end-card-next-debate={next.related ? 'related' : 'space'}
       className="mt-3.5 flex shrink-0 items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:mt-2.5 @max-md:gap-2.5 @max-md:p-2"
     >
-      <span className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-20">
+      {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
+          landscape box cropped it down to a strip across the middle of the two. */}
+      <span className="relative aspect-[27/41] w-12 shrink-0 overflow-hidden rounded-md bg-grey-02 @max-md:w-10">
         {next.keyFrame ? (
           <NativeGeoImage value={next.keyFrame} alt="" className="absolute inset-0 size-full object-cover" />
         ) : null}
         <span
           aria-hidden
-          className="absolute top-1/2 left-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-6"
+          className="absolute top-1/2 left-1/2 grid size-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white @max-md:size-5"
         >
-          <Play size={12} />
+          <Play size={10} />
         </span>
       </span>
 
