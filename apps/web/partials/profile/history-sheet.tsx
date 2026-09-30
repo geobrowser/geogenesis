@@ -7,12 +7,14 @@ import * as React from 'react';
 import type { EntityChoice } from '~/core/profile/stage-history';
 import type { SearchResult } from '~/core/types';
 
-import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { SmallButton, SquareButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { inputStyles } from '~/design-system/input';
 import { SelectEntity } from '~/design-system/select-entity';
 import { TextButton } from '~/design-system/text-button';
+
+import { profilePillClassName } from './profile-pill';
 
 type Props = {
   title: string;
@@ -58,12 +60,12 @@ export function HistorySheet({ title, canSave, onCancel, onSave, children }: Pro
           <p className="text-metadata text-grey-04">Added to your profile when you save it.</p>
         </Description>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="secondary" onClick={onCancel}>
+          <button type="button" onClick={onCancel} className={profilePillClassName('secondary')}>
             Cancel
-          </Button>
-          <Button type="button" onClick={onSave} disabled={!canSave}>
+          </button>
+          <button type="button" onClick={onSave} disabled={!canSave} className={profilePillClassName('primary')}>
             Done
-          </Button>
+          </button>
         </div>
       </footer>
     </div>
