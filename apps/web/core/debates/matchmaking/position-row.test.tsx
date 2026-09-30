@@ -256,3 +256,24 @@ describe('PositionRow', () => {
     });
   });
 });
+
+describe('PositionRow confirming announcement', () => {
+  const confirming = 'Response submitted. Waiting for confirmation.';
+
+  it('stays silent while the response is only pending', () => {
+    render(<PositionRow positions={[]} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />);
+
+    expect(screen.queryByText(confirming)).not.toBeInTheDocument();
+  });
+
+  it('announces the confirming sentence once, hidden', () => {
+    render(
+      <PositionRow positions={[]} responseKind="stance" viewerPosition={true} pending announcing onRespond={() => {}} />
+    );
+
+    const notices = screen.getAllByText(confirming);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toHaveAttribute('aria-live', 'polite');
+    expect(notices[0]).toHaveClass('sr-only');
+  });
+});

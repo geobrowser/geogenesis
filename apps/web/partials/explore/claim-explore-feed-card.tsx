@@ -329,6 +329,7 @@ export function ClaimExploreFeedCard({
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
             pending={control.isResponsePending}
+            announcing={control.isResponsePending}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"

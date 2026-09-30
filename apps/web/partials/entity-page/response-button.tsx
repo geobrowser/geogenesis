@@ -113,7 +113,27 @@ export function ResponseButton({
     </button>
   );
 
-  if (!tooltip || !actionTitle) return button;
+  if (!tooltip || !behaviour.title) return button;
 
-  return <Tooltip trigger={button} label={actionTitle} />;
+  // The same sentence the native `title` carries: the action while the control is live, the
+  // confirming copy while a response is pending. A tooltip that kept the action name told a
+  // hovering reader the press would still do something.
+  return <Tooltip trigger={button} label={behaviour.title} />;
+}
+
+/**
+ * One screen-reader confirmation for a response still being indexed. Hidden, and always mounted.
+ *
+ * A live region has to be in the document *before* its text changes for a screen reader to announce
+ * that change, so the node stays and only its text comes and goes. `active` is held true across the
+ * whole confirming window — through the reconciling⇄delayed retry flips — so the sentence goes in
+ * once when the response enters that window and is cleared once when it is confirmed or dropped,
+ * rather than removed and re-added on every flip and spoken again each time.
+ */
+export function ResponseConfirmingAnnouncement({ active }: { active: boolean }) {
+  return (
+    <span aria-live="polite" className="sr-only">
+      {active ? RESPONSE_CONFIRMING_COPY : null}
+    </span>
+  );
 }

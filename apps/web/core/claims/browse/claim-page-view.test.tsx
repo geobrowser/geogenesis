@@ -693,21 +693,24 @@ describe('ClaimPageView description', () => {
 });
 
 describe('ClaimPageView position', () => {
-  // The claim page is where a confirming response was pressed again and published a retraction.
-  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
-  // cursor, and only the presses that would undo it are dropped until it lands.
-  it('marks the pills pending while the response confirms, without announcing a wait', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction. It
+  // hands the pills the two flags that guard the window: `pending`, which drops the undo-ing press
+  // and shows the wait cursor, and `announcing`, the single screen-reader confirmation. Both run for
+  // the whole confirming window — the same flag drives them — so neither is dropped and re-fired on
+  // an indexing retry. There is no visible sentence; the announcement is `sr-only` inside the pills.
+  it('marks the pills pending and announcing while the response confirms', () => {
     mocks.isResponsePending = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
-    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+    expect(mocks.positionControl?.announcing).toBe(true);
   });
 
   it('releases the pills once it has landed', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(false);
+    expect(mocks.positionControl?.announcing).toBe(false);
   });
 });
 

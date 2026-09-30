@@ -30,7 +30,7 @@ import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { Tooltip } from '~/design-system/tooltip';
 
-import { ResponseButton } from '~/partials/entity-page/response-button';
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
 
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
@@ -848,6 +848,7 @@ function TickerClaimHeader({
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
       <span className="flex shrink-0 items-center gap-1">
+        <ResponseConfirmingAnnouncement active={control.isResponsePending} />
         <ClaimIconButton
           responseKind={responseKind}
           position

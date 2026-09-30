@@ -285,32 +285,37 @@ describe('compact, for the sticky header', () => {
   }
 
   /**
-   * Out of layout, still announced. This assertion used to demand the node be gone entirely, on my
-   * claim that the page's own control announced instead — which is false exactly where it matters:
-   * `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this sentence in a
-   * `title`, read on focus and never announced. A vote cast from the bar had no confirmation at all
-   * for a screen reader.
+   * The sticky bar and the page header both mount this control. Only the page copy announces, so
+   * one vote is not spoken twice. The claim page announces from its own pills.
    */
-  it('keeps the indexing notice announceable while taking no layout', async () => {
-    mocks.indexingDelayed = true;
+  it('stays silent in the sticky bar so the page control can announce once', async () => {
+    mocks.processing = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
 
     await waitFor(() => expect(tallyTrigger()).toBeInTheDocument());
 
-    const notice = screen.getByText(INDEXING);
-    expect(notice).toHaveAttribute('aria-live', 'polite');
-    // `sr-only` is absolutely positioned and clipped, so it cannot widen the 48px row.
-    expect(notice).toHaveClass('sr-only');
-    expect(notice).not.toHaveClass('ml-1');
+    expect(screen.queryByText(INDEXING)).not.toBeInTheDocument();
   });
 
-  it('still shows the indexing notice everywhere else', async () => {
-    mocks.indexingDelayed = true;
+  it('announces once from the debate overlay, hidden', async () => {
+    mocks.processing = true;
+    render(
+      <EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" presentation="debate-vertical" />,
+      { wrapper }
+    );
+
+    const notices = await screen.findAllByText(INDEXING);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toHaveClass('sr-only');
+  });
+
+  it('announces the indexing notice without showing it', async () => {
+    mocks.processing = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
     const notice = await screen.findByText(INDEXING);
-    expect(notice).toHaveClass('ml-1');
-    expect(notice).not.toHaveClass('sr-only');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    expect(notice).toHaveClass('sr-only');
   });
 
   /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */

@@ -39,7 +39,7 @@ import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { ResponseButton } from '~/partials/entity-page/response-button';
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
 
 import type {
   Debate,
@@ -559,7 +559,10 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     isConnected,
-    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    /**
+     * The viewer's response is on its way to the chain; the pills ignore presses until it lands, and
+     * the one screen-reader confirmation is spoken for the length of it.
+     */
     isResponsePending,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
@@ -777,6 +780,7 @@ function RespondableControls({
         // a retraction.
         disabled={!canRespond}
         pending={isResponsePending}
+        announcing={isResponsePending}
         titleFor={actionTitle}
         noteFor={noteFor}
       />
@@ -1013,6 +1017,7 @@ export function PositionRow({
   onRespond,
   disabled,
   pending,
+  announcing = false,
   titleFor,
   noteFor,
   endSlot,
@@ -1029,6 +1034,8 @@ export function PositionRow({
    * pointer, with a wait cursor.
    */
   pending?: boolean;
+  /** Speak the confirming sentence once, hidden. Separate from `pending`, which lasts longer. */
+  announcing?: boolean;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1070,6 +1077,7 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className="@container">
+      <ResponseConfirmingAnnouncement active={announcing} />
       <div
         className={cx(
           'grid gap-2',

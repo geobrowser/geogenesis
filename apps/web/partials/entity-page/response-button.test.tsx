@@ -195,7 +195,7 @@ describe('the label', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Agree');
   });
 
-  it('keeps the tooltip naming the action, not the confirming copy, while a response confirms', async () => {
+  it('puts the confirming copy in the tooltip while a response confirms', async () => {
     render(
       <ResponseButton
         tooltip
@@ -212,8 +212,6 @@ describe('the label', () => {
 
     const button = screen.getByRole('button', { name: 'Remove agreement' });
     fireEvent.focus(button);
-    const tip = await screen.findByRole('tooltip');
-    expect(tip).toHaveTextContent('Remove agreement');
-    expect(tip).not.toHaveTextContent(RESPONSE_CONFIRMING_COPY);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(RESPONSE_CONFIRMING_COPY);
   });
 });
