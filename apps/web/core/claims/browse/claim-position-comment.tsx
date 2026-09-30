@@ -41,6 +41,7 @@ export function ClaimPositionCommentControl({
   promptForComment,
   disabled,
   pending,
+  announcing,
   titleFor,
   noteFor,
   positionRowClassName,
@@ -67,6 +68,8 @@ export function ClaimPositionCommentControl({
   onActivityPublish?: (delta: number) => void;
   disabled?: boolean;
   /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
+  /** The narrower window the confirmation is announced on — see `PositionRow`. */
+  announcing?: boolean;
   pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
@@ -171,6 +174,7 @@ export function ClaimPositionCommentControl({
           onRespond={choosePosition}
           disabled={disabled || isSubmitting}
           pending={pending}
+          announcing={announcing}
           titleFor={titleFor}
           noteFor={noteFor}
           endSlot={positionRowEndSlot}

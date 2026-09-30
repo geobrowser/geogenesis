@@ -774,11 +774,6 @@ function RespondableControls({
           ))
         }
       />
-      {isResponseIndexingDelayed ? (
-        <span aria-live="polite" className="sr-only">
-          {RESPONSE_CONFIRMING_COPY}
-        </span>
-      ) : null}
       <PositionRow
         positions={optimisticPositions}
         responseKind={CLAIM_RESPONSE_KIND}
@@ -790,6 +785,7 @@ function RespondableControls({
         // a retraction.
         disabled={!canRespond}
         pending={isResponsePending}
+        announcing={isResponseIndexingDelayed}
         titleFor={actionTitle}
         noteFor={noteFor}
       />
@@ -1026,6 +1022,7 @@ export function PositionRow({
   onRespond,
   disabled,
   pending,
+  announcing,
   titleFor,
   noteFor,
   endSlot,
@@ -1041,6 +1038,10 @@ export function PositionRow({
    * pointer, with a wait cursor.
    */
   pending?: boolean;
+  /**
+   * The narrower window the confirmation is *announced* on, which is not the same as `pending`.
+   */
+  announcing?: boolean;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1074,6 +1075,11 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className="@container">
+      {announcing ? (
+        <span aria-live="polite" className="sr-only">
+          {RESPONSE_CONFIRMING_COPY}
+        </span>
+      ) : null}
       <div
         className={cx(
           'grid gap-2',
