@@ -4,15 +4,13 @@
   "hashAlgorithm": "sha256",
   "schemaVersion": "2026-05-09",
   "sourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
-  "eventRegistryHash": "46f159124e69f1bd7b530a3b2806b63c5bfcbed0c6b773a1f46389246174300a",
-  "hash": "7b3fb368509a8133d22ae66314e50c681b7625af1a053173fcdc361b02ce5879",
-  "shortHash": "7b3fb368509a",
-  "integrity": "sha256-ez+zaFCagTPSKuZjFOUMaBt2Ja8aBTFz/Nw2GwLOWHk=",
+  "eventRegistryHash": "55c383096e35b9c6b3bb16f9c46e4cef9112d86aa8defb39e3dffc7277a14ec4",
+  "hash": "997e25cb095fcda66fcf701cfa2a4b8dc2a46bf16f6966a47fd73aeb803cb8e4",
+  "shortHash": "997e25cb095f",
+  "integrity": "sha256-mX4lywlfzaZvz3Ac+ipLjcKka/FvaWakf9c664A8uOQ=",
   "files": {
     "stable": "ga.js",
     "latest": "ga-latest.js",
-    "hashed": "ga-7b3fb368509a.js"
-  },
-  "upstreamSourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
-  "localPatch": "scripts/analytics/extend-action-registry.py"
+    "hashed": "ga-997e25cb095f.js"
+  }
 }
