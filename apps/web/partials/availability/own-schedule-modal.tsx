@@ -10,7 +10,7 @@ import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
 
 /**
  * "Set your debate schedule", wired to the viewer's saved week — the one editor the navbar, the
- * debates hub banner and your own availability link all open.
+ * debates hub's header calendar and banner, and your own availability link all open.
  */
 export function OwnScheduleModal({
   open,

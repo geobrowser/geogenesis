@@ -40,7 +40,14 @@ export type ScheduleEntry =
   | 'reschedule_link';
 
 /** Which control opened the viewer's own schedule editor. */
-export type ScheduleEditorSurface = 'navbar' | 'hub_banner' | 'people_tab' | 'availability_link';
+export type ScheduleEditorSurface =
+  | 'navbar'
+  /** The calendar button beside "I'm available" in the hub header: the standing entry point. */
+  | 'hub_header'
+  /** The set-schedule banner under that header, which only introduces it. */
+  | 'hub_banner'
+  | 'people_tab'
+  | 'availability_link';
 
 /** Every event that knows how the week was opened says so the same way, `unknown` included. */
 function entryProperty(entry: ScheduleEntry | null | undefined) {
