@@ -1,14 +1,15 @@
 import * as Effect from 'effect/Effect';
 
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
   type ApiProposalListItem,
   convertVoteOption,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapApiActionsToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import type { Profile } from '~/core/types';
@@ -143,7 +144,7 @@ export async function getMyGovernanceProposals(opts: {
       startTime: p.timing.startTime,
       submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
       endTime: p.timing.endTime,
-      status: mapProposalStatus(p.status),
+      status: mapProposalStatus(getEffectiveApiProposalStatus(p)),
       canExecute: getApiProposalCanExecute(p),
       proposalVotes: {
         totalCount: p.votes.total,

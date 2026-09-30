@@ -1,12 +1,15 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
 import { useExecuteProposal, useProposalExecutability } from '~/core/hooks/use-execute-proposal';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
+import { decodeGovernanceRevert, describeGovernanceError } from '~/core/utils/contracts/governance-errors';
+import { describeDeadProposal, isPermanentExecuteRevert } from '~/core/utils/contracts/proposal-executability';
 import { isUserRejection } from '~/core/utils/error-diagnostics';
 
 import { Button, SmallButton } from '~/design-system/button';
@@ -25,9 +28,17 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
     spaceId,
     proposalId,
   });
-  const { state: executability } = useProposalExecutability({ spaceId, proposalId });
+  const { state: executability, revert: simulationRevert } = useProposalExecutability({ spaceId, proposalId });
   const reportError = useReportError();
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  // The real transaction can revert with a permanent cause the simulation missed
+  // (the simulation fails open on an unrecognisable RPC error). Classify the
+  // execute error with the same rules, so a failed attempt that proves the
+  // proposal dead says so instead of offering Execute again.
+  const executeRevert = status === 'error' && !isUserRejection(error) ? decodeGovernanceRevert(error) : null;
+  const isDeadAfterAttempt = isPermanentExecuteRevert(executeRevert);
 
   const isPending = status === 'pending';
   const isSuccess = status === 'success';
@@ -55,16 +66,25 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
       return;
     }
 
+    // Re-probe: whatever the cached simulation said, it was wrong for this click.
+    void queryClient.invalidateQueries({ queryKey: ['proposal-executability', spaceId, proposalId] });
+
     // Surface the decoded on-chain revert (named selector + hint, with copy +
     // retry) so the user — and any copied report — sees why it failed. Don't
     // assume a revert means "already applied"; for execute it usually doesn't
     // (CanNotExecute = not enough votes, or the voting period hasn't elapsed).
     const message = error ? describeGovernanceError(error) : 'An unknown error occurred';
-    reportError(`Execute failed: ${message}`, () => {
-      reset();
-      execute();
-    });
-  }, [status, error, reportError, reset, execute]);
+    // No retry for a permanent revert — retrying it can only fail the same way.
+    reportError(
+      `Execute failed: ${message}`,
+      isPermanentExecuteRevert(decodeGovernanceRevert(error))
+        ? undefined
+        : () => {
+            reset();
+            execute();
+          }
+    );
+  }, [status, error, reportError, reset, execute, queryClient, spaceId, proposalId]);
 
   if (isSuccess) {
     return (
@@ -74,15 +94,14 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
     );
   }
 
-  // The proposal can never be executed — either the DAO has no record of it, or
-  // its own action reverts on-chain. "Pending execution" would be a lie. Say so
-  // honestly. (Editors can recreate the request one click away from the Editors
-  // menu; a proposal missing from the DAO has to be published again.)
-  if (executability === 'dead' && status === 'idle') {
+  // The proposal can never be executed — the DAO has no record of it, its own
+  // action reverts on-chain, or its role change contradicts the chain's roles.
+  // "Pending execution" would be a lie. Say so honestly, with the cause.
+  if ((executability === 'dead' && status !== 'pending') || isDeadAfterAttempt) {
     return (
       <div
         className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01"
-        title="This proposal can never be executed: either the space's DAO has no record of it, or one of its on-chain actions reverts. Older editor and member requests, and proposals that predate this space's migration, hit this permanently and need to be recreated."
+        title={describeDeadProposal(isDeadAfterAttempt ? executeRevert : simulationRevert)}
       >
         Can&apos;t be completed
       </div>
