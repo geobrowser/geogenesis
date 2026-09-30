@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 
 import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
@@ -114,6 +114,14 @@ function facesTrigger() {
 function tallyTrigger() {
   return screen.getByRole('button', { name: '67%' });
 }
+
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 beforeEach(() => {
   mocks.positive = 2;
@@ -398,17 +406,11 @@ describe('while a response is confirming', () => {
     }
   });
 
-  it('puts the confirming copy in the tooltip', async () => {
-    mocks.processing = true;
-    for (const thumb of await renderThumbs()) expect(thumb).toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
-  });
-
   it('is an ordinary control otherwise', async () => {
     for (const thumb of await renderThumbs()) {
       expect(thumb).not.toHaveAttribute('aria-disabled');
       expect(thumb).not.toHaveClass('cursor-progress');
       expect(thumb.className).toMatch(/hover:text-text/);
-      expect(thumb).not.toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
     }
   });
 
@@ -422,5 +424,48 @@ describe('while a response is confirming', () => {
 
     expect(mocks.submitResponse).not.toHaveBeenCalled();
     expect(up).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+/**
+ * A publish that fails otherwise rolls the optimistic mark back and reads as the vote vanishing —
+ * the claim pills already name the reason, and the thumbs now do too.
+ */
+describe('when a publish fails', () => {
+  const MESSAGE = 'Publish failed';
+
+  function thumbs() {
+    return screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  }
+
+  async function pressUpAndFail({ compact = false }: { compact?: boolean } = {}) {
+    mocks.submitResponse = vi.fn((_direction: unknown, options?: { onError?: (error: unknown) => void }) =>
+      options?.onError?.(new Error(MESSAGE))
+    );
+    const user = userEvent.setup();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact={compact} />, {
+      wrapper,
+    });
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    await user.click(thumbs()[0]!);
+  }
+
+  it('names the reason where there is room', async () => {
+    await pressUpAndFail();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(MESSAGE);
+    expect(alert).toHaveClass('ml-1');
+    expect(alert).not.toHaveClass('sr-only');
+  });
+
+  it('keeps the reason announceable while taking no layout in the bar', async () => {
+    await pressUpAndFail({ compact: true });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(MESSAGE);
+    // `sr-only` is absolutely positioned and clipped, so it cannot widen the 48px row.
+    expect(alert).toHaveClass('sr-only');
+    expect(alert).not.toHaveClass('ml-1');
   });
 });
