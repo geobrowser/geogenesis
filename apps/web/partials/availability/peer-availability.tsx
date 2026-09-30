@@ -127,7 +127,7 @@ type Props = {
   entry?: ScheduleEntry | null;
   /**
    * Claims the viewer and this person hold opposite positions on. Supplied by a caller that has
-   * already compared them; `null` when nobody has, which leaves the line out.
+   * already compared them; `null` when nobody has, which leaves the count out of the line.
    */
   disagreementCount?: number | null;
 };
@@ -157,13 +157,14 @@ export function PeerAvailabilityView({
   // The week starts at today's midnight, so its early slots are already gone. They are dropped
   // rather than dimmed: a time nobody can pick is not information about their week, and geo-chat
   // refuses a past start anyway. Drawn once per opening; `SendRequest` rechecks at the click.
+  const clock = React.useCallback(() => (now ? now.getTime() : Date.now()), [now]);
   const days = React.useMemo(() => {
-    const cutoff = (now ?? new Date()).getTime();
+    const cutoff = clock();
     return peerScheduleDays(schedule, now).map(day => ({
       ...day,
       slots: day.slots.filter(slot => Date.parse(slot.start) > cutoff),
     }));
-  }, [schedule, now]);
+  }, [schedule, now, clock]);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
   // can ask for, and the footer needs to name the one that is.
   // Matched by instant, not spelling: the wire sends `…:00Z` and the grid's starts are `…:00.000Z`.
@@ -176,14 +177,13 @@ export function PeerAvailabilityView({
   });
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
   // For the free-time field, whose `min` is the only thing keeping a past time out of it.
-  const notBefore = (now ?? new Date()).getTime();
-  const clock = React.useCallback(() => (now ? now.getTime() : Date.now()), [now]);
+  const notBefore = clock();
   const name = peerName || shortId(schedule.userId);
   const hasAnySlot = days.some(day => day.slots.length > 0);
 
   // A week crossing a DST boundary holds two genuinely different offsets, so the header names one
-  // only when every slot agrees. The header is the only place their zone appears: every time in
-  // the modal is the viewer's own, since a second clock on each chip read as noise.
+  // only when every slot agrees. This line is the only place their zone appears: every time in the
+  // modal is the viewer's own, since a second clock on each chip read as noise.
   const offsets = new Set(days.flatMap(day => day.slots).map(slot => slot.offsetMinutes));
   const uniformOffset = offsets.size === 1 ? [...offsets][0] : null;
   // geo-chat sends an empty zone for a side with no saved schedule, so naming them is conditional —
@@ -194,10 +194,10 @@ export function PeerAvailabilityView({
           uniformOffset === null ? '' : `, ${formatOffset(uniformOffset)}`
         }.`
       : 'Times shown in your local time.';
-  // A bookable week carries the zone in its footer, where "Pick a time" used to be. Every other
-  // state has no footer, so it gets the line on its own at the bottom.
-  const showsWeek = schedule.theirWeekKnown && schedule.peerHasSchedule && hasAnySlot;
-  const zoneInFooter = Boolean(booking) && showsWeek;
+  const week = !schedule.theirWeekKnown ? 'unknown' : !schedule.peerHasSchedule || !hasAnySlot ? 'empty' : 'slots';
+  // A bookable week carries the zone in its footer, beside Send. Every other state has no footer,
+  // so it gets the line on its own at the bottom.
+  const zoneInFooter = Boolean(booking) && week === 'slots';
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
@@ -219,11 +219,11 @@ export function PeerAvailabilityView({
         </Text>
       </header>
 
-      {!schedule.theirWeekKnown ? (
+      {week === 'unknown' ? (
         // An older geo-chat cannot send their week at all, and its intersection says nothing
         // about them. Better to say so than to report an empty week as theirs.
         <Empty>Can&rsquo;t show {name}&rsquo;s week from this server yet.</Empty>
-      ) : !schedule.peerHasSchedule || !hasAnySlot ? (
+      ) : week === 'empty' ? (
         // Availability is a preference, not a gate, so a caller that can book is offered a time of
         // its own rather than a wall (GEO-2938).
         <Empty
