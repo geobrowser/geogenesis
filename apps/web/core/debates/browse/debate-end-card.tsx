@@ -18,6 +18,7 @@ import { Text } from '~/design-system/text';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 
+import { PILL_ACTION_CLASS } from './pill-action';
 import type { EndCardDebater, useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -72,14 +73,13 @@ export function DebateEndCard({
               <span className="text-chatMedium text-grey-04">Where do you stand?</span>
               {/* Replay at every width: a pill on the question's own line rather than a circle in a
                   band above the card, which cost the card about 50px and sat apart from everything
-                  else the viewer can do here. The claims pill's shape, so it reads as one of the
-                  card's actions. */}
+                  else the viewer can do here. */}
               <button
                 type="button"
                 aria-label="Replay debate"
                 data-end-card-replay
                 onClick={onReplay}
-                className="flex h-7 shrink-0 items-center gap-1 rounded-full border border-grey-02 bg-white px-2.5 text-smallButton text-grey-04 shadow-light transition-colors hover:text-text"
+                className={cx(PILL_ACTION_CLASS, 'shrink-0 gap-1 px-2.5 text-smallButton')}
               >
                 <RetrySmall />
                 Replay
