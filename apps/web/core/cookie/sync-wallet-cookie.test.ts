@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { forgetSyncedWalletCookie, syncWalletCookie } from './sync-wallet-cookie';
+import { SYNC_RETRY_DELAYS_MS, forgetSyncedWalletCookie, syncWalletCookie } from './sync-wallet-cookie';
 
 const onConnectionChange = vi.hoisted(() => vi.fn<(args: unknown) => Promise<string | null>>());
 const getToken = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
@@ -88,5 +88,92 @@ describe('syncWalletCookie', () => {
     await syncWalletCookie(ADDRESS);
 
     expect(onConnectionChange).toHaveBeenCalledTimes(2);
+  });
+
+  // Nothing else re-runs the sync when the token shows up: the smart-account query is keyed on
+  // wallet addresses. Without a retry an idle tab stayed unrecognised by the server.
+  describe('retry without a smart-account refetch', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('syncs once the token shows up', async () => {
+      getToken.mockResolvedValueOnce(null);
+
+      await syncWalletCookie(ADDRESS);
+      expect(onConnectionChange).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+
+      // Recognised now, so nothing further is scheduled.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries when the server recognised no wallet', async () => {
+      onConnectionChange.mockImplementationOnce(async () => null);
+
+      await syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('stops after the last delay', async () => {
+      getToken.mockResolvedValue(null);
+
+      await syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(getToken).toHaveBeenCalledTimes(1 + SYNC_RETRY_DELAYS_MS.length);
+    });
+
+    it('does not retry when the server recognised a different wallet', async () => {
+      onConnectionChange.mockImplementation(async () => OTHER);
+
+      await syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps one retry pending however often it is asked, and retries the latest address', async () => {
+      getToken.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      onConnectionChange.mockImplementation(async () => OTHER);
+
+      await syncWalletCookie(ADDRESS);
+      await syncWalletCookie(OTHER);
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+      // Recognised as OTHER, which is what the retry asked about, so it is remembered.
+      await syncWalletCookie(OTHER);
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+    });
+
+    // Every mounted smart-account consumer can ask at once. One pending retry, on its own schedule,
+    // keeps that from becoming a burst of Server Actions.
+    it('does not start a second retry schedule for repeated asks', async () => {
+      getToken.mockResolvedValue(null);
+
+      await syncWalletCookie(ADDRESS);
+      await syncWalletCookie(ADDRESS);
+      await syncWalletCookie(ADDRESS);
+      expect(getToken).toHaveBeenCalledTimes(3);
+
+      // The first retry is due at the first delay; the next only one delay after that.
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0] + SYNC_RETRY_DELAYS_MS[1] - 1);
+      expect(getToken).toHaveBeenCalledTimes(4);
+    });
+
+    it('cancels a pending retry when the wallet goes away', async () => {
+      getToken.mockResolvedValueOnce(null);
+
+      await syncWalletCookie(ADDRESS);
+      forgetSyncedWalletCookie();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(onConnectionChange).not.toHaveBeenCalled();
+    });
   });
 });

@@ -14,6 +14,39 @@ import { onConnectionChange } from './cookie';
 let syncedAddress: string | null = null;
 
 /**
+ * Delays before trying again when there was no identity token yet, or the server recognised no
+ * wallet. Nothing else re-runs the sync — the smart-account query is keyed on wallet addresses, not
+ * the token — so without these an idle tab could stay unrecognised by the server until an
+ * unrelated refetch. Spaced past `getCachedIdentityToken`'s 30s cooldown after a failed fetch, and
+ * bounded: past the last one, the next smart-account run picks it up as before.
+ */
+export const SYNC_RETRY_DELAYS_MS = [5_000, 15_000, 35_000, 60_000] as const;
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryAttempt = 0;
+let retryAddress: `0x${string}` | null = null;
+
+function clearRetry() {
+  if (retryTimer !== null) clearTimeout(retryTimer);
+  retryTimer = null;
+  retryAttempt = 0;
+  retryAddress = null;
+}
+
+function scheduleRetry(address: `0x${string}`) {
+  // The latest address wins, so a retry never re-asks about a wallet this tab has left.
+  retryAddress = address;
+  if (retryTimer !== null || retryAttempt >= SYNC_RETRY_DELAYS_MS.length) return;
+
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    const pending = retryAddress;
+    // A failure here is left for the next smart-account run, which reports it.
+    if (pending) syncWalletCookie(pending).catch(() => {});
+  }, SYNC_RETRY_DELAYS_MS[retryAttempt++]);
+}
+
+/**
  * Has the server recognise `address` as this tab's wallet. The server takes the wallet from the
  * Privy identity token, not from `address` (GEO-3107), so `address` only decides whether a call
  * is needed and whether the answer matches.
@@ -21,17 +54,24 @@ let syncedAddress: string | null = null;
 export async function syncWalletCookie(address: `0x${string}`) {
   if (syncedAddress === address.toLowerCase()) return;
 
-  // No token yet means Privy has not finished signing in. Leave it for the next run rather than
-  // failing the smart-account query over it.
+  // No token yet means Privy has not finished signing in. Retry shortly rather than failing the
+  // smart-account query over it.
   const identityToken = await getCachedIdentityToken();
-  if (!identityToken) return;
+  if (!identityToken) return scheduleRetry(address);
 
   const recognised = await onConnectionChange({ type: 'connect', identityToken });
-  // Remembered only once the server vouches for this same wallet, so anything else is retried.
-  if (recognised?.toLowerCase() === address.toLowerCase()) syncedAddress = recognised.toLowerCase();
+  if (recognised?.toLowerCase() === address.toLowerCase()) {
+    syncedAddress = recognised.toLowerCase();
+    clearRetry();
+    return;
+  }
+  // No wallet recognised can be transient (Privy's keys unreachable). A different wallet cannot:
+  // the same token would name it again, so that is left to the next smart-account run.
+  if (recognised === null) scheduleRetry(address);
 }
 
 /** Call when the wallet goes away, so signing back in with the same one writes the cookie again. */
 export function forgetSyncedWalletCookie() {
   syncedAddress = null;
+  clearRetry();
 }
