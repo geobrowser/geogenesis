@@ -466,8 +466,9 @@ describe('EntityFeed more filters', () => {
   // A fresh store per render, like a fresh page load: what carries over is only what the atom wrote
   // to localStorage, which is the persistence under test — not state left in the shared store.
   function renderExploreFeed() {
-    return render(
-      <Provider store={createStore()}>
+    const store = createStore();
+    const tree = () => (
+      <Provider store={store}>
         <EntityFeed
           apiEndpoint="/api/explore/feed"
           initialTime="month"
@@ -479,6 +480,9 @@ describe('EntityFeed more filters', () => {
         />
       </Provider>
     );
+    const result = render(tree());
+    /** The same page re-rendered, as when the sidebar cache it reads hands back a new payload. */
+    return { ...result, rerenderFeed: () => result.rerender(tree()) };
   }
 
   const typeTrigger = () => screen.queryByRole('button', { name: /^\d+ types?$/ });
@@ -580,6 +584,35 @@ describe('EntityFeed more filters', () => {
 
     await waitFor(() => expect(typeTrigger()?.textContent).toBe('2 types'));
     expect(await requestedUrl()).not.toContain('typeIds');
+  });
+
+  // Copilot on #2682: an account change swaps the sidebar payload under an open menu.
+  it('drops a ticked space the next account cannot see, so the trigger and request agree', async () => {
+    const { rerenderFeed } = renderExploreFeed();
+    pickOption('More filters');
+    fireEvent.click(screen.getByText('My space'));
+    expect(await requestedUrl()).toContain('spaceIds=');
+
+    mocks.browseSidebar = { featured: [FEATURED], editorOf: [], memberOf: [] };
+    rerenderFeed();
+
+    // The trigger reads "Any space" again. Left selected, it would fall back to counting a space it
+    // can no longer name ("1 space") over a feed the route has already stopped filtering.
+    await waitFor(() => expect(screen.queryByText('1 space')).toBeNull());
+    expect(screen.queryByText('My space')).toBeNull();
+    expect(await requestedUrl()).not.toContain('spaceIds');
+  });
+
+  it('keeps a ticked space while the next payload is still loading', async () => {
+    const { rerenderFeed } = renderExploreFeed();
+    pickOption('More filters');
+    fireEvent.click(screen.getByText('My space'));
+
+    mocks.browseSidebar = null;
+    rerenderFeed();
+
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('spaceIds')).toBe(MINE.id);
   });
 
   it('offers nothing extra on a feed that does not opt in', () => {

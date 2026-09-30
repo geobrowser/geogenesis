@@ -9,6 +9,7 @@ import { useAtom } from 'jotai';
 
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
+import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
@@ -332,6 +333,21 @@ export function EntityFeed({
   const toggleSpace = React.useCallback((spaceId: string) => {
     setSelectedSpaceIds(current => toggleId(current, spaceId));
   }, []);
+
+  // The options follow the account: signing out or switching accounts swaps the sidebar payload,
+  // and a member space ticked under the old one is not on the new menu. Left selected, it would keep
+  // going out while the route drops it as a space this reader cannot see — the trigger saying
+  // "1 space" over an unfiltered feed. Only a settled payload prunes; a key still loading keeps the
+  // selection rather than throwing away one about to be valid.
+  React.useEffect(() => {
+    setSelectedSpaceIds(current =>
+      keepSelectableSpaces(
+        current,
+        spaceOptions.map(option => option.value),
+        browseSidebar !== null
+      )
+    );
+  }, [browseSidebar, spaceOptions]);
 
   React.useEffect(() => {
     if (
