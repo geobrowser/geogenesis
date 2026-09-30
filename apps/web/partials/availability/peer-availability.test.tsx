@@ -559,6 +559,25 @@ describe('a week with nothing in it', () => {
   });
 });
 
+describe('zone line', () => {
+  const ZONE = 'Times shown in your zone, UTC. Ada is in UTC, same time as you.';
+
+  // It sits where "Pick a time above." used to, and a pick takes its place with the picked time.
+  it('fills the footer until a time is picked', async () => {
+    const { user } = setupBooking(booking(), { slots: [slot(16)] });
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
+    expect(screen.queryByText('Pick a time above.')).not.toBeInTheDocument();
+
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+    expect(screen.queryByText(ZONE)).not.toBeInTheDocument();
+  });
+
+  it('still shows without a footer to sit in', () => {
+    setup({ slots: [slot(16)] });
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
+  });
+});
+
 describe('disagreement line', () => {
   const renderWith = (disagreementCount: number | null) =>
     render(
@@ -624,7 +643,7 @@ describe('times that have already gone', () => {
 
   it('does not seed a preselected time that has gone', () => {
     renderAt({ booking: booking(), initialSelectedStart: '2026-09-21T13:00:00Z', slots: [slot(13), slot(16)] });
-    expect(screen.getByText('Pick a time above.')).toBeInTheDocument();
+    expect(screen.getByText('Times shown in your zone, UTC. Ada is in UTC, same time as you.')).toBeInTheDocument();
   });
 
   // An open modal does not re-render as time passes, so a time that was ahead when picked can be

@@ -186,6 +186,18 @@ export function PeerAvailabilityView({
   // the modal is the viewer's own, since a second clock on each chip read as noise.
   const offsets = new Set(days.flatMap(day => day.slots).map(slot => slot.offsetMinutes));
   const uniformOffset = offsets.size === 1 ? [...offsets][0] : null;
+  // geo-chat sends an empty zone for a side with no saved schedule, so naming them is conditional —
+  // "Ada is in ," otherwise.
+  const zoneNote =
+    schedule.viewerTimezone && schedule.peerTimezone
+      ? `Times shown in your zone, ${schedule.viewerTimezone}. ${name} is in ${schedule.peerTimezone}${
+          uniformOffset === null ? '' : `, ${formatOffset(uniformOffset)}`
+        }.`
+      : 'Times shown in your local time.';
+  // A bookable week carries the zone in its footer, where "Pick a time" used to be. Every other
+  // state has no footer, so it gets the line on its own at the bottom.
+  const showsWeek = schedule.theirWeekKnown && schedule.peerHasSchedule && hasAnySlot;
+  const zoneInFooter = Boolean(booking) && showsWeek;
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
@@ -194,19 +206,10 @@ export function PeerAvailabilityView({
         <Text as="h2" variant="smallTitle">
           When {name} is free
         </Text>
-        <Text as="p" variant="footnote" color="grey-04">
-          {/* geo-chat sends an empty zone for a side with no saved schedule, so naming them is
-              conditional — "Ada is in ," otherwise. */}
-          {schedule.viewerTimezone && schedule.peerTimezone
-            ? `Times shown in your zone, ${schedule.viewerTimezone}. ${name} is in ${schedule.peerTimezone}${
-                uniformOffset === null ? '' : `, ${formatOffset(uniformOffset)}`
-              }.`
-            : 'Times shown in your local time.'}
-        </Text>
         {/* Scheduling is with the person, not over one claim: the room is where they pick which to
             debate first, so the viewer only has to find a time. The count leads only when there is
             one to give; zero or still loading, the room half stands on its own. */}
-        <Text as="p" variant="footnote" color="grey-04">
+        <Text as="p" variant="metadata" color="grey-04">
           {disagreementCount !== null && disagreementCount > 0
             ? `You and ${firstName(name) ?? name} disagree on ${disagreementCount} ${
                 disagreementCount === 1 ? 'claim' : 'claims'
@@ -259,9 +262,15 @@ export function PeerAvailabilityView({
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
               peerName={name}
               viewerTimezone={schedule.viewerTimezone}
+              zoneNote={zoneNote}
             />
           )}
         </>
+      )}
+      {!zoneInFooter && (
+        <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
+          {zoneNote}
+        </Text>
       )}
     </div>
   );
@@ -275,6 +284,7 @@ function BookingFooter({
   viewerIsFree,
   peerName,
   viewerTimezone,
+  zoneNote,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
@@ -282,6 +292,8 @@ function BookingFooter({
   viewerIsFree: boolean | null;
   peerName: string;
   viewerTimezone: string;
+  /** Which zone the grid is in, shown until a pick replaces it with the picked time. */
+  zoneNote: string;
 }) {
   if (booking.requestedStart) {
     return <BookedHint booking={booking} peerName={peerName} viewerTimezone={viewerTimezone} />;
@@ -291,7 +303,7 @@ function BookingFooter({
     <div className="flex shrink-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-3">
         <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
-          {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : 'Pick a time above.'}
+          {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : zoneNote}
         </Text>
         <SendRequest booking={booking} clock={clock} startsAt={startsAt} viewerIsFree={viewerIsFree} />
       </div>
