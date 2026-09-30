@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import { readRegistry, renderEventTypes } from '../../../scripts/analytics/registry.mjs';
 import type { AnalyticsEventName, capture } from './analytics';
 
 /**
@@ -41,24 +41,27 @@ describe('the analytics bundle in public/', () => {
   it('types capture and its forwarding helpers against exactly the shipped Genesis event names', () => {
     expectTypeOf<typeof capture>().parameter(0).toEqualTypeOf<AnalyticsEventName>();
     const bundle = fs.readFileSync(path.join(PUBLIC_DIR, `geo-analytics-${manifest().shortHash}.js`), 'utf8');
-    const match = bundle.match(/var registry=(\{.*?\});/);
-    expect(match, 'Upstream registry format changed; update the vendor script and this check').not.toBeNull();
-    const registry = JSON.parse(match![1]) as { events: Record<string, { apps: string[] }> };
-    const expected = Object.keys(registry.events)
-      .filter(name => registry.events[name].apps.includes('genesis'))
-      .sort();
     const file = path.join(process.cwd(), 'core/analytics-events.ts');
-    const source = ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-    const declaration = source.statements.find(
-      (node): node is ts.TypeAliasDeclaration =>
-        ts.isTypeAliasDeclaration(node) && node.name.text === 'AnalyticsEventName'
-    );
-    expect(declaration).toBeDefined();
-    expect(ts.isUnionTypeNode(declaration!.type)).toBe(true);
-    const members = (declaration!.type as ts.UnionTypeNode).types.map(node =>
-      ts.isLiteralTypeNode(node) && ts.isStringLiteral(node.literal) ? node.literal.text : '<unrestricted type>'
-    );
-    expect(members).toEqual(expected);
+    expect(fs.readFileSync(file, 'utf8')).toBe(renderEventTypes(bundle));
+  });
+
+  it('excludes server-only and other-app events from browser capture', () => {
+    const registry = {
+      events: {
+        action_completed: { apps: ['genesis'], origin: 'browser' },
+        signed_in: { apps: ['genesis', 'news'], origin: 'browser' },
+        debate_published: { apps: ['genesis'], origin: 'server' },
+        email_opened: { apps: ['email'], origin: 'browser' },
+      },
+    };
+    const source = `var registry = ${JSON.stringify(registry, null, 2)};`;
+    expect(readRegistry(source)).toEqual(registry);
+    expect(renderEventTypes(source)).toContain("  | 'action_completed'");
+    expect(renderEventTypes(source)).toContain("  | 'signed_in'");
+    expect(renderEventTypes(source)).not.toContain('debate_published');
+    expect(renderEventTypes(source)).not.toContain('email_opened');
+    expect(() => renderEventTypes('var registry={"events":{}};')).toThrow('no Genesis browser events');
+    expect(() => readRegistry('an incompatible upstream bundle')).toThrow('registry format changed');
   });
 
   it('is the only one, and is the one the manifest names', () => {

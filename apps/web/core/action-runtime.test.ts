@@ -12,6 +12,43 @@ const publicDir = path.join(process.cwd(), 'public');
 const manifest = JSON.parse(fs.readFileSync(path.join(publicDir, 'geo-analytics-manifest.json'), 'utf8'));
 const source = fs.readFileSync(path.join(publicDir, `geo-analytics-${manifest.shortHash}.js`), 'utf8');
 
+type Runtime = Required<NonNullable<Window['lytics']>> & {
+  validate: (event: string, properties: unknown) => { valid: boolean; missing: string[] };
+};
+
+function createRuntime() {
+  const dom = new JSDOM('<!doctype html><body></body>', {
+    url: 'https://www.geobrowser.io/explore',
+    runScripts: 'outside-only',
+  });
+  const browser = dom.window as unknown as Window & { lytics: Runtime };
+  const fetch = vi.fn(async () => ({ ok: true, status: 200 }));
+  browser.fetch = fetch as unknown as typeof window.fetch;
+  browser.lyticsConfig = {
+    app: 'genesis',
+    amplitudeApiKey: false,
+    posthogToken: false,
+    xPixelId: false,
+    collectorUrl: 'https://collector.example',
+    collectorBatchSize: 1,
+    collectorFlushIntervalMs: false,
+    autoPageViews: false,
+    autoRouteTracking: false,
+    autoClickTracking: false,
+    autoScrollTracking: false,
+  };
+  dom.window.eval(source);
+  const records = () =>
+    fetch.mock.calls.flatMap(call => {
+      const body = JSON.parse((call as unknown as [string, { body: string }])[1].body);
+      return (
+        body.resourceLogs?.flatMap((resource: any) => resource.scopeLogs.flatMap((scope: any) => scope.logRecords)) ??
+        []
+      );
+    });
+  return { dom, browser, fetch, records };
+}
+
 describe('shipped action contract', () => {
   it('has a matching content hash and SRI', () => {
     const hash = crypto.createHash('sha256').update(source).digest();
@@ -19,33 +56,8 @@ describe('shipped action contract', () => {
     expect(`sha256-${hash.toString('base64')}`).toBe(manifest.integrity);
   });
   it('accepts and serializes all context fields through the actual runtime', async () => {
-    const dom = new JSDOM('<!doctype html><body></body>', {
-      url: 'https://www.geobrowser.io/explore',
-      runScripts: 'outside-only',
-    });
-    const browser = dom.window as unknown as Window & {
-      lytics: {
-        capture: (event: string, properties: unknown) => void;
-        validate: (event: string, properties: unknown) => { valid: boolean; missing: string[] };
-      };
-    };
-    const fetch = vi.fn(async () => ({ ok: true, status: 200 }));
-    browser.fetch = fetch as unknown as typeof window.fetch;
-    browser.lyticsConfig = {
-      app: 'genesis',
-      amplitudeApiKey: false,
-      posthogToken: false,
-      xPixelId: false,
-      collectorUrl: 'https://collector.example',
-      collectorBatchSize: 1,
-      collectorFlushIntervalMs: false,
-      autoPageViews: false,
-      autoRouteTracking: false,
-      autoClickTracking: false,
-      autoScrollTracking: false,
-    };
+    const { dom, browser, fetch, records } = createRuntime();
     try {
-      dom.window.eval(source);
       const context = {
         ...snapshotActionContext('debate_claim_ticker', 'claim', 'claim'),
         action_context_version: 'v1',
@@ -97,24 +109,55 @@ describe('shipped action contract', () => {
         browser.lytics.capture(event, context);
       }
       await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-      const bodies = fetch.mock.calls.map(call => JSON.parse((call as unknown as [string, { body: string }])[1].body));
-      const records = bodies.flatMap(
-        body =>
-          body.resourceLogs?.flatMap((resource: any) => resource.scopeLogs.flatMap((scope: any) => scope.logRecords)) ??
-          []
-      );
-      expect(records.map(record => record.body.stringValue)).toEqual(['action_completed', 'component_impression']);
-      const record = records.find(record => record.body.stringValue === 'action_completed');
-      expect(record).toBeDefined();
-      const attributes = Object.fromEntries(
-        record.attributes.map((attribute: any) => [attribute.key, attribute.value])
-      );
-      for (const [key, value] of Object.entries(context)) {
-        if (value !== undefined) expect(attributes[key], key).toBeDefined();
+      expect(records().map((record: any) => record.body.stringValue)).toEqual([
+        'action_completed',
+        'component_impression',
+      ]);
+      for (const record of records()) {
+        const attributes = Object.fromEntries(
+          record.attributes.map((attribute: any) => [attribute.key, attribute.value])
+        );
+        for (const [key, value] of Object.entries(context)) {
+          if (value !== undefined) expect(attributes[key], `${record.body.stringValue}/${key}`).toBeDefined();
+        }
+        expect(attributes.component).toEqual({ stringValue: 'debate_claim_ticker' });
+        expect(attributes.session_id.stringValue).toBeTruthy();
+        expect(attributes.anonymous_id.stringValue).toBeTruthy();
       }
-      expect(attributes.component).toEqual({ stringValue: 'debate_claim_ticker' });
-      expect(attributes.session_id.stringValue).toBeTruthy();
-      expect(attributes.anonymous_id.stringValue).toBeTruthy();
+    } finally {
+      dom.window.close();
+    }
+  });
+
+  it('delivers events emitted through the SDK helpers that Genesis uses', async () => {
+    const { dom, browser, records } = createRuntime();
+    try {
+      const runtime = browser.lytics;
+      runtime.pageViewed();
+      runtime.voteCast('up', { entity_id: 'claim-1' });
+      runtime.modeToggled('edit');
+      runtime.graphEntityViewed({ entity_id: 'claim-1' });
+      runtime.signedUp({ user_id: 'person-1' });
+      runtime.loggedIn({ user_id: 'person-1' });
+      runtime.sessionRestored({ user_id: 'person-1' });
+      runtime.loggedOut();
+      runtime.identityReset();
+      const expected = [
+        'page_viewed',
+        'vote_cast',
+        'mode_toggled',
+        'graph_entity_viewed',
+        'signed_up',
+        'signed_in',
+        'session_restored',
+        'signed_out',
+        'identity_reset',
+      ];
+      await vi.waitFor(() => expect(records().map((record: any) => record.body.stringValue)).toEqual(expected));
+      // The SDK can serialize unknown events too; emission alone does not prove registration.
+      for (const event of expected) {
+        expect(runtime.validate(event, {}), event).toMatchObject({ unknown: false });
+      }
     } finally {
       dom.window.close();
     }

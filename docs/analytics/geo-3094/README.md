@@ -33,10 +33,12 @@ its upstream source commit is `8372245fcd2862d81eb194cd7d7df914ca9acf8c`.
 
 The vendor command copies bytes unchanged, verifies upstream source and registry
 hashes, updates the loader filename and SRI, removes the previous bundle, and
-generates `AnalyticsEventName` from the vendored registry's Genesis events.
+generates `AnalyticsEventName` from the vendored registry's Genesis browser events.
 `capture` and forwarding helpers use that union, so an unregistered event name
-fails typecheck. The bundle test checks the generated union against the actual
-vendored registry, preventing a hand-edited type from bypassing registration.
+fails typecheck. Vendoring and the bundle test share the same type generator,
+preventing a hand-edited type from bypassing registration. Runtime tests also
+exercise the page-view, voting, mode, entity-view and auth SDK helpers, whose
+event names are internal to the bundle rather than passed to Genesis `capture`.
 Both checks already run in CI. Re-running the command with the same upstream
 checkout must produce no changes.
 
