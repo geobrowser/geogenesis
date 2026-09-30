@@ -180,6 +180,7 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
 
     const blockChange = entityDiffToBlockChange(blockEntity);
     if (!blockChange) continue;
+    if (blockEntity.movedBlock) blockChange.moved = true;
 
     const existing = parentBlocks.get(parentId) ?? [];
     existing.push(blockChange);
@@ -224,7 +225,7 @@ export async function postProcessDiffs(
   // 1. Classify entities
   // Maps block entity ID → 'ADD' (block was added/exists in new state) or 'REMOVE' (block was removed).
   // This is used in step 7 to synthesize diffs in the correct direction for the history path.
-  const blocksWithParent = new Map<string, 'ADD' | 'REMOVE'>();
+  const blocksWithParent = new Map<string, 'ADD' | 'REMOVE' | 'MOVE'>();
   const blockTypeEntities: string[] = [];
   const blockRelEntities: string[] = [];
   const idsToResolve = new Set<string>();
@@ -242,10 +243,19 @@ export async function postProcessDiffs(
     let hasBlockConfig = false;
     for (const rel of entity.relations) {
       if (rel.typeId === BLOCKS) {
-        // If the block exists in the new state (ADD or UPDATE), track as ADD.
-        // If only a REMOVE (no after), track as REMOVE.
-        if (rel.after?.toEntityId) blocksWithParent.set(rel.after.toEntityId, 'ADD');
-        if (rel.before?.toEntityId && !rel.after?.toEntityId) blocksWithParent.set(rel.before.toEntityId, 'REMOVE');
+        const beforeBlockId = rel.before?.toEntityId;
+        const afterBlockId = rel.after?.toEntityId;
+
+        if (afterBlockId && beforeBlockId === afterBlockId) {
+          blocksWithParent.set(afterBlockId, 'MOVE');
+          idsToResolve.add(afterBlockId);
+        } else if (afterBlockId) {
+          // Block exists in the new state (ADD, or a retarget to a different block).
+          blocksWithParent.set(afterBlockId, 'ADD');
+        } else if (beforeBlockId) {
+          // Only a REMOVE (no after).
+          blocksWithParent.set(beforeBlockId, 'REMOVE');
+        }
       }
       if (rel.typeId === TYPES_PROPERTY) {
         const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
@@ -608,8 +618,8 @@ export async function postProcessDiffs(
       const dataType = rv.property.dataType;
       // For ADD: block was created in this edit → before=null, after=value.
       // For REMOVE: block existed before and was removed → before=value, after=null.
-      const before = blockChangeType === 'REMOVE' ? rv.value : null;
-      const after = blockChangeType === 'ADD' ? rv.value : null;
+      const before = blockChangeType === 'REMOVE' || blockChangeType === 'MOVE' ? rv.value : null;
+      const after = blockChangeType === 'ADD' || blockChangeType === 'MOVE' ? rv.value : null;
       if (dataType === 'TEXT') {
         values.push({
           propertyId: rv.property.id,
@@ -632,18 +642,22 @@ export async function postProcessDiffs(
       }
     }
 
+    const typeChangeType = blockChangeType === 'MOVE' ? 'UPDATE' : blockChangeType;
+    const blockPresentBefore = blockChangeType === 'REMOVE' || blockChangeType === 'MOVE';
+    const blockPresentAfter = blockChangeType === 'ADD' || blockChangeType === 'MOVE';
     const syntheticDiff: EntityDiff = {
       entityId: blockId,
       name: remoteBlock.name,
+      movedBlock: blockChangeType === 'MOVE',
       values,
       relations: [
         {
           relationId: `synthetic-type-${blockId}`,
           typeId: TYPES_PROPERTY,
           spaceId,
-          changeType: blockChangeType,
-          before: blockChangeType === 'REMOVE' ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
-          after: blockChangeType === 'ADD' ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
+          changeType: typeChangeType,
+          before: blockPresentBefore ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
+          after: blockPresentAfter ? { toEntityId: blockType.id, toSpaceId: null, position: null } : null,
         },
       ],
       blocks: [],
