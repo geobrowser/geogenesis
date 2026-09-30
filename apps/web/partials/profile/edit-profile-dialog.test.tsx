@@ -63,6 +63,11 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
   }),
 }));
 
+// The sheets search the graph and have their own tests; here only the swap in
+// and out of the modal body matters.
+vi.mock('./add-position-sheet', () => ({ AddPositionSheet: () => <p>Position sheet</p> }));
+vi.mock('./add-education-sheet', () => ({ AddEducationSheet: () => <p>Education sheet</p> }));
+
 function renderDialog(onOpenChange = vi.fn()) {
   const { rerender } = render(<EditProfileDialog open onOpenChange={onOpenChange} />);
   return { onOpenChange, rerender };
@@ -318,12 +323,138 @@ describe('EditProfileDialog', () => {
       expect(retry).toBeEnabled();
     });
 
-    it('discards the abandoned edit when the user cancels instead', async () => {
+    // The rows are already in the local store, so `hasChanges` reads false — but
+    // closing is what abandons them, and that still deserves the question.
+    it('asks before discarding the abandoned edit, then discards it', async () => {
+      renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(mocks.reset).not.toHaveBeenCalled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+
+      expect(mocks.reset).toHaveBeenCalled();
+    });
+  });
+
+  describe('closing with unsaved edits', () => {
+    const confirmation = () => screen.queryByText('Exiting without saving will discard edits permanently');
+
+    it.each(['Cancel', 'Close'])('asks before %s throws them away', async name => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name }));
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks on a backdrop click', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      const backdrop = screen.getByRole('dialog');
+      fireEvent.pointerDown(backdrop);
+      fireEvent.click(backdrop);
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks on Escape', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.keyboard('{Escape}');
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks when the only edit is a staged position', async () => {
+      mocks.hasPendingHistory = true;
       renderDialog();
 
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
+      expect(confirmation()).toBeInTheDocument();
+    });
+
+    it('throws the draft away on Discard edits', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+
       expect(mocks.reset).toHaveBeenCalled();
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('publishes the draft on Save changes', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(mocks.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Preston Mantel!' }),
+        expect.anything()
+      );
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('goes back to editing, draft intact, when the question is dismissed', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.keyboard('{Escape}');
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(nameField()).toHaveValue('Preston Mantel!');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    // Save changes cannot publish a profile with no name, so it is not offered as
+    // though it could; Discard edits or going back are the ways out.
+    it('holds Save changes when the draft cannot be saved', async () => {
+      renderDialog();
+
+      await userEvent.clear(nameField());
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    });
+
+    // One level at a time: from a sheet, Escape is the Back button, not a way to
+    // take the whole modal down.
+    it('steps back out of a sheet on Escape rather than closing', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: /Add experience/ }));
+      expect(screen.getByText('Position sheet')).toBeInTheDocument();
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.queryByText('Position sheet')).not.toBeInTheDocument();
+      expect(nameField()).toBeInTheDocument();
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('closes without asking when nothing was changed', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
 
