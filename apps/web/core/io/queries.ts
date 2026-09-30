@@ -4,16 +4,8 @@ import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import {
-  AUTHORS_PROPERTY_ID,
-  BLOCKS_PROPERTY_ID,
-  CLAIM_END_OFFSET_PROPERTY_ID,
-  CLAIM_START_OFFSET_PROPERTY_ID,
-  DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
-  DEBATE_TRANSCRIPTS_PROPERTY_ID,
-  MARKDOWN_CONTENT_PROPERTY_ID,
-  NAME_PROPERTY_ID,
   VOTE_DEBATES_PROPERTY_ID,
   VOTE_TYPE_ID,
 } from '~/core/debates/ontology';
@@ -52,7 +44,7 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
-import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
+import { debateTranscriptClaimsDocument, debateTranscriptClaimsVariables } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -765,17 +757,7 @@ export function getDebateTranscriptClaims(debateEntityId: string, spaceId: strin
   return graphql({
     query: debateTranscriptClaimsDocument,
     decoder: data => groupTranscriptClaims(data, spaceId),
-    variables: {
-      id: debateEntityId,
-      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
-      blocksPropertyId: BLOCKS_PROPERTY_ID,
-      authorsPropertyId: AUTHORS_PROPERTY_ID,
-      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-      spaceId,
-      namePropertyId: NAME_PROPERTY_ID,
-      markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-      offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
-    },
+    variables: debateTranscriptClaimsVariables(debateEntityId, spaceId),
     signal,
   });
 }
