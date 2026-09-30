@@ -9,6 +9,8 @@ import { useDebatePlayback } from './use-debate-playback';
 
 const mocks = vi.hoisted(() => ({
   recordingUrl: vi.fn(),
+  /** Which requests went through `refresh` — the uncached re-sign — rather than the cached lookup. */
+  recordingUrlRefreshes: [] as unknown[],
   turnSegments: [] as DebateMediaTurnSegment[],
   mediaPending: false,
   reportEvent: vi.fn(),
@@ -19,7 +21,13 @@ vi.mock('~/core/telemetry/logger', () => ({ reportEvent: mocks.reportEvent }));
 // The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
 vi.mock('./hooks', () => ({
-  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useRecordingPlaybackUrl: () => ({
+    lookup: mocks.recordingUrl,
+    refresh: (request: unknown) => {
+      mocks.recordingUrlRefreshes.push(request);
+      return mocks.recordingUrl(request);
+    },
+  }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateMedia: () => ({
     data: mocks.mediaPending ? undefined : { turn_segments: mocks.turnSegments },
@@ -68,7 +76,7 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
   // THE REGRESSION. `active` flips whenever the card crosses the viewport threshold, and the
   // effect used to open with setUrls({slot1: null, slot2: null}) on every flip — blanking the
   // <video> back to the "Loading…" placeholder and re-requesting two signed URLs. That is the
-  // flicker. `useRecordingUrl` is a mutation, so nothing upstream de-duplicates the requests.
+  // flicker. (The lookup is cached since GEO-2965, but the blanking was never about the network.)
   it('does NOT refetch or blank when the card is scrolled past and returns', async () => {
     const debate = debateFixture();
     const { result, rerender } = renderHook(({ active }) => useDebatePlayback(debate, active), {
@@ -1716,10 +1724,14 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     const untouched = result.current.urls.slot2;
     mocks.recordingUrl.mockResolvedValueOnce({ url: 'https://cdn.test/slot1.webm?sig=fresh' });
+    mocks.recordingUrlRefreshes = [];
 
     await act(async () => {
       await result.current.refreshSlotUrl(1);
     });
+
+    // Through the uncached re-sign (GEO-2965): the cached URL is the one suspected of being dead.
+    expect(mocks.recordingUrlRefreshes).toEqual([{ debateId: 'debate-1', filename: 'slot1.webm' }]);
 
     expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=fresh');
     // The healthy tile is mid-playback. Blanking its URL would drop it to "Loading…" and release

@@ -9,6 +9,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
@@ -71,6 +72,18 @@ type DebateFeedPlayerProps = {
    */
   preload?: boolean;
   /**
+   * Buffer this debate's recordings, not just open them — for the one card the viewer is most
+   * likely to reach next (GEO-2965).
+   *
+   * `preload` gets the URLs and the recordings' headers. Whether that is also enough to *play* is
+   * up to the browser: Chrome takes a finalized recording all the way to `canplay` under
+   * `preload="metadata"`, Safari and Firefox generally stop at the header. The active card holds
+   * its pair until both can play, so a card arriving without that data waits for it. Raising the
+   * next card to `preload="auto"` is what lets it arrive ready on every engine, and it is limited
+   * to one card because it is also the one that costs real bandwidth.
+   */
+  buffer?: boolean;
+  /**
    * Opens the claims panel — the same panel the claims pill under the player opens. With a
    * debater's space id, at that debater's claims. The end card offers it; without it the card's
    * ways into the claims are simply not drawn.
@@ -99,6 +112,7 @@ export function DebateFeedPlayer({
   debate,
   active,
   preload = false,
+  buffer = false,
   reducedOverlays = false,
   onOpenClaims,
   onPlaybackRequest,
@@ -150,12 +164,30 @@ export function DebateFeedPlayer({
     const spaceId = participant ? validateSpaceId(participant.profile_space_id) : null;
     return spaceId ? (bylines.get(spaceId) ?? null) : null;
   };
+  /*
+   * Both recordings, held until both can play (GEO-2965). See `pair-readiness.ts`.
+   *
+   * Keyed on the debate, not the card: the feed keys its cards by claim, so a re-rank hands this
+   * same player a different debate, and that debate's pair has to be held on its own terms.
+   */
+  const pair = usePairReadiness({
+    pairKey: debate.id,
+    slot1Ref: slot1VideoRef,
+    slot2Ref: slot2VideoRef,
+    slot1Src: urls.slot1,
+    slot2Src: urls.slot2,
+    active,
+  });
+  // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
+  // starts playback lets the pair go first.
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    pair.release();
     togglePlaybackRaw();
   };
   const playFromStart = () => {
     measurement.control('replay');
+    pair.release();
     void playFromStartRaw();
   };
   const seekBoth = (seconds: number) => {
@@ -210,21 +242,29 @@ export function DebateFeedPlayer({
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
   // mid-scrub.
+  //
+  // And not before the pair has been let go (GEO-2965): starting one element that can play beside
+  // one that cannot is what made the panels arrive one at a time.
+  const pairMayStart = pair.mayStart;
   React.useEffect(() => {
     if (!ready) return;
     // A refusal is not retried: the browser gives the same answer every time, and
     // only the viewer's tap is a gesture it will accept.
-    if (active && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
+    if (active && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, awaitingTap, isScrubbing, playbackEnded, playing, ready, resumeBoth, suspend]);
+  }, [active, awaitingTap, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
 
   const hasError = error != null;
+  // `ready` keeps its meaning for GEO-3074's outcome — both URLs in hand — so its `ready_ms` and
+  // its `media_loading` reason stay comparable across this change. The hold is reported beside it
+  // rather than folded into it.
+  const pairHeld = ready && pair.holding;
   React.useEffect(() => {
-    onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError });
-  }, [onPlaybackState, ready, playing, autoplayBlocked, hasError]);
+    onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError, pairHeld });
+  }, [onPlaybackState, ready, playing, autoplayBlocked, hasError, pairHeld]);
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
@@ -503,6 +543,7 @@ export function DebateFeedPlayer({
         data-debate-active={active ? 'true' : 'false'}
         data-debate-playing={playing ? 'true' : 'false'}
         data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
+        data-debate-pair-held={pairHeld ? 'true' : 'false'}
         // No gap and one radius on the outside: the two tiles are a single surface in the Figma
         // frame, which is what lets the subtitle and the round card straddle the seam rather than
         // sit inside one tile.
@@ -522,6 +563,8 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot1Participant)}
           src={urls.slot1}
           videoRef={slot1VideoRef}
+          buffer={active || buffer}
+          concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
           roundBadge={turnState?.slot === 1 ? roundBadge : null}
@@ -582,6 +625,8 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot2Participant)}
           src={urls.slot2}
           videoRef={slot2VideoRef}
+          buffer={active || buffer}
+          concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2}
           countdown={playing && turnState?.slot === 2 ? turnState : null}
           roundBadge={turnState?.slot === 2 ? roundBadge : null}
@@ -753,6 +798,8 @@ function DebaterVideo({
   byline,
   src,
   videoRef,
+  buffer = false,
+  concealed = false,
   audible,
   countdown,
   roundBadge,
@@ -776,6 +823,15 @@ function DebaterVideo({
   byline: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
+  buffer?: boolean;
+  /**
+   * Keep the element invisible while its partner cannot show a frame yet (GEO-2965).
+   *
+   * Invisible rather than unmounted: the element has to exist to load, and loading is what the
+   * hold is waiting on.
+   */
+  concealed?: boolean;
   audible: boolean;
   countdown: TurnState;
   /** The round, beside this tile's timer for as long as this tile's turn runs. */
@@ -818,6 +874,20 @@ function DebaterVideo({
   const name = participant ? speakerLabel(participant) : 'Debater';
 
   const muted = !audible || mutedByUser;
+
+  /*
+   * `preload` only ever goes up for the life of an element.
+   *
+   * `rebuild` below raises the DOM property to `auto` directly, and React writes a prop only when
+   * its *own* previous value changes — so a prop that could fall back to `metadata` when this card
+   * stops being the active or next one would write straight over that raise, on the one element
+   * that was shown to need it. Latching makes every transition React can make metadata -> auto,
+   * which never undoes anything. The latch drops when the element does (no `src`), so a
+   * different debate's element starts from the default again.
+   */
+  const [buffered, setBuffered] = React.useState(false);
+  if (src && buffer && !buffered) setBuffered(true);
+  if (!src && buffered) setBuffered(false);
 
   /**
    * Re-assert the rendered mute after a resume (GEO-2947).
@@ -909,10 +979,13 @@ function DebaterVideo({
   //
   // Nothing puts `preload` back, deliberately. It looks like it wants a reset — `rebuild` writes
   // that DOM property directly, which React cannot see and never reconciles — but there is no
-  // case that needs one. A genuinely different recording never reaches a live element: the hook
+  // case that needs one. A genuinely different recording rarely reaches a live element: the hook
   // blanks both URLs before fetching the new pair (`setUrls({slot1: null, slot2: null})`), which
   // unmounts the `<video>` and takes the raised `preload` with it, and the replacement is built from
-  // the JSX default. The only `src` change a live element sees is `onExhausted` re-signing *this*
+  // the JSX default. (Since GEO-2965 cached the URL lookup, a re-rank onto a debate whose URLs are
+  // already cached can resolve inside the same batch as the blanking and hand the live element the
+  // new pair directly. It then keeps `auto`, which costs a buffer and breaks nothing; the source
+  // swap itself is handled by the release effect above.) The other `src` change a live element sees is `onExhausted` re-signing *this*
   // recording — the one that has just failed every rebuild it was allowed under `metadata` (see `rebuild`).
   // Putting it back there would hand the fresh URL the same mode that killed the old one, and buy another
   // wasted attempt and another blank half-second before the next rebuild raised it again.
@@ -1029,13 +1102,17 @@ function DebaterVideo({
         {src ? (
           <video
             ref={videoRef}
-            className="h-full w-full object-cover"
+            // Both tiles fade in together, and only once both have a frame — see `concealed`.
+            className={cx(
+              'h-full w-full object-cover transition-opacity duration-200',
+              concealed ? 'opacity-0' : 'opacity-100'
+            )}
             playsInline
-            // Enough to paint a frame and know the shape of the recording, without pulling a
-            // multi-megabyte file down for a card nobody has reached yet — the feed keeps several
-            // of these mounted at once. Some recordings cannot be read this way at all; those are
-            // the ones `rebuild` raises, for that element alone and only for as long as it lives.
-            preload="metadata"
+            // `metadata` by default: enough to paint a frame and know the shape of the recording,
+            // without pulling a multi-megabyte file down for a card nobody has reached yet — the
+            // feed keeps several of these mounted at once. `auto` for the active card and the one
+            // after it, which are about to play (`buffered`), and for any element `rebuild` raised.
+            preload={buffered ? 'auto' : 'metadata'}
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}

@@ -38,6 +38,8 @@ import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
+/** How many cards past the active one open their recordings. See the `preload` prop below. */
+const PRELOAD_AHEAD = 2;
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
   // claim title, media gap, and vertical breathing room.
@@ -363,12 +365,18 @@ export function DebatesBrowseFeed({
           onPlaybackState={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
           }
-          // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
+          // Resolve the next debates' recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
-          // (GEO-2895). Only one ahead — the feed is vertical and one-at-a-time, so a wider
-          // window would fetch recordings most viewers never reach.
-          preload={activeIndex >= 0 && index === activeIndex + 1}
+          // (GEO-2895).
+          //
+          // Two ahead for the URLs and headers, one ahead for the data (GEO-2965). The active
+          // card now waits until both of its recordings can play, so a card reached cold is a
+          // card that waits — and a quick double swipe used to land exactly there, on a card
+          // nothing had opened. Headers are cheap; buffering is not, so only the very next card
+          // buffers, and nothing further than two ahead is touched at all.
+          preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
+          buffer={activeIndex >= 0 && index === activeIndex + 1}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -440,6 +448,7 @@ function DebateFeedItem({
   active,
   initialSeekSeconds,
   preload,
+  buffer,
   root,
   scrollHint,
   onActivate,
@@ -456,6 +465,8 @@ function DebateFeedItem({
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
+  /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
+  buffer: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
@@ -538,6 +549,7 @@ function DebateFeedItem({
               debate={debate}
               active={active}
               preload={preload}
+              buffer={buffer}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}
