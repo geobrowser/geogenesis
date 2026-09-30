@@ -104,7 +104,6 @@
     "pluralize": "^8.0.0",
     "posthog-js": "^1.395.0",
     "react": "^19.2.8",
-    "react-cookie": "^8.1.2",
     "react-dom": "^19.2.8",
     "react-error-boundary": "^6.1.2",
     "react-input-autosize": "^3.0.0",

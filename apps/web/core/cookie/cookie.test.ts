@@ -49,12 +49,17 @@ describe('onConnectionChange', () => {
     expect(store.set).toHaveBeenCalledWith(WALLET_ADDRESS, ADDRESS, expect.anything());
   });
 
-  it('deletes the cookie on disconnect, and skips the write when there is none', async () => {
+  it('deletes the cookie on disconnect', async () => {
     store.values.set(WALLET_ADDRESS, ADDRESS);
-    await expect(onConnectionChange({ type: 'disconnect' })).resolves.toBeNull();
-    expect(store.delete).toHaveBeenCalledTimes(1);
 
+    await expect(onConnectionChange({ type: 'disconnect' })).resolves.toBeNull();
+
+    expect(store.delete).toHaveBeenCalledWith(WALLET_ADDRESS);
+  });
+
+  it('does not delete on disconnect when there is no cookie', async () => {
     await onConnectionChange({ type: 'disconnect' });
-    expect(store.delete).toHaveBeenCalledTimes(1);
+
+    expect(store.delete).not.toHaveBeenCalled();
   });
 });

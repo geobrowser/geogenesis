@@ -203,9 +203,8 @@ export function useSmartAccount() {
 
       // The EOA address — registry now keys permissions on this directly (no Safe
       // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-      // Called on every run, because the cookie is httpOnly and the client cannot read it
-      // to tell whether it is already set. The action checks that itself and writes only on
-      // a change; an unconditional write reloaded idle pages (see `onConnectionChange`).
+      // Unconditional: the cookie is httpOnly, so only the action can tell whether it is
+      // already set (see `onConnectionChange`).
       await Cookie.onConnectionChange({ type: 'connect', address: wrapped.account.address });
 
       return wrapped;
