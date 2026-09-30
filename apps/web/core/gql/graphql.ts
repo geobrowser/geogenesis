@@ -1169,6 +1169,8 @@ export type EntityFilter = {
   valuesByPropertyIdConnectionExist?: boolean | null | undefined;
   /** Some related `values` exist. */
   valuesExist?: boolean | null | undefined;
+  /** Entities this user has voted on. Use inside `not` for the entities they have not voted on. */
+  votedBy?: EntityVotedByFilter | null | undefined;
 };
 
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
@@ -1211,6 +1213,16 @@ export type EntityToManyValueFilter = {
   none?: ValueFilter | null | undefined;
   /** Some related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: ValueFilter | null | undefined;
+};
+
+/** Matches entities one user has voted on. Negate with `not` for the entities they have not. Vote kinds: 0 curation, 1 stance, 2 veracity. Vote types: 0 agree/verify, 1 disagree/dispute, 2 neither (a retracted position). */
+export type EntityVotedByFilter = {
+  /** Vote kinds to count. Omit or pass [] for any kind. */
+  kinds?: Array<number> | null | undefined;
+  /** Vote types to count. Omit or pass [] for any type; [0, 1] leaves out retracted positions. */
+  types?: Array<number> | null | undefined;
+  /** The voter (their personal space id). */
+  userId: any;
 };
 
 /** A filter to be used against Float fields. All fields are combined with a logical ‘and.’ */

@@ -114,11 +114,8 @@ const mocks = vi.hoisted(() => ({
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
   fetchNextTaggedPage: vi.fn(),
-  boundedPagingOverride: null as {
-    autoPages: boolean;
-    stoppedShort: boolean;
-    keepLooking: () => void;
-  } | null,
+  /** How many claims under the current filters the graph records the viewer answering. */
+  graphAnsweredCount: 0,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -433,7 +430,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
-      fetched: claims.length,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -442,6 +438,12 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       refetch: vi.fn(),
     };
   },
+  // No answered claims in the graph's record here unless a case says so, so an empty excluded
+  // catalogue reads as an empty one.
+  useTaggedAnsweredCount: (_tagId: string, filters: any, enabled: boolean) => ({
+    answeredCount: enabled && filters.excludeAnsweredBy ? mocks.graphAnsweredCount : null,
+    isLoading: false,
+  }),
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic.
     const rows = enabled ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
@@ -490,16 +492,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     };
   },
 }));
-
-vi.mock('~/core/debates/matchmaking/use-bounded-paging', async importOriginal => {
-  const original = await importOriginal<typeof import('~/core/debates/matchmaking/use-bounded-paging')>();
-
-  return {
-    ...original,
-    useBoundedPaging: (options: Parameters<typeof original.useBoundedPaging>[0]) =>
-      mocks.boundedPagingOverride ?? original.useBoundedPaging(options),
-  };
-});
 
 const HYDRATION_ERROR = new Error('hydration exploded');
 
@@ -895,8 +887,8 @@ beforeEach(() => {
   mocks.facetOnlySpaces = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
+  mocks.graphAnsweredCount = 0;
   mocks.fetchNextTaggedPage = vi.fn();
-  mocks.boundedPagingOverride = null;
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
   mocks.savedClaimsError = null;
@@ -2109,16 +2101,6 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
-  });
-
-  it('keeps the same rematch attribution when Keep looking appears below existing rows', async () => {
-    mocks.boundedPagingOverride = { autoPages: false, stoppedShort: true, keepLooking: vi.fn() };
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    const keepLooking = screen.getByRole('button', { name: 'Keep looking' });
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Keep looking');
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
   });
 
   it('leaves the sentinel out once there is no page left to fetch', async () => {
@@ -4642,6 +4624,51 @@ describe('Hide my positions', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Show my positions' }));
 
     expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The backlog is left out by the server (GEO-2894), so a page of the tag is rows that can be shown.
+   *
+   * Asked by the viewer's own personal space, which is what a vote's `userId` is — the participant
+   * row's `profile_space_id`, not their geo-chat user id.
+   */
+  it('asks the server to leave out what the viewer has answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await screen.findByText('A newly published claim');
+
+    expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBe('profile-local');
+  });
+
+  it('asks for everything once it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull());
+  });
+
+  // The server left every claim out, so the catalogue arrives empty rather than collapsed — and it
+  // is the same statement, with the same way out.
+  it('says the viewer answered these when the server leaves nothing', async () => {
+    mocks.debateTagClaims = [];
+    mocks.graphAnsweredCount = 2;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+  });
+
+  // And an empty catalogue with nothing left out is just empty.
+  it('does not blame the switch for a catalogue that is simply empty', async () => {
+    mocks.debateTagClaims = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/No other eligible claims/)).toBeInTheDocument();
+    expect(screen.queryByText(/You’ve answered every claim here/)).toBeNull();
   });
 
   // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
