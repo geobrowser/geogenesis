@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { atom, useAtom } from 'jotai';
 
+import { reportEvent } from '~/core/telemetry/logger';
+
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
 import {
@@ -11,7 +13,6 @@ import {
   type PlayBothOutcome,
   type TurnState,
   clampSeconds,
-  normalizeTurnDurationsMs,
   pairPlayhead,
   participantForSlot,
   playBothWithMutedFallback,
@@ -23,6 +24,7 @@ import {
   turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
+  usableTurnDurationsMs,
 } from './playback-utils';
 
 type PlaybackUrls = {
@@ -256,8 +258,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const [isResuming, setIsResuming] = React.useState(false);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
+  // `null` when the row's allowance is empty or malformed (GEO-2956). Nothing is invented in its
+  // place: the rendered segments below stand in for it where they exist, and without them the
+  // debate reports `timingError` instead of playing to a made-up schedule.
   const turnDurations = React.useMemo(
-    () => normalizeTurnDurationsMs(debate.turn_durations_ms),
+    () => usableTurnDurationsMs(debate.turn_durations_ms),
     [debate.turn_durations_ms]
   );
 
@@ -284,20 +289,25 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     () =>
       turnSegments.length > 0
         ? turnSpansFromSegments(turnSegments)
-        : turnSpansForDurations(debate.first_participant_slot, turnDurations),
+        : turnDurations
+          ? turnSpansForDurations(debate.first_participant_slot, turnDurations)
+          : [],
     [debate.first_participant_slot, turnDurations, turnSegments]
   );
   /**
    * How many turns the format allows for, which is what says whether a round is a rebuttal or a
    * closing. Deliberately off the allowance rather than off `turnSpans`, which counts what the
-   * render kept — see `round-cues.ts`.
+   * render kept — see `round-cues.ts`. Only a row with no usable allowance counts the rendered
+   * segments instead: that is still what was recorded, where the catalog would be a guess.
    */
-  const turnCount = turnDurations.length;
+  const turnCount = turnDurations?.length ?? turnSegments.length;
   const turnStateAt = React.useCallback(
     (seconds: number): TurnState =>
       turnSegments.length > 0
         ? turnStateFromSegments(turnSegments, seconds)
-        : turnStateForTime(debate.first_participant_slot, turnDurations, seconds),
+        : turnDurations
+          ? turnStateForTime(debate.first_participant_slot, turnDurations, seconds)
+          : null,
     [debate.first_participant_slot, turnDurations, turnSegments]
   );
 
@@ -305,9 +315,35 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // this was measured against — so taking the total from the allowance leaves the scrubber
   // running past the end of both recordings.
   const timelineSeconds = React.useMemo(
-    () => (turnSegments.length > 0 ? timelineSecondsForSegments(turnSegments) : timelineSecondsFor(turnDurations)),
+    () =>
+      turnSegments.length > 0
+        ? timelineSecondsForSegments(turnSegments)
+        : turnDurations
+          ? timelineSecondsFor(turnDurations)
+          : 0,
     [turnDurations, turnSegments]
   );
+
+  /**
+   * Neither the row's allowance nor the render's segments can place a turn (GEO-2956).
+   *
+   * Only decided once the media query has settled, because `turn_segments` arrives with it and a
+   * debate with a bad row but a finished render plays fine. No debate the API lists was in this
+   * state on 2026-09-30, which is why it is reported rather than handled more gracefully: if it
+   * ever happens it is a data bug in geo-chat, and the report is how anyone finds out.
+   */
+  const timingUnavailable = turnDurations === null && turnSegments.length === 0 && !mediaQuery.isPending;
+  const timingError = timingUnavailable ? "This debate's turn timings are missing, so it can't be played." : null;
+  React.useEffect(() => {
+    if (!enabled || !timingUnavailable) return;
+    reportEvent({
+      name: 'debate_playback_turn_timing_unavailable',
+      level: 'warning',
+      tags: { turn_format_id: debate.turn_format_id || 'unknown' },
+      extra: { debate_id: debate.id, turn_durations_ms: debate.turn_durations_ms },
+    });
+  }, [debate.id, debate.turn_durations_ms, debate.turn_format_id, enabled, timingUnavailable]);
+
   const slot1Participant = participantForSlot(debate, 1);
   const slot2Participant = participantForSlot(debate, 2);
   const slot1Recording = debate.recordings.find(recording => recording.participant_slot === 1) ?? null;
@@ -1227,8 +1263,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     slot1Participant,
     slot2Participant,
     urls,
-    ready,
-    error,
+    // A debate that cannot be timed is never ready, so nothing autoplays it on a zero-length
+    // timeline; `error` carries the reason to the card.
+    ready: ready && !timingUnavailable,
+    error: error ?? timingError,
     playing,
     userPaused,
     autoplayBlocked,

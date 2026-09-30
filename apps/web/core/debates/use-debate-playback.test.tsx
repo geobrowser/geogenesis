@@ -7,14 +7,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateMediaTurnSegment } from './api';
 import { useDebatePlayback } from './use-debate-playback';
 
-const mocks = vi.hoisted(() => ({ recordingUrl: vi.fn(), turnSegments: [] as DebateMediaTurnSegment[] }));
+const mocks = vi.hoisted(() => ({
+  recordingUrl: vi.fn(),
+  turnSegments: [] as DebateMediaTurnSegment[],
+  mediaPending: false,
+  reportEvent: vi.fn(),
+}));
+
+vi.mock('~/core/telemetry/logger', () => ({ reportEvent: mocks.reportEvent }));
 
 // The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
 vi.mock('./hooks', () => ({
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
-  useDebateMedia: () => ({ data: { turn_segments: mocks.turnSegments }, isLoading: false, error: null }),
+  useDebateMedia: () => ({
+    data: mocks.mediaPending ? undefined : { turn_segments: mocks.turnSegments },
+    isPending: mocks.mediaPending,
+    isLoading: mocks.mediaPending,
+    error: null,
+  }),
 }));
 
 function debateFixture(id = 'debate-1'): Debate {
@@ -870,6 +882,74 @@ describe('useDebatePlayback — the audible slot follows the render, not the all
     expect(result.current.timelineSeconds).toBe(60);
     act(() => result.current.seekBoth(25));
     await waitFor(() => expect(result.current.activeSlot).toBe(1));
+  });
+});
+
+describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.mediaPending = false;
+    mocks.reportEvent.mockReset();
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+  afterEach(() => {
+    mocks.mediaPending = false;
+  });
+
+  const untimedDebate = () => ({ ...debateFixture(), turn_durations_ms: [] }) as Debate;
+  const renderedSegments: DebateMediaTurnSegment[] = [
+    {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 50_000,
+      duration_ms: 50_000,
+      countdown_start_ms: 0,
+    },
+    {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 50_000,
+      output_end_ms: 110_000,
+      duration_ms: 60_000,
+      countdown_start_ms: 55_000,
+    },
+  ];
+
+  it('plays from the rendered segments when the row has no usable allowance', async () => {
+    mocks.turnSegments = renderedSegments;
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.error).toBeNull();
+    expect(result.current.timelineSeconds).toBe(110);
+    expect(result.current.turnCount).toBe(2);
+    expect(mocks.reportEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses to play and reports it when nothing recorded can place a turn', async () => {
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.ready).toBe(false);
+    expect(result.current.error).toMatch(/turn timings are missing/);
+    // The old fallback made this a 60s two-turn debate.
+    expect(result.current.timelineSeconds).toBe(0);
+    expect(mocks.reportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'debate_playback_turn_timing_unavailable', level: 'warning' })
+    );
+  });
+
+  it('does not call the debate broken while the media response that could time it is still loading', async () => {
+    mocks.mediaPending = true;
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.error).toBeNull();
+    expect(mocks.reportEvent).not.toHaveBeenCalled();
   });
 });
 
