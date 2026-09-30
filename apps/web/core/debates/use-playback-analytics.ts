@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { type AnalyticsEventName, capture } from '~/core/analytics';
 
 import type { Debate } from './api';
 import { createPlaybackMeasurement } from './playback-analytics';
@@ -48,7 +48,7 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       playback_instance_id: instance,
       presentation_instance_id: instance,
     };
-    const emit = (event: string, properties: Record<string, unknown>) => {
+    const emit = (event: AnalyticsEventName, properties: Record<string, unknown>) => {
       try {
         capture(event, { ...context, ...properties });
       } catch {

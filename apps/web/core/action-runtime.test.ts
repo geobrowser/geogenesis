@@ -74,17 +74,37 @@ describe('shipped action contract', () => {
         });
       }
       expect(browser.lytics.validate('component_impression', context)).toMatchObject({ valid: true, missing: [] });
-      browser.lytics.capture('action_completed', context);
-      await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+      const shared = [
+        'component',
+        'page_path',
+        'page_type',
+        'page_view_id',
+        'target_id',
+        'target_type',
+        'action_context_version',
+      ];
+      for (const [event, extra] of [
+        ['action_completed', ['operation_id', 'action_kind', 'outcome']],
+        ['component_impression', ['presentation_instance_id']],
+      ] as const) {
+        for (const field of [...shared, ...extra]) {
+          // Explicit empty values prevent defaults (e.g. page_path) hiding a missing producer field.
+          expect(browser.lytics.validate(event, { ...context, [field]: '' })).toMatchObject({
+            valid: false,
+            missing: expect.arrayContaining([field]),
+          });
+        }
+        browser.lytics.capture(event, context);
+      }
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
       const bodies = fetch.mock.calls.map(call => JSON.parse((call as unknown as [string, { body: string }])[1].body));
-      const record = bodies
-        .flatMap(
-          body =>
-            body.resourceLogs?.flatMap((resource: any) =>
-              resource.scopeLogs.flatMap((scope: any) => scope.logRecords)
-            ) ?? []
-        )
-        .find(record => record.body.stringValue === 'action_completed');
+      const records = bodies.flatMap(
+        body =>
+          body.resourceLogs?.flatMap((resource: any) => resource.scopeLogs.flatMap((scope: any) => scope.logRecords)) ??
+          []
+      );
+      expect(records.map(record => record.body.stringValue)).toEqual(['action_completed', 'component_impression']);
+      const record = records.find(record => record.body.stringValue === 'action_completed');
       expect(record).toBeDefined();
       const attributes = Object.fromEntries(
         record.attributes.map((attribute: any) => [attribute.key, attribute.value])

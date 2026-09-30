@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-7b3fb368509a.js';
+import manifest from '../public/geo-analytics-manifest.json';
+
+const analyticsScriptSrc = `http://localhost:3000/geo-analytics-${manifest.shortHash}.js`;
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -55,7 +57,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-ez+zaFCagTPSKuZjFOUMaBt2Ja8aBTFz/Nw2GwLOWHk=');
+    expect(script?.integrity).toBe(manifest.integrity);
     expect(script?.crossOrigin).toBe('anonymous');
   });
 

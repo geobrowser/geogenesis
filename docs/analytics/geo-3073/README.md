@@ -45,7 +45,7 @@ All captured events carry `is_automated` (WebDriver or a headless user agent), `
 
 ## Runtime and validation
 
-The content-hashed vendor bundle registers both new events and their `growth-v2` contracts. `action_context_version=v1` versions the description independently. `scripts/analytics/extend-action-registry.py` reapplies the reviewed registry extension to an upstream bundle and updates its filename, SRI and manifest. The manifest preserves upstream source provenance and explicitly identifies the local patch; it does not claim this is an upstream release.
+The upstream analytics registry defines both events and their `growth-v2` contracts. `action_context_version=v1` versions the description independently. Genesis vendors the upstream bundle and manifest unchanged with `bun run scripts/analytics/vendor.mjs /path/to/analytics`; no local registry patch is needed. See [the vendoring and rollout instructions](../geo-3094/README.md) for the release checks and production comparison.
 
 React Query mutations use `useObservedMutation` to capture before asynchronous `onMutate`, preserve caller variables/callbacks, and count automatic transport retries once. Search result selection uses one hook for keyboard, mouse and per-space choices. Entity type and provenance resolution reuse the graph's existing type and Sources helpers. Nested scopes retain their own positions; metadata is never carried onto a different target. Canonical display joins use the surface ID without replacing legacy ranking opportunity IDs.
 
