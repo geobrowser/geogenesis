@@ -14,6 +14,7 @@ import {
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
+  hideDebate,
   isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
@@ -22,6 +23,7 @@ import {
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
+  unhideDebate,
   updateDebateAvailability,
 } from './api';
 
@@ -1015,6 +1017,76 @@ describe('scheduled debate limit', () => {
       code: 'too_many_open_invitations',
       message:
         'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+    });
+  });
+});
+
+describe('debate visibility (GEO-2785)', () => {
+  const visibility = {
+    debate_id: '01a0448a-61d3-7101-8434-a20fdadf6f97',
+    hidden: true,
+    hidden_at: '2026-09-30T18:00:00Z',
+    hidden_by_user_id: 'user-1',
+    hidden_reason: 'test debate',
+  };
+  const ok = () =>
+    new Response(JSON.stringify(visibility), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+  it('hides with a trimmed reason, authenticated', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(hideDebate('debate-1', '  test debate  ', vi.fn(), 'user-a')).resolves.toEqual(visibility);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/hide',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: 'Bearer access-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'test debate' }),
+      })
+    );
+  });
+
+  it('sends no reason when the reason is blank', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await hideDebate('debate-1', '   ', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/hide',
+      expect.objectContaining({ body: JSON.stringify({}) })
+    );
+  });
+
+  it('unhides authenticated, with no body', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await unhideDebate('debate-1', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/unhide',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer access-token' }, body: undefined })
+    );
+  });
+
+  it('surfaces a refusal as a GeoChatRequestError with its code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'debate_visibility_forbidden', message: 'no' } }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(unhideDebate('debate-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      name: 'GeoChatRequestError',
+      code: 'debate_visibility_forbidden',
+      status: 403,
     });
   });
 });

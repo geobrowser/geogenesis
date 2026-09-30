@@ -4,13 +4,13 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { ExploreTypeTag } from './explore-type-tag';
 import { SpaceThumb } from './space-thumb';
 
 /**
@@ -30,8 +30,6 @@ export function DebateExploreMetaRow({
   compact?: boolean;
   endSlot?: React.ReactNode;
 }) {
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
   return (
     <div className="flex items-center justify-between gap-3">
       <div
@@ -57,14 +55,7 @@ export function DebateExploreMetaRow({
             label="Join"
           />
         ) : null}
-        {!compact ? (
-          <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-            Debate
-          </span>
-        ) : null}
-        <span className="shrink-0 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-          {timeAgo}
-        </span>
+        {!compact ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
       </div>
       {endSlot}
     </div>

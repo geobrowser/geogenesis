@@ -16,8 +16,9 @@ import {
   SELECTED_SLOT,
 } from './peer-availability';
 
-// A fixed clock, so the seven columns and their labels are the same on every run. A Monday.
-const NOW = new Date('2026-09-21T15:00:00Z');
+// A fixed clock, so the seven columns and their labels are the same on every run. A Monday, early
+// enough that the fixtures' slots on it are still ahead: the view drops ones that have gone.
+const NOW = new Date('2026-09-21T08:00:00Z');
 
 /** Chips are labelled in the viewer's zone; UTC on both sides keeps the fixtures readable. */
 const slot = (hour: number, viewerIsFree = true, day = 21): PeerSlot => ({
@@ -538,8 +539,8 @@ describe('a week with nothing in it', () => {
 
     it('bounds the input at now in that zone', () => {
       setupBooking(booking(), { viewerTimezone, peerHasSchedule: false, slots: [] });
-      // NOW is 15:00Z, which is 20:45 in Kathmandu.
-      expect(screen.getByLabelText('Time to request')).toHaveAttribute('min', '2026-09-21T20:45');
+      // NOW is 08:00Z, which is 13:45 in Kathmandu.
+      expect(screen.getByLabelText('Time to request')).toHaveAttribute('min', '2026-09-21T13:45');
     });
 
     it('confirms the time that was typed', () => {
@@ -558,28 +559,91 @@ describe('a week with nothing in it', () => {
   });
 });
 
-describe('times that have already gone', () => {
-  // The week starts at today's midnight and geo-chat refuses a past start, so a booking caller
-  // must not be able to send one.
-  it('cannot pick one', async () => {
-    const book = booking();
-    const { user } = setupBooking(book, { slots: [slot(13), slot(16)] });
-    const gone = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
+describe('zone line', () => {
+  const ZONE = 'Times shown in your zone, UTC. Ada is in UTC, same time as you.';
 
-    expect(gone).toBeDisabled();
-    await user.click(gone);
+  // It sits where "Pick a time above." used to, and a pick takes its place with the picked time.
+  it('fills the footer until a time is picked', async () => {
+    const { user } = setupBooking(booking(), { slots: [slot(16)] });
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
+    expect(screen.queryByText('Pick a time above.')).not.toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: 'Send request' })).toBeDisabled();
-    expect(book.onRequest).not.toHaveBeenCalled();
+    await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
+    expect(screen.queryByText(ZONE)).not.toBeInTheDocument();
   });
 
-  it('leaves the read-only week pickable, which is what it has always been', async () => {
-    const { user } = setup({ slots: [slot(13)] });
-    const chip = within(day('2026-09-21')).getByRole('button', { name: /1pm/ });
+  it('still shows without a footer to sit in', () => {
+    setup({ slots: [slot(16)] });
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
+  });
+});
 
-    expect(chip).not.toBeDisabled();
-    await user.click(chip);
-    expect(chip).toHaveAttribute('aria-pressed', 'true');
+describe('disagreement line', () => {
+  const renderWith = (disagreementCount: number | null) =>
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ slots: [slot(16)] })}
+        peerName="Ada Lovelace"
+        now={NOW}
+        disagreementCount={disagreementCount}
+      />
+    );
+
+  it('says how many claims they disagree on and that the room picks one', () => {
+    renderWith(12);
+    expect(
+      screen.getByText(
+        'You and Ada disagree on 12 claims. When you join the debate room, you can discuss what claim to debate first.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('is singular for one claim', () => {
+    renderWith(1);
+    expect(screen.getByText(/disagree on 1 claim\./)).toBeInTheDocument();
+  });
+
+  it.each([null, 0])('keeps only the room sentence when the count is %s', count => {
+    renderWith(count);
+    expect(
+      screen.getByText('When you join the debate room, you can discuss what claim to debate first.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/disagree on/)).not.toBeInTheDocument();
+  });
+});
+
+describe('times that have already gone', () => {
+  // The week starts at today's midnight, so its early slots are gone before it opens. They are
+  // left out rather than drawn disabled, booking or not.
+  const AFTERNOON = new Date('2026-09-21T15:00:00Z');
+  const renderAt = (props: Partial<React.ComponentProps<typeof PeerAvailabilityView>> & { slots: PeerSlot[] }) => {
+    const { slots, ...rest } = props;
+    return render(<PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={AFTERNOON} {...rest} />);
+  };
+
+  it('leaves them out of today', () => {
+    renderAt({ booking: booking(), slots: [slot(13), slot(15), slot(16)] });
+    const today = within(day('2026-09-21'));
+
+    expect(today.queryByRole('button', { name: /1pm/ })).not.toBeInTheDocument();
+    // Exactly now has already started, so it is gone too.
+    expect(today.queryByRole('button', { name: /3pm/ })).not.toBeInTheDocument();
+    expect(today.getByRole('button', { name: /4pm/ })).toBeInTheDocument();
+  });
+
+  it('leaves them out of a read-only week too', () => {
+    renderAt({ slots: [slot(13), slot(16, true, 22)] });
+    expect(within(day('2026-09-21')).getByText('Nothing free')).toBeInTheDocument();
+  });
+
+  it('shows the empty week when every slot has gone', () => {
+    renderAt({ slots: [slot(9), slot(13)] });
+    expect(screen.getByText('Ada has no times free in the next 7 days.')).toBeInTheDocument();
+  });
+
+  it('does not seed a preselected time that has gone', () => {
+    renderAt({ booking: booking(), initialSelectedStart: '2026-09-21T13:00:00Z', slots: [slot(13), slot(16)] });
+    expect(screen.getByText('Times shown in your zone, UTC. Ada is in UTC, same time as you.')).toBeInTheDocument();
   });
 
   // An open modal does not re-render as time passes, so a time that was ahead when picked can be

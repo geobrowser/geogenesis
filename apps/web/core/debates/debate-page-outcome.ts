@@ -13,8 +13,11 @@ export type DebatePageLoadStage = 'debate_list' | 'anchor_lookup' | 'media_readi
 
 export type DebatePageFeedState =
   | { kind: 'loading'; stage: DebatePageLoadStage }
-  /** The feed fell back to the plain entity page: this debate cannot be watched here. */
-  | { kind: 'unavailable'; detail: 'not_found' | 'not_watchable' | 'not_processed' }
+  /**
+   * The debate cannot be watched here. `removed` is geo-chat's answer that the debate was removed
+   * (GEO-2785) and the page shows its removed state; the rest fall back to the plain entity page.
+   */
+  | { kind: 'unavailable'; detail: 'not_found' | 'not_watchable' | 'not_processed' | 'removed' }
   /** A lookup failed, so the feed shows its error state instead of the debate. */
   | { kind: 'lookup_error' }
   /** The linked debate's card is rendered. */

@@ -47,7 +47,13 @@ export function useDebatesPanelDeepLink() {
     // land them on the page with the hub shut, so hand back the link itself: signed in by then, it
     // opens the tab it named.
     redirectTo: tab ? toDebatesPanel({ tab, pathname: pathname ?? undefined, via: link.via ?? undefined }) : undefined,
-    analytics: { link_source: link.via ?? undefined },
+    analytics: {
+      link_source: link.via ?? undefined,
+      component: 'debate_matchmaking',
+      auth_control: 'open_debates',
+      auth_trigger: 'deep_link',
+      auth_intent: 'join_debate',
+    },
     onError: openPending,
   });
 

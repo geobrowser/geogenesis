@@ -62,7 +62,16 @@ export function InlineCommentComposer({
     interactionSurface: 'activity_feed',
   });
   const { smartAccount } = useSmartAccount();
-  const promptSignIn = usePrivySignIn();
+  const promptSignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'comment_composer',
+      target_type: 'entity',
+      target_id: targetEntityId,
+      auth_control: 'comment',
+      auth_intent: 'comment',
+      auth_continuation: 'resume',
+    },
+  });
   const isSignedIn = !!smartAccount;
   const { isComposing, close } = composer;
   const adjustActivityPosts = useAdjustActivityPosts();

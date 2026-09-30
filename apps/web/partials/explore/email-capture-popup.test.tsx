@@ -6,6 +6,7 @@ import * as React from 'react';
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
 import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 
@@ -31,11 +32,13 @@ const mocks = vi.hoisted(() => ({
   useLoginWithEmailArgs: undefined as unknown,
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
+  capture: vi.fn(),
 }));
 
 vi.mock('~/core/analytics', () => ({
   signupCompleted: mocks.signupCompleted,
   trackPrivyAuth: mocks.trackPrivyAuth,
+  capture: mocks.capture,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -84,6 +87,7 @@ function scrollPastTrigger() {
 }
 
 beforeEach(() => {
+  resetAuthAttempt();
   window.localStorage.clear();
   // A pending account attempt is session-scoped; left behind it resumes into the next test.
   window.sessionStorage.clear();
@@ -891,6 +895,36 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
     });
 
+    it('starts exactly one attributed attempt for the create-account press', async () => {
+      await subscribeSuccessfully();
+      mocks.capture.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      const starts = mocks.capture.mock.calls.filter(([event]) => event === 'auth_attempt_started');
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.[1]).toMatchObject({ component: 'explore_email_capture', auth_control: 'create_account' });
+    });
+
+    it('starts its own attributed email attempt when the document inherited another attempt', async () => {
+      await subscribeSuccessfully();
+      const inherited = beginAuthAttempt({ component: 'explore_email_capture', auth_control: 'create_account' });
+      // A fresh document has copied storage but no ownership of the earlier attempt.
+      resetAuthAttempt();
+      sessionStorage.setItem('geo:auth-attempt:active', inherited.id);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(currentAuthAttempt()?.id).not.toBe(inherited.id);
+      expect(currentAuthAttempt()?.properties).toMatchObject({
+        component: 'explore_email_capture',
+        auth_control: 'create_account',
+        auth_trigger: 'control',
+      });
+      expect(readAuthAttempt(inherited.id)?.outcome).toBeUndefined();
+      expect(mocks.sendCode).toHaveBeenCalledOnce();
+    });
+
     // The headless SDK calls the captured completion after its verification promise resolves,
     // even when authentication has already unmounted this card.
     it('reports completion after the card unmounts, attributed to this flow', async () => {
@@ -910,12 +944,15 @@ describe('ExploreEmailCapturePopup', () => {
       };
       args?.onComplete?.(completion);
 
-      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(completion, {
-        auth_flow: 'manual_login',
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        completion,
+        expect.objectContaining({
+          auth_flow: 'manual_login',
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one
@@ -980,11 +1017,13 @@ describe('ExploreEmailCapturePopup', () => {
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
       expect(mocks.usePrivySignInOptions?.resumeAuthAttempt).toBe(true);
-      expect(mocks.usePrivySignInOptions?.analytics).toEqual({
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.usePrivySignInOptions?.analytics).toEqual(
+        expect.objectContaining({
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
       // The modal replaces the popup visually, but this hook must remain mounted until Privy
       // completes so its completion handler can attribute the signup to this surface.
       expect(popup()).toBeInTheDocument();

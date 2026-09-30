@@ -231,7 +231,13 @@ export function EntityVoteButtons({
   function openPrivySignIn() {
     // Stay on this page after onboarding instead of bouncing to the explore page.
     prepareOnboarding();
-    login();
+    const attempt = login({
+      ...signInContext.current,
+      auth_control: `${responseKind}_${pendingSignInDirectionRef.current}`,
+      auth_intent: 'vote',
+      auth_continuation: 'queued',
+    });
+    if (signInContext.current) signInContext.current = { ...signInContext.current, auth_attempt_id: attempt?.id };
   }
 
   function queueResponse(direction: ActiveResponseDirection) {

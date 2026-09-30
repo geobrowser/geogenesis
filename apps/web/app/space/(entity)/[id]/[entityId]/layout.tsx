@@ -10,6 +10,7 @@ import { ActionContextProvider } from '~/core/action-context-provider';
 import { entityActionScope } from '~/core/action-entity-context';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -33,7 +34,12 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 
-import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
+import {
+  cachedFetchDebateVisibility,
+  cachedFetchEntitiesBatch,
+  cachedFetchEntity,
+  cachedFetchEntityPage,
+} from './cached-fetch-entity';
 
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
@@ -59,6 +65,12 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   // which is most of what hiding was meant to stop.
   if (isHiddenEntity(entity)) {
     return { title: 'Not Found' };
+  }
+
+  // The same for a debate geo-chat reports removed (GEO-2785): its page shows the removed state, and
+  // a link preview must not go on naming the claim and describing the debate.
+  if (isDebateEntity(entity?.types) && (await cachedFetchDebateVisibility(entityId)) === 'removed') {
+    return { title: 'Debate removed' };
   }
 
   const title = entity?.name ?? 'Entity';
