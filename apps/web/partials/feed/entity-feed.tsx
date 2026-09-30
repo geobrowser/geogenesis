@@ -5,12 +5,15 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-qu
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
+import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
-import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
+import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -54,13 +57,6 @@ const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
  * `explore-debate-tag-filter` for the numbers.
  */
 const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
-
-/**
- * Remembers that this viewer opened "More filters", so an advanced reader isn't asked twice. Only
- * the reveal is kept, never a selection: a filter the viewer cannot see narrowing their feed is the
- * thing #2628 removed the menus to avoid, so the menus always open on Explore's defaults.
- */
-export const MORE_FILTERS_STORAGE_KEY = 'exploreMoreFiltersOpen';
 
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -222,7 +218,7 @@ export function EntityFeed({
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
   const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
   const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<string[]>([]);
-  const [moreFiltersOpen, setMoreFiltersOpen] = React.useState(false);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useAtom(exploreMoreFiltersOpenAtom);
   const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
   const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
   const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
@@ -268,7 +264,7 @@ export function EntityFeed({
     ? selectsWholePopulation
       ? undefined
       : selectedTypeIds
-    : moreFiltersRevealed && !sameIds(selectedTypeIds, initialTypeIds)
+    : moreFiltersRevealed && selectedTypeIds.join(',') !== initialTypeIds.join(',')
       ? selectedTypeIds
       : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
@@ -314,53 +310,27 @@ export function EntityFeed({
   const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
   const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
 
-  React.useEffect(() => {
-    if (!showMoreFilters) return;
-    try {
-      if (window.localStorage.getItem(MORE_FILTERS_STORAGE_KEY) === 'true') setMoreFiltersOpen(true);
-    } catch {
-      // Site data blocked — the menus start put away, one click from open.
-    }
-  }, [showMoreFilters]);
-
   const toggleMoreFilters = React.useCallback(() => {
-    const next = !moreFiltersOpen;
-    setMoreFiltersOpen(next);
     // Putting the menus away puts their filters away too, so the feed never stays narrowed by a
     // menu the viewer can no longer see.
-    if (!next) {
+    if (moreFiltersOpen) {
       setSelectedTypeIds([...initialTypeIds]);
       setSelectedSpaceIds([]);
     }
-    try {
-      if (next) window.localStorage.setItem(MORE_FILTERS_STORAGE_KEY, 'true');
-      else window.localStorage.removeItem(MORE_FILTERS_STORAGE_KEY);
-    } catch {
-      // Quota or blocked site data — the choice holds for this visit, it just won't be restored.
-    }
-  }, [initialTypeIds, moreFiltersOpen]);
+    setMoreFiltersOpen(!moreFiltersOpen);
+  }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);
 
-  // The spaces the old server-rendered menu offered — featured first, then the viewer's editor and
-  // member spaces — read off the browse sidebar's cache, which `BrowseSidebar` fills on every page.
-  // The route narrows a request to these same rows, so the menu cannot offer a space it would drop.
+  // Read off the browse sidebar's cache, which `BrowseSidebar` fills on every page, so the menu
+  // costs no request of its own.
   const browseSidebar = useCachedBrowseSidebarData();
-  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(() => {
-    if (!browseSidebar) return [];
-    const seen = new Set<string>();
-    const options: HubFilterOption<string>[] = [];
-    for (const row of [...browseSidebar.featured, ...browseSidebar.editorOf, ...browseSidebar.memberOf]) {
-      const key = normId(row.id);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      options.push({ value: row.id, label: row.name });
-    }
-    return options;
-  }, [browseSidebar]);
+  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
+    () =>
+      browseSidebar ? browseSidebarVisibleSpaces(browseSidebar).map(row => ({ value: row.id, label: row.name })) : [],
+    [browseSidebar]
+  );
 
   const toggleSpace = React.useCallback((spaceId: string) => {
-    setSelectedSpaceIds(current =>
-      current.includes(spaceId) ? current.filter(id => id !== spaceId) : [...current, spaceId]
-    );
+    setSelectedSpaceIds(current => toggleId(current, spaceId));
   }, []);
 
   React.useEffect(() => {
@@ -651,10 +621,4 @@ export function EntityFeed({
       </div>
     </div>
   );
-}
-
-function sameIds(left: readonly string[], right: readonly string[]): boolean {
-  if (left.length !== right.length) return false;
-  const rightSet = new Set(right.map(normId));
-  return left.every(id => rightSet.has(normId(id)));
 }

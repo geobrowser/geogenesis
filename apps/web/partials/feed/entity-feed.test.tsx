@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,7 +12,7 @@ import {
   PAPER_TYPE_ID,
 } from '~/core/explore/explore-constants';
 
-import { EntityFeed, MORE_FILTERS_STORAGE_KEY } from './entity-feed';
+import { EntityFeed } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
@@ -462,17 +463,21 @@ describe('EntityFeed more filters', () => {
   const FEATURED = { id: 'space-featured', name: 'Featured space' };
   const MINE = { id: 'space-mine', name: 'My space' };
 
+  // A fresh store per render, like a fresh page load: what carries over is only what the atom wrote
+  // to localStorage, which is the persistence under test — not state left in the shared store.
   function renderExploreFeed() {
     return render(
-      <EntityFeed
-        apiEndpoint="/api/explore/feed"
-        initialTime="month"
-        initialSort="best"
-        showSortFilter
-        showMoreFilters
-        typeOptions={EXPLORE_ENTITY_TYPES}
-        initialTypeIds={DEFAULT_EXPLORE_TYPE_IDS}
-      />
+      <Provider store={createStore()}>
+        <EntityFeed
+          apiEndpoint="/api/explore/feed"
+          initialTime="month"
+          initialSort="best"
+          showSortFilter
+          showMoreFilters
+          typeOptions={EXPLORE_ENTITY_TYPES}
+          initialTypeIds={DEFAULT_EXPLORE_TYPE_IDS}
+        />
+      </Provider>
     );
   }
 
@@ -483,7 +488,7 @@ describe('EntityFeed more filters', () => {
 
   beforeEach(() => {
     mocks.browseSidebar = { featured: [FEATURED], editorOf: [MINE], memberOf: [MINE] };
-    localStorage.removeItem(MORE_FILTERS_STORAGE_KEY);
+    localStorage.removeItem('exploreMoreFiltersOpen');
   });
 
   it('keeps the type and space menus out of the header until asked for', () => {
