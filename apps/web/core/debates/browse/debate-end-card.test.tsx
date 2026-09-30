@@ -262,22 +262,20 @@ describe('DebateEndCard', () => {
     expect(screen.queryByText(/Watch (a related|another) debate/)).toBeNull();
   });
 
-  it('offers replay as the pause circle on a wide player and a header pill on a narrow one', () => {
+  it('offers replay once, as a pill in the card header at every width', () => {
     const onReplay = vi.fn();
     renderCard(cardFixture(), undefined, onReplay);
 
-    // Both are drawn and the player's width shows one: the circle where pause sat, or a pill on the
-    // question's line, which saves a phone the band the circle needs above the card.
-    const [circle, pill] = screen.getAllByRole('button', { name: 'Replay debate' });
-    expect([...circle.classList]).toContain('@max-md:hidden');
-    expect([...pill.classList]).toContain('@max-md:flex');
-    expect(pill).toHaveTextContent('Replay');
+    // One control, not a circle in the corner on a wide player and a pill on a narrow one.
+    const replay = screen.getByRole('button', { name: 'Replay debate' });
+    expect([...replay.classList]).toContain('flex');
+    expect([...replay.classList]).not.toContain('hidden');
+    expect(replay).toHaveTextContent('Replay');
+    expect(replay.closest('section')).toHaveAttribute('aria-label', 'Debate results');
     // Marked, so a player's playback capture can tell the card's one ask-to-play from its other controls.
-    expect(circle).toHaveAttribute('data-end-card-replay');
-    expect(pill).toHaveAttribute('data-end-card-replay');
+    expect(replay).toHaveAttribute('data-end-card-replay');
 
-    fireEvent.click(circle);
-    fireEvent.click(pill);
-    expect(onReplay).toHaveBeenCalledTimes(2);
+    fireEvent.click(replay);
+    expect(onReplay).toHaveBeenCalledTimes(1);
   });
 });

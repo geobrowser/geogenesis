@@ -257,12 +257,14 @@ export const submitOrResumeUserOperation = async (
 ): Promise<`0x${string}`> => {
   const callsKey = callsKeyOf(calls);
   const previous = unconfirmedByAddress.get(address);
-  // Any send supersedes the record: it is either this resumption, or different calls that
-  // move the account on.
-  unconfirmedByAddress.delete(address);
+  const expired = previous !== undefined && Date.now() - previous.at >= UNCONFIRMED_RESUME_TTL_MS;
 
-  const resumable =
-    previous !== undefined && previous.callsKey === callsKey && Date.now() - previous.at < UNCONFIRMED_RESUME_TTL_MS;
+  const resumable = previous !== undefined && !expired && previous.callsKey === callsKey;
+
+  // Only this resumption, or expiry, consumes the record. A send of DIFFERENT calls must not: while
+  // the unconfirmed op is still pending it shares that op's nonce and is rejected (AA25), and if it
+  // cleared the record the caller's retry of the original calls would resubmit instead of resuming.
+  if (resumable || expired) unconfirmedByAddress.delete(address);
 
   let hash: `0x${string}`;
   if (resumable) {

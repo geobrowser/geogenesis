@@ -7,7 +7,7 @@ import { atom, useAtom } from 'jotai';
 import { reportEvent } from '~/core/telemetry/logger';
 
 import type { Debate } from './api';
-import { useDebateMedia, useDebateTranscript, useRecordingUrl } from './hooks';
+import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -105,6 +105,22 @@ const STALL_EPSILON_SECONDS = 0.001;
  */
 const documentIsHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
+/** Closer than this, a paused element is already where it is being sent. */
+const SEEK_NOOP_EPSILON_SECONDS = 0.001;
+
+/**
+ * Put an element at `seconds`, unless a paused one is already there (GEO-2965).
+ *
+ * Assigning `currentTime` its own value is still a seek: the element drops back below
+ * `HAVE_FUTURE_DATA` and has to re-establish playback from the demuxer. On a pair the hold has just
+ * waited on until both could play, that one needless seek per element is what let them start apart
+ * again. A *playing* element is always written, because its position moves under the comparison.
+ */
+function moveTo(video: HTMLVideoElement, seconds: number) {
+  if (video.paused && Math.abs(video.currentTime - seconds) < SEEK_NOOP_EPSILON_SECONDS) return;
+  video.currentTime = seconds;
+}
+
 /**
  * Drives the two synchronized debater recordings for a single debate: loads the
  * per-slot playback URLs, keeps the videos in lockstep, tracks the active turn
@@ -116,7 +132,7 @@ const documentIsHidden = () => typeof document !== 'undefined' && document.visib
 const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>['data']>['segments'] = [];
 
 export function useDebatePlayback(debate: Debate, enabled: boolean) {
-  const recordingUrlMutation = useRecordingUrl();
+  const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
@@ -149,6 +165,21 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  /**
+   * The pair still needs moving to where playback will start (GEO-2965).
+   *
+   * Every debate starts with a seek: the recordings begin before the debate does (GEO-2644), so
+   * debate-time 0 is ~2-5s into each file, and `resumeBoth` seeks both elements there before
+   * playing. Left to the resume, that seek happens *after* the card has waited for both elements
+   * to be able to play — at 0 — so each element re-buffers at its new position and starts on its
+   * own again. Measured on the preview: the two starts landed 15-420ms apart, the same asymmetry
+   * the hold exists to remove, reintroduced one step later.
+   *
+   * So a fresh pair is moved to its starting position as soon as both elements know their shape
+   * (`loadedmetadata`), and the hold then waits for data *there*. The resume computes the same
+   * target, finds both elements already on it, and does not seek at all — see `seekVideosTo`.
+   */
+  const needsPrepositionRef = React.useRef(false);
   /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
   const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
   const lastSyncSeekAtRef = React.useRef(0);
@@ -256,7 +287,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
    * that it must not write `muted` from underneath a retry that depends on it.
    */
   const [isResuming, setIsResuming] = React.useState(false);
-  const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
+  const recordingUrlsRef = React.useRef(recordingUrls);
 
   // `null` when the row's allowance is empty or malformed (GEO-2956). Nothing is invented in its
   // place: the rendered segments below stand in for it where they exist, and without them the
@@ -383,8 +414,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [activeSlot, playheadSeconds, transcriptSegments]);
 
   React.useEffect(() => {
-    getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
-  }, [recordingUrlMutation.mutateAsync]);
+    recordingUrlsRef.current = recordingUrls;
+  }, [recordingUrls]);
 
   // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
   // not re-request them (GEO-2895).
@@ -398,8 +429,9 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // placeholder, which is the flicker: a card the viewer had already watched blanking and
   // reloading as they scrolled past it.
   //
-  // `useRecordingUrl` is a mutation rather than a query, so nothing upstream caches this —
-  // every discarded URL is a real round trip.
+  // The lookup itself is cached now (GEO-2965, `useRecordingPlaybackUrl`), so a card the feed
+  // unmounts and remounts reads its URLs back without a round trip. This key still earns its
+  // place: it is what stops a re-activation blanking the URLs a mounted card is already playing.
   //
   // The key is claimed only once URLs are committed, never while a request is in flight. A
   // cleanup that lands mid-flight (StrictMode's dev double-run, or scrolling away and back
@@ -455,8 +487,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     refreshedSlotsRef.current.clear();
 
     Promise.all([
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
+      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot1RecordingFilename }),
+      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
       .then(([slot1Result, slot2Result]) => {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
@@ -477,6 +509,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
         const slot2 = slot2Result.url;
 
         fetchedForRef.current = recordingsKey;
+        needsPrepositionRef.current = true;
         setUrls({ slot1, slot2 });
       })
       .catch(caught => {
@@ -529,7 +562,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       refreshedSlotsRef.current.add(slot);
 
       try {
-        const { url } = await getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename });
+        // `refresh`, never the cached `lookup`: the cached URL is the one suspected of being dead.
+        const { url } = await recordingUrlsRef.current.refresh({ debateId: debate.id, filename });
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
           current[slot === 1 ? 'slot1' : 'slot2'] === url
@@ -571,8 +605,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return false;
-      primaryVideo.currentTime = Math.max(0, playhead - offsets.slot1);
-      secondaryVideo.currentTime = Math.max(0, playhead - offsets.slot2);
+      moveTo(primaryVideo, Math.max(0, playhead - offsets.slot1));
+      moveTo(secondaryVideo, Math.max(0, playhead - offsets.slot2));
       secondaryVideo.playbackRate = 1;
       noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
@@ -589,6 +623,30 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const pendingSeekSeconds = pendingSeekSecondsRef.current;
     if (pendingSeekSeconds !== null && seekVideosTo(pendingSeekSeconds)) {
       pendingSeekSecondsRef.current = null;
+      // A deliberate position is where playback will start from, so it is the preposition too.
+      needsPrepositionRef.current = false;
+    }
+
+    // See `needsPrepositionRef`. Only for a pair nothing has started or moved yet, and only once
+    // both know their shape: before `HAVE_METADATA` a seek has nothing to land on.
+    if (
+      needsPrepositionRef.current &&
+      primaryVideo &&
+      secondaryVideo &&
+      primaryVideo.paused &&
+      secondaryVideo.paused &&
+      primaryVideo.readyState >= HTMLMediaElement.HAVE_METADATA &&
+      secondaryVideo.readyState >= HTMLMediaElement.HAVE_METADATA
+    ) {
+      needsPrepositionRef.current = false;
+      // Exactly the target `resumeBoth` will compute for this pair, so the resume finds both
+      // elements already there.
+      seekVideosTo(
+        clampSeconds(
+          pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds,
+          timelineSeconds
+        )
+      );
     }
 
     // Hoisted above the playhead read, which depends on it: off screen, which element's clock
@@ -815,6 +873,8 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       // awaiting, so two overlapping activations cannot both write state.
       const generation = ++resumeGenerationRef.current;
       const debateGeneration = debateGenerationRef.current;
+      // The resume positions the pair itself from here on.
+      needsPrepositionRef.current = false;
       setError(null);
       // Realign the pair so a resume can't leave the recordings drifting. Off the *running*
       // element's clock, not slot 1's unconditionally: a resume on return from a backgrounded tab
@@ -1075,6 +1135,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const seekBoth = React.useCallback(
     (seconds: number) => {
       const nextTime = clampSeconds(seconds, timelineSeconds);
+      needsPrepositionRef.current = false;
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);

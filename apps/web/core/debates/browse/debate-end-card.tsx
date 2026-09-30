@@ -19,7 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { DebateClaimTickerCard } from './debate-claim-ticker';
 import { Play } from './icons';
-import { CONTROL_CIRCLE_CLASS } from './player-controls';
+import { PILL_ACTION_CLASS } from './pill-action';
 import type { EndCardClaims, useDebateEndCard } from './use-debate-end-card';
 import type { NextDebate } from './use-next-debate';
 
@@ -43,8 +43,8 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  * the card is sized to fit a feed card's player without scrolling: a list would be one more
  * vertical thing to scroll inside a feed that already scrolls vertically.
  *
- * A narrow player gets replay as a pill in the card's header rather than a circle in a band above
- * it. The card still scrolls vertically as a last resort on a player too short for it.
+ * Replay is a pill in the card's header rather than a circle in a band above it. The card still
+ * scrolls vertically as a last resort on a player too short for it.
  */
 export function DebateEndCard({
   card,
@@ -61,39 +61,27 @@ export function DebateEndCard({
   return (
     <div data-debate-end-card className="absolute inset-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-black/55" />
-      {/* The corner the pause control sat in for the whole debate, and the same circle, now starting
-          it again. Inside this layer rather than left on the tile, which the card sits above. A
-          narrow player draws the pill in the card's header instead — see below. */}
-      <button
-        type="button"
-        aria-label="Replay debate"
-        data-end-card-replay
-        onClick={onReplay}
-        className={cx(CONTROL_CIRCLE_CLASS, 'absolute top-3 left-3 @max-md:hidden')}
-      >
-        <RetrySmall />
-      </button>
-
       {/* As tall as its content rather than the player: a card stretched to the bottom edge left a
           band of blank white under the last section that read as something missing. Capped at the
-          player, and scrolls as a last resort on one too short for it. */}
+          player, and scrolls as a last resort on one too short for it. No band above it: replay is
+          in the card's header, so nothing sits over the dimmed frame. */}
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-16 flex max-h-[calc(100%-5rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
+        className="absolute inset-x-4 top-4 flex max-h-[calc(100%-2rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
       >
         <div className="flex flex-col gap-3 @max-md:gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-chatMedium text-grey-04">Where do you stand?</span>
-              {/* Replay on a narrow player: a pill on the question's own line rather than a circle in a
-                  band above the card, which cost the card about 50px it could not spare. The claims
-                  pill's shape, so it reads as one of the card's actions. */}
+              {/* Replay at every width: a pill on the question's own line rather than a circle in a
+                  band above the card, which cost the card about 50px and sat apart from everything
+                  else the viewer can do here. */}
               <button
                 type="button"
                 aria-label="Replay debate"
                 data-end-card-replay
                 onClick={onReplay}
-                className="hidden h-7 shrink-0 items-center gap-1 rounded-full border border-grey-02 bg-white px-2.5 text-smallButton text-grey-04 shadow-light transition-colors hover:text-text @max-md:flex"
+                className={cx(PILL_ACTION_CLASS, 'shrink-0 gap-1 px-2.5 text-smallButton')}
               >
                 <RetrySmall />
                 Replay

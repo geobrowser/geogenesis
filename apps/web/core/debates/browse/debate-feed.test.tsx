@@ -96,16 +96,25 @@ vi.mock('./debate-feed-player', async () => {
       debate,
       active,
       preload,
+      buffer,
       onPlaybackState,
     }: {
       debate: Debate;
       active: boolean;
       preload?: boolean;
+      buffer?: boolean;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
     }) => {
       const state = JSON.stringify(mocks.playerState);
       React.useEffect(() => onPlaybackState?.(JSON.parse(state)), [onPlaybackState, state]);
-      return <div data-testid={`player-${debate.id}`} data-active={active} data-preload={preload ? 'true' : 'false'} />;
+      return (
+        <div
+          data-testid={`player-${debate.id}`}
+          data-active={active}
+          data-preload={preload ? 'true' : 'false'}
+          data-buffer={buffer ? 'true' : 'false'}
+        />
+      );
     },
   };
 });
@@ -848,22 +857,29 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
       id: el.getAttribute('data-testid'),
       active: el.getAttribute('data-active') === 'true',
       preload: el.getAttribute('data-preload') === 'true',
+      buffer: el.getAttribute('data-buffer') === 'true',
     }));
   }
 
-  it('preloads the debate immediately after the active one, and only that one', () => {
+  // GEO-2965 widened this from one ahead to two. The active card now holds until both of its
+  // recordings can play, so a card reached cold waits; a quick double swipe is how a viewer lands on
+  // one. Only the very next card buffers, because buffering is what costs bandwidth.
+  it('opens the two debates after the active one, and buffers only the next', () => {
+    mocks.debates = [...mocks.debates, completedDebate('debate-4', 'Fourth claim', '2026-07-02T00:04:10.000Z')];
     render(<DebatesBrowseFeed spaceId="space-1" />);
     const players = playersInRenderOrder();
     const activeIndex = players.findIndex(p => p.active);
 
     expect(activeIndex).toBeGreaterThanOrEqual(0);
-    expect(players[activeIndex + 1]?.preload).toBe(true);
+    expect(players.length).toBeGreaterThan(activeIndex + 3);
+    expect(players[activeIndex + 1]).toMatchObject({ preload: true, buffer: true });
+    expect(players[activeIndex + 2]).toMatchObject({ preload: true, buffer: false });
 
-    // Every other card loads nothing: not the active one (already loading because it is
-    // active), and not two ahead — a vertical one-at-a-time feed would otherwise fetch
+    // Everything else loads nothing: not the active one (already loading because it is active),
+    // and nothing three or more ahead — a vertical one-at-a-time feed would otherwise fetch
     // recordings most viewers never reach.
     players.forEach((p, i) => {
-      if (i !== activeIndex + 1) expect(p.preload).toBe(false);
+      if (i !== activeIndex + 1 && i !== activeIndex + 2) expect(p).toMatchObject({ preload: false, buffer: false });
     });
   });
 

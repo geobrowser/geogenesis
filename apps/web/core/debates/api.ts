@@ -1767,6 +1767,26 @@ export async function respondToScheduledDebate(
   });
 }
 
+/**
+ * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
+ * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
+ * slot for both people and withdraws the calendar invite. It refuses with `409
+ * debate_already_started` once anyone has joined the room, and `409 request_not_cancellable` once the
+ * request is already resolved.
+ */
+export async function cancelScheduledDebate(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,

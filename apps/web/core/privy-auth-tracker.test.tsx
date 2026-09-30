@@ -154,6 +154,27 @@ describe('PrivyAuthTracker', () => {
     expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
   });
 
+  it('retains the email attempt when handing over to the modal after the session rotates', () => {
+    window.lytics = { getContext: () => ({ anonymous_id: 'visitor', session_id: 'email-session' }) };
+    try {
+      render(<PrivyAuthTracker />);
+      beginPrivyAuth({ signup_surface: 'explore_email_capture' });
+      window.lytics.getContext = () => ({ anonymous_id: 'visitor', session_id: 'modal-session' });
+      const button = renderHook(() => useTrackedLogin({}));
+      act(() => button.result.current.login({ signup_surface: 'explore_email_capture' }, { resume: true }));
+      broadcast(completion('email-to-modal'));
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          signup_session_id: 'email-session',
+          signup_context_source: 'auth_start',
+        })
+      );
+    } finally {
+      delete window.lytics;
+    }
+  });
+
   it('does not classify a restore as manual or consume the pending attribution', () => {
     render(<PrivyAuthTracker />);
     beginPrivyAuth({ link_source: 'deep-link' });

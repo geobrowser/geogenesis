@@ -2,6 +2,17 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { parse } from 'graphql';
 
+import {
+  AUTHORS_PROPERTY_ID,
+  BLOCKS_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
+  DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  MARKDOWN_CONTENT_PROPERTY_ID,
+  NAME_PROPERTY_ID,
+} from '../debates/ontology';
+
 /**
  * Every claim extracted from a debate's transcript, with the speaker each one is attributed to.
  *
@@ -35,29 +46,42 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
     $namePropertyId: UUID!
     $markdownPropertyId: UUID!
     $offsetPropertyIds: [UUID!]
+    $first: Int
   ) {
     entity(id: $id) {
-      transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }) {
+      transcripts: relationsList(
+        first: $first
+        filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }
+      ) {
         position
         toEntity {
           id
-          blocks: relationsList(filter: { typeId: { is: $blocksPropertyId }, spaceId: { is: $spaceId } }) {
+          blocks: relationsList(
+            first: $first
+            filter: { typeId: { is: $blocksPropertyId }, spaceId: { is: $spaceId } }
+          ) {
             position
             toEntity {
               id
               # The turn's text, per space. This is the verbatim concatenation of the speaker's
               # Whisper segments, which is what lets claim-timing.ts locate the turn on the
               # video timeline by matching it back against the transcript.
-              markdown: valuesList(filter: { propertyId: { is: $markdownPropertyId } }) {
+              markdown: valuesList(first: $first, filter: { propertyId: { is: $markdownPropertyId } }) {
                 spaceId
                 text
               }
-              authors: relationsList(filter: { typeId: { is: $authorsPropertyId }, spaceId: { is: $spaceId } }) {
+              authors: relationsList(
+                first: $first
+                filter: { typeId: { is: $authorsPropertyId }, spaceId: { is: $spaceId } }
+              ) {
                 toEntity {
                   id
                 }
               }
-              claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
+              claims: relationsList(
+                first: $first
+                filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }
+              ) {
                 position
                 # The id of the relation entity below, which is what a publisher writes timecodes
                 # onto. The app only reads them, so nothing here needs it — the backfill scripts do,
@@ -68,7 +92,10 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                 # own moment. Populated for most of the corpus since the backfill (921 of 1,072
                 # statements as of 2026-09-23); claim-timing.ts falls back to matching for the rest.
                 entity {
-                  valuesList(filter: { propertyId: { in: $offsetPropertyIds }, spaceId: { is: $spaceId } }) {
+                  valuesList(
+                    first: $first
+                    filter: { propertyId: { in: $offsetPropertyIds }, spaceId: { is: $spaceId } }
+                  ) {
                     propertyId
                     integer
                   }
@@ -83,7 +110,7 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                   # The claim sentence per space. The aggregated name field above merges spaces, so a
                   # Name published for this claim elsewhere could otherwise rewrite what a debater
                   # is shown to have said.
-                  names: valuesList(filter: { propertyId: { is: $namePropertyId } }) {
+                  names: valuesList(first: $first, filter: { propertyId: { is: $namePropertyId } }) {
                     spaceId
                     text
                   }
@@ -144,9 +171,30 @@ type DebateTranscriptClaimsVariables = {
   namePropertyId: string;
   markdownPropertyId: string;
   offsetPropertyIds: string[];
+  first?: number;
 };
 
 export const debateTranscriptClaimsDocument = parse(DEBATE_TRANSCRIPT_CLAIMS_SOURCE) as TypedDocumentNode<
   DebateTranscriptClaimsQuery,
   DebateTranscriptClaimsVariables
 >;
+
+/** One property/space contract for the UI and offline timing readers. */
+export function debateTranscriptClaimsVariables(
+  id: string,
+  spaceId: string,
+  first?: number
+): DebateTranscriptClaimsVariables {
+  return {
+    id,
+    spaceId,
+    transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
+    blocksPropertyId: BLOCKS_PROPERTY_ID,
+    authorsPropertyId: AUTHORS_PROPERTY_ID,
+    claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+    namePropertyId: NAME_PROPERTY_ID,
+    markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
+    offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
+    ...(first === undefined ? {} : { first }),
+  };
+}
