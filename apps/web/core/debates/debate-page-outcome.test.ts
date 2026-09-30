@@ -43,6 +43,16 @@ describe('createDebatePageOutcome', () => {
     ]);
   });
 
+  it('never sends measurement_version, which makes the collector reject an event with no measurement contract', () => {
+    const { outcome, events } = setup();
+    outcome.leave('pagehide');
+    outcome.player({ ...idle, ready: true, playing: true });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).not.toHaveProperty('measurement_version');
+    expect(events[0]).toMatchObject({ outcome_version: 'debate-page-v1' });
+  });
+
   it('records once: leaving after a play, or a second play, sends nothing more', () => {
     const { outcome, events } = setup();
     outcome.feed({ kind: 'shown' });
