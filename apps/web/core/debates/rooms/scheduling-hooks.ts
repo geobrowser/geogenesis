@@ -17,6 +17,7 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
+  cancelScheduledDebate,
   createScheduledDebate,
   listScheduledDebates,
   rescheduleScheduledDebate,
@@ -163,4 +164,26 @@ export function useRespondToScheduledDebate() {
     [acceptMutateAsync, declineMutateAsync]
   );
   return { ...mutation, mutate, mutateAsync };
+}
+
+/**
+ * Calls a scheduled debate off (GEO-3093): withdrawing a request you proposed, or cancelling one both
+ * of you agreed to. geo-chat frees the slot for both people, so the viewer's availability reads go
+ * too; the other debater's client hears it through `debate.requests_changed`.
+ */
+export function useCancelScheduledDebate() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
+    mutationFn: ({ requestId }) => cancelScheduledDebate(requestId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      // Settled rather than succeeded: a refusal (someone joined, or it was already resolved) means
+      // the list the viewer pressed on is stale, and the refetch is what corrects it.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+    },
+  });
 }
