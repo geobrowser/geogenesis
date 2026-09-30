@@ -58,9 +58,12 @@ journeys AS (
            a.signup_anonymous_id, a.signup_session_id, a.context_source,
            -- Include earlier sessions for the same logged-out visitor, not just the last click.
            arraySort(x -> x.1, groupArrayIf(tuple(h.event_time, h.page_path, coalesce(h.session_id, '')),
-               a.linked AND h.event_name = 'page_viewed' AND h.event_time < a.signed_up_at)) AS pages_before_signup,
+               a.linked AND h.event_name = 'page_viewed'
+               AND h.event_time >= a.signed_up_at - INTERVAL 30 DAY
+               AND h.event_time < a.signed_up_at)) AS pages_before_signup,
            arraySort(x -> x.1, groupArrayIf(tuple(h.event_time, h.debate_id, h.active_ms, coalesce(h.session_id, '')),
                a.linked AND h.event_name = 'debate_playback_interval' AND h.active_ms > 0
+               AND h.event_time >= a.signed_up_at - INTERVAL 30 DAY
                AND h.event_time < a.signed_up_at)) AS playback_before_signup
     FROM accounts a LEFT JOIN history h ON a.signup_anonymous_id = h.anonymous_id
     GROUP BY a.account_id, a.signed_up_at, a.observed_in_app, a.linked,

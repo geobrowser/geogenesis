@@ -5,6 +5,9 @@ import { readAnalyticsContext } from '../analytics-context';
 
 const storageKey = 'geo:signup-visitor:v1';
 const maxAgeMs = 24 * 60 * 60 * 1000;
+// Creation time is server-derived; attempt timestamps use the device clock. Keep
+// tolerance narrow because a recently existing account can fall in this margin.
+const clockSkewMs = 60_000;
 
 type SignupVisitor = {
   startedAt: number;
@@ -44,7 +47,7 @@ export function clearSignupVisitor() {
   }
 }
 
-function pendingVisitor(): SignupVisitor | null {
+function pendingVisitor(now = Date.now()): SignupVisitor | null {
   let stored: string | null;
   try {
     stored = memoryOnly ? JSON.stringify(memory) : window.localStorage.getItem(storageKey);
@@ -61,8 +64,8 @@ function pendingVisitor(): SignupVisitor | null {
   if (
     !candidate ||
     !Number.isFinite(candidate.startedAt) ||
-    candidate.startedAt > Date.now() ||
-    Date.now() - candidate.startedAt > maxAgeMs ||
+    candidate.startedAt > now + clockSkewMs ||
+    now - candidate.startedAt > maxAgeMs ||
     !validId(candidate.anonymousId) ||
     !validId(candidate.sessionId)
   ) {
@@ -74,12 +77,18 @@ function pendingVisitor(): SignupVisitor | null {
 
 /** A restore can finish signup in another tab without Privy reporting a fresh login. */
 export function signupVisitorProperties(createdAt?: Date | string | null): AnalyticsProperties {
-  const visitor = pendingVisitor();
+  const now = Date.now();
+  const visitor = pendingVisitor(now);
   if (!visitor) return {};
   if (createdAt !== undefined) {
     const created = createdAt ? new Date(createdAt).getTime() : NaN;
-    // Do not attach an abandoned signup attempt to an existing account's boot restore.
-    if (!Number.isFinite(created) || created < Math.floor(visitor.startedAt / 1000) * 1000 || created > Date.now())
+    // Account creation has second precision. Bound skew on both sides without
+    // extending the attempt's expiry or admitting established accounts' restores.
+    if (
+      !Number.isFinite(created) ||
+      created < Math.floor(visitor.startedAt / 1000) * 1000 - clockSkewMs ||
+      created > now + clockSkewMs
+    )
       return {};
   }
   return {

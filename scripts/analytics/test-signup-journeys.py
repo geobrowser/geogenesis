@@ -30,7 +30,8 @@ def main():
         events.append((id, when, name, visitor, session, account, account, page, json.dumps(props or {})))
 
     def link(account, source='auth_start', visitor=None, name='signed_up'):
-        event(account + source, name, account=account, props={
+        event(account + source, name, when='2026-09-30 00:00:01' if account == 'restored' else '2026-09-29 12:01:00',
+              account=account, props={
             'signup_anonymous_id': visitor or account + '-visitor',
             'signup_session_id': account + '-session', 'signup_context_source': source,
         })
@@ -49,12 +50,24 @@ def main():
     event('signed-in', 'page_viewed', '2026-09-29 11:00:00', account='old-account', visitor='history-visitor', page='/signed-in')
     event('restored-page', 'page_viewed', '2026-09-29 11:00:00', visitor='restored-visitor', page='/claim')
     event('outside-lookback', 'page_viewed', '2026-07-01 11:00:00', visitor='instant-visitor', page='/old')
+    # Source creation times differ within the same day. The scan's midnight bound
+    # is deliberately broader than each account's exact history window.
+    for account, boundary in [('history', '12:00:00'), ('restored', '23:59:59')]:
+        for suffix, when in [('outside', '00:00:00'), ('boundary', boundary)]:
+            event(f'{account}-{suffix}-page', 'page_viewed', f'2026-08-30 {when}',
+                  visitor=f'{account}-visitor', page=f'/{suffix}')
+            event(f'{account}-{suffix}-watch', 'debate_playback_interval', f'2026-08-30 {when}',
+                  visitor=f'{account}-visitor', props={'debate_id': suffix, 'active_ms': 1000})
+        event(f'{account}-at-signup', 'page_viewed', f'2026-09-29 {boundary}',
+              visitor=f'{account}-visitor', page='/at-signup')
+        event(f'{account}-watch-at-signup', 'debate_playback_interval', f'2026-09-29 {boundary}',
+              visitor=f'{account}-visitor', props={'debate_id': 'at-signup', 'active_ms': 1000})
     accounts = ['history', 'instant', 'missing', 'missing-fields', 'restored', 'history']
     account_literals = ','.join(literal(a) for a in accounts)
     event_literals = ','.join('(' + ','.join(literal(v) for v in e) + ')' for e in events)
     fixtures = f"""WITH fixture_signups AS (
         SELECT arrayJoin([{account_literals}]) AS privy_user_id,
-               toDateTime64('2026-09-29 12:00:00', 3, 'UTC') AS event_time,
+               toDateTime64(if(privy_user_id = 'restored', '2026-09-29 23:59:59', '2026-09-29 12:00:00'), 3, 'UTC') AS event_time,
                'fixture-source' AS source_account_id
     ), fixture_events AS (
         SELECT t.1 AS event_id, toDateTime64(t.2, 3, 'UTC') AS event_time, t.3 AS event_name,
@@ -69,8 +82,10 @@ def main():
         rows = json.load(response)['data']
     by_account = {row['account_id']: row for row in rows}
     assert len(rows) == 5, rows
-    assert [p[1] for p in by_account['history']['pages_before_signup']] == ['/explore', '/debate'], rows
-    assert len(by_account['history']['playback_before_signup']) == 1, rows
+    assert [p[1] for p in by_account['history']['pages_before_signup']] == ['/boundary', '/explore', '/debate'], rows
+    assert [p[1] for p in by_account['history']['playback_before_signup']] == ['boundary', 'fixture-debate'], rows
+    assert [p[1] for p in by_account['restored']['pages_before_signup']] == ['/boundary', '/claim'], rows
+    assert [p[1] for p in by_account['restored']['playback_before_signup']] == ['boundary'], rows
     assert by_account['history']['context_source'] == 'auth_start', rows
     assert by_account['instant']['history_status'] == 'no_observed_history', rows
     assert by_account['missing']['history_status'] == 'missing_link', rows
@@ -84,7 +99,7 @@ def main():
         assert row['pct_source_accounts_linked'] == 60, row
         assert row['pct_observed_app_accounts_linked'] == 75, row
         assert row['coverage_below_target'] == 1, row
-    print('PASS: signup joins, restore, prior sessions, playback, deduplication, empty history, missing links and coverage')
+    print('PASS: signup joins, restore, prior sessions, playback, deduplication, empty history, missing links, exact 30-day boundaries and coverage')
 
 
 if __name__ == '__main__':

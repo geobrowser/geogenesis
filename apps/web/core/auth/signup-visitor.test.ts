@@ -96,6 +96,55 @@ describe('signup visitor attribution', () => {
     );
   });
 
+  it.each([-60_000, 60_000])('links a new-account restore with a %i ms client clock offset', async offset => {
+    const serverStart = start.getTime();
+    vi.setSystemTime(serverStart + offset);
+    const auth = await import('../privy-auth-events');
+    auth.beginPrivyAuth();
+    vi.setSystemTime(serverStart + 10_000 + offset);
+    auth.completePrivyAuth(
+      completion({
+        user: { id: 'skewed-restore', createdAt: new Date(serverStart + 10_000) },
+        isNewUser: false,
+        wasAlreadyAuthenticated: true,
+      })
+    );
+    expect(window.lytics!.sessionRestored).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        signup_anonymous_id: visitor.anonymous_id,
+        signup_session_id: visitor.session_id,
+      })
+    );
+    expect(window.lytics!.signedUp).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['lower boundary', -60_500, true],
+    ['before lower boundary', -60_501, false],
+    ['upper boundary', 60_000, true],
+    ['after upper boundary', 60_001, false],
+  ] as const)('enforces the bounded restore window at the %s', async (_, offset, accepted) => {
+    const { beginSignupVisitor, signupVisitorProperties } = await import('./signup-visitor');
+    beginSignupVisitor();
+    const properties = signupVisitorProperties(new Date(start.getTime() + offset));
+    expect(Boolean(properties.signup_context_source)).toBe(accepted);
+  });
+
+  it.each([30_000, 60_001])('bounds a client clock rollback of %i ms', async rollback => {
+    const { beginSignupVisitor, signupVisitorProperties } = await import('./signup-visitor');
+    beginSignupVisitor();
+    vi.setSystemTime(start.getTime() - rollback);
+    expect(Boolean(signupVisitorProperties().signup_context_source)).toBe(rollback <= 60_000);
+  });
+
+  it('does not extend the 24-hour attempt expiry to compensate for server clock skew', async () => {
+    const { beginSignupVisitor, signupVisitorProperties } = await import('./signup-visitor');
+    beginSignupVisitor();
+    vi.setSystemTime(start.getTime() + 24 * 60 * 60 * 1000 + 1);
+    expect(signupVisitorProperties(new Date(Date.now() - 30_000))).toEqual({});
+  });
+
   it.each(['cancel', 'logout', 'expired', 'corrupt'])(
     'rejects %s context and uses completion context',
     async reason => {
