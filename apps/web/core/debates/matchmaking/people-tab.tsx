@@ -47,6 +47,7 @@ import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
@@ -135,7 +136,10 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
   const schedulableQuery = useSchedulablePeople(showOffline);
   const viewerHasNoSchedule = showOffline && schedulableQuery.data?.viewer_has_schedule === false;
 
-  const onlinePeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+  const onlinePeople = React.useMemo(
+    () => (peopleQuery.data?.people ?? []).filter(person => !isExcludedFromPeopleTab(person.profile_space_id)),
+    [peopleQuery.data]
+  );
   // Held in state so the slot filters below re-run as time passes; React Compiler caches a
   // `Date.now()` read in render once per mount.
   const [now, setNow] = React.useState(() => Date.now());
@@ -159,7 +163,7 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
     const offline: DebatePerson[] = [];
     for (const candidate of schedulableQuery.data.people) {
       const key = normId(candidate.user.user_id);
-      if (onRoster.has(key)) continue;
+      if (onRoster.has(key) || isExcludedFromPeopleTab(candidate.user.profile_space_id)) continue;
       const upcoming = candidate.slots.filter(slot => {
         const start = Date.parse(slot.start);
         return start > now && start < weekEnds;

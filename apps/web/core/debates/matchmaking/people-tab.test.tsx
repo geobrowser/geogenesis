@@ -1561,6 +1561,30 @@ describe('Online only', () => {
     expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
   });
 
+  it('leaves hidden accounts off the list, online or offline', () => {
+    // Dashed on purpose: geo-chat can spell a space id either way.
+    mocks.people = [
+      person('user-them', 'Arturas'),
+      { ...person('user-hidden', 'Bryan 0811'), profile_space_id: '879dc356-d44f-41ff-befa-e156d1db31c2' },
+    ];
+    const hidden = schedulable('user-juan', 'Juan1', [slotIn(26)]);
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [
+        schedulable('user-away', 'Ona', [slotIn(26)]),
+        { ...hidden, user: { ...hidden.user, profile_space_id: '0c6b9f616d53429b8f61f1a1edd72bd2' } },
+      ],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.queryByText('Bryan 0811')).not.toBeInTheDocument();
+    expect(screen.queryByText('Juan1')).not.toBeInTheDocument();
+  });
+
   it('ranks everyone by matches, so an offline person with more matches sits above an online one', () => {
     const viewer = mocks.personalSpaceId!;
     const arturas = PROFILE_SPACE_IDS['user-them'];
