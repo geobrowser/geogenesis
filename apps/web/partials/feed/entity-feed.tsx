@@ -12,7 +12,8 @@ import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cac
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
+import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
@@ -38,11 +39,14 @@ function LoadingSkeleton() {
   );
 }
 
-const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
-  { value: 'best', label: 'Best' },
-  { value: 'new', label: 'New' },
-  { value: 'top', label: 'Top' },
-];
+const SORT_LABELS: Record<ExplorePageSort, string> = {
+  'for-you': 'For you',
+  best: 'Best',
+  new: 'New',
+  top: 'Top',
+};
+
+const DEFAULT_SORT_OPTIONS: readonly ExplorePageSort[] = ['best', 'new', 'top'];
 
 /**
  * The sorts a time range applies to.
@@ -57,7 +61,7 @@ const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
  * Top is unaffected only because its own window happens not to hit that path. See
  * `explore-debate-tag-filter` for the numbers.
  */
-const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
+const SORTS_WITH_TIME_RANGE: readonly ExplorePageSort[] = ['top'];
 
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -75,7 +79,14 @@ type EntityFeedProps = {
   /** Initial value for the time dropdown. Defaults to "week". */
   initialTime?: ExploreTime;
   /** Initial value for the sort dropdown. Defaults to "new". */
-  initialSort?: ExploreSort;
+  initialSort?: ExplorePageSort;
+  /** Sorts offered in the dropdown, in order. Defaults to Best, New, Top. */
+  sortOptions?: readonly ExplorePageSort[];
+  /**
+   * The viewer's followed topics, for the For you sort (GEO-3083), or null while they load. For
+   * you waits for them rather than serving Best first and then swapping the feed underneath.
+   */
+  followedTopicIds?: readonly string[] | null;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
@@ -127,13 +138,14 @@ type EntityFeedProps = {
 async function fetchFeedPage(
   apiEndpoint: string,
   params: {
-    sort: ExploreSort;
+    sort: ExplorePageSort;
     /** Omitted when the feed's sort has no time range. */
     time: ExploreTime | undefined;
     /** Empty means no space narrowing at all. */
     spaceIds: readonly string[];
     typeIds: readonly string[] | undefined;
     topicIds: readonly string[];
+    followedTopicIds: readonly string[];
     fixedParams: Record<string, string>;
     cursor: string | undefined;
   }
@@ -148,6 +160,7 @@ async function fetchFeedPage(
   if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
+  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
   const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
@@ -192,6 +205,8 @@ export function EntityFeed({
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
+  sortOptions = DEFAULT_SORT_OPTIONS,
+  followedTopicIds = [],
   showTimeFilter = true,
   showSortFilter = false,
   compactHeader = false,
@@ -213,7 +228,7 @@ export function EntityFeed({
   claimCardVariant = 'feed',
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
-  const [sort, setSort] = React.useState<ExploreSort>(initialSort);
+  const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
@@ -409,6 +424,8 @@ export function EntityFeed({
   const smartAccountAddress = smartAccount?.account.address ?? null;
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
+  const isForYou = sort === 'for-you';
+  const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
   const queryKey = [
     apiEndpoint,
     sort,
@@ -418,6 +435,8 @@ export function EntityFeed({
     topicIdsKey,
     fixedParamsKey,
     smartAccountAddress,
+    // Only on For you, so every other sort's key, and so its cache, is unchanged.
+    ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
   ];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
@@ -429,9 +448,11 @@ export function EntityFeed({
         spaceIds: requestedSpaceIds,
         typeIds,
         topicIds: selectedTopicIds,
+        followedTopicIds: requestedFollowedTopicIds,
         fixedParams,
         cursor: pageParam as string | undefined,
       }),
+    enabled: !isForYou || followedTopicIds !== null,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -459,11 +480,20 @@ export function EntityFeed({
     const pages = data?.pages ?? [];
     const flat: ExploreFeedItem[] = [];
     for (const p of pages) flat.push(...p.items);
-    return flat;
-  }, [data?.pages]);
+    if (!isForYou) return flat;
+    // For you pages two streams that overlap, so an item served from one can come back later from
+    // the other. The first appearance stays.
+    const seen = new Set<string>();
+    return flat.filter(item => {
+      const id = normId(item.entityId);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [data?.pages, isForYou]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
-  const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
+  const sortLabel = SORT_LABELS[sort];
   const filterTriggerClassName = cx(
     'flex items-center gap-1.5 text-metadata text-grey-04 transition-colors duration-150',
     compactHeader
@@ -507,16 +537,16 @@ export function EntityFeed({
                 </button>
               }
             >
-              {SORT_OPTIONS.map(o => (
+              {sortOptions.map(option => (
                 <MenuItem
-                  key={o.value}
-                  active={o.value === sort}
+                  key={option}
+                  active={option === sort}
                   onClick={() => {
-                    setSort(o.value);
+                    setSort(option);
                     setSortMenuOpen(false);
                   }}
                 >
-                  {o.label}
+                  {SORT_LABELS[option]}
                 </MenuItem>
               ))}
               {showMoreFilters ? (
@@ -610,7 +640,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading ? (
+        ) : isLoading || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
