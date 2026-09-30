@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { ScheduleOverlapResponse } from '~/core/debates/api';
 
-import { formatOffset, peerScheduleDays, toPeerSchedule } from './peer-schedule';
+import {
+  formatOffset,
+  formatViewerInstant,
+  peerScheduleDays,
+  toPeerSchedule,
+  viewerInputInstant,
+  viewerInputValue,
+} from './peer-schedule';
 
 const response = (overrides: Partial<ScheduleOverlapResponse> = {}): ScheduleOverlapResponse => ({
   with: 'user-peer',
@@ -274,11 +281,11 @@ describe('peerScheduleDays', () => {
   });
 
   describe('timezones', () => {
-    it('labels each chip in both zones', () => {
+    it('labels each chip in the viewer zone and keeps the offset', () => {
       const result = days({ their_slots: their(['2026-09-21T17:00:00Z', '2026-09-21T17:30:00Z']) });
 
       // 17:00Z is 1pm in New York (UTC-4 in September) and 7pm in Berlin (UTC+2).
-      expect(result[0].slots[0]).toMatchObject({ label: '1pm', peerLabel: '7pm', offsetMinutes: 360 });
+      expect(result[0].slots[0]).toMatchObject({ label: '1pm', offsetMinutes: 360 });
     });
 
     it('handles a half-hour zone without hand-rolling an offset', () => {
@@ -287,7 +294,7 @@ describe('peerScheduleDays', () => {
         now
       );
 
-      expect(result[0].slots[0]).toMatchObject({ label: '1pm', peerLabel: '10:30pm', offsetMinutes: 570 });
+      expect(result[0].slots[0]).toMatchObject({ label: '1pm', offsetMinutes: 570 });
     });
 
     it('re-resolves the offset across a DST boundary rather than reusing one', () => {
@@ -307,8 +314,8 @@ describe('peerScheduleDays', () => {
       const before = result.find(day => day.date === '2026-10-23')?.slots[0];
       const after = result.find(day => day.date === '2026-10-26')?.slots[0];
 
-      expect(before).toMatchObject({ label: '1pm', peerLabel: '7pm', offsetMinutes: 360 });
-      expect(after).toMatchObject({ label: '1pm', peerLabel: '6pm', offsetMinutes: 300 });
+      expect(before).toMatchObject({ label: '1pm', offsetMinutes: 360 });
+      expect(after).toMatchObject({ label: '1pm', offsetMinutes: 300 });
     });
 
     it('falls back to the browser zone for one Intl will not take', () => {
@@ -334,5 +341,59 @@ describe('formatOffset', () => {
     [-300, '−5 hrs'],
   ])('formats %i as %s', (minutes, expected) => {
     expect(formatOffset(minutes)).toBe(expected);
+  });
+});
+
+describe('formatViewerInstant', () => {
+  const instant = '2026-09-21T16:00:00Z';
+
+  it('formats in the viewer zone, not the browser zone', () => {
+    expect(formatViewerInstant(instant, 'Asia/Tokyo')).toBe(
+      new Date(instant).toLocaleString(undefined, { timeZone: 'Asia/Tokyo' })
+    );
+  });
+
+  it.each(['', 'local', 'Not/AZone'])('falls back to the browser zone for %j', zone => {
+    expect(formatViewerInstant(instant, zone)).toBe(new Date(instant).toLocaleString());
+  });
+
+  it('passes an unparseable instant through rather than printing Invalid Date', () => {
+    expect(formatViewerInstant('not-a-date', 'UTC')).toBe('not-a-date');
+  });
+});
+
+describe('viewerInputInstant', () => {
+  const read = (value: string, zone: string) => viewerInputInstant(value, zone)?.toISOString() ?? null;
+
+  it('reads the wall clock in the viewer zone', () => {
+    expect(read('2026-09-22T09:00', 'Asia/Kathmandu')).toBe('2026-09-22T03:15:00.000Z');
+    expect(read('2026-09-22T09:00', 'America/New_York')).toBe('2026-09-22T13:00:00.000Z');
+  });
+
+  // New York springs forward at 2am on 2026-03-08, so 2:30 never happens that day.
+  it('moves a skipped time forward by the jump, as new Date(local) does', () => {
+    // 3:30am EDT.
+    expect(read('2026-03-08T02:30', 'America/New_York')).toBe('2026-03-08T07:30:00.000Z');
+  });
+
+  // And falls back at 2am on 2026-11-01, so 1:30 happens twice; the first is in EDT.
+  it('takes the earlier of a repeated time', () => {
+    expect(read('2026-11-01T01:30', 'America/New_York')).toBe('2026-11-01T05:30:00.000Z');
+  });
+
+  it.each(['', '2026-09-22', 'not-a-date'])('rejects %j', value => {
+    expect(viewerInputInstant(value, 'UTC')).toBeNull();
+  });
+});
+
+describe('viewerInputValue', () => {
+  it('writes the wall clock in the viewer zone', () => {
+    expect(viewerInputValue(Date.parse('2026-09-21T15:00:00Z'), 'Asia/Kathmandu')).toBe('2026-09-21T20:45');
+  });
+
+  // 00:30Z is the first 2:30am in Berlin on the night the clocks go back.
+  it('round-trips through viewerInputInstant', () => {
+    const at = Date.parse('2026-10-25T00:30:00Z');
+    expect(viewerInputInstant(viewerInputValue(at, 'Europe/Berlin'), 'Europe/Berlin')?.getTime()).toBe(at);
   });
 });

@@ -56,7 +56,7 @@ export function ExplorePage({
           reachable at all. It renders nothing until it is shown, so it costs the tab order
           nothing the rest of the time. */}
       <ExploreEmailCapturePopup />
-      <main className="min-w-0 pt-5">
+      <main className="min-w-0 pt-2">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />
         </div>
@@ -67,6 +67,7 @@ export function ExplorePage({
           // No space or type menus: the feed spans every space the reader may see, and the server
           // decides which types it holds (Debate and Claim — see `DEFAULT_EXPLORE_TYPE_IDS`).
           showSortFilter
+          compactHeader
           dividerBeforeFeed
           titleOpensSidePanel
           claimCardVariant="debate-panel-mobile"
