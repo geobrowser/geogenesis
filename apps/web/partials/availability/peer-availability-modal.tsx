@@ -17,7 +17,7 @@ import { PeerAvailability, type PeerAvailabilityBooking } from './peer-availabil
 
 type Props = {
   open: boolean;
-  /** Absent leaves the week read-only, which is what it is for everyone without the booking flag. */
+  /** Absent leaves the week read-only, as on the debug page. */
   booking?: PeerAvailabilityBooking;
   /** The person whose week is being looked at. Nothing else about them is needed. */
   userId: string;

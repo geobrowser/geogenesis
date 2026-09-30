@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useDebugDebatesPageEnabled, useFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { validateSpaceId } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -227,15 +227,10 @@ export function DebateCoordinator() {
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
   const atRoom = isDebateRoomPath(pathname);
-  // Behind the flags that can produce a room at all, so a signed-in viewer who has never touched
-  // debates does not poll for rooms every 30s.
-  const debugDebatesEnabled = useDebugDebatesPageEnabled();
-  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  const roomsFeatureEnabled = debugDebatesEnabled || peerAvailabilityEnabled;
-  const upcomingRoomsQuery = useUpcomingDebateRooms(roomsFeatureEnabled && !atRoom);
+  const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
-  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, roomsFeatureEnabled && !atRoom);
+  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again.
   const joinableRooms = React.useMemo(
     () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
@@ -255,13 +250,9 @@ export function DebateCoordinator() {
   // Only loaded rooms prove a session is not room-owned: every guard below reads vacuously safe on
   // `[]`, so routing on an unloaded list pushes a room's own session into the ordinary picker.
   // A 404 is the exception -- no rooms endpoint means no room can own one.
-  // With the feature off nothing is asked for, so there is nothing to wait on and routing behaves
-  // as it did before rooms existed.
   const roomsQueryError = upcomingRoomsQuery.error;
   const roomsKnown =
-    !roomsFeatureEnabled ||
-    upcomingRoomsQuery.isSuccess ||
-    (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+    upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
   const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.
@@ -392,7 +383,6 @@ export function DebateCoordinator() {
     joinableRooms,
     pathname,
     roomsKnown,
-    roomsFeatureEnabled,
     roomSessionsReported,
     refetchUpcomingRooms,
     roomSessionIds,

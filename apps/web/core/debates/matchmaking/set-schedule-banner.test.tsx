@@ -25,6 +25,9 @@ vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'did:privy:1' }),
 }));
 
+// The editor's copy-link button reads the personal space through the wallet stack; it has its own tests.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
+
 afterEach(() => {
   cleanup();
   mocks.isSet = false;

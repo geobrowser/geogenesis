@@ -17,11 +17,9 @@ import { CopyAvailabilityLinkMenuItem } from './copy-availability-link-menu-item
 const { capture, revision } = vi.hoisted(() => ({ capture: vi.fn(), revision: { current: 0 } }));
 vi.mock('~/core/analytics', () => ({ capture, analyticsContextRevision: () => revision.current }));
 
-let flagOn = true;
 let personalSpaceId: string | null = 'my-space';
 const setToast = vi.fn();
 
-vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => flagOn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId }) }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
 
@@ -38,7 +36,6 @@ beforeEach(() => {
   capture.mockReset();
   revision.current = 0;
   window.history.replaceState({}, '', '/explore');
-  flagOn = true;
   personalSpaceId = 'my-space';
 });
 
@@ -61,14 +58,9 @@ describe('CopyOwnAvailabilityLinkButton', () => {
     expect(screen.getByRole('button', { name: 'Link copied' })).toBeInTheDocument();
   });
 
-  it('draws nothing behind the flag or without a personal space', () => {
-    flagOn = false;
-    const { rerender } = render(<CopyOwnAvailabilityLinkButton />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-
-    flagOn = true;
+  it('draws nothing without a personal space', () => {
     personalSpaceId = null;
-    rerender(<CopyOwnAvailabilityLinkButton />);
+    render(<CopyOwnAvailabilityLinkButton />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
@@ -90,12 +82,6 @@ describe('CopyAvailabilityLinkMenuItem', () => {
     );
     expect(setToast).toHaveBeenCalledOnce();
     expect(onOpenChange).toHaveBeenCalledWith(false);
-  });
-
-  it('draws nothing behind the flag', () => {
-    flagOn = false;
-    render(<CopyAvailabilityLinkMenuItem profileSpaceId="their-space" />);
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 

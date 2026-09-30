@@ -30,7 +30,6 @@ describe('feature flags', () => {
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
-      peerAvailability: false,
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
@@ -38,14 +37,15 @@ describe('feature flags', () => {
     });
   });
 
-  // Claims and debates shipped to everyone. Every browser that ever opened the flags dialog still
-  // has the retired ids in storage, and they must not survive normalization — a stray `questionsTab`
-  // reaching the dialog would render a checkbox for a flag nothing reads.
-  it('drops the retired claims-and-debates flags that are still in storage', () => {
-    expect(normalizeFeatureFlags({ questionsTab: true, debatesTab: true, debateDebugging: true })).toEqual({
+  // Claims, debates and scheduling shipped to everyone. Every browser that ever opened the flags
+  // dialog still has the retired ids in storage, and they must not survive normalization — a stray
+  // `questionsTab` reaching the dialog would render a checkbox for a flag nothing reads.
+  it('drops the retired flags that are still in storage', () => {
+    expect(
+      normalizeFeatureFlags({ questionsTab: true, debatesTab: true, peerAvailability: true, debateDebugging: true })
+    ).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
-      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
@@ -71,7 +71,6 @@ describe('feature flags', () => {
     expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: true,
-      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: true,
       exploreSidePanel: false,
