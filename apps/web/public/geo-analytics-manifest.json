@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "hashAlgorithm": "sha256",
   "schemaVersion": "2026-05-09",
-  "sourceHash": "44408aa0b7ac2c3ebcd408f92eb5cd8e5a1e26f5d57ad3c4efefc48fb1e1b2cb",
-  "eventRegistryHash": "a3c51521fb993d4d124cfcc79c3b42bbd2b49302dc3fb1dcbc3664ab2d8c9774",
-  "hash": "a3a214b8ae746d1032650737fcdbbfdf793344870e7ae19447218387e588fe56",
-  "shortHash": "a3a214b8ae74",
-  "integrity": "sha256-o6IUuK50bRAyZQc3/Nu/33kzRIcOeuGURyGDh+WI/lY=",
+  "sourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
+  "eventRegistryHash": "46f159124e69f1bd7b530a3b2806b63c5bfcbed0c6b773a1f46389246174300a",
+  "hash": "7b3fb368509a8133d22ae66314e50c681b7625af1a053173fcdc361b02ce5879",
+  "shortHash": "7b3fb368509a",
+  "integrity": "sha256-ez+zaFCagTPSKuZjFOUMaBt2Ja8aBTFz/Nw2GwLOWHk=",
   "files": {
     "stable": "ga.js",
     "latest": "ga-latest.js",
-    "hashed": "ga-a3a214b8ae74.js"
+    "hashed": "ga-7b3fb368509a.js"
   },
-  "upstreamSourceHash": "44408aa0b7ac2c3ebcd408f92eb5cd8e5a1e26f5d57ad3c4efefc48fb1e1b2cb",
+  "upstreamSourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
   "localPatch": "scripts/analytics/extend-action-registry.py"
 }

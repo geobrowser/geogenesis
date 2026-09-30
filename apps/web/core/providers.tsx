@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { CookiesProvider } from 'react-cookie';
 
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
+import { BrowserTimezoneReporter } from './debates/browser-timezone';
 import { NotificationRegistration } from './notifications/hooks';
 import { PrivyAuthTracker } from './privy-auth-tracker';
 import { ReactQueryProvider } from './query-client';
@@ -40,6 +41,7 @@ export function Providers({ children }: Props) {
             <EmbeddedWalletSync />
             <AnalyticsUserIdentifier />
             <NotificationRegistration />
+            <BrowserTimezoneReporter />
             <SentryUserIdentifier />
             <JotaiProvider store={store}>
               <SyncEngineProvider>
