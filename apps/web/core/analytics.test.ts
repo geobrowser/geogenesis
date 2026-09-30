@@ -41,6 +41,22 @@ describe('analytics', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  // A blocked runtime script never drains the queue, so it must not grow for the life of the tab
+  // (GEO-3067); identity calls still get through when it does load.
+  it('bounds the queue while the runtime is missing but keeps identity calls', async () => {
+    const { capture, loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1500; i++) capture('action_completed', { index: i });
+    loggedIn({ id: 'user-1' } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    expect(runtime.capture).toHaveBeenCalledTimes(1000);
+    expect(runtime.capture).toHaveBeenLastCalledWith('action_completed', expect.objectContaining({ index: 999 }));
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1);
+  });
+
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
     const { initAnalytics } = await import('./analytics');
 
