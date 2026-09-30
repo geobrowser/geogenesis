@@ -78,7 +78,15 @@ export type PeerAvailabilityBooking = {
  * Takes a user id and nothing else, so the shareable link that will eventually open this can
  * mount it without this component knowing anything about routing.
  */
-export function PeerAvailability({ userId, peerName, className, booking, initialSelectedStart, entry = null }: Props) {
+export function PeerAvailability({
+  userId,
+  peerName,
+  className,
+  booking,
+  initialSelectedStart,
+  entry = null,
+  disagreementCount = null,
+}: Props) {
   const { schedule, enabled, isPending, isError } = usePeerSchedule(userId);
 
   // Once per opening: the modal mounts this only while open, and a refetch is not a second look.
@@ -99,6 +107,7 @@ export function PeerAvailability({ userId, peerName, className, booking, initial
       className={className}
       booking={booking}
       initialSelectedStart={initialSelectedStart}
+      disagreementCount={disagreementCount}
     />
   );
 }
@@ -116,6 +125,11 @@ type Props = {
   initialSelectedStart?: string | null;
   /** What opened this week, for analytics. */
   entry?: ScheduleEntry | null;
+  /**
+   * Claims the viewer and this person hold opposite positions on. Supplied by a caller that has
+   * already compared them; `null` when nobody has, which leaves the line out.
+   */
+  disagreementCount?: number | null;
 };
 
 /**
@@ -129,6 +143,7 @@ export function PeerAvailabilityView({
   now,
   booking,
   initialSelectedStart = null,
+  disagreementCount = null,
 }: {
   schedule: PeerSchedule;
   peerName?: string | null;
@@ -137,22 +152,30 @@ export function PeerAvailabilityView({
   now?: Date;
   booking?: PeerAvailabilityBooking;
   initialSelectedStart?: string | null;
+  disagreementCount?: number | null;
 }) {
-  const days = React.useMemo(() => peerScheduleDays(schedule, now), [schedule, now]);
+  // The week starts at today's midnight, so its early slots are already gone. They are dropped
+  // rather than dimmed: a time nobody can pick is not information about their week, and geo-chat
+  // refuses a past start anyway. Drawn once per opening; `SendRequest` rechecks at the click.
+  const days = React.useMemo(() => {
+    const cutoff = (now ?? new Date()).getTime();
+    return peerScheduleDays(schedule, now).map(day => ({
+      ...day,
+      slots: day.slots.filter(slot => Date.parse(slot.start) > cutoff),
+    }));
+  }, [schedule, now]);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
   // can ask for, and the footer needs to name the one that is.
   // Matched by instant, not spelling: the wire sends `…:00Z` and the grid's starts are `…:00.000Z`.
   // A pick outside the drawn week seeds nothing rather than a selection nobody can see.
   const [selectedStart, setSelectedStart] = React.useState<string | null>(() => {
     if (!initialSelectedStart) return null;
+    // A chip can outlive its time; `days` has already dropped it, so a past pick seeds nothing.
     const instant = Date.parse(initialSelectedStart);
-    // A chip can outlive its time; a past pick would only be refused at Send.
-    if (instant <= (now ?? new Date()).getTime()) return null;
     return days.flatMap(day => day.slots).find(slot => Date.parse(slot.start) === instant)?.start ?? null;
   });
   const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
-  // The week starts at today's midnight, so its early columns are already gone. geo-chat refuses a
-  // past start outright, so a booking caller must not be able to pick one.
+  // For the free-time field, whose `min` is the only thing keeping a past time out of it.
   const notBefore = (now ?? new Date()).getTime();
   const clock = React.useCallback(() => (now ? now.getTime() : Date.now()), [now]);
   const name = peerName || shortId(schedule.userId);
@@ -166,7 +189,8 @@ export function PeerAvailabilityView({
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
-      <header className="flex shrink-0 flex-col gap-1">
+      {/* Right padding keeps the heading clear of the modal's close button, which sits over it. */}
+      <header className="flex shrink-0 flex-col gap-1 pr-8">
         <Text as="h2" variant="smallTitle">
           When {name} is free
         </Text>
@@ -179,6 +203,15 @@ export function PeerAvailabilityView({
               }.`
             : 'Times shown in your local time.'}
         </Text>
+        {/* Scheduling is with the person, not over one claim: the room is where they pick which to
+            debate first, so the viewer only has to find a time. */}
+        {disagreementCount !== null && disagreementCount > 0 && (
+          <Text as="p" variant="footnote" color="grey-04">
+            You and {firstName(name) ?? name} disagree on {disagreementCount}{' '}
+            {disagreementCount === 1 ? 'claim' : 'claims'}. When you join the debate room you can discuss what claim to
+            debate first.
+          </Text>
+        )}
       </header>
 
       {!schedule.theirWeekKnown ? (
@@ -215,13 +248,7 @@ export function PeerAvailabilityView({
             </Hint>
           )}
           <Legend peerName={name} showMutual={schedule.viewerHasSchedule} />
-          <WeekGrid
-            days={days}
-            peerName={name}
-            selectedStart={selectedStart}
-            onSelect={setSelectedStart}
-            notBefore={booking ? notBefore : null}
-          />
+          <WeekGrid days={days} peerName={name} selectedStart={selectedStart} onSelect={setSelectedStart} />
           {booking && (
             <BookingFooter
               booking={booking}
@@ -421,26 +448,16 @@ function WeekGrid({
   peerName,
   selectedStart,
   onSelect,
-  notBefore,
 }: {
   days: PeerDay[];
   peerName: string;
   selectedStart: string | null;
   onSelect: (start: string | null) => void;
-  /** Instants at or before this cannot be picked. `null` leaves the week read-only and pickable. */
-  notBefore: number | null;
 }) {
   return (
     <div className="grid min-h-0 flex-1 grid-cols-7 gap-3 overflow-y-auto overscroll-contain mobile:grid-cols-1 mobile:gap-2">
       {days.map(day => (
-        <DayColumn
-          key={day.date}
-          day={day}
-          peerName={peerName}
-          selectedStart={selectedStart}
-          onSelect={onSelect}
-          notBefore={notBefore}
-        />
+        <DayColumn key={day.date} day={day} peerName={peerName} selectedStart={selectedStart} onSelect={onSelect} />
       ))}
     </div>
   );
@@ -451,13 +468,11 @@ function DayColumn({
   peerName,
   selectedStart,
   onSelect,
-  notBefore,
 }: {
   day: PeerDay;
   peerName: string;
   selectedStart: string | null;
   onSelect: (start: string | null) => void;
-  notBefore: number | null;
 }) {
   // Opened on a preselected slot past the fold, the pick has to be visible.
   const [expanded, setExpanded] = React.useState(
@@ -504,7 +519,6 @@ function DayColumn({
               dayLabel={dayLabel}
               peerName={peerName}
               selected={slot.start === selectedStart}
-              past={notBefore !== null && new Date(slot.start).getTime() <= notBefore}
               onSelect={() => onSelect(slot.start === selectedStart ? null : slot.start)}
             />
           ))}
@@ -549,14 +563,12 @@ function SlotChip({
   dayLabel,
   peerName,
   selected,
-  past = false,
   onSelect,
 }: {
   slot: PeerDaySlot;
   dayLabel: string;
   peerName: string;
   selected: boolean;
-  past?: boolean;
   onSelect: () => void;
 }) {
   // The visible chip carries the day in its column and free-vs-not in its border, neither of which
@@ -569,19 +581,14 @@ function SlotChip({
       : slot.viewerIsFree
         ? 'you are both free'
         : `only ${peerName} is free`,
-    past ? 'already passed' : null,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  ].join(', ');
 
   return (
     <button
       type="button"
       aria-label={label}
       aria-pressed={selected}
-      disabled={past}
       data-viewer-free={slot.viewerIsFree === true || undefined}
-      data-past={past || undefined}
       {...debateActionAnalyticsAttributes(
         'peer-availability',
         slot.viewerIsFree === true ? 'Mutual slot' : 'Slot',
@@ -592,8 +599,7 @@ function SlotChip({
         'rounded-md border px-2 py-1 text-left text-footnote tabular-nums transition-colors',
         selected ? SELECTED_SLOT : slot.viewerIsFree === true ? MUTUAL_SLOT : PEER_ONLY_SLOT,
         // Here rather than in the shared looks, which the legend's static swatches also wear.
-        !selected && 'hover:border-text',
-        past && 'cursor-not-allowed opacity-40'
+        !selected && 'hover:border-text'
       )}
     >
       {slot.label}
