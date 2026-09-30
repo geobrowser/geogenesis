@@ -15,6 +15,8 @@ type DebateEntityViewProps = {
   debateId: string;
   /** The normal entity page, rendered on the server and shown only in edit mode. */
   editView: React.ReactNode;
+  /** Shown if geo-chat reports the debate removed after the page rendered (GEO-2785). */
+  removedView?: React.ReactNode;
 };
 
 /**
@@ -23,7 +25,7 @@ type DebateEntityViewProps = {
  * (props, relations, blocks) is only for editors and shows up when edit mode is on. If the debates
  * feature is off we fall back to the entity page so nothing is ever hidden without a way to see it.
  */
-export function DebateEntityView({ spaceId, debateId, editView }: DebateEntityViewProps) {
+export function DebateEntityView({ spaceId, debateId, editView, removedView }: DebateEntityViewProps) {
   const isEditing = useUserIsEditing(spaceId);
   // A link may name the moment it wants — a claim extracted from this debate pointing back at
   // where it was said. Null when the link is not asking for one, and also when it asks for
@@ -42,6 +44,7 @@ export function DebateEntityView({ spaceId, debateId, editView }: DebateEntityVi
       initialDebateId={debateId}
       initialSeekSeconds={initialSeekSeconds}
       fallback={editView}
+      removedView={removedView}
     />
   );
 }
