@@ -10,6 +10,7 @@ import {
   recoverAuthAttempt,
   resetAuthAttempt,
 } from './auth-attempt';
+import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
 import { beginSignupVisitor, clearSignupVisitor, signupVisitorProperties } from './auth/signup-visitor';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
@@ -23,12 +24,15 @@ export function beginPrivyAuth(
   options: Parameters<typeof beginSignupVisitor>[0] = {}
 ) {
   beginSignupVisitor(options);
+  // A new attempt replaces the last; whatever it would have withdrawn belongs to that one.
+  clearSignInAbandoned();
   return beginAuthAttempt(properties);
 }
 
 export function cancelPrivyAuth() {
   finishAuthAttempt('closed');
   clearSignupVisitor();
+  runSignInAbandoned();
 }
 
 export function resetPrivyAuthSession() {
@@ -53,6 +57,8 @@ export function completePrivyAuth(params: Completion, properties?: AnalyticsProp
     return;
   }
 
+  // Signed in: nothing queued for this attempt is to be withdrawn any more.
+  clearSignInAbandoned();
   const duplicateLifecycle = completedThisSession || (params.isNewUser && signedUpUserIds.has(params.user.id));
   const attempt = currentAuthAttempt(true);
   // Suppress repeated account events without leaving a newly initiated attempt pending.

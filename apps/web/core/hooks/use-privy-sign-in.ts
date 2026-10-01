@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
@@ -25,6 +26,23 @@ type UsePrivySignInOptions = {
   /** Called only for an attempt this hook started, after Privy reports a failure or dismissal. */
   onError?: () => void;
 };
+
+/** Per-press options, for a caller whose continuation depends on what was pressed. */
+export type PrivySignInCallOptions = {
+  /**
+   * Runs if this press's sign-in is abandoned (the modal dismissed), alongside the hook-level
+   * `onError`. A control that queued the viewer's action at the press — which side of a claim they
+   * picked, say — withdraws it here, so a sign-in they walked away from does not publish it later.
+   */
+  onCancel?: () => void;
+  /** Where this press returns to, for a caller whose destination depends on what was pressed. */
+  redirectTo?: string;
+};
+
+type PrivySignIn = (
+  properties?: AnalyticsProperties | React.SyntheticEvent,
+  callOptions?: PrivySignInCallOptions
+) => ReturnType<ReturnType<typeof useTrackedLogin>['login']>;
 
 /**
  * Opens Privy's own "Log in or sign up" dialog straight away, the way the upvote control does.
@@ -57,17 +75,22 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
     },
   });
 
-  return React.useCallback(
-    (properties?: AnalyticsProperties | React.SyntheticEvent) => {
-      prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
+  return React.useCallback<PrivySignIn>(
+    (properties, callOptions) => {
+      prepareOnboarding({ returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
-      return login(
+      const attempt = login(
         {
           ...(typeof configured === 'function' ? configured() : configured),
           ...(properties && !('nativeEvent' in properties) ? properties : {}),
         },
         { resume: optionsRef.current?.resumeAuthAttempt }
       );
+      // Registered with the app-level attempt rather than held here: this control can unmount
+      // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).
+      // After `login`, whose new attempt clears the previous one's.
+      if (callOptions?.onCancel) onSignInAbandoned(callOptions.onCancel);
+      return attempt;
     },
     [login, prepareOnboarding]
   );

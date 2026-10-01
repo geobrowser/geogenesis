@@ -139,10 +139,12 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('uses the batch-seeded caches without fetching or hydrating Entity once batching resolves', async () => {
     renderButtons(true, true);
 
-    await waitFor(() => expect(mocks.queryEntityOptions).toHaveLength(1));
+    await waitFor(() => expect(mocks.queryEntityOptions.length).toBeGreaterThan(0));
     expect(mocks.getCounts).not.toHaveBeenCalled();
     expect(mocks.getViewerResponse).not.toHaveBeenCalled();
-    expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
+    // Every render, not a count of them: the queue subscription can re-run the component once on
+    // mount without changing anything, and what matters is that no render ever enabled the query.
+    for (const options of mocks.queryEntityOptions) expect(options).toMatchObject({ enabled: false });
   });
 
   // This used to assert chevrons — the `0 0 16 16` glyphs a factual claim drew. Claims are thumbs
@@ -304,12 +306,7 @@ describe('RespondersPopoverContent under a batch', () => {
   const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent
-          entityId="claim-1"
-          spaceId="space-1"
-          objectType={0}
-          responseKind={responseKind}
-        />
+        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (

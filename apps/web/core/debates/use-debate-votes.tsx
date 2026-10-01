@@ -27,12 +27,14 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
+import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '../hooks/cached-write-identity';
 import { useGeoProfile } from '../hooks/use-geo-profile';
 import { usePersonalSpaceId } from '../hooks/use-personal-space-id';
 import { useSmartAccount } from '../hooks/use-smart-account';
@@ -139,7 +141,24 @@ export type DebateVotesResult = {
   isMyPick: (participant: DebateParticipant) => boolean;
   hasVoted: boolean;
   isVoting: boolean;
-  castVote: (participant: DebateParticipant) => Promise<void>;
+  castVote: (participant: DebateParticipant, options?: CastVoteOptions) => Promise<void>;
+};
+
+type CastVoteOptions = {
+  /**
+   * Set when the pending-actions runner is replaying a vote queued before the account was ready.
+   * A replay that still cannot publish throws instead of toasting, so the runner keeps it queued
+   * and offers a retry — returning quietly told the runner it had succeeded, and the vote was gone.
+   */
+  fromQueue?: boolean;
+  /**
+   * A replay through the press's own closure, with no voting control on screen: its tally is from
+   * before sign-in and does not know the viewer's existing vote, so the vote is read fresh. Trusting
+   * it would mint a second Vote entity for a viewer who had already voted.
+   */
+  readExistingVoteFresh?: boolean;
+  /** For a replay: whether its press is still the one queued, re-checked after the fresh read. */
+  isCurrent?: () => boolean;
 };
 
 /**
@@ -155,12 +174,14 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
   const { ready: authReady, authenticated } = useGeoChatAuth();
-  const enqueuePendingAction = useEnqueuePendingAction('winner_vote_button');
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   // Lets the queued replay reach the current `castVote` without making the callback depend on
   // itself. The runner only fires it once a personal space exists, so the replay lands past the
   // branch that queued it.
-  const castVoteRef = React.useRef<(participant: DebateParticipant) => Promise<void>>(async () => {});
-  const { personalSpaceId } = usePersonalSpaceId();
+  const castVoteRef = React.useRef<(participant: DebateParticipant, options?: CastVoteOptions) => Promise<void>>(
+    async () => {}
+  );
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -171,7 +192,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const isVoting = useVoteInFlight(debateEntityId);
   const { profile } = useGeoProfile(smartAccount?.account.address);
 
-  const { data: votes } = useQuery({
+  const { data: votes, isSuccess: haveVotesAnswered } = useQuery({
     queryKey: votesQueryKey(debateEntityId),
     queryFn: ({ signal }) => fetchDebateVotes(debateEntityId, signal),
   });
@@ -196,22 +217,77 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     [hasVoted, sharesBySpaceEntityId]
   );
 
+  // A pick made before the account could publish, read off the queue so it is still drawn after the
+  // panel or card that took it remounts during sign-up. Once the write starts, the optimistic row it
+  // puts in the votes cache takes over.
+  //
+  // Replayed through the hook mounted now when there is one (`useQueuedAction`): its tally knows the
+  // viewer's existing vote, which the press's closure — taken signed out — could not, and a switch
+  // needs it.
+  const queuedVote = useQueuedAction({
+    id: `debate-winner-vote:${debateEntityId}`,
+    component: 'winner_vote_button',
+    label: 'your winner vote',
+    // Held until the viewer's existing vote is known, which a switch needs and a repeat skips.
+    ready: haveVotesAnswered && personalSpaceId !== null,
+    run: (intent, { live, isCurrent }) => {
+      const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
+      if (!participant) throw new Error('The debater you picked is no longer in this debate.');
+      return castVoteRef.current(participant, { fromQueue: true, readExistingVoteFresh: !live, isCurrent });
+    },
+  });
+  const queuedWinner = queuedVote.intent;
+
   const isMyPick = React.useCallback(
     (participant: DebateParticipant) =>
-      tally.myVote !== null && ID.equals(tally.myVote.winnerSpaceEntityId, participant.profile_space_id),
-    [tally.myVote]
+      queuedWinner !== undefined
+        ? ID.equals(queuedWinner, participant.profile_space_id)
+        : tally.myVote !== null && ID.equals(tally.myVote.winnerSpaceEntityId, participant.profile_space_id),
+    [queuedWinner, tally.myVote]
+  );
+
+  const { queue: queueVoteIntent, cancel: cancelQueuedVote } = queuedVote;
+  const queueVote = React.useCallback(
+    (participant: DebateParticipant) => queueVoteIntent(participant.profile_space_id),
+    [queueVoteIntent]
   );
 
   const castVote = React.useCallback(
-    async (participant: DebateParticipant) => {
+    async (
+      participant: DebateParticipant,
+      { fromQueue = false, readExistingVoteFresh = false, isCurrent = () => true }: CastVoteOptions = {}
+    ) => {
       const attribution = getContext();
-      if (debatesWithVoteInFlight.has(debateEntityId)) return;
+      // A replay that cannot publish throws rather than returning: the runner drops an action whose
+      // run resolves, so a quiet return here is a vote lost (see `CastVoteOptions`).
+      if (debatesWithVoteInFlight.has(debateEntityId)) {
+        if (fromQueue) throw new Error('Another vote on this debate is still publishing.');
+        return;
+      }
 
-      const previousVote = tally.myVote;
+      // Read through the cache rather than only from this render. A queued vote replays through a
+      // closure taken before sign-up, when neither existed yet; the cache has both by the time the
+      // runner fires, the same fallback every other queued write uses.
+      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const voterSpaceId = readRegisteredPersonalSpaceId(queryClient, account?.account.address, {
+        personalSpaceId,
+        isRegistered,
+      });
+
+      const previousVote =
+        readExistingVoteFresh && voterSpaceId
+          ? tallyDebateVotes(await fetchDebateVotes(debateEntityId), voterSpaceId).myVote
+          : tally.myVote;
+      // Cleared (a sign-out) or replaced (a newer pick) during that read: the vote must not follow.
+      if (!isCurrent()) return;
       if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
-      if (previousVote && previousVote.winnerRelationId == null) return;
+      if (previousVote && previousVote.winnerRelationId == null) {
+        if (fromQueue) throw new Error('Your previous vote is still being indexed.');
+        return;
+      }
 
-      if (!smartAccount) {
+      if (!account) {
+        if (fromQueue) throw new Error('Your account is not ready yet.');
         // Null covers three different situations — signed out, still restoring, and a failed
         // initialization — and only the first is an invitation to log in. Privy is the authority
         // on which one this is, and sending a signed-in viewer through login would clear their
@@ -221,19 +297,18 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
           // the vote silently dropped is worse than the toast this replaced. The runner replays
           // it once there is a personal space to write from, which is what the vote needs and
           // what finishing onboarding produces.
-          const attempt = openPrivySignIn({
-            ...attribution,
-            auth_control: 'pick_winner',
-            auth_intent: 'vote',
-            auth_continuation: 'queued',
-          });
+          const attempt = openPrivySignIn(
+            {
+              ...attribution,
+              auth_control: 'pick_winner',
+              auth_intent: 'vote',
+              auth_continuation: 'queued',
+            },
+            // A dismissed sign-in withdraws the pick, so walking away never publishes it later.
+            { onCancel: cancelQueuedVote }
+          );
           attribution.auth_attempt_id = attempt?.id;
-          enqueuePendingAction({
-            id: `debate-winner-vote:${debateEntityId}`,
-            label: 'your winner vote',
-            requires: 'personalSpace',
-            run: () => withActionContext(attribution, () => castVoteRef.current(participant)),
-          });
+          withActionContext(attribution, () => queueVote(participant));
           // Signed out is a step, not an error: open the login the upvote control opens rather
           // than a toast that names the problem and leaves them to find the way in.
           return;
@@ -248,7 +323,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         setToast(<span>Your account is not ready to vote yet. Please try again in a moment.</span>);
         return;
       }
-      if (!personalSpaceId) {
+      if (!voterSpaceId) {
+        if (fromQueue) throw new Error('Your personal space is not ready yet.');
+        // A new account whose space is still being made: hold the pick for the runner, as the
+        // signed-out path does, rather than asking for a second press once it exists. Only then —
+        // with no setup under way nothing would ever publish it, so say what is missing instead.
+        if (isAccountSetupPending) {
+          queueVote(participant);
+          return;
+        }
         setToast(<span>Personal space required to vote. Please complete onboarding.</span>);
         return;
       }
@@ -262,10 +345,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
       const values: Value[] = [
         {
-          id: ID.createValueId({ entityId: voteEntityId, propertyId: NAME_PROPERTY_ID, spaceId: personalSpaceId }),
+          id: ID.createValueId({ entityId: voteEntityId, propertyId: NAME_PROPERTY_ID, spaceId: voterSpaceId }),
           entity: { id: voteEntityId, name: voteName },
           property: { id: NAME_PROPERTY_ID, name: 'Name', dataType: 'TEXT' },
-          spaceId: personalSpaceId,
+          spaceId: voterSpaceId,
           value: voteName,
           isLocal: true,
           hasBeenPublished: false,
@@ -275,7 +358,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       const relate = (propertyId: string, propertyName: string, toId: string, toName: string | null): Relation => ({
         id: IdUtils.generate(),
         entityId: IdUtils.generate(),
-        spaceId: personalSpaceId,
+        spaceId: voterSpaceId,
         renderableType: 'RELATION',
         position: Position.generate(),
         type: { id: propertyId, name: propertyName },
@@ -306,7 +389,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       // still delete it.
       const optimisticVote: DebateVoteRecord = {
         id: voteEntityId,
-        voterSpaceId: personalSpaceId,
+        voterSpaceId: voterSpaceId,
         winnerSpaceEntityId: participant.profile_space_id,
         winnerName,
         winnerRelationId: newWinnerRelation.id,
@@ -331,7 +414,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       };
 
       const publish = Effect.gen(function* () {
-        const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
+        const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, voterSpaceId);
         if (ops.length === 0) throw new Error('No operations to publish');
 
         const result = yield* Effect.retry(
@@ -339,9 +422,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
             try: () =>
               personalSpace.publishEdit({
                 name: `Vote: ${voteName}`,
-                spaceId: personalSpaceId,
+                spaceId: voterSpaceId,
                 ops,
-                author: personalSpaceId,
+                author: voterSpaceId,
                 network: 'TESTNET',
               }),
             catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
@@ -352,7 +435,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         // The wallet retries known pre-submission failures. Repeating this whole
         // call after an uncertain response could submit the vote twice.
         return yield* Effect.tryPromise({
-          try: () => smartAccount.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
+          try: () => account.sendUserOperation({ calls: [{ to: result.to, value: 0n, data: result.calldata }] }),
           catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
         });
       });
@@ -376,6 +459,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
           console.error('[useDebateVotes] Publish failed:', error);
           const { message, retry } = toUserFacingError(error, 'Failed to publish vote: ');
+          // A replay hands the failure to the runner, which keeps the pick queued and offers its own
+          // retry. Reporting here as well would show it twice, and returning would drop the pick.
+          if (fromQueue) throw new Error(message);
           reportError(message, retry);
           return;
         }
@@ -396,7 +482,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
       const isVoteIndexed = async () => {
         if (!previousVote) return await Effect.runPromise(checkEntityExists(voteEntityId));
-        const indexed = tallyDebateVotes(await fetchDebateVotes(debateEntityId), personalSpaceId).myVote;
+        const indexed = tallyDebateVotes(await fetchDebateVotes(debateEntityId), voterSpaceId).myVote;
         return indexed !== null && ID.equals(indexed.winnerSpaceEntityId, participant.profile_space_id);
       };
 
@@ -440,12 +526,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       tally.myVote,
       smartAccount,
       personalSpaceId,
+      isRegistered,
       profile?.name,
       debate.claim.claim,
       debateEntityId,
       queryClient,
       openPrivySignIn,
-      enqueuePendingAction,
+      queueVote,
+      cancelQueuedVote,
+      isAccountSetupPending,
       authReady,
       authenticated,
       isAccountLoading,

@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
+import { usePrivySignIn } from './hooks/use-privy-sign-in';
 import { useTrackedLogin } from './hooks/use-tracked-login';
 import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 import { PrivyAuthTracker } from './privy-auth-tracker';
@@ -62,6 +63,21 @@ vi.mock('./analytics', () => ({
   identifyPrivyUser: mocks.identifyPrivyUser,
   reconcileAnonymousAnalyticsIdentity: vi.fn(),
 }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/explore',
+  useSearchParams: () => new URLSearchParams(''),
+}));
+vi.mock('~/partials/onboarding/dialog', async () => {
+  const { atom } = await import('jotai');
+  return {
+    nameAtom: atom(''),
+    topicIdAtom: atom(''),
+    avatarAtom: atom(''),
+    spaceIdAtom: atom(''),
+    stepAtom: atom('start'),
+    selectedTopicIdsAtom: atom<string[]>([]),
+  };
+});
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: null, isFetched: false }),
 }));
@@ -89,6 +105,62 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 afterEach(cleanup);
+
+const dismiss = () =>
+  act(() => {
+    for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
+  });
+
+/**
+ * A press's `onCancel` withdraws what it queued — a vote, a join — if the sign-in is dismissed.
+ * Queued actions outlive the control that pressed them, so the withdrawal has to as well.
+ */
+describe('a press abandoned with the sign-in', () => {
+  it('is withdrawn even after the control that pressed it unmounts', () => {
+    const onCancel = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel });
+    });
+    control.unmount();
+    dismiss();
+
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('is not withdrawn once the sign-in completes', () => {
+    const onCancel = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel });
+    });
+    broadcast(completion('completes'));
+    dismiss();
+
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('belongs to its own attempt, not a later one', () => {
+    const first = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel: first });
+    });
+    dismiss();
+    act(() => {
+      control.result.current();
+    });
+    dismiss();
+
+    expect(first).toHaveBeenCalledOnce();
+  });
+});
 
 describe('PrivyAuthTracker', () => {
   describe.each(['modal-login', 'modal-signup', 'headless-signup'] as const)('%s with both observers', flow => {

@@ -306,7 +306,8 @@ export function CommentSection({
   const requireSignInToComment = React.useCallback(
     (replyToCommentId?: string) => {
       setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
-      promptSignIn();
+      // A dismissed sign-in drops the intent, so a later, unrelated sign-in doesn't pop this open.
+      promptSignIn(undefined, { onCancel: () => setPendingComposer(null) });
     },
     [entityId, promptSignIn, setPendingComposer]
   );

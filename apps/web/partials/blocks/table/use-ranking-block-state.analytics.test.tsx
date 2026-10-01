@@ -28,6 +28,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('~/partials/onboarding/dialog', () => ({ stepAtom: {} }));
 vi.mock('~/atoms/post-onboarding-redirect', () => ({ postOnboardingRedirectAtom: {} }));
 vi.mock('~/atoms/ranking-compose-return', () => ({ rankingComposeReturnHrefAtom: {} }));
+vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('jotai', () => ({ useSetAtom: () => vi.fn() }));
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({

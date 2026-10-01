@@ -94,7 +94,8 @@ export function InlineCommentComposer({
   React.useEffect(() => {
     if (!isComposing || isSignedIn) return;
     setPendingComposer({ entityId: targetEntityId, replyToCommentId });
-    promptSignIn();
+    // A dismissed sign-in drops the intent, so a later, unrelated sign-in doesn't pop this open.
+    promptSignIn(undefined, { onCancel: () => setPendingComposer(null) });
     close();
     // Only on the transition into a signed-out open composer; `close` is a fresh closure each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

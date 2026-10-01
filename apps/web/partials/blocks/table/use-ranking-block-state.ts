@@ -53,6 +53,7 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Row } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
@@ -165,6 +166,7 @@ export function useRankingBlockState({
   const searchParams = useSearchParams();
   const preferMyTab = searchParams?.get('tab') === RANKING_COMPOSE_TAB_MY;
   const { showOnboarding } = useOnboarding();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
@@ -749,11 +751,13 @@ export function useRankingBlockState({
           return;
         }
 
-        if (composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
+        // Onboarding already done, the space still being created: straight to compose, which
+        // queues the publish until the space exists. Reopening onboarding here put the viewer back
+        // on the profile step they had just finished. The return address is only for the onboarding
+        // run below: left set on the way to compose, `PostAuthRedirect` would pull the viewer back
+        // there once the space registered, wherever they had gone since.
+        if (composeAccessStatus === 'needs-onboarding' && !isAccountSetupPending) {
           setPostOnboardingRedirect(href);
-        }
-
-        if (composeAccessStatus === 'needs-onboarding') {
           showOnboarding();
           setStep('enter-profile');
           return;
@@ -770,6 +774,7 @@ export function useRankingBlockState({
       ensureAccess,
       promptLogin,
       showOnboarding,
+      isAccountSetupPending,
       entityId,
       parentEntityId,
       pathname,
