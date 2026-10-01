@@ -3,23 +3,29 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtomValue, useSetAtom } from 'jotai';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import { ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import type { DebateClaim, DebateParticipant } from '~/core/debates/api';
 import type { TickerWindow } from '~/core/debates/claim-ticker';
 import { speakerLabel } from '~/core/debates/playback-utils';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { CLAIM_RESPONSE_COPY, type ResponseKind, responsePositionLabel } from '~/core/responses/entity-response';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { Dots } from '~/design-system/dots';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
 import { type AccountAnalytics, AccountStep } from '~/partials/explore/email-capture-account-step';
+import { OnboardingInline, stepAtom } from '~/partials/onboarding/dialog';
+import { inlineOnboardingHoldsAtom } from '~/partials/onboarding/onboarding-dialog-visibility';
 
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import type { DebateStage } from './use-debate-stage';
@@ -115,9 +121,17 @@ export function DebateStagePanel({
     );
   }
 
+  if (stage.signup === 'onboarding') {
+    return (
+      <PanelSurface variant={variant}>
+        <PanelOnboarding onDone={stage.finishOnboarding} onNotNow={stage.collapseSignup} />
+      </PanelSurface>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-2">
-      {stage.signup === 'collapsed' ? <SignupChip onOpen={stage.reopenSignup} /> : null}
+      {stage.signup === 'collapsed' ? <SignupChip signedIn={stage.authenticated} onOpen={stage.reopenSignup} /> : null}
       {stage.signup === 'confirmed' ? <VoteCountsPill /> : null}
       {claim ? (
         <PanelClaimCard key={claim.window.claim.id} claim={claim} onAnswered={onAnswered} />
@@ -224,7 +238,23 @@ function StancePrompt({
  * headless login, mounted only while someone is actually signing up (its hook shares an emitter with
  * the navbar's login, and an always-mounted one broke that button before).
  */
+/**
+ * Holds the app-wide onboarding modal back for as long as the caller is mounted.
+ *
+ * Every panel state that sits between a signed-out vote and a finished profile holds it: the
+ * modal would otherwise open over the debate the moment the code verifies, and again when "Not
+ * now" collapses the panel.
+ */
+function useInlineOnboardingHold() {
+  const setHolds = useSetAtom(inlineOnboardingHoldsAtom);
+  React.useLayoutEffect(() => {
+    setHolds(count => count + 1);
+    return () => setHolds(count => count - 1);
+  }, [setHolds]);
+}
+
 function InlineSignup({ stance, onNotNow }: { stance: boolean; onNotNow: () => void }) {
+  useInlineOnboardingHold();
   const prepareOnboarding = usePrepareOnboarding();
   const openSignIn = usePrivySignIn(undefined, { analytics: DEBATE_SIGNUP_ANALYTICS });
   const [email, setEmail] = React.useState('');
@@ -302,8 +332,64 @@ function InlineSignup({ stance, onNotNow }: { stance: boolean; onNotNow: () => v
   );
 }
 
-/** What "Not now" leaves behind: a way back in that stays for the rest of the debate. */
-function SignupChip({ onOpen }: { onOpen: () => void }) {
+/**
+ * After the code: the new account's profile steps, in the panel, while the debate plays.
+ *
+ * The same onboarding the modal runs (`OnboardingInline`). An account that already has a space —
+ * someone who signed in rather than up — has nothing to do here and goes straight to "counts".
+ */
+function PanelOnboarding({ onDone, onNotNow }: { onDone: () => void; onNotNow: () => void }) {
+  useInlineOnboardingHold();
+  const { isRegistered, isFetched } = usePersonalSpaceId();
+  const { topicId: pendingTopicId } = usePendingPersonalSpace();
+  const step = useAtomValue(stepAtom);
+
+  const needsOnboarding = isFetched && !isRegistered && !pendingTopicId;
+  // Done when the account has a space, or one is being created and the completion beat is over.
+  const done = isFetched && (isRegistered || (Boolean(pendingTopicId) && step !== 'completed'));
+  const finish = React.useEffectEvent(onDone);
+  React.useEffect(() => {
+    if (done) finish();
+  }, [done]);
+
+  return (
+    <ActionSurface
+      className="flex flex-col gap-3"
+      trackImpression
+      value={{
+        component: 'debate_inline_signup',
+        target_type: 'application',
+        target_id: 'genesis',
+        variant: 'onboarding',
+      }}
+    >
+      <span className="self-start rounded-full bg-successTertiary px-2.5 py-1 text-metadata text-text">
+        ✓ Email confirmed
+      </span>
+      {needsOnboarding ? (
+        <OnboardingInline onFinished={onDone} />
+      ) : (
+        <div className="grid h-16 place-items-center">
+          <Dots />
+        </div>
+      )}
+      {step !== 'completed' ? (
+        <button type="button" onClick={onNotNow} className={cx(STAGE_TEXT_LINK, 'self-center')}>
+          Not now
+        </button>
+      ) : null}
+    </ActionSurface>
+  );
+}
+
+/**
+ * What "Not now" leaves behind: a way back in that stays for the rest of the debate.
+ *
+ * Holds the onboarding modal back too — a viewer who chose to finish later should not have it
+ * thrown over the debate a second later. It comes back on the next page, as it always has.
+ */
+function SignupChip({ signedIn, onOpen }: { signedIn: boolean; onOpen: () => void }) {
+  useInlineOnboardingHold();
   return (
     <button
       type="button"
@@ -312,9 +398,9 @@ function SignupChip({ onOpen }: { onOpen: () => void }) {
     >
       <span className="flex items-center gap-1.5 text-grey-04">
         <span aria-hidden className="size-1.5 rounded-full bg-orange" />
-        Vote not counted
+        {signedIn ? 'Profile not finished' : 'Vote not counted'}
       </span>
-      <span className="text-ctaPrimary">Confirm email</span>
+      <span className="text-ctaPrimary">{signedIn ? 'Finish your profile' : 'Confirm email'}</span>
     </button>
   );
 }

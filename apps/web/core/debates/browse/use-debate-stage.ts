@@ -23,10 +23,12 @@ export type StagePhase = 'deciding' | 'stance' | 'live';
 /**
  * The inline sign-up for a signed-out viewer who voted.
  *
- * `open` in the claim panel; `collapsed` to a chip after "Not now"; `confirmed` for the beat after
- * the code verifies, when the panel says the vote counts before handing back to the claims.
+ * `open` in the claim panel (email, then code); `onboarding` once the code verifies, for a new
+ * account's profile steps, still in the panel; `collapsed` to a chip after "Not now" at either
+ * point; `confirmed` for the beat when it is all done, when the panel says the vote counts before
+ * handing back to the claims.
  */
-export type SignupState = 'hidden' | 'open' | 'collapsed' | 'confirmed';
+export type SignupState = 'hidden' | 'open' | 'onboarding' | 'collapsed' | 'confirmed';
 
 /** How long "✓ Your vote counts" stays in the panel before the claims take it back. */
 const CONFIRMED_MS = 2_500;
@@ -160,10 +162,11 @@ export function useDebateStage({
     setPendingStance(null);
   }, [authenticated, main.control.canRespond, main.known, pendingStance, viewerPosition]);
 
-  // Signing in finishes the sign-up: say the vote counts, then give the panel back to the claims.
+  // Signing in moves the sign-up on to onboarding, in the same panel. The panel works out whether
+  // this account needs any (an existing one does not) and calls `finishOnboarding` when it is done.
   React.useEffect(() => {
     if (!authenticated) return;
-    setSignup(current => (current === 'open' || current === 'collapsed' ? 'confirmed' : current));
+    setSignup(current => (current === 'open' ? 'onboarding' : current));
   }, [authenticated]);
   React.useEffect(() => {
     if (signup !== 'confirmed') return;
@@ -179,11 +182,16 @@ export function useDebateStage({
     /** True while the viewer's side is only held, waiting on an account. */
     stanceHeld: pendingStance !== null && viewerPosition === null,
     signup: authReady ? signup : 'hidden',
+    authenticated,
     vote,
     justWatch,
     switchStance,
-    collapseSignup: () => setSignup(current => (current === 'open' ? 'collapsed' : current)),
-    reopenSignup: () => setSignup(current => (current === 'collapsed' ? 'open' : current)),
+    collapseSignup: () =>
+      setSignup(current => (current === 'open' || current === 'onboarding' ? 'collapsed' : current)),
+    reopenSignup: () =>
+      setSignup(current => (current === 'collapsed' ? (authenticated ? 'onboarding' : 'open') : current)),
+    finishOnboarding: () =>
+      setSignup(current => (current === 'onboarding' || current === 'collapsed' ? 'confirmed' : current)),
   };
 }
 

@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   beginPrivyAuth: vi.fn(),
   prepareOnboarding: vi.fn(),
   accountStep: vi.fn(),
+  personalSpace: { isRegistered: false, isFetched: true },
+  pendingTopicId: null as string | null,
 }));
 
 vi.mock('~/core/action-context-provider', () => ({
@@ -47,6 +49,17 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
   },
 }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => null }));
+vi.mock('~/partials/onboarding/dialog', async () => {
+  const { atom } = await import('jotai');
+  return {
+    stepAtom: atom('start'),
+    OnboardingInline: () => <div data-testid="onboarding-inline" />,
+  };
+});
+vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => mocks.personalSpace }));
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ topicId: mocks.pendingTopicId }),
+}));
 
 function stage(overrides: Partial<DebateStage> = {}): DebateStage {
   return {
@@ -54,6 +67,8 @@ function stage(overrides: Partial<DebateStage> = {}): DebateStage {
     stance: null,
     stanceHeld: false,
     signup: 'hidden',
+    authenticated: false,
+    finishOnboarding: vi.fn(),
     vote: vi.fn(),
     justWatch: vi.fn(),
     switchStance: vi.fn(),
@@ -64,7 +79,11 @@ function stage(overrides: Partial<DebateStage> = {}): DebateStage {
   } as DebateStage;
 }
 
-const speaker = { participant_slot: 1, display_name: 'Adam', profile_space_id: 'space-1' } as unknown as DebateParticipant;
+const speaker = {
+  participant_slot: 1,
+  display_name: 'Adam',
+  profile_space_id: 'space-1',
+} as unknown as DebateParticipant;
 const LONG_CLAIM =
   'Open-source innovation provides different perspectives and methods for solving problems that no single closed lab, however well funded, can match on its own.';
 const claim: StagePanelClaim = {
@@ -162,6 +181,29 @@ describe('DebateStagePanel inline sign-up', () => {
     renderPanel({ stage: stage({ phase: 'live', stance: true, signup: 'collapsed', reopenSignup }) });
     fireEvent.click(screen.getByRole('button', { name: /Vote not counted/ }));
     expect(reopenSignup).toHaveBeenCalled();
+  });
+
+  it('runs a new account’s onboarding in the panel once the code verifies', () => {
+    mocks.personalSpace = { isRegistered: false, isFetched: true };
+    mocks.pendingTopicId = null;
+    renderPanel({ stage: stage({ phase: 'live', stance: true, signup: 'onboarding', authenticated: true }) });
+    expect(screen.getByText('✓ Email confirmed')).toBeInTheDocument();
+    expect(screen.getByTestId('onboarding-inline')).toBeInTheDocument();
+  });
+
+  it('skips onboarding for an account that already has a space', () => {
+    mocks.personalSpace = { isRegistered: true, isFetched: true };
+    const finishOnboarding = vi.fn();
+    renderPanel({
+      stage: stage({ phase: 'live', stance: true, signup: 'onboarding', authenticated: true, finishOnboarding }),
+    });
+    expect(screen.queryByTestId('onboarding-inline')).not.toBeInTheDocument();
+    expect(finishOnboarding).toHaveBeenCalled();
+  });
+
+  it('names the unfinished profile on the chip once signed in', () => {
+    renderPanel({ stage: stage({ phase: 'live', stance: true, signup: 'collapsed', authenticated: true }) });
+    expect(screen.getByRole('button', { name: /Finish your profile/ })).toBeInTheDocument();
   });
 
   it('says the vote counts once the account exists', () => {

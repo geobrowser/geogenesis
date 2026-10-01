@@ -1,4 +1,5 @@
 import { act, cleanup, renderHook } from '@testing-library/react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -88,7 +89,7 @@ describe('useDebateStage', () => {
     expect(result.current.signup).toBe('open');
   });
 
-  it('publishes the held vote once the new account can, and says it counts', () => {
+  it('publishes the held vote once the new account can, and moves the panel on to onboarding', () => {
     mocks.auth = { ready: true, authenticated: false };
     const { result, rerender } = render();
     act(() => result.current.vote(true));
@@ -97,7 +98,23 @@ describe('useDebateStage', () => {
     rerender({ debate, immersive: true, enabled: true, initialSeekSeconds: null });
 
     expect(mocks.main.control.respond).toHaveBeenCalledWith(true);
+    expect(result.current.signup).toBe('onboarding');
+
+    act(() => result.current.finishOnboarding());
     expect(result.current.signup).toBe('confirmed');
+  });
+
+  it('lets onboarding be put off to a chip, and picked up again as onboarding', () => {
+    mocks.auth = { ready: true, authenticated: false };
+    const { result, rerender } = render();
+    act(() => result.current.vote(true));
+    mocks.auth = { ready: true, authenticated: true };
+    rerender({ debate, immersive: true, enabled: true, initialSeekSeconds: null });
+
+    act(() => result.current.collapseSignup());
+    expect(result.current.signup).toBe('collapsed');
+    act(() => result.current.reopenSignup());
+    expect(result.current.signup).toBe('onboarding');
   });
 
   it('waits for the account to be able to publish before replaying the held vote', () => {

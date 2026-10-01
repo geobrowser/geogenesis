@@ -1,3 +1,5 @@
+import { atom } from 'jotai';
+
 export type OnboardingStep =
   | 'start'
   | 'existing-entity-match'
@@ -18,3 +20,14 @@ export function shouldOpenOnboardingDialog(isOnboardingVisible: boolean, step: O
   if (step === 'done') return false;
   return isOnboardingVisible || step === 'completed';
 }
+
+/**
+ * How many inline onboarding surfaces are holding onboarding for themselves right now.
+ *
+ * The full-screen debate player runs sign-up and onboarding inside its claim panel while the debate
+ * plays (GEO-3112). While it does, the app-wide modal must stand down — the two would otherwise
+ * both show the same steps. A count rather than a flag, so the panel can hand over from its email
+ * step to its onboarding steps (one unmounting as the other mounts) without the modal getting a
+ * frame in between.
+ */
+export const inlineOnboardingHoldsAtom = atom(0);
