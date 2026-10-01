@@ -339,15 +339,20 @@ export function EntityFeed({
   // going out while the route drops it as a space this reader cannot see — the trigger saying
   // "1 space" over an unfiltered feed. Only a settled payload prunes; a key still loading keeps the
   // selection rather than throwing away one about to be valid.
+  //
+  // A payload whose Featured traversal failed is not settled either. It still arrives — with the
+  // featured rows empty and `featuredError` set — so reading it as an answer would untick every
+  // featured space on one transient failure, when the route's own lookup may well have succeeded.
+  const spaceOptionsSettled = browseSidebar !== null && !browseSidebar.featuredError;
   React.useEffect(() => {
     setSelectedSpaceIds(current =>
       keepSelectableSpaces(
         current,
         spaceOptions.map(option => option.value),
-        browseSidebar !== null
+        spaceOptionsSettled
       )
     );
-  }, [browseSidebar, spaceOptions]);
+  }, [spaceOptions, spaceOptionsSettled]);
 
   React.useEffect(() => {
     if (

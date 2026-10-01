@@ -276,8 +276,12 @@ describe('keepSelectableSpaces', () => {
     expect(keepSelectableSpaces(selected, [], false)).toBe(selected);
   });
 
-  it('hands back the same array when nothing is dropped, whatever the id spelling', () => {
-    const selected = [MEMBER];
-    expect(keepSelectableSpaces(selected, [normId(MEMBER).toUpperCase()], true)).toBe(selected);
+  it('hands back the same array when nothing changes', () => {
+    const selected = [FEATURED, MEMBER];
+    expect(keepSelectableSpaces(selected, [MEMBER, FEATURED], true)).toBe(selected);
+  });
+
+  it("keeps a space offered under another spelling, in the menu's spelling", () => {
+    expect(keepSelectableSpaces([MEMBER], [normId(MEMBER)], true)).toEqual([normId(MEMBER)]);
   });
 });

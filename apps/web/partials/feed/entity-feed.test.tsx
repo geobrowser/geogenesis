@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
     featured: { id: string; name: string }[];
     editorOf: { id: string; name: string }[];
     memberOf: { id: string; name: string }[];
+    featuredError?: boolean;
   } | null,
 }));
 
@@ -613,6 +614,34 @@ describe('EntityFeed more filters', () => {
 
     const url = new URL(await requestedUrl(), 'http://localhost');
     expect(url.searchParams.get('spaceIds')).toBe(MINE.id);
+  });
+
+  // Copilot on #2682: a failed Featured traversal still returns a payload, with no featured rows.
+  it('keeps a ticked featured space through a payload whose Featured lookup failed', async () => {
+    const { rerenderFeed } = renderExploreFeed();
+    pickOption('More filters');
+    fireEvent.click(screen.getByText('Featured space'));
+
+    mocks.browseSidebar = { featured: [], editorOf: [MINE], memberOf: [MINE], featuredError: true };
+    rerenderFeed();
+
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('spaceIds')).toBe(FEATURED.id);
+  });
+
+  // Copilot on #2682: the checkboxes and the trigger compare ids exactly.
+  it('follows a space whose id comes back in another spelling, so the trigger still names it', async () => {
+    const { rerenderFeed } = renderExploreFeed();
+    pickOption('More filters');
+    fireEvent.click(screen.getByText('My space'));
+    const respelled = { ...MINE, id: 'spacemine' };
+
+    mocks.browseSidebar = { featured: [FEATURED], editorOf: [respelled], memberOf: [respelled] };
+    rerenderFeed();
+
+    await waitFor(() => expect(screen.queryByText('1 space')).toBeNull());
+    const url = new URL(await requestedUrl(), 'http://localhost');
+    expect(url.searchParams.get('spaceIds')).toBe('spacemine');
   });
 
   it('offers nothing extra on a feed that does not opt in', () => {
