@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
+  /** The viewer's side as the index reports it when a replay reads it fresh. */
+  freshViewerDirection: null as 'positive' | 'negative' | null,
   /** Privy's answer on whether anyone is signed in. */
   authenticated: true,
   /** A new account whose personal space is still being created in the background. */
@@ -187,6 +189,10 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   }),
 }));
 
+vi.mock('~/core/responses/replay-viewer-response', () => ({
+  readViewerResponseForReplay: async () => mocks.freshViewerDirection,
+}));
+
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
@@ -269,6 +275,7 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
+  mocks.freshViewerDirection = null;
   mocks.authenticated = true;
   mocks.accountSetupPending = false;
   queueStore = createStore();
@@ -1067,6 +1074,40 @@ describe('replaying a queued side', () => {
     await act(() => running);
 
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * With no card for the claim on screen when the account is ready, the press's own closure replays
+ * it — and its view of the viewer is from before they signed in. It asks the index instead.
+ */
+describe('replaying a queued side with no card on screen', () => {
+  function queueThenUnmount() {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    const view = renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness({ viewer_response: null })} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    view.unmount();
+    return queued()[0]!;
+  }
+
+  it('skips a side the index says the viewer already holds', async () => {
+    const action = queueThenUnmount();
+    mocks.freshViewerDirection = 'positive';
+
+    await action.run();
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+
+  it('publishes a side the viewer does not hold', async () => {
+    const action = queueThenUnmount();
+
+    await action.run();
+
+    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
   });
 });
 

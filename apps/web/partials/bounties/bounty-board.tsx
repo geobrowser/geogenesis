@@ -75,18 +75,19 @@ export function BountyBoard({ header }: Props) {
 
   // One interest query for every loaded bounty; the available cards bind to it.
   const bountyIds = React.useMemo(() => bounties.map(bounty => bounty.id), [bounties]);
-  const { interestedIds, isLoading: isInterestLoading } = useInterestedBountyIds(bountyIds);
+  const { interestedIds, isLoading: isInterestLoading, isInterestKnown } = useInterestedBountyIds(bountyIds);
   const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
   const interest: BoardInterestBindings = React.useMemo(
     () => ({
       interestedIds,
       isInterestLoading,
+      isInterestKnown,
       canRegisterInterest,
       pendingBountyId,
       onRegisterInterest: target =>
         registerInterest({ bountyId: target.id, bountyName: target.name, bountySpaceId: target.spaceId }),
     }),
-    [canRegisterInterest, interestedIds, isInterestLoading, pendingBountyId, registerInterest]
+    [canRegisterInterest, interestedIds, isInterestKnown, isInterestLoading, pendingBountyId, registerInterest]
   );
   const groups = React.useMemo(() => {
     const visible = sortBounties(applyBountyFilters(bounties, filters), filters.sort);

@@ -151,6 +151,12 @@ type CastVoteOptions = {
    * and offers a retry — returning quietly told the runner it had succeeded, and the vote was gone.
    */
   fromQueue?: boolean;
+  /**
+   * A replay through the press's own closure, with no voting control on screen: its tally is from
+   * before sign-in and does not know the viewer's existing vote, so the vote is read fresh. Trusting
+   * it would mint a second Vote entity for a viewer who had already voted.
+   */
+  readExistingVoteFresh?: boolean;
 };
 
 /**
@@ -222,10 +228,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     label: 'your winner vote',
     // Held until the viewer's existing vote is known, which a switch needs and a repeat skips.
     ready: haveVotesAnswered && personalSpaceId !== null,
-    run: intent => {
+    run: (intent, { live }) => {
       const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
       if (!participant) throw new Error('The debater you picked is no longer in this debate.');
-      return castVoteRef.current(participant, { fromQueue: true });
+      return castVoteRef.current(participant, { fromQueue: true, readExistingVoteFresh: !live });
     },
   });
   const queuedWinner = queuedVote.intent;
@@ -245,19 +251,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   );
 
   const castVote = React.useCallback(
-    async (participant: DebateParticipant, { fromQueue = false }: CastVoteOptions = {}) => {
+    async (
+      participant: DebateParticipant,
+      { fromQueue = false, readExistingVoteFresh = false }: CastVoteOptions = {}
+    ) => {
       const attribution = getContext();
       // A replay that cannot publish throws rather than returning: the runner drops an action whose
       // run resolves, so a quiet return here is a vote lost (see `CastVoteOptions`).
       if (debatesWithVoteInFlight.has(debateEntityId)) {
         if (fromQueue) throw new Error('Another vote on this debate is still publishing.');
-        return;
-      }
-
-      const previousVote = tally.myVote;
-      if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
-      if (previousVote && previousVote.winnerRelationId == null) {
-        if (fromQueue) throw new Error('Your previous vote is still being indexed.');
         return;
       }
 
@@ -269,6 +271,16 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         personalSpaceId,
         isRegistered,
       });
+
+      const previousVote =
+        readExistingVoteFresh && voterSpaceId
+          ? tallyDebateVotes(await fetchDebateVotes(debateEntityId), voterSpaceId).myVote
+          : tally.myVote;
+      if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
+      if (previousVote && previousVote.winnerRelationId == null) {
+        if (fromQueue) throw new Error('Your previous vote is still being indexed.');
+        return;
+      }
 
       if (!account) {
         if (fromQueue) throw new Error('Your account is not ready yet.');

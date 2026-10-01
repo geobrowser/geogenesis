@@ -29,7 +29,7 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   // bounty's DAO space (an earlier geogenesis shape). A row is the viewer's
   // when it lives in their personal space OR points from their space entity —
   // both checks need only the personal space id.
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isSuccess } = useQuery({
     enabled: Boolean(personalSpaceId) && bountyIds.length > 0,
     queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId, key],
     queryFn: () => {
@@ -61,7 +61,10 @@ export function useInterestedBountyIds(bountyIds: string[]) {
 
   // Until the first fetch settles every bounty looks un-registered, so callers need
   // this to avoid offering a button that would write a duplicate relation.
-  return { interestedIds, isLoading };
+  // `isLoading` is false for a failed read too, which leaves `interestedIds` empty — "interested in
+  // nothing". Anything that acts on that answer, rather than just drawing it, waits for
+  // `isInterestKnown`.
+  return { interestedIds, isLoading, isInterestKnown: isSuccess };
 }
 
 type ProposeInterestArgs = {

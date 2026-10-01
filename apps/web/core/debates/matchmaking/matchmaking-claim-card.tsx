@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -10,7 +12,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import {
@@ -32,6 +34,7 @@ import {
   isAwaitingResponseSubmission,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
+import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -448,6 +451,7 @@ export function useClaimPositionControl({
   // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const { authenticated } = useGeoChatAuth();
+  const queryClient = useQueryClient();
 
   const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
@@ -489,12 +493,26 @@ export function useClaimPositionControl({
     // Held until the viewer's own side is known — the same wait that keeps the pills from
     // republishing a held side — so the check below reads an answer, not a loading default.
     ready: answersReady,
-    run: intent => {
+    run: async (intent, { live }) => {
       const direction = intent === 'positive' ? 'positive' : 'negative';
+      // The side the viewer holds: this card's answer when it is the one on screen; read fresh when
+      // the replay is the press's own closure, whose answer is from before they signed in.
+      const held = live
+        ? readiness.viewer_response?.position === true
+          ? 'positive'
+          : readiness.viewer_response?.position === false
+            ? 'negative'
+            : null
+        : await readViewerResponseForReplay(queryClient, {
+            entityId: claim.claim_entity_id,
+            spaceId: claim.space_id,
+            responseKind: CLAIM_RESPONSE_KIND,
+            objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+          });
       // A returning viewer who already held this side: nothing to publish. Sending it again would be
       // a second response for one press, where pressing a held side signed in means "remove".
-      if (readiness.viewer_response?.position === (direction === 'positive')) return;
-      return submitResponseAsync(direction).then(() => {});
+      if (held === direction) return;
+      await submitResponseAsync(direction);
     },
   });
   const queuedPosition = queuedPositionAction.intent === undefined ? null : queuedPositionAction.intent === 'positive';

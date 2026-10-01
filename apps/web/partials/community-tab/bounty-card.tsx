@@ -245,6 +245,7 @@ function InterestButton({
   isInterested,
   isPending,
   isInterestLoading,
+  isInterestKnown,
   canRegisterInterest,
   canApply,
   onClick,
@@ -253,6 +254,8 @@ function InterestButton({
   isPending: boolean;
   /** Interest state is still unknown; every bounty reads as un-registered until it settles. */
   isInterestLoading: boolean;
+  /** The viewer's interest was read successfully — not merely finished loading. */
+  isInterestKnown: boolean;
   canRegisterInterest: boolean;
   /** Whether the bounty still takes interest (it may have ended or filled since the press). */
   canApply: boolean;
@@ -274,8 +277,10 @@ function InterestButton({
   // Pressed before the account could publish it — signed out, or the personal space still being
   // made — queued, and drawn as registered, until it can.
   const queuedInterest = useQueuedBountyInterest(bountyId, {
-    // The interest query only runs once the space is known, so both have to have answered.
-    ready: canRegisterInterest && !isInterestLoading,
+    // The interest query only runs once the space is known, so both have to have answered — and
+    // answered successfully: a failed read is not loading either, and reads as "not interested",
+    // which would publish a duplicate for a viewer who had applied.
+    ready: canRegisterInterest && isInterestKnown,
     alreadyInterested: isInterested,
     eligible: canApply,
     register: onClick,
@@ -330,6 +335,7 @@ export function AvailableBountyCard({
   isInterested,
   isPending,
   isInterestLoading,
+  isInterestKnown,
   canRegisterInterest,
   onRegisterInterest,
   height = AVAILABLE_CARD_HEIGHT_PX,
@@ -338,6 +344,8 @@ export function AvailableBountyCard({
   isInterested: boolean;
   isPending: boolean;
   isInterestLoading: boolean;
+  /** The viewer's interest was read successfully — not merely finished loading. */
+  isInterestKnown: boolean;
   canRegisterInterest: boolean;
   onRegisterInterest: (bounty: SpaceBounty) => Promise<boolean>;
 } & CardSize) {
@@ -351,6 +359,7 @@ export function AvailableBountyCard({
             isInterested={isInterested}
             isPending={isPending}
             isInterestLoading={isInterestLoading}
+            isInterestKnown={isInterestKnown}
             canRegisterInterest={canRegisterInterest}
             canApply={availableBountyCta(bounty) === 'apply'}
             onClick={() => onRegisterInterest(bounty)}

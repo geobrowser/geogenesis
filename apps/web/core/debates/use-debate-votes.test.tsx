@@ -116,11 +116,13 @@ vi.mock('~/core/state/pending-actions', () => ({
   }: {
     id: string;
     requires?: string;
-    run: (intent: string | undefined) => Promise<void> | void;
+    run: (intent: string | undefined, replay: { live: boolean }) => Promise<void> | void;
   }) => ({
     intent: mocks.queuedIntent,
     isQueued: mocks.queuedIntent !== undefined,
-    queue: (intent: string) => mocks.enqueuePendingAction({ id, requires, intent, run: () => run(intent) }),
+    // As the press's own fallback replays it — with no voting control mounted to answer.
+    queue: (intent: string) =>
+      mocks.enqueuePendingAction({ id, requires, intent, run: () => run(intent, { live: false }) }),
     cancel: () => mocks.dequeuePendingAction(id),
   }),
 }));
@@ -481,6 +483,33 @@ describe('useDebateVotes castVote', () => {
       expect(view.result.current.feed.isVoting).toBe(false);
       expect(view.result.current.panel.isVoting).toBe(false);
     });
+  });
+
+  // Replayed by the press's own closure, with no voting control on screen: its tally predates sign-in
+  // and knows no vote. The account voted on this debate before, so the replay must switch that vote,
+  // not mint a second one.
+  it('reads the viewer’s existing vote fresh when a queued pick replays with no control on screen', async () => {
+    mocks.signedIn = false;
+    mocks.authenticated = false;
+    const view = await renderVotes();
+    await act(async () => {
+      await view.result.current.castVote(BOB);
+    });
+    const action = mocks.enqueuePendingAction.mock.calls[0]![0] as { run: () => Promise<void> };
+
+    // Signed in now, and the index has the vote this account cast before.
+    mocks.signedIn = true;
+    mocks.authenticated = true;
+    mocks.voteEntities = [voteEntity('vote-1', ALICE_SPACE, 'winner-rel-1')];
+    // The account resolves; the tally this hook holds is still the one fetched signed out, with no vote.
+    view.rerender();
+    expect(view.result.current.hasVoted).toBe(false);
+    await act(async () => {
+      await action.run();
+    });
+
+    await waitFor(() => expect(mocks.publishEdit).toHaveBeenCalled());
+    expect(publishAt(0).all.every(relation => relation.fromEntity.id === 'vote-1')).toBe(true);
   });
 
   it('reuses the existing Vote entity rather than minting a second one', async () => {

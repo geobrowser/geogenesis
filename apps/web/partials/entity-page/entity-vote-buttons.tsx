@@ -1,7 +1,7 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -35,6 +35,7 @@ import {
   resolveEntityResponseKind,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
+import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -154,6 +155,7 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
+  const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
   // and drawing it as cast would be a vote that silently never lands.
@@ -205,11 +207,21 @@ export function EntityVoteButtons({
     // Held until the viewer's own side is known: right after sign-in it is still loading, and its
     // empty default would read as "holds nothing" — publishing a side they already hold.
     ready: Boolean(personalSpaceId) && (responseBatch.managed ? responseBatch.ready : hasServerResponseAnswered),
-    run: intent => {
+    run: async (intent, { live }) => {
       const direction = intent === 'negative' ? 'negative' : 'positive';
+      // The side the viewer holds: this control's answer when it is the one on screen; read fresh
+      // when the replay is the press's own closure, whose answer is from before they signed in.
+      const held = live
+        ? serverResponseDirection
+        : await readViewerResponseForReplay(queryClient, {
+            entityId,
+            spaceId,
+            responseKind: queryResponseKind,
+            objectType: ENTITY_RESPONSE_OBJECT_TYPE,
+          });
       // A returning viewer who already held this side: nothing to publish.
-      if (serverResponseDirection === direction) return;
-      return submitResponseAsync(direction).then(() => {});
+      if (held === direction) return;
+      await submitResponseAsync(direction);
     },
   });
   const queuedResponse: ActiveResponseDirection | undefined =

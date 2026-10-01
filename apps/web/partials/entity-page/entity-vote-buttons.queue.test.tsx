@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   responseSpaceId: null as string | null,
   /** The viewer's own indexed side. */
   serverDirection: null as 'positive' | 'negative' | null,
+  /** The viewer's side as the index reports it when a replay reads it fresh. */
+  freshDirection: null as 'positive' | 'negative' | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -60,6 +62,9 @@ vi.mock('~/core/io/queries', () => ({
   getUserEntityResponse: () => Effect.succeed(mocks.serverDirection),
 }));
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({ fetchProfilesBySpaceIds: () => Effect.succeed([]) }));
+vi.mock('~/core/responses/replay-viewer-response', () => ({
+  readViewerResponseForReplay: async () => mocks.freshDirection,
+}));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
 
@@ -83,6 +88,7 @@ beforeEach(() => {
   mocks.accountSetupPending = false;
   mocks.responseSpaceId = null;
   mocks.serverDirection = null;
+  mocks.freshDirection = null;
   mocks.submitResponseAsync.mockReset();
   mocks.submitResponseAsync.mockResolvedValue(undefined);
 });
@@ -141,6 +147,21 @@ describe('replaying a queued vote', () => {
     mocks.serverDirection = 'positive';
     view.rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />);
     await act(() => running);
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+});
+
+/** No control on screen when the account is ready: the press's own closure asks the index. */
+describe('replaying a queued vote with no control on screen', () => {
+  it('skips a side the index says the viewer already holds', async () => {
+    mocks.accountSetupPending = true;
+    const view = render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    fireEvent.click(upvote());
+    view.unmount();
+    mocks.freshDirection = 'positive';
+
+    await queued()[0]!.run();
 
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
   });

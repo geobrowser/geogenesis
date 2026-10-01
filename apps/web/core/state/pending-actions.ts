@@ -195,7 +195,12 @@ export function useQueuedAction({
   id: string;
   component: ActionComponent;
   label: string;
-  run: (intent: string | undefined) => Promise<void> | void;
+  /**
+   * Carries the action out. `live` is false when no control for it is mounted and this is the press's
+   * own closure: its view of the viewer is from before sign-in, so anything it decides from — whether
+   * they already hold this side — has to be read fresh rather than trusted.
+   */
+  run: (intent: string | undefined, replay: { live: boolean }) => Promise<void> | void;
   requires?: PendingActionRequirement;
   liveOnly?: boolean;
   /**
@@ -209,7 +214,7 @@ export function useQueuedAction({
   const intent = usePendingActionIntent(id);
   const runRef = useRef(run);
   runRef.current = run;
-  useLivePendingActionHandler(id, nextIntent => runRef.current(nextIntent), ready);
+  useLivePendingActionHandler(id, nextIntent => runRef.current(nextIntent, { live: true }), ready);
 
   const queue = useCallback(
     (nextIntent: string = 'queued') =>
@@ -218,7 +223,7 @@ export function useQueuedAction({
         label,
         requires,
         intent: nextIntent,
-        run: liveOnly ? undefined : () => runRef.current(nextIntent),
+        run: liveOnly ? undefined : () => runRef.current(nextIntent, { live: false }),
       }),
     [enqueue, id, label, requires, liveOnly]
   );

@@ -61,6 +61,7 @@ function bounty(statusId: string | null): BoardBounty {
 const interest: BoardInterestBindings = {
   interestedIds: new Set(['b']),
   isInterestLoading: false,
+  isInterestKnown: true,
   canRegisterInterest: true,
   pendingBountyId: null,
   onRegisterInterest: vi.fn(),
