@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 
 import { verifyPrivyIdentityToken } from './privy-identity-token';
-import { WALLET_SESSION, WALLET_SESSION_MAX_AGE_SECONDS, readWalletCookie, signWalletSession } from './wallet-session';
+import { WALLET_SESSION, WALLET_SESSION_MAX_AGE_SECONDS, readWalletSession, signWalletSession } from './wallet-session';
 
 /**
  * The unsigned cookie this replaced. It held a bare address anyone could set, so it is never
@@ -22,7 +22,8 @@ type ConnectionChangeArgs =
     };
 
 /**
- * Writes only when the cookie would actually change. Next treats any cookie write inside a Server
+ * Writes only when the cookie would actually change, or the session is due for renewal (see
+ * `wallet-session-lifetime`). Next treats any cookie write inside a Server
  * Action as a revalidation: the client drops its prefetch cache and re-renders the current page
  * from the server, and if a deploy has shipped since the tab loaded, that re-render becomes a full
  * browser reload. Reading the cookie does not count as a revalidation.
@@ -47,7 +48,9 @@ export async function onConnectionChange(connectionChange: ConnectionChangeArgs)
   if (!address) return null;
 
   if (hasLegacyCookie) cookieStore.delete(LEGACY_WALLET_ADDRESS);
-  if (readWalletCookie(cookieStore) === address) return address;
+  // Same wallet: leave it, unless it is old enough to re-issue. That keeps the write to once a week.
+  const current = readWalletSession(cookieStore);
+  if (current?.address === address && !current.renewalDue) return address;
 
   const session = signWalletSession(address);
   if (!session) return null;

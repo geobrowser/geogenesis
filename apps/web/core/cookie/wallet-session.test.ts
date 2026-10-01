@@ -6,6 +6,7 @@ import {
   WALLET_SESSION_MAX_AGE_SECONDS,
   readWalletCookie,
   readWalletCookieLowercase,
+  readWalletSession,
   signWalletSession,
   verifyWalletSession,
 } from './wallet-session';
@@ -93,5 +94,26 @@ describe('wallet session cookie', () => {
     expect(readWalletCookieLowercase(storeWith(signWalletSession(ADDRESS)!))).toBe(ADDRESS.toLowerCase());
     expect(readWalletCookieLowercase(storeWith(ADDRESS))).toBeNull();
     expect(readWalletCookieLowercase(storeWith(undefined))).toBeNull();
+  });
+
+  // The session is a bearer credential: its lifetime bounds how long a lapsed or revoked Privy login
+  // keeps working on the server. Literal days, so reverting the constant fails here.
+  describe('lifetime', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    it('trusts a session for 30 days and no longer', () => {
+      const session = signWalletSession(ADDRESS, NOW)!;
+
+      expect(verifyWalletSession(session, NOW + 29 * DAY)).toBe(ADDRESS);
+      expect(verifyWalletSession(session, NOW + 31 * DAY)).toBeNull();
+    });
+
+    it('marks a session due for renewal once it is more than 7 days old', () => {
+      const session = signWalletSession(ADDRESS, NOW)!;
+
+      expect(readWalletSession(storeWith(session), NOW + 6 * DAY)).toEqual({ address: ADDRESS, renewalDue: false });
+      expect(readWalletSession(storeWith(session), NOW + 8 * DAY)).toEqual({ address: ADDRESS, renewalDue: true });
+      expect(readWalletSession(storeWith(session), NOW + 31 * DAY)).toBeNull();
+    });
   });
 });

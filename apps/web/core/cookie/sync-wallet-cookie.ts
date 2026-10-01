@@ -1,6 +1,7 @@
 import { getCachedIdentityToken, setCachedIdentityToken } from '~/core/auth/identity-token';
 
 import { onConnectionChange } from './cookie';
+import { WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
 
 /**
  * The address this tab last had the server recognise. Module scope, so it outlives the
@@ -12,6 +13,17 @@ import { onConnectionChange } from './cookie';
  * and mark the smart-account query as errored. Calling only when the address changes avoids both.
  */
 let syncedAddress: string | null = null;
+
+/**
+ * When `syncedAddress` was confirmed. The memo lapses after the session's renewal interval so a tab
+ * left open for weeks still asks once a week, which is when the server re-issues the session —
+ * otherwise it would expire under a tab that believed it was synced.
+ */
+let syncedAt = 0;
+
+function isSynced(address: string): boolean {
+  return syncedAddress === address && Date.now() - syncedAt < WALLET_SESSION_RENEW_AFTER_SECONDS * 1000;
+}
 
 /**
  * Delays before trying again when there was no identity token yet, or the server recognised no
@@ -63,7 +75,7 @@ function scheduleRetry(address: `0x${string}`) {
  * is needed and whether the answer matches.
  */
 export async function syncWalletCookie(address: `0x${string}`) {
-  if (syncedAddress === address.toLowerCase()) return;
+  if (isSynced(address.toLowerCase())) return;
 
   if (requestedAddress !== address.toLowerCase()) {
     requestedAddress = address.toLowerCase();
@@ -82,6 +94,7 @@ export async function syncWalletCookie(address: `0x${string}`) {
   if (superseded()) return;
   if (recognised?.toLowerCase() === address.toLowerCase()) {
     syncedAddress = recognised.toLowerCase();
+    syncedAt = Date.now();
     clearRetry();
     return;
   }

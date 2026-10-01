@@ -1,6 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { getAddress, isAddress } from 'viem';
 
+import { WALLET_SESSION_MAX_AGE_SECONDS, WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
+
+export { WALLET_SESSION_MAX_AGE_SECONDS };
+
 /**
  * The signed-in wallet the server trusts, carried in the `walletSession` cookie as
  * `<address>.<issuedAtSeconds>.<signature>`.
@@ -16,9 +20,6 @@ import { getAddress, isAddress } from 'viem';
  */
 
 export const WALLET_SESSION = 'walletSession';
-
-/** Browsers cap cookie lifetime at 400 days, so a session can never outlive this anyway. */
-export const WALLET_SESSION_MAX_AGE_SECONDS = 400 * 24 * 60 * 60;
 
 type CookieReader = { get(name: string): { value: string } | undefined };
 
@@ -46,8 +47,9 @@ export function signWalletSession(address: string, now = Date.now()): string | n
   return `${payload}.${sign(key, payload).toString('base64url')}`;
 }
 
-/** The checksummed address a cookie value vouches for, or null if it is forged, malformed or expired. */
-export function verifyWalletSession(value: string | undefined, now = Date.now()): `0x${string}` | null {
+type VerifiedSession = { address: `0x${string}`; ageSeconds: number };
+
+function verify(value: string | undefined, now: number): VerifiedSession | null {
   if (!value) return null;
   const key = secret();
   if (!key) return null;
@@ -66,7 +68,25 @@ export function verifyWalletSession(value: string | undefined, now = Date.now())
   const actual = Buffer.from(signature, 'base64url');
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
 
-  return address;
+  return { address, ageSeconds };
+}
+
+/** The checksummed address a cookie value vouches for, or null if it is forged, malformed or expired. */
+export function verifyWalletSession(value: string | undefined, now = Date.now()): `0x${string}` | null {
+  return verify(value, now)?.address ?? null;
+}
+
+/**
+ * The session in this request with whether it is due to be re-issued, or null when there is none
+ * the server can trust. For the code that issues sessions; everything else wants `readWalletCookie`.
+ */
+export function readWalletSession(
+  cookieStore: CookieReader,
+  now = Date.now()
+): { address: `0x${string}`; renewalDue: boolean } | null {
+  const session = verify(cookieStore.get(WALLET_SESSION)?.value, now);
+  if (!session) return null;
+  return { address: session.address, renewalDue: session.ageSeconds > WALLET_SESSION_RENEW_AFTER_SECONDS };
 }
 
 /**

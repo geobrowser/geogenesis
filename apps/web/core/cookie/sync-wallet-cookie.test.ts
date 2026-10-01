@@ -289,4 +289,24 @@ describe('syncWalletCookie', () => {
       expect(onConnectionChange).toHaveBeenCalledTimes(2);
     });
   });
+
+  // A tab left open for weeks must still ask once a week, which is when the server re-issues the
+  // session; otherwise the session would expire under a tab that believed it was synced.
+  describe('a long-open tab', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it('asks again once the session is due for renewal, and not before', async () => {
+      const DAY = 24 * 60 * 60 * 1000;
+      await syncWalletCookie(ADDRESS);
+
+      vi.setSystemTime(Date.now() + 6 * DAY);
+      await syncWalletCookie(ADDRESS);
+      expect(onConnectionChange).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(Date.now() + 2 * DAY);
+      await syncWalletCookie(ADDRESS);
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+  });
 });

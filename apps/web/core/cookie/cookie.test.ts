@@ -131,4 +131,39 @@ describe('onConnectionChange', () => {
 
     expect(store.delete).not.toHaveBeenCalled();
   });
+
+  // Renewal is a cookie write, so it re-renders the page (#2672): only once the session is due.
+  describe('renewal', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    it('re-issues a session for the same wallet once it is more than 7 days old', async () => {
+      const old = signWalletSession(ADDRESS, Date.now() - 8 * DAY)!;
+      store.values.set(WALLET_SESSION, old);
+
+      await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBe(ADDRESS);
+
+      expect(store.set).toHaveBeenCalledTimes(1);
+      const renewed = store.values.get(WALLET_SESSION)!;
+      expect(renewed).not.toBe(old);
+      expect(verifyWalletSession(renewed, Date.now() + 29 * DAY)).toBe(ADDRESS);
+    });
+
+    it('leaves a same-wallet session under 7 days old alone', async () => {
+      store.values.set(WALLET_SESSION, signWalletSession(ADDRESS, Date.now() - 6 * DAY)!);
+
+      await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+      expect(store.set).not.toHaveBeenCalled();
+    });
+
+    it('issues the cookie for 30 days', async () => {
+      await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+      expect(store.set).toHaveBeenCalledWith(
+        WALLET_SESSION,
+        expect.any(String),
+        expect.objectContaining({ maxAge: 30 * 24 * 60 * 60 })
+      );
+    });
+  });
 });
