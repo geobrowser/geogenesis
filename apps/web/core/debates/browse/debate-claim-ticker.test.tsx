@@ -854,7 +854,7 @@ describe('the small-panel layout', () => {
     expect(cardOf(text)).toHaveClass('flex-col', 'p-3');
     // Small: one row, one line.
     expect(text).toHaveClass('@max-md:line-clamp-1');
-    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5');
+    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5', '@max-md:min-h-9');
   });
 
   // The name and the share are a tap away in the sheet; on a 337px line they would leave the claim
@@ -931,6 +931,21 @@ describe('the small-panel layout', () => {
 
     expect(screen.getByTitle('Show the whole claim')).toHaveClass('@max-md:invisible');
     expect(claimText(/Supreme Court/)).toHaveClass('@max-md:visible');
+  });
+
+  /**
+   * The wrapper the read-in-full tap needs must not change the wide card. In a plain block box the
+   * expand toggle is an inline-level `<button>` on a line box of its own, and every truncated claim
+   * in the desktop backlog came out 87px rather than 80px. Measured on the preview; jsdom has no
+   * layout, so what is pinned is the flex column that blockifies it.
+   */
+  it('keeps the expand toggle a flex item, so the wide card keeps its height', () => {
+    forceClampedOverflow();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+
+    for (const toggle of screen.getAllByTitle('Show the whole claim')) {
+      expect(toggle.parentElement).toHaveClass('flex', 'flex-col');
+    }
   });
 
   // The end card's carousel draws the same card on white, inside the same `@container`, with its
