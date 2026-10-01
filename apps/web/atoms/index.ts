@@ -103,12 +103,41 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{
+export type EntityCommentsPanelTarget = {
   entityId: string;
   spaceId: string;
   /** Logical graph type retained so comments created from the global panel are attributed correctly. */
   targetEntityType?: string;
-} | null>(null);
+};
+
+export const entityCommentsPanelAtom = atom<EntityCommentsPanelTarget | null>(null);
+
+/** The debate whose claims panel the explore feed has open, or `null`. */
+export const exploreDebateClaimsPanelAtom = atom<string | null>(null);
+
+/** Every panel sharing the one right-hand slot. */
+type EntityPanelKind = 'entity' | 'comments' | 'exploreDebateClaims';
+
+const clearEntityPanelsExceptAtom = atom(null, (_get, set, keep: EntityPanelKind) => {
+  if (keep !== 'entity') set(entitySidePanelAtom, null);
+  if (keep !== 'comments') set(entityCommentsPanelAtom, null);
+  if (keep !== 'exploreDebateClaims') set(exploreDebateClaimsPanelAtom, null);
+});
+
+export const openEntitySidePanelAtom = atom(null, (_get, set, target: EntitySidePanelTarget | null) => {
+  set(entitySidePanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'entity');
+});
+
+export const openEntityCommentsPanelAtom = atom(null, (_get, set, target: EntityCommentsPanelTarget | null) => {
+  set(entityCommentsPanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'comments');
+});
+
+export const openExploreDebateClaimsPanelAtom = atom(null, (_get, set, debateId: string | null) => {
+  set(exploreDebateClaimsPanelAtom, debateId);
+  if (debateId) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
+});
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 

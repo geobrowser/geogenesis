@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useAtomValue, useSetAtom } from 'jotai';
+
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
@@ -24,6 +26,7 @@ import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
+import { exploreDebateClaimsPanelAtom, openExploreDebateClaimsPanelAtom } from '~/atoms';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
@@ -287,13 +290,22 @@ export function DebateExploreFeedCard({
     return () => onPlaybackAvailabilityChange(debateId, false);
   }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
-  // The interaction state lives on the card rather than inside the bar: the bar is shared with the
-  // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
-  // share dialog, the app's comments panel — is the card's to own and to render once. Same
-  // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
-  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  /*
+   * Which control opens what is still the card's to render — the bar is shared with the full-screen
+   * feed and stays presentational — but *whether* this card's claims panel is open is not the card's
+   * to own.
+   *
+   * It was `useState` here, which gave every card in the feed its own flag. Several cards sit inside
+   * the 800px media look-ahead band at once, so several can show a Claims button, and each could open
+   * a panel: the same fixed overlay at the same edge, so the second covered the first exactly and
+   * only closing it revealed that two were open. Held in one atom naming the debate, the feed has
+   * one panel and opening another debate's replaces it.
+   */
+  const openClaimsDebateId = useAtomValue(exploreDebateClaimsPanelAtom);
+  const setClaimsPanel = useSetAtom(openExploreDebateClaimsPanelAtom);
+  const claimsOpen = openClaimsDebateId === debateId;
   // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
-  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
+  const openClaims = React.useCallback(() => setClaimsPanel(debateId), [debateId, setClaimsPanel]);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -435,7 +447,7 @@ export function DebateExploreFeedCard({
               rail to put it in. The panel itself is the same component. */}
           {claimsOpen ? (
             <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
+              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsPanel(null)} />
             </div>
           ) : null}
         </>
