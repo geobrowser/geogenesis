@@ -21,6 +21,9 @@ type Props = {
   onToggle: (topic: TopicOption) => void;
   /** The caller is still working out `spaceIds`. */
   isPreparing?: boolean;
+  /** The caller failed to work out `spaceIds`; `onRetryPrepare` tries again. */
+  failedToPrepare?: boolean;
+  onRetryPrepare?: () => void;
   className?: string;
 };
 
@@ -28,7 +31,15 @@ type Props = {
  * Search box and a wall of topic pills. Holds no picks itself, so it renders the same inside
  * onboarding and anywhere else that lets someone choose topics to follow.
  */
-export function FeedTopicPicker({ spaceIds, selected, onToggle, isPreparing = false, className }: Props) {
+export function FeedTopicPicker({
+  spaceIds,
+  selected,
+  onToggle,
+  isPreparing = false,
+  failedToPrepare = false,
+  onRetryPrepare,
+  className,
+}: Props) {
   const [query, setQuery] = React.useState('');
   const hasQuery = query.trim().length > 0;
 
@@ -43,7 +54,10 @@ export function FeedTopicPicker({ spaceIds, selected, onToggle, isPreparing = fa
   const selectedIds = React.useMemo(() => new Set(selected.map(topic => normId(topic.id))), [selected]);
 
   const isBusy = hasQuery ? isSearching && results.length === 0 : isPreparing || isLoading;
-  const failed = hasQuery ? isSearchError : isError;
+  const failed = hasQuery ? isSearchError : isError || failedToPrepare;
+  const retry = failedToPrepare ? onRetryPrepare : () => void refetch();
+  // Hits from the previous query stay on screen while the next loads, but can't be picked.
+  const isStale = hasQuery && isSearching;
   const nothingListed = (hasQuery ? results : suggestions).length === 0;
 
   return (
@@ -67,6 +81,7 @@ export function FeedTopicPicker({ spaceIds, selected, onToggle, isPreparing = fa
               key={topic.id}
               topic={topic}
               isSelected={selectedIds.has(normId(topic.id))}
+              isStale={isStale && !selectedIds.has(normId(topic.id))}
               onToggle={onToggle}
             />
           ))}
@@ -81,8 +96,8 @@ export function FeedTopicPicker({ spaceIds, selected, onToggle, isPreparing = fa
             <Text as="p" variant="body" className="text-[16px] leading-5 font-normal text-grey-04">
               We couldn&apos;t load topics.
             </Text>
-            {!hasQuery && (
-              <button type="button" onClick={() => refetch()} className="text-smallButton text-text underline">
+            {!hasQuery && retry && (
+              <button type="button" onClick={retry} className="text-smallButton text-text underline">
                 Try again
               </button>
             )}
@@ -114,25 +129,33 @@ export function FeedTopicPicker({ spaceIds, selected, onToggle, isPreparing = fa
 function TopicPill({
   topic,
   isSelected,
+  isStale,
   onToggle,
 }: {
   topic: TopicOption;
   isSelected: boolean;
+  isStale: boolean;
   onToggle: (topic: TopicOption) => void;
 }) {
   return (
     <div
       role="button"
-      tabIndex={0}
+      tabIndex={isStale ? -1 : 0}
       aria-pressed={isSelected}
+      aria-disabled={isStale || undefined}
       onKeyDown={event => {
+        if (isStale) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onToggle(topic);
         }
       }}
-      onClick={() => onToggle(topic)}
-      className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${isSelected ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
+      onClick={() => !isStale && onToggle(topic)}
+      className={cx(
+        'flex items-center justify-start rounded-[40px] border px-4 py-3',
+        isSelected ? 'border-[#2A2B2E]' : 'border-grey-02',
+        isStale ? 'cursor-default opacity-50' : 'cursor-pointer'
+      )}
     >
       <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{topic.name}</span>
     </div>

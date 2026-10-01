@@ -289,7 +289,7 @@ export const OnboardingDialog = () => {
           onEscapeKeyDown={e => e.preventDefault()}
           onPointerDownOutside={e => e.preventDefault()}
           onInteractOutside={e => e.preventDefault()}
-          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center p-6"
+          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center overflow-y-auto p-6"
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
@@ -324,6 +324,8 @@ export const OnboardingDialog = () => {
               <StepCustomizeFeed
                 spaceIds={selectedTopicIds.length > 0 ? selectedTopicIds : featuredSpaces.map(space => space.id)}
                 isPreparing={selectedTopicIds.length === 0 && featuredStatus === 'loading'}
+                failedToPrepare={selectedTopicIds.length === 0 && featuredStatus === 'error'}
+                onRetryPrepare={loadFeaturedSpaces}
                 selected={feedTopics}
                 onToggle={handleToggleFeedTopic}
                 onCompleteOnboard={onCompleteOnboard}
@@ -346,7 +348,7 @@ type ModalCardProps = {
 // The topic step is a wall of pills, so it gets a wider, taller card than the rest of the flow.
 const cardSize = (step: Step) => {
   if (step === 'completed') return 'h-[245px] max-w-[360px] px-6 py-10';
-  if (step === 'customize-feed') return 'h-[560px] max-h-[calc(100dvh-13rem)] max-w-[480px] p-6 pt-8';
+  if (step === 'customize-feed') return 'h-[560px] max-h-[calc(100dvh-13rem)] min-h-[420px] max-w-[480px] p-6 pt-8';
   return 'h-[485px] max-w-[360px] p-6 pt-8';
 };
 
@@ -908,12 +910,16 @@ function StepInterestedIn({
 function StepCustomizeFeed({
   spaceIds,
   isPreparing,
+  failedToPrepare,
+  onRetryPrepare,
   selected,
   onToggle,
   onCompleteOnboard,
 }: {
   spaceIds: string[];
   isPreparing: boolean;
+  failedToPrepare: boolean;
+  onRetryPrepare: () => void;
   selected: TopicOption[];
   onToggle: (topic: TopicOption) => void;
   onCompleteOnboard: () => void;
@@ -940,6 +946,8 @@ function StepCustomizeFeed({
       <FeedTopicPicker
         spaceIds={spaceIds}
         isPreparing={isPreparing}
+        failedToPrepare={failedToPrepare}
+        onRetryPrepare={onRetryPrepare}
         selected={selected}
         onToggle={onToggle}
         className="mt-6 flex-1"
