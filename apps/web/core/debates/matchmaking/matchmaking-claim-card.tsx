@@ -56,6 +56,17 @@ import type {
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
+/**
+ * The publish function of whichever control for a claim is mounted now, by queued-action id.
+ *
+ * A vote queued before sign-up replays through `useEntityResponse`, whose in-flight state — the
+ * thing that keeps the pill held while the write confirms — is keyed by the viewer's personal space.
+ * The function captured at the press predates that space, so it records the write under a key no
+ * card reads, and the pill dropped back to empty the moment the queue let go of it. Replaying through
+ * a control mounted after sign-up writes where the card on screen is looking.
+ */
+const liveClaimResponseSubmitters = new Map<string, (direction: 'positive' | 'negative') => Promise<unknown>>();
+
 /** A signed-out press's sign-in prompt. `onCancel` withdraws the press if the sign-in is abandoned. */
 export type RequireSignIn = (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) => void;
 
@@ -484,6 +495,16 @@ export function useClaimPositionControl({
   // held in the card went with it.
   const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
   const queuedDirection = usePendingAction(queuedActionId)?.direction;
+  const submitResponseAsyncRef = React.useRef(submitResponseAsync);
+  submitResponseAsyncRef.current = submitResponseAsync;
+  React.useEffect(() => {
+    const submit = (direction: 'positive' | 'negative') => submitResponseAsyncRef.current(direction);
+    liveClaimResponseSubmitters.set(queuedActionId, submit);
+    return () => {
+      if (liveClaimResponseSubmitters.get(queuedActionId) === submit)
+        liveClaimResponseSubmitters.delete(queuedActionId);
+    };
+  }, [queuedActionId]);
   const queuedPosition = queuedDirection === undefined ? null : queuedDirection === 'positive';
   const viewerPosition = pendingResponse
     ? optimisticPosition
@@ -556,7 +577,8 @@ export function useClaimPositionControl({
       label: 'your position',
       requires: 'personalSpace',
       direction,
-      run: () => submitResponseAsync(direction).then(() => {}),
+      // The press's own function only when no card for this claim is mounted to draw the result.
+      run: () => (liveClaimResponseSubmitters.get(queuedActionId) ?? submitResponseAsync)(direction).then(() => {}),
     });
   };
 

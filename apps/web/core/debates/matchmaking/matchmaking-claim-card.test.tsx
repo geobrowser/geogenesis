@@ -258,8 +258,7 @@ beforeEach(() => {
     }
   );
   mocks.submitResponse.mockReset();
-  mocks.submitResponseAsync.mockReset();
-  mocks.submitResponseAsync.mockResolvedValue(undefined);
+  mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
   queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
@@ -937,11 +936,16 @@ describe('a side picked before the account can publish', () => {
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
     unmount();
 
+    // The remounted card's response hook knows the new personal space; the press's does not.
+    const pressSubmit = mocks.submitResponseAsync;
+    mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
     renderCard(signedOutCard(vi.fn()));
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
 
+    // Replays through the card on screen, so its in-flight state lands where that card reads it.
     await queued()[0].run();
     expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
+    expect(pressSubmit).not.toHaveBeenCalled();
   });
 
   it('withdraws the side when the sign-in is abandoned', () => {
