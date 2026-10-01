@@ -363,7 +363,8 @@ function NextDebateCard({ next, highlighted, onPlay }: { next: NextDebate; highl
       {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked. */}
       <span
         className={cx(
-          'relative block aspect-[27/41] w-full overflow-hidden rounded-md bg-grey-02',
+          // Shorter on a narrow player, so "Play next" stays on screen under the row.
+          'relative block aspect-[27/41] w-full overflow-hidden rounded-md bg-grey-02 @max-md:aspect-[4/3]',
           highlighted && 'ring-2 ring-text ring-offset-1'
         )}
       >

@@ -669,7 +669,9 @@ function DebateFeedPlayerBody({
         'relative aspect-480/289 w-full md:absolute md:aspect-auto md:transition-[top,right,width,height,border-radius] md:duration-500 md:ease-[cubic-bezier(0.34,1.56,0.64,1)]',
         slot === speakerSlot
           ? 'md:top-0 md:right-0 md:z-0 md:h-full md:w-full'
-          : 'md:top-3 md:right-3 md:z-30 md:h-[34%] md:w-[28%] md:rounded-lg md:shadow-card md:ring-2 md:ring-white'
+          : // Bottom right, clear of the turn timer and round badge in the top corner and above the
+            // timeline. `top` rather than `bottom` so the swap animates from the speaker's `top-0`.
+            'md:top-[calc(66%-2.75rem)] md:right-3 md:z-30 md:h-[34%] md:w-[28%] md:rounded-lg md:shadow-card md:ring-2 md:ring-white'
       );
     return undefined;
   };
@@ -840,7 +842,7 @@ function DebateFeedPlayerBody({
         <DebaterVideo
           inert={endCardShown}
           participant={slot1Participant}
-          byline={bylineFor(slot1Participant)}
+          byline={layout === 'versus' && isPhone ? null : bylineFor(slot1Participant)}
           src={slot1Src}
           videoRef={slot1VideoRef}
           buffer={active || buffer}
@@ -863,13 +865,14 @@ function DebateFeedPlayerBody({
           topLeft={immersive ? null : topLeftControls}
           layoutClassName={tileLayout(1)}
           pipListener={pipListener(1)}
+          fullWidthName={layout === 'versus'}
           clearScrubber={immersive ? clearScrubberFor(1) : 'never'}
           teaser={showTeaser && teasers && slot1Src ? { src: slot1Src, window: teasers[1] } : null}
         />
         <DebaterVideo
           inert={endCardShown}
           participant={slot2Participant}
-          byline={bylineFor(slot2Participant)}
+          byline={layout === 'versus' && isPhone ? null : bylineFor(slot2Participant)}
           src={slot2Src}
           videoRef={slot2VideoRef}
           buffer={active || buffer}
@@ -894,6 +897,7 @@ function DebateFeedPlayerBody({
           scrubber={immersive ? null : scrubberControl}
           layoutClassName={tileLayout(2)}
           pipListener={pipListener(2)}
+          fullWidthName={layout === 'versus'}
           teaser={showTeaser && teasers && slot2Src ? { src: slot2Src, window: teasers[2] } : null}
         />
 
@@ -951,12 +955,13 @@ function DebateFeedPlayerBody({
           !roundCard &&
           !endCardShown &&
           (!reducedOverlays || (active && playing && mutedByUser)) &&
+          !holdPlayback &&
           !(immersive && isPhone && panelClaim === null) && (
             <span
               className={cx(
                 'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]',
                 // No seam in the corner layout: the pill sits above the timeline instead.
-                layout === 'pip' && 'md:top-auto md:bottom-9 md:translate-y-0'
+                layout === 'pip' && 'md:top-16 md:translate-y-0'
               )}
             >
               {subtitle}
@@ -1099,6 +1104,7 @@ function DebaterVideo({
   inert = false,
   layoutClassName,
   pipListener = false,
+  fullWidthName = false,
   teaser = null,
 }: {
   participant: DebateParticipant | null;
@@ -1156,6 +1162,8 @@ function DebaterVideo({
   layoutClassName?: string;
   /** The small corner tile of the full-screen view's phone layout: no name band or overlays. */
   pipListener?: boolean;
+  /** Half-width tiles on a phone, before the debate: the name has nothing beside it to share with. */
+  fullWidthName?: boolean;
   /** A few seconds of this debater to loop silently over the tile before the debate starts. */
   teaser?: { src: string; window: TeaserWindow } | null;
 }) {
@@ -1613,7 +1621,10 @@ function DebaterVideo({
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
+          className={cx(
+            'pointer-events-auto flex min-w-0 items-center gap-2 text-left',
+            fullWidthName ? 'max-w-[55%] md:max-w-full' : 'max-w-[55%]'
+          )}
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
