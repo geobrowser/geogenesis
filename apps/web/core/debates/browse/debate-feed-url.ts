@@ -49,8 +49,8 @@ export function debateFeedHref(
     return `${location.pathname}?${params.toString()}`;
   }
 
-  const currentEntityId = location.pathname.split('/').filter(Boolean).at(-1);
-  if (currentEntityId != null && ID.equals(currentEntityId, debateId)) return null;
+  const currentDebateId = debateIdFromEntityPath(location.pathname, spaceId);
+  if (currentDebateId != null && ID.equals(currentDebateId, debateId)) return null;
   params.delete(DEBATE_TIME_PARAM);
   const query = params.toString();
   return `${NavUtils.toEntity(spaceId, hexId)}${query ? `?${query}` : ''}`;

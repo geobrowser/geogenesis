@@ -78,6 +78,7 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 vi.mock('next/navigation', () => ({
   // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
   useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.

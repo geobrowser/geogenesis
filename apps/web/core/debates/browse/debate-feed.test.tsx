@@ -755,6 +755,14 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
   });
 });
 
+const older = '2026-07-01T00:00:00.000Z';
+const newer = '2026-07-05T00:00:00.000Z';
+
+/** The feed's claim titles, top to bottom. */
+function headings() {
+  return screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
+}
+
 function activateDebate(claim: string) {
   const section = screen.getByRole('heading', { name: claim }).closest('section');
   if (!section) throw new Error(`Could not find debate section for ${claim}`);
@@ -828,13 +836,6 @@ function completedDebate(id: string, claim: string, completedAt: string): Debate
 }
 
 describe('DebatesBrowseFeed ordering', () => {
-  const older = '2026-07-01T00:00:00.000Z';
-  const newer = '2026-07-05T00:00:00.000Z';
-
-  function headings() {
-    return screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
-  }
-
   // What plays after the debate you opened is what the explore page's "Best" sort would have
   // shown you, rather than simply the most recent thing in the space.
   it('follows the Best ranking rather than recency', () => {
@@ -1063,9 +1064,6 @@ describe('DebatesBrowseFeed visit outcome (GEO-3074)', () => {
 // A short-video feed's address bar names what is on screen, so reloading, copying it or coming Back
 // lands on that debate rather than on whichever one the feed was opened at.
 describe('DebatesBrowseFeed — the URL follows the debate on screen', () => {
-  const older = '2026-07-01T00:00:00.000Z';
-  const newer = '2026-07-05T00:00:00.000Z';
-
   beforeEach(() => {
     mocks.debates = [
       completedDebate('debate-1', 'Opened debate', newer),
@@ -1125,10 +1123,6 @@ describe('DebatesBrowseFeed — the URL follows the debate on screen', () => {
 // a debate inserted above the one on screen drags the scroll position down with it.
 describe('DebatesBrowseFeed — nothing is inserted above what the viewer has reached', () => {
   const at = (day: number) => `2026-07-${String(day).padStart(2, '0')}T00:00:00.000Z`;
-
-  function headings() {
-    return screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
-  }
 
   it('keeps the reached debates and the preloading ones in place when a better-ranked debate arrives', () => {
     mocks.debates = ['a', 'b', 'c', 'd', 'e'].map((id, index) => completedDebate(id, `Debate ${id}`, at(10 - index)));

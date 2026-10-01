@@ -307,14 +307,14 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
-  // Memoised because both branches build a new array: the effect below is keyed on this, and an
-  // unmemoised ternary re-ran it on every render.
   // An unanchored feed has nothing fixed at the top, so its first paint has to be its final order:
   // painting whichever debates' readiness came back first, then ranking the rest in above them, is
   // the drift described at `pinnedIds`. Only until something is pinned — after that the order on
   // screen is held by the pin, and a later lookup (a refetch adding a debate) must not blank it.
   const orderPending = initialDebateId == null && mediaLoading && pinnedIds.length === 0;
 
+  // Memoised because both branches build a new array: the effect below is keyed on this, and an
+  // unmemoised ternary re-ran it on every render.
   const visibleDebates = React.useMemo(
     () => (anchorPending || orderPending ? [] : debates.slice(0, visibleCount)),
     [anchorPending, orderPending, debates, visibleCount]
