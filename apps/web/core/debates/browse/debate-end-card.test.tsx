@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { summarizeClaimResponses } from '~/core/claims/browse/claim-response-summary';
 import type { DebateParticipant } from '~/core/debates/api';
-import { claimVsArguments, poolResponses } from '~/core/debates/end-card';
 
 import { DebateEndCard } from './debate-end-card';
+import type { NextDebate } from './use-next-debate';
 
 afterEach(cleanup);
 
@@ -19,22 +19,28 @@ vi.mock('~/core/claims/browse/claim-summary', () => ({
   ClaimResponders: ({ entityId }: { entityId: string }) => <span data-testid="claim-voters" data-entity={entityId} />,
   ClaimSplitBar: ({ percent }: { percent: number }) => <span role="presentation" data-split={percent} />,
 }));
-vi.mock('~/partials/blocks/table/ranking-period-metadata', () => ({
-  RankingAggregatedSubmitterAvatars: ({ submitterSpaceIds }: { submitterSpaceIds: string[] }) => (
-    <span data-testid="debater-faces">{submitterSpaceIds.length}</span>
+// The live claim card reads the network for its votes; what matters here is which claims the
+// carousel hands it, in what order, and with whom as the speaker.
+vi.mock('./debate-claim-ticker', () => ({
+  DebateClaimTickerCard: ({
+    window,
+    speaker,
+  }: {
+    window: { claim: { id: string; text: string } };
+    speaker: { display_name: string } | null;
+  }) => (
+    <div data-testid="claim-card" data-claim={window.claim.id}>
+      {speaker?.display_name}: {window.claim.text}
+    </div>
   ),
 }));
-// Resolving a person's profile reads the network and drives the side panel; what matters here is
-// which person the card asks it to open, and from where.
-const profileMocks = vi.hoisted(() => ({ opened: [] as { spaceId: string; surface?: string }[] }));
-vi.mock('./use-open-debater-profile', () => ({
-  useOpenDebaterProfile:
-    (participant: { profile_space_id: string }, options?: { interactionSurface?: string }) =>
-    (event: { preventDefault: () => void }) => {
-      // As the real hook does for a plain click on a link: open the panel instead of navigating.
-      event.preventDefault();
-      profileMocks.opened.push({ spaceId: participant.profile_space_id, surface: options?.interactionSurface });
-    },
+// Hydrates the entity on hover through the sync engine; here it only has to be the link it wraps.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...props
+  }: React.ComponentProps<'a'> & Record<string, unknown>) => <a {...props} />,
 }));
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({ showParticipants }: { showParticipants?: boolean }) => (
@@ -63,30 +69,25 @@ const participant = (spaceId: string, name: string, position: boolean): DebatePa
     participant_slot: position ? 1 : 2,
   }) as unknown as DebateParticipant;
 
-const debater = (spaceId: string, name: string, position: boolean, votes: [number, number], claimCount = 8) => {
-  const split = poolResponses([{ counts: { positive: votes[0], negative: votes[1] }, responders: [] }]);
-  return {
-    participant: participant(spaceId, name, position),
-    name,
-    claimCount,
-    split,
-    responderSpaceIds: votes[0] + votes[1] > 0 ? ['a', 'b', 'c', 'd'] : [],
-  };
-};
+const carouselClaim = (id: string, spaceId: string | null = 'space-1') => ({
+  id,
+  text: `Claim ${id}`,
+  spaceId,
+  blockId: 'block',
+  timing: null,
+});
 
 function cardFixture({
   claim = summary(62, 38),
-  steve = [44, 56] as [number, number],
-  jonathan = [71, 29] as [number, number],
-  countsReady = true,
+  claimIds = ['c1', 'c2', 'c3'],
+  nextDebate = null,
 }: {
   claim?: ReturnType<typeof summary>;
-  steve?: [number, number];
-  jonathan?: [number, number];
-  countsReady?: boolean;
+  claimIds?: string[];
+  nextDebate?: NextDebate | null;
 } = {}): CardData {
-  const agreeSide = debater('steve-space', 'Steve Fuller', true, steve);
-  const disagreeSide = debater('jonathan-space', 'Jonathan Bostock', false, jonathan, 9);
+  const steve = participant('steve-space', 'Steve Fuller', true);
+  const jonathan = participant('jonathan-space', 'Jonathan Bostock', false);
   return {
     claimId: 'claim-1',
     spaceId: 'space-1',
@@ -104,14 +105,28 @@ function cardFixture({
         responseError: null,
       },
     },
-    debaters: [agreeSide, disagreeSide],
-    agreeSide,
-    disagreeSide,
-    comparison: claimVsArguments({ claim, agreeSide: agreeSide.split, disagreeSide: disagreeSide.split }),
-    countsReady,
-    totalClaims: 17,
+    carousel: {
+      claims: claimIds.map(id => carouselClaim(id)),
+      // Alternating, as a debate does.
+      speakerByClaimId: new Map(claimIds.map((id, index) => [id, index % 2 === 0 ? steve : jonathan])),
+      entitiesByClaimId: new Map(),
+    },
+    nextDebate,
   } as unknown as CardData;
 }
+
+const nextDebate = (overrides: Partial<NextDebate> = {}): NextDebate => ({
+  debateId: 'next-debate',
+  spaceId: 'space-1',
+  claimName: 'We should slow down AI development',
+  keyFrame: 'ipfs://keyframe',
+  related: true,
+  participants: [
+    { spaceId: 'ada-space', name: 'Ada', avatarUrl: null },
+    { spaceId: 'bo-space', name: 'Bo', avatarUrl: null },
+  ],
+  ...overrides,
+});
 
 const renderCard = (card: CardData, onOpenClaims?: (id?: string) => void, onReplay = vi.fn()) =>
   render(<DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} />);
@@ -135,14 +150,6 @@ describe('DebateEndCard', () => {
     expect(voters[0]).toHaveAttribute('data-entity', 'claim-1');
   });
 
-  it('draws the comparison in full at every width, not a narrow-player summary', () => {
-    const { container } = renderCard(cardFixture());
-    const box = container.querySelector('[data-end-card-comparison="ready"]') as HTMLElement;
-
-    expect(within(box).getByText('Claim vs. arguments')).toBeInTheDocument();
-    expect(box.querySelector('[role="img"]')?.className).not.toContain('@max-md:hidden');
-  });
-
   it('keeps the ready-to-debate faces out of the pills, since the row above shows who voted', () => {
     renderCard(cardFixture());
     expect(screen.getByTestId('position-row')).toHaveAttribute('data-show-participants', 'false');
@@ -156,159 +163,129 @@ describe('DebateEndCard', () => {
     expect(screen.queryByTestId('claim-voters')).toBeNull();
   });
 
-  it('prints no claim count for a debater before the transcript has said which claims are theirs', () => {
-    const card = cardFixture();
-    card.debaters.forEach(debater => {
-      (debater as { claimCount: number | null }).claimCount = null;
-    });
-    renderCard(card);
-
-    expect(screen.queryByText(/\d+ claims/)).toBeNull();
-  });
-
   it('asserts nothing about the votes before the counts have landed', () => {
     // "No votes yet" off a query still in flight would be a fact about the network, not the debate.
-    renderCard(cardFixture({ claim: summary(0, 0, { hasCounts: false }), countsReady: false }));
+    renderCard(cardFixture({ claim: summary(0, 0, { hasCounts: false }) }));
 
     expect(screen.queryByText('No votes yet')).toBeNull();
-    expect(screen.queryByText('Claim vs. arguments')).toBeNull();
   });
 
-  it('shows each debater with their side, then their count, share and voters on one line', () => {
+  it('lays the extracted claims out as a carousel of votable cards, in the order given', () => {
     renderCard(cardFixture());
+    const strip = screen.getByRole('region', { name: 'Claims from this debate' });
 
-    const steve = document.querySelector('[data-end-card-debater="steve-space"]') as HTMLElement;
-    expect(within(steve).getByText('Steve Fuller')).toBeInTheDocument();
-    expect(within(steve).getAllByText(/Agree/).length).toBeGreaterThan(0);
-
-    const row = within(steve).getByText('44% agree').parentElement as HTMLElement;
-    expect(within(row).getByText('8 claims')).toBeInTheDocument();
-    expect(within(row).getByTestId('debater-faces')).toBeInTheDocument();
-  });
-
-  it('puts the side and the count on one line on a narrow player, and the share and voters on the next', () => {
-    // jsdom applies no container queries, so this reads the layout off the classes that make it.
-    renderCard(cardFixture());
-    const steve = document.querySelector('[data-end-card-debater="steve-space"]') as HTMLElement;
-    const row = within(steve).getByText('44% agree').parentElement as HTMLElement;
-    const parts = [...row.children] as HTMLElement[];
-    const at = (predicate: (part: HTMLElement) => boolean) => parts.findIndex(predicate);
-
-    const side = at(part => part.textContent === 'Agree');
-    const count = at(part => part.textContent === '8 claims');
-    const lineBreak = at(part => part.classList.contains('basis-full'));
-    const share = at(part => part.textContent === '44% agree');
-
-    expect(side).toBeGreaterThanOrEqual(0);
-    expect(parts[side].className).toContain('hidden @max-md:inline');
-    expect(side < count && count < lineBreak && lineBreak < share).toBe(true);
-    expect(parts[lineBreak].className).toContain('@max-md:block');
-    // The break spaces the two lines by its own height, the column's gap; a row gap on top of that
-    // would land once above the break and once below, doubling the space over the share.
-    expect(parts[lineBreak].className).toContain('h-1.5');
-    expect(row.className).toContain('@max-md:gap-y-0');
-    expect(steve.className).toContain('@max-md:gap-1.5');
-    // The separator between count and share belongs to the one-line layout only.
-    expect(parts[lineBreak + 1].textContent).toBe('·');
-    expect(parts[lineBreak + 1].className).toContain('@max-md:hidden');
-  });
-
-  it("draws no split bar for a debater — only the claim's own row has one", () => {
-    // A bar per debater repeated the claim's bar directly above at a size too small to read.
-    const { container } = renderCard(cardFixture());
-
-    expect(container.querySelectorAll('[data-split]')).toHaveLength(1);
-    for (const column of container.querySelectorAll('[data-end-card-debater]')) {
-      expect(column.querySelector('[data-split]')).toBeNull();
-    }
-  });
-
-  it("opens the claims panel at a debater's claims from their count, share and voters", () => {
-    const onOpenClaims = vi.fn();
-    renderCard(cardFixture(), onOpenClaims);
-
-    const open = screen.getByRole('button', { name: "9 claims, 71% agree — open Jonathan Bostock's claims" });
-    // The count and the faces are both inside the one control, so either opens it.
-    expect(within(open).getByText('9 claims')).toBeInTheDocument();
-    expect(within(open).getByTestId('debater-faces')).toBeInTheDocument();
-
-    fireEvent.click(within(open).getByText('9 claims'));
-    expect(onOpenClaims).toHaveBeenCalledWith('jonathan-space');
-  });
-
-  it("opens a debater's profile in the side panel from their name, not their claims", () => {
-    profileMocks.opened = [];
-    const onOpenClaims = vi.fn();
-    renderCard(cardFixture(), onOpenClaims);
-
-    fireEvent.click(screen.getByRole('link', { name: 'Jonathan Bostock' }));
-
-    expect(profileMocks.opened).toEqual([{ spaceId: 'jonathan-space', surface: 'debate_end_card' }]);
-    expect(onOpenClaims).not.toHaveBeenCalled();
-  });
-
-  it("links the name to the debater's space, so Cmd-click and copy link reach them", () => {
-    // A real address rather than a button: the hook lets modified clicks through to it. geo-chat
-    // spells space ids as dashed UUIDs and the space route takes the graph's hex.
-    const card = cardFixture();
-    (card.debaters[0].participant as { profile_space_id: string }).profile_space_id =
-      'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
-    renderCard(card);
-
-    expect(screen.getByRole('link', { name: 'Steve Fuller' })).toHaveAttribute(
-      'href',
-      '/space/aaaaaaaabbbbccccddddeeeeeeeeeeee'
-    );
-  });
-
-  it("keeps the side chip out of the name's link", () => {
-    renderCard(cardFixture());
-    const name = screen.getByRole('link', { name: 'Steve Fuller' });
-    expect(within(name).queryByText('Agree')).toBeNull();
-  });
-
-  it('draws no way into the claims when there is nowhere to open them', () => {
-    renderCard(cardFixture());
-
-    expect(screen.queryByRole('button', { name: /open Steve Fuller's claims/ })).toBeNull();
-    // The count and faces are still shown, just not as a control.
-    expect(screen.getAllByTestId('debater-faces')).toHaveLength(2);
-    expect(screen.getByText('8 claims')).toBeInTheDocument();
-  });
-
-  it('puts the claim and the arguments on one line, and reads the gap', () => {
-    const { container } = renderCard(cardFixture());
-
-    expect(screen.getByText('24 pts apart')).toBeInTheDocument();
     expect(
-      screen.getByText("Most agree with the claim, but found Jonathan Bostock's arguments against it more convincing.")
-    ).toBeInTheDocument();
-    // Agree runs from the left, under the Agree button: 62% agree sits 38% of the way along.
-    expect((container.querySelector('[data-marker="claim"]') as HTMLElement).style.left).toBe('38%');
-    expect((container.querySelector('[data-marker="arguments"]') as HTMLElement).style.left).toBe('62%');
+      within(strip)
+        .getAllByTestId('claim-card')
+        .map(card => card.dataset.claim)
+    ).toEqual(['c1', 'c2', 'c3']);
+    expect(within(strip).getByText('Steve Fuller: Claim c1')).toBeInTheDocument();
+    expect(within(strip).getByText('Jonathan Bostock: Claim c2')).toBeInTheDocument();
+    expect(within(strip).getByText(/Vote on claims made/)).toHaveTextContent('Vote on claims made · 3');
   });
 
-  it('names the ends of the line Agree and Disagree, left to right, and leaves the names above', () => {
-    // Agree on the left, as the Agree button and the green end of every split bar are. Which debater
-    // argued which side is already on the card directly above, so the line does not repeat it.
+  it('no longer draws a column per debater', () => {
+    renderCard(cardFixture());
+
+    expect(document.querySelector('[data-end-card-debater]')).toBeNull();
+    expect(screen.queryByText(/\d+ claims ·/)).toBeNull();
+  });
+
+  it('snaps a card at a time, and bleeds to the edges of the card', () => {
     const { container } = renderCard(cardFixture());
-    const line = container.querySelector('[data-end-card-comparison] [role="img"]') as HTMLElement;
-    const ends = [...line.children].filter(child => child.tagName === 'SPAN').map(child => child.textContent);
+    const strip = container.querySelector('[data-end-card-claims]') as HTMLElement;
 
-    expect(ends).toEqual(['Agree', 'Disagree']);
-    expect(line.textContent).not.toContain('Steve Fuller');
-    expect(line.textContent).not.toContain('Jonathan Bostock');
+    expect([...strip.classList]).toEqual(
+      expect.arrayContaining(['snap-x', 'snap-mandatory', 'overflow-x-auto', '-mx-5'])
+    );
+    expect([...(strip.firstElementChild as HTMLElement).classList]).toContain('snap-start');
   });
 
-  it('waits rather than characterising a split off a handful of votes', () => {
-    const { container } = renderCard(cardFixture({ steve: [1, 1] }));
+  it('steps the strip a card at a time from the arrows, at every width', () => {
+    const { container } = renderCard(cardFixture());
+    const strip = container.querySelector('[data-end-card-claims]') as HTMLElement;
+    strip.scrollBy = vi.fn();
+    Object.defineProperty(strip.firstElementChild, 'offsetWidth', { value: 264 });
+    // jsdom lays nothing out; give the strip more cards than it can show, then let it re-read.
+    Object.defineProperty(strip, 'clientWidth', { value: 400 });
+    Object.defineProperty(strip, 'scrollWidth', { value: 800 });
+    fireEvent.scroll(strip);
 
-    expect(container.querySelector('[data-end-card-comparison]')).toHaveAttribute(
-      'data-end-card-comparison',
-      'waiting'
+    const more = screen.getByRole('button', { name: 'More claims' });
+    fireEvent.click(more);
+
+    expect(strip.scrollBy).toHaveBeenCalledWith({ left: 264, behavior: 'smooth' });
+    expect([...more.classList]).not.toContain('@max-md:hidden');
+    // At the start, there is nothing to go back to.
+    expect(screen.getByRole('button', { name: 'Previous claims' })).toBeDisabled();
+  });
+
+  it('opens the claims panel from See all, which a narrow player hides', () => {
+    const onOpenClaims = vi.fn();
+    renderCard(cardFixture(), onOpenClaims);
+
+    const seeAll = screen.getByRole('button', { name: 'See all' });
+    fireEvent.click(seeAll);
+    expect(onOpenClaims).toHaveBeenCalledWith();
+    // A narrow player's header has room for the arrows or See all, and keeps the arrows.
+    expect([...seeAll.classList]).toContain('@max-md:hidden');
+  });
+
+  it('offers no See all when there is nowhere to open the claims', () => {
+    renderCard(cardFixture());
+    expect(screen.queryByRole('button', { name: 'See all' })).toBeNull();
+  });
+
+  it('leaves the section out entirely when the debate extracted no claims yet', () => {
+    renderCard(cardFixture({ claimIds: [] }));
+    expect(screen.queryByRole('region', { name: 'Claims from this debate' })).toBeNull();
+  });
+
+  it('heads the next debate like the claims, and links it to its page with its claim and who argued it', () => {
+    const { container } = renderCard(cardFixture({ nextDebate: nextDebate() }));
+    const section = screen.getByRole('region', { name: 'Watch a related debate' });
+    const link = within(section).getByRole('link');
+
+    expect(section).toHaveAttribute('data-end-card-next-debate', 'related');
+    // A heading beside the row, in the same style as "Vote on claims made", not a label inside it.
+    expect(within(section).getByText('Watch a related debate')).toHaveClass('text-chatMedium', 'text-grey-04');
+    expect(within(link).queryByText('Watch a related debate')).toBeNull();
+    expect(link).toHaveAttribute('href', expect.stringContaining('next-debate'));
+    expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
+    expect(within(link).getByText('Ada vs. Bo')).toBeInTheDocument();
+    expect(container.querySelector('[data-end-card-comparison]')).toBeNull();
+  });
+
+  it('does not call a debate related when it is only the next one in the space', () => {
+    renderCard(cardFixture({ nextDebate: nextDebate({ related: false }) }));
+
+    expect(screen.getByRole('region', { name: 'Watch another debate' })).toHaveAttribute(
+      'data-end-card-next-debate',
+      'space'
     );
-    expect(container.querySelector('[data-marker]')).toBeNull();
-    expect(screen.queryByText(/pts apart/)).toBeNull();
+    expect(screen.queryByText('Watch a related debate')).toBeNull();
+  });
+
+  it('still offers the debate when geo-chat could not say who argued it', () => {
+    renderCard(cardFixture({ nextDebate: nextDebate({ participants: [], keyFrame: null }) }));
+
+    const link = within(screen.getByRole('region', { name: 'Watch a related debate' })).getByRole('link');
+    expect(within(link).getByText('We should slow down AI development')).toBeInTheDocument();
+    expect(within(link).queryByText(/ vs\. /)).toBeNull();
+  });
+
+  it('ends after the claims when there is nothing left to suggest', () => {
+    renderCard(cardFixture({ nextDebate: null }));
+
+    expect(screen.queryByText(/Watch (a related|another) debate/)).toBeNull();
+  });
+
+  it('puts the claims above the next debate, which closes the card', () => {
+    const { container } = renderCard(cardFixture({ nextDebate: nextDebate() }));
+    const strip = container.querySelector('[data-end-card-claims]') as HTMLElement;
+    const next = container.querySelector('[data-end-card-next-debate]') as HTMLElement;
+
+    expect(strip.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('offers replay once, as a pill in the card header at every width', () => {

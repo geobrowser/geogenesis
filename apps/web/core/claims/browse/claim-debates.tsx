@@ -20,7 +20,8 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -91,11 +92,11 @@ export function ClaimDebates({ claimId, spaceId }: { claimId: string; spaceId: s
     const map = new Map<string, DebateSide[]>();
     for (const debate of debates) {
       map.set(debate.id, [
-        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: true,
         })),
-        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: false,
         })),
@@ -227,8 +228,8 @@ export function useWinnerSharesWithStatus(
     const spaceIdByHex = new Map<string, string>();
 
     for (const vote of votes) {
-      const debateId = relationTargets(vote.relations, VOTE_DEBATES_PROPERTY_ID)[0];
-      const winnerSpaceEntityId = relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
+      const debateId = Entities.relationTargets(vote.relations, VOTE_DEBATES_PROPERTY_ID)[0];
+      const winnerSpaceEntityId = Entities.relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
       // The space a Vote lives in is its voter, which is what one-vote-per-person is enforced on.
       const voterSpaceId = vote.spaces[0];
       if (!debateId || !winnerSpaceEntityId || !voterSpaceId) continue;
@@ -430,10 +431,4 @@ function entityTimestamp(raw: string | number | null | undefined): Date | null {
 
   const date = typeof raw === 'number' ? new Date(raw * 1000) : new Date(/^\d+$/.test(raw) ? Number(raw) * 1000 : raw);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-export function relationTargets(relations: Relation[], propertyId: string): string[] {
-  return relations
-    .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, propertyId))
-    .map(relation => relation.toEntity.id);
 }
