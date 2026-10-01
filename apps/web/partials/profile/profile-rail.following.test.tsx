@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   isLoading: false,
   metadata: new Map<string, Meta>(),
   metadataLoading: false,
+  metadataError: false,
   unfollow: vi.fn(),
   pending: new Set<string>(),
 }));
@@ -39,7 +40,11 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
   }),
 }));
 vi.mock('~/core/topics/use-topic-metadata', () => ({
-  useTopicMetadata: () => ({ metadata: mocks.metadata, isLoading: mocks.metadataLoading }),
+  useTopicMetadata: () => ({
+    metadata: mocks.metadata,
+    isLoading: mocks.metadataLoading,
+    isError: mocks.metadataError,
+  }),
 }));
 vi.mock('~/core/topics/use-follow-topics', () => ({
   useFollowTopics: () => ({
@@ -84,6 +89,7 @@ beforeEach(() => {
   mocks.isLoading = false;
   mocks.metadata = new Map();
   mocks.metadataLoading = false;
+  mocks.metadataError = false;
   mocks.unfollow = vi.fn().mockResolvedValue(true);
   mocks.pending = new Set();
 });
@@ -116,6 +122,17 @@ describe('Following row visibility', () => {
     expect(screen.getByText('Following')).toBeInTheDocument();
     expect(screen.queryByText('Untitled')).not.toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('shows a dash instead of a count when topic metadata fails to load, rather than "Untitled" rows', () => {
+    mocks.rows = [row(TOPIC_A)];
+    mocks.metadataError = true;
+    renderFollowing();
+    expect(screen.getByText('Following')).toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('Untitled')).not.toBeInTheDocument();
+    expect(screen.queryByText('1')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Following \d+ topics?/)).not.toBeInTheDocument();
   });
 });
 

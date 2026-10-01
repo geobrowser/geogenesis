@@ -53,4 +53,14 @@ describe('useTopicMetadata', () => {
     expect(result.current.metadata.get(normId(TOPIC))?.name).toBe('Mental health');
     expect(result.current.metadata.get(normId(TOPIC))?.image).toBe('ipfs://image');
   });
+
+  it('reports isError when the fetch rejects, rather than settling on an empty map', async () => {
+    mocks.fetchTopicMetadata.mockRejectedValue(new Error('subgraph down'));
+
+    const { result } = renderHook(() => useTopicMetadata([TOPIC]), { wrapper: wrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.metadata.size).toBe(0);
+  });
 });
