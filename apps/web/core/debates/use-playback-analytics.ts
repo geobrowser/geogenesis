@@ -20,6 +20,8 @@ export function usePlaybackAnalytics(
   // Which media this instance has already reported exposed, so re-binding to re-attached elements
   // doesn't report it again under the same `exposure_id`.
   const exposedFor = React.useRef<string | null>(null);
+  // Interval numbering continues across re-binds for the same media, like the exposure latch.
+  const intervalSequence = React.useRef({ key: '', count: 0 });
   const elementRef = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
@@ -73,7 +75,10 @@ export function usePlaybackAnalytics(
         /* Playback stays usable. */
       }
     };
-    const clock = createPlaybackMeasurement(properties => emit('debate_playback_interval', properties));
+    if (intervalSequence.current.key !== exposureKey) intervalSequence.current = { key: exposureKey, count: 0 };
+    const clock = createPlaybackMeasurement(properties =>
+      emit('debate_playback_interval', { ...properties, interval_sequence: ++intervalSequence.current.count })
+    );
     const foreground = () => document.visibilityState === 'visible' && document.hasFocus();
     const tick = () => {
       if (disposed) return;

@@ -149,3 +149,82 @@ it('reports a card exposed once across a release and re-attach (GEO-3067)', () =
   exposeFor(2_000);
   expect(exposures()).toBe(1);
 });
+
+// The playback instance survives a release, so interval numbering has to continue with it.
+it('keeps interval_sequence increasing across a release and re-attach (GEO-3067)', () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  let observe: IntersectionObserverCallback = () => {};
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(cb: IntersectionObserverCallback) {
+        observe = cb;
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  const debate = { id: 'debate-a', started_at: null, recordings: [] } as unknown as Debate;
+  function Player({ released }: { released: boolean }) {
+    const first = React.useRef<HTMLVideoElement>(null);
+    const second = React.useRef<HTMLVideoElement>(null);
+    const controller = {
+      slot1VideoRef: first,
+      slot2VideoRef: second,
+      ready: true,
+      timelineSeconds: 100,
+      mutedByUser: true,
+      isScrubbing: false,
+    } as unknown as DebatePlaybackController;
+    const analytics = usePlaybackAnalytics(debate, true, controller, !released);
+    return (
+      <div ref={analytics.elementRef}>
+        {released ? (
+          <div>Loading…</div>
+        ) : (
+          <>
+            <video ref={first} />
+            <video ref={second} />
+          </>
+        )}
+      </div>
+    );
+  }
+  const playAndFlush = (container: HTMLElement) => {
+    const videos = Array.from(container.querySelectorAll('video'));
+    for (const v of videos) Object.defineProperties(v, { paused: { value: false }, readyState: { value: 4 } });
+    act(() =>
+      observe(
+        [{ isIntersecting: true, intersectionRatio: 0.8 }] as IntersectionObserverEntry[],
+        {} as IntersectionObserver
+      )
+    );
+    for (let i = 0; i < 6; i++)
+      act(() => {
+        videos.forEach(v => {
+          v.currentTime += 0.5;
+        });
+        vi.advanceTimersByTime(500);
+      });
+    act(() => window.dispatchEvent(new Event('geo-analytics-context-changing')));
+  };
+  const sequences = () =>
+    capture.mock.calls
+      .filter(([event]) => event === 'debate_playback_interval')
+      .map(([, properties]) => (properties as { interval_sequence: number }).interval_sequence);
+
+  const view = render(<Player released={false} />);
+  playAndFlush(view.container);
+  const before = sequences();
+  expect(before.length).toBeGreaterThan(0);
+
+  view.rerender(<Player released />);
+  view.rerender(<Player released={false} />);
+  playAndFlush(view.container);
+  const all = sequences();
+
+  expect(all.length).toBeGreaterThan(before.length);
+  expect(all).toEqual(all.map((_, index) => index + 1));
+});

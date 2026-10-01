@@ -400,7 +400,8 @@ export function DebatesBrowseFeed({
           buffer={activeIndex >= 0 && index === activeIndex + 1}
           // Cards stay mounted as the feed grows, so everything outside one behind to the preload
           // window ahead releases its <video> elements (GEO-3067).
-          releaseMedia={activeIndex >= 0 && (index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD)}
+          // With no active card (a refetch dropped it), everything stays released until one is chosen.
+          releaseMedia={activeIndex < 0 || index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
