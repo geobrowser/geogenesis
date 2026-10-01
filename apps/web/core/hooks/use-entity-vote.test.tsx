@@ -14,14 +14,17 @@ import {
   useFailedResponses,
 } from '~/core/responses/failed-response-retries';
 
+import { ReceiptConfirmationTimeoutError } from '../errors';
 import { QueuedSendTimeoutError } from './smart-account-send-queue';
 import {
+  RESPONSE_FAILED_AFTER_SUBMIT_COPY,
   responseIndexingRetryDelayMs,
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
   useEntityResponseIndexingState,
 } from './use-entity-vote';
 import { personalSpaceIdQueryKey } from './use-personal-space-id';
+import { useToast } from './use-toast';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
@@ -50,6 +53,8 @@ const mocks = vi.hoisted(() => ({
   loadResponseSummaryCaches: vi.fn(),
   personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
   ensureSpaceMembership: vi.fn(),
+  /** Every send the hook builds, so a test can play the bundler accepting it. */
+  tx: vi.fn<(args: { to: string; data: string; onSubmitted?: (hash: `0x${string}`) => void }) => void>(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -75,7 +80,13 @@ vi.mock('~/core/hooks/use-personal-space-id', async importOriginal => ({
 
 vi.mock('~/core/hooks/use-smart-account-transaction', async () => {
   const { Effect } = await import('effect');
-  return { useSmartAccountTransaction: () => () => Effect.succeed('0xtransaction') };
+  return {
+    useSmartAccountTransaction:
+      () => (args: { to: string; data: string; onSubmitted?: (hash: `0x${string}`) => void }) => {
+        mocks.tx(args);
+        return Effect.succeed('0xtransaction');
+      },
+  };
 });
 
 vi.mock('~/core/io/queries', async () => {
@@ -128,6 +139,7 @@ beforeEach(() => {
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
   mocks.ensureSpaceMembership.mockReset();
   mocks.ensureSpaceMembership.mockResolvedValue(false);
+  mocks.tx.mockReset();
   resetFailedResponses();
 });
 
@@ -1014,6 +1026,157 @@ function createHarness() {
     ),
   };
 }
+
+/**
+ * GEO-2889. A position used to read as "waiting for confirmation" for the whole of inclusion —
+ * p50 6s, p90 ~30s, p99 ~2 minutes. The bundler's acceptance is the moment it is made; inclusion
+ * still decides whether it stays.
+ */
+describe('useEntityResponse publishes on submission', () => {
+  function renderResponse() {
+    const { wrapper } = createHarness();
+    return renderHook(
+      () => ({
+        response: useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+        snapshot: useEntityResponseIndexingSnapshot({
+          entityId: 'claim-1',
+          spaceId: TARGET_SPACE_ID,
+          responseKind: 'stance',
+        }),
+        toast: useToast()[0],
+      }),
+      { wrapper }
+    );
+  }
+
+  /** The bundler accepting the send with this index. */
+  function submit(index = 0) {
+    const onSubmitted = mocks.tx.mock.calls[index]?.[0].onSubmitted;
+    if (!onSubmitted) throw new Error(`send ${index} carries no submission callback`);
+    act(() => onSubmitted('0x00000000000000000000000000000000000000000000000000000000000000aa'));
+  }
+
+  afterEach(() => {
+    // The toast lives in a module-level atom, so it would carry into the next test.
+    const { result } = renderHook(() => useToast());
+    act(() => result.current[1](null));
+  });
+
+  it('treats the response as made once the bundler accepts it, before it is included', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    // Pressed, not yet at the bundler: drawn on its side, but still waiting.
+    expect(result.current.response.optimisticResponse).toBe('positive');
+    expect(result.current.response.isSubmittingResponse).toBe(true);
+
+    submit();
+
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+    expect(result.current.snapshot).toMatchObject({ status: 'reconciling', submitted: true });
+    // Still the same side, and still known to be landing — the index is not trusted yet.
+    expect(result.current.response.optimisticResponse).toBe('positive');
+    expect(result.current.response.isProcessingResponse).toBe(true);
+    expect(mocks.tx).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls the response back, and says so, when it fails after submission', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderResponse();
+    const failed = renderHook(() => useFailedResponses());
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    submit();
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+
+    await act(async () => {
+      transaction.resolve({
+        _tag: 'Left',
+        left: new ReceiptConfirmationTimeoutError('UserOperation 0xaa was submitted but its receipt did not arrive'),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Nothing left claiming the position was made.
+    expect(result.current.snapshot.status).toBe('idle');
+    expect(result.current.response.optimisticResponse).toBeUndefined();
+    expect(result.current.response.isProcessingResponse).toBe(false);
+    expect(result.current.toast?.props.children).toBe(RESPONSE_FAILED_AFTER_SUBMIT_COPY);
+    // And no one-click retry: the op may still land, so sending it again could publish twice.
+    expect(failed.result.current.count).toBe(0);
+    expect(mocks.tx).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('does not announce a failure that never reached the bundler as an undone publish', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('User rejected') });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.snapshot.status).toBe('idle');
+    expect(result.current.toast).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it('does not let an older send reaching the bundler stand in for a newer press', async () => {
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    act(() => result.current.response.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+    expect(mocks.tx).toHaveBeenCalledTimes(2);
+
+    submit(0);
+    expect(result.current.response.optimisticResponse).toBe('negative');
+    expect(result.current.response.isSubmittingResponse).toBe(true);
+
+    submit(1);
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+  });
+
+  it('keeps an included response published while the index is re-checked', async () => {
+    mocks.fetchResponse.mockReturnValue(null);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    // The kernel path, which never reports submission: inclusion alone has to clear the wait.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+
+    // Index never catches up within the first pass: `delayed`, then a re-check back to reconciling.
+    for (let i = 0; i < 40 && result.current.snapshot.status !== 'delayed'; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+    }
+    expect(result.current.snapshot.status).toBe('delayed');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(result.current.snapshot.status).toBe('reconciling');
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+  });
+});
 
 /**
  * GEO-2687. This re-check is on the critical path of a two-person interaction: in the rematch

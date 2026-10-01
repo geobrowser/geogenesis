@@ -123,7 +123,7 @@ export function DebateEndCard({
               viewerPosition={claimResponse.control.viewerPosition}
               onRespond={claimResponse.control.respond}
               disabled={!claimResponse.control.canRespond}
-              pending={claimResponse.control.isResponsePending}
+              pending={claimResponse.control.isResponseSubmitting}
               titleFor={claimResponse.control.actionTitle}
               showParticipants={false}
             />

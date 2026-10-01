@@ -702,7 +702,7 @@ function ClaimPositionSection({
         onActivityPublish={adjustActivityTotal}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
-        pending={control.isResponsePending}
+        pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
