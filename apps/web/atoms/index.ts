@@ -115,13 +115,25 @@ export const entityCommentsPanelAtom = atom<EntityCommentsPanelTarget | null>(nu
 /** The debate whose claims panel the explore feed has open, or `null`. */
 export const exploreDebateClaimsPanelAtom = atom<string | null>(null);
 
-/** Every panel sharing the one right-hand slot. */
-type EntityPanelKind = 'entity' | 'comments' | 'exploreDebateClaims';
+/**
+ * Which panel the full-screen debate feed has open, and the debater its claims list opens at.
+ */
+/** Which panel the full-screen debate feed has open, or `null`. */
+export const debateFeedPanelAtom = atom<'claims' | 'comments' | null>(null);
+
+/**
+ * Every panel sharing the one right-hand slot. Opening any of these clears the others.
+ *
+ * Not in this slot (left alone on purpose): ranking-compose entity sheets, proposal review
+ * panels (exclusive among themselves), the debates hub, and slide-ups (those stack).
+ */
+type EntityPanelKind = 'entity' | 'comments' | 'exploreDebateClaims' | 'debateFeed';
 
 const clearEntityPanelsExceptAtom = atom(null, (_get, set, keep: EntityPanelKind) => {
   if (keep !== 'entity') set(entitySidePanelAtom, null);
   if (keep !== 'comments') set(entityCommentsPanelAtom, null);
   if (keep !== 'exploreDebateClaims') set(exploreDebateClaimsPanelAtom, null);
+  if (keep !== 'debateFeed') set(debateFeedPanelAtom, null);
 });
 
 export const openEntitySidePanelAtom = atom(null, (_get, set, target: EntitySidePanelTarget | null) => {
@@ -137,6 +149,11 @@ export const openEntityCommentsPanelAtom = atom(null, (_get, set, target: Entity
 export const openExploreDebateClaimsPanelAtom = atom(null, (_get, set, debateId: string | null) => {
   set(exploreDebateClaimsPanelAtom, debateId);
   if (debateId) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
+});
+
+export const openDebateFeedPanelAtom = atom(null, (_get, set, panel: 'claims' | 'comments' | null) => {
+  set(debateFeedPanelAtom, panel);
+  if (panel) set(clearEntityPanelsExceptAtom, 'debateFeed');
 });
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
