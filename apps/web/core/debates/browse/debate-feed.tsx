@@ -17,6 +17,7 @@ import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useComments } from '~/core/hooks/use-comments';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -43,10 +44,13 @@ import { debateFullscreenActiveAtom } from '~/atoms';
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
+/** The claim panel's column beside the video on desktop (GEO-3112). */
+const SIDE_PANEL_WIDTH = '19rem';
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
-  // claim title, media gap, and vertical breathing room.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+  // claim title, media gap, and vertical breathing room — and, beside it, the claim panel's column
+  // and its gap, so the three never push the rail off a laptop screen.
+  '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 4rem - ${SIDE_PANEL_WIDTH} - 1rem), calc(82.9dvh - 13.38rem)), 640px)`,
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -572,6 +576,12 @@ function DebateFeedItem({
   // badge and the panel share one cache entry, so opening the panel doesn't refetch.
   const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
+  // The claim panel's two possible homes. Both are always in the page so neither layout reflows
+  // when the other is chosen; the player portals into whichever one this screen shows.
+  const [sidePanelHost, setSidePanelHost] = React.useState<HTMLDivElement | null>(null);
+  const [belowPanelHost, setBelowPanelHost] = React.useState<HTMLDivElement | null>(null);
+  const isPhone = useMediaQuery('(max-width: 767px)');
+
   React.useEffect(() => {
     const element = itemRef.current;
     if (!element) return;
@@ -628,7 +638,15 @@ function DebateFeedItem({
               topics={topics}
             />
           </div>
-          <div className="mt-6 md:mt-7">
+          <div className="relative mt-6 md:mt-7">
+            {/* Desktop: the claim panel's column, beside the video and no taller than it, aligned to
+                its top edge. Positioned off the player rather than in the flex row so it never sets
+                the card's height; the spacer beside the column below reserves its width. */}
+            <div
+              ref={setSidePanelHost}
+              className="absolute inset-y-0 left-full ml-4 flex flex-col overflow-y-auto md:hidden"
+              style={{ width: SIDE_PANEL_WIDTH }}
+            />
             <DebateFeedPlayer
               debate={debate}
               active={active}
@@ -639,11 +657,15 @@ function DebateFeedItem({
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}
               onPlaybackState={onPlaybackState}
+              immersive
+              panelHost={isPhone ? belowPanelHost : sidePanelHost}
             />
           </div>
-          {/* Mobile: horizontal bar below the videos. Wrapper controls display so
-              it doesn't collide with the bar's own `flex`. */}
-          <div className="mt-3 hidden md:block">
+          {/* Mobile: the claim panel, under the video. */}
+          <div ref={setBelowPanelHost} className="mt-3 hidden md:block" />
+          {/* The debate's actions, under the video and left-aligned at every width (GEO-3112). On a
+              phone the claim panel sits between the two. */}
+          <div className="mt-3">
             <DebateInteractionBar
               orientation="horizontal"
               {...interactionProps}
@@ -656,14 +678,8 @@ function DebateFeedItem({
             <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
           )}
         </div>
-        {/* Desktop: vertical rail to the right of the videos. */}
-        <div className="flex flex-col justify-end md:hidden">
-          <DebateInteractionBar
-            orientation="vertical"
-            {...interactionProps}
-            overflow={<DebateOverflowMenu debate={debate} variant="circle" />}
-          />
-        </div>
+        {/* Desktop: room for the claim panel's column, which hangs off the player into this space. */}
+        <div aria-hidden className="shrink-0 md:hidden" style={{ width: SIDE_PANEL_WIDTH }} />
       </div>
       <DebateShareDialog
         open={share.open}

@@ -258,10 +258,13 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+      // Reserves the claim panel's column beside the video (GEO-3112).
+      '--debate-feed-column-width':
+        'clamp(280px, min(calc(100cqw - 4rem - 19rem - 1rem), calc(82.9dvh - 13.38rem)), 640px)',
     });
-    expect(screen.getByTestId('entity-votes-debate-horizontal')).toBeInTheDocument();
-    expect(screen.getByTestId('entity-votes-debate-vertical')).toBeInTheDocument();
+    // One horizontal action bar under the video, on both layouts (GEO-3112).
+    expect(screen.getAllByTestId('entity-votes-debate-horizontal')).toHaveLength(1);
+    expect(screen.queryByTestId('entity-votes-debate-vertical')).not.toBeInTheDocument();
     expect(mocks.entityVoteProps).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ entityId: 'debate-1', spaceId: 'space-1', responseKind: 'curation' }),
@@ -505,11 +508,12 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(screen.queryByText('Removed view')).not.toBeInTheDocument();
   });
 
-  it('puts the overflow menu in both orientations of the bar', () => {
+  it('puts the overflow menu in the action bar on both layouts', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    expect(screen.getByTestId('overflow-pill-debate-1')).toBeInTheDocument();
-    expect(screen.getByTestId('overflow-circle-debate-1')).toBeInTheDocument();
+    // One horizontal bar under the video on both layouts (GEO-3112), so one pill and no circle rail.
+    expect(screen.getAllByTestId('overflow-pill-debate-1')).toHaveLength(1);
+    expect(screen.queryByTestId('overflow-circle-debate-1')).not.toBeInTheDocument();
   });
 
   // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it

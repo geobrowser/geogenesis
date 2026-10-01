@@ -744,7 +744,22 @@ export function useDebatePlayback(
     // there, slot 2 and the remembered position are evidence too. In the foreground slot 2 is
     // deliberately allowed to run ahead (the drift nudge, and further still while slot 1 stalls),
     // so trusting it would resume past audio the viewer never heard. See `pairPlayhead`.
-    const position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, hidden);
+    let position = pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current, hidden);
+    // A recording that has played to its own end is finished, not stopped (GEO-3112). The two
+    // files rarely end together — whoever closes the debate keeps recording after the other has
+    // stopped — so once slot 1 has run out, slot 2 is the clock for the rest of the timeline, and
+    // once both have, the debate is over wherever the shorter file left the playhead. Without
+    // this, the split-pair rule below read slot 1's end as the browser stopping playback, paused
+    // the closing speaker and recorded a user pause, and the debate halted just short of its end:
+    // no end screen unless the viewer dragged the scrubber the rest of the way.
+    if (primaryVideo?.ended && secondaryVideo) {
+      position = secondaryVideo.ended
+        ? { seconds: timelineSeconds, live: false }
+        : {
+            seconds: Math.max(position.seconds, secondaryVideo.currentTime + offsets.slot2),
+            live: !secondaryVideo.paused,
+          };
+    }
     const playhead = clampSeconds(position.seconds, timelineSeconds);
     // Off screen, record it whether or not it came off a running element: this tick may be the
     // `pause` event of the last element still going, and its final position is not observable
@@ -848,7 +863,8 @@ export function useDebatePlayback(
     const secondaryUnplayable = Boolean(secondaryVideo?.error);
     // Whichever element still speaks for whether the debate is running. Slot 1, as everywhere
     // else in this file, unless slot 1 is the one that cannot play.
-    const runningVideo = primaryUnplayable ? secondaryVideo : primaryVideo;
+    // Slot 2 also takes over once slot 1's recording has run out: see the playhead above.
+    const runningVideo = primaryUnplayable || primaryVideo?.ended ? secondaryVideo : primaryVideo;
 
     // Keep both videos in the same play/pause state. If the browser pauses one
     // on its own (e.g. it blocks the unmuted speaker under autoplay policy),
@@ -867,6 +883,9 @@ export function useDebatePlayback(
       pairIsSettled &&
       !primaryUnplayable &&
       !secondaryUnplayable &&
+      // A file that has played to its end is not a pair member that stopped (see the playhead).
+      !primaryVideo.ended &&
+      !secondaryVideo.ended &&
       primaryVideo.paused !== secondaryVideo.paused &&
       playhead < timelineSeconds
     ) {
@@ -1429,6 +1448,8 @@ export function useDebatePlayback(
     turnState,
     turnSpans,
     turnCount,
+    /** Each recording's start against the debate clock: element time is debate time minus this. */
+    offsets,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,

@@ -71,6 +71,29 @@ vi.mock('~/core/debates/browse/use-debate-end-card', () => ({
   useDebateEndCard: () => ({}),
 }));
 
+// The full-screen opening (vote to start, the claim panel, the end screen) reads the claim's
+// responses and the space's debates through react-query; it has its own suites. Here the debate is
+// already live, as it is for a viewer who has taken a side.
+vi.mock('~/core/debates/browse/use-debate-stage', () => ({
+  useDebateStage: () => ({
+    phase: 'live',
+    main: { summary: { hasCounts: false, total: 0 }, responseKind: 'stance', control: { viewerPosition: null } },
+    stance: null,
+    stanceHeld: false,
+    signup: 'hidden',
+    vote: vi.fn(),
+    justWatch: vi.fn(),
+    switchStance: vi.fn(),
+    collapseSignup: vi.fn(),
+    reopenSignup: vi.fn(),
+  }),
+}));
+
+vi.mock('~/core/debates/browse/use-next-debate', () => ({
+  useNextDebate: () => null,
+  useNextDebates: () => [],
+}));
+
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
 }));
@@ -192,7 +215,8 @@ describe('DebatesPageClient browse feed', () => {
     // voting now happens on the end-of-debate scorecard and in the claims panel.
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
+    // One action bar, under the video on every width (GEO-3112).
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(1);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });

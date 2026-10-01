@@ -1155,6 +1155,50 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     expect(result.current.userPaused).toBe(true);
   });
 
+  /**
+   * GEO-3112. The two recordings rarely end together: whoever closes the debate keeps recording
+   * after the other has stopped. Slot 1 playing to its own end is the debate going on, not the
+   * browser refusing it — so the closing speaker keeps playing, slot 2 becomes the clock, and the
+   * debate ends when the timeline does, which is what brings up the end screen.
+   */
+  it('plays the closing speaker on when the other recording runs out first, and ends there', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    // Slot 1's file runs out 6s before the 60s timeline; slot 2 is still in the closing turn.
+    slot1.currentTime = 54;
+    slot2.currentTime = 54;
+    Object.assign(slot1, { ended: true });
+    slot1.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.paused).toBe(false);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.playbackEnded).toBe(false);
+
+    slot2.currentTime = 60;
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playheadSeconds).toBe(60);
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.playing).toBe(false);
+  });
+
+  it('ends the debate when both recordings have run out short of the timeline', async () => {
+    const { result, slot1, slot2 } = await playing();
+
+    slot1.currentTime = 58;
+    slot2.currentTime = 57;
+    Object.assign(slot1, { ended: true });
+    Object.assign(slot2, { ended: true });
+    slot1.browserPause();
+    slot2.browserPause();
+    act(() => result.current.onPlaybackTick());
+
+    expect(result.current.playbackEnded).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+  });
+
   it('restarts a pair the browser paused in the background when the tab comes back', async () => {
     const { result, slot1, slot2 } = await playing();
 

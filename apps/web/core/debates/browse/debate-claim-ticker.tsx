@@ -49,6 +49,8 @@ type DebateTicker = {
   historyBySlot: Map<number, StackedCard[]>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
+  /** Every claim that will surface as a card, in the order they are said — for "3 of 7". */
+  orderedClaimIds: string[];
   /** Which way the viewer answered each claim this session. */
   answers: ReadonlyMap<string, boolean>;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -211,10 +213,13 @@ export function useDebateClaimTicker(
     return history;
   }, [backlogBySlot, playheadMs]);
 
+  const orderedClaimIds = React.useMemo(() => windows.map(window => window.claim.id), [windows]);
+
   return {
     cardsBySlot,
     historyBySlot,
     markers,
+    orderedClaimIds,
     answers,
     onAnswered,
     rowsByClaimId,

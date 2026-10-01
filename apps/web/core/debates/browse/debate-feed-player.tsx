@@ -3,11 +3,13 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { createPortal } from 'react-dom';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import type { ClaimMarker, StackedCard } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
+import { type TeaserWindow, teaserWindows } from '~/core/debates/debate-stage';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
@@ -17,6 +19,7 @@ import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -27,9 +30,13 @@ import { Text } from '~/design-system/text';
 
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
-import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
+import { DebateEndScreen, NEXT_DEBATE_COUNT } from './debate-end-screen';
+import { DebateRoundBadge, DebateRoundCard, roundCardTextShadow } from './debate-round-cues';
+import { DebateStagePanel, type StagePanelClaim } from './debate-stage-panel';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateEndCard } from './use-debate-end-card';
+import { type DebateStage, useDebateStage } from './use-debate-stage';
+import { useNextDebates } from './use-next-debate';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 /**
@@ -55,6 +62,8 @@ const MAX_MEDIA_RECOVERY_ATTEMPTS = 3;
  * looking at the card sees it heal rather than reload.
  */
 const MEDIA_RECOVERY_BACKOFF_MS = 400;
+
+const NO_OFFSETS = { slot1: 0, slot2: 0 };
 
 /** How every big round control in the player looks, wherever it is put. */
 const PLAYBACK_CONTROL_CIRCLE_CLASS = 'size-16 place-items-center rounded-full bg-white text-text shadow-card';
@@ -111,9 +120,36 @@ type DebateFeedPlayerProps = {
   initialSeekSeconds?: number | null;
   /** Told whenever this card's playback state changes — the linked debate's card on its own page. */
   onPlaybackState?: (state: DebatePagePlayerState) => void;
+  /**
+   * The full-screen debate view (GEO-3112): vote to start, the claim panel, the corner-video layout
+   * on a phone, and the single end screen. Every other player — the explore card, a profile's
+   * activity gallery — leaves it off and behaves exactly as before.
+   */
+  immersive?: boolean;
+  /** Where the claim panel renders — beside the video on desktop, below it on a phone. */
+  panelHost?: HTMLElement | null;
 };
 
-export function DebateFeedPlayer({
+/**
+ * A debate's two recordings, played as one.
+ *
+ * The full-screen view (`immersive`) wraps it with its opening — vote to start, the claim panel,
+ * the end screen — whose reads run only there. Every other player renders the same body with no
+ * stage, and none of those reads.
+ */
+export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
+  return props.immersive ? <ImmersiveDebateFeedPlayer {...props} /> : <DebateFeedPlayerBody {...props} stage={null} />;
+}
+
+function ImmersiveDebateFeedPlayer(props: DebateFeedPlayerProps) {
+  const { debate, active, preload = false, initialSeekSeconds = null } = props;
+  const stage = useDebateStage({ debate, immersive: true, enabled: active || preload, initialSeekSeconds });
+  // Warmed while the debate is the active one, so the end screen's suggestions are there when it ends.
+  useNextDebates(debate, active, NEXT_DEBATE_COUNT);
+  return <DebateFeedPlayerBody {...props} stage={stage} />;
+}
+
+function DebateFeedPlayerBody({
   debate,
   active,
   preload = false,
@@ -124,7 +160,10 @@ export function DebateFeedPlayer({
   onPlaybackRequest,
   initialSeekSeconds = null,
   onPlaybackState,
-}: DebateFeedPlayerProps) {
+  immersive = false,
+  panelHost = null,
+  stage,
+}: DebateFeedPlayerProps & { stage: DebateStage | null }) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
@@ -153,6 +192,7 @@ export function DebateFeedPlayer({
     turnState,
     turnSpans,
     turnCount,
+    offsets,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -255,6 +295,39 @@ export function DebateFeedPlayer({
    */
   const awaitingTap = userPaused || autoplayBlocked;
 
+  /**
+   * The full-screen view's opening (GEO-3112). Outside it there is no stage and nothing below
+   * changes. Inside it, playback is held until the viewer takes a side or chooses to just watch —
+   * or, for a viewer who already took one, until that answer is in.
+   */
+  const holdPlayback = stage !== null && stage.phase !== 'live';
+
+  /**
+   * Start the debate from the viewer's own tap, with sound.
+   *
+   * Inside the gesture rather than left to the autoplay effect a render later: a browser that only
+   * lets audible playback start from a gesture (Safari, Chrome without engagement) sees the play
+   * and the unmute in the same handler. The speaker who opens the debate is unmuted directly on the
+   * element for the same reason — the render that would do it lands after the gesture has ended.
+   */
+  const startFromGesture = () => {
+    setMutedByUser(false);
+    const opener = debate.first_participant_slot === 2 ? slot2VideoRef.current : slot1VideoRef.current;
+    if (opener) opener.muted = false;
+    if (!ready) return;
+    measurement.control('play');
+    pair.release();
+    void resumeBoth();
+  };
+  const voteToStart = (position: boolean) => {
+    stage?.vote(position);
+    startFromGesture();
+  };
+  const justWatch = (via: 'link' | 'video_tap') => {
+    stage?.justWatch(via);
+    startFromGesture();
+  };
+
   // Autoplay the debate that's in view; pause the rest. Respect an explicit
   // user pause so scrolling back doesn't fight the viewer, and don't resume
   // mid-scrub.
@@ -267,12 +340,33 @@ export function DebateFeedPlayer({
     // A refusal is not retried: the browser gives the same answer every time, and
     // only the viewer's tap is a gesture it will accept.
     // A detached pair has no elements to start; this re-runs when they arrive.
-    if (active && !detached && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
+    if (
+      active &&
+      !detached &&
+      pairMayStart &&
+      !holdPlayback &&
+      !awaitingTap &&
+      !isScrubbing &&
+      !playing &&
+      !playbackEnded
+    ) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, awaitingTap, detached, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+  }, [
+    active,
+    awaitingTap,
+    detached,
+    holdPlayback,
+    isScrubbing,
+    pairMayStart,
+    playbackEnded,
+    playing,
+    ready,
+    resumeBoth,
+    suspend,
+  ]);
 
   // A resume still confirming when the card goes inactive or loses its media is retired, since its
   // elements may be released. Read through a ref so a resume settling doesn't re-run autoplay.
@@ -538,11 +632,166 @@ export function DebateFeedPlayer({
     []
   );
   const toggleFromVideo = () => {
+    // Before the debate has started, the video is the "Just watch" button.
+    if (holdPlayback) {
+      if (stage?.phase === 'stance') justWatch('video_tap');
+      return;
+    }
     setFlash({ icon: playing ? 'pause' : 'play', visible: true });
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
     togglePlayback();
   };
+
+  /**
+   * How the two tiles share the player, by phase, in the full-screen view.
+   *
+   * - `stack`: one above the other, as every other player draws them — and the full-screen view on
+   *   desktop throughout, where there is room for both at full size.
+   * - `versus`: before the debate starts, side by side on a phone with a VS badge on the seam.
+   * - `pip`: during it, on a phone, the speaker fills the player and the listener sits in its
+   *   corner. They swap at each turn change.
+   *
+   * Every phone-only rule is an `md:` class, so a desktop never sees anything but `stack`.
+   */
+  const isPhone = useMediaQuery('(max-width: 767px)');
+  const layout: 'stack' | 'versus' | 'pip' = !immersive ? 'stack' : holdPlayback ? 'versus' : 'pip';
+  const speakerSlot = turnState?.slot ?? debate.first_participant_slot;
+  const tileLayout = (slot: 1 | 2) => {
+    if (layout === 'versus') return 'relative aspect-480/289 w-full md:aspect-[3/4] md:w-1/2';
+    if (layout === 'pip')
+      // Positioned by top/right/width/height so the swap animates; a little overshoot makes it a
+      // beat rather than a cut.
+      return cx(
+        'relative aspect-480/289 w-full md:absolute md:aspect-auto md:transition-[top,right,width,height,border-radius] md:duration-500 md:ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+        slot === speakerSlot
+          ? 'md:top-0 md:right-0 md:z-0 md:h-full md:w-full'
+          : // Bottom right, clear of the turn timer and round badge in the top corner and above the
+            // timeline. `top` rather than `bottom` so the swap animates from the speaker's `top-0`.
+            'md:top-[calc(66%-2.75rem)] md:right-3 md:z-30 md:h-[34%] md:w-[28%] md:rounded-lg md:shadow-card md:ring-2 md:ring-white'
+      );
+    return undefined;
+  };
+  const pipListener = (slot: 1 | 2) => layout === 'pip' && slot !== speakerSlot;
+  // The scrubber runs along whichever tile is at the bottom of the player.
+  // The corner layout is phone-only (every rule of it is `md:`), so on a desktop the bottom tile is
+  // always slot 2 — otherwise hovering lifted whichever name was speaking, not the one on the bar.
+  const bottomTile = layout === 'pip' && isPhone ? speakerSlot : 2;
+  const clearScrubberFor = (slot: 1 | 2) =>
+    slot === bottomTile && !holdPlayback ? (scrubberShown ? 'always' : 'on-hover') : 'never';
+
+  // Before the debate starts, both debaters loop a few seconds of themselves talking, silently.
+  const teasers = React.useMemo(
+    () => (stage ? teaserWindows(turnSpans, offsets ?? NO_OFFSETS) : null),
+    [stage, turnSpans, offsets]
+  );
+  const showTeaser = teasers !== null && active && holdPlayback && !detached;
+
+  // The newest claim on screen, for the panel. One at a time there, whichever debater said it.
+  const panelClaim = React.useMemo<StagePanelClaim | null>(() => {
+    if (!immersive) return null;
+    let newest: StackedCard | null = null;
+    for (const cards of ticker.cardsBySlot.values())
+      for (const card of cards) if (!newest || card.window.startMs > newest.window.startMs) newest = card;
+    if (!newest) return null;
+    const id = newest.window.claim.id;
+    const index = ticker.orderedClaimIds.indexOf(id);
+    return {
+      window: newest.window,
+      speaker: ticker.participantByClaimId.get(id) ?? null,
+      row: ticker.rowsByClaimId.get(id) ?? null,
+      entity: ticker.entitiesByClaimId.get(id) ?? null,
+      position: index >= 0 ? index + 1 : 1,
+      total: Math.max(ticker.orderedClaimIds.length, 1),
+    };
+  }, [immersive, ticker]);
+  const caption = React.useMemo(
+    () =>
+      subtitle
+        ? {
+            speaker: turnState?.slot === 2 ? slot2Participant : turnState?.slot === 1 ? slot1Participant : null,
+            text: subtitle,
+          }
+        : null,
+    [slot1Participant, slot2Participant, subtitle, turnState?.slot]
+  );
+
+  // The corner controls and the timeline, drawn in a tile by default and over the whole player in
+  // the full-screen view, where the tiles change size and place under them.
+  const topLeftControls =
+    ready && !playbackEnded ? (
+      <div className="flex items-center gap-2">
+        {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+          centred paused glyph and tap-to-toggle instead. */}
+        <ControlCircle
+          ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+          onClick={togglePlayback}
+          className="md:hidden"
+        >
+          {playing ? <Pause /> : <Play />}
+        </ControlCircle>
+        {/* Feed debates autoplay muted, so the unmute control stays visible during
+          playback — otherwise there's no way to hear audio. Once unmuted it recedes
+          to hover-only on desktop; touch has no hover, so on mobile it stays visible
+          or there'd be no way to find it again.
+
+          `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+          held in landscape is wider than the `md` breakpoint and still has no hover, so
+          width alone left the control faded out but tappable there — a tap aimed at
+          play/pause muted the debate instead, with nothing able to bring the control back. */}
+        <ControlCircle
+          ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+          onClick={() => {
+            measurement.control(mutedByUser ? 'unmute' : 'mute');
+            setMutedByUser(current => !current);
+          }}
+          className={
+            mutedByUser
+              ? undefined
+              : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+          }
+        >
+          {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+        </ControlCircle>
+      </div>
+    ) : null;
+  const scrubberControl = ready ? (
+    // Always available so the viewer can seek. During playback it recedes to
+    // hover-only and drops pointer-events so it can't swallow play/pause taps.
+    // `pointer-events-none` does not stop keyboard focus reaching the range input, which
+    // is what brings it back up for a viewer who never touches the pointer.
+    <div
+      onFocus={() => setTimelineFocused(true)}
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
+      }}
+      className={cx(
+        'transition-opacity',
+        scrubberShown
+          ? 'opacity-100'
+          : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
+            // set `pointer-events-auto` on themselves — they have to, so a drag can pass
+            // between them to the range input underneath. An explicit value beats an
+            // inherited one, so `pointer-events-none` here never reached them and a fully
+            // transparent marker stayed clickable: a click meant to pause the video seeked
+            // it instead. The descendant selector outranks the marker's own class.
+            //
+            // Focusability is deliberately untouched. Tabbing to a marker sets
+            // `timelineFocused`, which is what brings the scrubber back into view, so the
+            // keyboard route in depends on them staying in the tab order while hidden.
+            'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
+      )}
+    >
+      <FeedScrubber
+        currentTime={playheadSeconds}
+        duration={timelineSeconds}
+        markers={reducedOverlays ? [] : ticker.markers}
+        onSeek={seekBoth}
+        onScrubStart={beginScrub}
+        onScrubEnd={endScrub}
+      />
+    </div>
+  ) : null;
 
   return (
     <ActionSurface
@@ -584,13 +833,15 @@ export function DebateFeedPlayer({
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+          reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+          layout === 'versus' && 'md:flex-row md:gap-0.5',
+          layout === 'pip' && 'md:aspect-square'
         )}
       >
         <DebaterVideo
           inert={endCardShown}
           participant={slot1Participant}
-          byline={bylineFor(slot1Participant)}
+          byline={layout === 'versus' && isPhone ? null : bylineFor(slot1Participant)}
           src={slot1Src}
           videoRef={slot1VideoRef}
           buffer={active || buffer}
@@ -607,52 +858,20 @@ export function DebateFeedPlayer({
           onRecovered={() => resyncSlot(1)}
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
-          claims={claimsFor(1)}
+          claims={immersive ? null : claimsFor(1)}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
-          topLeft={
-            ready && !playbackEnded ? (
-              <div className="flex items-center gap-2">
-                {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
-                  centred paused glyph and tap-to-toggle instead. */}
-                <ControlCircle
-                  ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                  onClick={togglePlayback}
-                  className="md:hidden"
-                >
-                  {playing ? <Pause /> : <Play />}
-                </ControlCircle>
-                {/* Feed debates autoplay muted, so the unmute control stays visible during
-                  playback — otherwise there's no way to hear audio. Once unmuted it recedes
-                  to hover-only on desktop; touch has no hover, so on mobile it stays visible
-                  or there'd be no way to find it again.
-
-                  `no-hover:` as well as `md:`, because the two ask different questions. A tablet
-                  held in landscape is wider than the `md` breakpoint and still has no hover, so
-                  width alone left the control faded out but tappable there — a tap aimed at
-                  play/pause muted the debate instead, with nothing able to bring the control back. */}
-                <ControlCircle
-                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-                  onClick={() => {
-                    measurement.control(mutedByUser ? 'unmute' : 'mute');
-                    setMutedByUser(current => !current);
-                  }}
-                  className={
-                    mutedByUser
-                      ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
-                  }
-                >
-                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-                </ControlCircle>
-              </div>
-            ) : null
-          }
+          topLeft={immersive ? null : topLeftControls}
+          layoutClassName={tileLayout(1)}
+          pipListener={pipListener(1)}
+          fullWidthName={layout === 'versus'}
+          clearScrubber={immersive ? clearScrubberFor(1) : 'never'}
+          teaser={showTeaser && teasers && slot1Src ? { src: slot1Src, window: teasers[1] } : null}
         />
         <DebaterVideo
           inert={endCardShown}
           participant={slot2Participant}
-          byline={bylineFor(slot2Participant)}
+          byline={layout === 'versus' && isPhone ? null : bylineFor(slot2Participant)}
           src={slot2Src}
           videoRef={slot2VideoRef}
           buffer={active || buffer}
@@ -666,54 +885,57 @@ export function DebateFeedPlayer({
           onRecovered={() => resyncSlot(2)}
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
-          claims={claimsFor(2)}
+          claims={immersive ? null : claimsFor(2)}
           claimsOpen={claimsOpenFor(2)}
           onClaimsHoverChange={onTileHover(2)}
           // This is the half the scrubber sits in, so its claim corner is the one that has to lift
-          // clear of the bar.
-          clearScrubber={scrubberShown ? 'always' : 'on-hover'}
+          // clear of the bar. In the full-screen view that is whichever tile is at the bottom.
+          clearScrubber={immersive ? clearScrubberFor(2) : scrubberShown ? 'always' : 'on-hover'}
           // Taller than the top tile's, per the frame.
           scrimClassName="h-[4.625rem]"
-          scrubber={
-            ready ? (
-              // Always available so the viewer can seek. During playback it recedes to
-              // hover-only and drops pointer-events so it can't swallow play/pause taps.
-              // `pointer-events-none` does not stop keyboard focus reaching the range input, which
-              // is what brings it back up for a viewer who never touches the pointer.
-              <div
-                onFocus={() => setTimelineFocused(true)}
-                onBlur={event => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
-                }}
-                className={cx(
-                  'transition-opacity',
-                  scrubberShown
-                    ? 'opacity-100'
-                    : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
-                      // set `pointer-events-auto` on themselves — they have to, so a drag can pass
-                      // between them to the range input underneath. An explicit value beats an
-                      // inherited one, so `pointer-events-none` here never reached them and a fully
-                      // transparent marker stayed clickable: a click meant to pause the video seeked
-                      // it instead. The descendant selector outranks the marker's own class.
-                      //
-                      // Focusability is deliberately untouched. Tabbing to a marker sets
-                      // `timelineFocused`, which is what brings the scrubber back into view, so the
-                      // keyboard route in depends on them staying in the tab order while hidden.
-                      'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
-                )}
-              >
-                <FeedScrubber
-                  currentTime={playheadSeconds}
-                  duration={timelineSeconds}
-                  markers={reducedOverlays ? [] : ticker.markers}
-                  onSeek={seekBoth}
-                  onScrubStart={beginScrub}
-                  onScrubEnd={endScrub}
-                />
-              </div>
-            ) : null
-          }
+          scrubber={immersive ? null : scrubberControl}
+          layoutClassName={tileLayout(2)}
+          pipListener={pipListener(2)}
+          fullWidthName={layout === 'versus'}
+          teaser={showTeaser && teasers && slot2Src ? { src: slot2Src, window: teasers[2] } : null}
         />
+
+        {/* In the full-screen view the controls belong to the player, not to a tile: the tiles move
+            and resize under them on a phone. Hidden until the debate has started. */}
+        {immersive && !holdPlayback && topLeftControls ? (
+          <div className="absolute top-3 left-3 z-[35] flex items-center gap-2">{topLeftControls}</div>
+        ) : null}
+        {immersive && !holdPlayback && scrubberControl ? (
+          <div className="absolute inset-x-0 bottom-0 z-[35]">{scrubberControl}</div>
+        ) : null}
+
+        {/* The matchup, on the seam, until the debate starts — set like the round card that opens
+            each round, at its size, so the debate's two title moments speak with one voice. */}
+        {immersive && holdPlayback ? (
+          <span
+            aria-hidden
+            data-debate-versus
+            className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 font-bold tracking-[-0.02em] text-white"
+            style={{ ...roundCardTextShadow, fontSize: '12cqw', lineHeight: 1 }}
+          >
+            VS
+          </span>
+        ) : null}
+
+        {/* What the paused, looping video is waiting for. Without it a viewer watching the faces has
+            no reason to look at the panel. Points at it: right on a desktop, down on a phone. */}
+        {stage?.phase === 'stance' ? (
+          <span
+            data-debate-vote-cue
+            className="pointer-events-none absolute top-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 px-3.5 py-2 text-metadata whitespace-nowrap text-white backdrop-blur-sm"
+          >
+            <Play size={12} />
+            Vote to start watching
+            <span aria-hidden className="inline-block md:rotate-90">
+              →
+            </span>
+          </span>
+        ) : null}
 
         {/* Straddling the seam between the tiles, which is the one strip of the player that is never
           a face — and the one place it cannot land on top of the claim stack.
@@ -744,11 +966,24 @@ export function DebateFeedPlayer({
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-        {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
-          <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
-            {subtitle}
-          </span>
-        )}
+        {/* On a phone in the full-screen view, the zone under the video carries the words large
+            between claims, so the pill only comes back while a claim card has that zone. */}
+        {subtitle &&
+          !roundCard &&
+          !endCardShown &&
+          (!reducedOverlays || (active && playing && mutedByUser)) &&
+          !holdPlayback &&
+          !(immersive && isPhone && panelClaim === null) && (
+            <span
+              className={cx(
+                'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]',
+                // No seam in the corner layout: the pill sits above the timeline instead.
+                layout === 'pip' && 'md:top-16 md:translate-y-0'
+              )}
+            >
+              {subtitle}
+            </span>
+          )}
 
         <DebateRoundCard cue={roundCard} />
 
@@ -782,19 +1017,45 @@ export function DebateFeedPlayer({
           {flash.icon === 'pause' ? <Pause /> : <Play />}
         </div>
 
-        <ActionSurface
-          className="contents"
-          trackImpression={endCardShown}
-          value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
-        >
-          <MeasuredEndCard
-            debate={debate}
-            enabled={active && ready && !reducedOverlays}
-            shown={endCardShown}
-            onOpenClaims={onOpenClaims}
-            onReplay={replayFromEndCard}
-          />
-        </ActionSurface>
+        {stage ? (
+          endCardShown ? (
+            <DebateEndScreen debate={debate} stage={stage} onReplay={replayFromEndCard} />
+          ) : null
+        ) : (
+          <ActionSurface
+            className="contents"
+            trackImpression={endCardShown}
+            value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
+          >
+            <MeasuredEndCard
+              debate={debate}
+              enabled={active && ready && !reducedOverlays}
+              shown={endCardShown}
+              onOpenClaims={onOpenClaims}
+              onReplay={replayFromEndCard}
+            />
+          </ActionSurface>
+        )}
+
+        {/* The claim panel, wherever the feed card put its host. A portal keeps it in this player's
+            React tree — its playback, ticker and attribution — while it lays out beside or below. */}
+        {stage && panelHost
+          ? createPortal(
+              <DebateStagePanel
+                stage={stage}
+                debateId={debate.id}
+                claimText={debate.claim.claim}
+                claim={panelClaim}
+                caption={caption}
+                onVote={voteToStart}
+                onJustWatch={() => justWatch('link')}
+                onAnswered={ticker.onAnswered}
+                variant={isPhone ? 'below' : 'side'}
+                playing={playing}
+              />,
+              panelHost
+            )
+          : null}
 
         {error && (
           <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
@@ -848,6 +1109,10 @@ function DebaterVideo({
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
+  layoutClassName,
+  pipListener = false,
+  fullWidthName = false,
+  teaser = null,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -900,6 +1165,14 @@ function DebaterVideo({
   topLeft?: React.ReactNode;
   scrubber?: React.ReactNode;
   scrimClassName?: string;
+  /** Size and place in the player. Defaults to a full-width 480:289 tile in a stack. */
+  layoutClassName?: string;
+  /** The small corner tile of the full-screen view's phone layout: no name band or overlays. */
+  pipListener?: boolean;
+  /** Half-width tiles on a phone, before the debate: the name has nothing beside it to share with. */
+  fullWidthName?: boolean;
+  /** A few seconds of this debater to loop silently over the tile before the debate starts. */
+  teaser?: { src: string; window: TeaserWindow } | null;
 }) {
   const name = participant ? speakerLabel(participant) : 'Debater';
 
@@ -1125,7 +1398,7 @@ function DebaterVideo({
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
       inert={inert}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      className={cx('overflow-hidden bg-grey-01', layoutClassName ?? 'relative aspect-480/289 w-full')}
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
@@ -1157,6 +1430,8 @@ function DebaterVideo({
           <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
         )}
       </button>
+
+      {teaser ? <TeaserVideo src={teaser.src} clip={teaser.window} /> : null}
 
       {/* What a tile says when its recording cannot be revived.
 
@@ -1340,6 +1615,7 @@ function DebaterVideo({
         style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
           'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
+          pipListener && 'md:hidden',
           cardYield > 0.5 && '[&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
@@ -1352,7 +1628,10 @@ function DebaterVideo({
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
+          className={cx(
+            'pointer-events-auto flex min-w-0 items-center gap-2 text-left',
+            fullWidthName ? 'max-w-[55%] md:max-w-full' : 'max-w-[55%]'
+          )}
         >
           <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
@@ -1380,6 +1659,59 @@ function DebaterVideo({
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>
+  );
+}
+
+/**
+ * One debater, looping a few seconds of themselves talking, with no sound and no captions.
+ *
+ * Its own element on top of the tile's, never the tile's own: `useDebatePlayback` keeps the pair
+ * in step whenever slot 1 is running, so two recordings playing different moments through the
+ * real elements would be "corrected" into sync on every tick. These two are nothing to it.
+ *
+ * Pointer-transparent, so a tap reaches the tile underneath — which, before the debate starts,
+ * is "Just watch".
+ */
+function TeaserVideo({ src, clip }: { src: string; clip: TeaserWindow }) {
+  const ref = React.useRef<HTMLVideoElement | null>(null);
+
+  // Released when the teaser goes, which on a phone is what returns its decoder (GEO-2963).
+  React.useLayoutEffect(() => {
+    const video = ref.current;
+    return () => {
+      if (video) releaseVideo(video);
+    };
+  }, []);
+
+  const restart = () => {
+    const video = ref.current;
+    if (!video) return;
+    if (Math.abs(video.currentTime - clip.startSeconds) > 0.25) video.currentTime = clip.startSeconds;
+    void video.play().catch(() => {
+      /* Refused (Low Power Mode, autoplay off): the tile's still frame stands in. */
+    });
+  };
+
+  return (
+    <video
+      ref={ref}
+      aria-hidden
+      src={src}
+      muted
+      playsInline
+      autoPlay
+      preload="auto"
+      disablePictureInPicture
+      className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover"
+      onLoadedMetadata={restart}
+      onEnded={restart}
+      onTimeUpdate={event => {
+        const video = event.currentTarget;
+        if (video.currentTime >= clip.endSeconds || video.currentTime < clip.startSeconds - 0.5) {
+          video.currentTime = clip.startSeconds;
+        }
+      }}
+    />
   );
 }
 

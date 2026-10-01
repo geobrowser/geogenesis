@@ -24,7 +24,7 @@ import type { RoundCue } from '~/core/debates/round-cues';
  * seam is where the top tile's scrim has run all the way to black, so dark type there leaves the
  * outline holding an empty shape.
  */
-const roundCardTextShadow = {
+export const roundCardTextShadow = {
   textShadow:
     '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)',
 };

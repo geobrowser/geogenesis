@@ -49,7 +49,11 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+import {
+  type OnboardingStep,
+  inlineOnboardingHoldsAtom,
+  shouldOpenOnboardingDialog,
+} from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
@@ -96,7 +100,28 @@ function filterExactNameMatches(results: SearchResult[], name: string, allowedTy
   );
 }
 
-export const OnboardingDialog = () => {
+/** The app-wide onboarding modal. Stands down while an inline surface holds onboarding. */
+export const OnboardingDialog = () => <OnboardingFlow variant="modal" />;
+
+/**
+ * The same onboarding, drawn in place rather than in a modal — the full-screen debate player's
+ * claim panel (GEO-3112). Same steps, same atoms, same optimistic personal-space hand-off; it just
+ * does not navigate away when it finishes, and calls `onFinished` instead.
+ *
+ * The caller must hold `inlineOnboardingHoldsAtom` while this is mounted so the modal stands down.
+ */
+export function OnboardingInline({ onFinished }: { onFinished: () => void }) {
+  return <OnboardingFlow variant="inline" onFinished={onFinished} />;
+}
+
+function OnboardingFlow({ variant, onFinished }: { variant: 'modal' | 'inline'; onFinished?: () => void }) {
+  const inline = variant === 'inline';
+  // The modal yields while something is onboarding the viewer in place, and runs none of its
+  // effects — two copies of this flow would otherwise both route, fetch and track.
+  const inlineHolds = useAtomValue(inlineOnboardingHoldsAtom);
+  const standDown = !inline && inlineHolds > 0;
+  const onFinishedRef = useRef(onFinished);
+  onFinishedRef.current = onFinished;
   const { isOnboardingVisible, hideOnboarding } = useOnboarding();
   const router = useRouter();
 
@@ -128,34 +153,42 @@ export const OnboardingDialog = () => {
   // dialog is actually visible, so the post-creation redirect lands
   // instantly. Skipping for non-onboarding tabs avoids pointless prefetch.
   useEffect(() => {
-    if (!isOnboardingVisible) return;
+    if (inline || standDown || !isOnboardingVisible) return;
     router.prefetch(destination);
-  }, [isOnboardingVisible, router, destination]);
+  }, [inline, standDown, isOnboardingVisible, router, destination]);
 
   useEffect(() => {
     // Only resolve stale state on tabs where the dialog is actually
     // being shown. Otherwise a second tab (e.g. entity preview opened
     // from the match step) would reset `stepAtom` and, via the cross-tab
     // atomWithStorage sync, clobber the original tab's progress.
-    if (!isOnboardingVisible) return;
+    if (standDown || !isOnboardingVisible) return;
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
       setStep('start');
     }
-  }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
+  }, [standDown, isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
   // Play the completion screen for a beat, then send the user where they were
   // headed. Decoupling the redirect from the synchronous `setPending` (which
   // hides the dialog via `shouldOnboard`) also makes the navigation reliable.
   useEffect(() => {
-    if (step !== 'completed') return;
+    if (step !== 'completed' || standDown) return;
     const timeout = setTimeout(() => {
+      if (inline) {
+        // Inline, the viewer is where they wanted to be — in the middle of a debate.
+        devLog('[onboarding] inline completion done');
+        setStep('done');
+        setPostOnboardingRedirect(null);
+        onFinishedRef.current?.();
+        return;
+      }
       devLog('[onboarding] completion animation done → navigating to %s', destination);
       router.push(destination);
       setStep('done');
       dismissOnboarding();
     }, COMPLETION_ANIMATION_MS);
     return () => clearTimeout(timeout);
-  }, [step, destination, router, setStep, dismissOnboarding]);
+  }, [inline, standDown, step, destination, router, setStep, dismissOnboarding, setPostOnboardingRedirect]);
 
   // Fetch featured spaces for the 'interested-in' step. This is the same featured-space
   // traversal the Browse sidebar uses. `featuredError` distinguishes a failed fetch from a
@@ -176,13 +209,13 @@ export const OnboardingDialog = () => {
   }, []);
 
   useEffect(() => {
-    if (step !== 'interested-in') return;
+    if (standDown || step !== 'interested-in') return;
     loadFeaturedSpaces();
-  }, [step, loadFeaturedSpaces]);
+  }, [standDown, step, loadFeaturedSpaces]);
 
   const lastTrackedStep = useRef<string | null>(null);
   useEffect(() => {
-    const visible = isOnboardingVisible || step === 'completed';
+    const visible = !standDown && (isOnboardingVisible || step === 'completed');
     if (!visible || step === 'done') {
       lastTrackedStep.current = null;
       return;
@@ -190,7 +223,7 @@ export const OnboardingDialog = () => {
     if (lastTrackedStep.current === step) return;
     lastTrackedStep.current = step;
     trackAuthOnboarding(step, step === 'completed' ? 'completed' : 'viewed');
-  }, [isOnboardingVisible, step]);
+  }, [standDown, isOnboardingVisible, step]);
 
   const address = smartAccount?.account.address;
 
@@ -211,7 +244,8 @@ export const OnboardingDialog = () => {
     // Kick off the background personal-space creation immediately.
     setPending({ topicId, address, status: 'pending' });
 
-    if (!hasSeenAssistant) {
+    // Not over a debate the viewer is watching: the assistant can introduce itself another time.
+    if (!inline && !hasSeenAssistant) {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
@@ -254,10 +288,50 @@ export const OnboardingDialog = () => {
       ? 'start'
       : step;
 
+  const steps = (
+    <>
+      <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
+      {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
+      {effectiveStep === 'existing-entity-match' && (
+        <StepExistingEntityMatch
+          candidates={entityMatchCandidates}
+          onSkip={() => {
+            setTopicId('');
+            setStep('interested-in');
+          }}
+          onSelect={(entityId, entityName) => {
+            if (entityName) setName(entityName);
+            beginOptimisticOnboarding(entityId);
+          }}
+        />
+      )}
+      {effectiveStep === 'interested-in' && (
+        <StepInterestedIn
+          selectedTopicIds={selectedTopicIds}
+          handleSelectTopics={handleSelectTopics}
+          onCompleteOnboard={onCompleteOnboard}
+          featuredSpaces={featuredSpaces}
+          status={featuredStatus}
+          onRetry={loadFeaturedSpaces}
+        />
+      )}
+      {effectiveStep === 'completed' && <StepComplete />}
+    </>
+  );
+
+  if (inline) {
+    // A fixed height, as the modal card has: the steps lay themselves out against it.
+    return (
+      <div data-onboarding-inline className="flex h-[26rem] flex-col overflow-hidden">
+        {steps}
+      </div>
+    );
+  }
+
   return (
     // Stay open through the completion screen — `setPending` flips
     // `isOnboardingVisible` false, but we want it to finish first.
-    <Root open={shouldOpenOnboardingDialog(isOnboardingVisible, step)}>
+    <Root open={!standDown && shouldOpenOnboardingDialog(isOnboardingVisible, step)}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content
@@ -271,38 +345,13 @@ export const OnboardingDialog = () => {
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
-            <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
-            {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
-            {effectiveStep === 'existing-entity-match' && (
-              <StepExistingEntityMatch
-                candidates={entityMatchCandidates}
-                onSkip={() => {
-                  setTopicId('');
-                  setStep('interested-in');
-                }}
-                onSelect={(entityId, entityName) => {
-                  if (entityName) setName(entityName);
-                  beginOptimisticOnboarding(entityId);
-                }}
-              />
-            )}
-            {effectiveStep === 'interested-in' && (
-              <StepInterestedIn
-                selectedTopicIds={selectedTopicIds}
-                handleSelectTopics={handleSelectTopics}
-                onCompleteOnboard={onCompleteOnboard}
-                featuredSpaces={featuredSpaces}
-                status={featuredStatus}
-                onRetry={loadFeaturedSpaces}
-              />
-            )}
-            {effectiveStep === 'completed' && <StepComplete />}
+            {steps}
           </ModalCard>
         </Content>
       </Portal>
     </Root>
   );
-};
+}
 
 type ModalCardProps = {
   childKey: string;

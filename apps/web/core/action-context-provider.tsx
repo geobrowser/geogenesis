@@ -28,6 +28,9 @@ const IMPRESSION_COMPONENTS = new Set<ActionComponent>([
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'debate_stance_panel',
+  'debate_inline_signup',
+  'debate_end_screen',
 ]);
 
 /** Read inherited attribution when a reusable component supplies optional overrides. */
