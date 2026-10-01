@@ -326,8 +326,8 @@ export function keepSelectedVisible<T extends { id: string; name: string | null;
  * Intersection, not union: two topics narrow the list rather than widening it, because drilling
  * into a subject is what the filter is for, and the union of two topics is a bigger pile than
  * either alone. geo-chat's `topic_ids` means the same thing (GEO-2696), and this is how claims it
- * has never seen — the picker's pinned rows, and the hub's featured list — are held to the same
- * rule. Two halves of one menu disagreeing about what a second topic does would be worse than
+ * has never seen — the picker's pinned rows, and the hub's graph-sourced list — are held to the
+ * same rule. Two halves of one menu disagreeing about what a second topic does would be worse than
  * either answer.
  */
 export function carriesEveryTopic(topics: { id: string }[] | undefined, selected: string[]): boolean {

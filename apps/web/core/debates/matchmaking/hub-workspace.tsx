@@ -1,0 +1,123 @@
+'use client';
+
+import * as React from 'react';
+
+import { useStore } from 'jotai';
+import { useSearchParams } from 'next/navigation';
+
+import { Text } from '~/design-system/text';
+
+import { useGeoChatAuth } from '../hooks';
+import { fromClaimsFilterSearch } from './claims-filter-params';
+import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
+import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
+import { HubLiveRail } from './hub-live-rail';
+import { HubSkeleton } from './hub-states';
+import { LobbyTab } from './lobby-tab';
+import { useHubFilterOwner } from './use-hub-filter-owner';
+import type { DebatesHubTab } from '~/atoms';
+
+const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
+  { value: 'lobby', label: 'Lobby' },
+  { value: 'explore', label: 'Explore' },
+  { value: 'positions', label: 'My positions' },
+];
+
+/**
+ * The one a signed-out viewer can be offered, and the reason the other two cannot.
+ */
+const SIGNED_OUT_LISTS: ClaimsTabVariant[] = ['explore'];
+
+/**
+ * Full-screen matchmaking hub (GEO-2726): claims centre, facet + live rails.
+ * Named `@container/hub` collapse: facets first, then live; narrow falls back to panel menus.
+ * Width is capped by the shell's 1200px `<main>`.
+ */
+export function DebatesHubWorkspace() {
+  const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
+
+  const { ready, authenticated, accountKey } = useGeoChatAuth();
+
+  const searchParams = useSearchParams();
+  const store = useStore();
+
+  const appliedQuery = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!searchParams) return;
+
+    const query = searchParams.toString();
+    if (appliedQuery.current === query) return;
+    const isFirstPass = appliedQuery.current === undefined;
+    appliedQuery.current = query;
+
+    const asked = fromClaimsFilterSearch(
+      new URLSearchParams(query),
+      LIST_OPTIONS.map(option => option.value)
+    ).list;
+
+    const opened = asked ?? DEFAULT_WORKSPACE_LIST;
+    setList(opened);
+
+    const seed = readUrlSeed(opened, query);
+    if (!seed) return;
+
+    const narrows = Boolean(seed.search) || seed.spaceIds.length > 0 || seed.topicIds.length > 0;
+    if (isFirstPass && !narrows) return;
+
+    const atoms = VARIANT_ATOMS[opened];
+    store.set(atoms.search, seed.search);
+    store.set(atoms.topicIds, [...seed.topicIds]);
+    store.set(atoms.spaceIds, [...seed.spaceIds]);
+    store.set(atoms.seedSpent, narrows);
+  }, [searchParams, store]);
+  const options = React.useMemo(
+    () => (authenticated ? LIST_OPTIONS : LIST_OPTIONS.filter(option => SIGNED_OUT_LISTS.includes(option.value))),
+    [authenticated]
+  );
+
+  const shown = options.some(option => option.value === list) ? list : 'explore';
+
+  const filtersReconciled = useHubFilterOwner(accountKey ?? null, ready);
+
+  const showList = React.useCallback((tab: DebatesHubTab) => {
+    if (tab === 'explore' || tab === 'positions' || tab === 'lobby') setList(tab);
+  }, []);
+
+  const picker = (
+    <HubFilterMenu
+      label={options.find(option => option.value === shown)?.label ?? 'Explore'}
+      options={options}
+      value={shown}
+      onChange={setList}
+    />
+  );
+
+  return (
+    <div className="@container/hub flex w-full flex-col">
+      <header className="sticky top-11 z-20 flex items-center justify-between gap-3 bg-white px-4 py-5">
+        <Text as="h1" variant="mainPage" color="text">
+          Debates
+        </Text>
+      </header>
+
+      <div className="flex gap-8 px-4">
+        <div className="min-w-0 flex-1">
+          {!ready || !filtersReconciled ? (
+            <HubSkeleton />
+          ) : shown === 'lobby' ? (
+            <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
+          ) : (
+            <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
+          )}
+        </div>
+
+        <aside
+          aria-label="Live"
+          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-80 shrink-0 self-start overflow-y-auto @[64rem]/hub:block"
+        >
+          <HubLiveRail />
+        </aside>
+      </div>
+    </div>
+  );
+}

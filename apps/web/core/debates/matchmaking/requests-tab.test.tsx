@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateChallenge, DebateRequest, DebateRequestParty } from '../api';
 import { RequestsTab } from './requests-tab';
+import type { ScheduledContent } from './scheduled-debates-section';
 
 const mocks = vi.hoisted(() => ({
   incoming: [] as DebateRequest[],
@@ -17,6 +18,21 @@ const mocks = vi.hoisted(() => ({
   acceptChallenge: vi.fn(),
   rejectChallenge: vi.fn(),
   currentUserId: 'user-me' as string | null,
+  peerAvailability: false,
+  scheduled: { answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null } as ScheduledContent,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+}));
+
+// The section's own rendering needs a QueryClientProvider, which this suite deliberately does without
+// (see below). Stubbed, because what is under test here is whether the section appears at all.
+vi.mock('./scheduled-debates-section', async importOriginal => ({
+  ...(await importOriginal<typeof import('./scheduled-debates-section')>()),
+  useScheduledContent: () => mocks.scheduled,
+  ScheduledDebatesSection: () => <div data-testid="scheduled-debates-section" />,
 }));
 
 // Partial: the tab now pulls in the scheduling hooks, which read the shared query options and key
@@ -31,12 +47,6 @@ vi.mock('../hooks', async importOriginal => ({
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
-}));
-
-// The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
-vi.mock('./scheduled-debates-section', () => ({
-  ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -409,5 +419,90 @@ describe('RequestsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Block Arturas' }));
 
     expect(mocks.block).toHaveBeenCalledWith('user-them');
+  });
+});
+
+/**
+ * Dense is the workspace rail.
+ */
+const EMPTY_SCHEDULED: ScheduledContent = {
+  answerable: [],
+  upcoming: [],
+  people: [],
+  requestsError: null,
+  roomsError: null,
+};
+
+describe('dense (workspace rail) visibility', () => {
+  beforeEach(() => {
+    mocks.incoming = [];
+    mocks.outbound = null;
+    mocks.challenge = null;
+    mocks.peerAvailability = false;
+    mocks.scheduled = EMPTY_SCHEDULED;
+  });
+
+  it('renders nothing at all when nothing is pending, heading included', () => {
+    const { container } = render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(container.innerHTML).toBe('');
+    expect(screen.queryByText('Requests')).not.toBeInTheDocument();
+  });
+
+  it('draws its own heading once it has something', () => {
+    mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+
+  it('appears for a sent request as well as a received one', () => {
+    mocks.outbound = request('request-1', SPACE_A, 'Bitcoin will never go above $250K');
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+
+  it('appears for a pending challenge with no claim requests', () => {
+    mocks.challenge = challenge('recipient');
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+
+  it('does not appear for a challenge that is no longer pending', () => {
+    mocks.challenge = { ...challenge('recipient'), status: 'accepted' };
+    const { container } = render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(container.innerHTML).toBe('');
+  });
+
+  // The cases the rail's own gate could not see.
+  it('appears for a scheduled request awaiting an answer', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [{ id: 'scheduled-1' }] as unknown as ScheduledContent['answerable'],
+    };
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+
+  it('appears for an upcoming room', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, upcoming: [{ id: 'room-1' }] as unknown as ScheduledContent['upcoming'] };
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
+  });
+
+  // A failed read is not an empty one: going quiet would tell the viewer nothing is scheduled.
+  it('appears when a scheduled read failed', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, requestsError: new Error('nope') };
+    render(<RequestsTab dense denseLabel="Requests" />);
+
+    expect(screen.getByText('Requests')).toBeInTheDocument();
   });
 });
