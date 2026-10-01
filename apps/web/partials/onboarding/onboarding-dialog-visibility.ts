@@ -2,6 +2,7 @@ export type OnboardingStep =
   | 'start'
   | 'existing-entity-match'
   | 'interested-in'
+  | 'customize-feed'
   | 'completed'
   | 'done'
   // Legacy values that may still be persisted in localStorage from an older

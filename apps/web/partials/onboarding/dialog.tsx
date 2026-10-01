@@ -14,6 +14,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { trackAuthOnboarding } from '~/core/auth-attempt';
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -28,8 +29,10 @@ import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -49,7 +52,9 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
@@ -69,6 +74,7 @@ type Step = OnboardingStep;
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
   'interested-in': 2,
+  'customize-feed': 3,
 };
 
 const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, order]) => [order, step])) as Record<
@@ -101,7 +107,7 @@ export const OnboardingDialog = () => {
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
-  const setTopicId = useSetAtom(topicIdAtom);
+  const [topicId, setTopicId] = useAtom(topicIdAtom);
   const setName = useSetAtom(nameAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
@@ -110,6 +116,7 @@ export const OnboardingDialog = () => {
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
   const [featuredStatus, setFeaturedStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [heldFeedTopics, setHeldFeedTopics] = useAtom(feedTopicsAtom);
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
@@ -175,8 +182,9 @@ export const OnboardingDialog = () => {
       });
   }, []);
 
+  // 'customize-feed' also needs them: with no space picks, suggestions come from every featured space.
   useEffect(() => {
-    if (step !== 'interested-in') return;
+    if (step !== 'interested-in' && step !== 'customize-feed') return;
     loadFeaturedSpaces();
   }, [step, loadFeaturedSpaces]);
 
@@ -193,6 +201,7 @@ export const OnboardingDialog = () => {
   }, [isOnboardingVisible, step]);
 
   const address = smartAccount?.account.address;
+  const feedTopics = heldTopicsFor(heldFeedTopics, address);
 
   if (!address) return null;
 
@@ -233,13 +242,28 @@ export const OnboardingDialog = () => {
     }
   }
 
+  // `topicId` is empty unless the user claimed an existing entity on the match step.
   function onCompleteOnboard() {
     if (!address || !smartAccount) return;
-    beginOptimisticOnboarding('');
+    capture('form_submission', {
+      form_type: 'onboarding_customize_feed',
+      outcome: feedTopics.length > 0 ? 'completed' : 'skipped',
+      topic_count: feedTopics.length,
+      space_pick_count: selectedTopicIds.length,
+    });
+    beginOptimisticOnboarding(topicId);
   }
 
   const handleSelectTopics = (id: string) => {
-    setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(topicId => topicId !== id) : [...prev, id]));
+    setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
+  };
+
+  const handleToggleFeedTopic = (topic: TopicOption) => {
+    const id = normId(topic.id);
+    const next = feedTopics.some(t => normId(t.id) === id)
+      ? feedTopics.filter(t => normId(t.id) !== id)
+      : [...feedTopics, topic];
+    setHeldFeedTopics({ address, topics: next });
   };
 
   // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates
@@ -267,7 +291,7 @@ export const OnboardingDialog = () => {
           onEscapeKeyDown={e => e.preventDefault()}
           onPointerDownOutside={e => e.preventDefault()}
           onInteractOutside={e => e.preventDefault()}
-          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center p-6"
+          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center overflow-y-auto p-6"
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
@@ -282,7 +306,9 @@ export const OnboardingDialog = () => {
                 }}
                 onSelect={(entityId, entityName) => {
                   if (entityName) setName(entityName);
-                  beginOptimisticOnboarding(entityId);
+                  // Claiming an existing entity skips the space step but still picks topics.
+                  setTopicId(entityId);
+                  setStep('customize-feed');
                 }}
               />
             )}
@@ -290,10 +316,21 @@ export const OnboardingDialog = () => {
               <StepInterestedIn
                 selectedTopicIds={selectedTopicIds}
                 handleSelectTopics={handleSelectTopics}
-                onCompleteOnboard={onCompleteOnboard}
+                onContinue={() => setStep('customize-feed')}
                 featuredSpaces={featuredSpaces}
                 status={featuredStatus}
                 onRetry={loadFeaturedSpaces}
+              />
+            )}
+            {effectiveStep === 'customize-feed' && (
+              <StepCustomizeFeed
+                spaceIds={selectedTopicIds.length > 0 ? selectedTopicIds : featuredSpaces.map(space => space.id)}
+                isPreparing={selectedTopicIds.length === 0 && featuredStatus === 'loading'}
+                failedToPrepare={selectedTopicIds.length === 0 && featuredStatus === 'error'}
+                onRetryPrepare={loadFeaturedSpaces}
+                selected={feedTopics}
+                onToggle={handleToggleFeedTopic}
+                onCompleteOnboard={onCompleteOnboard}
               />
             )}
             {effectiveStep === 'completed' && <StepComplete />}
@@ -310,6 +347,13 @@ type ModalCardProps = {
   effectiveStep: Step;
 };
 
+// The topic step is a wall of pills, so it gets a wider, taller card than the rest of the flow.
+const cardSize = (step: Step) => {
+  if (step === 'completed') return 'h-[245px] max-w-[360px] px-6 py-10';
+  if (step === 'customize-feed') return 'h-[560px] max-h-[calc(100dvh-13rem)] min-h-[420px] max-w-[480px] p-6 pt-8';
+  return 'h-[485px] max-w-[360px] p-6 pt-8';
+};
+
 const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
   return (
     <motion.div
@@ -318,14 +362,14 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 mt-40 flex ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
+      className={`pointer-events-auto relative z-100 mt-40 flex ${cardSize(effectiveStep)} w-full flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
     >
       {children}
     </motion.div>
   );
 };
 
-const STEPS_WITH_HEADER = ['start', 'interested-in', 'existing-entity-match'] as const;
+const STEPS_WITH_HEADER = ['start', 'interested-in', 'customize-feed', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
 type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
@@ -334,13 +378,21 @@ const DOT_CONFIGS: Record<StepWithHeader, DotConfig[]> = {
   start: [
     { width: 'w-8', active: true },
     { width: 'w-4', active: false },
+    { width: 'w-4', active: false },
   ],
   'interested-in': [
+    { width: 'w-4', active: true },
+    { width: 'w-8', active: true },
+    { width: 'w-4', active: false },
+  ],
+  'customize-feed': [
+    { width: 'w-4', active: true },
     { width: 'w-4', active: true },
     { width: 'w-8', active: true },
   ],
   'existing-entity-match': [
     { width: 'w-8', active: true },
+    { width: 'w-4', active: false },
     { width: 'w-4', active: false },
   ],
 };
@@ -357,6 +409,7 @@ const StepDots = ({ step }: { step: StepWithHeader }) => (
 // older version of the flow still renders the header for the step it maps to.
 const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityMatches: () => void }) => {
   const setStep = useSetAtom(stepAtom);
+  const topicId = useAtomValue(topicIdAtom);
   // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
   const { logout } = useLogout();
 
@@ -368,6 +421,11 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
     if (step === 'existing-entity-match') {
       onClearEntityMatches();
       setStep('start');
+      return;
+    }
+    // A claimed entity came from the match step, not the space step.
+    if (step === 'customize-feed' && topicId) {
+      setStep('existing-entity-match');
       return;
     }
     setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'start');
@@ -750,22 +808,21 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
 function StepInterestedIn({
   handleSelectTopics,
   selectedTopicIds,
-  onCompleteOnboard,
+  onContinue,
   featuredSpaces,
   status,
   onRetry,
 }: {
   handleSelectTopics: (id: string) => void;
   selectedTopicIds: string[];
-  onCompleteOnboard: () => void;
+  onContinue: () => void;
   featuredSpaces: BrowseSpaceRow[];
   status: 'loading' | 'loaded' | 'error';
   onRetry: () => void;
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const isCreateProfile = selectedTopicIds.length > 0;
-  const primaryLabel = isCreateProfile ? 'Create profile' : 'Skip for now';
+  const hasPicks = selectedTopicIds.length > 0;
 
   return (
     <div className="flex h-full flex-col justify-between">
@@ -837,17 +894,83 @@ function StepInterestedIn({
         </Button>
       ) : (
         <Button
-          onClick={onCompleteOnboard}
+          onClick={onContinue}
           disabled={isLoading}
-          variant={isCreateProfile ? 'primary' : 'secondary'}
+          variant={hasPicks ? 'primary' : 'secondary'}
           className={cx(
             'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && isCreateProfile && 'bg-ctaHover'
+            !isLoading && hasPicks && 'bg-ctaHover'
           )}
         >
-          {primaryLabel}
+          {hasPicks ? 'Continue' : 'Skip for now'}
         </Button>
       )}
+    </div>
+  );
+}
+
+function StepCustomizeFeed({
+  spaceIds,
+  isPreparing,
+  failedToPrepare,
+  onRetryPrepare,
+  selected,
+  onToggle,
+  onCompleteOnboard,
+}: {
+  spaceIds: string[];
+  isPreparing: boolean;
+  failedToPrepare: boolean;
+  onRetryPrepare: () => void;
+  selected: TopicOption[];
+  onToggle: (topic: TopicOption) => void;
+  onCompleteOnboard: () => void;
+}) {
+  const hasPicks = selected.length > 0;
+  const needsMore = selected.length < RECOMMENDED_FEED_TOPIC_COUNT;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <StepContents childKey="customize-feed">
+        <div className="w-full">
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
+            Customize your feed
+          </Text>
+          <Text
+            as="p"
+            variant="body"
+            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
+          >
+            Follow topics to see debates and posts about them
+          </Text>
+        </div>
+      </StepContents>
+      <FeedTopicPicker
+        spaceIds={spaceIds}
+        isPreparing={isPreparing}
+        failedToPrepare={failedToPrepare}
+        onRetryPrepare={onRetryPrepare}
+        selected={selected}
+        onToggle={onToggle}
+        className="mt-6 flex-1"
+      />
+      <div className="shrink-0 pt-4">
+        <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
+          {needsMore
+            ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
+            : `${selected.length} topics selected`}
+        </Text>
+        <Button
+          onClick={onCompleteOnboard}
+          variant={hasPicks ? 'primary' : 'secondary'}
+          className={cx(
+            'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
+            hasPicks && 'bg-ctaHover'
+          )}
+        >
+          {hasPicks ? 'Create profile' : 'Skip for now'}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
+
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
@@ -10,6 +12,7 @@ import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { normId } from '~/core/utils/norm-id';
 
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed } from '~/partials/feed/entity-feed';
@@ -17,6 +20,7 @@ import { EntityFeed } from '~/partials/feed/entity-feed';
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
 const FOR_YOU_ACCOUNT_WAIT_MS = 5_000;
@@ -57,9 +61,15 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
     return () => clearTimeout(timer);
   }, [awaitingAccount]);
 
+  // Onboarding picks count as followed while their follow edit waits for the new space to index.
+  const heldPicks = heldTopicsFor(useAtomValue(feedTopicsAtom), smartAccount?.account.address);
+
   const followedTopicIds = React.useMemo(
-    () => (isLoading || awaitingAccount ? null : [...topicIds].sort()),
-    [awaitingAccount, isLoading, topicIds]
+    () =>
+      isLoading || awaitingAccount
+        ? null
+        : [...new Set([...topicIds, ...heldPicks.map(topic => normId(topic.id))])].sort(),
+    [awaitingAccount, isLoading, topicIds, heldPicks]
   );
 
   return (
