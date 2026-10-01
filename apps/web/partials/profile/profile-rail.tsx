@@ -24,8 +24,13 @@ import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
+import { useFollowTopics } from '~/core/topics/use-follow-topics';
+import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { useTopicMetadata } from '~/core/topics/use-topic-metadata';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -488,6 +493,7 @@ export function AboutSection({
             <VerifiedBy verifiers={facts.verifiedBy} />
           </Row>
         )}
+        <Following spaceId={spaceId} />
 
         {/* Each count is the tab that lists what it counts, which is the only
             question a number like this raises. */}
@@ -657,6 +663,127 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+function FollowingSkeleton() {
+  return (
+    <Row label="Following">
+      <span className="inline-flex items-center gap-2" aria-hidden>
+        <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
+        <span className="inline-flex">
+          <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        </span>
+      </span>
+    </Row>
+  );
+}
+
+export function Following({ spaceId }: { spaceId: string }) {
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  const { rows, isLoading } = useFollowedTopics(spaceId);
+
+  const topics = React.useMemo(() => {
+    const seen = new Set<string>();
+    const unique: { relationId: string; topicId: string }[] = [];
+    for (const row of rows) {
+      const key = normId(row.toEntityId);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push({ relationId: row.id, topicId: row.toEntityId });
+    }
+    return unique;
+  }, [rows]);
+
+  const topicIds = React.useMemo(() => topics.map(topic => topic.topicId), [topics]);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
+  const { unfollow, isPending } = useFollowTopics();
+
+  if (!isLoading && topics.length === 0) return null;
+  if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
+
+  const metaFor = (topicId: string) => metadata.get(normId(topicId));
+  const nameFor = (topicId: string) => metaFor(topicId)?.name ?? 'Untitled';
+  const imageFor = (topicId: string) => metaFor(topicId)?.image ?? PLACEHOLDER_SPACE_IMAGE;
+  // The topic's own page, in one of the spaces it lives in. The follow row carries no home space —
+  // its `spaceId` is the follower's
+  const linkFor = (topicId: string) => {
+    const homeSpaceId = metaFor(topicId)?.spaces[0]?.id;
+    return homeSpaceId ? NavUtils.toEntity(homeSpaceId, topicId) : null;
+  };
+
+  const visible = topics.slice(0, 3);
+
+  return (
+    <Row label="Following">
+      <Popover.Root>
+        <Popover.Trigger
+          aria-label={`Following ${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}`}
+          className="inline-flex items-center gap-2 text-metadata text-text hover:underline"
+        >
+          <span className="tabular-nums">{topics.length}</span>
+          <AvatarGroup>
+            {visible.map(({ topicId }) => (
+              <AvatarGroup.Item key={topicId} size={20}>
+                <FallbackImage value={imageFor(topicId)} sizes="20px" className="object-cover" />
+              </AvatarGroup.Item>
+            ))}
+            <AvatarGroup.Overflow count={topics.length - visible.length} size={20} />
+          </AvatarGroup>
+        </Popover.Trigger>
+
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={4}
+            className="z-100 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown"
+          >
+            <ul>
+              {topics.map(({ relationId, topicId }) => {
+                const href = linkFor(topicId);
+                const name = nameFor(topicId);
+                const label = (
+                  <>
+                    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
+                      <FallbackImage value={imageFor(topicId)} sizes="20px" className="object-cover" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-metadata text-text">{name}</span>
+                    <span className="shrink-0 text-tag text-grey-04">Topic</span>
+                  </>
+                );
+
+                return (
+                  <li key={relationId} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
+                    {href ? (
+                      <Link href={href} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        {label}
+                      </Link>
+                    ) : (
+                      <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{label}</span>
+                    )}
+                    {isOwner && (
+                      <button
+                        type="button"
+                        aria-label={`Unfollow ${name}`}
+                        onClick={() => unfollow([topicId])}
+                        disabled={isPending(topicId) || isLoading}
+                        className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+                      >
+                        Unfollow
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    </Row>
   );
 }
 
