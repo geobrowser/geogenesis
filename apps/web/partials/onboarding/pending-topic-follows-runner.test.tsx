@@ -54,7 +54,20 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  window.localStorage.clear();
 });
+
+/** A Web Locks stand-in where another tab may be holding the lock. */
+function stubLocks(heldElsewhere: { value: boolean }) {
+  vi.stubGlobal('navigator', {
+    ...navigator,
+    locks: {
+      request: (_name: string, _options: unknown, callback: (lock: object | null) => Promise<unknown>) =>
+        callback(heldElsewhere.value ? null : {}),
+    },
+  });
+}
 
 describe('PendingTopicFollowsRunner', () => {
   it('follows every pick in one call and clears them', async () => {
@@ -100,5 +113,34 @@ describe('PendingTopicFollowsRunner', () => {
 
     expect(mocks.follow).toHaveBeenCalledTimes(3);
     expect(store.get(feedTopicsAtom)).toEqual(picks);
+  });
+
+  it('leaves the picks to another tab that holds the lock, then publishes only what is left', async () => {
+    mocks.follow.mockResolvedValue(true);
+    const heldElsewhere = { value: true };
+    stubLocks(heldElsewhere);
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(mocks.follow).not.toHaveBeenCalled();
+
+    // The other tab followed them and cleared storage, then let go of the lock.
+    window.localStorage.setItem('onboardingFeedTopics', '[]');
+    heldElsewhere.value = false;
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(picks);
+  });
+
+  it('publishes under the lock when no other tab holds it', async () => {
+    mocks.follow.mockResolvedValue(true);
+    stubLocks({ value: false });
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenCalledWith(picks);
+    expect(store.get(feedTopicsAtom)).toEqual([]);
   });
 });
