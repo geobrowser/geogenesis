@@ -16,7 +16,7 @@ import {
   topicIdAtom,
 } from '~/partials/onboarding/dialog';
 
-import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
+import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 /**
@@ -88,7 +88,7 @@ export function usePrepareOnboarding() {
       setSpaceId('');
       setStep('start');
       setSelectedTopicIds([]);
-      setFeedTopics([]);
+      setFeedTopics(NO_HELD_FEED_TOPICS);
     },
     [
       authenticated,

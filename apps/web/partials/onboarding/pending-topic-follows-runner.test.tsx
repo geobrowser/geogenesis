@@ -7,10 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 
 import { PendingTopicFollowsRunner } from './pending-topic-follows-runner';
-import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
+import { type HeldFeedTopics, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 
 const mocks = vi.hoisted(() => ({
   personalSpaceId: 'space-1' as string | null,
+  address: '0xA',
   followedLoading: false,
   follow: vi.fn(),
   getSpace: vi.fn(),
@@ -18,6 +19,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
+}));
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: mocks.address } } }),
 }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ isLoading: mocks.followedLoading }),
@@ -30,9 +34,12 @@ const picks = [
   { id: 'topic-b', name: 'AI safety' },
 ];
 
-function mount(pending: unknown = null) {
+const held = { address: '0xA', topics: picks };
+const none = { address: '', topics: [] };
+
+function mount(pending: unknown = null, stored: HeldFeedTopics = held) {
   const store = createStore();
-  store.set(feedTopicsAtom, picks);
+  store.set(feedTopicsAtom, stored);
   store.set(pendingPersonalSpaceAtom, pending as never);
   render(
     <Provider store={store}>
@@ -45,6 +52,7 @@ function mount(pending: unknown = null) {
 beforeEach(() => {
   vi.useFakeTimers();
   mocks.personalSpaceId = 'space-1';
+  mocks.address = '0xA';
   mocks.followedLoading = false;
   mocks.follow.mockReset();
   mocks.getSpace.mockReset();
@@ -78,7 +86,7 @@ describe('PendingTopicFollowsRunner', () => {
 
     expect(mocks.follow).toHaveBeenCalledOnce();
     expect(mocks.follow).toHaveBeenCalledWith(picks);
-    expect(store.get(feedTopicsAtom)).toEqual([]);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
   it('waits while the personal space is still being created', async () => {
@@ -97,11 +105,11 @@ describe('PendingTopicFollowsRunner', () => {
 
     await act(() => vi.advanceTimersByTimeAsync(0));
     expect(mocks.follow).not.toHaveBeenCalled();
-    expect(store.get(feedTopicsAtom)).toEqual(picks);
+    expect(store.get(feedTopicsAtom)).toEqual(held);
 
     await act(() => vi.advanceTimersByTimeAsync(3_000));
     expect(mocks.follow).toHaveBeenCalledOnce();
-    expect(store.get(feedTopicsAtom)).toEqual([]);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
   it('keeps the picks when the publish fails, and stops retrying after a few', async () => {
@@ -112,7 +120,7 @@ describe('PendingTopicFollowsRunner', () => {
     for (let i = 0; i < 10; i++) await act(() => vi.advanceTimersByTimeAsync(30_000));
 
     expect(mocks.follow).toHaveBeenCalledTimes(3);
-    expect(store.get(feedTopicsAtom)).toEqual(picks);
+    expect(store.get(feedTopicsAtom)).toEqual(held);
   });
 
   it('leaves the picks to another tab that holds the lock, then publishes only what is left', async () => {
@@ -130,7 +138,7 @@ describe('PendingTopicFollowsRunner', () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000));
 
     expect(mocks.follow).not.toHaveBeenCalled();
-    expect(store.get(feedTopicsAtom)).toEqual(picks);
+    expect(store.get(feedTopicsAtom)).toEqual(held);
   });
 
   it('publishes under the lock when no other tab holds it', async () => {
@@ -141,6 +149,27 @@ describe('PendingTopicFollowsRunner', () => {
     await act(() => vi.advanceTimersByTimeAsync(0));
 
     expect(mocks.follow).toHaveBeenCalledWith(picks);
-    expect(store.get(feedTopicsAtom)).toEqual([]);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it("drops another account's picks instead of following them", async () => {
+    mocks.follow.mockResolvedValue(true);
+    mocks.address = '0xB';
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('drops picks stored without an owner', async () => {
+    mocks.follow.mockResolvedValue(true);
+    const store = mount(null, picks as unknown as HeldFeedTopics);
+
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 });

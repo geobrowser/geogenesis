@@ -53,7 +53,7 @@ import { Truncate } from '~/design-system/truncate';
 
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
-import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
@@ -115,7 +115,7 @@ export const OnboardingDialog = () => {
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
   const [featuredStatus, setFeaturedStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
-  const [feedTopics, setFeedTopics] = useAtom(feedTopicsAtom);
+  const [heldFeedTopics, setHeldFeedTopics] = useAtom(feedTopicsAtom);
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
@@ -200,6 +200,7 @@ export const OnboardingDialog = () => {
   }, [isOnboardingVisible, step]);
 
   const address = smartAccount?.account.address;
+  const feedTopics = heldTopicsFor(heldFeedTopics, address);
 
   if (!address) return null;
 
@@ -257,7 +258,10 @@ export const OnboardingDialog = () => {
   };
 
   const handleToggleFeedTopic = (topic: TopicOption) => {
-    setFeedTopics(prev => (prev.some(t => t.id === topic.id) ? prev.filter(t => t.id !== topic.id) : [...prev, topic]));
+    const next = feedTopics.some(t => t.id === topic.id)
+      ? feedTopics.filter(t => t.id !== topic.id)
+      : [...feedTopics, topic];
+    setHeldFeedTopics({ address, topics: next });
   };
 
   // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates

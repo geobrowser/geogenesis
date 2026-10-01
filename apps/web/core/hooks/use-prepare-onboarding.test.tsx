@@ -108,15 +108,15 @@ describe('usePrepareOnboarding', () => {
   it('clears the held feed topics', () => {
     const { result } = setup();
     act(() => {
-      result.current.setFeedTopics([{ id: 'topic-a', name: 'Bitcoin' }]);
+      result.current.setFeedTopics({ address: '0xA', topics: [{ id: 'topic-a', name: 'Bitcoin' }] });
     });
-    expect(result.current.feedTopics).toHaveLength(1);
+    expect(result.current.feedTopics.topics).toHaveLength(1);
 
     act(() => {
       result.current.prepare();
     });
 
-    expect(result.current.feedTopics).toEqual([]);
+    expect(result.current.feedTopics).toEqual({ address: '', topics: [] });
   });
 
   // Reported in review: two callers gate on `!smartAccount` rather than `!authenticated`, and a

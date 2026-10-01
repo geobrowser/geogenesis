@@ -20,7 +20,7 @@ import { EntityFeed } from '~/partials/feed/entity-feed';
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
-import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
 const FOR_YOU_ACCOUNT_WAIT_MS = 5_000;
@@ -62,7 +62,7 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
   }, [awaitingAccount]);
 
   // Onboarding picks count as followed while their follow edit waits for the new space to index.
-  const heldPicks = useAtomValue(feedTopicsAtom);
+  const heldPicks = heldTopicsFor(useAtomValue(feedTopicsAtom), smartAccount?.account.address);
 
   const followedTopicIds = React.useMemo(
     () =>
