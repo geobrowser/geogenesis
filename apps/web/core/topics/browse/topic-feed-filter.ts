@@ -33,7 +33,7 @@ export function topicsRelationFilter(topicIds: readonly string[]): EntityFilter 
   };
 }
 
-/** One population query shared by feed ranking and composition counts. */
+/** The complete population: the feed's fallback past the topic walk, and the counts' fallback. */
 export function topicFeedPopulationScopes(
   topicId: string,
   selectedTopicIds: readonly string[],

@@ -29,20 +29,36 @@ const windows = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+  graphql: ({
+    query,
+    decoder,
+    variables,
+  }: {
+    query: any;
+    decoder: (data: unknown) => unknown;
+    variables: Record<string, unknown>;
+  }) => {
     const operation =
       query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
     windows.operations.push(operation);
     if (windows.responder) {
       windows.calls += 1;
       windows.variables.push(variables);
-      return Effect.succeed(windows.responder(operation, variables));
+      const response = windows.responder(operation, variables) as { raw?: unknown } | undefined;
+      // `{ raw }` is a graph response, run through the real decoder.
+      return Effect.succeed(response && 'raw' in response ? decoder(response.raw) : response);
     }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
     return Effect.succeed(next);
   },
+}));
+
+// Fixtures are already card-shaped, so a `{ raw }` response's nodes decode as themselves.
+vi.mock('./explore-card-item', async importOriginal => ({
+  ...(await importOriginal<typeof import('./explore-card-item')>()),
+  decodeExploreCardEntity: (node: { id?: unknown } | null) => (typeof node?.id === 'string' ? node : null),
 }));
 
 // Only reached when a wallet is passed, which these cases do not do; mocked so the module graph
@@ -52,7 +68,7 @@ vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberR
 
 const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
   await import('./fetch-explore-feed');
-const { encodeExploreForYouCursor } = await import('./explore-window-cursor');
+const { encodeExploreForYouCursor, encodeExploreWindowCursor } = await import('./explore-window-cursor');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -522,6 +538,122 @@ describe('a complete contextual population', () => {
 
     expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
     expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
+  });
+});
+
+describe('a topic page from the topic walk (GEO-3092)', () => {
+  const PAGE_TOPIC = 'cccccccccccccccccccccccccccccccc';
+  const SELECTED = 'dddddddddddddddddddddddddddddddd';
+  const topicArgs = {
+    ...feedArgs,
+    typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
+    requireDebateTagOnClaims: undefined,
+    requireName: true,
+    completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID], entityFilter: { id: { in: ['x'] } } }],
+    topicFeedTopicIds: [PAGE_TOPIC, SELECTED],
+  };
+  const walkRows = (count: number) =>
+    Array.from({ length: count }, (_, index) => entity(`walk-${index}`, index % 3 ? CLAIM_TYPE_ID : DEBATE_TYPE_ID));
+  const completeIndex = (ids: string[]) => ({
+    nodes: ids.map((id, index) => ({ id, rankingScore: String(100 - index), createdAt: '1' })),
+    pageInfo: { hasNextPage: false, endCursor: null },
+  });
+
+  it.each([
+    ['best', 66],
+    ['new', 30],
+  ] as const)('reads %s from one walk over every topic, without the complete population', async (sort, size) => {
+    windows.responder = () => ({ raw: { entitiesRankedForTopicsConnection: { nodes: walkRows(size) } } });
+
+    const result = await fetchExploreFeed({ ...topicArgs, sort });
+
+    expect(windows.operations).toEqual(['ExploreTopicFeedConnection']);
+    expect(windows.variables[0]).toMatchObject({
+      topicIds: [PAGE_TOPIC, SELECTED],
+      typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID],
+      spaceIds: [SPACE],
+      sortBy: sort,
+      matchAll: true,
+      debateTaggedClaims: false,
+      first: size,
+      offset: 0,
+      maxPerTopic: size,
+    });
+    expect(result.items).toHaveLength(22);
+    // A full window means more.
+    expect(result.nextCursor).not.toBeNull();
+  });
+
+  it('keeps New in walk order and ends where the walk comes back short', async () => {
+    windows.responder = () => ({ raw: { entitiesRankedForTopicsConnection: { nodes: walkRows(5) } } });
+
+    const result = await fetchExploreFeed({ ...topicArgs, sort: 'new' });
+
+    expect(result.items.map(item => item.entityId)).toEqual(walkRows(5).map((row: any) => row.id));
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('counts undecodable nodes when advancing, so the next window starts after them', async () => {
+    const nodes = [...walkRows(29), { id: null }];
+    windows.responder = (_operation, variables) =>
+      variables.offset === 0
+        ? { raw: { entitiesRankedForTopicsConnection: { nodes } } }
+        : { raw: { entitiesRankedForTopicsConnection: { nodes: [] } } };
+
+    const first = await fetchExploreFeed({ ...topicArgs, sort: 'new' });
+    const second = await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor: first.nextCursor });
+    await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor: second.nextCursor });
+
+    expect(windows.variables.map(variables => variables.offset)).toEqual([0, 0, 30]);
+  });
+
+  it('serves the complete population when the walk fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    windows.responder = operation => {
+      if (operation === 'ExploreTopicFeedConnection') throw new Error('Unknown argument "sortBy"');
+      return operation === 'ExploreCompleteIndex'
+        ? completeIndex(['ranked'])
+        : windowOf([entity('ranked', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null });
+    };
+
+    const result = await fetchExploreFeed(topicArgs);
+
+    expect(result.items.map(item => item.entityId)).toEqual(['ranked']);
+    expect(windows.operations).toEqual([
+      'ExploreTopicFeedConnection',
+      'ExploreCompleteIndex',
+      'ExploreEntitiesConnection',
+    ]);
+    warn.mockRestore();
+  });
+
+  it('serves a window deeper than the walk can reach from the complete population', async () => {
+    const ids = Array.from({ length: 1_000 }, (_, index) => `deep-${index}`);
+    windows.responder = operation =>
+      operation === 'ExploreCompleteIndex'
+        ? completeIndex(ids)
+        : windowOf(
+            ids.slice(990).map(id => entity(id, CLAIM_TYPE_ID)),
+            { hasNextPage: false, endCursor: null }
+          );
+
+    const result = await fetchExploreFeed({
+      ...topicArgs,
+      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID], entityFilter: { id: { in: ids } } }],
+      cursor: encodeExploreWindowCursor({ after: '990', offset: 0 }),
+    });
+
+    expect(windows.operations).toEqual(['ExploreCompleteIndex', 'ExploreEntitiesConnection']);
+    expect(result.items[0]?.entityId).toBe('deep-990');
+  });
+
+  it('sends the debate-tag rule to the walk rather than as a filter', async () => {
+    windows.responder = () => ({ raw: { entitiesRankedForTopicsConnection: { nodes: [] } } });
+
+    await fetchExploreFeed({ ...topicArgs, requireDebateTagOnClaims: true });
+
+    expect(windows.variables[0]?.debateTaggedClaims).toBe(true);
+    expect(windows.variables[0]).not.toHaveProperty('filter');
   });
 });
 
