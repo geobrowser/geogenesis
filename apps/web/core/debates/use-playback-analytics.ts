@@ -17,6 +17,9 @@ export function usePlaybackAnalytics(
   mediaAttached = true
 ) {
   const playbackInstance = React.useRef(crypto.randomUUID());
+  // Which media this instance has already reported exposed, so re-binding to re-attached elements
+  // doesn't report it again under the same `exposure_id`.
+  const exposedFor = React.useRef<string | null>(null);
   const elementRef = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
@@ -50,7 +53,8 @@ export function usePlaybackAnalytics(
       return;
     const instance = playbackInstance.current;
     let visible = false;
-    let exposed = false;
+    const exposureKey = `${debate.id}|${mediaVersion}|${offset}`;
+    let exposed = exposedFor.current === exposureKey;
     let visibleSince: number | null = null;
     let disposed = false;
     let pageHidden = false;
@@ -82,6 +86,7 @@ export function usePlaybackAnalytics(
       else if (visibleSince === null) visibleSince = now;
       else if (!exposed && now - visibleSince >= 1000) {
         exposed = true;
+        exposedFor.current = exposureKey;
         emit('debate_exposed', { exposure_id: instance, visibility_rule: 'player-60pct-1s-v1' });
       }
       clock.sample({

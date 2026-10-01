@@ -83,3 +83,69 @@ it('measures playback again after a released card re-attaches its videos (GEO-30
   const intervals = capture.mock.calls.filter(([e]) => e === 'debate_playback_interval');
   expect(intervals.length).toBeGreaterThan(0);
 });
+
+// #2644 keeps `exposure_id` stable per player, so a card that was exposed, released and revisited
+// must not report a second exposure under the same id.
+it('reports a card exposed once across a release and re-attach (GEO-3067)', () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  let observe: IntersectionObserverCallback = () => {};
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(cb: IntersectionObserverCallback) {
+        observe = cb;
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  const debate = { id: 'debate-a', started_at: null, recordings: [] } as unknown as Debate;
+  function Player({ released }: { released: boolean }) {
+    const first = React.useRef<HTMLVideoElement>(null);
+    const second = React.useRef<HTMLVideoElement>(null);
+    const controller = {
+      slot1VideoRef: first,
+      slot2VideoRef: second,
+      ready: true,
+      timelineSeconds: 100,
+      mutedByUser: true,
+      isScrubbing: false,
+    } as unknown as DebatePlaybackController;
+    const analytics = usePlaybackAnalytics(debate, true, controller, !released);
+    return (
+      <div ref={analytics.elementRef}>
+        {released ? (
+          <div>Loading…</div>
+        ) : (
+          <>
+            <video ref={first} />
+            <video ref={second} />
+          </>
+        )}
+      </div>
+    );
+  }
+  const exposeFor = (ms: number) => {
+    act(() =>
+      observe(
+        [{ isIntersecting: true, intersectionRatio: 0.8 }] as IntersectionObserverEntry[],
+        {} as IntersectionObserver
+      )
+    );
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  };
+  const exposures = () => capture.mock.calls.filter(([event]) => event === 'debate_exposed').length;
+
+  const view = render(<Player released={false} />);
+  exposeFor(2_000);
+  expect(exposures()).toBe(1);
+
+  view.rerender(<Player released />);
+  view.rerender(<Player released={false} />);
+  exposeFor(2_000);
+  expect(exposures()).toBe(1);
+});

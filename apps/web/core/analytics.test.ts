@@ -59,6 +59,19 @@ describe('analytics', () => {
     expect(runtime.loggedIn).toHaveBeenCalledTimes(1);
   });
 
+  it('stays bounded when the full queue holds only identity calls', async () => {
+    const { loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1001; i++) loggedIn({ id: `user-${i}` } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    // Only the oldest identity call gives way; the newest identity state always arrives.
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1000);
+    expect(runtime.loggedIn).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-1000' }), expect.anything());
+  });
+
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
     const { initAnalytics } = await import('./analytics');
 

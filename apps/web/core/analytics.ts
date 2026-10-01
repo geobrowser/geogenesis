@@ -141,7 +141,7 @@ let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
 // Calls wait here until the runtime script loads, which a blocker can prevent for the life of the
-// tab. Bounded so they can't pile up, but identity calls are always kept: later events rely on them.
+// tab. Hard-bounded; identity calls displace events first, since later events rely on them.
 const MAX_PENDING_CALLS = 1000;
 const IDENTITY_METHODS = new Set<PendingCall['method']>([
   'identifyUser',
