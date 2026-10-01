@@ -113,7 +113,6 @@ function canplayAll(c: HTMLElement) {
     });
 }
 
-
 // A start that comes back blocked must keep its error on screen and in the GEO-3074 outcome
 // state; re-running autoplay as the resume settles cleared it within milliseconds (GEO-3067).
 describe('DebateFeedPlayer blocked start', () => {
