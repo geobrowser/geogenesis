@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Entity } from '~/core/types';
 import { sleep } from '~/core/utils/utils';
@@ -88,6 +89,23 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  * not describe the same state in two different words.
  */
 export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
+
+/**
+ * Whether the viewer's response is still on its way to the bundler — the only part of a write the
+ * UI waits on (GEO-2889).
+ *
+ * Inclusion is not waited on. It is the slow part — `web.write.entity_response` p50 6s, p90 ~30s,
+ * p99 ~2 minutes, almost all of it the receipt — and once the bundler has the op nothing the viewer
+ * does can make it faster. So a submitted write reads as made: its side is drawn held, and the
+ * controls answer presses again. The mutation still settles on inclusion, and a failure there rolls
+ * the state back exactly as before, so a write that never lands does not stay shown as made.
+ *
+ * `delayed` is only reachable after inclusion, so it is never awaiting submission. Neither is
+ * `indexed`, nor a `reconciling` that the bundler has accepted.
+ */
+export function isAwaitingResponseSubmission(state: EntityResponseIndexingState) {
+  return state.status === 'reconciling' && !state.submitted;
+}
 
 /**
  * The one kind a claim is answered with.

@@ -1,5 +1,9 @@
+import { uuidToHex } from '~/core/id/normalize';
+
+import type { Debate, DebateParticipant } from './api';
 import { type TimedClaim, isAssertableMoment } from './claim-timing';
-import { PLAYBACK_END_EPSILON_MS } from './playback-utils';
+import { PLAYBACK_END_EPSILON_MS, orderedParticipants } from './playback-utils';
+import type { DebateTranscriptClaims } from './transcript-claims';
 
 /**
  * How long a claim card stays up once the debater has finished saying it.
@@ -278,4 +282,63 @@ export function claimMarkers(claims: TimedClaim[], timelineMs: number): ClaimMar
         return kept;
       }, [])
   );
+}
+
+/**
+ * Who said each claim, keyed by claim id.
+ *
+ * Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
+ * space, which both debaters share. The block's `Authors` relation points at the speaker's personal
+ * space, which is the id the participant list keys on.
+ *
+ * Shared by the live claim cards and the end card's carousel, so a claim is credited to the same
+ * person in both. A restated claim is credited to nobody.
+ */
+export function speakersByClaimId(
+  debate: Debate,
+  claims: Pick<DebateTranscriptClaims, 'all' | 'blocks'>
+): Map<string, DebateParticipant> {
+  const bySpace = new Map<string, DebateParticipant>();
+  for (const participant of orderedParticipants(debate)) {
+    bySpace.set(uuidToHex(participant.profile_space_id), participant);
+  }
+
+  const byBlock = new Map<string, DebateParticipant>();
+  for (const block of claims.blocks) {
+    const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
+    if (speaker) byBlock.set(block.id, speaker);
+  }
+
+  const speakers = new Map<string, DebateParticipant>();
+  for (const claim of claims.all) {
+    // Linked from more than one turn, so its block is only the first of them and cannot say who
+    // made it — see `restated`. Uncredited, it never reaches a card that names a speaker.
+    if (claim.restated) continue;
+    const speaker = byBlock.get(claim.blockId);
+    if (speaker) speakers.set(claim.id, speaker);
+  }
+  return speakers;
+}
+
+/**
+ * The claims a card can actually be drawn for, in the order given.
+ *
+ * A claim needs a speaker the participant list recognises, so the card can attribute it, and a
+ * space to answer in — without either, `DebateClaimTickerCard` renders nothing.
+ *
+ * Two claim entities can also carry the same text *and* the same published moment — measured: 11
+ * such claims, all in one debate whose claims appear to have been published twice — and drawing
+ * both doubles every card. The key is text **and** moment rather than text alone: a debater who
+ * genuinely repeats themselves later has said something new, and keeps their card.
+ */
+export function drawableClaims(claims: TimedClaim[], speakers: ReadonlyMap<string, DebateParticipant>): TimedClaim[] {
+  const seen = new Set<string>();
+  return claims.filter(claim => {
+    if (claim.spaceId === null || !speakers.has(claim.id)) return false;
+
+    const key = `${claim.timing?.endMs ?? 'unplaced'} ${claim.text.trim().toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

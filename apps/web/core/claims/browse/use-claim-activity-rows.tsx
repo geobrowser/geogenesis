@@ -16,10 +16,11 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import type { CommentActivityRow } from '~/partials/comments/types';
 
-import { debateCreatedDate, debateDate, relationTargets } from './claim-debates';
+import { debateCreatedDate, debateDate } from './claim-debates';
 import { DebateActivityRow } from './debate-activity-row';
 import { useDebateKeyframes } from './use-debate-keyframes';
 
@@ -97,11 +98,11 @@ export function useClaimActivityRows({
     const map = new Map<string, Array<{ spaceId: string; position: boolean }>>();
     for (const debate of debates) {
       map.set(debate.id, [
-        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(spaceId => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(spaceId => ({
           spaceId,
           position: true,
         })),
-        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(spaceId => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(spaceId => ({
           spaceId,
           position: false,
         })),

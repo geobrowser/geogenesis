@@ -16,14 +16,10 @@ import {
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
-import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
-import { useClaimTimings } from '~/core/debates/use-claim-timings';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { uuidToHex } from '~/core/id/normalize';
+import { speakerLabel } from '~/core/debates/playback-utils';
+import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
-import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
@@ -79,8 +75,12 @@ export function useDebateClaimTicker(
     enabled,
   }: { playheadMs: number; timelineMs: number; enabled: boolean }
 ): DebateTicker {
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, enabled);
-  const { timings } = useClaimTimings(debate.id, claims, enabled);
+  const {
+    transcript: { claims },
+    claims: drawable,
+    speakerByClaimId: participantByClaimId,
+    entitiesByClaimId,
+  } = useDrawableDebateClaims(debate, enabled);
 
   const [answers, setAnswers] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
 
@@ -102,32 +102,6 @@ export function useDebateClaimTicker(
       return new Map(current).set(claimId, position);
     });
   }, []);
-
-  // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
-  // space, which both debaters share. The block's `Authors` relation points at the speaker's
-  // personal space, which is the id the participant list keys on.
-  const participantByClaimId = React.useMemo(() => {
-    const bySpace = new Map<string, DebateParticipant>();
-    for (const participant of orderedParticipants(debate)) {
-      bySpace.set(uuidToHex(participant.profile_space_id), participant);
-    }
-
-    const byBlock = new Map<string, DebateParticipant>();
-    for (const block of claims.blocks) {
-      const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
-      if (speaker) byBlock.set(block.id, speaker);
-    }
-
-    const speakers = new Map<string, DebateParticipant>();
-    for (const claim of claims.all) {
-      const speaker = byBlock.get(claim.blockId);
-      if (!speaker) continue;
-      speakers.set(claim.id, speaker);
-    }
-    return speakers;
-  }, [claims.all, claims.blocks, debate]);
-
-  const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
 
   /**
    * One gate for everything this surface offers, so the three ways it points at a claim agree.
@@ -160,39 +134,13 @@ export function useDebateClaimTicker(
    * an answer lands on whichever copy survived here. That is an argument for de-duplicating on
    * publish, not for showing the same sentence twice.
    */
-  const renderableClaims = React.useMemo(() => {
-    if (!enabled) return [];
-
-    const seen = new Set<string>();
-    return timedClaims.filter(claim => {
-      if (claim.spaceId === null || !participantByClaimId.has(claim.id)) return false;
-
-      const key = `${claim.timing?.endMs ?? 'unplaced'} ${claim.text.trim().toLowerCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [enabled, participantByClaimId, timedClaims]);
+  const renderableClaims = React.useMemo(() => (enabled ? drawable : []), [enabled, drawable]);
 
   // Two lists, because the live layer and the backlog answer different questions — see
   // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
   const windows = React.useMemo(() => tickerWindows(renderableClaims), [renderableClaims]);
   const backlog = React.useMemo(() => backlogWindows(renderableClaims), [renderableClaims]);
   const markers = React.useMemo(() => claimMarkers(renderableClaims, timelineMs), [renderableClaims, timelineMs]);
-
-  // One batch for every claim, the way the panel does it, so the live card and the end-of-debate
-  // stack never issue a lookup per claim as they mount.
-  const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  const { entities } = useQueryEntities({
-    where: { id: { in: claimIds } },
-    first: claimIds.length || 1,
-    enabled: enabled && claimIds.length > 0,
-  });
-  const entitiesByClaimId = React.useMemo(() => {
-    const map = new Map<string, Entity>();
-    for (const entity of entities) map.set(entity.id, entity);
-    return map;
-  }, [entities]);
 
   /**
    * Empty while this ticker is switched off, which is not the same as having no claims.
@@ -294,6 +242,9 @@ const HISTORY_EDGE_OPAQUE_PX = 71.5;
 /** The lead-in: the gradient's first stop sits 6.5% down its 71.5px, and nothing shows above it. */
 const HISTORY_EDGE_CLEAR_PX = 4.65;
 
+/** `glass` over the video; `light` on a white surface, as the end card's carousel is. */
+export type ClaimCardTone = 'glass' | 'light';
+
 /**
  * The claim card that rises over the video as it is said.
  *
@@ -323,8 +274,14 @@ function DebateClaimTickerCardBody({
   row,
   entity,
   onAnswered,
+  tone = 'glass',
 }: {
   window: TickerWindow;
+  /**
+   * `glass` over the video, as it rises while the claim is said. `light` on a white surface — the
+   * debate end card's carousel — where the dark glass would be white text on near-white.
+   */
+  tone?: ClaimCardTone;
   /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
   opacity?: number;
   /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
@@ -371,7 +328,12 @@ function DebateClaimTickerCardBody({
        * the open list is narrower than the live card on a phone now, so the fade reads as the edge
        * of a list rather than as damage to the claim you are reading.
        */
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] p-3 backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]"
+      className={cx(
+        'pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg p-3',
+        tone === 'glass'
+          ? 'bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]'
+          : 'bg-grey-01'
+      )}
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -380,8 +342,9 @@ function DebateClaimTickerCardBody({
         row={row}
         entity={entity}
         onAnswered={onAnswered}
+        tone={tone}
       />
-      <TickerClaimText text={claim.text} />
+      <TickerClaimText text={claim.text} tone={tone} />
     </ActionSurfaceDiv>
   );
 }
@@ -408,7 +371,7 @@ const TICKER_CLAMP_LINES = 2;
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({ text }: { text: string }) {
+function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
   const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
@@ -430,7 +393,8 @@ function TickerClaimText({ text }: { text: string }) {
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white',
+        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        tone === 'glass' ? 'text-white' : 'text-text',
         expanded ? 'block' : 'line-clamp-2'
       )}
     >
@@ -783,6 +747,7 @@ function TickerClaimHeader({
   row,
   entity,
   onAnswered,
+  tone,
 }: {
   claimId: string;
   spaceId: string;
@@ -790,6 +755,7 @@ function TickerClaimHeader({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  tone: ClaimCardTone;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
@@ -825,7 +791,12 @@ function TickerClaimHeader({
           is the avatar's 16px and the words centre against it. Untrimmed, each 17px line box sets
           the row instead and the card comes out a pixel taller than the frame draws. Per node and
           not via a child selector, because the name now sits inside a button. */}
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white">
+      <span
+        className={cx(
+          'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem]',
+          tone === 'glass' ? 'text-white' : 'text-grey-04'
+        )}
+      >
         {speaker && (
           // The same link as the name in the corner of the tile, and the same person — a reader
           // looking at who said this should be able to go and look at them from here.
@@ -835,7 +806,12 @@ function TickerClaimHeader({
             title={`Open ${speakerLabel(speaker)}`}
             className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
           >
-            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
+            <span
+              className={cx(
+                'block size-4 shrink-0 overflow-hidden rounded-full',
+                tone === 'glass' ? 'bg-white' : 'bg-grey-02'
+              )}
+            >
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
             <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
@@ -868,6 +844,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
+          tone={tone}
         />
         <ClaimIconButton
           responseKind={responseKind}
@@ -877,6 +854,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
+          tone={tone}
         />
       </span>
     </div>
@@ -903,6 +881,7 @@ function ClaimIconButton({
   disabled,
   title,
   onClick,
+  tone,
 }: {
   responseKind: ResponseKind;
   position: boolean;
@@ -911,7 +890,9 @@ function ClaimIconButton({
   disabled: boolean;
   title: string;
   onClick?: () => void;
+  tone: ClaimCardTone;
 }) {
+  const glass = tone === 'glass';
   return (
     <button
       type="button"
@@ -938,10 +919,10 @@ function ClaimIconButton({
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
-          ? position
-            ? 'bg-white/15 text-green'
-            : 'bg-white/15 text-red-01'
-          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+          ? cx(glass ? 'bg-white/15' : 'bg-divider', position ? 'text-green' : 'text-red-01')
+          : glass
+            ? 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+            : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
       <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />

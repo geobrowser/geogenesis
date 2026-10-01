@@ -1,51 +1,36 @@
 'use client';
 
-import { skipToken, useQueries } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import {
-  type ResponseSplit,
-  type ResponseTally,
-  claimVsArguments,
-  distinctResponders,
-  poolResponses,
-} from '~/core/debates/end-card';
-import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
-import { claimsForParticipant } from '~/core/debates/transcript-claims';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import type { EntityResponder } from '~/core/io/queries';
-import { entityRespondersQueryKey, entityResponseCountsQueryKey } from '~/core/responses/entity-response';
+import type { TimedClaim } from '~/core/debates/claim-timing';
+import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 import { useDebateClaimResponse } from './use-debate-claim-response';
+import { useNextDebate } from './use-next-debate';
 
-export type EndCardDebater = {
-  participant: DebateParticipant;
-  name: string;
-  /** Every claim they made, wherever it was published. Null until the transcript has answered. */
-  claimCount: number | null;
-  /** Responses to the claims that live in the debate's space, pooled. */
-  split: ResponseSplit;
-  /** Everyone who answered any of those claims, once each. */
-  responderSpaceIds: string[];
+const NO_ENTITIES: ReadonlyMap<string, Entity> = new Map();
+const NO_CLAIMS: TimedClaim[] = [];
+
+/** The claims the debate extracted, as the end card's carousel draws them. */
+export type EndCardClaims = {
+  /** In the order they were said. Empty until the transcript and its timings have both answered. */
+  claims: TimedClaim[];
+  speakerByClaimId: ReadonlyMap<string, DebateParticipant>;
+  entitiesByClaimId: ReadonlyMap<string, Entity>;
 };
 
 /**
  * Everything the end card draws, in one place.
  *
- * One batched read covers the claim being debated and every claim either debater made, and it seeds
- * the per-claim caches as it lands — so the claim's own vote control, its voter list and the claims
- * panel all read what this fetched instead of asking again.
- *
- * The debaters' numbers are read back out of those per-claim caches rather than off the batch's own
- * result. A vote refreshes the caches of the claim it was cast on and leaves the batch alone, so a
- * card reading the batch kept the old split for every claim voted on in the panel since it loaded.
+ * One batched read covers the claim being debated and every claim the debate extracted, and it
+ * seeds the per-claim caches as it lands — so the claim's own vote control and every card in the
+ * carousel read what this fetched instead of each asking again.
  *
  * `enabled` is the caller's: the player turns it on while the debate is the active one, so the card
  * has its numbers by the time the video ends rather than drawing empty bars and filling them in.
@@ -62,7 +47,7 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
    * `enabled` follows whether the debate is the active one, and scrolling makes another one active
    * while this card is still on screen. Turning the reads off then did more than stop fetching:
    * `useQueryEntities` answers a disabled query with no entities at all, cached or not, so the
-   * claim's response state lost its entity, reported no counts, and the comparison box vanished and
+   * claim's response state lost its entity, reported no counts, and the card's numbers vanished and
    * came back as the viewer scrolled. The flag is only there to keep debates nobody has reached from
    * fetching; one that has been reached has nothing left to save. Keyed on the debate, so a player
    * handed a different one starts held back again.
@@ -77,61 +62,50 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
   const spaceId = normId(debate.claim.space_id);
   const claimId = normId(debate.claim.claim_entity_id);
 
-  const participants = React.useMemo(() => orderedParticipants(debate), [debate]);
-  const transcript = useDebateTranscriptClaims(debate.id, debate.claim.space_id, live);
+  // The same claims the live cards drew, on the same keys, so a debate that played with its cards up
+  // hands the carousel a warm cache. Asked for here rather than borrowed from the player's ticker,
+  // which switches off when the viewer scrolls to another debate — while this card, and the carousel
+  // on it, can still be on screen.
+  const {
+    transcript,
+    claims: drawable,
+    speakerByClaimId,
+    entitiesByClaimId,
+    timingsReady,
+  } = useDrawableDebateClaims(debate, live);
   const { claims } = transcript;
   // Whether `claims` is the debate's, rather than the empty set standing in while it loads or after
-  // it failed. Nothing below may report a count off the stand-in.
+  // it failed.
   const claimsReady = live && !transcript.isLoading && transcript.error === null;
+  // Held until the timings are in, so the carousel isn't drawn in graph order — which is random —
+  // and then reshuffled under a viewer who has started scrolling it.
+  const carouselClaims = claimsReady && timingsReady ? drawable : NO_CLAIMS;
 
-  // Responses are per space, so only the claims published in the debate's own space can be
-  // counted against it. A claim the debate quoted from elsewhere has its votes somewhere else, and
-  // asking this space about it would report zero rather than the truth.
-  const claimsByParticipant = React.useMemo(
-    () =>
-      participants.map(participant => {
-        const made = claimsForParticipant(claims, participant.profile_space_id);
-        return {
-          participant,
-          claimCount: made.length,
-          countedIds: made
-            .filter(claim => claim.spaceId !== null && normId(claim.spaceId) === spaceId)
-            .map(claim => normId(claim.id)),
-        };
-      }),
-    [claims, participants, spaceId]
-  );
-
-  const countedIds = React.useMemo(() => claimsByParticipant.flatMap(entry => entry.countedIds), [claimsByParticipant]);
+  // Responses are per space, so only the claims published in the debate's own space can be batched
+  // against it. A claim quoted from elsewhere asks its own space for itself.
   const targets = React.useMemo(
-    () => [claimId, ...countedIds].map(entityId => ({ entityId, responseKind })),
-    [claimId, countedIds, responseKind]
+    () =>
+      [
+        claimId,
+        ...claims.all
+          .filter(claim => claim.spaceId !== null && normId(claim.spaceId) === spaceId)
+          .map(claim => normId(claim.id)),
+      ].map(entityId => ({ entityId, responseKind })),
+    [claimId, claims.all, responseKind, spaceId]
   );
-  // Fetches and seeds. Its values are read back through the per-claim caches (see the note on the
-  // hook); all that is read off the batch itself is whether it has finished.
+  // Fetches and seeds; all that is read off the batch itself is whether it has finished.
   const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
   // Whether the batch is still on its way to seeding the claim's caches. A transcript still loading
   // counts, since the batch starts when it lands; a transcript that failed does not, since then the
   // batch never starts at all.
   const batchPending = transcript.isLoading || (claimsReady && batch.data === undefined && !batch.isError);
 
-  // Only a batch that has answered is refreshed: one still waiting on the transcript, or that
-  // failed, has nothing on screen to bring up to date.
   const refreshIfStale = React.useEffectEvent(() => {
     if (batch.data !== undefined && batch.isStale && !batch.isFetching) void batch.refetch();
   });
   React.useEffect(() => {
     if (shown) refreshIfStale();
   }, [shown]);
-
-  // Each counted claim's counts and responders, straight from the caches the batch seeds and a vote
-  // refreshes. `skipToken` because these only ever read: the batch is what asks.
-  const countsById = useCachedByClaim<{ positive: number; negative: number } | null>(countedIds, entityId =>
-    entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind)
-  );
-  const respondersById = useCachedByClaim<EntityResponder[]>(countedIds, entityId =>
-    entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind)
-  );
 
   // The claim's own control resolves its vocabulary off the graph entity, and holds its reads back
   // until it has one — the same lookup the claims panel does for its rows.
@@ -148,77 +122,26 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     entity: batchPending ? null : (entities[0] ?? null),
   });
 
-  const debaters = React.useMemo<EndCardDebater[]>(
-    () =>
-      // The Agree side first, whatever slot it recorded in: the card's Agree button, the green end
-      // of every split bar and the Agree end of the comparison line are all on the left, so the
-      // debater arguing for the claim has to be too. Stable, so slot order holds within a side.
-      [...claimsByParticipant]
-        .sort((left, right) => Number(right.participant.position) - Number(left.participant.position))
-        .map(({ participant, claimCount, countedIds: ids }) => {
-          const tallies: ResponseTally[] = ids.map(entityId => ({
-            counts: countsById.get(entityId) ?? { positive: 0, negative: 0 },
-            responders: respondersById.get(entityId) ?? [],
-          }));
-          return {
-            participant,
-            name: speakerLabel(participant),
-            claimCount: claimsReady ? claimCount : null,
-            split: poolResponses(tallies),
-            responderSpaceIds: distinctResponders(tallies),
-          };
-        }),
-    [claimsByParticipant, claimsReady, countsById, respondersById]
-  );
+  const nextDebate = useNextDebate(debate, live);
 
-  const agreeSide = debaters.find(debater => debater.participant.position === true) ?? null;
-  const disagreeSide = debaters.find(debater => debater.participant.position === false) ?? null;
-  const comparison =
-    agreeSide && disagreeSide
-      ? claimVsArguments({ claim: claimResponse.summary, agreeSide: agreeSide.split, disagreeSide: disagreeSide.split })
-      : null;
+  const carousel = React.useMemo<EndCardClaims>(
+    () => ({
+      claims: carouselClaims,
+      speakerByClaimId,
+      // Held back while the batch is seeding, for the same reason as the claim's own entity above:
+      // each card's control would otherwise race the batch to answers it is already fetching.
+      entitiesByClaimId: batchPending ? NO_ENTITIES : entitiesByClaimId,
+    }),
+    [batchPending, carouselClaims, entitiesByClaimId, speakerByClaimId]
+  );
 
   return {
     claimId,
     spaceId,
     claimText: debate.claim.claim,
     claimResponse,
-    debaters,
-    agreeSide,
-    disagreeSide,
-    comparison,
-    /**
-     * Whether the debaters' counts are an answer: the transcript has said which claims are theirs,
-     * and every one of those has its counts. Until then their splits are zero because nothing has
-     * been asked, and the card must not print "No votes yet" off that.
-     *
-     * `undefined` is "not asked yet"; `null` is an answer. The batch writes a claim nobody has voted
-     * on as zeros, but the per-claim read — which the claims panel's rows run once these caches are
-     * past their `staleTime` — writes the API's own answer for it, which is `null`. Counting that as
-     * unanswered emptied the card whenever the panel was opened a while after the debate ended.
-     */
-    countsReady: claimsReady && countedIds.every(entityId => countsById.get(entityId) !== undefined),
+    carousel,
+    /** Where the card points the viewer next: a debate they haven't watched. Null for none. */
+    nextDebate,
   };
-}
-
-/**
- * One cached value per claim, subscribed to so it re-renders when a vote refreshes it.
- *
- * Read-only by construction (`skipToken`): the batch is the one fetcher, and a second request per
- * claim would undo the point of batching them.
- */
-function useCachedByClaim<T>(claimIds: string[], keyFor: (claimId: string) => readonly unknown[]) {
-  const values = useQueries({
-    queries: claimIds.map(claimId => ({ queryKey: keyFor(claimId), queryFn: skipToken })),
-    combine: dataOf,
-  }) as (T | undefined)[];
-  return React.useMemo(() => new Map(claimIds.map((claimId, index) => [claimId, values[index]])), [claimIds, values]);
-}
-
-/**
- * Module-level so `useQueries` sees the same `combine` every render and hands back the same array
- * until a value actually changes — which is what lets the debaters above stay memoized.
- */
-function dataOf(results: { data: unknown }[]) {
-  return results.map(result => result.data);
 }

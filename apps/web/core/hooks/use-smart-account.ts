@@ -15,6 +15,7 @@ import {
   submitOrResumeUserOperation,
   withSubmissionRetry,
 } from './smart-account-send-queue';
+import { sendTransactionReportingSubmission } from './smart-account-submission';
 
 export function smartAccountQueryKey(
   walletAddress: string | null | undefined,
@@ -178,10 +179,20 @@ export function useSmartAccount() {
         // Queue-wait bounded: sendTransaction callers sit under
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
-        sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-          enqueueFor(eoaAddress, () => withSubmissionRetry(() => zeroDevAccount.sendTransaction(...args)), {
-            maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
-          }),
+        //
+        // `onSubmitted` swaps the kernel's opaque submit-and-wait for the same two steps
+        // run separately, so the caller hears when the bundler accepted the op (GEO-2889).
+        // Same queue slot, held through inclusion either way.
+        sendTransaction: (txArgs, options) =>
+          enqueueFor(
+            eoaAddress,
+            () => {
+              const onSubmitted = options?.onSubmitted;
+              if (!onSubmitted) return withSubmissionRetry(() => zeroDevAccount.sendTransaction(txArgs));
+              return sendTransactionReportingSubmission(zeroDevAccount, txArgs, onSubmitted);
+            },
+            { maxQueueWaitMs: MAX_QUEUE_WAIT_MS }
+          ),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
         // outer timeout, only error-triggered retries, so a long queue wait should
         // block-and-succeed rather than fail.
