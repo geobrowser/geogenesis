@@ -455,8 +455,8 @@ export function useClaimPositionControl({
   const dequeuePendingAction = useDequeuePendingAction();
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
-  // Publishing before the personal space finishes registering fails, so wait it out the same way
-  // the claim page does.
+  // Publishing before the personal space finishes registering fails, so a press in that window is
+  // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const copy = CLAIM_RESPONSE_COPY;
@@ -590,8 +590,10 @@ export function useClaimPositionControl({
       // Signed in, account still being set up: hold the side rather than prompting a sign-in that
       // would do nothing. Read from the cache the navbar fills rather than `useSmartAccount`, which
       // would make every host of this control provide wagmi.
-      if (readCachedSmartAccount(queryClient, null)) {
-        queuePosition(position);
+      if (isAccountSetupPending || readCachedSmartAccount(queryClient, null)) {
+        // Pressing the side already queued takes it back, as pressing a held side does.
+        if (queuedPosition === position) dequeuePendingAction(queuedActionId);
+        else queuePosition(position);
         return;
       }
       // A host with no sign-in prompt leaves the pills disabled, so there is nothing to queue for.
@@ -610,7 +612,6 @@ export function useClaimPositionControl({
       );
       return;
     }
-    if (isAccountSetupPending) return;
     // Ignored rather than sent. Until the bundler has the write, the held pill is this client's guess,
     // and pressing a held pill means "remove" — so a double-click, or a press on a side that has not
     // reached the bundler, published a retraction nobody asked for. The request then failed with
@@ -632,9 +633,8 @@ export function useClaimPositionControl({
     if (responseBlockedReason) return responseBlockedReason;
     // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
-    if (!answersReady) return 'Loading this claim’s responses…';
-    if (!isConnected) return copy.connect;
-    if (isAccountSetupPending) return 'Finishing account setup…';
+    if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
+    if (!isConnected && !isAccountSetupPending) return copy.connect;
     if (isResponseSubmitting) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
@@ -660,8 +660,14 @@ export function useClaimPositionControl({
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
      * control gives a visitor nothing to press and no way to learn what to do about it.
      */
+    // Live while a new account's personal space is still being made: a press is queued for it and
+    // drawn at once, rather than the pills going dead for the seconds — or minutes — that takes.
+    // `answersReady` is waived for the same window. It waits for the viewer's own side so a press on
+    // a held side clears it rather than republishing — and an account this new holds no side.
     canRespond:
-      (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady && !responseBlockedReason,
+      (isConnected || Boolean(onRequireSignIn) || isAccountSetupPending) &&
+      (answersReady || isAccountSetupPending) &&
+      !responseBlockedReason,
   };
 }
 

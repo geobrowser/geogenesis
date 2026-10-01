@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
+  /** A new account whose personal space is still being created in the background. */
+  accountSetupPending: false,
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -184,7 +186,7 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
-  usePendingPersonalSpace: () => ({ isPending: false }),
+  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
 
 const SPACE_ID = mocks.spaceId;
@@ -265,6 +267,7 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
+  mocks.accountSetupPending = false;
   queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
@@ -974,6 +977,51 @@ describe('a side picked before the account can publish', () => {
 
     expect(onRequireSignIn).not.toHaveBeenCalled();
     expect(queued()).toHaveLength(1);
+  });
+});
+
+/**
+ * Right after sign-up the account exists but its personal space is still being made — seconds, or
+ * minutes. The pills used to go dead for all of it. They stay live now and queue the press.
+ */
+describe('while a new account is still being set up', () => {
+  const settingUp = readiness({ viewer_response: null });
+
+  it('keeps the pills live, even before the claim’s lookups answer, and queues a press', () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    const onRequireSignIn = vi.fn();
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={settingUp}
+        answersReady={false}
+        onRequireSignIn={onRequireSignIn}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeEnabled();
+    fireEvent.click(agree);
+
+    expect(onRequireSignIn).not.toHaveBeenCalled();
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'positive', requires: 'personalSpace' })]);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('switches the queued side, and takes it back when the same side is pressed again', () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={settingUp} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'negative' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+    expect(queued()).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 });
 
