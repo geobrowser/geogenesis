@@ -1,4 +1,4 @@
-import { act, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -222,7 +222,7 @@ function renderPlayer(
 }
 
 beforeEach(() => {
-  mocks.controller = null;
+  mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
   mocks.stackOpens = [];
@@ -230,7 +230,10 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('player layout', () => {
   it('keeps both stacked videos at the original aspect ratio', () => {
@@ -632,7 +635,11 @@ describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
   const controller = () => mocks.controller as ReturnType<typeof controllerFixture>;
 
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.clearAllTimers();
+    cleanup();
+    vi.useRealTimers();
+  });
 
   /**
    * `active` defaults on. The tests about `preload` itself pass it off: an active card buffers its
@@ -1379,7 +1386,11 @@ describe('the end card', () => {
  */
 describe('the pair becomes watchable together (GEO-2965)', () => {
   beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.clearAllTimers();
+    cleanup();
+    vi.useRealTimers();
+  });
 
   function setMedia(video: HTMLVideoElement, state: { readyState: number; networkState?: number }, event?: string) {
     Object.defineProperty(video, 'readyState', { configurable: true, value: state.readyState });

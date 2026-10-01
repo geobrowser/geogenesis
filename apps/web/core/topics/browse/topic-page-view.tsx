@@ -39,6 +39,7 @@ import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';
 import { limitTopicFeedSpaceIds } from './topic-feed-params';
+import { TopicFollowButton } from './topic-follow-button';
 import { useTopicAncestors } from './use-topic-ancestors';
 
 /**
@@ -353,6 +354,7 @@ export function TopicPageView({
               )}
               {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
             </div>
+            <TopicFollowButton topicId={entityId} spaceId={spaceId} topicName={entity.name} />
             <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
           </div>
 

@@ -38,6 +38,8 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   /** Props the votes/history/menu cluster received, or null if the page rendered none. */
   pageActions: null as Record<string, unknown> | null,
+  /** Props the follow control received, or null if the header rendered none. */
+  followButton: null as Record<string, unknown> | null,
   /** Side-panel tab selection, or null when the view is on a route rather than in the panel. */
   panel: null as { activeTabId: string | null; activeSystemTab: string | null } | null,
   /** What the route handed the editor provider: the server's snapshot of this entity's blocks. */
@@ -128,6 +130,14 @@ vi.mock('./use-topic-ancestors', () => ({ useTopicAncestors: () => [] }));
 vi.mock('../use-topic-space-scope', () => ({
   useTopicSpaceScope: () => mocks.topicSpaceIds,
 }));
+// Reaches for the wallet, the personal space and the follow list, none of which this file stands
+// up. What it asserts is that the header hands the control this topic at all.
+vi.mock('./topic-follow-button', () => ({
+  TopicFollowButton: (props: Record<string, unknown>) => {
+    mocks.followButton = props;
+    return <div data-testid="topic-follow-button" />;
+  },
+}));
 vi.mock('./topic-composition', () => ({
   TopicComposition: (props: Record<string, unknown>) => {
     mocks.composition = props;
@@ -169,6 +179,7 @@ beforeEach(() => {
   mocks.blocks = [];
   mocks.canEdit = true;
   mocks.pageActions = null;
+  mocks.followButton = null;
   mocks.panel = null;
   mocks.editorInstance = { id: 'topic-1', initialBlockRelations: [] };
   mocks.authoredTabId = null;
@@ -288,6 +299,30 @@ describe('TopicPageView composition', () => {
       spaceId: 'space-1',
       spaceIds: ['11111111111111111111111111111111'],
     });
+  });
+});
+
+/**
+ * A topic page is where a reader decides they care about a topic, and until now the page gave them
+ * nothing to press. The control lives in the header's meta row, which the route and the side panel
+ * both draw, so one placement covers both.
+ */
+describe('TopicPageView follow', () => {
+  it('hands the follow control this topic, in the space it is being read in', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('topic-follow-button')).toBeInTheDocument();
+    expect(mocks.followButton).toMatchObject({
+      topicId: 'topic-1',
+      spaceId: 'space-1',
+      topicName: 'Artificial intelligence',
+    });
+  });
+
+  it('keeps the control in edit mode', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
+
+    expect(screen.getByTestId('topic-follow-button')).toBeInTheDocument();
   });
 });
 
