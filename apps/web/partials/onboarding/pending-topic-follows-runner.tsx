@@ -88,9 +88,12 @@ export function PendingTopicFollowsRunner() {
           devLog('[onboarding] following %d onboarding topics in %s', sent.length, spaceId);
           if (!(await follow(sent))) return 'failed';
 
-          // Written to storage before the lock is released.
+          // Written to storage before the lock is released, and only over this owner's record: the
+          // wallet may have switched mid-publish and a newer account stored picks of its own.
+          const stillOwned = heldTopicsFor(readStoredFeedTopics(), owner);
+          if (stillOwned.length === 0) return 'done';
           const done = new Set(sent.map(topic => topic.id));
-          const left = heldTopicsFor(readStoredFeedTopics(), owner).filter(topic => !done.has(topic.id));
+          const left = stillOwned.filter(topic => !done.has(topic.id));
           setHeld(left.length > 0 ? { address: owner, topics: left } : NO_HELD_FEED_TOPICS);
           return 'done';
         });

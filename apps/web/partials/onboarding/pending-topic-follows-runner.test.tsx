@@ -172,4 +172,23 @@ describe('PendingTopicFollowsRunner', () => {
     expect(mocks.follow).not.toHaveBeenCalled();
     expect(store.get(feedTopicsAtom)).toEqual(none);
   });
+
+  it("keeps a newer account's picks stored while the old account's follow was publishing", async () => {
+    const newer = { address: '0xB', topics: [{ id: 'topic-c', name: 'Mental health' }] };
+    const switchTo: { store?: ReturnType<typeof mount> } = {};
+    mocks.follow.mockImplementation(async () => {
+      // B is mid-onboarding: no personal space yet, so its own picks wait.
+      mocks.address = '0xB';
+      mocks.personalSpaceId = null;
+      switchTo.store!.set(feedTopicsAtom, newer);
+      return true;
+    });
+    const store = mount();
+    switchTo.store = store;
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenCalledOnce();
+    expect(store.get(feedTopicsAtom)).toEqual(newer);
+  });
 });
