@@ -9,8 +9,19 @@ import { createPlaybackMeasurement } from './playback-analytics';
 import { recordingWindowOffsetsSeconds } from './playback-utils';
 import type { DebatePlaybackController } from './use-debate-playback';
 
-export function usePlaybackAnalytics(debate: Debate, active: boolean, controller: DebatePlaybackController) {
+/** `mediaAttached` re-binds the measurement when the player swaps its <video> elements (GEO-3067). */
+export function usePlaybackAnalytics(
+  debate: Debate,
+  active: boolean,
+  controller: DebatePlaybackController,
+  mediaAttached = true
+) {
   const playbackInstance = React.useRef(crypto.randomUUID());
+  // Which media this instance has already reported exposed, so re-binding to re-attached elements
+  // doesn't report it again under the same `exposure_id`.
+  const exposedFor = React.useRef<string | null>(null);
+  // Interval numbering continues across re-binds for the same media, like the exposure latch.
+  const intervalSequence = React.useRef({ key: '', count: 0 });
   const elementRef = React.useRef<HTMLDivElement>(null);
   const latest = React.useRef({ active, controller });
   latest.current = { active, controller };
@@ -33,10 +44,19 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
     const element = elementRef.current;
     const primary = controller.slot1VideoRef.current;
     const secondary = controller.slot2VideoRef.current;
-    if (!element || !primary || !secondary || !controller.ready || typeof IntersectionObserver === 'undefined') return;
+    if (
+      !mediaAttached ||
+      !element ||
+      !primary ||
+      !secondary ||
+      !controller.ready ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
     const instance = playbackInstance.current;
     let visible = false;
-    let exposed = false;
+    const exposureKey = `${debate.id}|${mediaVersion}|${offset}`;
+    let exposed = exposedFor.current === exposureKey;
     let visibleSince: number | null = null;
     let disposed = false;
     let pageHidden = false;
@@ -55,7 +75,10 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
         /* Playback stays usable. */
       }
     };
-    const clock = createPlaybackMeasurement(properties => emit('debate_playback_interval', properties));
+    if (intervalSequence.current.key !== exposureKey) intervalSequence.current = { key: exposureKey, count: 0 };
+    const clock = createPlaybackMeasurement(properties =>
+      emit('debate_playback_interval', { ...properties, interval_sequence: ++intervalSequence.current.count })
+    );
     const foreground = () => document.visibilityState === 'visible' && document.hasFocus();
     const tick = () => {
       if (disposed) return;
@@ -68,6 +91,7 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       else if (visibleSince === null) visibleSince = now;
       else if (!exposed && now - visibleSince >= 1000) {
         exposed = true;
+        exposedFor.current = exposureKey;
         emit('debate_exposed', { exposure_id: instance, visibility_rule: 'player-60pct-1s-v1' });
       }
       clock.sample({
@@ -141,7 +165,15 @@ export function usePlaybackAnalytics(debate: Debate, active: boolean, controller
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
     };
-  }, [debate.id, mediaVersion, offset, controller.ready, controller.slot1VideoRef, controller.slot2VideoRef]);
+  }, [
+    debate.id,
+    mediaVersion,
+    offset,
+    controller.ready,
+    controller.slot1VideoRef,
+    controller.slot2VideoRef,
+    mediaAttached,
+  ]);
 
   return {
     elementRef,

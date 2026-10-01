@@ -31,6 +31,7 @@ export default async function ExploreRoutePage() {
       pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={sidePanel.memberOrEditorSpaceIds}
       communityCalls={sidePanel.communityCalls}
+      signedIn={Boolean(wallet)}
     />
   );
 }

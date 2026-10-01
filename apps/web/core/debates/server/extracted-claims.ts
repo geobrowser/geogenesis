@@ -1,4 +1,4 @@
-import type { DebateClaimInput, DebatePublishTurn } from '../debate-publish-draft';
+import { type DebateClaimInput, type DebatePublishTurn, publishableTiming } from '../debate-publish-draft';
 import { looksLikeEntityId } from './claim-reuse';
 
 /** One turn of geo-chat's `GET /debates/{id}/claims` payload. */
@@ -35,6 +35,14 @@ export type DebateExtractedClaimsClaim = {
    * classification shipped, which read as "not a motion".
    */
   is_contestable?: boolean | null;
+  /**
+   * When the claim was said, in integer milliseconds on the transcript's clock (the one
+   * `GET /debates/{id}/transcript` serves): the span of the transcript documents it was extracted
+   * from (GEO-2958). Null when geo-chat could not measure it — a claim drawn from both speakers,
+   * say — and absent on payloads from before it was recorded.
+   */
+  start_ms?: number | null;
+  end_ms?: number | null;
 };
 
 export type DebateExtractedClaimsResponse = {
@@ -70,6 +78,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
         : null,
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
+    timing: decodeTiming(claim.start_ms, claim.end_ms),
   }));
   if (droppedTopics.length > 0) {
     // Loud, like the malformed-claim-id path in `claim-reuse`: a field rename upstream would
@@ -80,6 +89,16 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     });
   }
   return { transcriptTurns, claims };
+}
+
+/**
+ * `start_ms`/`end_ms` → a timing, only when both are whole non-negative milliseconds and the end
+ * is after the start. Anything else is null, which leaves the claim to the app's matcher: a
+ * published offset is read as a certainty, so a malformed one would be worse than none.
+ */
+function decodeTiming(startMs: unknown, endMs: unknown): { startMs: number; endMs: number } | null {
+  if (typeof startMs !== 'number' || typeof endMs !== 'number') return null;
+  return publishableTiming({ startMs, endMs });
 }
 
 /**

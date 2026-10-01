@@ -199,11 +199,6 @@ export function DebatesBrowseFeed({
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
   const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
-  // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
-  // other way in clears it. Held with the debate it was chosen on, because the open panel follows
-  // the active debate as the feed scrolls — and a debater who argues in the next one too would
-  // otherwise have the list jump to them unasked.
-  const [claimsFocus, setClaimsFocus] = React.useState<{ debateId: string; participantSpaceId: string } | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -398,6 +393,10 @@ export function DebatesBrowseFeed({
           // buffers, and nothing further than two ahead is touched at all.
           preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
           buffer={activeIndex >= 0 && index === activeIndex + 1}
+          // Cards stay mounted as the feed grows, so everything outside one behind to the preload
+          // window ahead releases its <video> elements (GEO-3067).
+          // With no active card (a refetch dropped it), everything stays released until one is chosen.
+          releaseMedia={activeIndex < 0 || index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -406,9 +405,8 @@ export function DebatesBrowseFeed({
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
           // otherwise open on the debate being scrolled away from.
-          onOpenClaims={(participantSpaceId?: string) => {
+          onOpenClaims={() => {
             setActiveId(debate.id);
-            setClaimsFocus(participantSpaceId ? { debateId: debate.id, participantSpaceId } : null);
             setOpenPanel('claims');
           }}
           onOpenComments={() => {
@@ -431,12 +429,11 @@ export function DebatesBrowseFeed({
     openPanel === 'claims' && activeDebate ? (
       <DebateClaimsPanel
         // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
-        // its scroll position and the debater it was opened at belong to the debate they were set
-        // on, and a reused panel carried the old offset onto the next one.
+        // its scroll position belongs to the debate it was set on, and a reused panel carried the
+        // old offset onto the next one.
         key={activeDebate.id}
         debate={activeDebate}
         onClose={closePanel}
-        focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}
       />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
@@ -470,6 +467,7 @@ function DebateFeedItem({
   initialSeekSeconds,
   preload,
   buffer,
+  releaseMedia,
   root,
   scrollHint,
   onActivate,
@@ -488,11 +486,11 @@ function DebateFeedItem({
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
   buffer: boolean;
+  releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
-  /** With a debater's space id, the panel opens at that debater's claims. */
-  onOpenClaims: (participantSpaceId?: string) => void;
+  onOpenClaims: () => void;
   onOpenComments: () => void;
   /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
   onPlaybackRequest: () => void;
@@ -571,6 +569,7 @@ function DebateFeedItem({
               active={active}
               preload={preload}
               buffer={buffer}
+              releaseMedia={releaseMedia}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}

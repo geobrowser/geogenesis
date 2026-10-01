@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
+import { equals as idEquals } from '~/core/id/normalize';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getTopRankedSpaceId, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -143,6 +144,24 @@ export function descriptionInSpace(values: Value[], spaceId?: string): string | 
 export function textInSpace(values: Value[], propertyId: string, spaceId?: string): string | null {
   const scoped = spaceId ? writtenIn(values, spaceId) : values;
   return pickBySpaceRank(scoped, propertyId)?.value || null;
+}
+
+/**
+ * The entities a relation property points at, skipping deleted relations. Ids compared normalized,
+ * since relations reach the client in both spellings depending on the query that found them.
+ */
+export function relationTargets(relations: Relation[], propertyId: string): string[] {
+  return relations
+    .filter(relation => relation.isDeleted !== true && idEquals(relation.type.id, propertyId))
+    .map(relation => relation.toEntity.id);
+}
+
+/**
+ * The relations published in one space. An entity's relations arrive from every space that has
+ * written to it, and a relation written elsewhere says nothing about this space's view of it.
+ */
+export function relationsInSpace(relations: Relation[], spaceId: string): Relation[] {
+  return relations.filter(relation => idEquals(relation.spaceId, spaceId));
 }
 
 /**

@@ -24,7 +24,13 @@ beforeEach(() => {
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
 });
 
-const sentArgs = () => mocks.fetchFeed.mock.calls[0]?.[0] as { typeIds: string[]; excludeTypeIds?: string[] };
+const sentArgs = () =>
+  mocks.fetchFeed.mock.calls[0]?.[0] as {
+    sort: string;
+    typeIds: string[];
+    excludeTypeIds?: string[];
+    forYouTopicIds: string[];
+  };
 
 describe('GET /api/explore/feed', () => {
   it('serves debates and claims when the client sends no types', async () => {
@@ -39,5 +45,31 @@ describe('GET /api/explore/feed', () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=new'));
 
     expect(sentArgs().excludeTypeIds).toEqual([NEWS_STORY_TYPE_ID]);
+  });
+
+  // GEO-3083. Signed out or following nothing, For you is Best and must never come back empty.
+  it('serves For you with no followed topics as Best', async () => {
+    await GET(new Request('https://example.com/api/explore/feed?sort=for-you'));
+
+    expect(sentArgs().sort).toBe('best');
+  });
+
+  it('sends valid followed topics for For you, normalized and deduplicated', async () => {
+    const topic = '8CB0A2B4-ADBF-4627-AA08-0CEC5112099A';
+    await GET(
+      new Request(
+        `https://example.com/api/explore/feed?sort=for-you&followedTopicIds=${topic},not-an-id,8cb0a2b4adbf4627aa080cec5112099a`
+      )
+    );
+
+    expect(sentArgs()).toMatchObject({ sort: 'best', forYouTopicIds: ['8cb0a2b4adbf4627aa080cec5112099a'] });
+  });
+
+  it('ignores followed topics on every other sort', async () => {
+    await GET(
+      new Request('https://example.com/api/explore/feed?sort=best&followedTopicIds=8cb0a2b4adbf4627aa080cec5112099a')
+    );
+
+    expect(sentArgs().forYouTopicIds).toEqual([]);
   });
 });

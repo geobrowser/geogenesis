@@ -4,7 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
@@ -15,11 +16,13 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
@@ -33,8 +36,20 @@ import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
+import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbyTopicIdsAtom,
+  debatesHubPositionsSearchAtom,
+  debatesHubPositionsSpaceIdsAtom,
+  debatesHubPositionsTopicIdsAtom,
+} from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -238,7 +253,7 @@ type SurfaceProps = {
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready, accountKey } = useGeoChatAuth();
-  const filtersReconciled = useFilterOwner(accountKey, ready);
+  const filtersReconciled = useHubFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
@@ -379,6 +394,57 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           </>
         )}
       </motion.div>
+
+      {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
+    </div>
+  );
+}
+
+/**
+ * The way out to the full-screen hub at `/matchmaking`.
+ *
+ * Values match the workspace picker (`lobby` / `explore` / `positions`). Lobby is omitted from the
+ * URL as the workspace default.
+ */
+function workspaceListFor(tab: DebatesHubTab): string | null {
+  if (tab === 'explore' || tab === 'positions' || tab === 'lobby') return tab;
+  return null;
+}
+
+function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
+  const { close } = useDebatesHub();
+
+  const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
+  const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
+  const exploreTopicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
+  const lobbySearch = useAtomValue(debatesHubLobbySearchAtom);
+  const lobbySpaceIds = useAtomValue(debatesHubLobbySpaceIdsAtom);
+  const lobbyTopicIds = useAtomValue(debatesHubLobbyTopicIdsAtom);
+  const positionsSearch = useAtomValue(debatesHubPositionsSearchAtom);
+  const positionsSpaceIds = useAtomValue(debatesHubPositionsSpaceIdsAtom);
+  const positionsTopicIds = useAtomValue(debatesHubPositionsTopicIdsAtom);
+
+  const filters =
+    activeTab === 'lobby'
+      ? { search: lobbySearch, spaceIds: lobbySpaceIds, topicIds: lobbyTopicIds }
+      : activeTab === 'positions'
+        ? { search: positionsSearch, spaceIds: positionsSpaceIds, topicIds: positionsTopicIds }
+        : activeTab === 'explore'
+          ? { search: exploreSearch, spaceIds: exploreSpaceIds, topicIds: exploreTopicIds }
+          : { search: '', spaceIds: [] as string[], topicIds: [] as string[] };
+
+  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), ...filters }, 'lobby');
+
+  return (
+    <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
+      <Link
+        href={query ? `/matchmaking?${query}` : '/matchmaking'}
+        onClick={close}
+        className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
+      >
+        <ExpandSmall />
+        Open full screen
+      </Link>
     </div>
   );
 }
@@ -426,47 +492,4 @@ function AvailabilityToggle() {
       </span>
     </button>
   );
-}
-
-/**
- * Keeps the hub's filter bar attributed to the viewer who set it.
- *
- * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
- * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
- * answer:
- *
- * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
- * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
- * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
- * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
- * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
- * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
- * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
- * never be second-guessed, which looks identical to an untouched filter from here.
- *
- * A different account is a different viewer, and inherits nothing.
- *
- * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
- * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
- * as a first sign-in and handed A's filters.
- *
- * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
- * is not someone signing out.
- */
-function useFilterOwner(accountKey: string | null, ready: boolean) {
-  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
-  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
-
-  // Only a handover between two established accounts leaves anything on screen that is not this
-  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
-  // already has by design, so there is nothing to wait for and the tabs render immediately.
-  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
-
-  React.useEffect(() => {
-    if (!ready || accountKey === null || owner === accountKey) return;
-    if (owner !== null) resetFilters();
-    setOwner(accountKey);
-  }, [accountKey, owner, ready, resetFilters, setOwner]);
-
-  return !awaitingHandover;
 }

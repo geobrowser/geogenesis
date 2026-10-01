@@ -292,14 +292,8 @@ export function DebateExploreFeedCard({
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
   // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
-  // Which debater the panel opens at — set by the end card's faces beside a debater, cleared by
-  // every other way in.
-  const [claimsFocus, setClaimsFocus] = React.useState<string | null>(null);
   // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
-  const openClaims = React.useCallback((participantSpaceId?: string) => {
-    setClaimsFocus(participantSpaceId ?? null);
-    setClaimsOpen(true);
-  }, []);
+  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -441,11 +435,7 @@ export function DebateExploreFeedCard({
               rail to put it in. The panel itself is the same component. */}
           {claimsOpen ? (
             <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel
-                debate={readyDebate}
-                onClose={() => setClaimsOpen(false)}
-                focusParticipantSpaceId={claimsFocus}
-              />
+              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
             </div>
           ) : null}
         </>
@@ -469,7 +459,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   debate: Debate;
   active: boolean;
   reducedOverlays: boolean;
-  onOpenClaims: (participantSpaceId?: string) => void;
+  onOpenClaims: () => void;
 }) {
   return (
     <DebateFeedPlayer

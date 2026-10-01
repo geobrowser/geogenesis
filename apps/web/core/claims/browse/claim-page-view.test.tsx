@@ -91,6 +91,8 @@ const mocks = vi.hoisted(() => ({
   commentPosition: null as Record<string, unknown> | null,
   /** Whether the viewer's own response is still confirming, per the shared position control. */
   isResponsePending: false,
+  /** Whether it has yet to reach the bundler — the narrower window the pills wait on (GEO-2889). */
+  isResponseSubmitting: false,
   /** Props the position pills received. */
   positionControl: null as Record<string, unknown> | null,
   /**
@@ -222,6 +224,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     responseError: null,
     isConnected: false,
     isResponsePending: mocks.isResponsePending,
+    isResponseSubmitting: mocks.isResponseSubmitting,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
@@ -349,6 +352,7 @@ beforeEach(() => {
   mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
   mocks.isResponsePending = false;
+  mocks.isResponseSubmitting = false;
   mocks.positionControl = null;
 });
 
@@ -696,12 +700,22 @@ describe('ClaimPageView position', () => {
   // The claim page is where a confirming response was pressed again and published a retraction.
   // The pills guard against that quietly: the side reads as taken at once, with no note or wait
   // cursor, and only the presses that would undo it are dropped until it lands.
-  it('marks the pills pending while the response confirms, without announcing a wait', () => {
+  it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
     mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
     expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+  });
+
+  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
+  it('releases the pills once the response is submitted, before it lands', () => {
+    mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = false;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
   });
 
   it('releases the pills once it has landed', () => {

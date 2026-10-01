@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
@@ -39,10 +40,12 @@ import {
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { claimRowKey } from './claim-row-key';
+import { fromClaimsFilterSearch } from './claims-filter-params';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests } from './hooks';
 import type { DebateAnalyticsSurface } from './hub-analytics';
+import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState, HubSkeleton } from './hub-states';
@@ -72,17 +75,13 @@ import {
 } from '~/atoms';
 
 /**
- * Which list a surface is showing. One per surface now, rather than a source the viewer picks.
+ * Which list a surface is showing.
  *
- * `all` is the tab's own rather than geo-chat's: the index has no notion of the Debate tag, so this
- * swaps the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
+ * `all` is the tab's own rather than geo-chat's: the index has no notion of that tag, so it swaps
+ * the list's *source* for the knowledge graph rather than changing a query param (GEO-2771).
  *
  * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
  * and who this viewer is already pair-blocked with, which is not in the graph at any price.
- *
- * Featured is gone with the picker it lived in (GEO-2863). It was a curated cut of the same tag
- * behind a menu most viewers never opened, and the menu was costing Explore's filter row the space
- * its switch needed.
  */
 type ClaimsTabFilter = 'all' | 'mine' | 'debate_now';
 
@@ -103,8 +102,6 @@ const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
 
-/** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
-
 /**
  * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
  *
@@ -124,25 +121,68 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  * `topic_ids`, so neither is a page-local filter any more and the list is whatever the index says.
  *
  * The server still returns `topics: []` on every row, which is not the contradiction it looks
- * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Featured
+ * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Explore
  * resolves topics itself, because its list comes from the knowledge graph and the index has never
  * seen it.
  */
 /**
  * Which surface is drawing this list (GEO-2861).
  *
- * Three surfaces over the same machinery, each fixed to one list: Lobby is `debate_now`, Explore is
- * the Debate tag, Positions is the viewer's own. None of them picks — the source menu that used to
- * choose between the last two went with GEO-2863.
+ * Each variant is fixed to one list: Lobby is `debate_now`, Explore the Debate tag, Positions the
+ * viewer's own. The panel gives each a tab (Lobby also has a Matches toggle); the workspace picks
+ * among them with the menu beside search.
  *
  * They hold their filter selections apart — narrowing what you can debate right now is a different
  * act from narrowing what you are browsing, and from narrowing what you have already answered — so
- * the atoms come from here rather than being read directly, and adding a surface means adding a row
- * rather than threading another flag through.
+ * the atoms come from here rather than being read directly.
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
-const VARIANT_ATOMS = {
+/** Every value the `list` param may name, for validating one that arrived from outside. */
+export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
+
+export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'lobby';
+
+/**
+ * The seed a variant should apply for a query, or null when the link names a different list.
+ *
+ * No spent marker any more. It used to hold a module-level set of `(list, query)` pairs so a second
+ * mount could not re-apply a link — but the workspace is the only caller now, and it does not
+ * remount on a query change, so that guard belongs there instead. Worse, the marker refused a
+ * genuine re-navigation: Back and then Forward to a URL already visited read as spent, and the
+ * filters it named never came back.
+ *
+ * Pure, so the caller decides when to ask and what "already applied" means.
+ */
+export function readUrlSeed(variant: ClaimsTabVariant, query: string) {
+  const seed = fromClaimsFilterSearch(new URLSearchParams(query), CLAIMS_TAB_VARIANTS);
+
+  if ((seed.list ?? DEFAULT_WORKSPACE_LIST) !== variant) return null;
+
+  return seed;
+}
+
+/**
+ * Which surface is drawing it, which is a different question from which list it draws (GEO-2726).
+ *
+ * `variant` picks the question and the selections; this picks the furniture. The workspace has room
+ * for an open facet rail where the panel has 400px and menus, and both arrangements ask the same
+ * thing of the same atoms — so the two are orthogonal and compose, rather than one being a third
+ * variant.
+ */
+export type ClaimsLayout = 'panel' | 'workspace';
+
+/**
+ * `workspace`: facet rail + list; panel menus are the narrow fallback.
+ *
+ * Within a session nothing has to be passed: the atoms above are keyed by variant rather than by
+ * surface, so narrowing in the panel and expanding to the workspace arrives at the same list.
+ *
+ * The expand link carries the selection in the URL regardless, and the workspace seeds from it on
+ * mount, because a link is the one way onto this surface with no session behind it — a shared or
+ * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
+ */
+export const VARIANT_ATOMS = {
   explore: {
     spaceIds: debatesHubExploreSpaceIdsAtom,
     topicIds: debatesHubExploreTopicIdsAtom,
@@ -170,6 +210,8 @@ export function ClaimsTab({
   trailing,
   warm = false,
   onSettledEmpty,
+  layout = 'panel',
+  scopePicker,
 }: {
   variant?: ClaimsTabVariant;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
@@ -200,9 +242,12 @@ export function ClaimsTab({
    * the requests instead. Being the same component is what makes that impossible.
    */
   warm?: boolean;
+  layout?: ClaimsLayout;
+  scopePicker?: React.ReactNode;
 } = {}) {
   const isLobby = variant === 'lobby';
   const atoms = VARIANT_ATOMS[variant];
+  const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
@@ -295,9 +340,9 @@ export function ClaimsTab({
 
   // Which tag this filter reads, and whether it reads one at all.
   //
-  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — switching
-  // Featured to All and back lands on each one's own cached catalog rather than refetching. Whether
-  // that catalog is *used* is `graphSourced`, which is also what holds the index query off.
+  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — moving
+  // between filters lands on each one's own cached catalog rather than refetching. Whether that
+  // catalog is *used* is `graphSourced`, which is also what holds the index query off.
   const claimsTagId = TAG_FOR_FILTER[filter] ?? DEBATE_TAG_ID;
   const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
 
@@ -314,8 +359,8 @@ export function ClaimsTab({
     () => ({
       search: debouncedSearch || null,
       topicIds: debouncedTopicIds,
-      // Narrowed to what geo-chat understands: `featured` and `all` are this tab's own sources, and
-      // the query is disabled for both anyway.
+      // Narrowed to what geo-chat understands: `all` is this tab's own source, and the query is
+      // disabled for it anyway.
       filter: graphSourced ? 'all' : (filter as MatchmakingClaimsFilter),
     }),
     [debouncedSearch, debouncedTopicIds, graphSourced, filter]
@@ -327,7 +372,7 @@ export function ClaimsTab({
   );
 
   // Every way the pages can describe a wider corpus than this tab will show is handled in there,
-  // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
+  // once, for both pickers — see `useScopedMatchmakingClaims`. Explore passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
   const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced);
@@ -340,13 +385,13 @@ export function ClaimsTab({
   //
   // The source gate covers the selections and the query, and deliberately not the search.
   //
-  // Featured builds both menus from the live space and topic selections over a list it already
+  // Explore builds both menus from the live space and topic selections over a list it already
   // holds, so those are right on the same render as the tick and there is nothing to wait for. The
-  // debounce still runs there, feeding a query Featured never makes, so ungated it would drop
+  // debounce still runs there, feeding a query Explore never makes, so ungated it would drop
   // skeletons over numbers that were already correct.
   //
-  // Search is the exception, because Featured filters by `debouncedSearch` like every other source
-  // does — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
+  // Search is the exception, because Explore filters by `debouncedSearch` like the index-sourced
+  // filters do — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
   // as the box is unsettled, so that window has to cover the counts wherever they came from.
   //
   // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
@@ -364,10 +409,10 @@ export function ClaimsTab({
   // run over the loaded pages either: tagged claims are a couple of thousand out of a corpus of
   // thousands, so a page-local filter would page for a very long time before it found one.
   //
-  // GEO-2771 moved `all` here from the index for the same reason it was always true of `featured`,
-  // and for one more: the graph already knows which claims are meant for debating, so replicating
-  // that into geo-chat only to filter on it is a trip with nothing at the end of it. What geo-chat
-  // still answers is everything *about* these claims — see the row lookup below.
+  // GEO-2771 moved `all` here from the index for one more reason: the graph already knows which
+  // claims are meant for debating, so replicating that into geo-chat only to filter on it is a trip
+  // with nothing at the end of it. What geo-chat still answers is everything *about* these claims
+  // — see the row lookup below.
   //
   // The list comes from the graph: one ranked, filtered page at a time (GEO-2798). Search, topics
   // and spaces are all applied by the server, so what arrives is what the viewer asked for and the
@@ -830,9 +875,9 @@ export function ClaimsTab({
     setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsComplete && !topicsSettling));
   }, [facetTopics, facetsComplete, setTopicIds, topicsSettling]);
 
-  // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
-  // empty Featured tab should say nothing is featured — not that filters are hiding things — and
-  // "Clear filters" should leave the viewer on the tab they picked.
+  // The variant is not counted as narrowing: it chooses which list is on screen rather than cutting
+  // one down, so an empty list should say the list is empty — not that filters are hiding things —
+  // and "Clear filters" should leave the viewer on the list they picked.
   // Two questions, and they had one answer.
   //
   // What the viewer has *narrowed* by decides what an empty list means: with nothing narrowing it,
@@ -962,10 +1007,23 @@ export function ClaimsTab({
   // Every hook above has run, so the cache is filled and the atoms are seeded; there is simply
   // nothing to draw. Placed here rather than early, which would break the rules of hooks.
   if (warm) return null;
-
   return (
-    <div className="flex flex-col">
-      <HubStickyControls>
+    <HubListColumns
+      workspace={workspace}
+      rail={
+        <HubFacetRail
+          facetSpaces={facetSpaces}
+          spaceIds={spaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          facetTopics={facetTopics}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+        />
+      }
+    >
+      <HubStickyControls workspaceStickyOffset={workspace}>
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
@@ -983,6 +1041,8 @@ export function ClaimsTab({
 
         <SpaceTopicFilters
           analyticsSurface="hub"
+          leading={scopePicker}
+          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -1059,10 +1119,9 @@ export function ClaimsTab({
               ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
               : undefined
           }
-          // What an empty list means depends on where it came from, and the two graph-sourced
-          // filters mean different things by it: Featured says a curator has tagged nothing, All
-          // says nothing carries the Debate tag. Both are statements about curation, not about the
-          // viewer's filters, so they only show when no filter is narrowing anything.
+          // What an empty list means depends on where it came from. Explore is the graph-sourced
+          // one, and empty there says nothing carries the Debate tag — a statement about curation,
+          // not about the viewer's filters, so it only shows when no filter is narrowing anything.
           //
           // Answered-everything comes first, because it is the only one of the three that is true
           // of a list with rows in it. Saying "nothing carries the Debate tag" to someone who has
@@ -1077,8 +1136,8 @@ export function ClaimsTab({
                   : NOTHING_HERE[filter]
           }
           // "Debate now" is the only filter here scored on who is online, so it is the only one an
-          // empty list means "nobody is around" for — Featured and All claims are statements about
-          // curation, and My positions is about the viewer. Withheld under a narrowing filter for
+          // empty list means "nobody is around" for — Explore is a statement about curation, and My
+          // positions is about the viewer. Withheld under a narrowing filter for
           // the same reason it is on the other tabs: that emptiness has a different cause
           // (GEO-2840).
           // `live` unconditionally: `SIGNED_OUT_HIDDEN_FILTERS` takes "Debate now" out of the menu
@@ -1128,7 +1187,6 @@ export function ClaimsTab({
             ))}
           </HubCardList>
         </HubQueryState>
-
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
           the empty state deliberately: the space allowlist and the topic filter both run over the
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
@@ -1151,7 +1209,7 @@ export function ClaimsTab({
 
         {mayFetchAhead ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
       </div>
-    </div>
+    </HubListColumns>
   );
 }
 
@@ -1163,9 +1221,52 @@ export function ClaimsTab({
  * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
  * — so this is the only piece that needed pinning here.
  */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
+/**
+ * The workspace's two columns: an open facet rail beside the list.
+ */
+export function HubListColumns({
+  workspace,
+  rail,
+  children,
+}: {
+  workspace: boolean;
+  rail: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  if (!workspace) return <div className="flex flex-col">{children}</div>;
+
   return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
+    <div className="flex min-w-0 gap-8">
+      <aside
+        aria-label="Filters"
+        className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
+        data-testid="hub-facet-rail"
+      >
+        {rail}
+      </aside>
+      {/* `@container/claims` is containment for the cards' own queries (`claim-pills-wide`,
+          `claim-card-narrow`), not a column grid. The list is one card per row at every width. */}
+      <div className="@container/claims flex min-w-0 flex-1 flex-col">{children}</div>
+    </div>
+  );
+}
+
+export function HubStickyControls({
+  children,
+  workspaceStickyOffset = false,
+}: {
+  children: React.ReactNode;
+  workspaceStickyOffset?: boolean;
+}) {
+  return (
+    <div
+      className={cx(
+        'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
+        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -1223,6 +1324,7 @@ type SpaceTopicFiltersProps = {
    * at the edge than as a fourth pill in the run.
    */
   trailing?: React.ReactNode;
+  menusClassName?: string;
 };
 
 /**
@@ -1244,7 +1346,9 @@ export function SpaceTopicFilters({
   countsPending,
   leading,
   trailing,
+  menusClassName,
 }: SpaceTopicFiltersProps) {
+  const menu = (node: React.ReactNode) => (menusClassName ? <div className={menusClassName}>{node}</div> : node);
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
 
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
@@ -1288,45 +1392,49 @@ export function SpaceTopicFilters({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {leading}
-      <HubMultiFilterMenu
-        // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
-        // Viewport-based alignment chooses the end there and hangs the menu over the page behind
-        // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
-        // their adaptive placement.
-        align="start"
-        label={spaceMenuLabel}
-        analytics={{ name: 'Space', surface: analyticsSurface }}
-        labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
-        options={spaceOptions}
-        values={spaceIds}
-        onToggle={onSpaceToggle}
-        onClear={onSpacesClear}
-        clearLabel="Any space"
-        countsPending={countsPending}
-        showImages
-      />
-      {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
-        // Beside the space menu, never pushed to the far end. The rematch picker used to do that
-        // with the width it has spare, and once "Matches only" arrived at that end the two sat
-        // together there — a menu and a switch, reading as one control. The menus belong with each
-        // other; the switch is what the end of the row is for.
+      {menu(
         <HubMultiFilterMenu
+          // The hub is docked to the viewport's right, but this trigger starts at the panel's left.
+          // Viewport-based alignment chooses the end there and hangs the menu over the page behind
+          // the panel. This wrapper owns the debate filters, so unrelated profile/feed menus keep
+          // their adaptive placement.
           align="start"
-          label={topicMenuLabel}
-          analytics={{ name: 'Topic', surface: analyticsSurface }}
-          options={topicOptions}
-          values={topicIds}
-          onToggle={onTopicToggle}
-          onClear={onTopicsClear}
-          clearLabel="Any topic"
+          label={spaceMenuLabel}
+          analytics={{ name: 'Space', surface: analyticsSurface }}
+          labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
+          options={spaceOptions}
+          values={spaceIds}
+          onToggle={onSpaceToggle}
+          onClear={onSpacesClear}
+          clearLabel="Any space"
           countsPending={countsPending}
-          // Only this menu takes a query. The space menu is the handful of spaces the viewer
-          // belongs to; the topic facet is every subject the corpus has been tagged with, which is
-          // a scrolling list on any space that has been used for a while.
-          searchPlaceholder="Search topics"
-          searchEmptyLabel="No topics match"
+          showImages
         />
-      ) : null}
+      )}
+      {facetTopics && topicIds && onTopicToggle && onTopicsClear
+        ? // Beside the space menu, never pushed to the far end. The rematch picker used to do that
+          // with the width it has spare, and once "Matches only" arrived at that end the two sat
+          // together there — a menu and a switch, reading as one control. The menus belong with each
+          // other; the switch is what the end of the row is for.
+          menu(
+            <HubMultiFilterMenu
+              align="start"
+              label={topicMenuLabel}
+              analytics={{ name: 'Topic', surface: analyticsSurface }}
+              options={topicOptions}
+              values={topicIds}
+              onToggle={onTopicToggle}
+              onClear={onTopicsClear}
+              clearLabel="Any topic"
+              countsPending={countsPending}
+              // Only this menu takes a query. The space menu is the handful of spaces the viewer
+              // belongs to; the topic facet is every subject the corpus has been tagged with, which
+              // is a scrolling list on any space that has been used for a while.
+              searchPlaceholder="Search topics"
+              searchEmptyLabel="No topics match"
+            />
+          )
+        : null}
       {/* A growable gap rather than `ml-auto`, which is what lets this be right about both cases
           without anyone having to measure the label.
 

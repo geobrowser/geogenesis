@@ -195,8 +195,8 @@ export function ClaimExploreFeedCard({
    *
    * It went beside the type and the age first, on the reasoning that it is
    * another fact about the claim in a row that already holds facts about it. On
-   * a real record that row is rarely as empty as it looks in isolation: the
-   * space chip, the type, the age, Controversial and the debate offer are
+   * a real record that row was rarely as empty as it looked in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer were
    * already competing for it, and a sixth segment wrapped the line.
    *
    * Under the matching pill it needs no words to say which side it means —
@@ -330,7 +330,7 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
-            pending={control.isResponsePending}
+            pending={control.isResponseSubmitting}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"

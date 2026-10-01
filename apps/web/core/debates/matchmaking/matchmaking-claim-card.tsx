@@ -28,6 +28,7 @@ import {
   CLAIM_RESPONSE_KIND,
   RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
+  isAwaitingResponseSubmission,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
@@ -471,6 +472,18 @@ export function useClaimPositionControl({
   // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
   // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
   const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+  /**
+   * Narrower than `isResponsePending`: only until the bundler has the write (GEO-2889).
+   *
+   * This is what the pills wait on. Inclusion is the slow part — p90 ~30s, p99 ~2 minutes — and the
+   * side is already drawn held, so after submission the response reads as made and a press means
+   * what it says: pressing the held side retracts it, pressing the other switches. A failure after
+   * submission still rolls the side back and says so (`useEntityResponse`).
+   *
+   * `isResponsePending` stays the wider window, for the readers that must not trust the index while
+   * a write is out — `trustedIndexedPosition` — which is about the data, not about the press.
+   */
+  const isResponseSubmitting = isAwaitingResponseSubmission(responseIndexing);
 
   // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
   // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
@@ -531,11 +544,12 @@ export function useClaimPositionControl({
       return;
     }
     if (isAccountSetupPending) return;
-    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
-    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
-    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
-    // "respond to this claim first" beside a pill that still looked held.
-    if (isResponsePending) return;
+    // Ignored rather than sent. Until the bundler has the write, the held pill is this client's guess,
+    // and pressing a held pill means "remove" — so a double-click, or a press on a side that has not
+    // reached the bundler, published a retraction nobody asked for. The request then failed with
+    // geo-chat's "respond to this claim first" beside a pill that still looked held. Once submitted
+    // the write is made, so a press is a new, deliberate response (GEO-2889).
+    if (isResponseSubmitting) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -554,7 +568,7 @@ export function useClaimPositionControl({
     if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
-    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
+    if (isResponseSubmitting) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -566,8 +580,13 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     isConnected,
-    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    /**
+     * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
+     * whether to trust the index — not for the pills, which use `isResponseSubmitting`.
+     */
     isResponsePending,
+    /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
+    isResponseSubmitting,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -734,7 +753,7 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponseSubmitting } =
     useClaimPositionControl({
       claim,
       positions,
@@ -779,11 +798,11 @@ function RespondableControls({
         viewerPosition={viewerPosition}
         onRespond={respond}
         // Not disabled while the response publishes: dimming the pills for the length of an indexing
-        // round trip read as the response not having landed. Pending instead — presses are ignored,
-        // because nothing serializes overlapping submissions and a second press on the held side is
-        // a retraction.
+        // round trip read as the response not having landed. Pending instead, and only until the
+        // bundler has the write — a press before then is a double-click on the held side, which is a
+        // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
-        pending={isResponsePending}
+        pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
       />

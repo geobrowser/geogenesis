@@ -1,16 +1,36 @@
 import { NextResponse } from 'next/server';
 
+import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { EXPLORE_EXCLUDED_TYPE_IDS } from '~/core/explore/explore-constants';
-import { parseExploreSort, parseExploreTime } from '~/core/explore/explore-feed-params';
+import { parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
-import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
+import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { normId } from '~/core/utils/norm-id';
 
+/** Enough for any real follow list; the query string stays under ~7 KB. */
+const MAX_FOLLOWED_TOPIC_IDS = 200;
+
+/** Dashless 32-hex ids, deduplicated. Anything else is dropped rather than sent to the graph. */
+function parseFollowedTopicIds(raw: string | null): string[] {
+  if (!raw) return [];
+  const ids = raw
+    .split(',')
+    .map(normId)
+    .filter(id => /^[0-9a-f]{32}$/.test(id));
+  return [...new Set(ids)].slice(0, MAX_FOLLOWED_TOPIC_IDS);
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const sort = parseExploreSort(searchParams.get('sort'));
+  const pageSort = parseExplorePageSort(searchParams.get('sort'));
+  // GEO-3083. For you is Best plus the followed-topic stream, so with no followed topics it is
+  // exactly Best: a signed-out reader or one who follows nothing never gets an empty feed. The
+  // client sends the ids because its follow cache updates the moment a follow is written, where a
+  // server read would trail the indexer.
+  const sort: ExploreSort = pageSort === 'for-you' ? 'best' : pageSort;
+  const forYouTopicIds = pageSort === 'for-you' ? parseFollowedTopicIds(searchParams.get('followedTopicIds')) : [];
   const time = parseExploreTime(searchParams.get('time'));
   // A list since GEO-2789's explore half. `spaceId` is still read so an older client, or a link
   // someone kept, still narrows to the one space it names.
@@ -31,7 +51,7 @@ export async function GET(request: Request) {
   let spaceFilter: string[] | null = null;
   if (spaceIdsParam && spaceIdsParam !== 'all') {
     const wanted = new Set(spaceIdsParam.split(',').map(normId).filter(Boolean));
-    const visible = [...browse.featured, ...browse.editorOf, ...browse.memberOf]
+    const visible = browseSidebarVisibleSpaces(browse)
       .filter(row => wanted.has(normId(row.id)))
       .map(row => row.id);
     if (visible.length > 0) spaceFilter = visible;
@@ -54,6 +74,7 @@ export async function GET(request: Request) {
       requireDebateTagOnClaims: true,
       // GEO-3070. Explore's Best opens on a playable debate.
       leadWithPlayableDebate: true,
+      forYouTopicIds,
     });
     return NextResponse.json(result);
   } catch (e) {

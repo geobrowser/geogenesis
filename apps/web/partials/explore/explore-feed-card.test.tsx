@@ -10,6 +10,7 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { ExploreFeedCard } from './explore-feed-card';
+import { ExploreTypeTag } from './explore-type-tag';
 
 const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 
@@ -167,6 +168,34 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByText('Debate')).toBeNull();
     expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
+  });
+
+  it('draws no age in either meta row', () => {
+    const fiveDaysAgo = Math.floor(Date.now() / 1000) - 5 * 86400;
+    const age = / ago$|just now/;
+    render(<ExploreFeedCard item={{ ...item, createdAtSec: fiveDaysAgo }} />);
+    expect(screen.queryByText(age)).toBeNull();
+
+    cleanup();
+    // Compact chrome is what routes the debate fallback through `DebateExploreMetaRow` rather than
+    // the generic row above; without it this half would check the same row twice.
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      createdAtSec: fiveDaysAgo,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+    };
+    render(<ExploreFeedCard item={debateItem} compactDebateChrome />);
+    expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap');
+    expect(screen.queryByText(age)).toBeNull();
+  });
+
+  it('draws every type as the same pill the debate card uses', () => {
+    render(<ExploreFeedCard item={{ ...item, types: [{ id: 'some-other-type', name: 'Person' }] }} />);
+    const tag = screen.getByText('Person');
+
+    cleanup();
+    render(<ExploreTypeTag>Debate</ExploreTypeTag>);
+    for (const className of screen.getByText('Debate').classList) expect(tag).toHaveClass(className);
   });
 
   it('does not route non-debate items to the debate card', () => {

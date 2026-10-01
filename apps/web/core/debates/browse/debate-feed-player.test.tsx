@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   endCardShown: [] as boolean[],
 }));
 
+const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
+vi.mock('~/core/debates/watched-debates', () => ({ markDebateWatched: watchedMocks.markDebateWatched }));
+
 // The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
 vi.mock('./use-debate-end-card', () => ({
   useDebateEndCard: (_debate: unknown, enabled: boolean, shown: boolean) => {
@@ -36,19 +39,13 @@ vi.mock('./use-debate-end-card', () => ({
 // A stand-in for the card, so the player's half is what is under test: when the card is shown, what
 // it is handed for replay, and whether the claims opener reaches it.
 vi.mock('./debate-end-card', () => ({
-  DebateEndCard: ({
-    onReplay,
-    onOpenClaims,
-  }: {
-    onReplay: () => void;
-    onOpenClaims?: (participantSpaceId?: string) => void;
-  }) => (
+  DebateEndCard: ({ onReplay, onOpenClaims }: { onReplay: () => void; onOpenClaims?: () => void }) => (
     <div data-testid="end-card">
       <button type="button" onClick={onReplay}>
         Replay debate
       </button>
-      <button type="button" onClick={() => onOpenClaims?.('debater-space')}>
-        open debater claims
+      <button type="button" onClick={() => onOpenClaims?.()}>
+        open claims
       </button>
     </div>
   ),
@@ -477,6 +474,27 @@ describe('DebateFeedPlayer media release (GEO-2963)', () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(slot1.hasAttribute('src')).toBe(false);
     expect(slot2.hasAttribute('src')).toBe(false);
+  });
+});
+
+describe('DebateFeedPlayer releaseMedia (GEO-3067)', () => {
+  it('releases both videos while held back and re-attaches the same URLs on return', () => {
+    const load = vi.mocked(HTMLMediaElement.prototype.load);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} releaseMedia />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(slot1.hasAttribute('src')).toBe(false);
+    expect(slot2.hasAttribute('src')).toBe(false);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+
+    const sources = Array.from(container.querySelectorAll('video')).map(video => video.getAttribute('src'));
+    expect(sources).toEqual(['https://cdn.test/slot1.webm', 'https://cdn.test/slot2.webm']);
   });
 });
 
@@ -1219,15 +1237,33 @@ describe('the end card', () => {
     expect(within(container).queryByTestId('end-card')).toBeNull();
   });
 
-  it('hands the claims opener through, with the debater the card asked for', () => {
+  it('records a debate watched to the end even on a compact tile, which never shows the end card', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
+  });
+
+  it('does not record a debate that is still playing', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(watchedMocks.markDebateWatched).not.toHaveBeenCalled();
+  });
+
+  it('hands the claims opener through to the card', () => {
     mocks.controller = ended();
     mocks.ticker = emptyTicker();
     const onOpenClaims = vi.fn();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active onOpenClaims={onOpenClaims} />);
-    fireEvent.click(within(container).getByRole('button', { name: 'open debater claims' }));
+    fireEvent.click(within(container).getByRole('button', { name: 'open claims' }));
 
-    expect(onOpenClaims).toHaveBeenCalledWith('debater-space');
+    expect(onOpenClaims).toHaveBeenCalledTimes(1);
   });
 
   it('stands the subtitle down under the card', () => {
