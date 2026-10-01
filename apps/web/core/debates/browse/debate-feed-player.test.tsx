@@ -611,6 +611,28 @@ describe('a backlog latch outliving its stack', () => {
     expect(lastOpen()).toBe(false);
   });
 
+  /**
+   * GEO-3114. On a small player the opened list is a sheet: as wide as the live card and pinned
+   * below the tile's top controls, so a claim prints whole. Behind `@max-md:` only, so the wide
+   * panel's 45%/62% column is untouched — and only while open, so the live card keeps the corner.
+   */
+  it('turns the opened corner into a sheet on a small panel, and only the opened one', () => {
+    mocks.ticker = withCardsForSlot1();
+    const { container } = render(renderAt(false));
+    const corner = () => container.querySelector('[data-claim-corner]') as HTMLElement;
+
+    const classes = () => [...corner().classList];
+
+    expect(classes()).not.toContain('@max-md:top-12');
+    expect(classes()).toContain('w-[calc(100%-1.75rem)]');
+
+    fireEvent.click(stackIn(container) as HTMLElement);
+
+    expect(classes()).toEqual(
+      expect.arrayContaining(['w-[45%]', 'md:w-[62%]', '@max-md:top-12', '@max-md:w-[calc(100%-1.75rem)]'])
+    );
+  });
+
   // The same latch, released by the same cleanup: a tile scrolled out of the preload window empties
   // the ticker, which takes the stack with it.
   it('closes the corner when the ticker empties rather than the debate ending', () => {
