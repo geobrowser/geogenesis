@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
@@ -65,37 +66,31 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
-  // Only the latest press's. A new press replaces it, and a completion disarms it.
-  const callOnCancelRef = React.useRef<(() => void) | undefined>(undefined);
-
   // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
-    onComplete: () => {
-      callOnCancelRef.current = undefined;
-      onCompleteRef.current?.();
-    },
+    onComplete: () => onCompleteRef.current?.(),
     onError: error => {
       // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
-      if (error !== 'exited_auth_flow') return;
-      const callOnCancel = callOnCancelRef.current;
-      callOnCancelRef.current = undefined;
-      optionsRef.current?.onError?.();
-      callOnCancel?.();
+      if (error === 'exited_auth_flow') optionsRef.current?.onError?.();
     },
   });
 
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
-      callOnCancelRef.current = callOptions?.onCancel;
       prepareOnboarding({ returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
-      return login(
+      const attempt = login(
         {
           ...(typeof configured === 'function' ? configured() : configured),
           ...(properties && !('nativeEvent' in properties) ? properties : {}),
         },
         { resume: optionsRef.current?.resumeAuthAttempt }
       );
+      // Registered with the app-level attempt rather than held here: this control can unmount
+      // while the modal is open, and the withdrawal must still happen (see `sign-in-abandoned`).
+      // After `login`, whose new attempt clears the previous one's.
+      if (callOptions?.onCancel) onSignInAbandoned(callOptions.onCancel);
+      return attempt;
     },
     [login, prepareOnboarding]
   );

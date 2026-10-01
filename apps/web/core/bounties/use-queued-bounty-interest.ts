@@ -14,11 +14,23 @@ import { useQueuedAction } from '~/core/state/pending-actions';
 export function useQueuedBountyInterest(
   bountyId: string,
   {
+    ready,
     alreadyInterested,
+    eligible,
     register,
   }: {
+    /**
+     * Whether `alreadyInterested` and `eligible` are answers yet. Right after sign-in the viewer's
+     * interest is still loading and reads as "not interested", which would publish a duplicate.
+     */
+    ready: boolean;
     /** Interested or allocated already — a returning viewer who signed in to press it again. */
     alreadyInterested: boolean;
+    /**
+     * Whether the bounty still takes interest. Sign-up can take minutes, and a bounty can end or fill
+     * in that time; the press is then dropped rather than published against a closed bounty.
+     */
+    eligible: boolean;
     /** Records interest; resolves whether it was recorded. */
     register: () => Promise<boolean>;
   }
@@ -28,8 +40,10 @@ export function useQueuedBountyInterest(
     component: 'bounty_interest',
     label: 'your interest in this bounty',
     liveOnly: true,
+    ready,
     run: async () => {
-      if (alreadyInterested) return;
+      // Both settle it without a write: what the press asked for is already true, or no longer can be.
+      if (alreadyInterested || !eligible) return;
       // The runner drops an action whose run resolves, so a write that did not happen has to throw.
       if (!(await register())) throw new Error('Your interest could not be recorded yet.');
     },

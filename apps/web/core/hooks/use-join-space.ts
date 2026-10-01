@@ -5,6 +5,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -28,7 +29,11 @@ type UseJoinSpaceArgs = {
 export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
   const { smartAccount } = useSmartAccount();
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
+  // Signed in without a usable space, the request is held only when one is on its way: being created
+  // for a new account, or still loading for a returning one. With neither, nothing would ever send
+  // it, and the button would read "Requested" for a request that never goes.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'join_space_button',
@@ -43,7 +48,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
-    run: () => requestToBeMemberAsync().then(() => {}),
+    run: () => requestToBeMemberAsync({ fromQueue: true }).then(() => {}),
   });
   const optimisticRequested = queuedJoin.isQueued;
 
@@ -59,7 +64,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       promptSignIn(undefined, { onCancel: queuedJoin.cancel });
       return;
     }
-    queuedJoin.queue();
+    if (isAccountSetupPending || isPersonalSpaceLoading) queuedJoin.queue();
   };
 
   return { join, status, optimisticRequested };

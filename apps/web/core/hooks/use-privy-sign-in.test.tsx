@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { runSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 
 import { usePrivySignIn } from './use-privy-sign-in';
 
@@ -161,33 +162,18 @@ describe('usePrivySignIn', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  // A control that queued the viewer's choice at the press withdraws it if they walk away.
-  it("runs a press's own cancel when its sign-in is dismissed", () => {
+  // A control that queued the viewer's choice at the press withdraws it if they walk away. The
+  // withdrawal is registered with the app-level attempt, so it outlives this hook — when it fires
+  // (dismissal) and when it is dropped (completion, a new attempt) is covered with the tracker.
+  it("registers a press's own cancel with the sign-in attempt", () => {
     const onCancel = vi.fn();
     const { result } = renderHook(() => usePrivySignIn());
 
     act(() => result.current(undefined, { onCancel }));
-    act(() => mocks.privyOnError?.('invalid_credentials'));
     expect(onCancel).not.toHaveBeenCalled();
 
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => runSignInAbandoned());
     expect(onCancel).toHaveBeenCalledOnce();
-  });
-
-  it('does not cancel a press whose sign-in completed, or one a later press replaced', () => {
-    const first = vi.fn();
-    const second = vi.fn();
-    const { result } = renderHook(() => usePrivySignIn());
-
-    act(() => result.current(undefined, { onCancel: first }));
-    act(() => mocks.privyOnComplete?.({}));
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
-    act(() => result.current(undefined, { onCancel: second }));
-    act(() => result.current());
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
-
-    expect(first).not.toHaveBeenCalled();
-    expect(second).not.toHaveBeenCalled();
   });
 
   it('notifies the initiating surface when the modal is dismissed or fails', () => {

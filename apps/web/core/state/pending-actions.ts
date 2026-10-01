@@ -35,7 +35,10 @@ export type PendingAction = {
 /** A queued action as the runner sees it: always runnable. */
 type RunnablePendingAction = PendingAction & { run: () => Promise<void> | void };
 
-type LiveHandler = (intent: string | undefined) => Promise<void> | void;
+/** A live handler's answer when its control unmounted before it could act: try another. */
+const HANDLER_GONE = Symbol('handler gone');
+
+type LiveHandler = (intent: string | undefined) => Promise<void | typeof HANDLER_GONE> | void;
 
 /**
  * Per action id, the handlers of the controls for it that are mounted now — the latest last.
@@ -64,11 +67,40 @@ function waitForLiveHandler(id: string) {
   });
 }
 
-function useLivePendingActionHandler(id: string, handler: LiveHandler) {
+/**
+ * Registers this control as a live handler for `id` (see `liveHandlers`).
+ *
+ * A replay waits for `ready` before running: the control decides from data of its own — whether the
+ * viewer already holds this side, already applied — and right after sign-in that data is still
+ * loading, its defaults reading as "no". If the control unmounts while the replay waits, it answers
+ * `HANDLER_GONE` and the queue tries another.
+ */
+function useLivePendingActionHandler(
+  id: string,
+  handler: (intent: string | undefined) => Promise<void> | void,
+  ready: boolean
+) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  const readyRef = useRef(ready);
+  readyRef.current = ready;
+  const readyWaiters = useRef<((outcome: 'ready' | 'gone') => void)[]>([]);
+
   useEffect(() => {
-    const live: LiveHandler = intent => handlerRef.current(intent);
+    if (!ready) return;
+    const waiting = readyWaiters.current;
+    readyWaiters.current = [];
+    waiting.forEach(resolve => resolve('ready'));
+  }, [ready]);
+
+  useEffect(() => {
+    const live: LiveHandler = async intent => {
+      if (!readyRef.current) {
+        const outcome = await new Promise<'ready' | 'gone'>(resolve => readyWaiters.current.push(resolve));
+        if (outcome === 'gone') return HANDLER_GONE;
+      }
+      return handlerRef.current(intent);
+    };
     liveHandlers.set(id, [...(liveHandlers.get(id) ?? []), live]);
     const waiters = liveHandlerWaiters.get(id);
     liveHandlerWaiters.delete(id);
@@ -77,6 +109,9 @@ function useLivePendingActionHandler(id: string, handler: LiveHandler) {
       const remaining = (liveHandlers.get(id) ?? []).filter(h => h !== live);
       if (remaining.length > 0) liveHandlers.set(id, remaining);
       else liveHandlers.delete(id);
+      const waiting = readyWaiters.current;
+      readyWaiters.current = [];
+      waiting.forEach(resolve => resolve('gone'));
     };
   }, [id]);
 }
@@ -108,16 +143,18 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
       const context = getContext();
       const queued: RunnablePendingAction = {
         ...action,
-        run: () =>
-          withActionContext(context, async () => {
-            const live = currentLiveHandler(action.id);
-            if (live) return live(action.intent);
-            if (action.run) return action.run();
-            const handler = await waitForLiveHandler(action.id);
+        run: async () => {
+          // Until a control carries it out, or none is left to and the press's own `run` does.
+          for (;;) {
             // Withdrawn, or replaced by a newer press, while it waited.
             if (!store.get(pendingActionsAtom).includes(queued)) return;
-            return withActionContext(context, () => handler(action.intent));
-          }),
+            const live = currentLiveHandler(action.id);
+            if (!live && action.run) return withActionContext(context, action.run);
+            const handler = live ?? (await waitForLiveHandler(action.id));
+            const outcome = await withActionContext(context, () => handler(action.intent));
+            if (outcome !== HANDLER_GONE) return;
+          }
+        },
       };
       setActions(prev => [...prev.filter(a => a.id !== action.id), queued]);
     },
@@ -134,7 +171,8 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
  * the action; the control that is mounted when the account is ready is the one whose `run` is used.
  *
  * `liveOnly` for an action whose `run` cannot work from the press's closure at all: with no control
- * mounted then, it waits for one rather than running stale.
+ * mounted then, it waits for one rather than running stale. `ready` holds a replay until the control
+ * on screen can tell what it should do.
  */
 export function useQueuedAction({
   id,
@@ -143,6 +181,7 @@ export function useQueuedAction({
   run,
   requires = 'personalSpace',
   liveOnly = false,
+  ready = true,
 }: {
   id: string;
   component: ActionComponent;
@@ -150,13 +189,18 @@ export function useQueuedAction({
   run: (intent: string | undefined) => Promise<void> | void;
   requires?: PendingActionRequirement;
   liveOnly?: boolean;
+  /**
+   * Whether this control's own data — what `run` decides from — has loaded. A replay through this
+   * control waits for it, so `run` never reads a loading default as an answer.
+   */
+  ready?: boolean;
 }) {
   const enqueue = useEnqueuePendingAction(component);
   const setActions = useSetAtom(pendingActionsAtom);
   const intent = usePendingActionIntent(id);
   const runRef = useRef(run);
   runRef.current = run;
-  useLivePendingActionHandler(id, nextIntent => runRef.current(nextIntent));
+  useLivePendingActionHandler(id, nextIntent => runRef.current(nextIntent), ready);
 
   const queue = useCallback(
     (nextIntent: string = 'queued') =>

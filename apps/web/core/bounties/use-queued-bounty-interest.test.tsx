@@ -13,8 +13,19 @@ let store = createStore();
 const queued = () => store.get(pendingActionsAtom);
 const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store={store}>{children}</JotaiProvider>;
 
-function renderInterest(register: () => Promise<boolean>, alreadyInterested = false) {
-  return renderHook(() => useQueuedBountyInterest('bounty-1', { alreadyInterested, register }), { wrapper });
+type Viewer = { ready?: boolean; alreadyInterested?: boolean; eligible?: boolean };
+
+function renderInterest(register: () => Promise<boolean>, viewer: Viewer = {}) {
+  return renderHook(
+    (props: Viewer) =>
+      useQueuedBountyInterest('bounty-1', {
+        ready: props.ready ?? true,
+        alreadyInterested: props.alreadyInterested ?? false,
+        eligible: props.eligible ?? true,
+        register,
+      }),
+    { wrapper, initialProps: viewer }
+  );
 }
 
 afterEach(cleanup);
@@ -47,7 +58,7 @@ describe('useQueuedBountyInterest', () => {
   // A returning viewer who already applied signed in to press it again: nothing new to publish.
   it('publishes nothing for a viewer who is already interested', async () => {
     const register = vi.fn().mockResolvedValue(true);
-    const { result } = renderInterest(register, true);
+    const { result } = renderInterest(register, { alreadyInterested: true });
 
     act(() => result.current.queue());
     await queued()[0]!.run();
@@ -80,6 +91,34 @@ describe('useQueuedBountyInterest', () => {
     await running;
 
     expect(register).toHaveBeenCalledOnce();
+  });
+
+  // Right after sign-in the viewer's interest is still loading and reads as "not interested". The
+  // replay waits for the answer — here, that they had applied already — instead of publishing.
+  it('waits for the viewer’s interest to load before deciding', async () => {
+    const register = vi.fn().mockResolvedValue(true);
+    const view = renderInterest(register, { ready: false });
+
+    act(() => view.result.current.queue());
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+    expect(register).not.toHaveBeenCalled();
+
+    view.rerender({ ready: true, alreadyInterested: true });
+    await running;
+
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  // Sign-up can take minutes; a bounty that ended or filled meanwhile is not applied to.
+  it('drops the interest without publishing once the bounty no longer takes it', async () => {
+    const register = vi.fn().mockResolvedValue(true);
+    const { result } = renderInterest(register, { eligible: false });
+
+    act(() => result.current.queue());
+    await queued()[0]!.run();
+
+    expect(register).not.toHaveBeenCalled();
   });
 
   it('withdraws the interest on cancel', () => {

@@ -1032,6 +1032,44 @@ describe('while a new account is still being set up', () => {
   });
 });
 
+/**
+ * The replay decides whether the viewer already holds the side from the card's own answer, and right
+ * after sign-in that answer is still loading — its default reads "holds nothing". It waits.
+ */
+describe('replaying a queued side', () => {
+  it('waits until the viewer’s own side is known, then skips a side they already hold', async () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    const card = (answersReady: boolean, viewerHolds: boolean) => (
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness({
+          viewer_response: viewerHolds
+            ? ({ position: true, position_label: 'Agree' } as MatchmakingReadiness['viewer_response'])
+            : null,
+        })}
+        answersReady={answersReady}
+      />
+    );
+    const view = renderCard(card(false, false));
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+
+    view.rerender(
+      <JotaiProvider store={queueStore}>
+        <QueryClientProvider client={new QueryClient()}>{card(true, true)}</QueryClientProvider>
+      </JotaiProvider>
+    );
+    await act(() => running);
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+});
+
 describe('MatchmakingClaimCard', () => {
   it('attributes response events to the claim text as well as its id', () => {
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);

@@ -13,6 +13,7 @@ import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
@@ -36,6 +37,7 @@ import {
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -152,28 +154,12 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-
-  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
-  // once the space exists (see pending-actions). The queued side is drawn from the queue, not held
-  // here, so it survives this control remounting while the viewer signs up; once the write starts
-  // the mutation's own optimistic state takes over.
-  //
-  // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
-  // the personal space, and keys the in-flight state this control draws by it.
-  const queuedVote = useQueuedAction({
-    id: `entity-vote:${entityId}:${spaceId}`,
-    component: 'entity_vote_buttons',
-    label: 'your vote',
-    run: intent => {
-      const direction = intent === 'negative' ? 'negative' : 'positive';
-      // A returning viewer who already held this side: nothing to publish.
-      if (serverResponseDirection === direction) return;
-      return submitResponseAsync(direction).then(() => {});
-    },
-  });
-  const queuedResponse: ActiveResponseDirection | undefined =
-    queuedVote.intent === 'positive' || queuedVote.intent === 'negative' ? queuedVote.intent : undefined;
-  const queueVoteWrite = (direction: ActiveResponseDirection) => queuedVote.queue(direction);
+  // Signed in without a usable space, a vote is held only when one is on its way: being created for
+  // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
+  // and drawing it as cast would be a vote that silently never lands.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
+  const spaceOnTheWay = isAccountSetupPending || isPersonalSpaceLoading;
 
   // Queued at the press (below), not on completion: the completion callback belongs to this
   // control, which can unmount mid-sign-up and take the vote with it.
@@ -187,7 +173,7 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
-  const { data: serverResponseDirection } = useQuery({
+  const { data: serverResponseDirection, isSuccess: hasServerResponseAnswered } = useQuery({
     queryKey: userEntityResponseQueryKey(
       personalSpaceId,
       entityId,
@@ -204,6 +190,31 @@ export function EntityVoteButtons({
     enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
+
+  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
+  // once the space exists (see pending-actions). The queued side is drawn from the queue, not held
+  // here, so it survives this control remounting while the viewer signs up; once the write starts
+  // the mutation's own optimistic state takes over.
+  //
+  // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
+  // the personal space, and keys the in-flight state this control draws by it.
+  const queuedVote = useQueuedAction({
+    id: `entity-vote:${entityId}:${spaceId}`,
+    component: 'entity_vote_buttons',
+    label: 'your vote',
+    // Held until the viewer's own side is known: right after sign-in it is still loading, and its
+    // empty default would read as "holds nothing" — publishing a side they already hold.
+    ready: Boolean(personalSpaceId) && (responseBatch.managed ? responseBatch.ready : hasServerResponseAnswered),
+    run: intent => {
+      const direction = intent === 'negative' ? 'negative' : 'positive';
+      // A returning viewer who already held this side: nothing to publish.
+      if (serverResponseDirection === direction) return;
+      return submitResponseAsync(direction).then(() => {});
+    },
+  });
+  const queuedResponse: ActiveResponseDirection | undefined =
+    queuedVote.intent === 'positive' || queuedVote.intent === 'negative' ? queuedVote.intent : undefined;
+  const queueVoteWrite = (direction: ActiveResponseDirection) => queuedVote.queue(direction);
 
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
@@ -237,7 +248,7 @@ export function EntityVoteButtons({
       openPrivySignIn(direction);
       return;
     }
-    queueVoteWrite(direction);
+    if (spaceOnTheWay) queueVoteWrite(direction);
   }
 
   function handlePositiveResponse() {
@@ -263,16 +274,19 @@ export function EntityVoteButtons({
   // Never block the buttons: when the personal space isn't ready the click queues the vote
   // instead of writing it, so the user is never stopped from acting while it's being created.
   const responseDisabled = false;
+  const signedInTitle = spaceOnTheWay
+    ? 'Vote now — saved until your account is ready'
+    : 'Finish setting up your account to vote';
   const positiveTitle = !isConnected
     ? smartAccount
-      ? 'Vote now — saved until your account is ready'
+      ? signedInTitle
       : responseCopy.signIn
     : positiveActive
       ? responseCopy.removePositive
       : responseCopy.positiveAction;
   const negativeTitle = !isConnected
     ? smartAccount
-      ? 'Vote now — saved until your account is ready'
+      ? signedInTitle
       : responseCopy.signIn
     : negativeActive
       ? responseCopy.removeNegative

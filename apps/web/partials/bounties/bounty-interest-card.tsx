@@ -55,7 +55,9 @@ export function BountyInterestCard({ detail, roles }: Props) {
   });
   // Pressed before the account could publish it: queued, and drawn as applied, until it can.
   const queuedInterest = useQueuedBountyInterest(detail.bounty.id, {
+    ready: !roles.isLoading && Boolean(roles.personalSpaceId),
     alreadyInterested: roles.isInterested || roles.isAllocated,
+    eligible: state === 'can-apply',
     register: actions.expressInterest,
   });
   const queueInterest = () => {

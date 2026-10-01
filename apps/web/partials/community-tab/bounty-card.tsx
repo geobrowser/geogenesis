@@ -246,6 +246,7 @@ function InterestButton({
   isPending,
   isInterestLoading,
   canRegisterInterest,
+  canApply,
   onClick,
 }: {
   isInterested: boolean;
@@ -253,6 +254,8 @@ function InterestButton({
   /** Interest state is still unknown; every bounty reads as un-registered until it settles. */
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
+  /** Whether the bounty still takes interest (it may have ended or filled since the press). */
+  canApply: boolean;
   /** Registers interest; resolves whether it was recorded. */
   onClick: () => Promise<boolean>;
   bountyId: string;
@@ -270,7 +273,13 @@ function InterestButton({
   });
   // Pressed before the account could publish it — signed out, or the personal space still being
   // made — queued, and drawn as registered, until it can.
-  const queuedInterest = useQueuedBountyInterest(bountyId, { alreadyInterested: isInterested, register: onClick });
+  const queuedInterest = useQueuedBountyInterest(bountyId, {
+    // The interest query only runs once the space is known, so both have to have answered.
+    ready: canRegisterInterest && !isInterestLoading,
+    alreadyInterested: isInterested,
+    eligible: canApply,
+    register: onClick,
+  });
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
   // Without a space, queued only while one is being made — with no setup under way, nothing would
@@ -343,6 +352,7 @@ export function AvailableBountyCard({
             isPending={isPending}
             isInterestLoading={isInterestLoading}
             canRegisterInterest={canRegisterInterest}
+            canApply={availableBountyCta(bounty) === 'apply'}
             onClick={() => onRegisterInterest(bounty)}
           />
         ) : (

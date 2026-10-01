@@ -184,7 +184,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const isVoting = useVoteInFlight(debateEntityId);
   const { profile } = useGeoProfile(smartAccount?.account.address);
 
-  const { data: votes } = useQuery({
+  const { data: votes, isSuccess: haveVotesAnswered } = useQuery({
     queryKey: votesQueryKey(debateEntityId),
     queryFn: ({ signal }) => fetchDebateVotes(debateEntityId, signal),
   });
@@ -220,6 +220,8 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     id: `debate-winner-vote:${debateEntityId}`,
     component: 'winner_vote_button',
     label: 'your winner vote',
+    // Held until the viewer's existing vote is known, which a switch needs and a repeat skips.
+    ready: haveVotesAnswered && personalSpaceId !== null,
     run: intent => {
       const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
       if (!participant) throw new Error('The debater you picked is no longer in this debate.');
