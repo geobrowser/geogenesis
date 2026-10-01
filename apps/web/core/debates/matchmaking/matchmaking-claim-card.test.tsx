@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   submitResponseAsync: vi.fn(),
   isConnected: true,
   enqueuePendingAction: vi.fn(),
+  dequeuePendingAction: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -179,6 +180,7 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 
 vi.mock('~/core/state/pending-actions', () => ({
   useEnqueuePendingAction: () => mocks.enqueuePendingAction,
+  useDequeuePendingAction: () => mocks.dequeuePendingAction,
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -257,6 +259,7 @@ beforeEach(() => {
   mocks.submitResponseAsync.mockResolvedValue(undefined);
   mocks.isConnected = true;
   mocks.enqueuePendingAction.mockReset();
+  mocks.dequeuePendingAction.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
@@ -899,7 +902,9 @@ describe('faces borrowed from the match', () => {
 describe('a side picked before the account can publish', () => {
   const signedOut = readiness({ viewer_response: null });
 
-  it('carries the side through sign-in and queues it for the new personal space', () => {
+  // Queued at the press, not on the sign-in's completion: that callback lives in this card, and the
+  // feed can remount the card mid-sign-up, taking the vote with it.
+  it('queues the side at the press, for the new personal space', () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
     renderCard(
@@ -914,13 +919,7 @@ describe('a side picked before the account can publish', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
     expect(onRequireSignIn).toHaveBeenCalledOnce();
-    const [properties, options] = onRequireSignIn.mock.calls[0];
-    expect(properties).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
-    // Nothing is queued for a sign-in the visitor might still dismiss.
-    expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
-
-    act(() => options.onComplete());
-
+    expect(onRequireSignIn.mock.calls[0][0]).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
     expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
     const action = mocks.enqueuePendingAction.mock.calls[0][0];
     expect(action).toMatchObject({ requires: 'personalSpace' });
@@ -930,7 +929,26 @@ describe('a side picked before the account can publish', () => {
     expect(mocks.submitResponseAsync).toHaveBeenCalledWith('negative');
   });
 
-  it('holds the picked side on screen while it waits', () => {
+  it('survives the card unmounting before sign-up finishes', () => {
+    mocks.isConnected = false;
+    const onRequireSignIn = vi.fn();
+    const { unmount } = renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={signedOut}
+        onRequireSignIn={onRequireSignIn}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    unmount();
+
+    void mocks.enqueuePendingAction.mock.calls[0][0].run();
+    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
+  });
+
+  it('withdraws the side when the sign-in is abandoned', () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
     renderCard(
@@ -943,11 +961,11 @@ describe('a side picked before the account can publish', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
-    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
-    act(() => onRequireSignIn.mock.calls[0][1].onComplete());
-
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'false');
+    act(() => onRequireSignIn.mock.calls[0][1].onCancel());
+
+    expect(mocks.dequeuePendingAction).toHaveBeenCalledWith(mocks.enqueuePendingAction.mock.calls[0][0].id);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('queues straight away for a signed-in account whose space is still being made', () => {

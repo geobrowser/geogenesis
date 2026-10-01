@@ -29,11 +29,11 @@ type UsePrivySignInOptions = {
 /** Per-press options, for a caller whose continuation depends on what was pressed. */
 export type PrivySignInCallOptions = {
   /**
-   * Runs once this press's sign-in completes, alongside the hook-level `onComplete`. A control that
-   * queues the viewer's action — which side of a claim they picked, say — passes it here, because
-   * that choice is only known at the press.
+   * Runs if this press's sign-in is abandoned (the modal dismissed), alongside the hook-level
+   * `onError`. A control that queued the viewer's action at the press — which side of a claim they
+   * picked, say — withdraws it here, so a sign-in they walked away from does not publish it later.
    */
-  onComplete?: () => void;
+  onCancel?: () => void;
 };
 
 export type PrivySignIn = (
@@ -63,29 +63,28 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
-  // Only the latest press's continuation. A new press replaces it and a dismissal drops it, so an
-  // abandoned sign-in never runs a choice made before it.
-  const callOnCompleteRef = React.useRef<(() => void) | undefined>(undefined);
+  // Only the latest press's. A new press replaces it, and a completion disarms it.
+  const callOnCancelRef = React.useRef<(() => void) | undefined>(undefined);
 
   // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
     onComplete: () => {
-      const callOnComplete = callOnCompleteRef.current;
-      callOnCompleteRef.current = undefined;
+      callOnCancelRef.current = undefined;
       onCompleteRef.current?.();
-      callOnComplete?.();
     },
     onError: error => {
       // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
       if (error !== 'exited_auth_flow') return;
-      callOnCompleteRef.current = undefined;
+      const callOnCancel = callOnCancelRef.current;
+      callOnCancelRef.current = undefined;
       optionsRef.current?.onError?.();
+      callOnCancel?.();
     },
   });
 
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
-      callOnCompleteRef.current = callOptions?.onComplete;
+      callOnCancelRef.current = callOptions?.onCancel;
       prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
       return login(

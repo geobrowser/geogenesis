@@ -35,7 +35,7 @@ import {
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDequeuePendingAction, useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -56,7 +56,7 @@ import type {
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 
-/** A signed-out press's sign-in prompt. `onComplete` carries the press through to the new account. */
+/** A signed-out press's sign-in prompt. `onCancel` withdraws the press if the sign-in is abandoned. */
 export type RequireSignIn = (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) => void;
 
 type Props = {
@@ -446,6 +446,7 @@ export function useClaimPositionControl({
   const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
   const queryClient = useQueryClient();
   const enqueuePendingAction = useEnqueuePendingAction('claim_position_control');
+  const dequeuePendingAction = useDequeuePendingAction();
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -541,10 +542,17 @@ export function useClaimPositionControl({
   // Replayed by `PendingActionsRunner` once the personal space exists. A new account has none until
   // well after sign-in completes — onboarding, then the space's own creation — so publishing at the
   // press, or asking the visitor to press again, loses the side they picked.
+  //
+  // Queued at the press, the way a deferred join records its intent, rather than from the sign-in's
+  // completion callback. That callback belongs to this card, and the feed can remount the card
+  // while the visitor is signing up — the For you feed refetches once their follows load, and
+  // onboarding navigates back to the page when it is done — taking the callback, and the vote,
+  // with it. The queue and its runner are app-level and outlive the card.
+  const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
   const queuePosition = (position: boolean) => {
     setQueuedPosition(position);
     enqueuePendingAction({
-      id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
+      id: queuedActionId,
       label: 'your position',
       requires: 'personalSpace',
       run: () => submitResponseAsync(position ? 'positive' : 'negative').then(() => {}),
@@ -560,14 +568,22 @@ export function useClaimPositionControl({
         queuePosition(position);
         return;
       }
-      onRequireSignIn?.(
+      // A host with no sign-in prompt leaves the pills disabled, so there is nothing to queue for.
+      if (!onRequireSignIn) return;
+      queuePosition(position);
+      onRequireSignIn(
         {
           ...getSignInContext(),
           auth_control: position ? 'agree' : 'disagree',
           auth_intent: 'vote',
           auth_continuation: 'queued',
         },
-        { onComplete: () => queuePosition(position) }
+        {
+          onCancel: () => {
+            setQueuedPosition(null);
+            dequeuePendingAction(queuedActionId);
+          },
+        }
       );
       return;
     }

@@ -21,6 +21,12 @@ export type PendingAction = {
 
 export const pendingActionsAtom = atom<PendingAction[]>([]);
 
+/** Drop a queued action that will no longer be wanted — its sign-in was abandoned, say. */
+export function useDequeuePendingAction() {
+  const setActions = useSetAtom(pendingActionsAtom);
+  return useCallback((id: string) => setActions(prev => prev.filter(a => a.id !== id)), [setActions]);
+}
+
 /** Enqueue an action to run once the account is ready. */
 export function useEnqueuePendingAction(component: ActionComponent = 'entity_vote_buttons') {
   const setActions = useSetAtom(pendingActionsAtom);

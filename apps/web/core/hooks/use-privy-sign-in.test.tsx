@@ -161,28 +161,30 @@ describe('usePrivySignIn', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
-  // The press's own continuation — which side of a claim was picked — rides the same attempt.
-  it("runs a press's own continuation when its sign-in completes", () => {
-    const onPress = vi.fn();
+  // A control that queued the viewer's choice at the press withdraws it if they walk away.
+  it("runs a press's own cancel when its sign-in is dismissed", () => {
+    const onCancel = vi.fn();
     const { result } = renderHook(() => usePrivySignIn());
 
-    act(() => result.current(undefined, { onComplete: onPress }));
-    expect(onPress).not.toHaveBeenCalled();
+    act(() => result.current(undefined, { onCancel }));
+    act(() => mocks.privyOnError?.('invalid_credentials'));
+    expect(onCancel).not.toHaveBeenCalled();
 
-    act(() => mocks.privyOnComplete?.({}));
-    expect(onPress).toHaveBeenCalledOnce();
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
-  it("drops a dismissed press's continuation, and a later press replaces an earlier one", () => {
+  it('does not cancel a press whose sign-in completed, or one a later press replaced', () => {
     const first = vi.fn();
     const second = vi.fn();
     const { result } = renderHook(() => usePrivySignIn());
 
-    act(() => result.current(undefined, { onComplete: first }));
-    act(() => mocks.privyOnError?.('exited_auth_flow'));
-    act(() => result.current(undefined, { onComplete: second }));
-    act(() => result.current());
+    act(() => result.current(undefined, { onCancel: first }));
     act(() => mocks.privyOnComplete?.({}));
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => result.current(undefined, { onCancel: second }));
+    act(() => result.current());
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
 
     expect(first).not.toHaveBeenCalled();
     expect(second).not.toHaveBeenCalled();
