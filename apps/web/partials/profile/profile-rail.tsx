@@ -666,6 +666,21 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
   );
 }
 
+function FollowingSkeleton() {
+  return (
+    <Row label="Following">
+      <span className="inline-flex items-center gap-2" aria-hidden>
+        <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
+        <span className="inline-flex">
+          <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        </span>
+      </span>
+    </Row>
+  );
+}
+
 export function Following({ spaceId }: { spaceId: string }) {
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
@@ -685,10 +700,11 @@ export function Following({ spaceId }: { spaceId: string }) {
   }, [rows]);
 
   const topicIds = React.useMemo(() => topics.map(topic => topic.topicId), [topics]);
-  const { metadata } = useTopicMetadata(topicIds);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
   const { unfollow, isPending } = useFollowTopics();
 
-  if (isLoading || topics.length === 0) return null;
+  if (!isLoading && topics.length === 0) return null;
+  if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
 
   const metaFor = (topicId: string) => metadata.get(normId(topicId));
   const nameFor = (topicId: string) => metaFor(topicId)?.name ?? 'Untitled';
