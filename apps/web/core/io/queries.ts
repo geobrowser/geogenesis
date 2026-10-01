@@ -39,11 +39,16 @@ import {
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import {
+  type ClaimResponseSummariesConnectionQuery,
+  claimResponseSummariesConnectionDocument,
+} from './claim-response-summaries-connection-document';
 import { debateTranscriptClaimsDocument, debateTranscriptClaimsVariables } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -57,7 +62,6 @@ import { promoteEntityIds } from './entity-id-filter';
 import { collapseOrFilter } from './filter-or-collapse';
 import { graphql } from './graphql-client';
 import {
-  claimResponseSummariesQuery,
   entitiesBatchQuery,
   entitiesPageQuery,
   entityBacklinksQuery,
@@ -597,7 +601,7 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
   });
 }
 
-const BACKLINKS_PAGE_SIZE = 1000;
+const BACKLINKS_PAGE_SIZE = 500;
 const COMMENT_ENTITIES_PAGE_SIZE = 1000;
 
 /**
@@ -621,32 +625,6 @@ function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortContr
       data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } } },
     signal,
-  });
-}
-
-/**
- * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
- * `id` is typed loosely because codegen maps the UUID scalar to `any`.
- */
-function collectBacklinkSourceIds<E>(
-  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
-) {
-  return Effect.gen(function* () {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-
-    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
-      const page = yield* fetchPage(offset);
-
-      for (const row of page) {
-        const id = row?.fromEntity?.id;
-        if (typeof id !== 'string' || seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
-      }
-
-      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
-    }
   });
 }
 
@@ -726,21 +704,37 @@ export function getCommentEntitiesViaReplyRelations(targetEntityId: string, sign
  */
 export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* collectBacklinkSourceIds(offset =>
-      graphql({
-        query: debateVoteBacklinksPageDocument,
-        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-        variables: {
-          id: debateEntityId,
-          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
-          voteTypeId: VOTE_TYPE_ID,
-          first: BACKLINKS_PAGE_SIZE,
-          offset,
-        },
-        signal,
-      })
+    const nodes = yield* Effect.tryPromise(() =>
+      collectCursorPages(after =>
+        Effect.runPromise(
+          graphql({
+            query: debateVoteBacklinksPageDocument,
+            decoder: (data: DebateVoteBacklinksPageQuery): CursorPage<{ fromEntity: { id: string } | null }> => {
+              const connection = data.entity?.backlinks;
+              if (!connection) throw new Error('Debate vote backlinks connection missing');
+              return {
+                items: connection.nodes.filter((node): node is { fromEntity: { id: string } | null } => node !== null),
+                endCursor: connection.pageInfo.endCursor,
+                hasNextPage: connection.pageInfo.hasNextPage,
+              };
+            },
+            variables: {
+              id: debateEntityId,
+              votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+              voteTypeId: VOTE_TYPE_ID,
+              first: BACKLINKS_PAGE_SIZE,
+              after,
+            },
+            signal,
+          })
+        )
+      )
     );
 
+    // A vote entity could carry more than one "Debates" relation to the same debate; dedupe by id.
+    const ids = [
+      ...new Set(nodes.flatMap(node => (typeof node.fromEntity?.id === 'string' ? [node.fromEntity.id] : []))),
+    ];
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForDebateVotes(ids, signal);
   });
@@ -1543,19 +1537,32 @@ export type ClaimResponseSummaryRow = {
 export function getClaimResponseSummaryPage(
   filter: UserVoteFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: claimResponseSummariesQuery,
-    decoder: data =>
-      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
-        userId: String(vote.userId),
-        objectId: String(vote.objectId),
-        voteType: vote.voteType,
-        voteKind: vote.voteKind,
-      })),
-    variables: { filter, first, offset },
+    query: claimResponseSummariesConnectionDocument,
+    decoder: (data: ClaimResponseSummariesConnectionQuery): CursorPage<ClaimResponseSummaryRow> => {
+      const connection = data.userVotesConnection;
+      if (!connection) throw new Error('Claim response summaries connection missing');
+      return {
+        items: connection.nodes.flatMap((vote): ClaimResponseSummaryRow[] =>
+          vote
+            ? [
+                {
+                  userId: String(vote.userId),
+                  objectId: String(vote.objectId),
+                  voteType: vote.voteType,
+                  voteKind: vote.voteKind,
+                },
+              ]
+            : []
+        ),
+        endCursor: connection.pageInfo.endCursor,
+        hasNextPage: connection.pageInfo.hasNextPage,
+      };
+    },
+    variables: { filter, first, after },
     signal,
   });
 }
