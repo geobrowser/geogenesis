@@ -9,6 +9,7 @@ import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-interest';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { uuidToHex } from '~/core/id/normalize';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -53,20 +54,25 @@ export function BountyInterestCard({ detail, roles }: Props) {
     },
   });
   // Pressed before the account could publish it: queued, and drawn as applied, until it can.
-  const queuedInterest = useQueuedBountyInterest(detail.bounty.id, actions.expressInterest);
+  const queuedInterest = useQueuedBountyInterest(detail.bounty.id, {
+    alreadyInterested: roles.isInterested || roles.isAllocated,
+    register: actions.expressInterest,
+  });
   const queueInterest = () => {
     queuedInterest.queue();
     // A dismissed sign-in withdraws it, so walking away never registers interest later.
     if (state === 'signed-out') openPrivySignIn(undefined, { onCancel: queuedInterest.cancel });
   };
-  const canQueue = state === 'signed-out' || state === 'no-personal-space';
+  // Without a space, only while one is being made — with no setup under way, nothing would publish it.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const canQueue = state === 'signed-out' || (state === 'no-personal-space' && isAccountSetupPending);
   const showQueued = queuedInterest.queued && canQueue;
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },
     'no-personal-space': {
       title: 'Want to take on this bounty?',
-      body: 'Express interest and an editor can allocate you once your account is ready.',
+      body: 'Finish setting up your personal space, then come back to apply.',
     },
     ended: { title: 'This bounty has ended', body: 'The submission deadline has passed.' },
     allocated: { title: 'Bounty assigned to you', body: 'Submit proposals in this space and link them to the bounty.' },

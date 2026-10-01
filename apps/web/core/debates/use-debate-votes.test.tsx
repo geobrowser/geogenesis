@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   queuedIntent: undefined as string | undefined,
   /** Null while the personal space is still being created. */
   personalSpaceId: null as string | null,
+  /** A new account whose personal space is being created in the background. */
+  accountSetupPending: false,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -104,11 +106,27 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   }),
 }));
 
+// The queue as the hook drives it: what it queues (and how that replays), what it withdraws, and the
+// intent it draws from.
 vi.mock('~/core/state/pending-actions', () => ({
-  useEnqueuePendingAction: () => mocks.enqueuePendingAction,
-  useDequeuePendingAction: () => mocks.dequeuePendingAction,
-  useLivePendingActionHandler: () => {},
-  usePendingActionIntent: () => mocks.queuedIntent,
+  useQueuedAction: ({
+    id,
+    requires = 'personalSpace',
+    run,
+  }: {
+    id: string;
+    requires?: string;
+    run: (intent: string | undefined) => Promise<void> | void;
+  }) => ({
+    intent: mocks.queuedIntent,
+    isQueued: mocks.queuedIntent !== undefined,
+    queue: (intent: string) => mocks.enqueuePendingAction({ id, requires, intent, run: () => run(intent) }),
+    cancel: () => mocks.dequeuePendingAction(id),
+  }),
+}));
+
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -205,6 +223,7 @@ beforeEach(() => {
   mocks.dequeuePendingAction.mockClear();
   mocks.queuedIntent = undefined;
   mocks.personalSpaceId = VOTER_SPACE;
+  mocks.accountSetupPending = false;
   mocks.voteEntities = [];
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
@@ -290,6 +309,7 @@ describe('useDebateVotes castVote', () => {
 
   it('queues a pick made while the personal space is still being created', async () => {
     mocks.personalSpaceId = null;
+    mocks.accountSetupPending = true;
     const view = await renderVotes();
 
     await act(async () => {
@@ -302,6 +322,28 @@ describe('useDebateVotes castVote', () => {
       requires: 'personalSpace',
       intent: ALICE_SPACE,
     });
+  });
+
+  // Signed in with no space and no setup under way: nothing would ever publish a queued pick.
+  it('says what is missing, rather than queuing, for an account with no space being made', async () => {
+    mocks.personalSpaceId = null;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
+  });
+
+  // The runner keeps a replay that throws and offers a retry; a quiet return would drop the pick.
+  it('fails a replay whose publish fails, so the runner keeps it queued', async () => {
+    mocks.prepareFails = true;
+    const view = await renderVotes();
+
+    await expect(view.result.current.castVote(ALICE, { fromQueue: true })).rejects.toThrow();
+    expect(mocks.reportError).not.toHaveBeenCalled();
   });
 
   it('draws a queued pick as the viewer’s, before it is published', async () => {

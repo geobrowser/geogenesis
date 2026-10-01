@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
@@ -21,12 +22,6 @@ function fitCommentTextarea(textarea: HTMLTextAreaElement) {
   textarea.style.height = `${Math.min(contentHeight, MAX_COMMENT_HEIGHT_PX)}px`;
   textarea.style.overflowY = contentHeight > MAX_COMMENT_HEIGHT_PX ? 'auto' : 'hidden';
   return contentHeight > singleLineHeight;
-}
-
-/** Whether the primary input is a mouse rather than a finger. Fine where it can't be asked. */
-function isPointerFine() {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
-  return !window.matchMedia('(hover: none), (pointer: coarse)').matches;
 }
 
 /**
@@ -88,7 +83,7 @@ export function ClaimPositionCommentControl({
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   // Focused for a mouse and keyboard, where it saves a click. On a touch screen focusing raises the
   // on-screen keyboard over the claim the viewer just answered, for an explanation that is optional.
-  const [focusComposerOnOpen] = React.useState(isPointerFine);
+  const focusComposerOnOpen = !useMediaQuery('(hover: none), (pointer: coarse)');
   const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
     targetEntityType: 'claim',
     interactionSurface: 'claim_position_explanation',

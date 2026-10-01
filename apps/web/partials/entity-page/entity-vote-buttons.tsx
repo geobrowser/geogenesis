@@ -13,9 +13,8 @@ import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
-import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -36,12 +35,7 @@ import {
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import {
-  useDequeuePendingAction,
-  useEnqueuePendingAction,
-  useLivePendingActionHandler,
-  usePendingActionIntent,
-} from '~/core/state/pending-actions';
+import { useQueuedAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -106,7 +100,6 @@ export function EntityVoteButtons({
   compact = false,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
-  const prepareOnboarding = usePrepareOnboarding();
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -159,41 +152,32 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const enqueuePendingAction = useEnqueuePendingAction();
 
   // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
   // once the space exists (see pending-actions). The queued side is drawn from the queue, not held
   // here, so it survives this control remounting while the viewer signs up; once the write starts
   // the mutation's own optimistic state takes over.
-  const voteActionId = `entity-vote:${entityId}:${spaceId}`;
-  const queuedIntent = usePendingActionIntent(voteActionId);
-  const queuedResponse: ActiveResponseDirection | undefined =
-    queuedIntent === 'positive' || queuedIntent === 'negative' ? queuedIntent : undefined;
-  const dequeuePendingAction = useDequeuePendingAction();
-  // Replayed through whichever control is mounted now: its response hook knows the personal space,
-  // and keys the in-flight state this control draws by it. The press's closure predates the space.
-  useLivePendingActionHandler(voteActionId, intent =>
-    submitResponseAsync(intent === 'negative' ? 'negative' : 'positive').then(() => {})
-  );
-
-  function queueVoteWrite(direction: ActiveResponseDirection) {
-    enqueuePendingAction({
-      id: voteActionId,
-      label: 'your vote',
-      requires: 'personalSpace',
-      intent: direction,
-      run: () => submitResponseAsync(direction).then(() => {}),
-    });
-  }
-
-  // Queued at the press (below), not on completion: the completion callback belongs to this
-  // control, which can unmount mid-sign-up and take the vote with it. A dismissed sign-in withdraws
-  // it, so a sign-in the viewer walked away from never publishes a vote later.
-  const { login } = useTrackedLogin({
-    onError: error => {
-      if (error === 'exited_auth_flow') dequeuePendingAction(voteActionId);
+  //
+  // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
+  // the personal space, and keys the in-flight state this control draws by it.
+  const queuedVote = useQueuedAction({
+    id: `entity-vote:${entityId}:${spaceId}`,
+    component: 'entity_vote_buttons',
+    label: 'your vote',
+    run: intent => {
+      const direction = intent === 'negative' ? 'negative' : 'positive';
+      // A returning viewer who already held this side: nothing to publish.
+      if (serverResponseDirection === direction) return;
+      return submitResponseAsync(direction).then(() => {});
     },
   });
+  const queuedResponse: ActiveResponseDirection | undefined =
+    queuedVote.intent === 'positive' || queuedVote.intent === 'negative' ? queuedVote.intent : undefined;
+  const queueVoteWrite = (direction: ActiveResponseDirection) => queuedVote.queue(direction);
+
+  // Queued at the press (below), not on completion: the completion callback belongs to this
+  // control, which can unmount mid-sign-up and take the vote with it.
+  const promptSignIn = usePrivySignIn();
 
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
@@ -234,15 +218,17 @@ export function EntityVoteButtons({
   const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
   function openPrivySignIn(direction: ActiveResponseDirection) {
-    // Stay on this page after onboarding instead of bouncing to the explore page.
-    prepareOnboarding();
     const context = getContext();
-    const attempt = login({
-      ...context,
-      auth_control: `${responseKind}_${direction}`,
-      auth_intent: 'vote',
-      auth_continuation: 'queued',
-    });
+    const attempt = promptSignIn(
+      {
+        ...context,
+        auth_control: `${responseKind}_${direction}`,
+        auth_intent: 'vote',
+        auth_continuation: 'queued',
+      },
+      // A dismissed sign-in withdraws the vote, so walking away never publishes it later.
+      { onCancel: queuedVote.cancel }
+    );
     withActionContext({ ...context, auth_attempt_id: attempt?.id }, () => queueVoteWrite(direction));
   }
 

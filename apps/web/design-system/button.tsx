@@ -42,9 +42,9 @@ export const PILL_BUTTON_SECONDARY_CLASS_NAME = PILL_BUTTON_SHAPE;
 export const DIALOG_ACTION_BUTTON_CLASS_NAME =
   'flex h-7 md:h-11 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50';
 
-/** The outlined counterpart to `DIALOG_ACTION_BUTTON_CLASS_NAME`: Decline, Skip. */
+/** The outlined counterpart to `DIALOG_ACTION_BUTTON_CLASS_NAME`: Decline, Not now, Skip. */
 export const DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME =
-  'flex h-7 md:h-11 w-full items-center justify-center rounded-full border border-grey-02 px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50';
+  'flex h-7 md:h-11 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50';
 
 /**
  * The button's classes on their own, for a link that should look like one. A

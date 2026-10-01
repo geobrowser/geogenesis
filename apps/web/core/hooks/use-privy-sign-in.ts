@@ -34,9 +34,11 @@ export type PrivySignInCallOptions = {
    * picked, say — withdraws it here, so a sign-in they walked away from does not publish it later.
    */
   onCancel?: () => void;
+  /** Where this press returns to, for a caller whose destination depends on what was pressed. */
+  redirectTo?: string;
 };
 
-export type PrivySignIn = (
+type PrivySignIn = (
   properties?: AnalyticsProperties | React.SyntheticEvent,
   callOptions?: PrivySignInCallOptions
 ) => ReturnType<ReturnType<typeof useTrackedLogin>['login']>;
@@ -85,7 +87,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
       callOnCancelRef.current = callOptions?.onCancel;
-      prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
+      prepareOnboarding({ returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
       return login(
         {

@@ -1,9 +1,9 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
@@ -34,8 +34,11 @@ const queued = () => store.get(pendingActionsAtom);
 const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store={store}>{children}</JotaiProvider>;
 const renderJoin = () => renderHook(() => useJoinSpace({ spaceId: 'space-1' }), { wrapper });
 
+afterEach(cleanup);
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.requestToBeMemberAsync.mockResolvedValue(undefined);
   store = createStore();
   mocks.smartAccount = null;
   mocks.personalSpace = { personalSpaceId: null, isRegistered: false };

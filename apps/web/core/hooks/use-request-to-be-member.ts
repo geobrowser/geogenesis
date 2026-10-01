@@ -9,7 +9,7 @@ import { Effect, Either } from 'effect';
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useActionContext } from '~/core/action-context-provider';
-import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
+import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -47,11 +47,10 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
       throw new Error('No smart account available');
     }
 
-    const cachedSpace =
-      personalSpaceId && isRegistered
-        ? { personalSpaceId, isRegistered }
-        : readCachedPersonalSpace(queryClient, account.account.address);
-    const requesterSpaceId = cachedSpace.isRegistered ? cachedSpace.personalSpaceId : null;
+    const requesterSpaceId = readRegisteredPersonalSpaceId(queryClient, account.account.address, {
+      personalSpaceId,
+      isRegistered,
+    });
 
     if (!requesterSpaceId) {
       dispatch({

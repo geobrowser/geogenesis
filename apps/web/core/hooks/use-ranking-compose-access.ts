@@ -10,11 +10,10 @@ import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
-import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
@@ -30,13 +29,7 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const tx = useSmartAccountTransaction();
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
-  // A dismissed sign-in drops the destination, so a later, unrelated sign-in doesn't land on the
-  // compose screen.
-  const { login } = useTrackedLogin({
-    onError: error => {
-      if (error === 'exited_auth_flow') setPostOnboardingRedirect(null);
-    },
-  });
+  const promptSignIn = usePrivySignIn();
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
 
@@ -50,24 +43,29 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
     return 'ready';
   })();
 
-  const prepareOnboarding = usePrepareOnboarding();
-
   const promptLogin = useCallback(
     (postLoginRedirect?: string) => {
       // Into the app-level return address rather than anything this hook holds: the ranking block
       // that called it can unmount while the viewer signs up. `PostAuthRedirect` follows it for an
       // existing account, and onboarding does for a new one, once their profile is made.
-      prepareOnboarding({ returnTo: postLoginRedirect });
-      login({
-        component: 'ranking_composer',
-        target_type: rankingId ? 'ranking' : 'space',
-        target_id: rankingId ?? spaceId,
-        auth_control: 'add_ranking',
-        auth_intent: 'ranking',
-        auth_continuation: 'resume',
-      });
+      promptSignIn(
+        {
+          component: 'ranking_composer',
+          target_type: rankingId ? 'ranking' : 'space',
+          target_id: rankingId ?? spaceId,
+          auth_control: 'add_ranking',
+          auth_intent: 'ranking',
+          auth_continuation: 'resume',
+        },
+        {
+          redirectTo: postLoginRedirect,
+          // A dismissed sign-in drops the destination, so a later, unrelated sign-in doesn't land
+          // on the compose screen.
+          onCancel: () => setPostOnboardingRedirect(null),
+        }
+      );
     },
-    [prepareOnboarding, login, spaceId, rankingId]
+    [promptSignIn, setPostOnboardingRedirect, spaceId, rankingId]
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {

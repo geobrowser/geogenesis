@@ -751,14 +751,13 @@ export function useRankingBlockState({
           return;
         }
 
-        if (composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
-          setPostOnboardingRedirect(href);
-        }
-
         // Onboarding already done, the space still being created: straight to compose, which
         // queues the publish until the space exists. Reopening onboarding here put the viewer back
-        // on the profile step they had just finished.
+        // on the profile step they had just finished. The return address is only for the onboarding
+        // run below: left set on the way to compose, `PostAuthRedirect` would pull the viewer back
+        // there once the space registered, wherever they had gone since.
         if (composeAccessStatus === 'needs-onboarding' && !isAccountSetupPending) {
+          setPostOnboardingRedirect(href);
           showOnboarding();
           setStep('enter-profile');
           return;

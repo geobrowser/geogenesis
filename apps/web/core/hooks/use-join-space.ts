@@ -1,12 +1,10 @@
 'use client';
 
-import * as React from 'react';
-
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useDequeuePendingAction, useEnqueuePendingAction, usePendingActionIntent } from '~/core/state/pending-actions';
+import { useQueuedAction } from '~/core/state/pending-actions';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -41,20 +39,13 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       auth_continuation: 'queued',
     },
   });
-  const enqueuePendingAction = useEnqueuePendingAction('join_space_button');
-  const dequeuePendingAction = useDequeuePendingAction();
-  const joinActionId = `join:${spaceId}`;
-  const optimisticRequested = usePendingActionIntent(joinActionId) !== undefined;
-
-  const queueJoinRequest = React.useCallback(() => {
-    enqueuePendingAction({
-      id: joinActionId,
-      label: 'your membership request',
-      requires: 'personalSpace',
-      intent: 'join',
-      run: () => requestToBeMemberAsync(),
-    });
-  }, [enqueuePendingAction, joinActionId, requestToBeMemberAsync]);
+  const queuedJoin = useQueuedAction({
+    id: `join:${spaceId}`,
+    component: 'join_space_button',
+    label: 'your membership request',
+    run: () => requestToBeMemberAsync().then(() => {}),
+  });
+  const optimisticRequested = queuedJoin.isQueued;
 
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
 
@@ -64,11 +55,11 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       return;
     }
     if (!smartAccount) {
-      queueJoinRequest();
-      promptSignIn(undefined, { onCancel: () => dequeuePendingAction(joinActionId) });
+      queuedJoin.queue();
+      promptSignIn(undefined, { onCancel: queuedJoin.cancel });
       return;
     }
-    queueJoinRequest();
+    queuedJoin.queue();
   };
 
   return { join, status, optimisticRequested };

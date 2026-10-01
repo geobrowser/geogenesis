@@ -1,7 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -15,7 +13,6 @@ import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-po
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
-import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -36,12 +33,7 @@ import {
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import {
-  useDequeuePendingAction,
-  useEnqueuePendingAction,
-  useLivePendingActionHandler,
-  usePendingActionIntent,
-} from '~/core/state/pending-actions';
+import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -450,14 +442,12 @@ export function useClaimPositionControl({
     responseKind: CLAIM_RESPONSE_KIND,
   };
   const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
-  const queryClient = useQueryClient();
-  const enqueuePendingAction = useEnqueuePendingAction('claim_position_control');
-  const dequeuePendingAction = useDequeuePendingAction();
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so a press in that window is
   // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { authenticated } = useGeoChatAuth();
 
   const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
@@ -488,16 +478,23 @@ export function useClaimPositionControl({
   // the pill the visitor pressed reads as unpressed for the whole of onboarding. Read off the queue
   // rather than kept here: the feed remounts this card when it reloads after onboarding, and state
   // held in the card went with it.
-  const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
-  const queuedDirection = usePendingActionIntent(queuedActionId);
-  const queuedPosition = queuedDirection === undefined ? null : queuedDirection === 'positive';
-  // The replay goes through the card on screen. `useEntityResponse` keys its in-flight state — what
-  // holds the pill while the write confirms — by the viewer's personal space, which the press's
-  // closure predates; replayed from there it lands under a key no card reads, and the pill went
-  // blank the moment the queue let go of it.
-  useLivePendingActionHandler(queuedActionId, intent =>
-    submitResponseAsync(intent === 'positive' ? 'positive' : 'negative').then(() => {})
-  );
+  //
+  // Replayed through the card on screen when there is one (`useQueuedAction`): `useEntityResponse`
+  // keys its in-flight state — what holds the pill while the write confirms — by the viewer's
+  // personal space, which the press's closure predates.
+  const queuedPositionAction = useQueuedAction({
+    id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
+    component: 'claim_position_control',
+    label: 'your position',
+    run: intent => {
+      const direction = intent === 'positive' ? 'positive' : 'negative';
+      // A returning viewer who already held this side: nothing to publish. Sending it again would be
+      // a second response for one press, where pressing a held side signed in means "remove".
+      if (readiness.viewer_response?.position === (direction === 'positive')) return;
+      return submitResponseAsync(direction).then(() => {});
+    },
+  });
+  const queuedPosition = queuedPositionAction.intent === undefined ? null : queuedPositionAction.intent === 'positive';
   const viewerPosition = pendingResponse
     ? optimisticPosition
     : (queuedPosition ?? readiness.viewer_response?.position ?? null);
@@ -569,35 +566,28 @@ export function useClaimPositionControl({
   // well after sign-in completes — onboarding, then the space's own creation — so publishing at the
   // press, or asking the visitor to press again, loses the side they picked.
   //
-  // Queued at the press, the way a deferred join records its intent, rather than from the sign-in's
+  // Queued at the press, like every other sign-up-gated control, rather than from the sign-in's
   // completion callback. That callback belongs to this card, and the feed can remount the card
   // while the visitor is signing up — the For you feed refetches once their follows load, and
   // onboarding navigates back to the page when it is done — taking the callback, and the vote,
   // with it. The queue and its runner are app-level and outlive the card.
-  const queuePosition = (position: boolean) => {
-    const direction = position ? 'positive' : 'negative';
-    enqueuePendingAction({
-      id: queuedActionId,
-      label: 'your position',
-      requires: 'personalSpace',
-      intent: direction,
-      run: () => submitResponseAsync(direction).then(() => {}),
-    });
-  };
+  const queuePosition = (position: boolean) => queuedPositionAction.queue(position ? 'positive' : 'negative');
 
   const respond = (position: boolean) => {
     if (!isConnected) {
-      // Signed in, account still being set up: hold the side rather than prompting a sign-in that
-      // would do nothing. Read from the cache the navbar fills rather than `useSmartAccount`, which
-      // would make every host of this control provide wagmi.
-      if (isAccountSetupPending || readCachedSmartAccount(queryClient, null)) {
+      // A new account whose space is still being made: hold the side rather than prompting a sign-in
+      // that would do nothing. Only then — a signed-in viewer with no space and no setup under way
+      // has nothing coming that would ever publish it.
+      if (isAccountSetupPending) {
         // Pressing the side already queued takes it back, as pressing a held side does.
-        if (queuedPosition === position) dequeuePendingAction(queuedActionId);
+        if (queuedPosition === position) queuedPositionAction.cancel();
         else queuePosition(position);
         return;
       }
-      // A host with no sign-in prompt leaves the pills disabled, so there is nothing to queue for.
-      if (!onRequireSignIn) return;
+      // Signed in with no space and none being made: nothing would ever publish a queued side, and a
+      // sign-in prompt does nothing for someone already signed in. A host with no sign-in prompt
+      // leaves the pills disabled, so there is nothing to queue for either.
+      if (authenticated || !onRequireSignIn) return;
       queuePosition(position);
       onRequireSignIn(
         {
@@ -606,9 +596,7 @@ export function useClaimPositionControl({
           auth_intent: 'vote',
           auth_continuation: 'queued',
         },
-        {
-          onCancel: () => dequeuePendingAction(queuedActionId),
-        }
+        { onCancel: queuedPositionAction.cancel }
       );
       return;
     }

@@ -27,18 +27,14 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import {
-  useDequeuePendingAction,
-  useEnqueuePendingAction,
-  useLivePendingActionHandler,
-  usePendingActionIntent,
-} from '~/core/state/pending-actions';
+import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Entity, Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
-import { readCachedPersonalSpace, readCachedSmartAccount } from '../hooks/cached-write-identity';
+import { readCachedSmartAccount, readRegisteredPersonalSpaceId } from '../hooks/cached-write-identity';
 import { useGeoProfile } from '../hooks/use-geo-profile';
 import { usePersonalSpaceId } from '../hooks/use-personal-space-id';
 import { useSmartAccount } from '../hooks/use-smart-account';
@@ -170,15 +166,14 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
   const { ready: authReady, authenticated } = useGeoChatAuth();
-  const enqueuePendingAction = useEnqueuePendingAction('winner_vote_button');
-  const dequeuePendingAction = useDequeuePendingAction();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   // Lets the queued replay reach the current `castVote` without making the callback depend on
   // itself. The runner only fires it once a personal space exists, so the replay lands past the
   // branch that queued it.
   const castVoteRef = React.useRef<(participant: DebateParticipant, options?: CastVoteOptions) => Promise<void>>(
     async () => {}
   );
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -217,8 +212,21 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   // A pick made before the account could publish, read off the queue so it is still drawn after the
   // panel or card that took it remounts during sign-up. Once the write starts, the optimistic row it
   // puts in the votes cache takes over.
-  const queuedVoteId = `debate-winner-vote:${debateEntityId}`;
-  const queuedWinner = usePendingActionIntent(queuedVoteId);
+  //
+  // Replayed through the hook mounted now when there is one (`useQueuedAction`): its tally knows the
+  // viewer's existing vote, which the press's closure — taken signed out — could not, and a switch
+  // needs it.
+  const queuedVote = useQueuedAction({
+    id: `debate-winner-vote:${debateEntityId}`,
+    component: 'winner_vote_button',
+    label: 'your winner vote',
+    run: intent => {
+      const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
+      if (!participant) throw new Error('The debater you picked is no longer in this debate.');
+      return castVoteRef.current(participant, { fromQueue: true });
+    },
+  });
+  const queuedWinner = queuedVote.intent;
 
   const isMyPick = React.useCallback(
     (participant: DebateParticipant) =>
@@ -228,45 +236,37 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     [queuedWinner, tally.myVote]
   );
 
-  // Replayed through the hook mounted now when there is one: its tally knows the viewer's existing
-  // vote, which the press's closure — taken signed out — could not, and a switch needs it.
-  useLivePendingActionHandler(queuedVoteId, intent => {
-    const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
-    if (!participant) throw new Error('The debater you picked is no longer in this debate.');
-    return castVoteRef.current(participant, { fromQueue: true });
-  });
-
+  const { queue: queueVoteIntent, cancel: cancelQueuedVote } = queuedVote;
   const queueVote = React.useCallback(
-    (participant: DebateParticipant) =>
-      enqueuePendingAction({
-        id: queuedVoteId,
-        label: 'your winner vote',
-        requires: 'personalSpace',
-        intent: participant.profile_space_id,
-        run: () => castVoteRef.current(participant, { fromQueue: true }),
-      }),
-    [enqueuePendingAction, queuedVoteId]
+    (participant: DebateParticipant) => queueVoteIntent(participant.profile_space_id),
+    [queueVoteIntent]
   );
 
   const castVote = React.useCallback(
     async (participant: DebateParticipant, { fromQueue = false }: CastVoteOptions = {}) => {
       const attribution = getContext();
-      if (debatesWithVoteInFlight.has(debateEntityId)) return;
+      // A replay that cannot publish throws rather than returning: the runner drops an action whose
+      // run resolves, so a quiet return here is a vote lost (see `CastVoteOptions`).
+      if (debatesWithVoteInFlight.has(debateEntityId)) {
+        if (fromQueue) throw new Error('Another vote on this debate is still publishing.');
+        return;
+      }
 
       const previousVote = tally.myVote;
       if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
-      if (previousVote && previousVote.winnerRelationId == null) return;
+      if (previousVote && previousVote.winnerRelationId == null) {
+        if (fromQueue) throw new Error('Your previous vote is still being indexed.');
+        return;
+      }
 
       // Read through the cache rather than only from this render. A queued vote replays through a
       // closure taken before sign-up, when neither existed yet; the cache has both by the time the
       // runner fires, the same fallback every other queued write uses.
       const account = readCachedSmartAccount(queryClient, smartAccount);
-      const voterSpaceId =
-        personalSpaceId ??
-        (() => {
-          const cached = readCachedPersonalSpace(queryClient, account?.account.address);
-          return cached.isRegistered ? cached.personalSpaceId : null;
-        })();
+      const voterSpaceId = readRegisteredPersonalSpaceId(queryClient, account?.account.address, {
+        personalSpaceId,
+        isRegistered,
+      });
 
       if (!account) {
         if (fromQueue) throw new Error('Your account is not ready yet.');
@@ -287,7 +287,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
               auth_continuation: 'queued',
             },
             // A dismissed sign-in withdraws the pick, so walking away never publishes it later.
-            { onCancel: () => dequeuePendingAction(queuedVoteId) }
+            { onCancel: cancelQueuedVote }
           );
           attribution.auth_attempt_id = attempt?.id;
           withActionContext(attribution, () => queueVote(participant));
@@ -307,9 +307,14 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       }
       if (!voterSpaceId) {
         if (fromQueue) throw new Error('Your personal space is not ready yet.');
-        // Signed in and the space is still being made: hold the pick for the runner, as the
-        // signed-out path does, rather than asking for a second press once it exists.
-        queueVote(participant);
+        // A new account whose space is still being made: hold the pick for the runner, as the
+        // signed-out path does, rather than asking for a second press once it exists. Only then —
+        // with no setup under way nothing would ever publish it, so say what is missing instead.
+        if (isAccountSetupPending) {
+          queueVote(participant);
+          return;
+        }
+        setToast(<span>Personal space required to vote. Please complete onboarding.</span>);
         return;
       }
 
@@ -436,6 +441,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
           console.error('[useDebateVotes] Publish failed:', error);
           const { message, retry } = toUserFacingError(error, 'Failed to publish vote: ');
+          // A replay hands the failure to the runner, which keeps the pick queued and offers its own
+          // retry. Reporting here as well would show it twice, and returning would drop the pick.
+          if (fromQueue) throw new Error(message);
           reportError(message, retry);
           return;
         }
@@ -500,14 +508,15 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       tally.myVote,
       smartAccount,
       personalSpaceId,
+      isRegistered,
       profile?.name,
       debate.claim.claim,
       debateEntityId,
       queryClient,
       openPrivySignIn,
       queueVote,
-      dequeuePendingAction,
-      queuedVoteId,
+      cancelQueuedVote,
+      isAccountSetupPending,
       authReady,
       authenticated,
       isAccountLoading,

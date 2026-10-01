@@ -8,6 +8,7 @@ import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-typ
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -269,9 +270,12 @@ function InterestButton({
   });
   // Pressed before the account could publish it — signed out, or the personal space still being
   // made — queued, and drawn as registered, until it can.
-  const queuedInterest = useQueuedBountyInterest(bountyId, onClick);
+  const queuedInterest = useQueuedBountyInterest(bountyId, { alreadyInterested: isInterested, register: onClick });
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
+  // Without a space, queued only while one is being made — with no setup under way, nothing would
+  // publish it, so the button stays disabled and says why.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   if (isInterested || queuedInterest.queued) {
     return <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>Awaiting allocation</span>;
@@ -290,13 +294,18 @@ function InterestButton({
           return;
         }
         if (!canRegisterInterest) {
-          queuedInterest.queue();
+          if (isAccountSetupPending) queuedInterest.queue();
           return;
         }
 
         void onClick();
       }}
-      disabled={isPending || (isLoggedIn && isInterestLoading)}
+      disabled={isPending || (isLoggedIn && (isInterestLoading || (!canRegisterInterest && !isAccountSetupPending)))}
+      title={
+        !isLoggedIn || canRegisterInterest || isAccountSetupPending
+          ? undefined
+          : 'You need a registered personal space to register interest'
+      }
       className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {isPending ? 'Saving…' : "I'm interested"}

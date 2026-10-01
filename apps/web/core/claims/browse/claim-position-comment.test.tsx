@@ -84,7 +84,7 @@ describe('ClaimPositionCommentControl', () => {
   });
 
   it('focuses the explanation for a mouse, so typing can start at once', () => {
-    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
     renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
@@ -94,7 +94,11 @@ describe('ClaimPositionCommentControl', () => {
 
   // Focusing raises the on-screen keyboard over the claim just answered, for an optional comment.
   it('leaves the explanation unfocused on a touch screen', () => {
-    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('coarse') }));
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('coarse'),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
     renderControl();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));

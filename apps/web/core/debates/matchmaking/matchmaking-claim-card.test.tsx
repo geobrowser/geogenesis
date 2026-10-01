@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
+  /** Privy's answer on whether anyone is signed in. */
+  authenticated: true,
   /** A new account whose personal space is still being created in the background. */
   accountSetupPending: false,
   indexing: { status: 'idle', pending: null, runId: null } as {
@@ -73,7 +75,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
 }));
 
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
@@ -267,6 +269,7 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
+  mocks.authenticated = true;
   mocks.accountSetupPending = false;
   queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
@@ -919,6 +922,7 @@ describe('a side picked before the account can publish', () => {
   // feed can remount the card mid-sign-up, taking the vote with it.
   it('queues the side at the press, for the new personal space', async () => {
     mocks.isConnected = false;
+    mocks.authenticated = false;
     const onRequireSignIn = vi.fn();
     renderCard(signedOutCard(onRequireSignIn));
 
@@ -937,6 +941,7 @@ describe('a side picked before the account can publish', () => {
   // What the feed does after onboarding: reload, and draw a fresh card for the same claim.
   it('still draws the picked side after the card remounts', async () => {
     mocks.isConnected = false;
+    mocks.authenticated = false;
     const onRequireSignIn = vi.fn();
     const { unmount } = renderCard(signedOutCard(onRequireSignIn));
 
@@ -958,6 +963,7 @@ describe('a side picked before the account can publish', () => {
 
   it('withdraws the side when the sign-in is abandoned', () => {
     mocks.isConnected = false;
+    mocks.authenticated = false;
     const onRequireSignIn = vi.fn();
     renderCard(signedOutCard(onRequireSignIn));
 
@@ -968,15 +974,16 @@ describe('a side picked before the account can publish', () => {
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('queues straight away for a signed-in account whose space is still being made', () => {
+  // Signed in with no space and no setup under way: nothing would ever publish a queued side.
+  it('queues nothing for a signed-in account with no space being made', () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
     renderCard(signedOutCard(onRequireSignIn), { smartAccount: { account: { address: '0xviewer' } } });
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
+    expect(queued()).toHaveLength(0);
     expect(onRequireSignIn).not.toHaveBeenCalled();
-    expect(queued()).toHaveLength(1);
   });
 });
 

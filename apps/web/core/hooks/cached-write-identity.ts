@@ -40,3 +40,19 @@ export function readCachedPersonalSpace(
     isRegistered: cached?.isRegistered ?? false,
   };
 }
+
+/**
+ * The registered personal space to write from: this render's when it has one, otherwise the cache's.
+ *
+ * For a write a queued action replays — through a closure taken at the press, before sign-up, when
+ * the render had no space; the cache has it by the time the runner fires. Null when neither has a
+ * registered space.
+ */
+export function readRegisteredPersonalSpaceId(
+  queryClient: QueryClient,
+  address: string | null | undefined,
+  live: { personalSpaceId: string | null; isRegistered: boolean }
+): string | null {
+  const space = live.personalSpaceId && live.isRegistered ? live : readCachedPersonalSpace(queryClient, address);
+  return space.isRegistered ? space.personalSpaceId : null;
+}
