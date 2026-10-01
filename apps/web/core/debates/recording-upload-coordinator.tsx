@@ -26,7 +26,6 @@ import {
   cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
-  geoChatErrorProperties,
   getDebate,
   getLocalRecordingPartUrls,
   resolveCurrentGeoChatUserId,
@@ -42,6 +41,11 @@ import {
   recoverOrphanedRecordingStreams,
   uploadRemainingParts,
 } from './recording-stream';
+import {
+  RecordingUploadError,
+  recordingStorageHttpError,
+  recordingUploadErrorProperties,
+} from './recording-upload-errors';
 import {
   type DebateRecordingUpload,
   debateRecordingUploadId,
@@ -86,6 +90,43 @@ export function isPermanentRecordingUploadError(error: unknown): boolean {
     permanentRecordingUploadErrorCodes.has(error.code)
   );
 }
+
+/**
+ * The recording was cancelled by someone else — the opponent, or this user from another device —
+ * and the cancellation has only now reached this device. Nothing about this upload went wrong, so it
+ * is reported as such and kept out of any failure rate (GEO-3051).
+ */
+function isRecordingCancelledElsewhereError(error: unknown): boolean {
+  return error instanceof GeoChatRequestError && error.code === 'recording_cancelled';
+}
+
+/**
+ * How long a failing upload keeps being retried before it is given up on (GEO-3051).
+ *
+ * Every failure the server does not name as permanent used to retry forever, every five minutes
+ * for as long as a tab was open. In production that was three debates producing all 229 retry
+ * events and not one terminal one: nothing ever counted the loss, and the banner never came down.
+ *
+ * Thirty attempts is about two and a half hours of a tab open and online retrying (the backoff
+ * reaches its five-minute ceiling by the seventh), and attempts are not made while the browser is
+ * offline, so a dropped connection spends none of them. The age limit is R2's: the bucket aborts
+ * an unfinished multipart upload after seven days, so a streamed recording older than that cannot
+ * be completed whatever the client does. Either way the row is only given up after an attempt has
+ * actually failed — a recording is never discarded without being tried.
+ */
+export const MAX_RECORDING_UPLOAD_ATTEMPTS = 30;
+export const MAX_RECORDING_UPLOAD_AGE_MS = 7 * 24 * 60 * 60_000;
+
+export function recordingUploadRetriesExhausted(attemptCount: number, createdAt: number, now = Date.now()): boolean {
+  return attemptCount >= MAX_RECORDING_UPLOAD_ATTEMPTS || now - createdAt >= MAX_RECORDING_UPLOAD_AGE_MS;
+}
+
+/**
+ * Why an upload stopped for good, on `debate_recording_upload_failed`. Only `rejected` and
+ * `retries_exhausted` are this device failing to deliver a recording; `opponent_cancelled` is a
+ * cancellation, and a failure rate excludes it.
+ */
+export type RecordingUploadTerminalReason = 'rejected' | 'retries_exhausted' | 'opponent_cancelled';
 
 /** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
 type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
@@ -236,10 +277,8 @@ export function recordingUploadDueAt(
   return Math.max(upload.nextAttemptAt, backoff?.nextAttemptAt ?? 0);
 }
 
-/** An error's own words for analytics, capped: the name alone ("Error") has said nothing so far. */
-function recordingUploadErrorMessage(error: unknown): string | null {
-  const message = error instanceof Error ? error.message.trim() : '';
-  return message ? message.slice(0, 200) : null;
+function browserOnline() {
+  return typeof navigator === 'undefined' || navigator.onLine;
 }
 
 export function DebateRecordingUploadCoordinator() {
@@ -457,11 +496,13 @@ export function DebateRecordingUploadCoordinator() {
     const backoffs = backoffRef.current;
     let attemptStage = upload.stage;
     let attemptCount = Math.max(upload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
+    let attemptCreatedAt = upload.createdAt;
     void withRecordingUploadLock(async () => {
       const latestUpload = await getDebateRecordingUpload(upload.id);
       if (!latestUpload || latestUpload.userId !== userId) return;
       attemptStage = latestUpload.stage;
       attemptCount = Math.max(latestUpload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
+      attemptCreatedAt = latestUpload.createdAt;
       // The row this was picked from can be a stale report of one already pushed back. Hold off
       // until it is due, and remember that here, or the stale report picks it again at once.
       if (latestUpload.nextAttemptAt > Date.now()) {
@@ -494,45 +535,72 @@ export function DebateRecordingUploadCoordinator() {
         }
       })
       .catch(async error => {
-        // Drop the local blob for failures no retry can fix (see the permanent codes above)
-        // instead of leaving the banner up forever.
-        if (isPermanentRecordingUploadError(error)) {
+        const failedAttemptCount = attemptCount + 1;
+        const online = browserOnline();
+        // One classifier for both events, so a failure has the same code whether it is retried or
+        // is the last straw. Never a filename, a URL or media content: see the classifier.
+        const errorProperties = recordingUploadErrorProperties(error, { online });
+        const permanent = isPermanentRecordingUploadError(error);
+        // A failure the browser itself puts down to being offline is never the last straw: the
+        // connection coming back is exactly what a retry is for.
+        const exhausted =
+          !permanent &&
+          errorProperties.error_code !== 'offline' &&
+          recordingUploadRetriesExhausted(failedAttemptCount, attemptCreatedAt);
+        // Drop the local blob for failures no retry can fix (see the permanent codes above), and for
+        // ones that have been retried past the bound, instead of leaving the banner up forever.
+        if (permanent || exhausted) {
           // The recording is dropped here and never retried, so this is the one place a lost upload
-          // can be counted. `recording_cancelled` is included: it is the opponent's cancellation
-          // reaching this device, which the canceller's own event does not see.
+          // can be counted. `recording_cancelled` arrives here too — the opponent's cancellation
+          // reaching this device, which the canceller's own event does not see — and is marked as
+          // such so it is never read as this device failing.
+          const terminalReason: RecordingUploadTerminalReason = isRecordingCancelledElsewhereError(error)
+            ? 'opponent_cancelled'
+            : exhausted
+              ? 'retries_exhausted'
+              : 'rejected';
           capture('debate_recording_upload_failed', {
             debate_id: upload.debateId,
             stage: attemptStage,
-            attempt_count: attemptCount + 1,
-            ...geoChatErrorProperties(error),
+            attempt_count: failedAttemptCount,
+            terminal_reason: terminalReason,
+            ...errorProperties,
           });
+          if (exhausted) {
+            console.warn('[DebateRecordingUploadCoordinator] giving up on upload after repeated failures:', {
+              uploadId: upload.id,
+              debateId: upload.debateId,
+              stage: attemptStage,
+              attemptCount: failedAttemptCount,
+              error,
+            });
+          }
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
             console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
           }
           // Kept even if the delete failed: this upload is never to be attempted again.
-          backoffs.set(upload.id, { attemptCount: attemptCount + 1, nextAttemptAt: Number.POSITIVE_INFINITY });
+          backoffs.set(upload.id, { attemptCount: failedAttemptCount, nextAttemptAt: Number.POSITIVE_INFINITY });
           return;
         }
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(attemptCount);
         // Recorded here before the queue write, which can fail on its own (GEO-3105): the backoff
         // must hold either way, since the next render decides from this and the row together.
-        backoffs.set(upload.id, { attemptCount: attemptCount + 1, nextAttemptAt });
-        // Bounded by the backoff (5s doubling to 5 minutes), so one stuck upload cannot flood this.
+        backoffs.set(upload.id, { attemptCount: failedAttemptCount, nextAttemptAt });
+        // Bounded by the backoff (5s doubling to 5 minutes) and by MAX_RECORDING_UPLOAD_ATTEMPTS.
         capture('debate_recording_upload_retry_scheduled', {
           debate_id: upload.debateId,
           stage: attemptStage,
-          attempt_count: attemptCount + 1,
-          online: typeof navigator === 'undefined' || navigator.onLine,
-          ...geoChatErrorProperties(error),
-          error_message: recordingUploadErrorMessage(error),
+          attempt_count: failedAttemptCount,
+          online,
+          ...errorProperties,
         });
         console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
           uploadId: upload.id,
           debateId: upload.debateId,
           stage: attemptStage,
-          attemptCount: attemptCount + 1,
+          attemptCount: failedAttemptCount,
           nextAttemptAt,
           error,
         });
@@ -1064,9 +1132,13 @@ function putRecording(
     };
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) resolve();
-      else reject(new Error(`Recording upload failed (${request.status})`));
+      else reject(recordingStorageHttpError(`Recording upload failed (${request.status})`, request.status));
     };
-    request.onerror = () => reject(new Error('Recording upload failed.'));
+    // No response at all: the connection, CORS, or a blob the browser could no longer read.
+    request.onerror = () => reject(new RecordingUploadError('Recording upload failed.', 'network'));
+    // Without these an aborted or timed-out request settles neither way and stalls the queue.
+    request.onabort = () => reject(new RecordingUploadError('Recording upload was interrupted.', 'aborted'));
+    request.ontimeout = () => reject(new RecordingUploadError('Recording upload timed out.', 'timeout'));
     request.send(blob);
   });
 }

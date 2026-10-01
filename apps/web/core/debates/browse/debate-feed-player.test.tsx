@@ -1,4 +1,4 @@
-import { act, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -227,7 +227,20 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
 
-afterEach(() => vi.restoreAllMocks());
+// GEO-3110. This file renders `DebateFeedPlayer` (and so `usePairReadiness`'s real `setTimeout`
+// backstop, `PAIR_HOLD_TIMEOUT_MS`) roughly eighty times without ever calling `unmount()` itself —
+// relying on this to tear each one down is what was missing. Left mounted, that backstop is a real
+// timer that outlives this test file; if it fires after vitest has torn the file's jsdom globals
+// off `globalThis` (which happens as soon as the file's tests are done, not when the timer
+// chooses to fire), its callback runs with `window` genuinely undefined —
+// `ReferenceError: window is not defined`, reported against whichever file happened to be running
+// when that race was lost. `cleanup()` unmounts every render from the test before it, which runs
+// `usePairReadiness`'s own effect cleanup and clears that timer (and any other), so none is left
+// pending once the file's tests finish.
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('player layout', () => {
   it('keeps both stacked videos at the original aspect ratio', () => {
@@ -596,6 +609,28 @@ describe('a backlog latch outliving its stack', () => {
     // Replay. The corner has no keyboard and no pointer in it, so it starts closed.
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+
+  /**
+   * GEO-3114. On a small player the opened list is a sheet: as wide as the live card and pinned
+   * below the tile's top controls, so a claim prints whole. Behind `@max-md:` only, so the wide
+   * panel's 45%/62% column is untouched — and only while open, so the live card keeps the corner.
+   */
+  it('turns the opened corner into a sheet on a small panel, and only the opened one', () => {
+    mocks.ticker = withCardsForSlot1();
+    const { container } = render(renderAt(false));
+    const corner = () => container.querySelector('[data-claim-corner]') as HTMLElement;
+
+    const classes = () => [...corner().classList];
+
+    expect(classes()).not.toContain('@max-md:top-14');
+    expect(classes()).toContain('w-[calc(100%-1.75rem)]');
+
+    fireEvent.click(stackIn(container) as HTMLElement);
+
+    expect(classes()).toEqual(
+      expect.arrayContaining(['w-[45%]', '@min-md:md:w-[62%]', '@max-md:top-14', '@max-md:w-[calc(100%-1.75rem)]'])
+    );
   });
 
   // The same latch, released by the same cleanup: a tile scrolled out of the preload window empties
