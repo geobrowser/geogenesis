@@ -4,7 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
-import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator';
+import {
+  DebateRecordingUploadCoordinator,
+  MAX_RECORDING_UPLOAD_AGE_MS,
+  MAX_RECORDING_UPLOAD_ATTEMPTS,
+} from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 const mocks = vi.hoisted(() => ({
@@ -363,7 +367,7 @@ describe('DebateRecordingUploadCoordinator', () => {
       stage: 'uploaded',
       attempt_count: 1,
       online: true,
-      error_code: null,
+      error_code: 'unknown',
       http_status: null,
       error_name: 'Error',
       error_message: 'Finalization unavailable',
@@ -459,31 +463,173 @@ describe('DebateRecordingUploadCoordinator', () => {
       debate_id: 'debate-1',
       stage: 'uploaded',
       attempt_count: 1,
+      terminal_reason: 'rejected',
       error_code: 'recording_not_ready',
       http_status: 400,
       error_name: 'GeoChatRequestError',
+      error_message: null,
     });
     expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
-  it('keeps retrying entries with very high attempt counts', async () => {
+  // GEO-3051. The opponent cancelling reaches this device as `recording_cancelled`. That ends the
+  // upload, but it is not this device failing, and a failure rate must be able to leave it out.
+  it('reports an opponent cancellation as its own terminal reason, not as a failure', async () => {
+    mocks.completeUpload.mockRejectedValue(
+      new GeoChatRequestError('this debate recording was cancelled', 'recording_cancelled', 400)
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    const failures = mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_failed');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.[1]).toMatchObject({
+      debate_id: 'debate-1',
+      terminal_reason: 'opponent_cancelled',
+      error_code: 'recording_cancelled',
+    });
+    expect(failures[0]?.[1]).not.toMatchObject({ terminal_reason: 'rejected' });
+  });
+
+  it('keeps retrying while under the attempt bound', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    mocks.completeUpload.mockRejectedValueOnce(new Error('Still unavailable'));
+    mocks.completeUpload.mockRejectedValueOnce(new TypeError('Load failed'));
     mocks.queue = [
       {
         ...queuedRecording('debate-1'),
         stage: 'uploaded',
         filename: 'recordings/debate-1.webm',
-        attemptCount: 1_000,
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 2,
       },
     ];
 
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
-    expect(mocks.queue[0]?.attemptCount).toBe(1_001);
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_retry_scheduled',
+      expect.objectContaining({
+        attempt_count: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+        error_code: 'fetch_failed',
+        error_name: 'TypeError',
+      })
+    );
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_failed', expect.anything());
+  });
+
+  // GEO-3051. Three debates sent all 229 retry events in production and none ever became terminal:
+  // a failure the server does not name as permanent was retried every five minutes indefinitely.
+  it('gives up, counts the failure and stops retrying once the attempt bound is reached', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValue(new TypeError('Load failed'));
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        stage: 'uploaded',
+        filename: 'recordings/debate-1.webm',
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_failed', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: MAX_RECORDING_UPLOAD_ATTEMPTS,
+      terminal_reason: 'retries_exhausted',
+      error_code: 'fetch_failed',
+      http_status: null,
+      error_name: 'TypeError',
+      error_message: 'Load failed',
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    // And it is not attempted again, even though the row's own backoff says "due".
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.completeUpload).toHaveBeenCalledOnce();
+  });
+
+  it('does not give up on a failure the browser puts down to being offline', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockImplementationOnce(async () => {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+      throw new TypeError('Failed to fetch');
+    });
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        stage: 'uploaded',
+        filename: 'recordings/debate-1.webm',
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_retry_scheduled',
+      expect.objectContaining({ error_code: 'offline', online: false })
+    );
+  });
+
+  it('gives up on a recording older than the multipart lifetime after its attempt fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.createUpload.mockRejectedValue(new Error('Recording part upload failed (404)'));
+    mocks.queue = [{ ...queuedRecording('debate-1'), createdAt: Date.now() - MAX_RECORDING_UPLOAD_AGE_MS - 1 }];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
+    // Tried first: age alone never discards a recording.
+    expect(mocks.createUpload).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_failed',
+      expect.objectContaining({ attempt_count: 1, terminal_reason: 'retries_exhausted' })
+    );
+  });
+
+  it('never sends a filename, URL or signature in upload failure properties', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValueOnce(
+      new Error(
+        'PUT https://geo-chat.r2.cloudflarestorage.com/debates/abc/1-slot.local.webm?X-Amz-Signature=0123456789abcdef0123456789abcdef failed for recordings/debate-1.webm (blob:https://geobrowser.io/9f0c)'
+      )
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    const [, properties] = mocks.capture.mock.calls.find(
+      ([name]) => name === 'debate_recording_upload_retry_scheduled'
+    )!;
+    const serialized = JSON.stringify(properties);
+    for (const leak of [
+      'https:',
+      'r2.',
+      'webm',
+      'X-Amz',
+      'Signature',
+      'recordings/',
+      'debates/',
+      'blob:',
+      '0123456789abcdef',
+    ]) {
+      expect(serialized).not.toContain(leak);
+    }
+    expect(properties).toMatchObject({ error_code: 'unknown', error_name: 'Error' });
+    expect(properties.error_message).toContain('failed for');
   });
 
   // GEO-3105. A Safari tab fired this event 180 times in three seconds, every one `attempt_count: 1`:
@@ -505,6 +651,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(retries).toHaveLength(1);
     expect(retries[0]?.[1]).toMatchObject({
       attempt_count: 1,
+      error_code: 'unknown',
       error_name: 'Error',
       error_message: 'Recording part upload failed (403)',
     });

@@ -2,6 +2,7 @@ import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
+import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
 
 /**
  * Streaming a debate recording while it is made (GEO-2955).
@@ -365,7 +366,12 @@ export class RecordingPartStreamer {
     const parts = await this.options.getPartUrls(multipart.filename, multipart.uploadId, wanted);
     this.urls = new Map(parts.map(part => [part.part_number, part.upload]));
     const upload = this.urls.get(partNumber);
-    if (!upload) throw new Error(`No upload URL was returned for recording part ${partNumber}.`);
+    if (!upload) {
+      throw new RecordingUploadError(
+        `No upload URL was returned for recording part ${partNumber}.`,
+        'part_url_missing'
+      );
+    }
     return upload;
   }
 }
@@ -398,7 +404,12 @@ export async function uploadRemainingParts(
     );
     for (const partNumber of batch) {
       const upload = urls.get(partNumber);
-      if (!upload) throw new Error(`No upload URL was returned for recording part ${partNumber}.`);
+      if (!upload) {
+        throw new RecordingUploadError(
+          `No upload URL was returned for recording part ${partNumber}.`,
+          'part_url_missing'
+        );
+      }
       const { start, end } = partRange(partNumber, multipart.partSize, blob.size);
       await transport.putPart(upload, blob.slice(start, end));
       uploaded.add(partNumber);
@@ -414,7 +425,9 @@ export async function uploadRemainingParts(
 /** One part of a streamed recording. The signed URL carries everything; no headers are needed. */
 export async function putRecordingPart(upload: ObjectStoreUpload, body: Blob): Promise<void> {
   const response = await fetch(upload.url, { method: upload.method, body });
-  if (!response.ok) throw new Error(`Recording part upload failed (${response.status})`);
+  if (!response.ok) {
+    throw recordingStorageHttpError(`Recording part upload failed (${response.status})`, response.status);
+  }
 }
 
 /** A 404 with no error code is a route this geo-chat does not have, not a missing debate. */
