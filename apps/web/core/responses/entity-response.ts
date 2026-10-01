@@ -89,6 +89,10 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
  */
 export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
 
+export function responseErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Could not publish your response. Try again.';
+}
+
 /**
  * The one kind a claim is answered with.
  *
@@ -155,7 +159,9 @@ export function getEntityResponseKind({ isClaim }: { isClaim: boolean }): Respon
  * the Types relation is read across every space the entity lives in, which is what lets a claim
  * collected into another space still draw the claim controls.
  */
-export function resolveEntityResponseKind(entity: Pick<Entity, 'relations' | 'values'> | null | undefined): ResponseKind {
+export function resolveEntityResponseKind(
+  entity: Pick<Entity, 'relations' | 'values'> | null | undefined
+): ResponseKind {
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
 
   const isClaim = activeRelations.some(
