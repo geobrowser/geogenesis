@@ -26,6 +26,21 @@ type UsePrivySignInOptions = {
   onError?: () => void;
 };
 
+/** Per-press options, for a caller whose continuation depends on what was pressed. */
+export type PrivySignInCallOptions = {
+  /**
+   * Runs once this press's sign-in completes, alongside the hook-level `onComplete`. A control that
+   * queues the viewer's action — which side of a claim they picked, say — passes it here, because
+   * that choice is only known at the press.
+   */
+  onComplete?: () => void;
+};
+
+export type PrivySignIn = (
+  properties?: AnalyticsProperties | React.SyntheticEvent,
+  callOptions?: PrivySignInCallOptions
+) => ReturnType<ReturnType<typeof useTrackedLogin>['login']>;
+
 /**
  * Opens Privy's own "Log in or sign up" dialog straight away, the way the upvote control does.
  *
@@ -48,17 +63,29 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
+  // Only the latest press's continuation. A new press replaces it and a dismissal drops it, so an
+  // abandoned sign-in never runs a choice made before it.
+  const callOnCompleteRef = React.useRef<(() => void) | undefined>(undefined);
+
   // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
-    onComplete: () => onCompleteRef.current?.(),
+    onComplete: () => {
+      const callOnComplete = callOnCompleteRef.current;
+      callOnCompleteRef.current = undefined;
+      onCompleteRef.current?.();
+      callOnComplete?.();
+    },
     onError: error => {
       // A rejected OTP can be retried in the same modal; only dismissal abandons the intent.
-      if (error === 'exited_auth_flow') optionsRef.current?.onError?.();
+      if (error !== 'exited_auth_flow') return;
+      callOnCompleteRef.current = undefined;
+      optionsRef.current?.onError?.();
     },
   });
 
-  return React.useCallback(
-    (properties?: AnalyticsProperties | React.SyntheticEvent) => {
+  return React.useCallback<PrivySignIn>(
+    (properties, callOptions) => {
+      callOnCompleteRef.current = callOptions?.onComplete;
       prepareOnboarding({ returnTo: optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
       return login(

@@ -161,6 +161,33 @@ describe('usePrivySignIn', () => {
     expect(onComplete).not.toHaveBeenCalled();
   });
 
+  // The press's own continuation — which side of a claim was picked — rides the same attempt.
+  it("runs a press's own continuation when its sign-in completes", () => {
+    const onPress = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn());
+
+    act(() => result.current(undefined, { onComplete: onPress }));
+    expect(onPress).not.toHaveBeenCalled();
+
+    act(() => mocks.privyOnComplete?.({}));
+    expect(onPress).toHaveBeenCalledOnce();
+  });
+
+  it("drops a dismissed press's continuation, and a later press replaces an earlier one", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn());
+
+    act(() => result.current(undefined, { onComplete: first }));
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+    act(() => result.current(undefined, { onComplete: second }));
+    act(() => result.current());
+    act(() => mocks.privyOnComplete?.({}));
+
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+  });
+
   it('notifies the initiating surface when the modal is dismissed or fails', () => {
     const onError = vi.fn();
     const { result } = renderHook(() =>

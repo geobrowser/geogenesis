@@ -33,7 +33,11 @@ import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
-import { Button, SquareButton } from '~/design-system/button';
+import {
+  DIALOG_ACTION_BUTTON_CLASS_NAME,
+  DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME,
+  SquareButton,
+} from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -560,10 +564,11 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
             </a>
           </Text>
         </div>
-        <Button
+        <button
+          type="button"
           disabled={!validName || isSearching || isUploadingAvatar}
           onClick={handleContinue}
-          className={`${!validName ? 'bg-[#F0F0F0]' : 'bg-ctaHover'} h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal`}
+          className={DIALOG_ACTION_BUTTON_CLASS_NAME}
         >
           {isSearching ? (
             <span className="inline-flex h-[1.125rem] items-center">
@@ -572,7 +577,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           ) : (
             'Continue'
           )}
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -618,13 +623,9 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
         ))}
       </div>
       <div className="shrink-0 pt-4">
-        <Button
-          type="button"
-          onClick={handlePrimary}
-          className="h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
-        >
+        <button type="button" onClick={handlePrimary} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
           Continue
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -829,24 +830,18 @@ function StepInterestedIn({
         </div>
       )}
       {isError ? (
-        <Button
-          onClick={onRetry}
-          className="min-h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
-        >
+        <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
           Try again
-        </Button>
+        </button>
       ) : (
-        <Button
+        <button
+          type="button"
           onClick={onCompleteOnboard}
           disabled={isLoading}
-          variant={isCreateProfile ? 'primary' : 'secondary'}
-          className={cx(
-            'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && isCreateProfile && 'bg-ctaHover'
-          )}
+          className={isCreateProfile ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
         >
           {primaryLabel}
-        </Button>
+        </button>
       )}
     </div>
   );

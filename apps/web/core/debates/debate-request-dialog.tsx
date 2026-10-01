@@ -5,6 +5,7 @@ import * as React from 'react';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
+import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
@@ -173,27 +174,17 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={onReject}
                 disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+                className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
               >
                 {rejectLabel}
               </button>
-              <button
-                type="button"
-                onClick={onAccept}
-                disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-              >
+              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
                 {acceptLabel}
               </button>
             </div>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={onAccept}
-                disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-              >
+              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
                 {acceptLabel}
               </button>
               <button

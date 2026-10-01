@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -13,6 +15,7 @@ import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-po
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
+import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -20,6 +23,7 @@ import {
 } from '~/core/hooks/use-entity-vote';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import type { PrivySignInCallOptions } from '~/core/hooks/use-privy-sign-in';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
@@ -31,6 +35,7 @@ import {
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -50,6 +55,9 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
+
+/** A signed-out press's sign-in prompt. `onComplete` carries the press through to the new account. */
+export type RequireSignIn = (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) => void;
 
 type Props = {
   claim: DebateClaimSummary;
@@ -148,7 +156,7 @@ type Props = {
    * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
    * possibility the host has to handle, which keeps the response path unchanged for everyone else.
    */
-  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
+  onRequireSignIn?: RequireSignIn;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -410,7 +418,7 @@ export function useClaimPositionControl({
    * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
    * one they stay disabled, which is what the hub's cards have always done.
    */
-  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
+  onRequireSignIn?: RequireSignIn;
   /**
    * Whether this host offers the account-level match at all.
    *
@@ -435,7 +443,9 @@ export function useClaimPositionControl({
     // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
     responseKind: CLAIM_RESPONSE_KIND,
   };
-  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
+  const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
+  const queryClient = useQueryClient();
+  const enqueuePendingAction = useEnqueuePendingAction('claim_position_control');
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -467,7 +477,15 @@ export function useClaimPositionControl({
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
-  const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  // A side picked before the account could publish, held until the queued write starts. Without it
+  // the pill the visitor pressed reads as unpressed for the whole of onboarding.
+  const [queuedPosition, setQueuedPosition] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    if (queuedPosition !== null && pendingResponse) setQueuedPosition(null);
+  }, [pendingResponse, queuedPosition]);
+  const viewerPosition = pendingResponse
+    ? optimisticPosition
+    : (queuedPosition ?? readiness.viewer_response?.position ?? null);
   // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
   // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
   const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
@@ -520,14 +538,37 @@ export function useClaimPositionControl({
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
   }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
+  // Replayed by `PendingActionsRunner` once the personal space exists. A new account has none until
+  // well after sign-in completes — onboarding, then the space's own creation — so publishing at the
+  // press, or asking the visitor to press again, loses the side they picked.
+  const queuePosition = (position: boolean) => {
+    setQueuedPosition(position);
+    enqueuePendingAction({
+      id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
+      label: 'your position',
+      requires: 'personalSpace',
+      run: () => submitResponseAsync(position ? 'positive' : 'negative').then(() => {}),
+    });
+  };
+
   const respond = (position: boolean) => {
     if (!isConnected) {
-      onRequireSignIn?.({
-        ...getSignInContext(),
-        auth_control: position ? 'agree' : 'disagree',
-        auth_intent: 'vote',
-        auth_continuation: 'repeat',
-      });
+      // Signed in, account still being set up: hold the side rather than prompting a sign-in that
+      // would do nothing. Read from the cache the navbar fills rather than `useSmartAccount`, which
+      // would make every host of this control provide wagmi.
+      if (readCachedSmartAccount(queryClient, null)) {
+        queuePosition(position);
+        return;
+      }
+      onRequireSignIn?.(
+        {
+          ...getSignInContext(),
+          auth_control: position ? 'agree' : 'disagree',
+          auth_intent: 'vote',
+          auth_continuation: 'queued',
+        },
+        { onComplete: () => queuePosition(position) }
+      );
       return;
     }
     if (isAccountSetupPending) return;
@@ -628,7 +669,7 @@ function RespondableControls({
    * from a second source contradicts the pair it is comparing rather than completing it.
    */
   reconcileWithIndexedResponse?: boolean;
-  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
+  onRequireSignIn?: RequireSignIn;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
 }) {

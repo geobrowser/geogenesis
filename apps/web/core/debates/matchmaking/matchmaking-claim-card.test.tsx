@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
@@ -17,6 +17,9 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
+  submitResponseAsync: vi.fn(),
+  isConnected: true,
+  enqueuePendingAction: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -127,10 +130,11 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     mocks.useEntityResponse(input);
     return {
       submitResponse: mocks.submitResponse,
+      submitResponseAsync: mocks.submitResponseAsync,
       optimisticResponse: undefined,
       isProcessingResponse: false,
       isResponseIndexingDelayed: false,
-      isConnected: true,
+      isConnected: mocks.isConnected,
       personalSpaceId: mocks.viewerSpaceId,
     };
   },
@@ -171,6 +175,10 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
     spacesById: new Map([[mocks.spaceId, { entity: { name: mocks.spaceName, image: null } }]]),
     isLoading: false,
   }),
+}));
+
+vi.mock('~/core/state/pending-actions', () => ({
+  useEnqueuePendingAction: () => mocks.enqueuePendingAction,
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -227,8 +235,10 @@ function participant(id: string) {
   } as DebateClaimPositionSummary['participants'][number];
 }
 
-function renderCard(card: ReactElement) {
+function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: object } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // What the navbar's `useSmartAccount` leaves behind once someone is signed in.
+  if (smartAccount) queryClient.setQueryData(['smart-account', 'wallet'], smartAccount);
   return render(<QueryClientProvider client={queryClient}>{card}</QueryClientProvider>);
 }
 
@@ -243,6 +253,10 @@ beforeEach(() => {
     }
   );
   mocks.submitResponse.mockReset();
+  mocks.submitResponseAsync.mockReset();
+  mocks.submitResponseAsync.mockResolvedValue(undefined);
+  mocks.isConnected = true;
+  mocks.enqueuePendingAction.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
@@ -874,6 +888,85 @@ describe('faces borrowed from the match', () => {
     expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
     // And no overflow either, which is the other half of what the merge would have added.
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+});
+
+/**
+ * A visitor who presses a side while signed out goes through sign-in, then onboarding, then the
+ * personal space's own creation — and only then can a response be published. The press used to
+ * open sign-in and nothing else, so the side they picked never landed.
+ */
+describe('a side picked before the account can publish', () => {
+  const signedOut = readiness({ viewer_response: null });
+
+  it('carries the side through sign-in and queues it for the new personal space', () => {
+    mocks.isConnected = false;
+    const onRequireSignIn = vi.fn();
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={signedOut}
+        onRequireSignIn={onRequireSignIn}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+
+    expect(onRequireSignIn).toHaveBeenCalledOnce();
+    const [properties, options] = onRequireSignIn.mock.calls[0];
+    expect(properties).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
+    // Nothing is queued for a sign-in the visitor might still dismiss.
+    expect(mocks.enqueuePendingAction).not.toHaveBeenCalled();
+
+    act(() => options.onComplete());
+
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
+    const action = mocks.enqueuePendingAction.mock.calls[0][0];
+    expect(action).toMatchObject({ requires: 'personalSpace' });
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+
+    void action.run();
+    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('negative');
+  });
+
+  it('holds the picked side on screen while it waits', () => {
+    mocks.isConnected = false;
+    const onRequireSignIn = vi.fn();
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={signedOut}
+        onRequireSignIn={onRequireSignIn}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+    act(() => onRequireSignIn.mock.calls[0][1].onComplete());
+
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('queues straight away for a signed-in account whose space is still being made', () => {
+    mocks.isConnected = false;
+    const onRequireSignIn = vi.fn();
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={signedOut}
+        onRequireSignIn={onRequireSignIn}
+      />,
+      { smartAccount: { account: { address: '0xviewer' } } }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(onRequireSignIn).not.toHaveBeenCalled();
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
   });
 });
 
