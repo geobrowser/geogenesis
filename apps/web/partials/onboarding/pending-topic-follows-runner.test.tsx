@@ -337,18 +337,41 @@ describe('PendingTopicFollowsRunner', () => {
 
   it('runs again when the picks were replaced by the same number of others mid-publish', async () => {
     const replaced = { address: '0xA', topics: [{ id: 'topic-c', name: 'Mental health' }] };
-    const switchTo: { store?: ReturnType<typeof mount> } = {};
-    mocks.follow.mockImplementationOnce(async () => {
-      switchTo.store!.set(feedTopicsAtom, replaced);
-      return true;
-    });
+    let finishFirst!: (ok: boolean) => void;
+    mocks.follow.mockImplementationOnce(() => new Promise<boolean>(resolve => (finishFirst = resolve)));
     mocks.follow.mockResolvedValue(true);
-    switchTo.store = mount(null, { address: '0xA', topics: [picks[0]] });
-
+    const store = mount(null, { address: '0xA', topics: [picks[0]] });
     await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(mocks.follow).toHaveBeenCalledOnce();
+
+    // Another tab swaps the pick while the first publish is still out, and this tab re-renders.
+    act(() => store.set(feedTopicsAtom, replaced));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    await act(async () => finishFirst(true));
     await act(() => vi.advanceTimersByTimeAsync(0));
 
     expect(mocks.follow).toHaveBeenLastCalledWith(replaced.topics);
-    expect(switchTo.store.get(feedTopicsAtom)).toEqual(none);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('still clears the picks when a publish lands after the failure cap', async () => {
+    mocks.follow.mockResolvedValue(false);
+    const store = mount();
+    for (let i = 0; i < 2; i++) {
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      await act(() => vi.advanceTimersByTimeAsync(11 * 60_000));
+    }
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(mocks.follow).toHaveBeenCalledTimes(3);
+
+    // The third publish timed out but lands a minute later.
+    mocks.fetchFollowed.mockResolvedValue(
+      picks.map(topic => ({ id: `r-${topic.id}`, spaceId: 'space-1', toEntityId: topic.id }))
+    );
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(mocks.follow).toHaveBeenCalledTimes(3);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 });

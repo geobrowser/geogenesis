@@ -36,7 +36,7 @@ const SUBMITTED_POLL_MS = 10_000;
 // Each failed publish shows the user an error, so stop after a few until the next page load.
 const MAX_PUBLISH_FAILURES = 3;
 
-type Outcome = 'done' | 'unindexed' | 'submitted' | 'failed';
+type Outcome = 'done' | 'unindexed' | 'submitted' | 'failed' | 'capped';
 
 // Picks sync across tabs through localStorage, but follow's dedupe is per tab, so only one tab may
 // publish them. Resolves null when another tab holds the lock.
@@ -103,17 +103,19 @@ export function PendingTopicFollowsRunner() {
       indexPollsRef.current = 0;
       publishFailuresRef.current = 0;
     }
-    if (publishFailuresRef.current >= MAX_PUBLISH_FAILURES) return;
     if (runningRef.current) return;
     runningRef.current = true;
 
     const spaceId = personalSpaceId;
     const owner = address;
+    // Past the cap this run only checks whether an earlier publish landed.
+    const mayPublish = publishFailuresRef.current < MAX_PUBLISH_FAILURES;
 
     void (async () => {
       let delay: number | null = null;
+      let outcome: Outcome | null | undefined;
       try {
-        const outcome = await withCrossTabLock(async () => {
+        outcome = await withCrossTabLock(async () => {
           // Read under the lock: a tab that waited finds the picks another tab already followed gone.
           if (heldTopicsFor(readStoredFeedTopics(), owner).length === 0) return 'done';
 
@@ -136,6 +138,7 @@ export function PendingTopicFollowsRunner() {
             return 'done';
           }
           if (latest.submittedAt && Date.now() - latest.submittedAt < SUBMITTED_GRACE_MS) return 'submitted';
+          if (!mayPublish) return 'capped';
 
           setHeld({ address: owner, topics: latest.topics, submittedAt: Date.now() });
           devLog('[onboarding] following %d onboarding topics in %s', missing.length, spaceId);
@@ -163,8 +166,9 @@ export function PendingTopicFollowsRunner() {
         }
       } finally {
         runningRef.current = false;
-        // A newer account that became ready mid-run was turned away by runningRef.
+        // A newer account, or picks changed mid-run, were turned away by runningRef.
         if (delay === null && addressRef.current !== owner) delay = 0;
+        if (outcome === 'done' && heldTopicsFor(readStoredFeedTopics(), owner).length > 0) delay = 0;
         if (delay !== null) setTimeout(() => setRetryTick(n => n + 1), delay);
       }
     })();
