@@ -32,6 +32,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -258,8 +259,9 @@ export const OnboardingDialog = () => {
   };
 
   const handleToggleFeedTopic = (topic: TopicOption) => {
-    const next = feedTopics.some(t => t.id === topic.id)
-      ? feedTopics.filter(t => t.id !== topic.id)
+    const id = normId(topic.id);
+    const next = feedTopics.some(t => normId(t.id) === id)
+      ? feedTopics.filter(t => normId(t.id) !== id)
       : [...feedTopics, topic];
     setHeldFeedTopics({ address, topics: next });
   };

@@ -60,7 +60,7 @@ export function decodeTopicSearch(data: { search?: TopicRow[] | null }): TopicOp
   return decodeTopics(data.search);
 }
 
-/** Suggested topics for `spaceIds`, in rank order. `fetchNextPage` appends the next page. */
+/** Suggested topics for `spaceIds`, in rank order. `fetchMore` appends the next page. */
 export function useTopicSuggestions(spaceIds: string[]) {
   const ids = React.useMemo(() => [...new Set(spaceIds.filter(Boolean).map(uuidToHex))].sort(), [spaceIds]);
 
@@ -82,9 +82,11 @@ export function useTopicSuggestions(spaceIds: string[]) {
     staleTime: 5 * 60_000,
   });
 
+  // Pages are offsets into a list that is rebuilt hourly, so a topic can recur across pages.
   const suggestions = React.useMemo(() => {
-    const seen = new Set<string>();
-    return (query.data?.pages ?? []).flat().filter(topic => !seen.has(topic.id) && seen.add(topic.id));
+    const byId = new Map<string, TopicOption>();
+    for (const topic of (query.data?.pages ?? []).flat()) if (!byId.has(topic.id)) byId.set(topic.id, topic);
+    return [...byId.values()];
   }, [query.data]);
 
   return {
