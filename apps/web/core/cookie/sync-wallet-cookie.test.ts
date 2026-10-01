@@ -224,4 +224,69 @@ describe('syncWalletCookie', () => {
       expect(setCachedToken).not.toHaveBeenCalled();
     });
   });
+
+  // Next runs Server Actions one at a time, so a newer request's cookie write always lands last. What
+  // can go wrong is the client's own bookkeeping: an older answer arriving after an account switch.
+  describe('an answer that arrives after the wallet changed', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>(r => (resolve = r));
+      return { promise, resolve };
+    }
+
+    it("does not cancel the new wallet's pending retry", async () => {
+      const answerForA = deferred<string | null>();
+      onConnectionChange.mockImplementationOnce(() => answerForA.promise);
+      const syncingA = syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Signed out of A and into B, whose token is not ready yet.
+      forgetSyncedWalletCookie();
+      getToken.mockResolvedValueOnce(null);
+      await syncWalletCookie(OTHER);
+
+      answerForA.resolve(ADDRESS);
+      await syncingA;
+
+      onConnectionChange.mockImplementation(async () => OTHER);
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not record the previous wallet as synced', async () => {
+      const answerForA = deferred<string | null>();
+      onConnectionChange.mockImplementationOnce(() => answerForA.promise);
+      const syncingA = syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(0);
+
+      forgetSyncedWalletCookie();
+      answerForA.resolve(ADDRESS);
+      await syncingA;
+
+      // Signing back in as A must still reach the server: the session may have been cleared since.
+      await syncWalletCookie(ADDRESS);
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores a late answer for an address this tab moved off without signing out', async () => {
+      const answerForA = deferred<string | null>();
+      onConnectionChange.mockImplementationOnce(() => answerForA.promise);
+      const syncingA = syncWalletCookie(ADDRESS);
+      await vi.advanceTimersByTimeAsync(0);
+
+      getToken.mockResolvedValueOnce(null);
+      await syncWalletCookie(OTHER);
+
+      answerForA.resolve(ADDRESS);
+      await syncingA;
+
+      onConnectionChange.mockImplementation(async () => OTHER);
+      await vi.advanceTimersByTimeAsync(SYNC_RETRY_DELAYS_MS[0]);
+      expect(onConnectionChange).toHaveBeenLastCalledWith({ type: 'connect', identityToken: 'identity-token' });
+      expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+  });
 });

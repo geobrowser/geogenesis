@@ -22,6 +22,17 @@ let syncedAddress: string | null = null;
  */
 export const SYNC_RETRY_DELAYS_MS = [5_000, 15_000, 35_000, 60_000] as const;
 
+/**
+ * Moves on whenever the wallet this tab wants changes: a different address asked for, or the wallet
+ * going away. A sync that finishes after that lost the race and must not touch the state of the newer
+ * one — otherwise an account switch mid-request could record the previous wallet as synced and cancel
+ * the new wallet's pending retry, leaving the tab signed in to the server as the old account. The
+ * cookie writes themselves need no such care: Next runs Server Actions one at a time, in order, so
+ * the newer request's write always lands last.
+ */
+let generation = 0;
+let requestedAddress: string | null = null;
+
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let retryAttempt = 0;
 let retryAddress: `0x${string}` | null = null;
@@ -54,12 +65,21 @@ function scheduleRetry(address: `0x${string}`) {
 export async function syncWalletCookie(address: `0x${string}`) {
   if (syncedAddress === address.toLowerCase()) return;
 
+  if (requestedAddress !== address.toLowerCase()) {
+    requestedAddress = address.toLowerCase();
+    generation += 1;
+  }
+  const startedIn = generation;
+  const superseded = () => startedIn !== generation;
+
   // No token yet means Privy has not finished signing in. Retry shortly rather than failing the
   // smart-account query over it.
   const identityToken = await getCachedIdentityToken();
+  if (superseded()) return;
   if (!identityToken) return scheduleRetry(address);
 
   const recognised = await onConnectionChange({ type: 'connect', identityToken });
+  if (superseded()) return;
   if (recognised?.toLowerCase() === address.toLowerCase()) {
     syncedAddress = recognised.toLowerCase();
     clearRetry();
@@ -82,5 +102,7 @@ export async function syncWalletCookie(address: `0x${string}`) {
 export function forgetSyncedWalletCookie() {
   if (syncedAddress !== null || retryAddress !== null) setCachedIdentityToken(null);
   syncedAddress = null;
+  requestedAddress = null;
+  generation += 1;
   clearRetry();
 }
