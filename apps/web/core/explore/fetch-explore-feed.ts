@@ -40,11 +40,20 @@ import {
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
+import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
-import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
+import {
+  type ExploreForYouCursor,
+  advanceForYouStream,
+  decodeExploreForYouCursor,
+  decodeExploreWindowCursor,
+  encodeExploreForYouCursor,
+  nextExploreWindowCursor,
+} from './explore-window-cursor';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 
 /**
@@ -233,6 +242,81 @@ async function fetchBestEntitiesByTypePage(args: {
         spaceIds: args.spaceIds,
         typeIds: [...args.typeIds],
         maxPerType: args.offset + args.limit,
+        createdAfter: t != null ? String(t) : undefined,
+        filter: combineEntityFilters(
+          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          args.entityFilter
+        ),
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
+type ForYouStreamPage = {
+  entities: ExploreCardEntity[];
+  /** Normalized id of each entity → the followed topics it matched, normalized. */
+  matchedTopicIds: Map<string, string[]>;
+  /** Each entity's index among the nodes returned, which the cursor counts in. */
+  rawIndex: number[];
+  /** Nodes the connection returned, decodable or not. */
+  fetched: number;
+};
+
+/**
+ * A For you stream (GEO-3083) with each row's followed topics, scoped and filtered like
+ * `fetchBestEntitiesByTypePage`. A per-topic or per-type cap below `offset + first` returns short.
+ */
+async function fetchForYouStreamPage(args: {
+  /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
+  stream: 'topics' | 'best' | 'plainBest';
+  topicIds: readonly string[];
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+  requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
+}): Promise<ForYouStreamPage> {
+  const t = timeThresholdSec(args.time);
+  const connection =
+    args.stream === 'topics' ? 'entitiesRankedForTopicsConnection' : 'entitiesRankedForFeedByTypeConnection';
+  return Effect.runPromise(
+    graphql({
+      query:
+        args.stream === 'topics'
+          ? exploreForYouConnectionDocument
+          : args.stream === 'best'
+            ? exploreForYouBestConnectionDocument
+            : exploreBestByTypeConnectionDocument,
+      decoder: (data: Record<string, { nodes?: unknown[] } | null | undefined>): ForYouStreamPage => {
+        const nodes = data[connection]?.nodes ?? [];
+        const entities: ExploreCardEntity[] = [];
+        const rawIndex: number[] = [];
+        const matchedTopicIds = new Map<string, string[]>();
+        for (const [index, node] of nodes.entries()) {
+          const decoded = decodeExploreCardEntity(node);
+          if (!decoded) continue;
+          entities.push(decoded);
+          rawIndex.push(index);
+          const matched = (node as { matchedTopicIds?: unknown }).matchedTopicIds;
+          matchedTopicIds.set(
+            normId(decoded.id),
+            Array.isArray(matched) ? matched.filter((id): id is string => typeof id === 'string').map(normId) : []
+          );
+        }
+        return { entities, rawIndex, matchedTopicIds, fetched: nodes.length };
+      },
+      variables: {
+        first: args.limit,
+        offset: args.offset,
+        ...(args.stream === 'plainBest' ? {} : { topicIds: [...args.topicIds] }),
+        spaceIds: args.spaceIds,
+        typeIds: [...args.typeIds],
+        ...(args.stream === 'topics'
+          ? { maxPerTopic: args.offset + args.limit }
+          : { maxPerType: args.offset + args.limit }),
         createdAfter: t != null ? String(t) : undefined,
         filter: combineEntityFilters(
           args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
@@ -663,6 +747,11 @@ export async function fetchExploreFeed(args: {
    */
   leadWithPlayableDebate?: boolean;
   /**
+   * GEO-3083. The viewer's followed topics. Non-empty with Best and a type selection, the feed is
+   * For you: the followed-topic stream mixed with Best. Empty or absent, it is exactly Best.
+   */
+  forYouTopicIds?: readonly string[];
+  /**
    * Complete population branches for a contextual feed. When supplied, Best and New order this
    * full population from a compact index rather than applying one expensive combined predicate.
    */
@@ -811,7 +900,7 @@ export async function fetchExploreFeed(args: {
 
   const excludeTypeIds = args.excludeTypeIds ?? [];
 
-  const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
+  const windowRows = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
     const builtRows = buildExploreFeedRows(entities, allowed, memberOrEditorSet);
     const allRows =
       excludeTypeIds.length > 0
@@ -830,10 +919,23 @@ export async function fetchExploreFeed(args: {
     // pass is what keeps the rendered card and the selection agreeing, and it can only ever
     // narrow — the yield problem it used to cause is gone because the server now supplies a full
     // page of the right type rather than whatever happened to be in the window.
-    const rows =
-      args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
-        ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
-        : allRows;
+    return args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
+      ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
+      : allRows;
+  };
+
+  // Aim for an explicit composition when every selected type has a target share (GEO-2950),
+  // and fall back to the run cap otherwise — a single type, or a selection including types the
+  // mix says nothing about, has no ratio to hit. The two are alternatives, not a pipeline:
+  // running the cap after the mix would re-promote scarce types and undo the ratio, which is
+  // the exact mechanism that took claims from 4.1 to 1.8 per 10.
+  const mixTypes = (rows: ExploreFeedRow[]): ExploreFeedRow[] =>
+    targetMixAppliesTo(args.typeIds)
+      ? applyTargetMix(rows, exploreItemTypeKey)
+      : applyDiversityCap(rows, exploreItemTypeKey);
+
+  const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
+    const rows = windowRows(entities);
 
     // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
     // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
@@ -843,17 +945,31 @@ export async function fetchExploreFeed(args: {
     // `applyPerSpaceQuota` for why that trade is the right way round.
     if (args.sort !== 'best') return rows;
 
-    // Aim for an explicit composition when every selected type has a target share (GEO-2950),
-    // and fall back to the run cap otherwise — a single type, or a selection including types the
-    // mix says nothing about, has no ratio to hit. The two are alternatives, not a pipeline:
-    // running the cap after the mix would re-promote scarce types and undo the ratio, which is
-    // the exact mechanism that took claims from 4.1 to 1.8 per 10.
-    const mixed = targetMixAppliesTo(args.typeIds)
-      ? applyTargetMix(rows, exploreItemTypeKey)
-      : applyDiversityCap(rows, exploreItemTypeKey);
-
-    return applyPerSpaceQuota(mixed, exploreItemSpaceKey);
+    return applyPerSpaceQuota(mixTypes(rows), exploreItemSpaceKey);
   };
+
+  const forYouTopicIds = args.forYouTopicIds ?? [];
+  if (forYouTopicIds.length > 0 && bestFiltersServerSide) {
+    const streamArgs = {
+      topicIds: forYouTopicIds,
+      spaceIds: baseIds,
+      time: args.time,
+      limit: FOR_YOU_FEED.lookahead,
+      typeIds: args.typeIds ?? [],
+      requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+      entityFilter: args.entityFilter,
+    };
+    return serveForYouPage({
+      cursor: args.cursor,
+      fetchTopics: offset => fetchForYouStreamPage({ ...streamArgs, stream: 'topics', offset }),
+      fetchBest: (offset, withTopics) =>
+        fetchForYouStreamPage({ ...streamArgs, stream: withTopics ? 'best' : 'plainBest', offset }),
+      windowRows,
+      mixTypes,
+      leadWithPlayableDebate: args.leadWithPlayableDebate ?? false,
+      attachMeta,
+    });
+  }
 
   // A window that survives none of the above is not the end of the feed, and returning it as an
   // empty page is what makes it behave like one — badly (GEO-2835 review). The client's sentinel
@@ -930,6 +1046,146 @@ export async function fetchExploreFeed(args: {
           hasNextPage: page.hasNextPage,
           endCursor: page.endCursor,
         }),
+  };
+}
+
+/**
+ * One page of For you (GEO-3083). Best rows matching a follow are left to the topic stream so the
+ * two never repeat each other; a failed topic query serves plain Best for that page only.
+ */
+async function serveForYouPage(args: {
+  cursor: string | null;
+  fetchTopics: (offset: number) => Promise<ForYouStreamPage>;
+  fetchBest: (offset: number, withTopics: boolean) => Promise<ForYouStreamPage>;
+  windowRows: (entities: ExploreCardEntity[]) => ExploreFeedRow[];
+  mixTypes: (rows: ExploreFeedRow[]) => ExploreFeedRow[];
+  leadWithPlayableDebate: boolean;
+  attachMeta: (rows: ExploreFeedRow[]) => Promise<ExploreFeedItem[]>;
+}): Promise<ExploreFeedResult> {
+  const { lookahead, pageSize, maxFetchesPerStream } = FOR_YOU_FEED;
+  const empty: ForYouStreamPage = { entities: [], rawIndex: [], matchedTopicIds: new Map(), fetched: 0 };
+  const logFailure = (error: unknown) => {
+    console.error('explore for you: topic query failed, serving Best for this page', error);
+    return null;
+  };
+
+  // Unserved rows in rank order, and the raw indices accounted for: served before, undecodable, or
+  // not servable here, so the cursor moves past them.
+  const prepare = (
+    page: ForYouStreamPage,
+    served: ReadonlySet<number>,
+    servableHere: (row: ExploreFeedRow) => boolean
+  ) => {
+    const rawOf = new Map(page.entities.map((entity, i) => [normId(entity.id), page.rawIndex[i]]));
+    const index = (row: ExploreFeedRow) => rawOf.get(normId(row.entityId)) ?? -1;
+    const rows = args.windowRows(page.entities).filter(servableHere);
+    const servable = new Set(rows.map(index));
+    const consumed = new Set(served);
+    for (let i = 0; i < page.fetched; i += 1) if (!servable.has(i)) consumed.add(i);
+    return { rows: args.mixTypes(rows.filter(row => !served.has(index(row)))), index, consumed };
+  };
+
+  // Reads on in chunks (bounded) until a page's worth of rows is still servable, so a page is never
+  // short while the stream has more. Best rows matching a follow don't count: the topic stream has them.
+  const readStream = async (
+    fetchChunk: (offset: number) => Promise<ForYouStreamPage>,
+    offset: number,
+    served: ReadonlySet<number>,
+    skipFollowed: boolean
+  ) => {
+    let page = empty;
+    let requested = 0;
+    for (let fetches = 0; fetches < maxFetchesPerStream; fetches += 1) {
+      requested += lookahead;
+      const chunk = await fetchChunk(offset + page.fetched);
+      page = {
+        entities: [...page.entities, ...chunk.entities],
+        rawIndex: [...page.rawIndex, ...chunk.rawIndex.map(i => i + page.fetched)],
+        matchedTopicIds: new Map([...page.matchedTopicIds, ...chunk.matchedTopicIds]),
+        fetched: page.fetched + chunk.fetched,
+      };
+      if (chunk.fetched < lookahead) break;
+      const servable = page.entities.filter(
+        (entity, i) =>
+          !served.has(page.rawIndex[i]) && !(skipFollowed && page.matchedTopicIds.get(normId(entity.id))?.length)
+      );
+      if (servable.length >= pageSize) break;
+    }
+    return { page, requested };
+  };
+
+  const fetchStreams = async (cursor: ExploreForYouCursor) => {
+    const bestServed = cursor.best?.served ?? new Set<number>();
+    const none = { page: empty, requested: lookahead };
+    const [topics, best] = await Promise.all([
+      cursor.topic === null
+        ? none
+        : readStream(args.fetchTopics, cursor.topic.offset, cursor.topic.served, false).catch(logFailure),
+      cursor.best === null
+        ? none
+        : readStream(offset => args.fetchBest(offset, true), cursor.best.offset, bestServed, true).catch(logFailure),
+    ]);
+    if (topics !== null && best !== null) return { topics, best, topicsFailed: false };
+    // Only this page: the topic cursor stays put, so nothing Best left to it is lost.
+    const plain =
+      cursor.best === null
+        ? none
+        : await readStream(offset => args.fetchBest(offset, false), cursor.best.offset, bestServed, false);
+    return { topics: none, best: plain, topicsFailed: true };
+  };
+
+  const buildPage = async (cursor: ExploreForYouCursor) => {
+    const streams = await fetchStreams(cursor);
+    const topicPage = streams.topics.page;
+    const topics = prepare(topicPage, cursor.topic?.served ?? new Set(), () => true);
+    const bestPage = streams.best.page;
+    const best = prepare(
+      bestPage,
+      cursor.best?.served ?? new Set(),
+      row => (bestPage.matchedTopicIds.get(normId(row.entityId)) ?? []).length === 0
+    );
+
+    const { page, takenTopic, takenBest } = composeForYouPage(topics.rows, best.rows, {
+      idOf: row => normId(row.entityId),
+      spaceOf: exploreItemSpaceKey,
+      topicsOf: row => topicPage.matchedTopicIds.get(normId(row.entityId)) ?? [],
+    });
+    for (const i of takenTopic) topics.consumed.add(topics.index(topics.rows[i]));
+    for (const i of takenBest) best.consumed.add(best.index(best.rows[i]));
+
+    const next: ExploreForYouCursor = {
+      topic: streams.topicsFailed
+        ? cursor.topic
+        : advanceForYouStream(cursor.topic, topics.consumed, topicPage.fetched, streams.topics.requested),
+      best: advanceForYouStream(cursor.best, best.consumed, bestPage.fetched, streams.best.requested),
+    };
+    return { page, next: next.topic === null && next.best === null ? null : next };
+  };
+
+  // An empty page with a cursor makes the client refire at once, so scan on here, bounded as Best is.
+  let result = await buildPage(decodeExploreForYouCursor(args.cursor));
+  let scanBudgetSpent = false;
+  const scanDeadline = Date.now() + MAX_EMPTY_WINDOW_SCAN_MS;
+  for (let scans = 0; result.page.length === 0 && result.next !== null; scans += 1) {
+    if (scans >= MAX_EMPTY_WINDOW_SCANS || Date.now() >= scanDeadline) {
+      scanBudgetSpent = true;
+      break;
+    }
+    result = await buildPage(result.next);
+  }
+
+  let page = result.page;
+  // GEO-3070, as for Best: the first page opens on a playable debate.
+  if (args.leadWithPlayableDebate && args.cursor === null) {
+    page = await leadWithPlayableDebate(page, {
+      isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+    });
+  }
+
+  return {
+    items: await args.attachMeta(page),
+    nextCursor: scanBudgetSpent || result.next === null ? null : encodeExploreForYouCursor(result.next),
   };
 }
 

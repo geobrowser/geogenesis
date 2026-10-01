@@ -33,6 +33,7 @@ describe('feature flags', () => {
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
       bountiesTab: true,
     });
   });
@@ -49,6 +50,7 @@ describe('feature flags', () => {
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
       bountiesTab: true,
     });
   });
@@ -74,6 +76,7 @@ describe('feature flags', () => {
       debateDebugging: true,
       debateFormatSelector: true,
       exploreSidePanel: false,
+      forYouFeed: false,
       bountiesTab: true,
     });
   });
