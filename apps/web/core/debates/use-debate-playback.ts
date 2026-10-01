@@ -131,11 +131,8 @@ function moveTo(video: HTMLVideoElement, seconds: number) {
 // below recompute on each one.
 const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>['data']>['segments'] = [];
 
-/**
- * geo-chat presigns recording URLs for 15 minutes and `lookup` may hand back one cached for up to
- * 5. A card re-attaching its media later than this re-signs first, so a <video> never gets a URL
- * about to lapse (GEO-3067).
- */
+// Presigns last 15 minutes and `lookup` may return one cached for 5, so a card re-attaching
+// later than this re-signs before handing a <video> its URL (GEO-3067).
 const RECORDING_URL_REUSE_MS = 5 * 60_000;
 
 export function useDebatePlayback(
