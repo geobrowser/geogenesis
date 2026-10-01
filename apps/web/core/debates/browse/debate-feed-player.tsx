@@ -72,6 +72,11 @@ type DebateFeedPlayerProps = {
    */
   preload?: boolean;
   /**
+   * Detach both recordings from their <video> elements while keeping the signed URLs, so a card
+   * away from the viewer holds no decoder or buffered media (GEO-3067).
+   */
+  releaseMedia?: boolean;
+  /**
    * Buffer this debate's recordings, not just open them — for the one card the viewer is most
    * likely to reach next (GEO-2965).
    *
@@ -112,6 +117,7 @@ export function DebateFeedPlayer({
   debate,
   active,
   preload = false,
+  releaseMedia = false,
   buffer = false,
   reducedOverlays = false,
   onOpenClaims,
@@ -122,8 +128,10 @@ export function DebateFeedPlayer({
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
-  const controller = useDebatePlayback(debate, active || preload);
-  const measurement = usePlaybackAnalytics(debate, active, controller);
+  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia });
+  // What the <video> elements actually hold: a released card, or one re-signing lapsed URLs, has none.
+  const detached = releaseMedia || controller.urlsLapsed;
+  const measurement = usePlaybackAnalytics(debate, active, controller, !detached);
   const {
     slot1VideoRef,
     slot2VideoRef,
@@ -170,12 +178,20 @@ export function DebateFeedPlayer({
    * Keyed on the debate, not the card: the feed keys its cards by claim, so a re-rank hands this
    * same player a different debate, and that debate's pair has to be held on its own terms.
    */
+  const slot1Src = detached ? null : urls.slot1;
+  const slot2Src = detached ? null : urls.slot2;
+  // Each re-attach brings new elements, so the hold re-arms for them. Derived during render so the
+  // hold is in place before the autoplay effect sees the re-attached pair.
+  const [attachment, setAttachment] = React.useState({ detached, generation: 0 });
+  if (attachment.detached !== detached) {
+    setAttachment({ detached, generation: detached ? attachment.generation : attachment.generation + 1 });
+  }
   const pair = usePairReadiness({
-    pairKey: debate.id,
+    pairKey: `${debate.id}:${attachment.generation}`,
     slot1Ref: slot1VideoRef,
     slot2Ref: slot2VideoRef,
-    slot1Src: urls.slot1,
-    slot2Src: urls.slot2,
+    slot1Src,
+    slot2Src,
     active,
   });
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
@@ -250,12 +266,21 @@ export function DebateFeedPlayer({
     if (!ready) return;
     // A refusal is not retried: the browser gives the same answer every time, and
     // only the viewer's tap is a gesture it will accept.
-    if (active && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
+    // A detached pair has no elements to start; this re-runs when they arrive.
+    if (active && !detached && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, awaitingTap, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+  }, [active, awaitingTap, detached, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+
+  // A resume still confirming when the card goes inactive or loses its media is retired, since its
+  // elements may be released. Read through a ref so a resume settling doesn't re-run autoplay.
+  const isResumingRef = React.useRef(isResuming);
+  isResumingRef.current = isResuming;
+  React.useEffect(() => {
+    if ((!active || detached) && isResumingRef.current) suspend();
+  }, [active, detached, suspend]);
 
   const hasError = error != null;
   // `ready` keeps its meaning for GEO-3074's outcome — both URLs in hand — so its `ready_ms` and
@@ -561,7 +586,7 @@ export function DebateFeedPlayer({
           inert={endCardShown}
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
-          src={urls.slot1}
+          src={slot1Src}
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
@@ -623,7 +648,7 @@ export function DebateFeedPlayer({
           inert={endCardShown}
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
-          src={urls.slot2}
+          src={slot2Src}
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}

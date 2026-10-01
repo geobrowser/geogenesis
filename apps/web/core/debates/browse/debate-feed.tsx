@@ -398,6 +398,10 @@ export function DebatesBrowseFeed({
           // buffers, and nothing further than two ahead is touched at all.
           preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
           buffer={activeIndex >= 0 && index === activeIndex + 1}
+          // Cards stay mounted as the feed grows, so everything outside one behind to the preload
+          // window ahead releases its <video> elements (GEO-3067).
+          // With no active card (a refetch dropped it), everything stays released until one is chosen.
+          releaseMedia={activeIndex < 0 || index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -470,6 +474,7 @@ function DebateFeedItem({
   initialSeekSeconds,
   preload,
   buffer,
+  releaseMedia,
   root,
   scrollHint,
   onActivate,
@@ -488,6 +493,7 @@ function DebateFeedItem({
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
   buffer: boolean;
+  releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
@@ -571,6 +577,7 @@ function DebateFeedItem({
               active={active}
               preload={preload}
               buffer={buffer}
+              releaseMedia={releaseMedia}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}

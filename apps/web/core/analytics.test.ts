@@ -41,6 +41,37 @@ describe('analytics', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  // A blocked runtime script never drains the queue, so it must not grow for the life of the tab
+  // (GEO-3067); identity calls still get through when it does load.
+  it('bounds the queue while the runtime is missing but keeps identity calls', async () => {
+    const { capture, loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1500; i++) capture('action_completed', { index: i });
+    loggedIn({ id: 'user-1' } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    // The identity call took the oldest event's place, so the queue never exceeded the bound.
+    expect(runtime.capture).toHaveBeenCalledTimes(999);
+    expect(runtime.capture).toHaveBeenNthCalledWith(1, 'action_completed', expect.objectContaining({ index: 1 }));
+    expect(runtime.capture).toHaveBeenLastCalledWith('action_completed', expect.objectContaining({ index: 999 }));
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays bounded when the full queue holds only identity calls', async () => {
+    const { loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1001; i++) loggedIn({ id: `user-${i}` } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    // Only the oldest identity call gives way; the newest identity state always arrives.
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1000);
+    expect(runtime.loggedIn).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-1000' }), expect.anything());
+  });
+
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
     const { initAnalytics } = await import('./analytics');
 
