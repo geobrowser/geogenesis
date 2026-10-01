@@ -933,6 +933,21 @@ describe('the small-panel layout', () => {
     expect(claimText(/Supreme Court/)).toHaveClass('@max-md:visible');
   });
 
+  /**
+   * The wrapper the read-in-full tap needs must not change the wide card. In a plain block box the
+   * expand toggle is an inline-level `<button>` on a line box of its own, and every truncated claim
+   * in the desktop backlog came out 87px rather than 80px. Measured on the preview; jsdom has no
+   * layout, so what is pinned is the flex column that blockifies it.
+   */
+  it('keeps the expand toggle a flex item, so the wide card keeps its height', () => {
+    forceClampedOverflow();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+
+    for (const toggle of screen.getAllByTitle('Show the whole claim')) {
+      expect(toggle.parentElement).toHaveClass('flex', 'flex-col');
+    }
+  });
+
   // The end card's carousel draws the same card on white, inside the same `@container`, with its
   // own small-panel layout. It must not inherit this one.
   it('leaves the card untouched where no small-panel layout is asked for', () => {
