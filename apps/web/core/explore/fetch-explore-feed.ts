@@ -318,8 +318,13 @@ async function fetchForYouStreamPage(args: {
           ? { maxPerTopic: args.offset + args.limit }
           : { maxPerType: args.offset + args.limit }),
         createdAfter: t != null ? String(t) : undefined,
+        // The topic walk applies the debate-tag rule itself (gaia#984). As a filter after the walk it
+        // would drop rows past each topic's cap and leave pages nearly empty.
+        ...(args.stream === 'topics' ? { debateTaggedClaims: args.requireDebateTagOnClaims ?? false } : {}),
         filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          args.requireDebateTagOnClaims && args.stream !== 'topics'
+            ? claimsRequireDebateTagFilter(args.spaceIds)
+            : undefined,
           args.entityFilter
         ),
         spaceIdsForLists: args.spaceIds,

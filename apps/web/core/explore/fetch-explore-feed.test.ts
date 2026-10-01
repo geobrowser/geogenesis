@@ -714,7 +714,18 @@ describe('For you', () => {
     expect(topic).toMatchObject({ topicIds: [TOPIC_A, TOPIC_B], offset: 0, first: 66, maxPerTopic: 66 });
     expect(best).toMatchObject({ offset: 0, first: 66, maxPerType: 66, topicIds: [TOPIC_A, TOPIC_B] });
     expect(topic.typeIds).toEqual(best.typeIds);
-    expect((topic.filter as { or?: unknown }).or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+    // The topic walk applies the debate-tag rule itself (gaia#984); Best still takes it as a filter.
+    expect(topic.debateTaggedClaims).toBe(true);
+    expect((topic.filter as { or?: unknown } | undefined)?.or).toBeUndefined();
+    expect((best.filter as { or?: unknown }).or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+
+  it('leaves the debate-tag rule off the topic walk when the feed does not ask for it', async () => {
+    respond(claims('t', 5), claims('b', 5));
+
+    await fetchExploreFeed({ ...forYouArgs, requireDebateTagOnClaims: false });
+
+    expect(opsOf('ExploreForYouConnection')[0]?.debateTaggedClaims).toBe(false);
   });
 
   it('serves three followed items then one Best item', async () => {
