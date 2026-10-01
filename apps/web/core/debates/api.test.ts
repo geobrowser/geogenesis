@@ -6,6 +6,7 @@ import {
   GeoChatRequestError,
   GeoChatSessionError,
   blockDebateUser,
+  clearClaimNotInterested,
   completeLocalRecordingUpload,
   createDebateRequest,
   createScheduledDebate,
@@ -20,6 +21,8 @@ import {
   listDebateClaims,
   listDebatePeople,
   listMatchmakingClaims,
+  listNotInterestedClaims,
+  markClaimNotInterested,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
@@ -358,6 +361,37 @@ describe('matchmaking', () => {
       'http://localhost:8080/me/debate-blocks/user-b',
       expect.objectContaining({ method: 'PUT' })
     );
+  });
+
+  // GEO-2862. Off-chain and private: a plain geo-chat write, no transaction.
+  it('marks, clears and lists "Not interested" claims', async () => {
+    const response = {
+      claims: [{ claim_entity_id: 'claim-1', claim_text: 'A claim', created_at: '2026-10-01T00:00:00Z' }],
+    };
+    // A fresh Response per call: a body can only be read once.
+    const fetch = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify(response), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(markClaimNotInterested('claim-1', vi.fn(), 'user-a')).resolves.toEqual(response);
+    await clearClaimNotInterested('claim-1', vi.fn(), 'user-a');
+    await listNotInterestedClaims(vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/me/not-interested-claims/claim-1',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/me/not-interested-claims/claim-1',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+    expect(fetch.mock.calls[2][0]).toBe('http://localhost:8080/me/not-interested-claims');
   });
 });
 

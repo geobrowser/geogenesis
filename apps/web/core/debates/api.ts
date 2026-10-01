@@ -690,6 +690,24 @@ export type DebateBlocksResponse = {
   blocked: DebateParticipantSummary[];
 };
 
+/**
+ * A claim the viewer marked "Not interested" (GEO-2862). Private to the viewer and stored in
+ * geo-chat, not on-chain: it is a browsing preference, not a position, and it sits beside any
+ * position the viewer holds rather than replacing it. geo-chat leaves these claims out of the
+ * viewer's `/matchmaking/claims` rows and facets (except the `mine` filter).
+ */
+export type NotInterestedClaim = {
+  claim_entity_id: string;
+  /** geo-chat's synced copy of the claim text; `null` when it has not synced the claim. */
+  claim_text: string | null;
+  created_at: string;
+};
+
+/** Every write returns the whole list, newest first, so the undo list can render from it. */
+export type NotInterestedClaimsResponse = {
+  claims: NotInterestedClaim[];
+};
+
 export type ObjectStoreUpload = {
   method: string;
   url: string;
@@ -2039,6 +2057,47 @@ export async function unblockDebateUser(
   accountKey: string | null
 ) {
   return geoChatRequest<DebateBlocksResponse>(`/me/debate-blocks/${userId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function listNotInterestedClaims(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>('/me/not-interested-claims', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Idempotent: marking a claim twice keeps the first mark. */
+export async function markClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
+    method: 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: clearing a claim that was never marked is not an error. */
+export async function clearClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
     method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,
