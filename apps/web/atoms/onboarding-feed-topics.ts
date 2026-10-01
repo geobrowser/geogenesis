@@ -2,7 +2,8 @@ import { atomWithStorage } from 'jotai/utils';
 
 import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 
-export type HeldFeedTopics = { address: string; topics: TopicOption[] };
+/** `submittedAt` is set while a follow edit for these topics may still be landing. */
+export type HeldFeedTopics = { address: string; topics: TopicOption[]; submittedAt?: number };
 
 export const FEED_TOPICS_STORAGE_KEY = 'onboardingFeedTopics';
 export const NO_HELD_FEED_TOPICS: HeldFeedTopics = { address: '', topics: [] };
@@ -15,12 +16,17 @@ export const feedTopicsAtom = atomWithStorage<HeldFeedTopics>(FEED_TOPICS_STORAG
   getOnInit: true,
 });
 
-/** The held picks if `address` chose them, else none: a wallet can switch without a logout. */
-export function heldTopicsFor(held: unknown, address: string | null | undefined): TopicOption[] {
-  if (!address || !held || typeof held !== 'object' || Array.isArray(held)) return [];
+/** The held record if `address` chose it, else null: a wallet can switch without a logout. */
+export function heldRecordFor(held: unknown, address: string | null | undefined): HeldFeedTopics | null {
+  if (!address || !held || typeof held !== 'object' || Array.isArray(held)) return null;
   const record = held as Partial<HeldFeedTopics>;
-  if (typeof record.address !== 'string' || record.address.toLowerCase() !== address.toLowerCase()) return [];
-  return Array.isArray(record.topics) ? record.topics : [];
+  if (typeof record.address !== 'string' || record.address.toLowerCase() !== address.toLowerCase()) return null;
+  if (!Array.isArray(record.topics)) return null;
+  return { address: record.address, topics: record.topics, submittedAt: record.submittedAt };
+}
+
+export function heldTopicsFor(held: unknown, address: string | null | undefined): TopicOption[] {
+  return heldRecordFor(held, address)?.topics ?? [];
 }
 
 /** The record as stored right now, which another tab may have changed since this one last rendered. */

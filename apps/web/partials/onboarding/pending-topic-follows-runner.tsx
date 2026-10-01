@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { Effect } from 'effect';
@@ -10,12 +12,14 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { useFollowTopics } from '~/core/topics/use-follow-topics';
-import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { followedTopicsQueryOptions, useFollowedTopics } from '~/core/topics/use-followed-topics';
 import { devLog } from '~/core/utils/dev-log';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   NO_HELD_FEED_TOPICS,
   feedTopicsAtom,
+  heldRecordFor,
   heldTopicsFor,
   readStoredFeedTopics,
 } from '~/atoms/onboarding-feed-topics';
@@ -25,10 +29,14 @@ const INDEX_POLL_MAX_MS = 30_000;
 const PUBLISH_RETRY_MS = 30_000;
 const LOCK_RETRY_MS = 5_000;
 const LOCK_NAME = 'geo:onboarding-topic-follows';
+// A publish started by an earlier page can still land after a reload; until this passes, wait for
+// its follows to be indexed rather than publish them again.
+const SUBMITTED_GRACE_MS = 2 * 60_000;
+const SUBMITTED_POLL_MS = 10_000;
 // Each failed publish shows the user an error, so stop after a few until the next page load.
 const MAX_PUBLISH_FAILURES = 3;
 
-type Outcome = 'done' | 'unindexed' | 'failed';
+type Outcome = 'done' | 'unindexed' | 'submitted' | 'failed';
 
 // Picks sync across tabs through localStorage, but follow's dedupe is per tab, so only one tab may
 // publish them. Resolves null when another tab holds the lock.
@@ -54,11 +62,28 @@ export function PendingTopicFollowsRunner() {
   const { personalSpaceId } = usePersonalSpaceId();
   const { isLoading: isLoadingFollowed } = useFollowedTopics();
   const { follow } = useFollowTopics();
+  const queryClient = useQueryClient();
 
   const [retryTick, setRetryTick] = React.useState(0);
   const runningRef = React.useRef(false);
   const indexPollsRef = React.useRef(0);
   const publishFailuresRef = React.useRef(0);
+  const ownerRef = React.useRef(address);
+  const addressRef = React.useRef(address);
+  addressRef.current = address;
+
+  // Writes only over this owner's stored record: the wallet can switch mid-publish, and a newer
+  // account's picks must survive the old account's run.
+  const clearFollowed = React.useCallback(
+    (owner: string, followed: readonly { id: string }[]) => {
+      const current = heldRecordFor(readStoredFeedTopics(), owner);
+      if (!current) return;
+      const done = new Set(followed.map(topic => normId(topic.id)));
+      const left = current.topics.filter(topic => !done.has(normId(topic.id)));
+      setHeld(left.length > 0 ? { address: owner, topics: left } : NO_HELD_FEED_TOPICS);
+    },
+    [setHeld]
+  );
 
   // Same rule as PendingPersonalSpaceRunner's pending record: another account's picks are dropped.
   React.useEffect(() => {
@@ -67,6 +92,12 @@ export function PendingTopicFollowsRunner() {
 
   React.useEffect(() => {
     if (!address || !personalSpaceId || pending || isLoadingFollowed || picks.length === 0) return;
+    // Retry budgets belong to one account.
+    if (ownerRef.current !== address) {
+      ownerRef.current = address;
+      indexPollsRef.current = 0;
+      publishFailuresRef.current = 0;
+    }
     if (publishFailuresRef.current >= MAX_PUBLISH_FAILURES) return;
     if (runningRef.current) return;
     runningRef.current = true;
@@ -79,22 +110,36 @@ export function PendingTopicFollowsRunner() {
       try {
         const outcome = await withCrossTabLock(async () => {
           // Read under the lock: a tab that waited finds the picks another tab already followed gone.
-          const sent = heldTopicsFor(readStoredFeedTopics(), owner);
-          if (sent.length === 0) return 'done';
+          const record = heldRecordFor(readStoredFeedTopics(), owner);
+          if (!record || record.topics.length === 0) return 'done';
 
           const space = await Effect.runPromise(getSpace(spaceId)).catch(() => null);
           if (!space) return 'unindexed';
 
-          devLog('[onboarding] following %d onboarding topics in %s', sent.length, spaceId);
-          if (!(await follow(sent))) return 'failed';
+          if (record.submittedAt && Date.now() - record.submittedAt < SUBMITTED_GRACE_MS) {
+            const rows = await queryClient
+              .fetchQuery({ ...followedTopicsQueryOptions(spaceId), staleTime: 0 })
+              .catch(() => null);
+            const followed = new Set((rows ?? []).map(row => normId(row.toEntityId)));
+            if (!record.topics.every(topic => followed.has(normId(topic.id)))) return 'submitted';
+            clearFollowed(owner, record.topics);
+            return 'done';
+          }
 
-          // Written to storage before the lock is released, and only over this owner's record: the
-          // wallet may have switched mid-publish and a newer account stored picks of its own.
-          const stillOwned = heldTopicsFor(readStoredFeedTopics(), owner);
-          if (stillOwned.length === 0) return 'done';
-          const done = new Set(sent.map(topic => topic.id));
-          const left = stillOwned.filter(topic => !done.has(topic.id));
-          setHeld(left.length > 0 ? { address: owner, topics: left } : NO_HELD_FEED_TOPICS);
+          // Re-read after the await, like every write here: see clearFollowed.
+          const latest = heldRecordFor(readStoredFeedTopics(), owner);
+          if (!latest || latest.topics.length === 0) return 'done';
+          const sent = latest.topics;
+          setHeld({ address: owner, topics: sent, submittedAt: Date.now() });
+          devLog('[onboarding] following %d onboarding topics in %s', sent.length, spaceId);
+          if (!(await follow(sent))) {
+            const current = heldRecordFor(readStoredFeedTopics(), owner);
+            if (current) setHeld({ address: owner, topics: current.topics });
+            return 'failed';
+          }
+
+          // Written to storage before the lock is released.
+          clearFollowed(owner, sent);
           return 'done';
         });
 
@@ -103,16 +148,31 @@ export function PendingTopicFollowsRunner() {
         } else if (outcome === 'unindexed') {
           indexPollsRef.current += 1;
           delay = Math.min(INDEX_POLL_MS * indexPollsRef.current, INDEX_POLL_MAX_MS);
+        } else if (outcome === 'submitted') {
+          delay = SUBMITTED_POLL_MS;
         } else if (outcome === 'failed') {
           publishFailuresRef.current += 1;
           delay = PUBLISH_RETRY_MS;
         }
       } finally {
         runningRef.current = false;
+        // A newer account that became ready mid-run was turned away by runningRef.
+        if (delay === null && addressRef.current !== owner) delay = 0;
         if (delay !== null) setTimeout(() => setRetryTick(n => n + 1), delay);
       }
     })();
-  }, [address, personalSpaceId, pending, isLoadingFollowed, picks.length, follow, setHeld, retryTick]);
+  }, [
+    address,
+    personalSpaceId,
+    pending,
+    isLoadingFollowed,
+    picks.length,
+    follow,
+    queryClient,
+    clearFollowed,
+    setHeld,
+    retryTick,
+  ]);
 
   return null;
 }
