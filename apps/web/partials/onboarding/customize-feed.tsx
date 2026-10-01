@@ -152,12 +152,12 @@ function TopicPill({
       }}
       onClick={() => !isStale && onToggle(topic)}
       className={cx(
-        'flex items-center justify-start rounded-[40px] border px-4 py-3',
+        'flex items-center justify-start rounded-full border px-3 py-1',
         isSelected ? 'border-[#2A2B2E]' : 'border-grey-02',
         isStale ? 'cursor-default opacity-50' : 'cursor-pointer'
       )}
     >
-      <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{topic.name}</span>
+      <span className="text-metadata text-[#2A2B2E]">{topic.name}</span>
     </div>
   );
 }
