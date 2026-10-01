@@ -12,6 +12,7 @@ import {
 } from '~/core/io/queries';
 import { profileBySpaceIdQueryKey, profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import type { Profile } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
@@ -29,7 +30,7 @@ import {
 
 export { claimResponseSummariesQueryKeyPrefix, claimResponseTargetKey } from './claim-response-summary-query-keys';
 
-export const CLAIM_RESPONSE_SUMMARY_PAGE_SIZE = 1_000;
+export const CLAIM_RESPONSE_SUMMARY_PAGE_SIZE = 500;
 const RESPONDER_METADATA_CHUNK_SIZE = 100;
 const RESPONDER_METADATA_CONCURRENCY = 4;
 
@@ -47,11 +48,11 @@ export type ClaimResponseSummary = {
 type FetchSummaryPageArgs = {
   filter: UserVoteFilter;
   first: number;
-  offset: number;
+  after: string | undefined;
   signal?: AbortSignal;
 };
 
-type FetchSummaryPage = (args: FetchSummaryPageArgs) => Promise<ClaimResponseSummaryRow[]>;
+type FetchSummaryPage = (args: FetchSummaryPageArgs) => Promise<CursorPage<ClaimResponseSummaryRow>>;
 type FetchSummaries = typeof fetchClaimResponseSummaries;
 type FetchProfiles = (spaceIds: string[]) => Promise<Profile[]>;
 type FetchSpaces = (spaceIds: string[], signal?: AbortSignal) => Promise<Space[]>;
@@ -130,21 +131,16 @@ export async function fetchClaimResponseSummaries({
   if (normalizedTargets.length === 0) return new Map<string, ClaimResponseSummary>();
 
   const filter = buildClaimResponseSummaryFilter(spaceId, normalizedTargets);
-  const rows: ClaimResponseSummaryRow[] = [];
-  let offset = 0;
 
-  while (true) {
-    const page = await fetchPage({ filter, first: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE, offset, signal });
-    rows.push(...page);
-    if (page.length < CLAIM_RESPONSE_SUMMARY_PAGE_SIZE) break;
-    offset += CLAIM_RESPONSE_SUMMARY_PAGE_SIZE;
-  }
+  const rows = await collectCursorPages(after =>
+    fetchPage({ filter, first: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE, after, signal })
+  );
 
   return groupClaimResponseSummaryRows(normalizedTargets, rows, personalSpaceId);
 }
 
-function defaultFetchPage({ filter, first, offset, signal }: FetchSummaryPageArgs) {
-  return Effect.runPromise(getClaimResponseSummaryPage(filter, first, offset, signal));
+function defaultFetchPage({ filter, first, after, signal }: FetchSummaryPageArgs) {
+  return Effect.runPromise(getClaimResponseSummaryPage(filter, first, after, signal));
 }
 
 export async function loadClaimResponseSummaryCaches({
