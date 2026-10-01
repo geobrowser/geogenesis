@@ -23,6 +23,12 @@ function fitCommentTextarea(textarea: HTMLTextAreaElement) {
   return contentHeight > singleLineHeight;
 }
 
+/** Whether the primary input is a mouse rather than a finger. Fine where it can't be asked. */
+function isPointerFine() {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return !window.matchMedia('(hover: none), (pointer: coarse)').matches;
+}
+
 /**
  * Position controls for the two surfaces where GEO-2979 invites an explanation.
  *
@@ -80,6 +86,9 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // Focused for a mouse and keyboard, where it saves a click. On a touch screen focusing raises the
+  // on-screen keyboard over the claim the viewer just answered, for an explanation that is optional.
+  const [focusComposerOnOpen] = React.useState(isPointerFine);
   const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
     targetEntityType: 'claim',
     interactionSurface: 'claim_position_explanation',
@@ -213,7 +222,7 @@ export function ClaimPositionCommentControl({
                 }}
                 placeholder={`Why do you ${action.toLowerCase()}?`}
                 aria-label={`Why do you ${action.toLowerCase()}?`}
-                autoFocus
+                autoFocus={focusComposerOnOpen}
                 wrap="soft"
                 rows={1}
                 disabled={isSubmitting}
