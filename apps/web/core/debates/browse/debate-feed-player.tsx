@@ -269,23 +269,18 @@ export function DebateFeedPlayer({
     // A detached pair has no elements to start; this re-runs when they arrive.
     if (active && !detached && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
-    } else if ((!active || detached) && (playing || isResuming)) {
-      // Includes a resume still confirming: its elements may be about to be released.
+    } else if (!active && playing) {
       suspend();
     }
-  }, [
-    active,
-    awaitingTap,
-    detached,
-    isResuming,
-    isScrubbing,
-    pairMayStart,
-    playbackEnded,
-    playing,
-    ready,
-    resumeBoth,
-    suspend,
-  ]);
+  }, [active, awaitingTap, detached, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+
+  // A resume still confirming when the card goes inactive or loses its media is retired, since its
+  // elements may be released. Read through a ref so a resume settling doesn't re-run autoplay.
+  const isResumingRef = React.useRef(isResuming);
+  isResumingRef.current = isResuming;
+  React.useEffect(() => {
+    if ((!active || detached) && isResumingRef.current) suspend();
+  }, [active, detached, suspend]);
 
   const hasError = error != null;
   // `ready` keeps its meaning for GEO-3074's outcome — both URLs in hand — so its `ready_ms` and
