@@ -9,7 +9,7 @@ import * as React from 'react';
  * routinely gone before the sentence was finished. Shown as a draining bar on the card, so how long
  * is left is never a surprise.
  */
-export const CLAIM_CARD_MS = 20_000;
+export const CLAIM_CARD_MS = 30_000;
 /** How often the cards' clocks advance. Short enough for the bar to read as continuous. */
 export const CLAIM_CARD_TICK_MS = 100;
 

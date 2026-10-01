@@ -214,7 +214,8 @@ describe('DebatesPageClient browse feed', () => {
     // voting now happens on the end-of-debate scorecard and in the claims panel.
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
+    // One action bar, under the video on every width (GEO-3112).
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(1);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });

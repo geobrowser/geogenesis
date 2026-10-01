@@ -260,11 +260,10 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(mediaColumn).toHaveStyle({
       // Reserves the claim panel's column beside the video (GEO-3112).
       '--debate-feed-column-width':
-        'clamp(280px, min(calc(100cqw - 4rem - 19rem - 1rem), calc(82.9dvh - 10.88rem)), 640px)',
+        'clamp(280px, min(calc(100cqw - 4rem - 19rem - 1rem), calc(82.9dvh - 13.38rem)), 640px)',
     });
-    // The action bar is horizontal on both layouts now: under the video on a phone, along the
-    // bottom of the claim panel's column on desktop (GEO-3112).
-    expect(screen.getAllByTestId('entity-votes-debate-horizontal')).toHaveLength(2);
+    // One horizontal action bar under the video, on both layouts (GEO-3112).
+    expect(screen.getAllByTestId('entity-votes-debate-horizontal')).toHaveLength(1);
     expect(screen.queryByTestId('entity-votes-debate-vertical')).not.toBeInTheDocument();
     expect(mocks.entityVoteProps).toEqual(
       expect.arrayContaining([
@@ -512,9 +511,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
   it('puts the overflow menu in the action bar on both layouts', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    // A horizontal bar on each: under the video on a phone, along the bottom of the claim panel's
-    // column on desktop (GEO-3112) — so two pills and no circle rail.
-    expect(screen.getAllByTestId('overflow-pill-debate-1')).toHaveLength(2);
+    // One horizontal bar under the video on both layouts (GEO-3112), so one pill and no circle rail.
+    expect(screen.getAllByTestId('overflow-pill-debate-1')).toHaveLength(1);
     expect(screen.queryByTestId('overflow-circle-debate-1')).not.toBeInTheDocument();
   });
 

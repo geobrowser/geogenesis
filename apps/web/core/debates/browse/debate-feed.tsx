@@ -49,7 +49,7 @@ const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
   // claim title, media gap, and vertical breathing room — and, beside it, the claim panel's column
   // and its gap, so the three never push the rail off a laptop screen.
-  '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 4rem - ${SIDE_PANEL_WIDTH} - 1rem), calc(82.9dvh - 10.88rem)), 640px)`,
+  '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 4rem - ${SIDE_PANEL_WIDTH} - 1rem), calc(82.9dvh - 13.38rem)), 640px)`,
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -578,21 +578,14 @@ function DebateFeedItem({
             />
           </div>
           <div className="relative mt-6 md:mt-7">
-            {/* Desktop: the claim panel's column, beside the video and exactly its height — the
-                claims from its top edge, the debate's actions along its bottom edge. Positioned off
-                the player rather than in the flex row so it never sets the card's height; the
-                spacer beside the column below reserves its width. */}
+            {/* Desktop: the claim panel's column, beside the video and no taller than it, aligned to
+                its top edge. Positioned off the player rather than in the flex row so it never sets
+                the card's height; the spacer beside the column below reserves its width. */}
             <div
-              className="absolute inset-y-0 left-full ml-4 flex flex-col justify-between gap-3 md:hidden"
+              ref={setSidePanelHost}
+              className="absolute inset-y-0 left-full ml-4 flex flex-col overflow-y-auto md:hidden"
               style={{ width: SIDE_PANEL_WIDTH }}
-            >
-              <div ref={setSidePanelHost} className="flex min-h-0 flex-col overflow-y-auto" />
-              <DebateInteractionBar
-                orientation="horizontal"
-                {...interactionProps}
-                overflow={<DebateOverflowMenu debate={debate} variant="pill" />}
-              />
-            </div>
+            />
             <DebateFeedPlayer
               debate={debate}
               active={active}
@@ -610,9 +603,9 @@ function DebateFeedItem({
           </div>
           {/* Mobile: the claim panel, under the video. */}
           <div ref={setBelowPanelHost} className="mt-3 hidden md:block" />
-          {/* Mobile: horizontal bar below the videos. Wrapper controls display so
-              it doesn't collide with the bar's own `flex`. */}
-          <div className="mt-3 hidden md:block">
+          {/* The debate's actions, under the video and left-aligned at every width (GEO-3112). On a
+              phone the claim panel sits between the two. */}
+          <div className="mt-3">
             <DebateInteractionBar
               orientation="horizontal"
               {...interactionProps}
