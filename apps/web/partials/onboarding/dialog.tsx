@@ -215,7 +215,10 @@ export const OnboardingDialog = () => {
     // Kick off the background personal-space creation immediately.
     setPending({ topicId, address, status: 'pending' });
 
-    if (!hasSeenAssistant) {
+    // Not on phones, where the assistant is a sheet that covers the page the viewer was just sent
+    // back to. Left unmarked as seen so it still introduces itself on a wider screen.
+    const isPhone = window.matchMedia('(max-width: 767px)').matches;
+    if (!hasSeenAssistant && !isPhone) {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
@@ -271,7 +274,7 @@ export const OnboardingDialog = () => {
           onEscapeKeyDown={e => e.preventDefault()}
           onPointerDownOutside={e => e.preventDefault()}
           onInteractOutside={e => e.preventDefault()}
-          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center p-6"
+          className="fixed inset-0 z-1000 flex h-full w-full items-center justify-center p-6"
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
@@ -322,7 +325,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 mt-40 flex ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
+      className={`pointer-events-auto relative z-100 flex ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
     >
       {children}
     </motion.div>
