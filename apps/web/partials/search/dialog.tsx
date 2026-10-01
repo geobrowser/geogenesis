@@ -85,9 +85,9 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }, []);
   const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
   const toggleSpaceSelected = useCallback((id: string) => {
+    setCanonicalOnly(false);
     setSelectedSpaceIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
   }, []);
-  const selectAllSpaces = useCallback(() => setSelectedSpaceIds([]), []);
   const addFilterTag = useCallback((tag: SearchFilterTag) => {
     setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
   }, []);
@@ -110,7 +110,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }, []);
 
   useEffect(() => {
-    if (!canonicalOnly) setSelectedSpaceIds([]);
+    if (canonicalOnly) setSelectedSpaceIds([]);
   }, [canonicalOnly]);
 
   const { hydrate } = useSyncEngine();
@@ -263,7 +263,6 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                           onToggleCanonicalOnly={toggleCanonicalOnly}
                           selectedSpaceIds={selectedSpaceIds}
                           onToggleSpace={toggleSpaceSelected}
-                          onSelectAllSpaces={selectAllSpaces}
                           typeIds={filterTypeIds}
                           onToggleType={toggleFilterType}
                           onClearTypes={clearFilterTypes}
