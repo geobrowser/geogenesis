@@ -86,26 +86,28 @@ describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     const held = result.current.urls;
 
-    rerender({ mediaAttached: false });
     now += 4 * 60_000;
+    rerender({ mediaAttached: false });
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
     rerender({ mediaAttached: true });
 
-    expect(result.current.resigningUrls).toBe(false);
+    expect(result.current.urlsLapsed).toBe(false);
     expect(result.current.urls).toBe(held);
     expect(mocks.recordingUrlRefreshes).toHaveLength(0);
   });
 
-  it('re-signs both URLs uncached, holding the placeholder, after the reuse window', async () => {
+  it('marks held URLs lapsed while released, then re-signs both uncached on re-attach', async () => {
     const { result, rerender } = renderPlayback();
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     const held = result.current.urls;
 
-    rerender({ mediaAttached: false });
     now += 6 * 60_000;
-    rerender({ mediaAttached: true });
+    rerender({ mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+    expect(mocks.recordingUrlRefreshes).toHaveLength(0);
 
-    expect(result.current.resigningUrls).toBe(true);
-    await waitFor(() => expect(result.current.resigningUrls).toBe(false));
+    rerender({ mediaAttached: true });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(false));
     expect(mocks.recordingUrlRefreshes).toHaveLength(2);
     expect(result.current.urls.slot1).not.toBe(held.slot1);
     expect(result.current.urls.slot2).not.toBe(held.slot2);

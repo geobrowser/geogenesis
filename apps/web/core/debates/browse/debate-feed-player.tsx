@@ -129,14 +129,15 @@ export function DebateFeedPlayer({
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
   const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia });
-  const measurement = usePlaybackAnalytics(debate, active, controller, !releaseMedia);
+  // What the <video> elements actually hold: a released card, or one re-signing lapsed URLs, has none.
+  const detached = releaseMedia || controller.urlsLapsed;
+  const measurement = usePlaybackAnalytics(debate, active, controller, !detached);
   const {
     slot1VideoRef,
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
     urls,
-    resigningUrls,
     ready,
     error,
     playing,
@@ -177,12 +178,16 @@ export function DebateFeedPlayer({
    * Keyed on the debate, not the card: the feed keys its cards by claim, so a re-rank hands this
    * same player a different debate, and that debate's pair has to be held on its own terms.
    */
-  // What the <video> elements actually hold: a released or re-signing card holds nothing.
-  const detached = releaseMedia || resigningUrls;
   const slot1Src = detached ? null : urls.slot1;
   const slot2Src = detached ? null : urls.slot2;
+  // Each re-attach brings new elements, so the hold re-arms for them. Derived during render so the
+  // hold is in place before the autoplay effect sees the re-attached pair.
+  const [attachment, setAttachment] = React.useState({ detached, generation: 0 });
+  if (attachment.detached !== detached) {
+    setAttachment({ detached, generation: detached ? attachment.generation : attachment.generation + 1 });
+  }
   const pair = usePairReadiness({
-    pairKey: debate.id,
+    pairKey: `${debate.id}:${attachment.generation}`,
     slot1Ref: slot1VideoRef,
     slot2Ref: slot2VideoRef,
     slot1Src,
@@ -261,12 +266,13 @@ export function DebateFeedPlayer({
     if (!ready) return;
     // A refusal is not retried: the browser gives the same answer every time, and
     // only the viewer's tap is a gesture it will accept.
-    if (active && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
+    // A detached pair has no elements to start; this re-runs when they arrive.
+    if (active && !detached && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
     } else if (!active && playing) {
       suspend();
     }
-  }, [active, awaitingTap, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+  }, [active, awaitingTap, detached, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
 
   const hasError = error != null;
   // `ready` keeps its meaning for GEO-3074's outcome — both URLs in hand — so its `ready_ms` and

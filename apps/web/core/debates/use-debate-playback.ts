@@ -143,7 +143,9 @@ export function useDebatePlayback(
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const urlsCommittedAtRef = React.useRef<number | null>(null);
-  const [resigningUrls, setResigningUrls] = React.useState(false);
+  // Held URLs aged past the reuse window while released; the player renders no <video> until they
+  // are re-signed, so a lapsed URL never reaches an element.
+  const [urlsLapsed, setUrlsLapsed] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
@@ -463,6 +465,8 @@ export function useDebatePlayback(
 
     let cancelled = false;
     fetchedForRef.current = null;
+    urlsCommittedAtRef.current = null;
+    setUrlsLapsed(false);
     setUrls({ slot1: null, slot2: null });
     // A different debate's clocks start over; carrying this across would strand the new one
     // at the old one's position.
@@ -588,14 +592,28 @@ export function useDebatePlayback(
     [debate.id, slot1RecordingFilename, slot2RecordingFilename]
   );
 
-  // Layout effect so a lapsed URL is never painted into a <video> between re-attach and re-sign.
-  React.useLayoutEffect(() => {
+  // While released, mark the held URLs lapsed once they reach the reuse window. Rechecked when the
+  // page becomes visible, since background tabs throttle the timer.
+  React.useEffect(() => {
     const committedAt = urlsCommittedAtRef.current;
-    if (!mediaAttached || committedAt === null || Date.now() - committedAt < RECORDING_URL_REUSE_MS) return;
+    if (mediaAttached || committedAt === null) return;
+    const check = () => {
+      if (Date.now() - committedAt >= RECORDING_URL_REUSE_MS) setUrlsLapsed(true);
+    };
+    const timer = setTimeout(check, Math.max(0, committedAt + RECORDING_URL_REUSE_MS - Date.now()));
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [mediaAttached, debate.id]);
+
+  // Re-attached with lapsed URLs: re-sign both (uncached) before the player renders the elements.
+  React.useEffect(() => {
+    if (!mediaAttached || !urlsLapsed) return;
     if (!slot1RecordingFilename || !slot2RecordingFilename) return;
 
     let cancelled = false;
-    setResigningUrls(true);
     Promise.all([
       recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot1RecordingFilename }),
       recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot2RecordingFilename }),
@@ -611,14 +629,20 @@ export function useDebatePlayback(
         // Fall back to the held URLs; the tile's own recovery re-signs if they have lapsed.
       })
       .finally(() => {
-        if (!cancelled) setResigningUrls(false);
+        if (!cancelled) setUrlsLapsed(false);
       });
 
     return () => {
       cancelled = true;
-      setResigningUrls(false);
     };
-  }, [mediaAttached, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
+  }, [mediaAttached, urlsLapsed, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
+
+  // Re-attached elements are new and start at 0, so the pair is pre-seeked again before it plays.
+  const wasAttachedRef = React.useRef(mediaAttached);
+  React.useEffect(() => {
+    if (mediaAttached && !wasAttachedRef.current) needsPrepositionRef.current = true;
+    wasAttachedRef.current = mediaAttached;
+  }, [mediaAttached]);
 
   const videos = React.useCallback(
     () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
@@ -1362,8 +1386,8 @@ export function useDebatePlayback(
   }, [playbackEnded, resumeBoth]);
 
   return {
-    /** Held URLs are being re-signed after a long release; render the placeholder meanwhile. */
-    resigningUrls,
+    /** Held URLs lapsed while released and are being re-signed; render no <video> meanwhile. */
+    urlsLapsed,
     slot1VideoRef,
     slot2VideoRef,
     slot1Participant,
