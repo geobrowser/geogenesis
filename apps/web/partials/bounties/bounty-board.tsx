@@ -84,7 +84,7 @@ export function BountyBoard({ header }: Props) {
       canRegisterInterest,
       pendingBountyId,
       onRegisterInterest: target =>
-        void registerInterest({ bountyId: target.id, bountyName: target.name, bountySpaceId: target.spaceId }),
+        registerInterest({ bountyId: target.id, bountyName: target.name, bountySpaceId: target.spaceId }),
     }),
     [canRegisterInterest, interestedIds, isInterestLoading, pendingBountyId, registerInterest]
   );

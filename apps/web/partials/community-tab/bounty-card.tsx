@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { availableBountyCta } from '~/core/bounties/community-adapter';
+import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-interest';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -251,7 +252,8 @@ function InterestButton({
   /** Interest state is still unknown; every bounty reads as un-registered until it settles. */
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
-  onClick: () => void;
+  /** Registers interest; resolves whether it was recorded. */
+  onClick: () => Promise<boolean>;
   bountyId: string;
 }) {
   const { smartAccount } = useSmartAccount();
@@ -262,13 +264,16 @@ function InterestButton({
       target_type: 'bounty',
       auth_control: 'express_interest',
       auth_intent: 'bounty_interest',
-      auth_continuation: 'repeat',
+      auth_continuation: 'queued',
     },
   });
+  // Pressed before the account could publish it — signed out, or the personal space still being
+  // made — queued, and drawn as registered, until it can.
+  const queuedInterest = useQueuedBountyInterest(bountyId, onClick);
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
 
-  if (isInterested) {
+  if (isInterested || queuedInterest.queued) {
     return <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>Awaiting allocation</span>;
   }
 
@@ -279,16 +284,19 @@ function InterestButton({
         event.stopPropagation();
 
         if (!isLoggedIn) {
-          openPrivySignIn();
+          queuedInterest.queue();
+          // A dismissed sign-in withdraws it, so walking away never registers interest later.
+          openPrivySignIn(undefined, { onCancel: queuedInterest.cancel });
+          return;
+        }
+        if (!canRegisterInterest) {
+          queuedInterest.queue();
           return;
         }
 
-        onClick();
+        void onClick();
       }}
-      disabled={isPending || (isLoggedIn && (isInterestLoading || !canRegisterInterest))}
-      title={
-        !isLoggedIn || canRegisterInterest ? undefined : 'You need a registered personal space to register interest'
-      }
+      disabled={isPending || (isLoggedIn && isInterestLoading)}
       className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {isPending ? 'Saving…' : "I'm interested"}
@@ -313,7 +321,7 @@ export function AvailableBountyCard({
   isPending: boolean;
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
-  onRegisterInterest: (bounty: SpaceBounty) => void;
+  onRegisterInterest: (bounty: SpaceBounty) => Promise<boolean>;
 } & CardSize) {
   return (
     <BountyCardShell bounty={bounty} height={height}>

@@ -34,7 +34,7 @@ export type BoardInterestBindings = {
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
   pendingBountyId: string | null;
-  onRegisterInterest: (bounty: SpaceBounty) => void;
+  onRegisterInterest: (bounty: SpaceBounty) => Promise<boolean>;
 };
 
 /**

@@ -919,7 +919,7 @@ describe('a side picked before the account can publish', () => {
     expect(onRequireSignIn).toHaveBeenCalledOnce();
     expect(onRequireSignIn.mock.calls[0][0]).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
     expect(queued()).toHaveLength(1);
-    expect(queued()[0]).toMatchObject({ requires: 'personalSpace', direction: 'negative' });
+    expect(queued()[0]).toMatchObject({ requires: 'personalSpace', intent: 'negative' });
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
 
     await queued()[0].run();

@@ -35,7 +35,12 @@ import {
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { useDequeuePendingAction, useEnqueuePendingAction, usePendingAction } from '~/core/state/pending-actions';
+import {
+  useDequeuePendingAction,
+  useEnqueuePendingAction,
+  useLivePendingActionHandler,
+  usePendingActionIntent,
+} from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -55,17 +60,6 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
-
-/**
- * The publish function of whichever control for a claim is mounted now, by queued-action id.
- *
- * A vote queued before sign-up replays through `useEntityResponse`, whose in-flight state — the
- * thing that keeps the pill held while the write confirms — is keyed by the viewer's personal space.
- * The function captured at the press predates that space, so it records the write under a key no
- * card reads, and the pill dropped back to empty the moment the queue let go of it. Replaying through
- * a control mounted after sign-up writes where the card on screen is looking.
- */
-const liveClaimResponseSubmitters = new Map<string, (direction: 'positive' | 'negative') => Promise<unknown>>();
 
 /** A signed-out press's sign-in prompt. `onCancel` withdraws the press if the sign-in is abandoned. */
 export type RequireSignIn = (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) => void;
@@ -494,18 +488,15 @@ export function useClaimPositionControl({
   // rather than kept here: the feed remounts this card when it reloads after onboarding, and state
   // held in the card went with it.
   const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
-  const queuedDirection = usePendingAction(queuedActionId)?.direction;
-  const submitResponseAsyncRef = React.useRef(submitResponseAsync);
-  submitResponseAsyncRef.current = submitResponseAsync;
-  React.useEffect(() => {
-    const submit = (direction: 'positive' | 'negative') => submitResponseAsyncRef.current(direction);
-    liveClaimResponseSubmitters.set(queuedActionId, submit);
-    return () => {
-      if (liveClaimResponseSubmitters.get(queuedActionId) === submit)
-        liveClaimResponseSubmitters.delete(queuedActionId);
-    };
-  }, [queuedActionId]);
+  const queuedDirection = usePendingActionIntent(queuedActionId);
   const queuedPosition = queuedDirection === undefined ? null : queuedDirection === 'positive';
+  // The replay goes through the card on screen. `useEntityResponse` keys its in-flight state — what
+  // holds the pill while the write confirms — by the viewer's personal space, which the press's
+  // closure predates; replayed from there it lands under a key no card reads, and the pill went
+  // blank the moment the queue let go of it.
+  useLivePendingActionHandler(queuedActionId, intent =>
+    submitResponseAsync(intent === 'positive' ? 'positive' : 'negative').then(() => {})
+  );
   const viewerPosition = pendingResponse
     ? optimisticPosition
     : (queuedPosition ?? readiness.viewer_response?.position ?? null);
@@ -576,9 +567,8 @@ export function useClaimPositionControl({
       id: queuedActionId,
       label: 'your position',
       requires: 'personalSpace',
-      direction,
-      // The press's own function only when no card for this claim is mounted to draw the result.
-      run: () => (liveClaimResponseSubmitters.get(queuedActionId) ?? submitResponseAsync)(direction).then(() => {}),
+      intent: direction,
+      run: () => submitResponseAsync(direction).then(() => {}),
     });
   };
 

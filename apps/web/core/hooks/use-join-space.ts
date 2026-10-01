@@ -6,8 +6,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
-import { useDeferredJoin } from '~/core/state/pending-join-intents';
+import { useDequeuePendingAction, useEnqueuePendingAction, usePendingActionIntent } from '~/core/state/pending-actions';
 
 type UseJoinSpaceArgs = {
   spaceId: string;
@@ -19,10 +18,14 @@ type UseJoinSpaceArgs = {
  * The one press handler every Join control shares, covering the three states a viewer can be in:
  *
  * - Signed in with a registered personal space: request membership now.
- * - Signed out: park the intent and open Privy. `useDeferredJoin` replays it once the wallet
- *   connects, which lands in the next branch.
- * - Signed in, personal space still registering: queue the request for `PendingActionsRunner`,
- *   which submits it once the space registers.
+ * - Signed out: queue the request and open Privy. `PendingActionsRunner` submits it once the new
+ *   account has a personal space; a dismissed sign-in withdraws it.
+ * - Signed in, personal space still registering: queue the request the same way.
+ *
+ * Queued at the press either way, into the app-level queue rather than anything this button owns:
+ * the button can unmount while the viewer signs up, and the request has to outlive it. The
+ * "requested" state is read off the queue for the same reason, until the request lands and the
+ * persisted membership bridge takes over.
  */
 export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId, space });
@@ -39,19 +42,19 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     },
   });
   const enqueuePendingAction = useEnqueuePendingAction('join_space_button');
-  const [optimisticRequested, setOptimisticRequested] = React.useState(false);
+  const dequeuePendingAction = useDequeuePendingAction();
+  const joinActionId = `join:${spaceId}`;
+  const optimisticRequested = usePendingActionIntent(joinActionId) !== undefined;
 
   const queueJoinRequest = React.useCallback(() => {
-    setOptimisticRequested(true);
     enqueuePendingAction({
-      id: `join:${spaceId}`,
+      id: joinActionId,
       label: 'your membership request',
       requires: 'personalSpace',
+      intent: 'join',
       run: () => requestToBeMemberAsync(),
     });
-  }, [enqueuePendingAction, spaceId, requestToBeMemberAsync]);
-
-  const deferJoin = useDeferredJoin(spaceId, Boolean(smartAccount), queueJoinRequest);
+  }, [enqueuePendingAction, joinActionId, requestToBeMemberAsync]);
 
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
 
@@ -61,8 +64,8 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       return;
     }
     if (!smartAccount) {
-      promptSignIn();
-      deferJoin();
+      queueJoinRequest();
+      promptSignIn(undefined, { onCancel: () => dequeuePendingAction(joinActionId) });
       return;
     }
     queueJoinRequest();

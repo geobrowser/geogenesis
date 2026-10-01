@@ -9,6 +9,7 @@ import { Effect, Either } from 'effect';
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useActionContext } from '~/core/action-context-provider';
+import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -38,11 +39,21 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const tx = useSmartAccountTransaction();
 
   const handleRequestToBeMember = useCallback(async () => {
-    if (!smartAccount) {
+    // Through the cache as well as this render. A join queued before sign-up replays through this
+    // hook as it was at the press, before the account or space existed; the cache has both by the
+    // time the runner fires. Reading only the render failed that replay on every retry.
+    const account = readCachedSmartAccount(queryClient, smartAccount);
+    if (!account) {
       throw new Error('No smart account available');
     }
 
-    if (!personalSpaceId || !isRegistered) {
+    const cachedSpace =
+      personalSpaceId && isRegistered
+        ? { personalSpaceId, isRegistered }
+        : readCachedPersonalSpace(queryClient, account.account.address);
+    const requesterSpaceId = cachedSpace.isRegistered ? cachedSpace.personalSpaceId : null;
+
+    if (!requesterSpaceId) {
       dispatch({
         type: 'ERROR',
         payload: isAccountSetupPending
@@ -57,7 +68,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     }
 
     const normalizedSpaceId = normalizeSpaceId(spaceId);
-    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(requesterSpaceId);
     const access = await runEffectEither(
       Effect.all([
         getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
@@ -70,7 +81,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     }
 
     try {
-      await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient, space });
+      await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
       // Necessary to propagate error status to useMutation

@@ -162,7 +162,7 @@ function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
           isInterestLoading={isInterestLoading}
           canRegisterInterest={canRegisterInterest}
           onRegisterInterest={target =>
-            void registerInterest({
+            registerInterest({
               bountyId: target.id,
               bountyName: target.name,
               bountySpaceId: target.spaceId,

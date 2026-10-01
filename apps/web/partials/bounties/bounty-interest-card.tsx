@@ -6,6 +6,7 @@ import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-interest';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { uuidToHex } from '~/core/id/normalize';
 
@@ -48,15 +49,24 @@ export function BountyInterestCard({ detail, roles }: Props) {
       target_type: 'bounty',
       auth_control: 'express_interest',
       auth_intent: 'bounty_interest',
-      auth_continuation: 'repeat',
+      auth_continuation: 'queued',
     },
   });
+  // Pressed before the account could publish it: queued, and drawn as applied, until it can.
+  const queuedInterest = useQueuedBountyInterest(detail.bounty.id, actions.expressInterest);
+  const queueInterest = () => {
+    queuedInterest.queue();
+    // A dismissed sign-in withdraws it, so walking away never registers interest later.
+    if (state === 'signed-out') openPrivySignIn(undefined, { onCancel: queuedInterest.cancel });
+  };
+  const canQueue = state === 'signed-out' || state === 'no-personal-space';
+  const showQueued = queuedInterest.queued && canQueue;
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },
     'no-personal-space': {
       title: 'Want to take on this bounty?',
-      body: 'Finish setting up your personal space, then come back to apply.',
+      body: 'Express interest and an editor can allocate you once your account is ready.',
     },
     ended: { title: 'This bounty has ended', body: 'The submission deadline has passed.' },
     allocated: { title: 'Bounty assigned to you', body: 'Submit proposals in this space and link them to the bounty.' },
@@ -76,24 +86,29 @@ export function BountyInterestCard({ detail, roles }: Props) {
       className="flex flex-row items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-4 mobile:flex-col mobile:items-stretch mobile:justify-start"
     >
       <div className="flex flex-col gap-0.5">
-        <Text variant="smallTitle">{copy[state].title}</Text>
+        <Text variant="smallTitle">{showQueued ? 'Interest saved' : copy[state].title}</Text>
         <Text variant="metadata" color="grey-04">
-          {actions.error ?? copy[state].body}
+          {actions.error ??
+            (showQueued ? 'It will be sent to the editors as soon as your account is ready.' : copy[state].body)}
         </Text>
       </div>
-      {state === 'can-apply' ? (
+      {showQueued ? (
+        <Button variant="secondary" onClick={queuedInterest.cancel}>
+          Cancel interest
+        </Button>
+      ) : canQueue ? (
+        // Same affordance as upvote/downvote: the button is always there. Signed out it opens Privy;
+        // either way the interest is kept and sent once the account is ready.
+        <Button variant="primary" onClick={queueInterest}>
+          I&apos;m interested
+        </Button>
+      ) : state === 'can-apply' ? (
         <Button
           variant="primary"
           disabled={actions.pending || roles.isLoading}
           onClick={() => void actions.expressInterest()}
         >
           {actions.pending ? 'Saving…' : "I'm interested"}
-        </Button>
-      ) : state === 'signed-out' ? (
-        // Same affordance as upvote/downvote: the button is always there, and a
-        // signed-out click opens Privy sign-in directly.
-        <Button variant="primary" onClick={openPrivySignIn}>
-          I&apos;m interested
         </Button>
       ) : state === 'interested' ? (
         <Button variant="secondary" disabled={actions.pending} onClick={() => void actions.cancelInterest()}>

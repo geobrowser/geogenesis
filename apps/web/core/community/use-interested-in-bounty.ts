@@ -98,9 +98,10 @@ export function useInterestedInBounty() {
   const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
-    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
-      if (!personalSpaceId || !isRegistered) return;
-      if (submittedBountyIds.current.has(bountyId)) return;
+    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs): Promise<boolean> => {
+      if (!personalSpaceId || !isRegistered) return false;
+      // Already sent this session, so already recorded as far as the caller is concerned.
+      if (submittedBountyIds.current.has(bountyId)) return true;
 
       const operation = observeOperation(
         'bounty_interest',
@@ -118,6 +119,7 @@ export function useInterestedInBounty() {
         bountySpaceId,
       });
 
+      let recorded = false;
       try {
         await makeProposal({
           values: [],
@@ -125,6 +127,7 @@ export function useInterestedInBounty() {
           spaceId: personalSpaceId,
           name: `Interested in: ${bountyName}`,
           onSuccess: () => {
+            recorded = true;
             operation.succeeded();
             void queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId] });
             void queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
@@ -139,6 +142,7 @@ export function useInterestedInBounty() {
         operation.failed('unknown');
         setPendingBountyId(null);
       }
+      return recorded;
     },
     [getContext, isRegistered, makeProposal, personalSpaceId, queryClient]
   );
