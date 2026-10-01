@@ -474,29 +474,6 @@ export async function playBothWithMutedFallback(
 }
 
 /**
- * Give both recordings leave to make sound, from inside the gesture that turned sound on.
- *
- * WebKit — so every browser on iOS — grants audible playback *per element*, and only to an element
- * that is unmuted or played while a user gesture is being handled. The feed plays two elements
- * and moves the sound between them at every turn boundary, and the boundary is a `timeupdate`, not
- * a gesture. So an unmute tap made during one debater's turn unlocked only that debater's element,
- * and at the handoff WebKit answered the gesture-less `muted = false` on the other one by pausing
- * it: the next speaker's turn went silent.
- *
- * Toggling each element's `muted` and putting it straight back is enough to unlock it, and leaves
- * every element exactly as it was — the render still owns `muted` (GEO-2947) and applies the
- * viewer's change itself. Synchronous on purpose: the leave is only granted inside the gesture.
- */
-export function primeForSound(videos: Array<Pick<HTMLMediaElement, 'muted'> | null>) {
-  for (const video of videos) {
-    if (!video) continue;
-    const wasMuted = video.muted;
-    video.muted = !wasMuted;
-    video.muted = wasMuted;
-  }
-}
-
-/**
  * One turn's place on the rendered timeline.
  *
  * `turnStateForTime` and `turnStateFromSegments` answer "who is speaking now and how long have
