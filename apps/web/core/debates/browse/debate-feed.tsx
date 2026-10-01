@@ -166,13 +166,17 @@ export function DebatesBrowseFeed({
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
 
-  const debates = React.useMemo(() => {
-    if (pinnedIds.length === 0) return rankedDebates;
+  const { debates, pinnedCount } = React.useMemo(() => {
+    if (pinnedIds.length === 0) return { debates: rankedDebates, pinnedCount: 0 };
     const byId = new Map(rankedDebates.map(debate => [debate.id, debate]));
-    // A pinned debate that has left the listing goes: there is nothing left to play.
+    // A pinned debate that has left the listing goes: there is nothing left to play. It stops
+    // counting as pinned too, or the run would stall short of the viewer — see the pin effect.
     const pinned = pinnedIds.flatMap(id => byId.get(id) ?? []);
     const pinnedSet = new Set(pinned.map(debate => debate.id));
-    return [...pinned, ...rankedDebates.filter(debate => !pinnedSet.has(debate.id))];
+    return {
+      debates: [...pinned, ...rankedDebates.filter(debate => !pinnedSet.has(debate.id))],
+      pinnedCount: pinned.length,
+    };
   }, [rankedDebates, pinnedIds]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
@@ -345,10 +349,13 @@ export function DebatesBrowseFeed({
   // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
   // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
   const pinThrough = activeIndex < 0 ? 0 : Math.min(activeIndex + PRELOAD_AHEAD + 1, visibleDebates.length);
+  // Compared with the pins still in the listing, not every id ever pinned: debates that dropped out
+  // would otherwise count towards a run that no longer covers the cards they were holding. Rebuilt
+  // from what is on screen, so those ids are compacted away as it extends.
   React.useEffect(() => {
-    if (pinThrough <= pinnedIds.length) return;
+    if (pinThrough <= pinnedCount) return;
     setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
-  }, [pinThrough, pinnedIds.length, visibleDebates]);
+  }, [pinThrough, pinnedCount, visibleDebates]);
 
   // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
   // address bar, or coming Back lands on what was being watched rather than on whichever debate the

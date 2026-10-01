@@ -1150,6 +1150,24 @@ describe('DebatesBrowseFeed — nothing is inserted above what the viewer has re
     expect(headings()).toEqual(['Debate a', 'Debate b', 'Debate c', 'Debate d', 'Debate z']);
   });
 
+  // A debate that drops out of the listing must stop counting towards the pinned run, or the run
+  // stalls short of the cards it was meant to hold and the drift comes back.
+  it('re-pins the card that takes the place of a pinned debate that left the listing', () => {
+    mocks.debates = ['a', 'b', 'c', 'd', 'e'].map((id, index) => completedDebate(id, `Debate ${id}`, at(10 - index)));
+    mocks.bestOrderIds = ['a', 'b', 'c', 'd', 'e'];
+    const view = render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    mocks.debates = mocks.debates.filter(debate => debate.id !== 'b');
+    mocks.bestOrderIds = ['a', 'c', 'd', 'e'];
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+
+    mocks.debates = [completedDebate('z', 'Debate z', at(20)), ...mocks.debates];
+    mocks.bestOrderIds = ['z', 'a', 'c', 'd', 'e'];
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(headings()).toEqual(['Debate a', 'Debate c', 'Debate d', 'Debate z', 'Debate e']);
+  });
+
   // Painting whichever debates' readiness came back first, then ranking the rest in above them, is
   // exactly the drift above — on a slow connection the feed ended up a dozen cards down.
   it('holds an unanchored feed until every readiness lookup has settled', () => {

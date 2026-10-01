@@ -2,10 +2,11 @@
 
 import * as React from 'react';
 
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { DEBATE_TIME_PARAM, parseDebateTimeParam } from '~/core/debates/debate-timecode';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateIdFromEntityPath } from './debate-feed-url';
@@ -44,8 +45,15 @@ export function DebateEntityView({ spaceId, debateId, editView, removedView }: D
   const pathname = usePathname();
   const [anchorId] = React.useState(() => debateIdFromEntityPath(pathname, spaceId) ?? debateId);
 
+  // `editView` and `removedView` were rendered on the server for `debateId`. Once the URL names
+  // another debate they describe the wrong one: edit mode would open debate A's value sheet under
+  // debate B's address. Anything server-rendered waits for the route to catch up with the URL.
+  const urlDebateId = debateIdFromEntityPath(pathname, spaceId);
+  const routeIsStale = urlDebateId != null && !ID.equals(urlDebateId, debateId);
+  const serverView = (view: React.ReactNode) => (routeIsStale ? <ResyncRouteToUrl /> : view);
+
   if (isEditing) {
-    return <>{editView}</>;
+    return <>{serverView(editView)}</>;
   }
 
   // Browse mode shows the live video, but if this debate isn't watchable in the space's feed we
@@ -56,8 +64,21 @@ export function DebateEntityView({ spaceId, debateId, editView, removedView }: D
       initialDebateId={anchorId}
       surface="debate-page"
       initialSeekSeconds={initialSeekSeconds}
-      fallback={editView}
-      removedView={removedView}
+      fallback={serverView(editView)}
+      removedView={serverView(removedView)}
     />
   );
+}
+
+/**
+ * Re-renders the page for the URL the feed has moved to, so its server-rendered views describe the
+ * debate on screen. A replace to the address already showing: no history entry, and edit mode — a
+ * global atom — carries over to the remounted page.
+ */
+function ResyncRouteToUrl() {
+  const router = useRouter();
+  React.useEffect(() => {
+    router.replace(`${window.location.pathname}${window.location.search}`, { scroll: false });
+  }, [router]);
+  return null;
 }
