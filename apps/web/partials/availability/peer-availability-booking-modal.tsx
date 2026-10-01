@@ -4,7 +4,9 @@ import * as React from 'react';
 
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
+import { useSetToast } from '~/core/hooks/use-toast';
 
+import { peerDisplayName, requestSentMessage } from './peer-availability';
 import { PeerAvailabilityModal } from './peer-availability-modal';
 
 /** A slot is 30 minutes, so a booking is one slot. */
@@ -33,27 +35,51 @@ export function PeerAvailabilityBookingModal({
   const propose = useCreateScheduledDebate();
   const reschedule = useRescheduleScheduledDebate();
   const mutation = rescheduleRequestId ? reschedule : propose;
+  const mode = rescheduleRequestId ? 'reschedule' : 'request';
+  const setToast = useSetToast();
+
+  const close = () => {
+    onClose();
+    // Otherwise the next person's week opens already showing the last one's outcome.
+    mutation.reset();
+  };
+
+  // A sent request is the end of the job, so the week closes on it and the confirmation moves to a
+  // toast. Per-call rather than on the hook: closing mid-flight resets the mutation, which detaches
+  // these callbacks, so a late success cannot close a week opened since.
+  const onSent = (request: { scheduled_start_at: string }, viewerTimezone: string) => {
+    setToast(
+      <span>
+        {requestSentMessage({
+          mode,
+          startsAt: request.scheduled_start_at,
+          peerName: peerDisplayName(props.peerName, userId),
+          viewerTimezone,
+        })}
+      </span>
+    );
+    close();
+  };
 
   return (
     <PeerAvailabilityModal
       {...props}
       userId={userId}
       entry={entry}
-      onClose={() => {
-        onClose();
-        // Otherwise the next person's week opens already showing the last one's outcome.
-        mutation.reset();
-      }}
+      onClose={close}
       booking={{
-        mode: rescheduleRequestId ? 'reschedule' : 'request',
+        mode,
         onRequest: (startsAt, pick) => {
           const slot = {
             startsAt: new Date(startsAt),
             minutes: SCHEDULED_DEBATE_MINUTES,
-            analytics: { entry, viewerIsFree: pick?.viewerIsFree ?? null },
+            analytics: { entry, viewerIsFree: pick.viewerIsFree },
           };
-          if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot });
-          else propose.mutate({ opponentUserId: userId, ...slot });
+          const callbacks = {
+            onSuccess: (request: { scheduled_start_at: string }) => onSent(request, pick.viewerTimezone),
+          };
+          if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot }, callbacks);
+          else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
         },
         pending: mutation.isPending,
         error: mutation.error
@@ -61,7 +87,6 @@ export function PeerAvailabilityBookingModal({
             ? rescheduleFailureMessage(mutation.error)
             : mutation.error.message
           : null,
-        requestedStart: mutation.data?.scheduled_start_at ?? null,
       }}
     />
   );

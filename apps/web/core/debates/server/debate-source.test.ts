@@ -188,8 +188,9 @@ describe('loadDebatePublishSource media gating', () => {
         },
       ],
       claims: [
-        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
-        { text: 'The action was unjustified.', is_factual: false, turn_index: 1 },
+        // Timed where geo-chat measured the span (GEO-2958), untimed where it did not.
+        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0, start_ms: 0, end_ms: 9_000 },
+        { text: 'The action was unjustified.', is_factual: false, turn_index: 1, start_ms: null, end_ms: null },
       ],
     });
 
@@ -206,6 +207,7 @@ describe('loadDebatePublishSource media gating', () => {
         existingClaimEntityId: null,
         topics: [],
         isContestable: false,
+        timing: { startMs: 0, endMs: 9_000 },
       },
       {
         text: 'The action was unjustified.',
@@ -214,6 +216,7 @@ describe('loadDebatePublishSource media gating', () => {
         existingClaimEntityId: null,
         topics: [],
         isContestable: false,
+        timing: null,
       },
     ]);
   });

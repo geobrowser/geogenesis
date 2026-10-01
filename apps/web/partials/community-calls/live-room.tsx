@@ -177,6 +177,10 @@ function RoomBody({
   const participants = useParticipants();
   const watchers = participants.filter(p => p.identity?.startsWith('Viewer_')).length;
   const speakers = participants.length - watchers;
+  // Who keeps a call alive past its scheduled cutoff (GEO-2584): people, viewers included,
+  // this client included. Agents are not people — the transcriber sitting in a room must not
+  // hold it open for the one human left in it.
+  const connectedCount = participants.filter(p => !p.isAgent).length;
   const [sidebarTab, setSidebarTab] = React.useState<SidebarTab | null>('chat');
   const { floaters, sendReaction } = useReactions();
   const isMobile = useIsMobileCallLayout();
@@ -409,7 +413,10 @@ function RoomBody({
       {occurrenceEnd !== undefined && (
         <div className="px-3 pt-3">
           <CallEndTimer
-            endTime={new Date(occurrenceEnd + extensionMs)}
+            startMs={occurrenceStart}
+            endMs={occurrenceEnd}
+            extensionMs={extensionMs}
+            connectedCount={connectedCount}
             onTimeUp={handleTimeUp}
             onExtend={canExtendFurther ? extend : undefined}
           />
