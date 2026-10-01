@@ -9,7 +9,7 @@ import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker, StackedCard } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
-import { type TeaserWindow, stakesLine, teaserWindows } from '~/core/debates/debate-stage';
+import { type TeaserWindow, teaserWindows } from '~/core/debates/debate-stage';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
@@ -128,8 +128,6 @@ type DebateFeedPlayerProps = {
   immersive?: boolean;
   /** Where the claim panel renders — beside the video on desktop, below it on a phone. */
   panelHost?: HTMLElement | null;
-  /** The header line under the claim, for "4 min · 2 rounds · 1,240 took a side". */
-  stakesHost?: HTMLElement | null;
 };
 
 /**
@@ -164,7 +162,6 @@ function DebateFeedPlayerBody({
   onPlaybackState,
   immersive = false,
   panelHost = null,
-  stakesHost = null,
   stage,
 }: DebateFeedPlayerProps & { stage: DebateStage | null }) {
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
@@ -1039,17 +1036,6 @@ function DebateFeedPlayerBody({
             />
           </ActionSurface>
         )}
-
-        {stage && stakesHost
-          ? createPortal(
-              stakesLine({
-                timelineSeconds,
-                turnCount,
-                sideCount: stage.main.summary.hasCounts ? stage.main.summary.total : null,
-              }),
-              stakesHost
-            )
-          : null}
 
         {/* The claim panel, wherever the feed card put its host. A portal keeps it in this player's
             React tree — its playback, ticker and attribution — while it lays out beside or below. */}

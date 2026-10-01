@@ -10,7 +10,7 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
  * Where the viewer stands on the claim a debate argues, and the control that changes it.
  *
  * The same lookup the end card and the claims panel do — the claim's graph entity, then its
- * response state — on the same keys, so the stance panel, the stakes line and the end screen share
+ * response state — on the same keys, so the stance panel and the end screen share
  * one set of reads rather than each asking.
  *
  * `known` is the gate the full-screen player waits on before deciding whether to ask for a stance:

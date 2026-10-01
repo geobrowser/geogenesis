@@ -54,33 +54,3 @@ export function teaserWindows(
   };
   return { 1: windowFor(1), 2: windowFor(2) };
 }
-
-/** Rounds are pairs of turns, the way the round cues name them. */
-export function roundCount(turnCount: number): number {
-  return turnCount > 0 ? Math.ceil(turnCount / 2) : 0;
-}
-
-/**
- * The stakes line under the claim: "4 min · 2 rounds · 1,240 took a side".
- *
- * Each part is dropped rather than guessed when its number is not known yet: a runtime of "0 min"
- * or "0 took a side" off a query still in flight would be a claim about the debate that is really a
- * claim about the network.
- */
-export function stakesLine({
-  timelineSeconds,
-  turnCount,
-  sideCount,
-}: {
-  timelineSeconds: number;
-  turnCount: number;
-  /** People who have taken a side on the claim, or null while unknown. */
-  sideCount: number | null;
-}): string {
-  const parts: string[] = [];
-  if (timelineSeconds > 0) parts.push(`${Math.max(1, Math.round(timelineSeconds / 60))} min`);
-  const rounds = roundCount(turnCount);
-  if (rounds > 0) parts.push(`${rounds} ${rounds === 1 ? 'round' : 'rounds'}`);
-  if (sideCount !== null && sideCount > 0) parts.push(`${sideCount.toLocaleString('en-US')} took a side`);
-  return parts.join(' · ');
-}

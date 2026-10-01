@@ -516,9 +516,6 @@ function DebateFeedItem({
   const [sidePanelHost, setSidePanelHost] = React.useState<HTMLDivElement | null>(null);
   const [belowPanelHost, setBelowPanelHost] = React.useState<HTMLDivElement | null>(null);
   const isPhone = useMediaQuery('(max-width: 767px)');
-  // "4 min · 2 rounds · 1,240 took a side", under the claim. Written by the player, which already
-  // holds the debate's timeline and the claim's response count, into this line of the header.
-  const [stakesHost, setStakesHost] = React.useState<HTMLParagraphElement | null>(null);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -574,7 +571,6 @@ function DebateFeedItem({
               spaceName={spaceName}
               spaceImage={spaceImage}
               topics={topics}
-              stakesHostRef={setStakesHost}
             />
           </div>
           <div className="relative mt-6 md:mt-7">
@@ -598,7 +594,6 @@ function DebateFeedItem({
               onPlaybackState={onPlaybackState}
               immersive
               panelHost={isPhone ? belowPanelHost : sidePanelHost}
-              stakesHost={stakesHost}
             />
           </div>
           {/* Mobile: the claim panel, under the video. */}
@@ -648,7 +643,6 @@ function DebateTitleHeader({
   spaceName,
   spaceImage,
   topics,
-  stakesHostRef,
 }: {
   claim: string;
   claimEntityId: string;
@@ -656,8 +650,6 @@ function DebateTitleHeader({
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
-  /** Where the player writes runtime, rounds and how many took a side — under the claim. */
-  stakesHostRef?: (element: HTMLParagraphElement | null) => void;
 }) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
@@ -728,9 +720,6 @@ function DebateTitleHeader({
           {isClaimExpanded ? 'Show less' : 'Show more'}
         </button>
       )}
-      {stakesHostRef ? (
-        <p ref={stakesHostRef} className="text-metadata text-grey-04 tabular-nums empty:hidden" />
-      ) : null}
     </div>
   );
 }

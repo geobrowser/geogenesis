@@ -238,7 +238,12 @@ function WinnerSection({
               disabled={votes.isVoting}
               onClick={() => void votes.castVote(participant)}
               className={cx(
-                mine ? cx(STAGE_PRIMARY_BUTTON, PICKED_PURPLE, 'hover:bg-[#9A4EFF]') : STAGE_SECONDARY_BUTTON,
+                mine
+                  ? cx(
+                      'flex h-9 w-full items-center justify-center gap-1.5 rounded-full px-4 text-metadata text-white transition-colors disabled:opacity-50',
+                      PICKED_PURPLE
+                    )
+                  : STAGE_SECONDARY_BUTTON,
                 'min-w-0'
               )}
             >

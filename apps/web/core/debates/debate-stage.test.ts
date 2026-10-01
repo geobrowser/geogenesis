@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { TEASER_LEAD_IN_SECONDS, TEASER_WINDOW_SECONDS, roundCount, stakesLine, teaserWindows } from './debate-stage';
+import { TEASER_LEAD_IN_SECONDS, TEASER_WINDOW_SECONDS, teaserWindows } from './debate-stage';
 import type { TurnSpan } from './playback-utils';
 
 const spans: TurnSpan[] = [
@@ -39,23 +39,5 @@ describe('teaserWindows', () => {
     const windows = teaserWindows([], { slot1: -2, slot2: 0 });
     expect(windows[1]).toEqual({ startSeconds: 2, endSeconds: 2 + TEASER_WINDOW_SECONDS });
     expect(windows[2]).toEqual({ startSeconds: 0, endSeconds: TEASER_WINDOW_SECONDS });
-  });
-});
-
-describe('stakesLine', () => {
-  it('reads runtime, rounds and how many people took a side', () => {
-    expect(stakesLine({ timelineSeconds: 241, turnCount: 4, sideCount: 1240 })).toBe(
-      '4 min · 2 rounds · 1,240 took a side'
-    );
-  });
-
-  it('drops a part it cannot state yet rather than printing zero', () => {
-    expect(stakesLine({ timelineSeconds: 0, turnCount: 4, sideCount: null })).toBe('2 rounds');
-    expect(stakesLine({ timelineSeconds: 30, turnCount: 0, sideCount: 0 })).toBe('1 min');
-  });
-
-  it('counts a single round in the singular', () => {
-    expect(roundCount(2)).toBe(1);
-    expect(stakesLine({ timelineSeconds: 120, turnCount: 1, sideCount: 3 })).toBe('2 min · 1 round · 3 took a side');
   });
 });

@@ -216,7 +216,14 @@ function StanceButton({
         event.stopPropagation();
         onClick();
       }}
-      className={cx(STAGE_SECONDARY_BUTTON, selected && 'border-transparent bg-divider hover:bg-divider')}
+      className={cx(
+        'flex h-9 w-full items-center justify-center gap-1.5 rounded-full border px-4 text-metadata text-text transition-colors disabled:opacity-50',
+        // Held: the claim card's own selected pill (`PositionButton` in matchmaking-claim-card) —
+        // divider fill, no border, filled thumb. Open: the request popup's secondary button. Kept
+        // as two exclusive sets rather than one overriding the other, because two background
+        // utilities on one element resolve by stylesheet order, not by the order written here.
+        selected ? 'border-transparent bg-divider' : 'border-grey-02 bg-white hover:bg-grey-01'
+      )}
     >
       <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
       {responsePositionLabel(position)}
