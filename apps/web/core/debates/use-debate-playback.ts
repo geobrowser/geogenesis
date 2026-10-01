@@ -651,6 +651,11 @@ export function useDebatePlayback(
     };
   }, [mediaAttached, urlsLapsed, resignAttempt, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
 
+  // Reaching the card (active or preloading) gives a re-sign that ran out of retries another go.
+  React.useEffect(() => {
+    if (enabled) setResignAttempt(0);
+  }, [enabled]);
+
   // Re-attached elements are new and start at 0, so the pair is pre-seeked again before it plays.
   const wasAttachedRef = React.useRef(mediaAttached);
   React.useEffect(() => {

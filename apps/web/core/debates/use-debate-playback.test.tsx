@@ -135,6 +135,41 @@ describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3
     expect(result.current.urlsLapsed).toBe(true);
     expect(mocks.recordingUrlRefreshes).toHaveLength(6);
   });
+  it('retries an exhausted re-sign when the card is reached again', async () => {
+    const debate = debateFixture();
+    const { result, rerender } = renderHook(
+      ({ enabled, mediaAttached }) => useDebatePlayback(debate, enabled, { mediaAttached }),
+      { initialProps: { enabled: true, mediaAttached: true } }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    now += 6 * 60_000;
+    rerender({ enabled: false, mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.recordingUrl.mockImplementation(() => Promise.reject(new Error('Could not load recordings.')));
+    rerender({ enabled: false, mediaAttached: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () => {
+        await Promise.resolve();
+        vi.advanceTimersByTime(2_000);
+      });
+    }
+    vi.useRealTimers();
+    await waitFor(() => expect(result.current.error).toBe('Could not load recordings.'));
+    const refreshesBefore = mocks.recordingUrlRefreshes.length;
+
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=back` })
+    );
+    rerender({ enabled: true, mediaAttached: true });
+
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(false));
+    expect(mocks.recordingUrlRefreshes.length).toBe(refreshesBefore + 2);
+    expect(result.current.error).toBeNull();
+    expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=back');
+  });
 });
 
 describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)', () => {
