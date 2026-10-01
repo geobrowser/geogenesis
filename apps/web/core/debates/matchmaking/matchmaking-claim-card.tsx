@@ -35,7 +35,7 @@ import {
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { useDequeuePendingAction, useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDequeuePendingAction, useEnqueuePendingAction, usePendingAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -479,11 +479,12 @@ export function useClaimPositionControl({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   // A side picked before the account could publish, held until the queued write starts. Without it
-  // the pill the visitor pressed reads as unpressed for the whole of onboarding.
-  const [queuedPosition, setQueuedPosition] = React.useState<boolean | null>(null);
-  React.useEffect(() => {
-    if (queuedPosition !== null && pendingResponse) setQueuedPosition(null);
-  }, [pendingResponse, queuedPosition]);
+  // the pill the visitor pressed reads as unpressed for the whole of onboarding. Read off the queue
+  // rather than kept here: the feed remounts this card when it reloads after onboarding, and state
+  // held in the card went with it.
+  const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
+  const queuedDirection = usePendingAction(queuedActionId)?.direction;
+  const queuedPosition = queuedDirection === undefined ? null : queuedDirection === 'positive';
   const viewerPosition = pendingResponse
     ? optimisticPosition
     : (queuedPosition ?? readiness.viewer_response?.position ?? null);
@@ -548,14 +549,14 @@ export function useClaimPositionControl({
   // while the visitor is signing up — the For you feed refetches once their follows load, and
   // onboarding navigates back to the page when it is done — taking the callback, and the vote,
   // with it. The queue and its runner are app-level and outlive the card.
-  const queuedActionId = `claim-position:${claim.claim_entity_id}:${claim.space_id}`;
   const queuePosition = (position: boolean) => {
-    setQueuedPosition(position);
+    const direction = position ? 'positive' : 'negative';
     enqueuePendingAction({
       id: queuedActionId,
       label: 'your position',
       requires: 'personalSpace',
-      run: () => submitResponseAsync(position ? 'positive' : 'negative').then(() => {}),
+      direction,
+      run: () => submitResponseAsync(direction).then(() => {}),
     });
   };
 
@@ -579,10 +580,7 @@ export function useClaimPositionControl({
           auth_continuation: 'queued',
         },
         {
-          onCancel: () => {
-            setQueuedPosition(null);
-            dequeuePendingAction(queuedActionId);
-          },
+          onCancel: () => dequeuePendingAction(queuedActionId),
         }
       );
       return;

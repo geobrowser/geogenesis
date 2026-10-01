@@ -5,12 +5,14 @@ import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
+import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ENTITY_RESPONSE_COPY, type ResponseKind, getResponseActionMethod } from '~/core/responses/entity-response';
+import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
-import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { MatchmakingClaimCard, type RequireSignIn } from './matchmaking-claim-card';
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
@@ -19,8 +21,6 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
-  enqueuePendingAction: vi.fn(),
-  dequeuePendingAction: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -178,11 +178,6 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   }),
 }));
 
-vi.mock('~/core/state/pending-actions', () => ({
-  useEnqueuePendingAction: () => mocks.enqueuePendingAction,
-  useDequeuePendingAction: () => mocks.dequeuePendingAction,
-}));
-
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: false }),
 }));
@@ -237,11 +232,19 @@ function participant(id: string) {
   } as DebateClaimPositionSummary['participants'][number];
 }
 
+/** The real pending-actions queue, so a test can see what a press left behind for the runner. */
+let queueStore = createStore();
+const queued = () => queueStore.get(pendingActionsAtom);
+
 function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: object } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // What the navbar's `useSmartAccount` leaves behind once someone is signed in.
   if (smartAccount) queryClient.setQueryData(['smart-account', 'wallet'], smartAccount);
-  return render(<QueryClientProvider client={queryClient}>{card}</QueryClientProvider>);
+  return render(
+    <JotaiProvider store={queueStore}>
+      <QueryClientProvider client={queryClient}>{card}</QueryClientProvider>
+    </JotaiProvider>
+  );
 }
 
 beforeEach(() => {
@@ -258,8 +261,7 @@ beforeEach(() => {
   mocks.submitResponseAsync.mockReset();
   mocks.submitResponseAsync.mockResolvedValue(undefined);
   mocks.isConnected = true;
-  mocks.enqueuePendingAction.mockReset();
-  mocks.dequeuePendingAction.mockReset();
+  queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
@@ -902,89 +904,67 @@ describe('faces borrowed from the match', () => {
 describe('a side picked before the account can publish', () => {
   const signedOut = readiness({ viewer_response: null });
 
+  const signedOutCard = (onRequireSignIn: RequireSignIn) => (
+    <MatchmakingClaimCard claim={claim} positions={positions} readiness={signedOut} onRequireSignIn={onRequireSignIn} />
+  );
+
   // Queued at the press, not on the sign-in's completion: that callback lives in this card, and the
   // feed can remount the card mid-sign-up, taking the vote with it.
-  it('queues the side at the press, for the new personal space', () => {
+  it('queues the side at the press, for the new personal space', async () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
-    renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={signedOut}
-        onRequireSignIn={onRequireSignIn}
-      />
-    );
+    renderCard(signedOutCard(onRequireSignIn));
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
     expect(onRequireSignIn).toHaveBeenCalledOnce();
     expect(onRequireSignIn.mock.calls[0][0]).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
-    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
-    const action = mocks.enqueuePendingAction.mock.calls[0][0];
-    expect(action).toMatchObject({ requires: 'personalSpace' });
+    expect(queued()).toHaveLength(1);
+    expect(queued()[0]).toMatchObject({ requires: 'personalSpace', direction: 'negative' });
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
 
-    void action.run();
+    await queued()[0].run();
     expect(mocks.submitResponseAsync).toHaveBeenCalledWith('negative');
   });
 
-  it('survives the card unmounting before sign-up finishes', () => {
+  // What the feed does after onboarding: reload, and draw a fresh card for the same claim.
+  it('still draws the picked side after the card remounts', async () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
-    const { unmount } = renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={signedOut}
-        onRequireSignIn={onRequireSignIn}
-      />
-    );
+    const { unmount } = renderCard(signedOutCard(onRequireSignIn));
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
     unmount();
 
-    void mocks.enqueuePendingAction.mock.calls[0][0].run();
+    renderCard(signedOutCard(vi.fn()));
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+
+    await queued()[0].run();
     expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
   });
 
   it('withdraws the side when the sign-in is abandoned', () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
-    renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={signedOut}
-        onRequireSignIn={onRequireSignIn}
-      />
-    );
+    renderCard(signedOutCard(onRequireSignIn));
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
-    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
     act(() => onRequireSignIn.mock.calls[0][1].onCancel());
 
-    expect(mocks.dequeuePendingAction).toHaveBeenCalledWith(mocks.enqueuePendingAction.mock.calls[0][0].id);
+    expect(queued()).toHaveLength(0);
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('queues straight away for a signed-in account whose space is still being made', () => {
     mocks.isConnected = false;
     const onRequireSignIn = vi.fn();
-    renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={signedOut}
-        onRequireSignIn={onRequireSignIn}
-      />,
-      { smartAccount: { account: { address: '0xviewer' } } }
-    );
+    renderCard(signedOutCard(onRequireSignIn), { smartAccount: { account: { address: '0xviewer' } } });
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
     expect(onRequireSignIn).not.toHaveBeenCalled();
-    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
+    expect(queued()).toHaveLength(1);
   });
 });
 

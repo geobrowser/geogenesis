@@ -1,4 +1,3 @@
-import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
@@ -6,6 +5,7 @@ import { useCallback } from 'react';
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
+import { readCachedSmartAccount } from './cached-write-identity';
 import { useSmartAccount } from './use-smart-account';
 
 type SendTxArgs = {
@@ -47,11 +47,7 @@ export function useSmartAccountTransaction() {
   const sendTransaction = useCallback(
     ({ to, data, value = 0n }: SendTxArgs) =>
       Effect.gen(function* () {
-        const cachedAccounts = queryClient
-          .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
-          .map(([, cached]) => cached)
-          .filter((cached): cached is GeoWalletClient => Boolean(cached));
-        const account = smartAccount ?? (cachedAccounts.length === 1 ? cachedAccounts[0] : null) ?? null;
+        const account = readCachedSmartAccount(queryClient, smartAccount);
 
         if (!account) {
           return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
