@@ -544,6 +544,7 @@ export class E {
     signal,
     additionalSpaceIds,
     includeNonCanonical,
+    tagIds,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -553,6 +554,7 @@ export class E {
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
     includeNonCanonical?: boolean;
+    tagIds?: string[];
   }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
@@ -565,6 +567,7 @@ export class E {
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
+    const tagIdsFilter = tagIds?.length ? [...tagIds].sort() : undefined;
 
     const page = await syncFetchQuery(cache, {
       queryKey: [
@@ -577,6 +580,7 @@ export class E {
         skip,
         additionalSpaceIds,
         includeNonCanonical,
+        tagIdsFilter,
       ],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
@@ -587,6 +591,7 @@ export class E {
               query: nameFilter,
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
+              tagIds: tagIdsFilter,
               additionalSpaceIds,
               includeNonCanonical,
             },
