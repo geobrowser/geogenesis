@@ -1,4 +1,4 @@
-import { act, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -227,7 +227,20 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
 
-afterEach(() => vi.restoreAllMocks());
+// GEO-3110. This file renders `DebateFeedPlayer` (and so `usePairReadiness`'s real `setTimeout`
+// backstop, `PAIR_HOLD_TIMEOUT_MS`) roughly eighty times without ever calling `unmount()` itself —
+// relying on this to tear each one down is what was missing. Left mounted, that backstop is a real
+// timer that outlives this test file; if it fires after vitest has torn the file's jsdom globals
+// off `globalThis` (which happens as soon as the file's tests are done, not when the timer
+// chooses to fire), its callback runs with `window` genuinely undefined —
+// `ReferenceError: window is not defined`, reported against whichever file happened to be running
+// when that race was lost. `cleanup()` unmounts every render from the test before it, which runs
+// `usePairReadiness`'s own effect cleanup and clears that timer (and any other), so none is left
+// pending once the file's tests finish.
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('player layout', () => {
   it('keeps both stacked videos at the original aspect ratio', () => {
