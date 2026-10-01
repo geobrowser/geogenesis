@@ -681,16 +681,6 @@ function FollowingSkeleton() {
   );
 }
 
-function FollowingUnavailable() {
-  return (
-    <Row label="Following">
-      <span className="text-metadata text-grey-03" title="Couldn’t be loaded">
-        —
-      </span>
-    </Row>
-  );
-}
-
 export function Following({ spaceId }: { spaceId: string }) {
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
@@ -710,12 +700,11 @@ export function Following({ spaceId }: { spaceId: string }) {
   }, [rows]);
 
   const topicIds = React.useMemo(() => topics.map(topic => topic.topicId), [topics]);
-  const { metadata, isLoading: isLoadingMetadata, isError: isMetadataError } = useTopicMetadata(topicIds);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
   const { unfollow, isPending } = useFollowTopics();
 
   if (!isLoading && topics.length === 0) return null;
   if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
-  if (isMetadataError) return <FollowingUnavailable />;
 
   const metaFor = (topicId: string) => metadata.get(normId(topicId));
   const nameFor = (topicId: string) => metaFor(topicId)?.name ?? 'Untitled';

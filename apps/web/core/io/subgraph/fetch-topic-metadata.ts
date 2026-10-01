@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { reportError } from '~/core/telemetry/logger';
 
 import { graphql } from './graphql';
 import {
@@ -92,7 +93,8 @@ export async function fetchTopicMetadata(topicIds: string[]): Promise<Map<string
   );
 
   if (Either.isLeft(result)) {
-    console.warn('Failed to resolve topic metadata for pending proposals', result.left);
+    reportError(result.left);
+    console.error('Failed to resolve topic metadata', result.left);
     return new Map();
   }
 

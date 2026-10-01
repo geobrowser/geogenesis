@@ -124,15 +124,17 @@ describe('Following row visibility', () => {
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
-  it('shows a dash instead of a count when topic metadata fails to load, rather than "Untitled" rows', () => {
+  it('stops pulsing and falls back to "Untitled" rows when topic metadata fails to load', async () => {
     mocks.rows = [row(TOPIC_A)];
     mocks.metadataError = true;
     renderFollowing();
+
     expect(screen.getByText('Following')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.queryByText('Untitled')).not.toBeInTheDocument();
-    expect(screen.queryByText('1')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/Following \d+ topics?/)).not.toBeInTheDocument();
+    expect(document.querySelector('.animate-pulse')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Following 1 topic')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    expect(screen.getByText('Untitled')).toBeInTheDocument();
   });
 });
 
