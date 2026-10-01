@@ -45,7 +45,7 @@ export function FeedTopicPicker({
 
   const { suggestions, isLoading, isError, refetch, hasMore, isFetchingMore, fetchMore } =
     useTopicSuggestions(spaceIds);
-  const { results, isSearching, isError: isSearchError } = useTopicSearch(query);
+  const { results, isSearching, isError: isSearchError, refetch: refetchSearch } = useTopicSearch(query);
 
   const pills = React.useMemo(
     () => buildTopicPills({ suggestions, searchResults: results, hasQuery, selected }),
@@ -55,7 +55,7 @@ export function FeedTopicPicker({
 
   const isBusy = hasQuery ? isSearching && results.length === 0 : isPreparing || isLoading;
   const failed = hasQuery ? isSearchError : isError || failedToPrepare;
-  const retry = failedToPrepare ? onRetryPrepare : () => void refetch();
+  const retry = hasQuery ? () => void refetchSearch() : failedToPrepare ? onRetryPrepare : () => void refetch();
   // Hits from the previous query stay on screen while the next loads, but can't be picked.
   const isStale = hasQuery && isSearching;
   const nothingListed = (hasQuery ? results : suggestions).length === 0;
@@ -96,7 +96,7 @@ export function FeedTopicPicker({
             <Text as="p" variant="body" className="text-[16px] leading-5 font-normal text-grey-04">
               We couldn&apos;t load topics.
             </Text>
-            {!hasQuery && retry && (
+            {retry && (
               <button type="button" onClick={retry} className="text-smallButton text-text underline">
                 Try again
               </button>

@@ -123,5 +123,6 @@ export function useTopicSearch(query: string) {
     // True while the shown results belong to an earlier query (debouncing, or placeholder data).
     isSearching: query.trim() !== '' && (query.trim() !== trimmed || result.isLoading || result.isPlaceholderData),
     isError: result.isError,
+    refetch: result.refetch,
   };
 }

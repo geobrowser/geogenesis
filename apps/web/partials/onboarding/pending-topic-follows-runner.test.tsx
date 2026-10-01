@@ -122,15 +122,49 @@ describe('PendingTopicFollowsRunner', () => {
     expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
-  it('keeps the picks when the publish fails, and stops retrying after a few', async () => {
+  // A failure can be a receipt timeout for an op that still lands, so it is never republished early.
+  it('keeps the picks marked submitted when the publish fails, and waits before publishing again', async () => {
     mocks.follow.mockResolvedValue(false);
     const store = mount();
 
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(store.get(feedTopicsAtom)).toEqual({ ...held, submittedAt: expect.any(Number) });
+
     // Stepped, so each retry's re-render lands before the next timer.
-    for (let i = 0; i < 10; i++) await act(() => vi.advanceTimersByTimeAsync(30_000));
+    for (let i = 0; i < 18; i++) await act(() => vi.advanceTimersByTimeAsync(30_000));
+    expect(mocks.follow).toHaveBeenCalledOnce();
+
+    // The late op landed after all.
+    mocks.fetchFollowed.mockResolvedValue(
+      picks.map(topic => ({ id: `r-${topic.id}`, spaceId: 'space-1', toEntityId: topic.id }))
+    );
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    expect(mocks.follow).toHaveBeenCalledOnce();
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('publishes again after the wait, and stops after a few failures', async () => {
+    mocks.follow.mockResolvedValue(false);
+    const store = mount();
+
+    for (let i = 0; i < 5; i++) {
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      await act(() => vi.advanceTimersByTimeAsync(11 * 60_000));
+    }
 
     expect(mocks.follow).toHaveBeenCalledTimes(3);
-    expect(store.get(feedTopicsAtom)).toEqual(held);
+    expect(store.get(feedTopicsAtom)).toMatchObject(held);
+  });
+
+  it('publishes only the picks not already followed', async () => {
+    mocks.follow.mockResolvedValue(true);
+    mocks.fetchFollowed.mockResolvedValue([{ id: 'r-a', spaceId: 'space-1', toEntityId: 'topic-a' }]);
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenCalledWith([picks[1]]);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
   it('leaves the picks to another tab that holds the lock, then publishes only what is left', async () => {
@@ -236,7 +270,7 @@ describe('PendingTopicFollowsRunner', () => {
 
   it('publishes again once an earlier submission is too old to still land', async () => {
     mocks.follow.mockResolvedValue(true);
-    const store = mount(null, { ...held, submittedAt: Date.now() - 3 * 60_000 });
+    const store = mount(null, { ...held, submittedAt: Date.now() - 11 * 60_000 });
 
     await act(() => vi.advanceTimersByTimeAsync(0));
 
@@ -249,7 +283,10 @@ describe('PendingTopicFollowsRunner', () => {
     const switchTo: { store?: ReturnType<typeof mount> } = {};
     mocks.follow.mockResolvedValue(false);
     switchTo.store = mount();
-    for (let i = 0; i < 4; i++) await act(() => vi.advanceTimersByTimeAsync(30_000));
+    for (let i = 0; i < 5; i++) {
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      await act(() => vi.advanceTimersByTimeAsync(11 * 60_000));
+    }
     expect(mocks.follow).toHaveBeenCalledTimes(3);
 
     mocks.follow.mockResolvedValue(true);
@@ -277,6 +314,41 @@ describe('PendingTopicFollowsRunner', () => {
 
     expect(mocks.follow).toHaveBeenCalledTimes(2);
     expect(mocks.follow).toHaveBeenLastCalledWith(newer.topics);
+    expect(switchTo.store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it("ignores the old account's failure once a newer account is signed in", async () => {
+    const newer = { address: '0xB', topics: [{ id: 'topic-c', name: 'Mental health' }] };
+    const switchTo: { store?: ReturnType<typeof mount> } = {};
+    mocks.follow.mockImplementationOnce(async () => {
+      mocks.address = '0xB';
+      switchTo.store!.set(feedTopicsAtom, newer);
+      return false;
+    });
+    mocks.follow.mockResolvedValue(true);
+    switchTo.store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenLastCalledWith(newer.topics);
+    expect(switchTo.store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('runs again when the picks were replaced by the same number of others mid-publish', async () => {
+    const replaced = { address: '0xA', topics: [{ id: 'topic-c', name: 'Mental health' }] };
+    const switchTo: { store?: ReturnType<typeof mount> } = {};
+    mocks.follow.mockImplementationOnce(async () => {
+      switchTo.store!.set(feedTopicsAtom, replaced);
+      return true;
+    });
+    mocks.follow.mockResolvedValue(true);
+    switchTo.store = mount(null, { address: '0xA', topics: [picks[0]] });
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenLastCalledWith(replaced.topics);
     expect(switchTo.store.get(feedTopicsAtom)).toEqual(none);
   });
 });

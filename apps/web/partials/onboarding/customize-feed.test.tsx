@@ -7,7 +7,12 @@ import { FeedTopicPicker } from './customize-feed';
 
 const mocks = vi.hoisted(() => ({
   suggestions: [] as { id: string; name: string }[],
-  search: { results: [] as { id: string; name: string }[], isSearching: false, isError: false },
+  search: {
+    results: [] as { id: string; name: string }[],
+    isSearching: false,
+    isError: false,
+    refetch: vi.fn(),
+  },
 }));
 
 vi.mock('~/core/topics/use-topic-suggestions', () => ({
@@ -25,13 +30,13 @@ vi.mock('~/core/topics/use-topic-suggestions', () => ({
 
 beforeEach(() => {
   mocks.suggestions = [];
-  mocks.search = { results: [], isSearching: false, isError: false };
+  mocks.search = { results: [], isSearching: false, isError: false, refetch: vi.fn() };
 });
 afterEach(cleanup);
 
 describe('FeedTopicPicker', () => {
   it("won't pick a hit from the previous query while the next one loads", () => {
-    mocks.search = { results: [{ id: 'btc', name: 'Bitcoin' }], isSearching: true, isError: false };
+    mocks.search = { results: [{ id: 'btc', name: 'Bitcoin' }], isSearching: true, isError: false, refetch: vi.fn() };
     const onToggle = vi.fn();
     render(<FeedTopicPicker spaceIds={[]} selected={[]} onToggle={onToggle} />);
     fireEvent.change(screen.getByLabelText('Search topics'), { target: { value: 'Mental health' } });
@@ -53,5 +58,15 @@ describe('FeedTopicPicker', () => {
 
     expect(screen.getByText(/couldn.t load topics/)).toBeInTheDocument();
     expect(onRetryPrepare).toHaveBeenCalledOnce();
+  });
+
+  it('retries a failed search', () => {
+    mocks.search = { results: [], isSearching: false, isError: true, refetch: vi.fn() };
+    render(<FeedTopicPicker spaceIds={[]} selected={[]} onToggle={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Search topics'), { target: { value: 'crypto' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(mocks.search.refetch).toHaveBeenCalledOnce();
   });
 });

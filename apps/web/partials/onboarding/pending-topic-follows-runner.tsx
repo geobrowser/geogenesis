@@ -29,9 +29,9 @@ const INDEX_POLL_MAX_MS = 30_000;
 const PUBLISH_RETRY_MS = 30_000;
 const LOCK_RETRY_MS = 5_000;
 const LOCK_NAME = 'geo:onboarding-topic-follows';
-// A publish started by an earlier page can still land after a reload; until this passes, wait for
-// its follows to be indexed rather than publish them again.
-const SUBMITTED_GRACE_MS = 2 * 60_000;
+// A submitted follow can land minutes after it was reported failed (receipt waits run ~90s per try)
+// or after a reload. Until this passes, wait for its follows to be indexed rather than publish again.
+const SUBMITTED_GRACE_MS = 10 * 60_000;
 const SUBMITTED_POLL_MS = 10_000;
 // Each failed publish shows the user an error, so stop after a few until the next page load.
 const MAX_PUBLISH_FAILURES = 3;
@@ -55,6 +55,11 @@ export function PendingTopicFollowsRunner() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const picks = heldTopicsFor(held, address);
+  // Re-runs when the set of topics changes, not only its size.
+  const picksKey = picks
+    .map(topic => normId(topic.id))
+    .sort()
+    .join(',');
   // An unowned value (the earlier plain-array shape) counts as another account's.
   const holdsAny = Array.isArray(held) ? held.length > 0 : (held?.topics?.length ?? 0) > 0;
   const heldForAnotherAccount = !!address && holdsAny && picks.length === 0;
@@ -91,7 +96,7 @@ export function PendingTopicFollowsRunner() {
   }, [heldForAnotherAccount, setHeld]);
 
   React.useEffect(() => {
-    if (!address || !personalSpaceId || pending || isLoadingFollowed || picks.length === 0) return;
+    if (!address || !personalSpaceId || pending || isLoadingFollowed || !picksKey) return;
     // Retry budgets belong to one account.
     if (ownerRef.current !== address) {
       ownerRef.current = address;
@@ -110,40 +115,42 @@ export function PendingTopicFollowsRunner() {
       try {
         const outcome = await withCrossTabLock(async () => {
           // Read under the lock: a tab that waited finds the picks another tab already followed gone.
-          const record = heldRecordFor(readStoredFeedTopics(), owner);
-          if (!record || record.topics.length === 0) return 'done';
+          if (heldTopicsFor(readStoredFeedTopics(), owner).length === 0) return 'done';
 
           const space = await Effect.runPromise(getSpace(spaceId)).catch(() => null);
           if (!space) return 'unindexed';
 
-          if (record.submittedAt && Date.now() - record.submittedAt < SUBMITTED_GRACE_MS) {
-            const rows = await queryClient
-              .fetchQuery({ ...followedTopicsQueryOptions(spaceId), staleTime: 0 })
-              .catch(() => null);
-            const followed = new Set((rows ?? []).map(row => normId(row.toEntityId)));
-            if (!record.topics.every(topic => followed.has(normId(topic.id)))) return 'submitted';
-            clearFollowed(owner, record.topics);
-            return 'done';
-          }
+          // Fresh, so neither this check nor follow's dedupe trusts a list cached before indexing.
+          const rows = await queryClient
+            .fetchQuery({ ...followedTopicsQueryOptions(spaceId), staleTime: 0 })
+            .catch(() => null);
+          if (!rows) return 'unindexed';
+          const followed = new Set(rows.map(row => normId(row.toEntityId)));
 
-          // Re-read after the await, like every write here: see clearFollowed.
+          // Re-read after the awaits, like every write here: see clearFollowed.
           const latest = heldRecordFor(readStoredFeedTopics(), owner);
           if (!latest || latest.topics.length === 0) return 'done';
-          const sent = latest.topics;
-          setHeld({ address: owner, topics: sent, submittedAt: Date.now() });
-          devLog('[onboarding] following %d onboarding topics in %s', sent.length, spaceId);
-          if (!(await follow(sent))) {
-            const current = heldRecordFor(readStoredFeedTopics(), owner);
-            if (current) setHeld({ address: owner, topics: current.topics });
-            return 'failed';
+          const missing = latest.topics.filter(topic => !followed.has(normId(topic.id)));
+          if (missing.length === 0) {
+            clearFollowed(owner, latest.topics);
+            return 'done';
           }
+          if (latest.submittedAt && Date.now() - latest.submittedAt < SUBMITTED_GRACE_MS) return 'submitted';
+
+          setHeld({ address: owner, topics: latest.topics, submittedAt: Date.now() });
+          devLog('[onboarding] following %d onboarding topics in %s', missing.length, spaceId);
+          // On failure the marker stays: a timed-out publish may still land.
+          if (!(await follow(missing))) return 'failed';
 
           // Written to storage before the lock is released.
-          clearFollowed(owner, sent);
+          clearFollowed(owner, latest.topics);
           return 'done';
         });
 
-        if (outcome === null) {
+        // An outcome for an account that is no longer signed in says nothing about the current one.
+        if (addressRef.current !== owner) {
+          delay = 0;
+        } else if (outcome === null) {
           delay = LOCK_RETRY_MS;
         } else if (outcome === 'unindexed') {
           indexPollsRef.current += 1;
@@ -166,7 +173,7 @@ export function PendingTopicFollowsRunner() {
     personalSpaceId,
     pending,
     isLoadingFollowed,
-    picks.length,
+    picksKey,
     follow,
     queryClient,
     clearFollowed,
