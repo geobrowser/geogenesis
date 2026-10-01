@@ -854,7 +854,7 @@ describe('the small-panel layout', () => {
     expect(cardOf(text)).toHaveClass('flex-col', 'p-3');
     // Small: one row, one line.
     expect(text).toHaveClass('@max-md:line-clamp-1');
-    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5');
+    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5', '@max-md:min-h-9');
   });
 
   // The name and the share are a tap away in the sheet; on a 337px line they would leave the claim

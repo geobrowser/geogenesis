@@ -363,11 +363,15 @@ function DebateClaimTickerCardBody({
         tone === 'glass'
           ? 'bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]'
           : 'bg-grey-01',
-        // One row on a small panel: avatar, the claim on a single line, the two thumbs. 32px tall
+        // One row on a small panel: avatar, the claim on a single line, the two thumbs. 36px tall
         // against the 80px card, so on a ~217px phone tile it sits under the speaker's chin rather
         // than across their face. The header's own box dissolves (`contents`) so its two halves
         // can sit either side of the text.
-        line && '@max-md:flex-row @max-md:items-center @max-md:gap-2 @max-md:px-2.5 @max-md:py-1.5',
+        //
+        // `min-h-9` because the line sits over the debater's own name row, which is 36px with its
+        // byline. A 29px line left the top of the name and the position chip showing above it,
+        // half-hidden behind the blur; matching the row covers it cleanly, as the full card did.
+        line && '@max-md:min-h-9 @max-md:flex-row @max-md:items-center @max-md:gap-2 @max-md:px-2.5 @max-md:py-1.5',
         // The opened list on a small panel is a sheet you have asked for in order to read, and the
         // edge dissolve would eat into the very claim that was tapped to get there — the sheet is
         // often shorter than the ramp's 71.5px plus a whole unclamped card.
