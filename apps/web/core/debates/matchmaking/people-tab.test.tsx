@@ -899,6 +899,36 @@ describe('See times', () => {
     expect(dialog.getByRole('heading', { name: /Arturas/ })).toBeInTheDocument();
   });
 
+  // Handed down from the row, so the week says the same number the row's "N matches" does.
+  it('tells the week how many claims the row disagrees on', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-2', position: true, ...context },
+        ],
+      ],
+    ]);
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(within(screen.getByRole('dialog')).getByText(/You and Arturas disagree on 2 claims\./)).toBeInTheDocument();
+  });
+
   it('mounts nothing until it is asked for', () => {
     mocks.people = [person('user-them', 'Arturas')];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -1688,7 +1718,8 @@ describe('Online only', () => {
       expect.objectContaining({
         opponentUserId: 'user-away',
         analytics: { entry: 'people_time', viewerIsFree: true },
-      })
+      }),
+      expect.anything()
     );
   });
 

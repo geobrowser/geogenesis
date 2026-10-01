@@ -8,6 +8,7 @@ import { useAvailabilityDeepLink } from '~/core/availability/use-availability-de
 import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -134,6 +135,11 @@ export function SharedAvailabilityModal({
   // known. Drawing the week's shell first would swap it for the editor under a signed-in owner, so
   // nothing shows until then. A failed space read settles it too: there is no one to be.
   const whoseKnown = ready && (spaceError || !authenticated || isSelf || !profile.isPending);
+  // The People tab hands its row's count in; a link has no row, so it asks for the pair itself.
+  const disagreementCount = useDisagreementCount(
+    authenticated && !isSelf ? personalSpaceId : null,
+    open && isPerson ? profileSpaceId : null
+  );
 
   // Whether the person behind the link can be booked. Read by the notice below and by analytics, so
   // the two cannot disagree. Still `loading` for a space that is not a person: only a hand-edited
@@ -205,6 +211,7 @@ export function SharedAvailabilityModal({
       peerName={name}
       rescheduleRequestId={rescheduleRequestId}
       entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
+      disagreementCount={disagreementCount}
       onClose={onClose}
     >
       {notice}

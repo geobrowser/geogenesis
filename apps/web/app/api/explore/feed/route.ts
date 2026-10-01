@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { EXPLORE_EXCLUDED_TYPE_IDS } from '~/core/explore/explore-constants';
 import { parseExploreSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
   let spaceFilter: string[] | null = null;
   if (spaceIdsParam && spaceIdsParam !== 'all') {
     const wanted = new Set(spaceIdsParam.split(',').map(normId).filter(Boolean));
-    const visible = [...browse.featured, ...browse.editorOf, ...browse.memberOf]
+    const visible = browseSidebarVisibleSpaces(browse)
       .filter(row => wanted.has(normId(row.id)))
       .map(row => row.id);
     if (visible.length > 0) spaceFilter = visible;

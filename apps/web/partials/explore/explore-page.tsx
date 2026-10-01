@@ -1,6 +1,7 @@
 'use client';
 
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
+import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -64,9 +65,13 @@ export function ExplorePage({
           apiEndpoint="/api/explore/feed"
           initialTime="month"
           initialSort="best"
-          // No space or type menus: the feed spans every space the reader may see, and the server
-          // decides which types it holds (Debate and Claim — see `DEFAULT_EXPLORE_TYPE_IDS`).
+          // No space or type menus up front: the feed spans every space the reader may see and holds
+          // Explore's default types (Debate and Claim — see `DEFAULT_EXPLORE_TYPE_IDS`). "More
+          // filters" in the sort menu reveals both for readers who want to narrow or widen it.
           showSortFilter
+          showMoreFilters
+          typeOptions={EXPLORE_ENTITY_TYPES}
+          initialTypeIds={DEFAULT_EXPLORE_TYPE_IDS}
           compactHeader
           dividerBeforeFeed
           titleOpensSidePanel

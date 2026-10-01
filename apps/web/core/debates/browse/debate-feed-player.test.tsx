@@ -480,6 +480,27 @@ describe('DebateFeedPlayer media release (GEO-2963)', () => {
   });
 });
 
+describe('DebateFeedPlayer releaseMedia (GEO-3067)', () => {
+  it('releases both videos while held back and re-attaches the same URLs on return', () => {
+    const load = vi.mocked(HTMLMediaElement.prototype.load);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} releaseMedia />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(slot1.hasAttribute('src')).toBe(false);
+    expect(slot2.hasAttribute('src')).toBe(false);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+
+    const sources = Array.from(container.querySelectorAll('video')).map(video => video.getAttribute('src'));
+    expect(sources).toEqual(['https://cdn.test/slot1.webm', 'https://cdn.test/slot2.webm']);
+  });
+});
+
 /**
  * A refused autoplay has to reach the screen (GEO-2978).
  *

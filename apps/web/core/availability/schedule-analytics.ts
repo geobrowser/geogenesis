@@ -37,7 +37,9 @@ export type ScheduleEntry =
   /** Someone's `?modal=availability` link. */
   | 'availability_link'
   /** A scheduling email's "Choose different time", which moves a request rather than making one. */
-  | 'reschedule_link';
+  | 'reschedule_link'
+  /** "Reschedule" on an accepted debate in the Requests tab, which moves it the same way. */
+  | 'requests_reschedule';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =

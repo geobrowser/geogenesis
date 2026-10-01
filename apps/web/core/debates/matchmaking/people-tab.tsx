@@ -143,6 +143,7 @@ export function PeopleTab({
   const [viewingTimes, setViewingTimes] = React.useState<{
     userId: string;
     name: string;
+    disagreementCount: number | null;
     initialStart?: string;
     entry: ScheduleEntry;
   } | null>(null);
@@ -543,15 +544,14 @@ export function PeopleTab({
                 const isViewer =
                   (currentUserId !== null && person.user_id === currentUserId) ||
                   (personalSpaceId !== null && normId(person.profile_space_id) === normId(personalSpaceId));
+                const matches = isViewer
+                  ? EMPTY_MATCHES
+                  : (matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES);
                 return (
                   <PersonRow
                     key={person.user_id}
                     person={person}
-                    matches={
-                      isViewer
-                        ? EMPTY_MATCHES
-                        : (matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES)
-                    }
+                    matches={matches}
                     matchesBySpace={
                       matchesKnown && !isViewer
                         ? (matchAnalysis.countsByProfileAndSpace.get(normId(person.profile_space_id)) ??
@@ -570,7 +570,14 @@ export function PeopleTab({
                     onRequireSignIn={onRequireSignIn}
                     onSeeTimes={(peer, opener, entry, initialStart) => {
                       seeTimesOpenerRef.current = opener;
-                      setViewingTimes({ ...peer, initialStart, entry });
+                      // Captured at the click, like the name: the row may leave the list while open.
+                      // Unknown until the comparison lands, and an unknown count is left unsaid.
+                      setViewingTimes({
+                        ...peer,
+                        disagreementCount: matchesKnown ? matches.length : null,
+                        initialStart,
+                        entry,
+                      });
                     }}
                   />
                 );
@@ -589,6 +596,7 @@ export function PeopleTab({
         openerRef={seeTimesOpenerRef}
         initialSelectedStart={viewingTimes?.initialStart}
         entry={viewingTimes?.entry}
+        disagreementCount={viewingTimes?.disagreementCount}
       />
     </div>
   );

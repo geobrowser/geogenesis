@@ -1598,7 +1598,8 @@ export async function rejectDebateChallenge(
  * -----------------------------------------------------------------------------------------------*/
 
 /** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
-export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled';
+/** `rescheduled`: the debate moved to a new time, and accepting it books a different room. */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled';
 
 /**
  * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
@@ -1784,9 +1785,13 @@ export async function createScheduledDebate(
 }
 
 /**
- * Moves a pending request to a new time. geo-chat flips who has to answer, so the other debater is
- * asked to accept the new time and emailed that it moved. It caps a request at five moves and
- * refuses one that is no longer pending, both as `409 reschedule_refused`.
+ * Moves a pending or accepted request to a new time. geo-chat flips who has to answer, so the other
+ * debater is asked to accept the new time and emailed that it moved. An accepted debate goes back
+ * to pending: its room closes and its time is freed, and accepting the new time books a new room.
+ *
+ * Refusals, all `409` except the last: `reschedule_refused` (five moves already, or declined,
+ * expired, cancelled or superseded), `debate_already_started` (someone has joined the room),
+ * `schedule_conflict` (the viewer already has a debate then), and `403 not_a_participant`.
  */
 export async function rescheduleScheduledDebate(
   requestId: string,
