@@ -29,7 +29,6 @@ type Props = {
   onToggleCanonicalOnly: () => void;
   selectedSpaceIds: string[];
   onToggleSpace: (id: string) => void;
-  onSelectAllSpaces: () => void;
   typeIds: string[];
   onToggleType: (id: string) => void;
   onClearTypes: () => void;
@@ -60,7 +59,6 @@ export function AdvancedSearchFilters({
   onToggleCanonicalOnly,
   selectedSpaceIds,
   onToggleSpace,
-  onSelectAllSpaces,
   typeIds,
   onToggleType,
   onClearTypes,
@@ -77,7 +75,6 @@ export function AdvancedSearchFilters({
           onToggleCanonicalOnly={onToggleCanonicalOnly}
           selectedSpaceIds={selectedSpaceIds}
           onToggleSpace={onToggleSpace}
-          onSelectAllSpaces={onSelectAllSpaces}
           container={portalContainer}
         />
         <TypeFilter
@@ -96,17 +93,26 @@ function FilterDropdown({
   label,
   trigger,
   container,
+  header,
+  onOpenChange,
   children,
 }: {
   label: string;
   trigger: React.ReactNode;
   container: HTMLElement | null;
+  header?: React.ReactNode;
+  onOpenChange?: (open: boolean) => void;
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
 
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
+
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -128,17 +134,41 @@ function FilterDropdown({
           collisionPadding={12}
           onKeyDown={shieldNavigationKeys}
           onOpenAutoFocus={event => event.preventDefault()}
-          className="z-100 w-(--radix-popper-anchor-width) min-w-[12rem] rounded border border-grey-02 bg-white shadow-lg"
+          className="z-100 flex w-(--radix-popper-anchor-width) min-w-[12rem] flex-col rounded border border-grey-02 bg-white shadow-lg"
         >
+          {header}
           <ul
             onWheel={event => trapWheelToElement(event.currentTarget, event)}
             className="m-0 flex max-h-52 list-none flex-col overflow-y-auto overscroll-contain"
           >
-            {children(() => setOpen(false))}
+            {children(() => handleOpenChange(false))}
           </ul>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+function FilterSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="border-b border-divider p-2">
+      <input
+        type="text"
+        value={value}
+        onChange={event => onChange(event.currentTarget.value)}
+        onKeyDown={shieldNavigationKeys}
+        placeholder={placeholder}
+        className="w-full bg-transparent px-1 text-footnoteMedium text-text placeholder:text-grey-04 focus:outline-hidden"
+      />
+    </div>
   );
 }
 
@@ -183,6 +213,12 @@ function TypeFilter({
   container: HTMLElement | null;
 }) {
   const selectedTypes = React.useMemo(() => new Set(typeIds), [typeIds]);
+  const [query, setQuery] = React.useState('');
+  const normalized = query.trim().toLowerCase();
+  const filteredTypes = React.useMemo(
+    () => (normalized === '' ? EXPLORE_ENTITY_TYPES : EXPLORE_ENTITY_TYPES.filter(type => type.label.toLowerCase().includes(normalized))),
+    [normalized]
+  );
   const label =
     typeIds.length === 0 ? 'Any type' : `${typeIds.length} ${typeIds.length === 1 ? 'type' : 'types'} selected`;
 
@@ -190,15 +226,20 @@ function TypeFilter({
     <FilterDropdown
       label="Types"
       container={container}
+      onOpenChange={open => {
+        if (!open) setQuery('');
+      }}
+      header={<FilterSearchInput value={query} onChange={setQuery} placeholder="Filter types…" />}
       trigger={<span className={cx('truncate', typeIds.length === 0 && 'text-grey-04')}>{label}</span>}
     >
       {() => (
         <>
-          {/* Multi-select, so picking a type keeps the menu open; the reset row is the only way to clear. */}
-          <OptionRow selected={typeIds.length === 0} onClick={onClearTypes}>
-            Any type
-          </OptionRow>
-          {EXPLORE_ENTITY_TYPES.map(type => {
+          {normalized === '' ? (
+            <OptionRow selected={typeIds.length === 0} onClick={onClearTypes}>
+              Any type
+            </OptionRow>
+          ) : null}
+          {filteredTypes.map(type => {
             const selected = selectedTypes.has(type.id);
             return (
               <OptionRow key={type.id} selected={selected} onClick={() => onToggleType(type.id)}>
@@ -207,6 +248,9 @@ function TypeFilter({
               </OptionRow>
             );
           })}
+          {filteredTypes.length === 0 ? (
+            <li className="px-3 py-2 text-footnoteMedium text-grey-04">No matches</li>
+          ) : null}
         </>
       )}
     </FilterDropdown>
@@ -218,14 +262,12 @@ function SpaceFilter({
   onToggleCanonicalOnly,
   selectedSpaceIds,
   onToggleSpace,
-  onSelectAllSpaces,
   container,
 }: {
   canonicalOnly: boolean;
   onToggleCanonicalOnly: () => void;
   selectedSpaceIds: string[];
   onToggleSpace: (id: string) => void;
-  onSelectAllSpaces: () => void;
   container: HTMLElement | null;
 }) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -251,38 +293,41 @@ function SpaceFilter({
   }, [spaces, selectedSpaceIds, onToggleSpace]);
 
   const selected = React.useMemo(() => new Set(selectedSpaceIds), [selectedSpaceIds]);
-  const label =
-    selectedSpaceIds.length === 0
+  const [query, setQuery] = React.useState('');
+  const normalized = query.trim().toLowerCase();
+  const filteredSpaces = React.useMemo(
+    () => (normalized === '' ? spaces : spaces.filter(space => (space.entity.name ?? '').toLowerCase().includes(normalized))),
+    [spaces, normalized]
+  );
+
+  const label = canonicalOnly
+    ? 'Canonical only'
+    : selectedSpaceIds.length === 0
       ? 'All spaces'
       : selectedSpaceIds.length === 1
         ? (spaces.find(space => space.id === selectedSpaceIds[0])?.entity?.name ?? '1 space')
         : `${selectedSpaceIds.length} spaces`;
 
   return (
-    <FilterDropdown label="Spaces" container={container} trigger={<span className="truncate">{label}</span>}>
+    <FilterDropdown
+      label="Spaces"
+      container={container}
+      onOpenChange={open => {
+        if (!open) setQuery('');
+      }}
+      header={<FilterSearchInput value={query} onChange={setQuery} placeholder="Filter spaces…" />}
+      trigger={<span className="truncate">{label}</span>}
+    >
       {() => (
         <>
           <OptionRow selected={canonicalOnly} onClick={onToggleCanonicalOnly}>
             <CheckboxVisual checked={canonicalOnly} />
             <span className="min-w-0 flex-1 truncate text-text">Canonical only</span>
           </OptionRow>
-          {!canonicalOnly ? (
-            <li className="border-b border-divider px-3 py-2 text-footnote text-grey-04 last:border-none">
-              Turn on Canonical only to filter by space.
-            </li>
-          ) : null}
-          <OptionRow selected={selectedSpaceIds.length === 0} onClick={onSelectAllSpaces} disabled={!canonicalOnly}>
-            All spaces
-          </OptionRow>
-          {spaces.map(space => {
+          {filteredSpaces.map(space => {
             const isSelected = selected.has(space.id);
             return (
-              <OptionRow
-                key={space.id}
-                selected={isSelected}
-                onClick={() => onToggleSpace(space.id)}
-                disabled={!canonicalOnly}
-              >
+              <OptionRow key={space.id} selected={isSelected} onClick={() => onToggleSpace(space.id)}>
                 <CheckboxVisual checked={isSelected} />
                 <span className="relative size-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
                   <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
@@ -291,6 +336,9 @@ function SpaceFilter({
               </OptionRow>
             );
           })}
+          {filteredSpaces.length === 0 ? (
+            <li className="px-3 py-2 text-footnoteMedium text-grey-04">No spaces</li>
+          ) : null}
         </>
       )}
     </FilterDropdown>
