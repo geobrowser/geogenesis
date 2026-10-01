@@ -35,6 +35,8 @@ const LOCK_NAME = 'geo:onboarding-topic-follows';
 // or after a reload. Until this passes, wait for its follows to be indexed rather than publish again.
 const SUBMITTED_GRACE_MS = 10 * 60_000;
 const SUBMITTED_POLL_MS = 10_000;
+// Past the publish cap, keep checking (read-only) for a late landing: held picks feed For you.
+const CAPPED_POLL_MS = 60_000;
 // Each failed publish shows the user an error, so stop after a few until the next page load.
 const MAX_PUBLISH_FAILURES = 3;
 
@@ -192,6 +194,8 @@ function nextDelay(
       return Math.min(INDEX_POLL_MS * budget.indexPolls, INDEX_POLL_MAX_MS);
     case 'submitted':
       return SUBMITTED_POLL_MS;
+    case 'capped':
+      return CAPPED_POLL_MS;
     case 'failed':
       budget.publishFailures += 1;
       return PUBLISH_RETRY_MS;

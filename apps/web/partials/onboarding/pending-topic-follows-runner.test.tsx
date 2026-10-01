@@ -374,4 +374,24 @@ describe('PendingTopicFollowsRunner', () => {
     expect(mocks.follow).toHaveBeenCalledTimes(3);
     expect(store.get(feedTopicsAtom)).toEqual(none);
   });
+
+  it('keeps checking, without publishing, after the wait past the cap ends', async () => {
+    mocks.follow.mockResolvedValue(false);
+    const store = mount();
+    for (let i = 0; i < 3; i++) {
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      await act(() => vi.advanceTimersByTimeAsync(11 * 60_000));
+    }
+    expect(mocks.follow).toHaveBeenCalledTimes(3);
+
+    // The last publish lands well after its 10-minute wait.
+    await act(() => vi.advanceTimersByTimeAsync(20 * 60_000));
+    mocks.fetchFollowed.mockResolvedValue(
+      picks.map(topic => ({ id: `r-${topic.id}`, spaceId: 'space-1', toEntityId: topic.id }))
+    );
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(mocks.follow).toHaveBeenCalledTimes(3);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
 });
