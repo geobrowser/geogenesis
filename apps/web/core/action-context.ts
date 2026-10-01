@@ -28,6 +28,9 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'debate_stance_panel',
+  'debate_inline_signup',
+  'debate_end_screen',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -46,7 +49,17 @@ export type ActionKind =
   | 'search_result'
   | 'assistant_message'
   | 'assistant_option'
-  | 'create_space';
+  | 'create_space'
+  /** Started a debate without taking a side on its claim. */
+  | 'just_watch'
+  /** Took a side while signed out: held until the account exists, then published as a `vote`. */
+  | 'stance_hold'
+  /** One step of the full-screen player's inline sign-up and onboarding, done or skipped. */
+  | 'signup_step'
+  /** Moved on to the next debate from the end screen, by autoplay or by choice. */
+  | 'play_next'
+  /** Changed side on a debate's claim from its end screen, after picking the other side's debater. */
+  | 'stance_switch';
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;

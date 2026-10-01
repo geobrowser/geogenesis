@@ -1429,6 +1429,8 @@ export function useDebatePlayback(
     turnState,
     turnSpans,
     turnCount,
+    /** Each recording's start against the debate clock: element time is debate time minus this. */
+    offsets,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,

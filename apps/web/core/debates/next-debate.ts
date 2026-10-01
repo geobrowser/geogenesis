@@ -112,6 +112,34 @@ export function pickNextDebate({
   rankByDebateId: ReadonlyMap<string, number>;
   watchedDebateIds: ReadonlySet<string>;
 }): NextDebatePick | null {
+  return (
+    pickNextDebates({ candidates, currentDebateId, currentClaimId, rankByDebateId, watchedDebateIds, count: 1 })[0] ??
+    null
+  );
+}
+
+/**
+ * Up to `count` debates to offer next, best first, by the same rules as {@link pickNextDebate}.
+ *
+ * Related debates lead, each in Best order, and the rest of the space follows in Best order — so the
+ * first entry is always what `pickNextDebate` would have chosen, and a row of three never puts an
+ * unrelated debate ahead of a related one.
+ */
+export function pickNextDebates({
+  candidates,
+  currentDebateId,
+  currentClaimId,
+  rankByDebateId,
+  watchedDebateIds,
+  count,
+}: {
+  candidates: NextDebateCandidate[];
+  currentDebateId: string;
+  currentClaimId: string;
+  rankByDebateId: ReadonlyMap<string, number>;
+  watchedDebateIds: ReadonlySet<string>;
+  count: number;
+}): NextDebatePick[] {
   const debateId = normId(currentDebateId);
   const claimId = normId(currentClaimId);
 
@@ -131,9 +159,9 @@ export function pickNextDebate({
     .sort((a, z) => rankOf(a.candidate) - rankOf(z.candidate) || a.index - z.index)
     .map(({ candidate }) => candidate);
 
-  const related = eligible.find(candidate => candidate.topicIds.some(topicId => currentTopics.has(topicId)));
-  if (related) return { candidate: related, related: true };
+  const isRelated = (candidate: NextDebateCandidate) => candidate.topicIds.some(topicId => currentTopics.has(topicId));
+  const related = eligible.filter(isRelated).map(candidate => ({ candidate, related: true }));
+  const rest = eligible.filter(candidate => !isRelated(candidate)).map(candidate => ({ candidate, related: false }));
 
-  const next = eligible[0];
-  return next ? { candidate: next, related: false } : null;
+  return [...related, ...rest].slice(0, Math.max(0, count));
 }

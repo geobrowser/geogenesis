@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
-import { type NextDebateCandidate, debateClaimIds, nextDebateCandidates, pickNextDebate } from './next-debate';
+import {
+  type NextDebateCandidate,
+  debateClaimIds,
+  nextDebateCandidates,
+  pickNextDebate,
+  pickNextDebates,
+} from './next-debate';
 
 const CURRENT_DEBATE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const CURRENT_CLAIM = 'cccccccccccccccccccccccccccccccc';
@@ -124,6 +130,56 @@ describe('pickNextDebate', () => {
 
   it('suggests nothing once every other debate in the space has been watched', () => {
     expect(pick({ candidates: [current, candidate('seen', 'claim-1', ['ai-safety'])], watched: ['seen'] })).toBeNull();
+  });
+});
+
+describe('pickNextDebates', () => {
+  const rank = (ids: string[]) => new Map(ids.map((id, index) => [normId(id), index]));
+
+  it('lists related debates first, then the rest of the space, each in Best order', () => {
+    const picks = pickNextDebates({
+      candidates: [
+        current,
+        candidate('unrelated-top', 'claim-1', ['sport']),
+        candidate('related-low', 'claim-2', ['ai-safety']),
+        candidate('related-high', 'claim-3', ['ai-policy']),
+        candidate('unrelated-low', 'claim-4', ['sport']),
+      ],
+      currentDebateId: CURRENT_DEBATE,
+      currentClaimId: CURRENT_CLAIM,
+      rankByDebateId: rank(['unrelated-top', 'related-high', 'unrelated-low', 'related-low']),
+      watchedDebateIds: new Set(),
+      count: 3,
+    });
+
+    expect(picks.map(pick => [pick.candidate.debateId, pick.related])).toEqual([
+      ['related-high', true],
+      ['related-low', true],
+      ['unrelated-top', false],
+    ]);
+  });
+
+  it('starts with exactly what pickNextDebate would choose', () => {
+    const input = {
+      candidates: [current, candidate('a', 'claim-a', ['sport']), candidate('b', 'claim-b', ['ai-policy'])],
+      currentDebateId: CURRENT_DEBATE,
+      currentClaimId: CURRENT_CLAIM,
+      rankByDebateId: rank(['a', 'b']),
+      watchedDebateIds: new Set<string>(),
+    };
+    expect(pickNextDebates({ ...input, count: 3 })[0]).toEqual(pickNextDebate(input));
+  });
+
+  it('returns fewer than asked when the space runs out, and nothing for a count of zero', () => {
+    const input = {
+      candidates: [current, candidate('only', 'claim-o')],
+      currentDebateId: CURRENT_DEBATE,
+      currentClaimId: CURRENT_CLAIM,
+      rankByDebateId: new Map<string, number>(),
+      watchedDebateIds: new Set<string>(),
+    };
+    expect(pickNextDebates({ ...input, count: 3 })).toHaveLength(1);
+    expect(pickNextDebates({ ...input, count: 0 })).toEqual([]);
   });
 });
 

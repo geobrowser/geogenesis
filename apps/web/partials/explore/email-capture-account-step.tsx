@@ -16,6 +16,17 @@ import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './emai
 const CODE_LENGTH = 6;
 
 // The headless attempt and its modal fallback belong to the same signup surface.
+export type AccountAnalytics = {
+  component: string;
+  auth_control: string;
+  auth_trigger: string;
+  target_type: string;
+  target_id: string;
+  link_source: string;
+  form_type: string;
+  signup_surface: string;
+};
+
 export const ACCOUNT_ANALYTICS = {
   component: 'explore_email_capture',
   auth_control: 'create_account',
@@ -34,7 +45,22 @@ export const ACCOUNT_ANALYTICS = {
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
+export function AccountStep({
+  email,
+  onGiveUp,
+  analytics = ACCOUNT_ANALYTICS,
+}: {
+  email: string;
+  onGiveUp: () => void;
+  /**
+   * Who is asking, for the auth attempt and its completion. Explore's capture by default; the
+   * full-screen debate player's inline sign-up passes its own, so the two are counted apart.
+   */
+  analytics?: typeof ACCOUNT_ANALYTICS | AccountAnalytics;
+}) {
+  // Read through a ref: the attempt is opened once, on mount, and completes long after.
+  const analyticsRef = React.useRef(analytics);
+  analyticsRef.current = analytics;
   // Headless email completion runs directly after verification, even if authentication has
   // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
   // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
@@ -43,7 +69,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args => completePrivyAuth(args, ACCOUNT_ANALYTICS),
+    onComplete: args => completePrivyAuth(args, analyticsRef.current),
   });
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
@@ -52,7 +78,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // Keep the modal fallback's UI error handler with the card; its analytics attribution is
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
-    analytics: ACCOUNT_ANALYTICS,
+    analytics,
     resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
@@ -112,9 +138,10 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
     const attempt = currentAuthAttempt();
-    if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
-      beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
-    openAuthAttempt(ACCOUNT_ANALYTICS);
+    const surface = analyticsRef.current;
+    if (!attempt || attempt.endedAt || attempt.properties.component !== surface.component)
+      beginPrivyAuth(surface, { resume: true });
+    openAuthAttempt(surface);
     void requestCode();
   }, [requestCode]);
 

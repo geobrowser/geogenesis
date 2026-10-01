@@ -17,6 +17,7 @@ import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useComments } from '~/core/hooks/use-comments';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -42,10 +43,13 @@ import { debateFullscreenActiveAtom } from '~/atoms';
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
+/** The claim panel's column beside the video on desktop (GEO-3112). */
+const SIDE_PANEL_WIDTH = '19rem';
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
-  // claim title, media gap, and vertical breathing room.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+  // claim title, media gap, and vertical breathing room — and, beside it, the claim panel's column
+  // and its gap, so the three never push the rail off a laptop screen.
+  '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 4rem - ${SIDE_PANEL_WIDTH} - 1rem), calc(82.9dvh - 10.88rem)), 640px)`,
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -507,6 +511,15 @@ function DebateFeedItem({
   // badge and the panel share one cache entry, so opening the panel doesn't refetch.
   const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
+  // The claim panel's two possible homes. Both are always in the page so neither layout reflows
+  // when the other is chosen; the player portals into whichever one this screen shows.
+  const [sidePanelHost, setSidePanelHost] = React.useState<HTMLDivElement | null>(null);
+  const [belowPanelHost, setBelowPanelHost] = React.useState<HTMLDivElement | null>(null);
+  const isPhone = useMediaQuery('(max-width: 767px)');
+  // "4 min · 2 rounds · 1,240 took a side", under the claim. Written by the player, which already
+  // holds the debate's timeline and the claim's response count, into this line of the header.
+  const [stakesHost, setStakesHost] = React.useState<HTMLParagraphElement | null>(null);
+
   React.useEffect(() => {
     const element = itemRef.current;
     if (!element) return;
@@ -561,9 +574,18 @@ function DebateFeedItem({
               spaceName={spaceName}
               spaceImage={spaceImage}
               topics={topics}
+              stakesHostRef={setStakesHost}
             />
           </div>
-          <div className="mt-6 md:mt-7">
+          <div className="relative mt-6 md:mt-7">
+            {/* Desktop: the claim panel's column, beside the video and aligned to its top edge.
+                Positioned off the player rather than in the flex row so it never sets the card's
+                height; the spacer beside the column below keeps the rail clear of it. */}
+            <div
+              ref={setSidePanelHost}
+              className="absolute top-0 left-full ml-4 flex flex-col md:hidden"
+              style={{ width: SIDE_PANEL_WIDTH }}
+            />
             <DebateFeedPlayer
               debate={debate}
               active={active}
@@ -574,8 +596,13 @@ function DebateFeedItem({
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}
               onPlaybackState={onPlaybackState}
+              immersive
+              panelHost={isPhone ? belowPanelHost : sidePanelHost}
+              stakesHost={stakesHost}
             />
           </div>
+          {/* Mobile: the claim panel, under the video. */}
+          <div ref={setBelowPanelHost} className="mt-3 hidden md:block" />
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
           <div className="mt-3 hidden md:block">
@@ -591,6 +618,8 @@ function DebateFeedItem({
             <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
           )}
         </div>
+        {/* Desktop: room for the claim panel, which hangs off the player into this space. */}
+        <div aria-hidden className="shrink-0 md:hidden" style={{ width: SIDE_PANEL_WIDTH }} />
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">
           <DebateInteractionBar
@@ -627,6 +656,7 @@ function DebateTitleHeader({
   spaceName,
   spaceImage,
   topics,
+  stakesHostRef,
 }: {
   claim: string;
   claimEntityId: string;
@@ -634,6 +664,8 @@ function DebateTitleHeader({
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
+  /** Where the player writes runtime, rounds and how many took a side — under the claim. */
+  stakesHostRef?: (element: HTMLParagraphElement | null) => void;
 }) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
   const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
@@ -704,6 +736,9 @@ function DebateTitleHeader({
           {isClaimExpanded ? 'Show less' : 'Show more'}
         </button>
       )}
+      {stakesHostRef ? (
+        <p ref={stakesHostRef} className="text-metadata text-grey-04 tabular-nums empty:hidden" />
+      ) : null}
     </div>
   );
 }

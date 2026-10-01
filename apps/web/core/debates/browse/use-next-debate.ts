@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import type { Debate } from '~/core/debates/api';
-import { debateClaimIds, nextDebateCandidates, pickNextDebate } from '~/core/debates/next-debate';
+import { debateClaimIds, nextDebateCandidates, pickNextDebates } from '~/core/debates/next-debate';
 import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
@@ -38,6 +38,7 @@ export type NextDebate = {
 
 const NO_WATCHED: ReadonlySet<string> = new Set();
 const NO_RANKING: ReadonlyMap<string, number> = new Map();
+const NO_NEXT: NextDebate[] = [];
 
 /**
  * The debate the end card offers next, ready to draw — or null while it is being worked out, or when
@@ -55,6 +56,17 @@ const NO_RANKING: ReadonlyMap<string, number> = new Map();
  * this card.
  */
 export function useNextDebate(debate: Debate, live: boolean): NextDebate | null {
+  return useNextDebates(debate, live, 1)[0] ?? null;
+}
+
+/**
+ * Up to `count` debates to offer next, best first — see `pickNextDebates` for the order. Empty while
+ * the choice is still being worked out, and when there is nothing left to offer.
+ *
+ * Drawn all at once: a row whose cards arrive one by one shifts under a viewer who is already
+ * reaching for one of them.
+ */
+export function useNextDebates(debate: Debate, live: boolean, count: number): NextDebate[] {
   const spaceId = normId(debate.claim.space_id);
 
   const ranking = useDebatesBestOrder(spaceId, live);
@@ -81,17 +93,18 @@ export function useNextDebate(debate: Debate, live: boolean): NextDebate | null 
   // partial list and then swapped. A ranking that failed falls through to query order.
   const settled =
     live && !debatesLoading && !ranking.isLoading && !(claimIds.length > 0 && claimsLoading) && debates.length > 0;
-  const pick = React.useMemo(
+  const picks = React.useMemo(
     () =>
       settled
-        ? pickNextDebate({
+        ? pickNextDebates({
             candidates,
             currentDebateId: debate.id,
             currentClaimId: debate.claim.claim_entity_id,
             rankByDebateId: ranking.isError ? NO_RANKING : ranking.rankByDebateId,
             watchedDebateIds,
+            count,
           })
-        : null,
+        : [],
     [
       settled,
       candidates,
@@ -100,6 +113,7 @@ export function useNextDebate(debate: Debate, live: boolean): NextDebate | null 
       ranking.isError,
       ranking.rankByDebateId,
       watchedDebateIds,
+      count,
     ]
   );
 
@@ -107,40 +121,55 @@ export function useNextDebate(debate: Debate, live: boolean): NextDebate | null 
   // Supported by on the same debate would otherwise pick the key frame or name a debater.
   const chosen = React.useMemo(
     () =>
-      pick
-        ? debates
-            .filter(entity => normId(entity.id) === pick.candidate.debateId)
-            .map(entity => ({ ...entity, relations: Entities.relationsInSpace(entity.relations, spaceId) }))
-        : [],
-    [debates, pick, spaceId]
+      picks.flatMap(pick =>
+        debates
+          .filter(entity => normId(entity.id) === pick.candidate.debateId)
+          .slice(0, 1)
+          .map(entity => ({ ...entity, relations: Entities.relationsInSpace(entity.relations, spaceId) }))
+      ),
+    [debates, picks, spaceId]
   );
   const keyframeByDebateId = useDebateKeyframes(chosen);
 
   // The sides as the graph publishes them, as `ClaimDebates` reads them.
-  const sides = React.useMemo(
+  const sidesByDebateId = React.useMemo(
     () =>
-      chosen.flatMap(entity => [
-        ...Entities.relationTargets(entity.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID),
-        ...Entities.relationTargets(entity.relations, DEBATE_OPPOSED_BY_PROPERTY_ID),
-      ]),
+      new Map(
+        chosen.map(entity => [
+          normId(entity.id),
+          [
+            ...Entities.relationTargets(entity.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID),
+            ...Entities.relationTargets(entity.relations, DEBATE_OPPOSED_BY_PROPERTY_ID),
+          ],
+        ])
+      ),
     [chosen]
   );
+  const sides = React.useMemo(() => [...new Set([...sidesByDebateId.values()].flat())], [sidesByDebateId]);
   const { profilesBySpaceId, isLoading: profilesLoading } = useProfilesBySpaceIds(sides, sides.length > 0);
 
-  if (!pick || chosen.length === 0) return null;
-  // Drawn once the names are in either way — a row whose names arrive a beat later shifts everything
-  // under it. Profiles that could not be resolved still leave the faces, keyed by space.
-  if (profilesLoading) return null;
+  return React.useMemo(() => {
+    if (picks.length === 0 || chosen.length === 0) return NO_NEXT;
+    // Drawn once the names are in either way — a row whose names arrive a beat later shifts everything
+    // under it. Profiles that could not be resolved still leave the faces, keyed by space.
+    if (profilesLoading) return NO_NEXT;
 
-  return {
-    debateId: pick.candidate.debateId,
-    spaceId,
-    claimName: pick.candidate.claimName,
-    keyFrame: keyframeByDebateId.get(chosen[0].id) ?? null,
-    related: pick.related,
-    participants: sides.map(sideSpaceId => {
-      const profile = profilesBySpaceId.get(sideSpaceId);
-      return { spaceId: sideSpaceId, name: profile?.name ?? null, avatarUrl: profile?.avatarUrl ?? null };
-    }),
-  };
+    return picks.flatMap(pick => {
+      const entity = chosen.find(candidate => normId(candidate.id) === pick.candidate.debateId);
+      if (!entity) return [];
+      return [
+        {
+          debateId: pick.candidate.debateId,
+          spaceId,
+          claimName: pick.candidate.claimName,
+          keyFrame: keyframeByDebateId.get(entity.id) ?? null,
+          related: pick.related,
+          participants: (sidesByDebateId.get(normId(entity.id)) ?? []).map(sideSpaceId => {
+            const profile = profilesBySpaceId.get(sideSpaceId);
+            return { spaceId: sideSpaceId, name: profile?.name ?? null, avatarUrl: profile?.avatarUrl ?? null };
+          }),
+        },
+      ];
+    });
+  }, [chosen, keyframeByDebateId, picks, profilesBySpaceId, profilesLoading, sidesByDebateId, spaceId]);
 }
