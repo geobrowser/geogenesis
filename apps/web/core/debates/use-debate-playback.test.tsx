@@ -112,6 +112,29 @@ describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3
     expect(result.current.urls.slot1).not.toBe(held.slot1);
     expect(result.current.urls.slot2).not.toBe(held.slot2);
   });
+  it('keeps media detached and surfaces the load error when re-signing keeps failing', async () => {
+    const { result, rerender } = renderPlayback();
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    now += 6 * 60_000;
+    rerender({ mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.recordingUrl.mockImplementation(() => Promise.reject(new Error('Could not load recordings.')));
+    rerender({ mediaAttached: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () => {
+        await Promise.resolve();
+        vi.advanceTimersByTime(2_000);
+      });
+    }
+    vi.useRealTimers();
+
+    await waitFor(() => expect(result.current.error).toBe('Could not load recordings.'));
+    expect(result.current.urlsLapsed).toBe(true);
+    expect(mocks.recordingUrlRefreshes).toHaveLength(6);
+  });
 });
 
 describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)', () => {

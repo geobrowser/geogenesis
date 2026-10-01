@@ -569,8 +569,11 @@ function callOrQueue(call: PendingCall) {
     return;
   }
 
-  if (pendingCalls.length >= MAX_PENDING_CALLS && !IDENTITY_METHODS.has(call.method)) {
-    return;
+  if (pendingCalls.length >= MAX_PENDING_CALLS) {
+    if (!IDENTITY_METHODS.has(call.method)) return;
+    // Room for an identity call comes from the oldest event, keeping the bound hard.
+    const evict = pendingCalls.findIndex(queued => !IDENTITY_METHODS.has(queued.method));
+    pendingCalls.splice(evict === -1 ? 0 : evict, 1);
   }
 
   pendingCalls.push(call);

@@ -52,7 +52,9 @@ describe('analytics', () => {
     window.lytics = runtime as never;
     document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
 
-    expect(runtime.capture).toHaveBeenCalledTimes(1000);
+    // The identity call took the oldest event's place, so the queue never exceeded the bound.
+    expect(runtime.capture).toHaveBeenCalledTimes(999);
+    expect(runtime.capture).toHaveBeenNthCalledWith(1, 'action_completed', expect.objectContaining({ index: 1 }));
     expect(runtime.capture).toHaveBeenLastCalledWith('action_completed', expect.objectContaining({ index: 999 }));
     expect(runtime.loggedIn).toHaveBeenCalledTimes(1);
   });

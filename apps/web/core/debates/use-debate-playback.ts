@@ -134,6 +134,9 @@ const NO_TRANSCRIPT_SEGMENTS: NonNullable<ReturnType<typeof useDebateTranscript>
 // Presigns last 15 minutes and `lookup` may return one cached for 5, so a card re-attaching
 // later than this re-signs before handing a <video> its URL (GEO-3067).
 const RECORDING_URL_REUSE_MS = 5 * 60_000;
+/** Re-sign attempts after a lapse before the card shows its load error, and the wait between. */
+const MAX_RESIGN_RETRIES = 2;
+const RESIGN_RETRY_DELAY_MS = 2_000;
 
 export function useDebatePlayback(
   debate: Debate,
@@ -146,6 +149,7 @@ export function useDebatePlayback(
   // Held URLs aged past the reuse window while released; the player renders no <video> until they
   // are re-signed, so a lapsed URL never reaches an element.
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
+  const [resignAttempt, setResignAttempt] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
@@ -467,6 +471,7 @@ export function useDebatePlayback(
     fetchedForRef.current = null;
     urlsCommittedAtRef.current = null;
     setUrlsLapsed(false);
+    setResignAttempt(0);
     setUrls({ slot1: null, slot2: null });
     // A different debate's clocks start over; carrying this across would strand the new one
     // at the old one's position.
@@ -597,6 +602,7 @@ export function useDebatePlayback(
   React.useEffect(() => {
     const committedAt = urlsCommittedAtRef.current;
     if (mediaAttached || committedAt === null) return;
+    setResignAttempt(0);
     const check = () => {
       if (Date.now() - committedAt >= RECORDING_URL_REUSE_MS) setUrlsLapsed(true);
     };
@@ -609,11 +615,13 @@ export function useDebatePlayback(
   }, [mediaAttached, debate.id]);
 
   // Re-attached with lapsed URLs: re-sign both (uncached) before the player renders the elements.
+  // A lapsed URL is never mounted: failures retry, then surface the load error with media detached.
   React.useEffect(() => {
     if (!mediaAttached || !urlsLapsed) return;
     if (!slot1RecordingFilename || !slot2RecordingFilename) return;
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     Promise.all([
       recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot1RecordingFilename }),
       recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot2RecordingFilename }),
@@ -624,18 +632,24 @@ export function useDebatePlayback(
         // Fresh signatures earn a fresh re-sign budget for the tiles.
         refreshedSlotsRef.current.clear();
         setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
+        setResignAttempt(0);
+        setError(null);
+        setUrlsLapsed(false);
       })
-      .catch(() => {
-        // Fall back to the held URLs; the tile's own recovery re-signs if they have lapsed.
-      })
-      .finally(() => {
-        if (!cancelled) setUrlsLapsed(false);
+      .catch(caught => {
+        if (cancelled) return;
+        if (resignAttempt < MAX_RESIGN_RETRIES) {
+          retryTimer = setTimeout(() => setResignAttempt(attempt => attempt + 1), RESIGN_RETRY_DELAY_MS);
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
       });
 
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [mediaAttached, urlsLapsed, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
+  }, [mediaAttached, urlsLapsed, resignAttempt, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
 
   // Re-attached elements are new and start at 0, so the pair is pre-seeked again before it plays.
   const wasAttachedRef = React.useRef(mediaAttached);
