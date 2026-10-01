@@ -1278,7 +1278,21 @@ function DebaterVideo({
             // The backlog is a list you have opened to scroll, and it should leave the debate
             // visible behind it — so it gives most of the picture back, and at that width the
             // dissolve at its top edge reads as the edge of a list rather than as damage.
-            claimsOpen ? 'w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            //
+            // `@min-md:` on the phone width, because `md:` here is a *custom* max-width variant and
+            // Tailwind emits custom variants after its own container queries — so a bare `md:w-[62%]`
+            // would beat the `@max-md:` sheet width below on every phone. Scoping it to a wide player
+            // keeps it exactly where it applied before: a phone-width viewport with a player of
+            // 448px or more (a tablet in portrait), and nowhere else.
+            claimsOpen ? 'w-[45%] @min-md:md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            // A small player (`@max-md`: a phone, or the compact gallery) opens the list as a sheet
+            // instead (GEO-3114): the live card's full width, so a claim prints whole in a few
+            // lines rather than eight at 45%, and pinned below the tile's top controls (`top-14`
+            // clears the mute control, which runs 12px to 54px on a phone) so the list can be as
+            // tall as the tile allows. It covers the face only while the viewer has it open: the
+            // chip under it ("Hide"), or a pointer leaving the tile, puts it away. The live card
+            // needs nothing here, as it docks itself to one line (see `ClaimCardSmallPanel`).
+            claimsOpen && '@max-md:top-14 @max-md:w-[calc(100%-1.75rem)]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
