@@ -70,6 +70,15 @@ describe('useRequestToBeMember', () => {
   // A returning member pressed Join while signed out, and the queue replays it once they are in.
   // What it was for is already true: done, quietly — throwing kept it queued and the button
   // "requested" for good.
+  // A sign-out can clear the queued request while its membership check is out.
+  it('does not send a queued request that stopped being the queued one during its check', async () => {
+    const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });
+
+    await act(() => result.current.requestToBeMemberAsync({ fromQueue: true, isCurrent: () => false }));
+
+    expect(mocks.requestSpaceMembership).not.toHaveBeenCalled();
+  });
+
   it('treats an existing membership as done for a queued request', async () => {
     mocks.alreadyMember = true;
     const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE }), { wrapper });

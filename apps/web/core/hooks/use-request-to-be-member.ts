@@ -30,6 +30,8 @@ interface UseRequestToBeMemberArgs {
 type RequestToBeMemberOptions = {
   /** Replaying a request queued before the account was ready (see `useJoinSpace`). */
   fromQueue?: boolean;
+  /** For a replay: whether its press is still the one queued, re-checked after the membership read. */
+  isCurrent?: () => boolean;
 };
 
 export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArgs) {
@@ -44,7 +46,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const tx = useSmartAccountTransaction();
 
   const handleRequestToBeMember = useCallback(
-    async ({ fromQueue = false }: RequestToBeMemberOptions = {}) => {
+    async ({ fromQueue = false, isCurrent = () => true }: RequestToBeMemberOptions = {}) => {
       // Through the cache as well as this render. A join queued before sign-up replays through this
       // hook as it was at the press, before the account or space existed; the cache has both by the
       // time the runner fires. Reading only the render failed that replay on every retry.
@@ -80,6 +82,8 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
           getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
         ])
       );
+      // Cleared (a sign-out) or replaced during that read: the request must not follow.
+      if (!isCurrent()) return;
       if (Either.isRight(access) && (access.right[0] || access.right[1])) {
         // What the queued request was for is already true — a returning member who pressed Join while
         // signed out. Done, not failed: throwing kept it queued and the button "requested" for good.

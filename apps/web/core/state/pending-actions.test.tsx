@@ -33,7 +33,7 @@ describe('useQueuedAction', () => {
     expect(result.current.intent).toBe('positive');
     await queued()[0]!.run();
 
-    expect(run).toHaveBeenCalledWith('positive', { live: true });
+    expect(run).toHaveBeenCalledWith('positive', expect.objectContaining({ live: true }));
   });
 
   // The control decides from its own data, which is still loading right after sign-in.
@@ -49,7 +49,7 @@ describe('useQueuedAction', () => {
     view.rerender({ ready: true, run });
     await running;
 
-    expect(run).toHaveBeenCalledWith('positive', { live: true });
+    expect(run).toHaveBeenCalledWith('positive', expect.objectContaining({ live: true }));
   });
 
   // A control that unmounts while the replay waits on it hands the replay on rather than stranding it.
@@ -66,7 +66,7 @@ describe('useQueuedAction', () => {
     await running;
 
     expect(waiting).not.toHaveBeenCalled();
-    expect(other).toHaveBeenCalledWith('positive', { live: true });
+    expect(other).toHaveBeenCalledWith('positive', expect.objectContaining({ live: true }));
   });
 
   // Several controls for one action — the same claim in the feed and a side panel. Closing the
@@ -80,7 +80,7 @@ describe('useQueuedAction', () => {
 
     await queued()[0]!.run();
 
-    expect(remaining).toHaveBeenCalledWith('negative', { live: true });
+    expect(remaining).toHaveBeenCalledWith('negative', expect.objectContaining({ live: true }));
   });
 
   // Withdrawn or replaced while the control's data loaded: the old press must not publish, and the
@@ -99,7 +99,7 @@ describe('useQueuedAction', () => {
 
     await queued()[0]!.run();
     expect(run).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith('negative', { live: true });
+    expect(run).toHaveBeenCalledWith('negative', expect.objectContaining({ live: true }));
   });
 
   it('does not run a press withdrawn while it waited for the control to be ready', async () => {

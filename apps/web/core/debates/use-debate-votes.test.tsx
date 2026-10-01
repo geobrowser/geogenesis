@@ -116,13 +116,18 @@ vi.mock('~/core/state/pending-actions', () => ({
   }: {
     id: string;
     requires?: string;
-    run: (intent: string | undefined, replay: { live: boolean }) => Promise<void> | void;
+    run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void> | void;
   }) => ({
     intent: mocks.queuedIntent,
     isQueued: mocks.queuedIntent !== undefined,
     // As the press's own fallback replays it — with no voting control mounted to answer.
     queue: (intent: string) =>
-      mocks.enqueuePendingAction({ id, requires, intent, run: () => run(intent, { live: false }) }),
+      mocks.enqueuePendingAction({
+        id,
+        requires,
+        intent,
+        run: () => run(intent, { live: false, isCurrent: () => true }),
+      }),
     cancel: () => mocks.dequeuePendingAction(id),
   }),
 }));
@@ -510,6 +515,17 @@ describe('useDebateVotes castVote', () => {
 
     await waitFor(() => expect(mocks.publishEdit).toHaveBeenCalled());
     expect(publishAt(0).all.every(relation => relation.fromEntity.id === 'vote-1')).toBe(true);
+  });
+
+  // A sign-out or a newer pick can clear or replace the queued pick while its fresh read is out.
+  it('does not publish a replayed pick that stopped being the queued one during its read', async () => {
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(BOB, { fromQueue: true, readExistingVoteFresh: true, isCurrent: () => false });
+    });
+
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
   });
 
   it('reuses the existing Vote entity rather than minting a second one', async () => {

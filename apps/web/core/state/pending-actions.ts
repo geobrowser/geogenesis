@@ -21,8 +21,12 @@ export type PendingAction = {
    * The press's own way to carry the action out, used when no control for it is mounted (see
    * `liveHandlers`). Omitted for an action only a mounted control can perform; the runner then
    * waits for one to mount.
+   *
+   * Given `isCurrent` — whether this press is still the one queued. A `run` that awaits anything
+   * before it writes (a fresh read, a membership check) re-checks it after: a sign-out or a newer press
+   * can clear or replace the action in the meantime, and the write must not follow.
    */
-  run?: () => Promise<void> | void;
+  run?: (isCurrent: () => boolean) => Promise<void> | void;
   /**
    * What the action will do, for a control to draw while it waits — the side of a vote, the
    * participant picked as a debate's winner. Lives on the action rather than in the control because
@@ -82,7 +86,7 @@ function waitForLiveHandler(id: string) {
  */
 function useLivePendingActionHandler(
   id: string,
-  handler: (intent: string | undefined) => Promise<void> | void,
+  handler: (intent: string | undefined, isCurrent: () => boolean) => Promise<void> | void,
   ready: boolean
 ) {
   const handlerRef = useRef(handler);
@@ -106,7 +110,7 @@ function useLivePendingActionHandler(
         // Withdrawn or replaced while it waited: done, and the replacement runs on its own.
         if (!isCurrent()) return;
       }
-      return handlerRef.current(intent);
+      return handlerRef.current(intent, isCurrent);
     };
     liveHandlers.set(id, [...(liveHandlers.get(id) ?? []), live]);
     const waiters = liveHandlerWaiters.get(id);
@@ -157,7 +161,8 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
           for (;;) {
             if (!isCurrent()) return;
             const live = currentLiveHandler(action.id);
-            if (!live && action.run) return withActionContext(context, action.run);
+            const fallback = action.run;
+            if (!live && fallback) return withActionContext(context, () => fallback(isCurrent));
             const handler = live ?? (await waitForLiveHandler(action.id));
             if (!isCurrent()) return;
             const outcome = await withActionContext(context, () => handler(action.intent, isCurrent));
@@ -198,9 +203,10 @@ export function useQueuedAction({
   /**
    * Carries the action out. `live` is false when no control for it is mounted and this is the press's
    * own closure: its view of the viewer is from before sign-in, so anything it decides from — whether
-   * they already hold this side — has to be read fresh rather than trusted.
+   * they already hold this side — has to be read fresh rather than trusted. `isCurrent` is re-checked
+   * after any such read and before writing (see `PendingAction.run`).
    */
-  run: (intent: string | undefined, replay: { live: boolean }) => Promise<void> | void;
+  run: (intent: string | undefined, replay: { live: boolean; isCurrent: () => boolean }) => Promise<void> | void;
   requires?: PendingActionRequirement;
   liveOnly?: boolean;
   /**
@@ -214,7 +220,11 @@ export function useQueuedAction({
   const intent = usePendingActionIntent(id);
   const runRef = useRef(run);
   runRef.current = run;
-  useLivePendingActionHandler(id, nextIntent => runRef.current(nextIntent, { live: true }), ready);
+  useLivePendingActionHandler(
+    id,
+    (nextIntent, isCurrent) => runRef.current(nextIntent, { live: true, isCurrent }),
+    ready
+  );
 
   const queue = useCallback(
     (nextIntent: string = 'queued') =>
@@ -223,7 +233,7 @@ export function useQueuedAction({
         label,
         requires,
         intent: nextIntent,
-        run: liveOnly ? undefined : () => runRef.current(nextIntent, { live: false }),
+        run: liveOnly ? undefined : isCurrent => runRef.current(nextIntent, { live: false, isCurrent }),
       }),
     [enqueue, id, label, requires, liveOnly]
   );

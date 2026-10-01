@@ -157,6 +157,8 @@ type CastVoteOptions = {
    * it would mint a second Vote entity for a viewer who had already voted.
    */
   readExistingVoteFresh?: boolean;
+  /** For a replay: whether its press is still the one queued, re-checked after the fresh read. */
+  isCurrent?: () => boolean;
 };
 
 /**
@@ -228,10 +230,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     label: 'your winner vote',
     // Held until the viewer's existing vote is known, which a switch needs and a repeat skips.
     ready: haveVotesAnswered && personalSpaceId !== null,
-    run: (intent, { live }) => {
+    run: (intent, { live, isCurrent }) => {
       const participant = orderedParticipants(debate).find(p => intent && ID.equals(p.profile_space_id, intent));
       if (!participant) throw new Error('The debater you picked is no longer in this debate.');
-      return castVoteRef.current(participant, { fromQueue: true, readExistingVoteFresh: !live });
+      return castVoteRef.current(participant, { fromQueue: true, readExistingVoteFresh: !live, isCurrent });
     },
   });
   const queuedWinner = queuedVote.intent;
@@ -253,7 +255,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const castVote = React.useCallback(
     async (
       participant: DebateParticipant,
-      { fromQueue = false, readExistingVoteFresh = false }: CastVoteOptions = {}
+      { fromQueue = false, readExistingVoteFresh = false, isCurrent = () => true }: CastVoteOptions = {}
     ) => {
       const attribution = getContext();
       // A replay that cannot publish throws rather than returning: the runner drops an action whose
@@ -276,6 +278,8 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         readExistingVoteFresh && voterSpaceId
           ? tallyDebateVotes(await fetchDebateVotes(debateEntityId), voterSpaceId).myVote
           : tally.myVote;
+      // Cleared (a sign-out) or replaced (a newer pick) during that read: the vote must not follow.
+      if (!isCurrent()) return;
       if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
       if (previousVote && previousVote.winnerRelationId == null) {
         if (fromQueue) throw new Error('Your previous vote is still being indexed.');

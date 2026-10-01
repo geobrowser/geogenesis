@@ -48,7 +48,7 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
-    run: () => requestToBeMemberAsync({ fromQueue: true }).then(() => {}),
+    run: (_intent, { isCurrent }) => requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(() => {}),
   });
   const optimisticRequested = queuedJoin.isQueued;
 

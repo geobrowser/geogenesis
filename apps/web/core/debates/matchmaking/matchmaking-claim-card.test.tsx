@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   isConnected: true,
   /** The viewer's side as the index reports it when a replay reads it fresh. */
   freshViewerDirection: null as 'positive' | 'negative' | null,
+  /** A fresh read held open, so a test can act while it is in flight. */
+  freshRead: null as Promise<'positive' | 'negative' | null> | null,
   /** Privy's answer on whether anyone is signed in. */
   authenticated: true,
   /** A new account whose personal space is still being created in the background. */
@@ -190,7 +192,7 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 }));
 
 vi.mock('~/core/responses/replay-viewer-response', () => ({
-  readViewerResponseForReplay: async () => mocks.freshViewerDirection,
+  readViewerResponseForReplay: () => mocks.freshRead ?? Promise.resolve(mocks.freshViewerDirection),
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -276,6 +278,7 @@ beforeEach(() => {
   mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
   mocks.freshViewerDirection = null;
+  mocks.freshRead = null;
   mocks.authenticated = true;
   mocks.accountSetupPending = false;
   queueStore = createStore();
@@ -1098,6 +1101,21 @@ describe('replaying a queued side with no card on screen', () => {
     mocks.freshViewerDirection = 'positive';
 
     await action.run();
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+
+  // A sign-out clears the queue; it can land while the fresh read is still out.
+  it('does not publish if the press is cleared while the fresh read is in flight', async () => {
+    const action = queueThenUnmount();
+    let answer: (direction: null) => void = () => {};
+    mocks.freshRead = new Promise(resolve => (answer = resolve));
+
+    const running = Promise.resolve(action.run());
+    await Promise.resolve();
+    act(() => queueStore.set(pendingActionsAtom, []));
+    answer(null);
+    await running;
 
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
   });

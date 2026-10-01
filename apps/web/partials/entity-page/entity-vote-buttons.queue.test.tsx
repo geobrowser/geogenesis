@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   serverDirection: null as 'positive' | 'negative' | null,
   /** The viewer's side as the index reports it when a replay reads it fresh. */
   freshDirection: null as 'positive' | 'negative' | null,
+  /** A fresh read held open, so a test can act while it is in flight. */
+  freshRead: null as Promise<'positive' | 'negative' | null> | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -63,7 +65,7 @@ vi.mock('~/core/io/queries', () => ({
 }));
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({ fetchProfilesBySpaceIds: () => Effect.succeed([]) }));
 vi.mock('~/core/responses/replay-viewer-response', () => ({
-  readViewerResponseForReplay: async () => mocks.freshDirection,
+  readViewerResponseForReplay: () => mocks.freshRead ?? Promise.resolve(mocks.freshDirection),
 }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
@@ -89,6 +91,7 @@ beforeEach(() => {
   mocks.responseSpaceId = null;
   mocks.serverDirection = null;
   mocks.freshDirection = null;
+  mocks.freshRead = null;
   mocks.submitResponseAsync.mockReset();
   mocks.submitResponseAsync.mockResolvedValue(undefined);
 });
@@ -162,6 +165,24 @@ describe('replaying a queued vote with no control on screen', () => {
     mocks.freshDirection = 'positive';
 
     await queued()[0]!.run();
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+
+  // A sign-out clears the queue; it can land while the fresh read is still out.
+  it('does not publish if the press is cleared while the fresh read is in flight', async () => {
+    mocks.accountSetupPending = true;
+    const view = render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    fireEvent.click(upvote());
+    view.unmount();
+    let answer: (direction: null) => void = () => {};
+    mocks.freshRead = new Promise(resolve => (answer = resolve));
+
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+    act(() => store.set(pendingActionsAtom, []));
+    answer(null);
+    await running;
 
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
   });

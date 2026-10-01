@@ -493,7 +493,7 @@ export function useClaimPositionControl({
     // Held until the viewer's own side is known — the same wait that keeps the pills from
     // republishing a held side — so the check below reads an answer, not a loading default.
     ready: answersReady,
-    run: async (intent, { live }) => {
+    run: async (intent, { live, isCurrent }) => {
       const direction = intent === 'positive' ? 'positive' : 'negative';
       // The side the viewer holds: this card's answer when it is the one on screen; read fresh when
       // the replay is the press's own closure, whose answer is from before they signed in.
@@ -509,6 +509,8 @@ export function useClaimPositionControl({
             responseKind: CLAIM_RESPONSE_KIND,
             objectType: CLAIM_RESPONSE_OBJECT_TYPE,
           });
+      // Cleared (a sign-out) or replaced (a newer press) during that read: the write must not follow.
+      if (!isCurrent()) return;
       // A returning viewer who already held this side: nothing to publish. Sending it again would be
       // a second response for one press, where pressing a held side signed in means "remove".
       if (held === direction) return;

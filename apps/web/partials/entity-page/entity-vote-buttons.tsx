@@ -207,7 +207,7 @@ export function EntityVoteButtons({
     // Held until the viewer's own side is known: right after sign-in it is still loading, and its
     // empty default would read as "holds nothing" — publishing a side they already hold.
     ready: Boolean(personalSpaceId) && (responseBatch.managed ? responseBatch.ready : hasServerResponseAnswered),
-    run: async (intent, { live }) => {
+    run: async (intent, { live, isCurrent }) => {
       const direction = intent === 'negative' ? 'negative' : 'positive';
       // The side the viewer holds: this control's answer when it is the one on screen; read fresh
       // when the replay is the press's own closure, whose answer is from before they signed in.
@@ -219,6 +219,8 @@ export function EntityVoteButtons({
             responseKind: queryResponseKind,
             objectType: ENTITY_RESPONSE_OBJECT_TYPE,
           });
+      // Cleared (a sign-out) or replaced (a newer press) during that read: the write must not follow.
+      if (!isCurrent()) return;
       // A returning viewer who already held this side: nothing to publish.
       if (held === direction) return;
       await submitResponseAsync(direction);
