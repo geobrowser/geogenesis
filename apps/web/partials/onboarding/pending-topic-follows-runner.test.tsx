@@ -196,7 +196,8 @@ describe('PendingTopicFollowsRunner', () => {
     expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
-  it("drops another account's picks instead of following them", async () => {
+  // A tab can see another wallet's picks before it sees the wallet switch; they are not its to delete.
+  it("leaves another account's picks alone and doesn't follow them", async () => {
     mocks.follow.mockResolvedValue(true);
     mocks.address = '0xB';
     const store = mount();
@@ -204,17 +205,17 @@ describe('PendingTopicFollowsRunner', () => {
     await act(() => vi.advanceTimersByTimeAsync(10_000));
 
     expect(mocks.follow).not.toHaveBeenCalled();
-    expect(store.get(feedTopicsAtom)).toEqual(none);
+    expect(store.get(feedTopicsAtom)).toEqual(held);
   });
 
-  it('drops picks stored without an owner', async () => {
+  it('ignores picks stored without an owner', async () => {
     mocks.follow.mockResolvedValue(true);
     const store = mount(null, picks as unknown as HeldFeedTopics);
 
     await act(() => vi.advanceTimersByTimeAsync(10_000));
 
     expect(mocks.follow).not.toHaveBeenCalled();
-    expect(store.get(feedTopicsAtom)).toEqual(none);
+    expect(store.get(feedTopicsAtom)).toEqual(picks);
   });
 
   it("keeps a newer account's picks stored while the old account's follow was publishing", async () => {
@@ -389,9 +390,62 @@ describe('PendingTopicFollowsRunner', () => {
     mocks.fetchFollowed.mockResolvedValue(
       picks.map(topic => ({ id: `r-${topic.id}`, spaceId: 'space-1', toEntityId: topic.id }))
     );
-    await act(() => vi.advanceTimersByTimeAsync(60_000));
+    await act(() => vi.advanceTimersByTimeAsync(16 * 60_000));
 
     expect(mocks.follow).toHaveBeenCalledTimes(3);
     expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('backs off the checks after the cap instead of polling every minute', async () => {
+    mocks.follow.mockResolvedValue(false);
+    mount();
+    for (let i = 0; i < 3; i++) {
+      await act(() => vi.advanceTimersByTimeAsync(0));
+      await act(() => vi.advanceTimersByTimeAsync(11 * 60_000));
+    }
+    mocks.fetchFollowed.mockClear();
+
+    // Stepped, so each pass's re-render lands before the next timer.
+    for (let i = 0; i < 60; i++) await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    // 1, 2, 4, 8, then every 15 minutes: about 6 checks in an hour, not 60.
+    expect(mocks.fetchFollowed.mock.calls.length).toBeLessThanOrEqual(7);
+  });
+
+  it('keeps one polling chain when a dependency change starts a pass while one is scheduled', async () => {
+    const t0 = Date.now();
+    const checkedAt: number[] = [];
+    mocks.fetchFollowed.mockImplementation(async () => {
+      checkedAt.push((Date.now() - t0) / 1000);
+      return [];
+    });
+    const store = mount(null, { ...held, submittedAt: Date.now() });
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+
+    // A new pick starts a pass halfway through the pending 10s check.
+    act(() =>
+      store.set(feedTopicsAtom, {
+        ...held,
+        topics: [...picks, { id: 'topic-c', name: 'Mental health' }],
+        submittedAt: Date.now(),
+      })
+    );
+    // 1s steps, so each timer's re-render lands on its own, as in a browser.
+    for (let i = 0; i < 40; i++) await act(() => vi.advanceTimersByTimeAsync(1_000));
+
+    expect(checkedAt).toEqual([0, 5, 15, 25, 35, 45]);
+  });
+
+  it('schedules nothing after unmount', async () => {
+    let finish!: (rows: unknown[]) => void;
+    mocks.fetchFollowed.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    mount(null, { ...held, submittedAt: Date.now() });
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    cleanup();
+    const timersAtUnmount = vi.getTimerCount();
+    await act(async () => finish([]));
+
+    expect(vi.getTimerCount()).toBe(timersAtUnmount);
   });
 });

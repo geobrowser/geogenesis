@@ -26,8 +26,9 @@ import {
   readStoredFeedTopics,
 } from '~/atoms/onboarding-feed-topics';
 
+// Unindexed space or a failing API: back off from 3s to 5 minutes.
 const INDEX_POLL_MS = 3_000;
-const INDEX_POLL_MAX_MS = 30_000;
+const INDEX_POLL_MAX_MS = 5 * 60_000;
 const PUBLISH_RETRY_MS = 30_000;
 const LOCK_RETRY_MS = 5_000;
 const LOCK_NAME = 'geo:onboarding-topic-follows';
@@ -35,8 +36,10 @@ const LOCK_NAME = 'geo:onboarding-topic-follows';
 // or after a reload. Until this passes, wait for its follows to be indexed rather than publish again.
 const SUBMITTED_GRACE_MS = 10 * 60_000;
 const SUBMITTED_POLL_MS = 10_000;
-// Past the publish cap, keep checking (read-only) for a late landing: held picks feed For you.
+// Past the publish cap, keep checking (read-only) for a late landing, since held picks feed For you;
+// back off from 1 to 15 minutes so a publish that never lands costs little.
 const CAPPED_POLL_MS = 60_000;
+const CAPPED_POLL_MAX_MS = 15 * 60_000;
 // Each failed publish shows the user an error, so stop after a few until the next page load.
 const MAX_PUBLISH_FAILURES = 3;
 
@@ -114,9 +117,6 @@ export function PendingTopicFollowsRunner() {
     .map(topic => normId(topic.id))
     .sort()
     .join(',');
-  // Anything held that isn't this account's (another owner, or no owner) is dropped.
-  const holdsAny = Array.isArray(held) ? held.length > 0 : (held?.topics?.length ?? 0) > 0;
-  const heldForAnotherAccount = !!address && holdsAny && picks.length === 0;
   const pending = useAtomValue(pendingPersonalSpaceAtom);
   const { personalSpaceId } = usePersonalSpaceId();
   const { isLoading: isLoadingFollowed } = useFollowedTopics();
@@ -126,22 +126,26 @@ export function PendingTopicFollowsRunner() {
   const [retryTick, setRetryTick] = React.useState(0);
   const runningRef = React.useRef(false);
   // Retry state for one account at a time.
-  const budgetRef = React.useRef({ owner: address, indexPolls: 0, publishFailures: 0 });
+  const budgetRef = React.useRef(newBudget(address));
   const addressRef = React.useRef(address);
   addressRef.current = address;
+  // At most one scheduled pass: a pass started by a dependency change replaces the pending one.
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  React.useEffect(() => () => clearTimeout(timerRef.current), []);
-
-  // Same rule as PendingPersonalSpaceRunner's pending record: another account's picks are dropped.
+  const mountedRef = React.useRef(false);
   React.useEffect(() => {
-    if (heldForAnotherAccount) setHeld(NO_HELD_FEED_TOPICS);
-  }, [heldForAnotherAccount, setHeld]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timerRef.current);
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!address || !personalSpaceId || pending || isLoadingFollowed || !picksKey) return;
-    if (budgetRef.current.owner !== address) budgetRef.current = { owner: address, indexPolls: 0, publishFailures: 0 };
+    if (budgetRef.current.owner !== address) budgetRef.current = newBudget(address);
     if (runningRef.current) return;
     runningRef.current = true;
+    clearTimeout(timerRef.current);
 
     const owner = address;
     const budget = budgetRef.current;
@@ -168,7 +172,10 @@ export function PendingTopicFollowsRunner() {
       } finally {
         runningRef.current = false;
         const delay = nextDelay(outcome, budget, addressRef.current !== owner, owner);
-        if (delay !== null) timerRef.current = setTimeout(() => setRetryTick(n => n + 1), delay);
+        clearTimeout(timerRef.current);
+        if (delay !== null && mountedRef.current) {
+          timerRef.current = setTimeout(() => setRetryTick(n => n + 1), delay);
+        }
       }
     })();
   }, [address, personalSpaceId, pending, isLoadingFollowed, picksKey, follow, queryClient, setHeld, retryTick]);
@@ -176,10 +183,18 @@ export function PendingTopicFollowsRunner() {
   return null;
 }
 
+type Budget = { owner: string | undefined; indexPolls: number; cappedPolls: number; publishFailures: number };
+
+function newBudget(owner: string | undefined): Budget {
+  return { owner, indexPolls: 0, cappedPolls: 0, publishFailures: 0 };
+}
+
+const backoff = (base: number, attempt: number, max: number) => Math.min(base * 2 ** (attempt - 1), max);
+
 /** When to run again after a pass, or null to wait for a state change. Updates `budget`. */
 function nextDelay(
   outcome: Outcome | null | undefined,
-  budget: { indexPolls: number; publishFailures: number },
+  budget: Budget,
   ownerChanged: boolean,
   owner: string
 ): number | null {
@@ -191,11 +206,12 @@ function nextDelay(
       return LOCK_RETRY_MS;
     case 'unindexed':
       budget.indexPolls += 1;
-      return Math.min(INDEX_POLL_MS * budget.indexPolls, INDEX_POLL_MAX_MS);
+      return backoff(INDEX_POLL_MS, budget.indexPolls, INDEX_POLL_MAX_MS);
     case 'submitted':
       return SUBMITTED_POLL_MS;
     case 'capped':
-      return CAPPED_POLL_MS;
+      budget.cappedPolls += 1;
+      return backoff(CAPPED_POLL_MS, budget.cappedPolls, CAPPED_POLL_MAX_MS);
     case 'failed':
       budget.publishFailures += 1;
       return PUBLISH_RETRY_MS;
