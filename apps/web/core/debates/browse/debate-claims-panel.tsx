@@ -403,7 +403,7 @@ function PanelClaimControls({
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         disabled={!control.canRespond}
-        pending={control.isResponsePending}
+        pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

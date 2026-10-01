@@ -8,7 +8,12 @@ import type { ReactElement } from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY, type ResponseKind, getResponseActionMethod } from '~/core/responses/entity-response';
+import {
+  ENTITY_RESPONSE_COPY,
+  RESPONSE_CONFIRMING_COPY,
+  type ResponseKind,
+  getResponseActionMethod,
+} from '~/core/responses/entity-response';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
@@ -1379,8 +1384,8 @@ describe('MatchmakingClaimCard', () => {
    * retraction behind a pill that still looked held, and Request debate then failed on it.
    */
   describe('while the viewer’s response is confirming', () => {
-    it.each(['reconciling', 'delayed'] as const)('ignores presses on either pill while %s', status => {
-      mocks.indexing = { status, pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+    it('ignores presses on either pill until the bundler has the write', () => {
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
       renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
       const agree = screen.getByRole('button', { name: /^Agree/ });
@@ -1393,6 +1398,47 @@ describe('MatchmakingClaimCard', () => {
       fireEvent.click(agree);
       fireEvent.click(disagree);
       expect(mocks.submitResponse).not.toHaveBeenCalled();
+    });
+
+    // GEO-2889. The double-click this guards against lands in the second or so before the bundler
+    // answers; inclusion behind it is p90 ~30s, which the pills used to wait out as well.
+    it('sends a double-click once', () => {
+      // `readiness()` has the viewer on Agree, so the first press switches sides.
+      const view = renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+      expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.anything());
+
+      // What the press did to the snapshot (`onMutate`), before the bundler has answered. The second
+      // click now lands on the held side, where it would be a retraction nobody meant.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+      view.rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+        </QueryClientProvider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['submitted', { status: 'reconciling', submitted: true }],
+      ['included and still indexing', { status: 'delayed' }],
+    ] as const)('treats the position as published once %s', (_label, state) => {
+      mocks.indexing = { ...state, pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      // Drawn held, live, and no longer saying it is waiting.
+      expect(agree).toHaveAttribute('aria-pressed', 'true');
+      expect(agree).not.toHaveAttribute('aria-disabled');
+      expect(agree).not.toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
+
+      // A press is now a deliberate new response, sent once: on the held side, a retraction.
+      fireEvent.click(agree);
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
     });
 
     it('removes the position once the chain has confirmed it', () => {
