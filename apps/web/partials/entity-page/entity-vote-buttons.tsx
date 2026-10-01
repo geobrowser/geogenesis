@@ -26,13 +26,13 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
-  RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
   hasUnpublishedClaimResponseKindEdit,
   resolveEntityResponseKind,
+  responseErrorMessage,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
@@ -48,7 +48,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_BUTTON_CLASS, VOTE_BUTTON_CONFIRMING_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
+import { VOTE_BUTTON_HOVER_CLASS, VOTE_BUTTON_RESTING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
@@ -75,19 +76,9 @@ type EntityVoteButtonsProps = {
    * blocking responses, or that there is no response kind — and the page explains that state too, so
    * a reader who finds nothing in the bar has somewhere else to find it.
    *
-   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
-   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
-   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
-   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
-   * earlier version of this comment claimed the page's own copy announced instead, and that is false
-   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
-   * puts this same sentence in a `title`: read on focus, never announced.
-   *
-   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
-   * profile — both live regions are inserted at once and the confirmation can be announced twice.
-   * Deduplicating needs the two surfaces to know about each other, and this component renders once
-   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
-   * announcement is the better failure than none.
+   * **The indexing notice stays off this copy.** The page header mounts another `EntityVoteButtons`
+   * for the same entity, and that one announces. Speaking here too would say the sentence twice.
+   * The bar takes no width either way.
    */
   compact?: boolean;
 };
@@ -150,7 +141,6 @@ export function EntityVoteButtons({
     submitResponseAsync,
     optimisticResponse,
     isProcessingResponse,
-    isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
@@ -168,6 +158,8 @@ export function EntityVoteButtons({
 
   // Direction a signed-out user picked before sign-in opened.
   const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
+
+  const [responseError, setResponseError] = React.useState<string | null>(null);
 
   function queueVoteWrite(direction: ActiveResponseDirection) {
     setQueuedResponse(direction);
@@ -251,19 +243,25 @@ export function EntityVoteButtons({
   }
 
   function handlePositiveResponse() {
+    setResponseError(null);
     if (!isConnected) {
       queueResponse('positive');
       return;
     }
-    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
+    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive', {
+      onError: error => setResponseError(responseErrorMessage(error)),
+    });
   }
 
   function handleNegativeResponse() {
+    setResponseError(null);
     if (!isConnected) {
       queueResponse('negative');
       return;
     }
-    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
+    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative', {
+      onError: error => setResponseError(responseErrorMessage(error)),
+    });
   }
 
   const scoreLabel = formatScore(displayScore);
@@ -391,63 +389,54 @@ export function EntityVoteButtons({
     );
   }
 
+  // Active for the whole confirming window — the same flag that gates the presses — so the sentence
+  // is spoken once when the vote enters it, not again on each indexing retry. Left off the compact
+  // sticky bar so the full-size page control is the one that speaks, and a vote is not announced
+  // twice; see the `compact` prop's note.
+  const confirmingAnnouncement = <ResponseConfirmingAnnouncement active={!compact && isProcessingResponse} />;
+
   if (presentation !== 'inline') {
     return (
-      <DebateVotePill
-        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
-        score={scoreLabel}
-        positiveActive={positiveActive}
-        negativeActive={negativeActive}
-        disabled={responseDisabled}
-        positiveTitle={positiveTitle}
-        negativeTitle={negativeTitle}
-        onPositive={handlePositiveResponse}
-        onNegative={handleNegativeResponse}
-      />
+      <>
+        <DebateVotePill
+          orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
+          score={scoreLabel}
+          positiveActive={positiveActive}
+          negativeActive={negativeActive}
+          disabled={responseDisabled}
+          pending={isProcessingResponse}
+          positiveTitle={positiveTitle}
+          negativeTitle={negativeTitle}
+          onPositive={handlePositiveResponse}
+          onNegative={handleNegativeResponse}
+        />
+        {confirmingAnnouncement}
+      </>
     );
   }
 
-  /*
-   * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
-   * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
-   * taught the pills how to behave in that window and nothing tied the thumbs to them.
-   *
-   * For the tens of seconds a response spends confirming (`isProcessingResponse`, the hook's own
-   * account of that window), the pills and now the thumbs:
-   *
-   * - **ignore presses.** The held thumb is this client's guess until the write lands, and pressing a
-   *   held thumb means "remove" — so a second press, or a double-click, published a retraction nobody
-   *   asked for mid-confirmation;
-   * - say so to assistive technology with `aria-disabled`, and to the pointer with `cursor-progress`;
-   * - drop the hover step, since nothing under the pointer is going to happen;
-   * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
-   * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
-   *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
-   */
-  const voteButtonProps = (onPress: () => void, title: string) => ({
-    onClick: () => {
-      if (!isProcessingResponse) onPress();
-    },
-    disabled: responseDisabled,
-    'aria-disabled': isProcessingResponse || undefined,
-    title: isProcessingResponse ? RESPONSE_CONFIRMING_COPY : title,
-    className: cx(
-      'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-      isProcessingResponse ? VOTE_BUTTON_CONFIRMING_CLASS : VOTE_BUTTON_CLASS,
-      responseDisabled && 'cursor-default opacity-50',
-      isProcessingResponse && 'cursor-progress'
-    ),
-  });
+  // The two thumbs share `ResponseButton` with the claim pills and the debate overlay.
+  const thumbClassName = cx(
+    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+    VOTE_BUTTON_RESTING_CLASS
+  );
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
-      <button {...voteButtonProps(handlePositiveResponse, positiveTitle)}>
+      <ResponseButton
+        selected={positiveActive}
+        pending={isProcessingResponse}
+        disabled={responseDisabled}
+        actionTitle={positiveTitle}
+        ariaLabel={positiveTitle}
+        tooltip
+        onPress={handlePositiveResponse}
+        className={thumbClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
+      >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
-      </button>
+      </ResponseButton>
       <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
         <button
           className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
@@ -457,21 +446,24 @@ export function EntityVoteButtons({
           {displayLabel}
         </button>
       </RespondersPopover>
-      <button {...voteButtonProps(handleNegativeResponse, negativeTitle)}>
+      <ResponseButton
+        selected={negativeActive}
+        pending={isProcessingResponse}
+        disabled={responseDisabled}
+        actionTitle={negativeTitle}
+        ariaLabel={negativeTitle}
+        tooltip
+        onPress={handleNegativeResponse}
+        className={thumbClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
+      >
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
-      </button>
+      </ResponseButton>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
-      {isResponseIndexingDelayed ? (
-        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
-        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
-        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
-        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
-        //
-        // I had claimed the page's own copy still announced. It does not on the surface that matters
-        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
-        // same sentence in a `title` attribute — read on focus, never announced as a live update.
-        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
-          {RESPONSE_CONFIRMING_COPY}
+      {confirmingAnnouncement}
+      {responseError ? (
+        <span role="alert" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-red-01')}>
+          {responseError}
         </span>
       ) : null}
     </div>
@@ -556,6 +548,7 @@ function DebateVotePill({
   positiveActive,
   negativeActive,
   disabled,
+  pending,
   positiveTitle,
   negativeTitle,
   onPositive,
@@ -566,11 +559,17 @@ function DebateVotePill({
   positiveActive: boolean;
   negativeActive: boolean;
   disabled: boolean;
+  pending: boolean;
   positiveTitle: string;
   negativeTitle: string;
   onPositive: () => void;
   onNegative: () => void;
 }) {
+  const arrowClassName = cx(
+    'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+    VOTE_BUTTON_RESTING_CLASS
+  );
+
   return (
     <div
       data-entity-vote-presentation={`debate-${orientation}`}
@@ -579,35 +578,33 @@ function DebateVotePill({
         orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
       )}
     >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
+      <ResponseButton
+        selected={positiveActive}
+        pending={pending}
         disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
+        actionTitle={positiveTitle}
+        ariaLabel={positiveTitle}
+        tooltip
+        onPress={onPositive}
+        className={arrowClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
       >
         <VoteArrow direction="up" filled={positiveActive} />
-      </button>
+      </ResponseButton>
       <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
+      <ResponseButton
+        selected={negativeActive}
+        pending={pending}
         disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
+        actionTitle={negativeTitle}
+        ariaLabel={negativeTitle}
+        tooltip
+        onPress={onNegative}
+        className={arrowClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
       >
         <VoteArrow direction="down" filled={negativeActive} />
-      </button>
+      </ResponseButton>
     </div>
   );
 }

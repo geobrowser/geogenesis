@@ -457,6 +457,7 @@ function PanelClaimControls({
         onRespond={control.respond}
         disabled={!control.canRespond}
         pending={control.isResponsePending}
+        announcing={control.isResponsePending}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

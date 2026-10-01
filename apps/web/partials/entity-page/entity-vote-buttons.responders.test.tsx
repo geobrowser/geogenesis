@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 
 import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { RESPONSE_CONFIRMING_COPY } from '~/core/responses/entity-response';
@@ -114,6 +114,14 @@ function facesTrigger() {
 function tallyTrigger() {
   return screen.getByRole('button', { name: '67%' });
 }
+
+beforeAll(() => {
+  globalThis.ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
 
 beforeEach(() => {
   mocks.positive = 2;
@@ -277,32 +285,37 @@ describe('compact, for the sticky header', () => {
   }
 
   /**
-   * Out of layout, still announced. This assertion used to demand the node be gone entirely, on my
-   * claim that the page's own control announced instead — which is false exactly where it matters:
-   * `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this sentence in a
-   * `title`, read on focus and never announced. A vote cast from the bar had no confirmation at all
-   * for a screen reader.
+   * The sticky bar and the page header both mount this control. Only the page copy announces, so
+   * one vote is not spoken twice. The claim page announces from its own pills.
    */
-  it('keeps the indexing notice announceable while taking no layout', async () => {
-    mocks.indexingDelayed = true;
+  it('stays silent in the sticky bar so the page control can announce once', async () => {
+    mocks.processing = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact />, { wrapper });
 
     await waitFor(() => expect(tallyTrigger()).toBeInTheDocument());
 
-    const notice = screen.getByText(INDEXING);
-    expect(notice).toHaveAttribute('aria-live', 'polite');
-    // `sr-only` is absolutely positioned and clipped, so it cannot widen the 48px row.
-    expect(notice).toHaveClass('sr-only');
-    expect(notice).not.toHaveClass('ml-1');
+    expect(screen.queryByText(INDEXING)).not.toBeInTheDocument();
   });
 
-  it('still shows the indexing notice everywhere else', async () => {
-    mocks.indexingDelayed = true;
+  it('announces once from the debate overlay, hidden', async () => {
+    mocks.processing = true;
+    render(
+      <EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" presentation="debate-vertical" />,
+      { wrapper }
+    );
+
+    const notices = await screen.findAllByText(INDEXING);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toHaveClass('sr-only');
+  });
+
+  it('announces the indexing notice without showing it', async () => {
+    mocks.processing = true;
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
 
     const notice = await screen.findByText(INDEXING);
-    expect(notice).toHaveClass('ml-1');
-    expect(notice).not.toHaveClass('sr-only');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    expect(notice).toHaveClass('sr-only');
   });
 
   /** These two stand in for the control entirely, so compact draws nothing rather than a sentence. */
@@ -398,17 +411,11 @@ describe('while a response is confirming', () => {
     }
   });
 
-  it('puts the confirming copy in the tooltip', async () => {
-    mocks.processing = true;
-    for (const thumb of await renderThumbs()) expect(thumb).toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
-  });
-
   it('is an ordinary control otherwise', async () => {
     for (const thumb of await renderThumbs()) {
       expect(thumb).not.toHaveAttribute('aria-disabled');
       expect(thumb).not.toHaveClass('cursor-progress');
       expect(thumb.className).toMatch(/hover:text-text/);
-      expect(thumb).not.toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
     }
   });
 
@@ -422,5 +429,48 @@ describe('while a response is confirming', () => {
 
     expect(mocks.submitResponse).not.toHaveBeenCalled();
     expect(up).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+/**
+ * A publish that fails otherwise rolls the optimistic mark back and reads as the vote vanishing —
+ * the claim pills already name the reason, and the thumbs now do too.
+ */
+describe('when a publish fails', () => {
+  const MESSAGE = 'Publish failed';
+
+  function thumbs() {
+    return screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  }
+
+  async function pressUpAndFail({ compact = false }: { compact?: boolean } = {}) {
+    mocks.submitResponse = vi.fn((_direction: unknown, options?: { onError?: (error: unknown) => void }) =>
+      options?.onError?.(new Error(MESSAGE))
+    );
+    const user = userEvent.setup();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact={compact} />, {
+      wrapper,
+    });
+    await waitFor(() => expect(thumbs()).toHaveLength(2));
+    await user.click(thumbs()[0]!);
+  }
+
+  it('names the reason where there is room', async () => {
+    await pressUpAndFail();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(MESSAGE);
+    expect(alert).toHaveClass('ml-1');
+    expect(alert).not.toHaveClass('sr-only');
+  });
+
+  it('keeps the reason announceable while taking no layout in the bar', async () => {
+    await pressUpAndFail({ compact: true });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(MESSAGE);
+    // `sr-only` is absolutely positioned and clipped, so it cannot widen the 48px row.
+    expect(alert).toHaveClass('sr-only');
+    expect(alert).not.toHaveClass('ml-1');
   });
 });

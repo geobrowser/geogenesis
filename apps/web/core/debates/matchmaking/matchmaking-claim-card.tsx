@@ -26,8 +26,8 @@ import { ID } from '~/core/id';
 import {
   CLAIM_RESPONSE_COPY,
   CLAIM_RESPONSE_KIND,
-  RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
+  responseErrorMessage,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
@@ -40,6 +40,8 @@ import { ResponsePositionIcon } from '~/design-system/icons/response-position-ic
 import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
 
 import type {
   Debate,
@@ -531,17 +533,17 @@ export function useClaimPositionControl({
       return;
     }
     if (isAccountSetupPending) return;
-    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
-    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
-    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
-    // "respond to this claim first" beside a pill that still looked held.
-    if (isResponsePending) return;
+    // No confirming-window guard here on purpose. While the write is confirming, the held pill is
+    // this client's guess and pressing a held pill means "remove", so a press on a still-confirming
+    // side published a retraction nobody asked for. That gate now lives once in `ResponseButton`
+    // (`acceptsPress: !pending`), and every surface that calls `respond` — the claim pills, the
+    // explore card, the debate overlay and the ticker — reaches it through that button, so the press
+    // never arrives here. A new caller that skips `ResponseButton` must carry the gate itself.
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
     submitResponse(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative', {
-      onError: error =>
-        setResponseError(error instanceof Error ? error.message : 'Could not publish your response. Try again.'),
+      onError: error => setResponseError(responseErrorMessage(error)),
     });
   };
 
@@ -554,7 +556,6 @@ export function useClaimPositionControl({
     if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
-    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -566,7 +567,10 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     isConnected,
-    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    /**
+     * The viewer's response is on its way to the chain; the pills ignore presses until it lands, and
+     * the one screen-reader confirmation is spoken for the length of it.
+     */
     isResponsePending,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
@@ -784,6 +788,7 @@ function RespondableControls({
         // a retraction.
         disabled={!canRespond}
         pending={isResponsePending}
+        announcing={isResponsePending}
         titleFor={actionTitle}
         noteFor={noteFor}
       />
@@ -1020,6 +1025,7 @@ export function PositionRow({
   onRespond,
   disabled,
   pending,
+  announcing = false,
   titleFor,
   noteFor,
   endSlot,
@@ -1036,6 +1042,8 @@ export function PositionRow({
    * pointer, with a wait cursor.
    */
   pending?: boolean;
+  /** Speak the confirming sentence once, hidden. Separate from `pending`, which lasts longer. */
+  announcing?: boolean;
   titleFor?: (position: boolean) => string;
   /**
    * Something to say under one of the two buttons — on a profile, which side
@@ -1077,6 +1085,7 @@ export function PositionRow({
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
     <div className="@container">
+      <ResponseConfirmingAnnouncement active={announcing} />
       <div
         className={cx(
           'grid gap-2',
@@ -1227,27 +1236,17 @@ function PositionButton({
   if (!onRespond) return <div className={className}>{content}</div>;
 
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      aria-disabled={pending || undefined}
+    <ResponseButton
+      selected={selected}
+      pending={pending}
       disabled={disabled}
-      title={title}
-      onClick={() => {
-        if (!pending) onRespond(position);
-      }}
-      className={cx(
-        className,
-        'transition-colors disabled:opacity-60',
-        // The only sign the press was taken: the pill drops presses for the 10-50s a response
-        // spends confirming, and nothing else on the page says so. The copy that used to sit
-        // under the pills read as an unsettled side, so the cue stays on the pointer.
-        pending && 'cursor-progress',
-        !selected && !disabled && !pending && 'hover:border-text'
-      )}
+      actionTitle={title}
+      onPress={() => onRespond(position)}
+      className={cx(className, 'transition-colors disabled:opacity-60')}
+      hoverClassName={selected ? undefined : 'hover:border-text'}
     >
       {content}
-    </button>
+    </ResponseButton>
   );
 }
 

@@ -122,6 +122,7 @@ export function DebateEndCard({
               onRespond={claimResponse.control.respond}
               disabled={!claimResponse.control.canRespond}
               pending={claimResponse.control.isResponsePending}
+              announcing={claimResponse.control.isResponsePending}
               titleFor={claimResponse.control.actionTitle}
               showParticipants={false}
             />

@@ -31,6 +31,8 @@ import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { ResponseButton, ResponseConfirmingAnnouncement } from '~/partials/entity-page/response-button';
+
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -860,12 +862,14 @@ function TickerClaimHeader({
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
       <span className="flex shrink-0 items-center gap-1">
+        <ResponseConfirmingAnnouncement active={control.isResponsePending} />
         <ClaimIconButton
           responseKind={responseKind}
           position
           label={copy.positiveAction}
           selected={control.viewerPosition === true}
           disabled={!control.canRespond}
+          pending={control.isResponsePending}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
         />
@@ -875,6 +879,7 @@ function TickerClaimHeader({
           label={copy.negativeAction}
           selected={control.viewerPosition === false}
           disabled={!control.canRespond}
+          pending={control.isResponsePending}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
         />
@@ -901,6 +906,7 @@ function ClaimIconButton({
   label,
   selected,
   disabled,
+  pending,
   title,
   onClick,
 }: {
@@ -909,43 +915,37 @@ function ClaimIconButton({
   label: string;
   selected: boolean;
   disabled: boolean;
+  pending: boolean;
   title: string;
   onClick?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={selected}
-      title={title}
-      disabled={disabled}
-      onClick={
-        onClick &&
-        (event => {
-          event.stopPropagation();
-          onClick();
-        })
-      }
-      className={cx(
-        // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
-        // padding instead of the header row. The frame's row is the avatar's 16px, and a button
-        // that sets the row taller pushes the whole card past the 97px the frame draws.
-        //
-        // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
-        // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
-        // 16px and the card stays 97px on both.
-        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default md:-my-1.5 md:size-7',
-        // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
-        // reader has actually taken a side.
-        selected
-          ? position
-            ? 'bg-white/15 text-green'
-            : 'bg-white/15 text-red-01'
-          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
-      )}
-    >
-      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
-    </button>
+    <span className="contents" onClick={event => event.stopPropagation()}>
+      <ResponseButton
+        selected={selected}
+        pending={pending}
+        disabled={disabled}
+        actionTitle={title}
+        ariaLabel={label}
+        onPress={() => onClick?.()}
+        className={cx(
+          // 20px of target around a 12px glyph, but `-my-0.5` so the extra 4px grows into the card's
+          // padding instead of the header row. The frame's row is the avatar's 16px, and a button
+          // that sets the row taller pushes the whole card past the 97px the frame draws.
+          //
+          // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
+          // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
+          // 16px and the card stays 97px on both.
+          '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default md:-my-1.5 md:size-7',
+          // Recessive until it matters: dim at rest, and unmistakable once the reader has actually
+          // taken a side.
+          selected ? (position ? 'bg-white/15 text-green' : 'bg-white/15 text-red-01') : 'text-white/55'
+        )}
+        hoverClassName={selected ? undefined : 'hover:bg-white/15 hover:text-white'}
+      >
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      </ResponseButton>
+    </span>
   );
 }
 
