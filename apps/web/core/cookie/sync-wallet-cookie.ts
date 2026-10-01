@@ -1,4 +1,5 @@
 import { getCachedIdentityToken, setCachedIdentityToken } from '~/core/auth/identity-token';
+import { reportEvent } from '~/core/telemetry/logger';
 
 import { onConnectionChange } from './cookie';
 import { WALLET_SESSION_RENEW_AFTER_SECONDS } from './wallet-session-lifetime';
@@ -102,7 +103,19 @@ export async function syncWalletCookie(address: `0x${string}`) {
   // is only kept current while a debates or community-call hook is mounted, so after an account
   // switch it can still hold the previous account's token. Drop it so the retry fetches this one.
   // Null is a token that could not be verified (Privy's keys unreachable), which can pass.
-  if (recognised !== null) setCachedIdentityToken(null);
+  if (recognised !== null) {
+    setCachedIdentityToken(null);
+    // Reported because the other way to get here would otherwise be silent: the server picks the
+    // account's Privy embedded wallet from the token, while `useSmartAccount` picks one from the
+    // connected list. They agree while an account holds one embedded wallet, which Privy enforces
+    // and Geo has no import path to break; this is what would show it if that ever changed. No
+    // addresses — the Sentry user already identifies who.
+    reportEvent({
+      name: 'wallet-session.mismatch',
+      level: 'warning',
+      tags: { area: 'wallet-session', outcome: 'server-verified-another-wallet' },
+    });
+  }
   scheduleRetry(address);
 }
 

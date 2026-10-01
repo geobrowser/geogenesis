@@ -5,8 +5,10 @@ import { SYNC_RETRY_DELAYS_MS, forgetSyncedWalletCookie, syncWalletCookie } from
 const onConnectionChange = vi.hoisted(() => vi.fn<(args: unknown) => Promise<string | null>>());
 const getToken = vi.hoisted(() => vi.fn<() => Promise<string | null>>());
 const setCachedToken = vi.hoisted(() => vi.fn<(token: string | null) => void>());
+const reportEvent = vi.hoisted(() => vi.fn());
 
 vi.mock('./cookie', () => ({ onConnectionChange }));
+vi.mock('~/core/telemetry/logger', () => ({ reportEvent }));
 vi.mock('~/core/auth/identity-token', () => ({
   getCachedIdentityToken: getToken,
   setCachedIdentityToken: setCachedToken,
@@ -21,6 +23,7 @@ describe('syncWalletCookie', () => {
     onConnectionChange.mockReset();
     getToken.mockReset();
     setCachedToken.mockReset();
+    reportEvent.mockReset();
     getToken.mockResolvedValue('identity-token');
     // The server answers with whatever wallet the token vouches for; here, the one asked about.
     onConnectionChange.mockImplementation(async () => ADDRESS);
@@ -307,6 +310,36 @@ describe('syncWalletCookie', () => {
       vi.setSystemTime(Date.now() + 2 * DAY);
       await syncWalletCookie(ADDRESS);
       expect(onConnectionChange).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // The server and the client each pick the account's embedded wallet their own way. They agree
+  // while an account holds one; a disagreement must be visible, not just retried quietly.
+  describe('reporting a wallet mismatch', () => {
+    it('reports when the server vouched for a different wallet, without naming either', async () => {
+      onConnectionChange.mockImplementationOnce(async () => OTHER);
+
+      await syncWalletCookie(ADDRESS);
+
+      expect(reportEvent).toHaveBeenCalledTimes(1);
+      expect(reportEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'wallet-session.mismatch', level: 'warning' })
+      );
+      expect(JSON.stringify(reportEvent.mock.calls)).not.toMatch(/0x[0-9a-f]{40}/i);
+    });
+
+    it('does not report a token that simply could not be verified', async () => {
+      onConnectionChange.mockImplementationOnce(async () => null);
+
+      await syncWalletCookie(ADDRESS);
+
+      expect(reportEvent).not.toHaveBeenCalled();
+    });
+
+    it('does not report a match', async () => {
+      await syncWalletCookie(ADDRESS);
+
+      expect(reportEvent).not.toHaveBeenCalled();
     });
   });
 });
