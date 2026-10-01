@@ -629,7 +629,7 @@ describe('a backlog latch outliving its stack', () => {
     fireEvent.click(stackIn(container) as HTMLElement);
 
     expect(classes()).toEqual(
-      expect.arrayContaining(['w-[45%]', 'md:w-[62%]', '@max-md:top-12', '@max-md:w-[calc(100%-1.75rem)]'])
+      expect.arrayContaining(['w-[45%]', '@min-md:md:w-[62%]', '@max-md:top-12', '@max-md:w-[calc(100%-1.75rem)]'])
     );
   });
 
