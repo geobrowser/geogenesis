@@ -147,7 +147,7 @@ export function PendingTopicFollowsRunner() {
           return 'done';
         });
 
-        // An outcome for an account that is no longer signed in says nothing about the current one.
+        // Retry state belongs to the signed-in account; another account's outcome is ignored.
         if (addressRef.current !== owner) {
           delay = 0;
         } else if (outcome === null) {
