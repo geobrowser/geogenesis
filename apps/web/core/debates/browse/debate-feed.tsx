@@ -578,14 +578,21 @@ function DebateFeedItem({
             />
           </div>
           <div className="relative mt-6 md:mt-7">
-            {/* Desktop: the claim panel's column, beside the video and aligned to its top edge.
-                Positioned off the player rather than in the flex row so it never sets the card's
-                height; the spacer beside the column below keeps the rail clear of it. */}
+            {/* Desktop: the claim panel's column, beside the video and exactly its height — the
+                claims from its top edge, the debate's actions along its bottom edge. Positioned off
+                the player rather than in the flex row so it never sets the card's height; the
+                spacer beside the column below reserves its width. */}
             <div
-              ref={setSidePanelHost}
-              className="absolute top-0 left-full ml-4 flex flex-col md:hidden"
+              className="absolute inset-y-0 left-full ml-4 flex flex-col justify-between gap-3 md:hidden"
               style={{ width: SIDE_PANEL_WIDTH }}
-            />
+            >
+              <div ref={setSidePanelHost} className="flex min-h-0 flex-col overflow-y-auto" />
+              <DebateInteractionBar
+                orientation="horizontal"
+                {...interactionProps}
+                overflow={<DebateOverflowMenu debate={debate} variant="pill" />}
+              />
+            </div>
             <DebateFeedPlayer
               debate={debate}
               active={active}
@@ -618,16 +625,8 @@ function DebateFeedItem({
             <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
           )}
         </div>
-        {/* Desktop: room for the claim panel, which hangs off the player into this space. */}
+        {/* Desktop: room for the claim panel's column, which hangs off the player into this space. */}
         <div aria-hidden className="shrink-0 md:hidden" style={{ width: SIDE_PANEL_WIDTH }} />
-        {/* Desktop: vertical rail to the right of the videos. */}
-        <div className="flex flex-col justify-end md:hidden">
-          <DebateInteractionBar
-            orientation="vertical"
-            {...interactionProps}
-            overflow={<DebateOverflowMenu debate={debate} variant="circle" />}
-          />
-        </div>
       </div>
       <DebateShareDialog
         open={share.open}

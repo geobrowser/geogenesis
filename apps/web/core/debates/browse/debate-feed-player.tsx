@@ -31,7 +31,7 @@ import { Text } from '~/design-system/text';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateEndScreen, NEXT_DEBATE_COUNT } from './debate-end-screen';
-import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
+import { DebateRoundBadge, DebateRoundCard, roundCardTextShadow } from './debate-round-cues';
 import { DebateStagePanel, type StagePanelClaim } from './debate-stage-panel';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateEndCard } from './use-debate-end-card';
@@ -677,7 +677,9 @@ function DebateFeedPlayerBody({
   };
   const pipListener = (slot: 1 | 2) => layout === 'pip' && slot !== speakerSlot;
   // The scrubber runs along whichever tile is at the bottom of the player.
-  const bottomTile = layout === 'pip' ? speakerSlot : 2;
+  // The corner layout is phone-only (every rule of it is `md:`), so on a desktop the bottom tile is
+  // always slot 2 — otherwise hovering lifted whichever name was speaking, not the one on the bar.
+  const bottomTile = layout === 'pip' && isPhone ? speakerSlot : 2;
   const clearScrubberFor = (slot: 1 | 2) =>
     slot === bottomTile && !holdPlayback ? (scrubberShown ? 'always' : 'on-hover') : 'never';
 
@@ -910,13 +912,31 @@ function DebateFeedPlayerBody({
           <div className="absolute inset-x-0 bottom-0 z-[35]">{scrubberControl}</div>
         ) : null}
 
-        {/* The matchup, on the seam, until the debate starts. */}
+        {/* The matchup, on the seam, until the debate starts — set like the round card that opens
+            each round, at its size, so the debate's two title moments speak with one voice. */}
         {immersive && holdPlayback ? (
           <span
             aria-hidden
-            className="pointer-events-none absolute top-1/2 left-1/2 z-20 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-text text-tag text-white ring-2 ring-white"
+            data-debate-versus
+            className="pointer-events-none absolute top-1/2 left-1/2 z-20 -translate-x-1/2 -translate-y-1/2 font-bold tracking-[-0.02em] text-white"
+            style={{ ...roundCardTextShadow, fontSize: '12cqw', lineHeight: 1 }}
           >
             VS
+          </span>
+        ) : null}
+
+        {/* What the paused, looping video is waiting for. Without it a viewer watching the faces has
+            no reason to look at the panel. Points at it: right on a desktop, down on a phone. */}
+        {stage?.phase === 'stance' ? (
+          <span
+            data-debate-vote-cue
+            className="pointer-events-none absolute top-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full bg-black/60 px-3.5 py-2 text-metadata whitespace-nowrap text-white backdrop-blur-sm"
+          >
+            <Play size={12} />
+            Vote to start watching
+            <span aria-hidden className="inline-block md:rotate-90">
+              →
+            </span>
           </span>
         ) : null}
 
@@ -1045,6 +1065,7 @@ function DebateFeedPlayerBody({
                 onJustWatch={() => justWatch('link')}
                 onAnswered={ticker.onAnswered}
                 variant={isPhone ? 'below' : 'side'}
+                playing={playing}
               />,
               panelHost
             )

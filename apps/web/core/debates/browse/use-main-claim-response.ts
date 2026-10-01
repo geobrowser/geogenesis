@@ -22,7 +22,11 @@ export function useMainClaimResponse(debate: Debate, enabled: boolean) {
   // ever enables it.
   const spaceId = normId(debate.claim?.space_id ?? '');
   const claimId = normId(debate.claim?.claim_entity_id ?? '');
-  const { entities } = useQueryEntities({ where: { id: { in: [claimId] } }, first: 1, enabled: enabled && claimId !== '' });
+  const { entities } = useQueryEntities({
+    where: { id: { in: [claimId] } },
+    first: 1,
+    enabled: enabled && claimId !== '',
+  });
   const response = useDebateClaimResponse({
     claimId,
     spaceId,

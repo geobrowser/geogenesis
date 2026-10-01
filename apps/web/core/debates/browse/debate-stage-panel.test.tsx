@@ -49,6 +49,13 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
   },
 }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => null }));
+vi.mock('~/core/claims/browse/claim-summary', () => ({
+  ClaimSummary: ({ summary, className }: { summary: { percent: number }; className?: string }) => (
+    <div data-testid="claim-summary" className={className}>
+      {summary.percent}% agree
+    </div>
+  ),
+}));
 vi.mock('~/partials/onboarding/dialog', async () => {
   const { atom } = await import('jotai');
   return {
@@ -109,6 +116,7 @@ function renderPanel(props: Partial<React.ComponentProps<typeof DebateStagePanel
       onJustWatch={onJustWatch}
       onAnswered={vi.fn()}
       variant="side"
+      playing
       {...props}
     />
   );
@@ -222,16 +230,35 @@ describe('DebateStagePanel live claims', () => {
     expect(mocks.respond).toHaveBeenCalledWith(true);
   });
 
-  it('keeps the crowd’s split hidden until the viewer has answered', () => {
+  it('keeps the crowd’s split hidden until the viewer has answered, then shows the claims panel’s band', () => {
     renderPanel({ stage: stage({ phase: 'live' }), claim });
-    expect(screen.queryByText(/64% agree/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('claim-summary')).not.toBeInTheDocument();
 
     cleanup();
     mocks.viewerPosition = true;
     renderPanel({ stage: stage({ phase: 'live' }), claim });
-    expect(screen.getByText('Your view is saved')).toBeInTheDocument();
-    expect(screen.getByText('64% agree · 412 votes')).toBeInTheDocument();
+    expect(screen.queryByText('Your view is saved')).not.toBeInTheDocument();
+    expect(screen.getByTestId('claim-summary')).toHaveClass('claim-card-summary-band');
+    expect(screen.getByTestId('claim-summary')).toHaveTextContent('64% agree');
     expect(screen.getByRole('button', { name: 'Agree' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('draws nothing beside the video between claims on desktop', () => {
+    const { container } = render(
+      <DebateStagePanel
+        stage={stage({ phase: 'live' })}
+        debateId="debate-1"
+        claimText="x"
+        claim={null}
+        caption={null}
+        onVote={vi.fn()}
+        onJustWatch={vi.fn()}
+        onAnswered={vi.fn()}
+        variant="side"
+        playing
+      />
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('carries what is being said between claims on a phone', () => {

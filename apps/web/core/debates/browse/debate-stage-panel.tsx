@@ -6,7 +6,7 @@ import cx from 'classnames';
 import { useAtomValue, useSetAtom } from 'jotai';
 
 import { ActionSurface } from '~/core/action-context-provider';
-import { ClaimSplitBar } from '~/core/claims/browse/claim-summary';
+import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { DebateClaim, DebateParticipant } from '~/core/debates/api';
 import type { TickerWindow } from '~/core/debates/claim-ticker';
 import { speakerLabel } from '~/core/debates/playback-utils';
@@ -21,12 +21,14 @@ import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dots } from '~/design-system/dots';
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
 import { type AccountAnalytics, AccountStep } from '~/partials/explore/email-capture-account-step';
 import { OnboardingInline, stepAtom } from '~/partials/onboarding/dialog';
 import { inlineOnboardingHoldsAtom } from '~/partials/onboarding/onboarding-dialog-visibility';
 
+import { CLAIM_CARD_MS, useClaimStack } from './use-claim-stack';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import type { DebateStage } from './use-debate-stage';
 
@@ -85,10 +87,12 @@ export function DebateStagePanel({
   onJustWatch,
   onAnswered,
   variant,
+  playing,
 }: {
   stage: DebateStage;
   debateId: string;
   claimText: string;
+  /** The claim surfacing right now, if any. It joins the stack; see `useClaimStack`. */
   claim: StagePanelClaim | null;
   /** What is being said right now, for the phone's caption zone between claims. */
   caption: { speaker: DebateParticipant | null; text: string } | null;
@@ -97,7 +101,18 @@ export function DebateStagePanel({
   onAnswered: (claimId: string, position: boolean | null) => void;
   /** `side` is the desktop column; `below` the phone's zone under the video. */
   variant: 'side' | 'below';
+  /** Whether the debate is playing — the cards' clocks only run while it is. */
+  playing: boolean;
 }) {
+  // Called before any early return: the stack outlives the sign-up states in between.
+  const stack = useClaimStack({
+    latest: stage.phase === 'live' ? claim : null,
+    idOf: (entry: StagePanelClaim) => entry.window.claim.id,
+    running: playing,
+    max: variant === 'side' ? 3 : 2,
+    resetKey: debateId,
+  });
+
   if (stage.phase !== 'live') {
     return (
       <PanelSurface variant={variant}>
@@ -129,19 +144,42 @@ export function DebateStagePanel({
     );
   }
 
+  const hasCards = stack.entries.length > 0;
+  // Nothing at all between claims on desktop: an empty card announcing that cards will come is a
+  // card. The phone keeps its zone, because it carries the captions.
+  if (!hasCards && variant === 'side' && stage.signup !== 'collapsed' && stage.signup !== 'confirmed') return null;
+
   return (
     <div className="flex flex-col gap-2">
       {stage.signup === 'collapsed' ? <SignupChip signedIn={stage.authenticated} onOpen={stage.reopenSignup} /> : null}
       {stage.signup === 'confirmed' ? <VoteCountsPill /> : null}
-      {claim ? (
-        <PanelClaimCard key={claim.window.claim.id} claim={claim} onAnswered={onAnswered} />
+      {hasCards ? (
+        <div
+          role="list"
+          aria-label="Claims from this debate"
+          className="flex flex-col gap-2"
+          // Reading a card, or reaching for its buttons, holds every card's clock.
+          onPointerEnter={() => stack.setHeld(true)}
+          onPointerLeave={() => stack.setHeld(false)}
+          onFocus={() => stack.setHeld(true)}
+          onBlur={event => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) stack.setHeld(false);
+          }}
+        >
+          {stack.entries.map(entry => (
+            <div role="listitem" key={entry.id}>
+              <PanelClaimCard
+                claim={entry.claim}
+                remaining={entry.remainingMs / CLAIM_CARD_MS}
+                onDismiss={() => stack.dismiss(entry.id)}
+                onAnswered={onAnswered}
+              />
+            </div>
+          ))}
+        </div>
       ) : variant === 'below' ? (
         <CaptionZone caption={caption} />
-      ) : (
-        <PanelSurface variant={variant}>
-          <p className="text-metadata text-grey-04">Claims appear here as the debaters make them.</p>
-        </PanelSurface>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -414,17 +452,23 @@ function VoteCountsPill() {
 }
 
 /**
- * A live claim, as the panel draws it: who said it, all of it, and both sides as real buttons.
+ * A live claim, as the panel draws it: who said it, all of it, both sides as real buttons, and how
+ * long it has left.
  *
- * The crowd's split is the reward for answering, so it is shown only once the viewer has — the
- * over-the-video card shows it up front, which is right for a running read of the room and wrong for
- * a question that has just been put to you. Answering never pauses the video.
+ * The crowd's split is the reward for answering, so it is shown only once the viewer has — as the
+ * claims panel's own footer band, with the share, the split and the faces. Answering never pauses
+ * the video, and the card stays until its time runs out or the viewer dismisses it.
  */
 function PanelClaimCard({
   claim,
+  remaining,
+  onDismiss,
   onAnswered,
 }: {
   claim: StagePanelClaim;
+  /** The share of the card's time left, 0–1. */
+  remaining: number;
+  onDismiss: () => void;
   onAnswered: (claimId: string, position: boolean | null) => void;
 }) {
   const { window, speaker, row, entity } = claim;
@@ -441,15 +485,22 @@ function PanelClaimCard({
     onAnswered(window.claim.id, position);
   }, [onAnswered, position, window.claim.id]);
 
-  const answered = position !== null;
   const copy = CLAIM_RESPONSE_COPY;
 
   return (
     <ActionSurface
-      className="flex flex-col gap-2.5 claim-card-panel-surface"
+      className="relative flex flex-col gap-2.5 overflow-hidden claim-card-panel-surface"
       trackImpression
       value={{ component: 'debate_claim_ticker', target_id: window.claim.id, target_type: 'claim', variant: 'panel' }}
     >
+      {/* How long the card has left, draining along its top edge. */}
+      <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-divider">
+        <span
+          data-claim-time-left
+          className="block h-full bg-grey-03 transition-[width] duration-100 ease-linear"
+          style={{ width: `${Math.max(0, Math.min(1, remaining)) * 100}%` }}
+        />
+      </span>
       <div className="flex items-center justify-between gap-2 text-metadata text-grey-04">
         <span className="flex min-w-0 items-center gap-1.5">
           {speaker ? (
@@ -457,12 +508,23 @@ function PanelClaimCard({
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
           ) : null}
-          <span className="truncate">
-            {answered ? 'Your view is saved' : speaker ? `${speakerLabel(speaker)}’s claim` : 'Claim'}
-          </span>
+          <span className="truncate">{speaker ? `${speakerLabel(speaker)}’s claim` : 'Claim'}</span>
         </span>
-        <span className="shrink-0 text-grey-03 tabular-nums">
-          {claim.position} of {claim.total}
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="text-grey-03 tabular-nums">
+            {claim.position} of {claim.total}
+          </span>
+          <button
+            type="button"
+            aria-label="Dismiss claim"
+            onClick={event => {
+              event.stopPropagation();
+              onDismiss();
+            }}
+            className="-mr-1 grid size-6 place-items-center rounded text-grey-04 transition-colors hover:bg-divider hover:text-text"
+          >
+            <CloseSmall />
+          </button>
         </span>
       </div>
       {/* Never clamped: the point of the panel is that the whole claim fits. */}
@@ -485,14 +547,16 @@ function PanelClaimCard({
           onClick={() => control.respond(false)}
         />
       </div>
-      {answered && summary.hasCounts && summary.percent !== null ? (
-        <div className="flex flex-col gap-1.5">
-          <ClaimSplitBar percent={summary.percent} className="h-1.5" />
-          <span className="text-metadata text-grey-04 tabular-nums">
-            {summary.percent}% {copy.positiveAction.toLowerCase()} · {summary.total.toLocaleString('en-US')}{' '}
-            {summary.total === 1 ? 'vote' : 'votes'}
-          </span>
-        </div>
+      {position !== null ? (
+        // The claims panel card's footer band: grey, full-bleed to the card's edge.
+        <ClaimSummary
+          entityId={window.claim.id}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          layout="inline"
+          className="-mx-3 -mb-3 rounded-b-[inherit] claim-card-summary-band"
+        />
       ) : null}
     </ActionSurface>
   );
