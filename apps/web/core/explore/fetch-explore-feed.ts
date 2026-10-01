@@ -922,7 +922,7 @@ export async function fetchExploreFeed(args: {
       return complete();
     }
     try {
-      return await fetchTopicFeedPage({
+      const page = await fetchTopicFeedPage({
         topicIds,
         spaceIds: baseIds,
         sort,
@@ -932,6 +932,9 @@ export async function fetchExploreFeed(args: {
         typeIds: args.typeIds ?? [],
         requireDebateTagOnClaims: args.requireDebateTagOnClaims,
       });
+      // gaia's topic table is empty until its first reconcile, so an empty first window may mean
+      // "not built yet" rather than "no entities". A topic that really is empty is cheap to confirm.
+      return offset === 0 && page.entities.length === 0 ? complete() : page;
     } catch (error) {
       // An API without gaia#985 still serves the page, slowly.
       console.warn('topic feed: topic walk failed, using the complete population', error);

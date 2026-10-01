@@ -191,7 +191,11 @@ export async function fetchTopicFeedCompositionCounts({
   if (spaceIds.length === 0) return emptyTopicFeedCompositionCounts();
 
   try {
-    return await fetchTopicFeedTypeCounts({ spaceIds, topicId });
+    const counts = await fetchTopicFeedTypeCounts({ spaceIds, topicId });
+    // As the feed: no rows may mean gaia's topic table isn't built yet.
+    return Object.values(counts.typeCounts).some(count => count > 0)
+      ? counts
+      : countCompletePopulation({ spaceIds, topicId });
   } catch (error) {
     console.warn('topic feed composition: type counts failed, counting the complete population', error);
     return countCompletePopulation({ spaceIds, topicId });

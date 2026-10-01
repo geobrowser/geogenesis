@@ -185,6 +185,19 @@ describe('fetchTopicFeedCompositionCounts', () => {
     });
   });
 
+  it('counts the compact population when the grouped count is empty, as before gaia builds it', async () => {
+    mocks.typeCounts = [];
+
+    // Its own space, so the population cache doesn't leak into the next test.
+    const counts = await fetchTopicFeedCompositionCounts({
+      spaceIds: ['22222222222222222222222222222222'],
+      topicId: PAGE_TOPIC,
+    });
+
+    expect(counts.typeCounts[CLAIM_TYPE_ID]).toBe(2);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['TopicFeedTypeCounts', 'ExploreRelationIndex']);
+  });
+
   it('counts the compact population the feed falls back to when the grouped count fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const expected = emptyTopicFeedCompositionCounts();

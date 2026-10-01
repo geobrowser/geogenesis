@@ -647,8 +647,45 @@ describe('a topic page from the topic walk (GEO-3092)', () => {
     expect(result.items[0]?.entityId).toBe('deep-990');
   });
 
-  it('sends the debate-tag rule to the walk rather than as a filter', async () => {
+  it('falls back when the first window is empty, as before gaia builds its topic table', async () => {
+    windows.responder = operation => {
+      if (operation === 'ExploreTopicFeedConnection')
+        return { raw: { entitiesRankedForTopicsConnection: { nodes: [] } } };
+      return operation === 'ExploreCompleteIndex'
+        ? completeIndex(['unbuilt'])
+        : windowOf([entity('unbuilt', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null });
+    };
+
+    const result = await fetchExploreFeed({
+      ...topicArgs,
+      completePopulationScopes: [
+        { typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID], entityFilter: { id: { in: ['unbuilt'] } } },
+      ],
+    });
+
+    expect(result.items.map(item => item.entityId)).toEqual(['unbuilt']);
+    expect(windows.operations).toEqual([
+      'ExploreTopicFeedConnection',
+      'ExploreCompleteIndex',
+      'ExploreEntitiesConnection',
+    ]);
+  });
+
+  it('ends the feed on an empty later window without falling back', async () => {
     windows.responder = () => ({ raw: { entitiesRankedForTopicsConnection: { nodes: [] } } });
+
+    const result = await fetchExploreFeed({
+      ...topicArgs,
+      sort: 'new',
+      cursor: encodeExploreWindowCursor({ after: '30', offset: 0 }),
+    });
+
+    expect(result).toEqual({ items: [], nextCursor: null });
+    expect(windows.operations).toEqual(['ExploreTopicFeedConnection']);
+  });
+
+  it('sends the debate-tag rule to the walk rather than as a filter', async () => {
+    windows.responder = () => ({ raw: { entitiesRankedForTopicsConnection: { nodes: walkRows(1) } } });
 
     await fetchExploreFeed({ ...topicArgs, requireDebateTagOnClaims: true });
 
