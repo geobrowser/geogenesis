@@ -889,6 +889,40 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
   });
 
   /**
+   * The nudge never lands on the recording being heard. On a phone a rate off 1 sends the audio
+   * through the time-stretcher, which crackles — so in slot 2's turn it is slot 1, the muted
+   * one, that is sped up or slowed down to close the gap.
+   */
+  it("nudges the muted recording, not the speaker's, in slot 2's turn", async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+
+    // 40s is slot 2's turn in the fixture. Slot 2 behind: slot 1 slows down to let it catch up.
+    slot1.currentTime = 40;
+    slot2.currentTime = 39.5;
+    slot2.playbackRate = 1.03; // left over from slot 1's turn
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot1.playbackRate).toBeLessThan(1);
+
+    // Slot 2 ahead: slot 1 speeds up.
+    slot2.currentTime = 40.5;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot1.playbackRate).toBeGreaterThan(1);
+  });
+
+  /**
    * And the guard must not swallow a real block — it still reaches the viewer, but as a
    * control rather than as a sentence.
    *

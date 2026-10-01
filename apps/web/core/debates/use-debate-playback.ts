@@ -49,7 +49,13 @@ const feedMutedAtom = atom(true);
 const SYNC_NUDGE_DRIFT_SECONDS = 0.18;
 /** Above this the gap is too wide to close by rate alone, so it is worth one seek. */
 const SYNC_SEEK_DRIFT_SECONDS = 0.75;
-/** How far off 1 the nudge goes. 3% converges 0.18s inside ~6s and is inaudible. */
+/**
+ * How far off 1 the nudge goes. 3% converges 0.18s inside ~6s.
+ *
+ * Only ever applied to the muted recording. On a phone any rate other than 1 routes the audio
+ * through the browser's time-stretcher, and on iOS Safari and Android Chrome that crackles
+ * audibly at a few percent — desktop's is clean enough that it went unnoticed there.
+ */
 const SYNC_NUDGE_RATE = 0.03;
 /** Floor between hard seeks, so a seek that itself causes drift cannot start a storm. */
 const MIN_SYNC_SEEK_INTERVAL_MS = 2_000;
@@ -693,6 +699,7 @@ export function useDebatePlayback(
       if (!primaryVideo || !secondaryVideo) return false;
       moveTo(primaryVideo, Math.max(0, playhead - offsets.slot1));
       moveTo(secondaryVideo, Math.max(0, playhead - offsets.slot2));
+      primaryVideo.playbackRate = 1;
       secondaryVideo.playbackRate = 1;
       noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
@@ -814,21 +821,33 @@ export function useDebatePlayback(
     ) {
       const drift = secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta);
       const absDrift = Math.abs(drift);
+      // The nudge goes on whichever recording is muted, never the one being heard: off 1, a
+      // phone's time-stretcher makes the speaker's voice crackle (see `SYNC_NUDGE_RATE`). That is
+      // slot 2 for slot 1's turn and slot 1 for slot 2's. Slot 1 is the clock, so nudging it
+      // runs the scrubber and subtitles a few percent off for a few seconds — invisible, where
+      // the crackle was not. Positive drift means slot 2 is ahead, so slot 1 speeds up to meet it.
+      const nudgePrimary = turnStateAt(playhead)?.slot === 2;
+      const nudged = nudgePrimary ? primaryVideo : secondaryVideo;
+      const heard = nudgePrimary ? secondaryVideo : primaryVideo;
+      if (heard.playbackRate !== 1) heard.playbackRate = 1;
 
       if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
         secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
-        secondaryVideo.playbackRate = 1;
+        nudged.playbackRate = 1;
         lastSyncSeekAtRef.current = now;
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
-        // to actually converge. Pitch shift at 3% is not audible.
-        secondaryVideo.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
-      } else if (secondaryVideo.playbackRate !== 1) {
-        secondaryVideo.playbackRate = 1;
+        // to actually converge.
+        const slot2Ahead = drift > 0;
+        const slowDown = slot2Ahead !== nudgePrimary;
+        nudged.playbackRate = slowDown ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
+      } else if (nudged.playbackRate !== 1) {
+        nudged.playbackRate = 1;
       }
-    } else if (secondaryVideo && secondaryVideo.playbackRate !== 1) {
+    } else {
       // Never leave a nudge running once the pair is no longer being kept in step.
-      secondaryVideo.playbackRate = 1;
+      if (primaryVideo && primaryVideo.playbackRate !== 1) primaryVideo.playbackRate = 1;
+      if (secondaryVideo && secondaryVideo.playbackRate !== 1) secondaryVideo.playbackRate = 1;
     }
 
     /**
