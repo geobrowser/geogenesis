@@ -269,10 +269,23 @@ export function DebateFeedPlayer({
     // A detached pair has no elements to start; this re-runs when they arrive.
     if (active && !detached && pairMayStart && !awaitingTap && !isScrubbing && !playing && !playbackEnded) {
       void resumeBoth();
-    } else if (!active && playing) {
+    } else if ((!active || detached) && (playing || isResuming)) {
+      // Includes a resume still confirming: its elements may be about to be released.
       suspend();
     }
-  }, [active, awaitingTap, detached, isScrubbing, pairMayStart, playbackEnded, playing, ready, resumeBoth, suspend]);
+  }, [
+    active,
+    awaitingTap,
+    detached,
+    isResuming,
+    isScrubbing,
+    pairMayStart,
+    playbackEnded,
+    playing,
+    ready,
+    resumeBoth,
+    suspend,
+  ]);
 
   const hasError = error != null;
   // `ready` keeps its meaning for GEO-3074's outcome — both URLs in hand — so its `ready_ms` and

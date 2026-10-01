@@ -206,4 +206,38 @@ describe('DebateFeedPlayer re-attach after release (GEO-3067)', () => {
     expect(plays.every(src => src.endsWith('?fresh'))).toBe(true);
     expect(errorShown(view.container)).toBe(false);
   });
+
+  it('cancels a resume still confirming when the card is released, and plays on return', async () => {
+    const view = render(<DebateFeedPlayer debate={debate} active />);
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    // The first play() is still pending when the card is flung away; releasing the element aborts it,
+    // as browsers do when load() runs.
+    const pending: Array<(error: unknown) => void> = [];
+    const playSpy = vi.mocked(HTMLMediaElement.prototype.play);
+    playSpy.mockImplementation(function (this: HTMLMediaElement) {
+      plays.push(this.getAttribute('src') ?? 'null');
+      return new Promise<void>((_, reject) => pending.push(reject));
+    });
+    canplayAll(view.container);
+    await waitFor(() => expect(plays.length).toBeGreaterThanOrEqual(1));
+
+    view.rerender(<DebateFeedPlayer debate={debate} active={false} releaseMedia />);
+    await act(async () => {
+      for (const reject of pending) reject(new DOMException('The play() request was interrupted', 'AbortError'));
+      await new Promise(resolve => setTimeout(resolve, 1_500));
+    });
+    expect(errorShown(view.container)).toBe(false);
+
+    playSpy.mockImplementation(function (this: HTMLMediaElement) {
+      plays.push(this.getAttribute('src') ?? 'null');
+      media(this).paused = false;
+      return Promise.resolve();
+    });
+    plays.length = 0;
+    view.rerender(<DebateFeedPlayer debate={debate} active />);
+    await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
+    canplayAll(view.container);
+    await waitFor(() => expect(plays.length).toBeGreaterThanOrEqual(2));
+    expect(errorShown(view.container)).toBe(false);
+  });
 });
