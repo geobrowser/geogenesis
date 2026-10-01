@@ -1059,3 +1059,122 @@ describe('DebatesBrowseFeed visit outcome (GEO-3074)', () => {
     expect(outcomes()).toEqual([]);
   });
 });
+
+// A short-video feed's address bar names what is on screen, so reloading, copying it or coming Back
+// lands on that debate rather than on whichever one the feed was opened at.
+describe('DebatesBrowseFeed — the URL follows the debate on screen', () => {
+  const older = '2026-07-01T00:00:00.000Z';
+  const newer = '2026-07-05T00:00:00.000Z';
+
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Opened debate', newer),
+      completedDebate('debate-2', 'Next debate', older),
+    ];
+  });
+
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  function currentUrl() {
+    return `${window.location.pathname}${window.location.search}`;
+  }
+
+  it("rewrites a debate page's path to the debate scrolled to, dropping the opened one's timecode", () => {
+    window.history.replaceState(null, '', '/space/space-1/debate-1?t=30');
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" surface="debate-page" />);
+
+    // Still on the debate the link named: its `?t=` has not been read yet when the media is cold.
+    expect(currentUrl()).toBe('/space/space-1/debate-1?t=30');
+
+    activateDebate('Next debate');
+    expect(currentUrl()).toBe('/space/space-1/debate2');
+
+    activateDebate('Opened debate');
+    expect(currentUrl()).toBe('/space/space-1/debate1');
+  });
+
+  it('names the debate on screen in `?debate=` on the Debates tab, leaving the path alone', () => {
+    window.history.replaceState(null, '', '/space/space-1/debates');
+    render(<DebatesBrowseFeed spaceId="space-1" surface="debates-tab" />);
+
+    expect(currentUrl()).toBe('/space/space-1/debates?debate=debate1');
+
+    activateDebate('Next debate');
+    expect(currentUrl()).toBe('/space/space-1/debates?debate=debate2');
+  });
+
+  it('leaves the URL alone when the feed falls back to the entity page', () => {
+    window.history.replaceState(null, '', '/space/space-1/debate-missing');
+    render(
+      <DebatesBrowseFeed
+        spaceId="space-1"
+        initialDebateId="debate-missing"
+        surface="debate-page"
+        fallback={<div>Entity page</div>}
+      />
+    );
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    expect(currentUrl()).toBe('/space/space-1/debate-missing');
+  });
+});
+
+// The feed is a mandatory snap container, and a browser keeps it snapped to the element it was on:
+// a debate inserted above the one on screen drags the scroll position down with it.
+describe('DebatesBrowseFeed — nothing is inserted above what the viewer has reached', () => {
+  const at = (day: number) => `2026-07-${String(day).padStart(2, '0')}T00:00:00.000Z`;
+
+  function headings() {
+    return screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
+  }
+
+  it('keeps the reached debates and the preloading ones in place when a better-ranked debate arrives', () => {
+    mocks.debates = ['a', 'b', 'c', 'd', 'e'].map((id, index) => completedDebate(id, `Debate ${id}`, at(10 - index)));
+    mocks.bestOrderIds = ['a', 'b', 'c', 'd', 'e'];
+    const view = render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    mocks.debates = [completedDebate('z', 'Debate z', at(20)), ...mocks.debates];
+    mocks.bestOrderIds = ['z', 'a', 'b', 'c', 'd', 'e'];
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+
+    // The active debate and the two preloading after it hold; below them the ranking still applies.
+    expect(headings()).toEqual(['Debate a', 'Debate b', 'Debate c', 'Debate z', 'Debate d']);
+  });
+
+  it('extends the pinned run as the viewer moves down', () => {
+    mocks.debates = ['a', 'b', 'c', 'd', 'e'].map((id, index) => completedDebate(id, `Debate ${id}`, at(10 - index)));
+    mocks.bestOrderIds = ['a', 'b', 'c', 'd', 'e'];
+    const view = render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('Debate b');
+
+    mocks.debates = [completedDebate('z', 'Debate z', at(20)), ...mocks.debates];
+    mocks.bestOrderIds = ['z', 'a', 'b', 'c', 'd', 'e'];
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(headings()).toEqual(['Debate a', 'Debate b', 'Debate c', 'Debate d', 'Debate z']);
+  });
+
+  // Painting whichever debates' readiness came back first, then ranking the rest in above them, is
+  // exactly the drift above — on a slow connection the feed ended up a dozen cards down.
+  it('holds an unanchored feed until every readiness lookup has settled', () => {
+    mocks.debates = [completedDebate('a', 'Debate a', at(10)), completedDebate('b', 'Debate b', at(9))];
+    mocks.bestOrderIds = ['a', 'b'];
+    mocks.processedIds = ['b'];
+    mocks.mediaLoading = true;
+    const view = render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+
+    mocks.processedIds = ['a', 'b'];
+    mocks.mediaLoading = false;
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(headings()).toEqual(['Debate a', 'Debate b']);
+
+    // A later lookup — a refetch that brought a new debate — must not blank a feed being watched.
+    mocks.mediaLoading = true;
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(headings()).toEqual(['Debate a', 'Debate b']);
+  });
+});

@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { DEBATE_TIME_PARAM, parseDebateTimeParam } from '~/core/debates/debate-timecode';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { DebatesBrowseFeed } from './debate-feed';
+import { debateIdFromEntityPath } from './debate-feed-url';
 
 type DebateEntityViewProps = {
   spaceId: string;
@@ -32,6 +33,17 @@ export function DebateEntityView({ spaceId, debateId, editView, removedView }: D
   // something that is not a position: see `parseDebateTimeParam` for why that is not clamped to 0.
   const initialSeekSeconds = parseDebateTimeParam(useSearchParams().get(DEBATE_TIME_PARAM));
 
+  // The feed rewrites this page's path to the debate on screen as the viewer scrolls, without a
+  // navigation, so `debateId` — the route param — stays the debate the page was *opened* at. Coming
+  // Back to the page then restores that route with the newer URL, and anchoring on the param opened
+  // the feed on a debate the viewer had long scrolled past. The router's pathname is the one that
+  // names what they were watching, and on an ordinary navigation it agrees with the param.
+  //
+  // Latched at mount: it changes on every swipe, and an anchor that followed it would hoist each
+  // debate to the top of the feed as the viewer reached it.
+  const pathname = usePathname();
+  const [anchorId] = React.useState(() => debateIdFromEntityPath(pathname, spaceId) ?? debateId);
+
   if (isEditing) {
     return <>{editView}</>;
   }
@@ -41,7 +53,8 @@ export function DebateEntityView({ spaceId, debateId, editView, removedView }: D
   return (
     <DebatesBrowseFeed
       spaceId={spaceId}
-      initialDebateId={debateId}
+      initialDebateId={anchorId}
+      surface="debate-page"
       initialSeekSeconds={initialSeekSeconds}
       fallback={editView}
       removedView={removedView}

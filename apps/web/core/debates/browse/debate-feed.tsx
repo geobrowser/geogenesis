@@ -30,6 +30,7 @@ import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
+import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateOverflowMenu } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
@@ -54,6 +55,7 @@ export function DebatesBrowseFeed({
   initialSeekSeconds = null,
   fallback,
   removedView,
+  surface = initialDebateId ? 'debate-page' : 'debates-tab',
 }: {
   spaceId: string;
   initialDebateId?: string;
@@ -74,9 +76,17 @@ export function DebatesBrowseFeed({
    * here, and the plain entity page is the one thing a removed debate must not fall back to.
    */
   removedView?: React.ReactNode;
+  /**
+   * Where the feed is mounted, so the URL can follow the debate on screen. See
+   * {@link DebateFeedSurface}. Defaults to the debate page when anchored, the tab when not — the
+   * tab passes it explicitly, since it anchors too when its URL names a debate.
+   */
+  surface?: DebateFeedSurface;
 }) {
   const debatesQuery = useSpaceDebates(spaceId, true);
-  const pageOutcome = useDebatePageOutcome(initialDebateId);
+  // The visit's outcome is about a debate's own page. The tab anchors too when reloaded on a
+  // `?debate=` URL, but that is still a visit to the tab.
+  const pageOutcome = useDebatePageOutcome(surface === 'debate-page' ? initialDebateId : undefined);
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -120,7 +130,19 @@ export function DebatesBrowseFeed({
   // opened is what that sort would have put in front of you.
   const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
 
-  const debates = React.useMemo(() => {
+  // Every debate the viewer has reached, plus the ones already preloading after it, in the order they
+  // were shown. Nothing may be inserted above or among them.
+  //
+  // The feed is a mandatory snap container, and browsers keep it snapped to the *element* it was on
+  // when content changes around it. So a debate slotted in above the one on screen does not push the
+  // viewer's card down — it drags the scroll position down with it, and the viewer is carried past
+  // debates they never saw. The readiness lookups resolve one at a time and each can rank anywhere,
+  // so on a slow connection a feed opened at the top ended up a dozen cards down within seconds. A
+  // listing refetch that adds a debate does the same at any time. Below the pinned run the order is
+  // still free to settle: nothing there is on screen.
+  const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
+
+  const rankedDebates = React.useMemo(() => {
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
     // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
     // order first would move the next debate out from under someone already scrolling. A ranking
@@ -143,6 +165,15 @@ export function DebatesBrowseFeed({
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
+
+  const debates = React.useMemo(() => {
+    if (pinnedIds.length === 0) return rankedDebates;
+    const byId = new Map(rankedDebates.map(debate => [debate.id, debate]));
+    // A pinned debate that has left the listing goes: there is nothing left to play.
+    const pinned = pinnedIds.flatMap(id => byId.get(id) ?? []);
+    const pinnedSet = new Set(pinned.map(debate => debate.id));
+    return [...pinned, ...rankedDebates.filter(debate => !pinnedSet.has(debate.id))];
+  }, [rankedDebates, pinnedIds]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -278,9 +309,15 @@ export function DebatesBrowseFeed({
 
   // Memoised because both branches build a new array: the effect below is keyed on this, and an
   // unmemoised ternary re-ran it on every render.
+  // An unanchored feed has nothing fixed at the top, so its first paint has to be its final order:
+  // painting whichever debates' readiness came back first, then ranking the rest in above them, is
+  // the drift described at `pinnedIds`. Only until something is pinned — after that the order on
+  // screen is held by the pin, and a later lookup (a refetch adding a debate) must not blank it.
+  const orderPending = initialDebateId == null && mediaLoading && pinnedIds.length === 0;
+
   const visibleDebates = React.useMemo(
-    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
-    [anchorPending, debates, visibleCount]
+    () => (anchorPending || orderPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, orderPending, debates, visibleCount]
   );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
@@ -303,6 +340,27 @@ export function DebatesBrowseFeed({
   // Which debate the viewer is on, so the one after it can preload its recordings.
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
+
+  // Pin through the active card and the ones preloading after it. Only ever grows, and only as the
+  // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
+  // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
+  const pinThrough = activeIndex < 0 ? 0 : Math.min(activeIndex + PRELOAD_AHEAD + 1, visibleDebates.length);
+  React.useEffect(() => {
+    if (pinThrough <= pinnedIds.length) return;
+    setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
+  }, [pinThrough, pinnedIds.length, visibleDebates]);
+
+  // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
+  // address bar, or coming Back lands on what was being watched rather than on whichever debate the
+  // feed was opened at. `replaceState`, not a push, so Back leaves the feed instead of stepping back
+  // through every debate scrolled past. Next keeps its router in step with direct history calls
+  // without navigating, so nothing remounts.
+  React.useEffect(() => {
+    if (!activeId || !rendersFeed) return;
+    const href = debateFeedHref(window.location, { surface, spaceId, debateId: activeId });
+    if (href == null) return;
+    window.history.replaceState(null, '', href);
+  }, [activeId, rendersFeed, spaceId, surface]);
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
   // below decides what to show.
@@ -416,7 +474,7 @@ export function DebatesBrowseFeed({
           onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
-      {!anchorPending && visibleCount < debates.length && (
+      {!anchorPending && !orderPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
